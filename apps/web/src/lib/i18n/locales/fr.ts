@@ -2216,6 +2216,8 @@ export const messages = {
 	"settingsGear.unmarkCurrent": "Ne plus marquer {name} comme actuel",
 	"settingsGear.markCurrent": "Marquer {name} comme actuel — les nouvelles sorties seront automatiquement associées à cet équipement",
 	"settingsGear.retire": "Retirer",
+	"settingsGear.wearDue": "À remplacer bientôt",
+	"settingsGear.wearWorn": "Distance de remplacement dépassée",
 	"settingsGear.delete": "Supprimer",
 	"settingsGear.restore": "Restaurer",
 	"settingsGear.retiredSection": "Retirés",

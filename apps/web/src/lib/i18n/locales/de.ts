@@ -2216,6 +2216,8 @@ export const messages = {
 	"settingsGear.unmarkCurrent": "{name} nicht mehr als aktuell markieren",
 	"settingsGear.markCurrent": "{name} als aktuell markieren — neue Läufe werden automatisch mit dieser Ausrüstung markiert",
 	"settingsGear.retire": "Ausmustern",
+	"settingsGear.wearDue": "Bald ersetzen",
+	"settingsGear.wearWorn": "Ersatzdistanz überschritten",
 	"settingsGear.delete": "Löschen",
 	"settingsGear.restore": "Wiederherstellen",
 	"settingsGear.retiredSection": "Ausgemustert",

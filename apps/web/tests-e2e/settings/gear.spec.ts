@@ -462,3 +462,49 @@ test.describe('/settings/gear — empty state', () => {
 		expect(data?.map((g) => g.name)).toContain(planted);
 	});
 });
+
+test.describe('/settings/gear — wear status', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('a shoe past its replacement distance shows the worn badge', async ({ page }) => {
+		const admin = getAdminClient();
+		const name = `E2E Worn Shoe ${Date.now()}`;
+
+		// Target 1 km; a 5 km run linked via run_gear pushes total > target so
+		// the gear_with_distance rollup → gearWear → 'worn'.
+		const { data: gear } = await admin
+			.from('gear')
+			.insert({
+				owner_id: USER_A.id,
+				kind: 'shoe',
+				name,
+				target_distance_m: 1000,
+			})
+			.select('id')
+			.single();
+		const { data: run } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				distance_m: 5000,
+				duration_s: 1500,
+				source: 'app',
+				is_public: false,
+				metadata: { activity_type: 'run' },
+			})
+			.select('id')
+			.single();
+		await admin.from('run_gear').insert({ run_id: run!.id, gear_id: gear!.id });
+
+		try {
+			await page.goto('/settings/gear');
+			const row = page.locator('.gear-row', { hasText: name });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+			await expect(row.getByTestId('wear-badge')).toContainText('Past replacement distance');
+		} finally {
+			await admin.from('runs').delete().eq('id', run!.id); // cascades run_gear
+			await admin.from('gear').delete().eq('id', gear!.id);
+		}
+	});
+});

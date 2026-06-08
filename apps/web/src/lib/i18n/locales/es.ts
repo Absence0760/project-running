@@ -2216,6 +2216,8 @@ export const messages = {
 	"settingsGear.unmarkCurrent": "Quitar {name} como actual",
 	"settingsGear.markCurrent": "Marcar {name} como actual — las carreras nuevas se etiquetarán automáticamente con este equipo",
 	"settingsGear.retire": "Retirar",
+	"settingsGear.wearDue": "Reemplazar pronto",
+	"settingsGear.wearWorn": "Distancia de reemplazo superada",
 	"settingsGear.delete": "Eliminar",
 	"settingsGear.restore": "Restaurar",
 	"settingsGear.retiredSection": "Retirados",

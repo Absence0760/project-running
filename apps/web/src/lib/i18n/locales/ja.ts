@@ -2212,6 +2212,8 @@ export const messages = {
 	"settingsGear.unmarkCurrent": "{name} の「現在」を解除",
 	"settingsGear.markCurrent": "{name} を「現在」に設定 — 新しいランにこのギアが自動で紐づきます",
 	"settingsGear.retire": "引退",
+	"settingsGear.wearDue": "そろそろ交換",
+	"settingsGear.wearWorn": "交換距離を超過",
 	"settingsGear.delete": "削除",
 	"settingsGear.restore": "復元",
 	"settingsGear.retiredSection": "引退済み",

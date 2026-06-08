@@ -2224,6 +2224,8 @@ export const en = {
 	"settingsGear.unmarkCurrent": "Unmark {name} as current",
 	"settingsGear.markCurrent": "Mark {name} as current — new runs will auto-tag with this gear",
 	"settingsGear.retire": "Retire",
+	"settingsGear.wearDue": "Replace soon",
+	"settingsGear.wearWorn": "Past replacement distance",
 	"settingsGear.delete": "Delete",
 	"settingsGear.restore": "Restore",
 	"settingsGear.retiredSection": "Retired",

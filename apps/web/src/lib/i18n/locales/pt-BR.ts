@@ -2215,6 +2215,8 @@ export const messages = {
 	"settingsGear.unmarkCurrent": "Desmarcar {name} como atual",
 	"settingsGear.markCurrent": "Marcar {name} como atual — novas corridas serão marcadas automaticamente com este equipamento",
 	"settingsGear.retire": "Aposentar",
+	"settingsGear.wearDue": "Substituir em breve",
+	"settingsGear.wearWorn": "Distância de troca ultrapassada",
 	"settingsGear.delete": "Excluir",
 	"settingsGear.restore": "Restaurar",
 	"settingsGear.retiredSection": "Aposentados",

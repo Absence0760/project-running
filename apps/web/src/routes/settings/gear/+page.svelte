@@ -13,6 +13,7 @@
 		type GearWithDistance,
 	} from '$lib/core/data';
 	import { getUnit } from '$lib/format/units.svelte';
+	import { gearWear } from '$lib/gear/gear_wear';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -247,6 +248,7 @@
 			<ul class="gear-list">
 				{#each active as g (g.id)}
 					{@const prog = progressFor(g)}
+					{@const wear = gearWear(g.total_distance_m, g.target_distance_m)}
 					<li class="gear-row" class:is-default={g.is_default}>
 						<button class="gear-main" onclick={() => openEdit(g)}>
 							<div class="gear-name">
@@ -254,13 +256,24 @@
 								{#if g.is_default}
 									<span class="default-pill" title={t('settingsGear.currentPillTitle')}>{t('settingsGear.currentPill')}</span>
 								{/if}
+								{#if wear.status === 'worn'}
+									<span class="wear-badge wear-worn" data-testid="wear-badge">
+										<span class="material-symbols" aria-hidden="true">change_circle</span>
+										{t('settingsGear.wearWorn')}
+									</span>
+								{:else if wear.status === 'due'}
+									<span class="wear-badge wear-due" data-testid="wear-badge">
+										<span class="material-symbols" aria-hidden="true">schedule</span>
+										{t('settingsGear.wearDue')}
+									</span>
+								{/if}
 								{#if g.brand || g.model}
 									<span class="muted">{[g.brand, g.model].filter(Boolean).join(' ')}</span>
 								{/if}
 							</div>
 							{#if g.target_distance_m}
 								<div class="bar">
-									<div class="bar-fill" style="width: {prog.pct}%"></div>
+									<div class="bar-fill wear-{wear.status}" style="width: {prog.pct}%"></div>
 								</div>
 							{/if}
 							<div class="gear-meta">
@@ -583,6 +596,37 @@
 		height: 100%;
 		background: var(--color-primary);
 		transition: width var(--transition-base);
+	}
+	/* Wear status recolours the fill so a worn shoe reads at a glance,
+	   not just by reading the "X / Y km" label. */
+	.bar-fill.wear-due {
+		background: var(--color-warning);
+	}
+	.bar-fill.wear-worn {
+		background: var(--color-danger);
+	}
+
+	.wear-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		padding: 0.1rem 0.4rem;
+		border-radius: var(--radius-sm);
+		white-space: nowrap;
+	}
+	.wear-badge .material-symbols {
+		font-size: 0.85rem;
+	}
+	.wear-due {
+		color: var(--color-warning-strong, var(--color-warning));
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+	}
+	.wear-worn {
+		color: var(--color-danger);
+		background: var(--color-danger-light);
 	}
 	.gear-actions {
 		display: flex;
