@@ -466,10 +466,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get logSheetTitle => '記録';
 
   @override
-  String get logStartRun => 'ランを開始';
+  String get logRun => 'ランを記録';
 
   @override
-  String get logStartLift => '筋トレを開始';
+  String get logLift => '筋トレを記録';
 
   @override
   String get logFood => '食事を記録';

@@ -79,11 +79,11 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Start run'), findsOneWidget);
-      expect(find.text('Start lift'), findsOneWidget);
+      expect(find.text('Log run'), findsOneWidget);
+      expect(find.text('Log lift'), findsOneWidget);
       expect(find.text('Log food'), findsOneWidget);
 
-      await tester.tap(find.text('Start lift'));
+      await tester.tap(find.text('Log lift'));
       await tester.pumpAndSettle();
       expect(result, LogAction.lift);
     });
@@ -112,7 +112,7 @@ void main() {
 
       // The food tile renders above the run tile.
       final foodTop = tester.getTopLeft(find.text('Log food')).dy;
-      final runTop = tester.getTopLeft(find.text('Start run')).dy;
+      final runTop = tester.getTopLeft(find.text('Log run')).dy;
       expect(foodTop, lessThan(runTop));
     });
   });

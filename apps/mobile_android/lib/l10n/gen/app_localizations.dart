@@ -845,17 +845,17 @@ abstract class AppLocalizations {
   /// **'Log'**
   String get logSheetTitle;
 
-  /// Log sheet item: begin recording a run
+  /// Log sheet item: log a run (opens the recorder)
   ///
   /// In en, this message translates to:
-  /// **'Start run'**
-  String get logStartRun;
+  /// **'Log run'**
+  String get logRun;
 
-  /// Log sheet item: begin logging a gym/lift workout
+  /// Log sheet item: log a gym/lift workout
   ///
   /// In en, this message translates to:
-  /// **'Start lift'**
-  String get logStartLift;
+  /// **'Log lift'**
+  String get logLift;
 
   /// Log sheet item: log food (meal slot chosen in the composer)
   ///

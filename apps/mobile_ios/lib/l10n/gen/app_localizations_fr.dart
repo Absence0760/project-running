@@ -477,10 +477,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get logSheetTitle => 'Ajouter';
 
   @override
-  String get logStartRun => 'Démarrer une course';
+  String get logRun => 'Enregistrer une course';
 
   @override
-  String get logStartLift => 'Démarrer la muscu';
+  String get logLift => 'Enregistrer la muscu';
 
   @override
   String get logFood => 'Enregistrer un aliment';

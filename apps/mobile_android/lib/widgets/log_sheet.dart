@@ -29,7 +29,7 @@ LogAction? logActionFromWire(String? wire) => switch (wire) {
 
 /// Display order with [recent] floated to the top (multi_modal.md: "the most
 /// recently used capture type floats to the top, so a daily lifter sees
-/// 'Start lift' first"). Stable for the remaining items. Pure so it can be
+/// 'Log lift' first"). Stable for the remaining items. Pure so it can be
 /// unit-tested without pumping the sheet.
 List<LogAction> orderedLogActions(LogAction? recent) {
   const base = [LogAction.run, LogAction.lift, LogAction.food];
@@ -37,7 +37,7 @@ List<LogAction> orderedLogActions(LogAction? recent) {
   return [recent, ...base.where((a) => a != recent)];
 }
 
-/// The Log bottom sheet — Start run / Start lift / Log food.
+/// The Log bottom sheet — Log run / Log lift / Log food.
 /// Resolves to the picked [LogAction], or null on dismiss. The caller
 /// (HomeScreen) performs the navigation so the sheet stays free of store /
 /// api dependencies.
@@ -87,8 +87,8 @@ class _LogSheet extends StatelessWidget {
 
   Widget _tile(BuildContext context, AppLocalizations l10n, LogAction a) {
     final (icon, label) = switch (a) {
-      LogAction.run => (Icons.directions_run, l10n.logStartRun),
-      LogAction.lift => (Icons.fitness_center, l10n.logStartLift),
+      LogAction.run => (Icons.directions_run, l10n.logRun),
+      LogAction.lift => (Icons.fitness_center, l10n.logLift),
       LogAction.food => (Icons.restaurant, l10n.logFood),
     };
     return ListTile(

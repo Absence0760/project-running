@@ -474,10 +474,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logSheetTitle => 'Log';
 
   @override
-  String get logStartRun => 'Start run';
+  String get logRun => 'Log run';
 
   @override
-  String get logStartLift => 'Start lift';
+  String get logLift => 'Log lift';
 
   @override
   String get logFood => 'Log food';

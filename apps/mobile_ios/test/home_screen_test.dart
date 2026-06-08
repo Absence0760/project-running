@@ -157,8 +157,8 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('Start run'), findsOneWidget);
-      expect(find.text('Start lift'), findsOneWidget);
+      expect(find.text('Log run'), findsOneWidget);
+      expect(find.text('Log lift'), findsOneWidget);
       expect(find.text('Log food'), findsOneWidget);
     });
 
@@ -171,7 +171,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       // No capture sheet — the tap jumped straight to the Run page.
-      expect(find.text('Start lift'), findsNothing);
+      expect(find.text('Log lift'), findsNothing);
     });
   });
 }

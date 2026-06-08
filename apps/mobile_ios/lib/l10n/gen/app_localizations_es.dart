@@ -478,10 +478,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get logSheetTitle => 'Registrar';
 
   @override
-  String get logStartRun => 'Iniciar carrera';
+  String get logRun => 'Registrar carrera';
 
   @override
-  String get logStartLift => 'Iniciar pesas';
+  String get logLift => 'Registrar pesas';
 
   @override
   String get logFood => 'Registrar comida';

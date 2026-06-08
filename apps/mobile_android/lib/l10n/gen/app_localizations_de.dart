@@ -477,10 +477,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get logSheetTitle => 'Erfassen';
 
   @override
-  String get logStartRun => 'Lauf starten';
+  String get logRun => 'Lauf erfassen';
 
   @override
-  String get logStartLift => 'Training starten';
+  String get logLift => 'Training erfassen';
 
   @override
   String get logFood => 'Essen erfassen';

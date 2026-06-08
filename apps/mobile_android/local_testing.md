@@ -324,7 +324,7 @@ See [run_recording.md](../../docs/features/run_recording.md) for the architectur
 - **Share run** — exports as GPX and opens the system share sheet
 - **Delete runs** from the detail screen
 - **Multi-select & bulk delete** — long-press to enter selection mode, tap to add more, delete from the app bar
-- **Unified timeline (multi-modal)** — once you've logged a lift (Log → Start lift) or a meal (Log → Log food), the History tab grows `All / Runs / Lifts / Meals` chips at the top and a day-grouped cross-modality timeline. **All / Lifts / Meals** show the timeline (run rows → run detail, lift rows → gym detail, meals read-only); the **Runs** chip restores the full run list with all its filters / sort / bulk-delete. A pure runner (no lifts or meals) never sees the chips. Pull-to-refresh updates both the runs and the activities feed.
+- **Unified timeline (multi-modal)** — once you've logged a lift (Log → Log lift) or a meal (Log → Log food), the History tab grows `All / Runs / Lifts / Meals` chips at the top and a day-grouped cross-modality timeline. **All / Lifts / Meals** show the timeline (run rows → run detail, lift rows → gym detail, meals read-only); the **Runs** chip restores the full run list with all its filters / sort / bulk-delete. A pure runner (no lifts or meals) never sees the chips. Pull-to-refresh updates both the runs and the activities feed.
 - **Sync button** — bulk-upload all unsynced runs (when signed in)
 - **Offline indicator** — runs saved offline show a cloud-off icon
 

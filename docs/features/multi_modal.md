@@ -213,8 +213,8 @@ becomes an **action button**, not a tab.
         ┌─────────────────────────────────┐
         │            Log                  ✕ │
         ├─────────────────────────────────┤
-        │  ▷  Start run                     │
-        │  ☰  Start lift                    │
+        │  ▷  Log run                       │
+        │  ☰  Log lift                      │
         │  🍴 Log food                      │
         └─────────────────────────────────┘
               ↑ last-used floats to top
@@ -224,7 +224,7 @@ becomes an **action button**, not a tab.
   "start a run" muscle memory the current `Run` tab gives. A runner who
   only ever runs effectively still has a one-gesture start.
 - The sheet's **order adapts**: the most recently used capture type
-  floats to the top, so a daily lifter sees "Start lift" first.
+  floats to the top, so a daily lifter sees "Log lift" first.
 - **Accessibility:** the `Log` button has an explicit `Semantics` label
   ("Log an activity"); the sheet items are a single focus group; the
   raised button keeps a ≥48 dp touch target.

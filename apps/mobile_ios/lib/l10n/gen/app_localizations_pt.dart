@@ -476,10 +476,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get logSheetTitle => 'Registrar';
 
   @override
-  String get logStartRun => 'Iniciar corrida';
+  String get logRun => 'Registrar corrida';
 
   @override
-  String get logStartLift => 'Iniciar musculação';
+  String get logLift => 'Registrar musculação';
 
   @override
   String get logFood => 'Registrar comida';
@@ -7542,10 +7542,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get logSheetTitle => 'Registrar';
 
   @override
-  String get logStartRun => 'Iniciar corrida';
+  String get logRun => 'Registrar corrida';
 
   @override
-  String get logStartLift => 'Iniciar musculação';
+  String get logLift => 'Registrar musculação';
 
   @override
   String get logFood => 'Registrar comida';

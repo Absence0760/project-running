@@ -278,13 +278,13 @@
   "@logSheetTitle": {
     "description": "Title of the Log capture bottom sheet"
   },
-  "logStartRun": "Start run",
-  "@logStartRun": {
-    "description": "Log sheet item: begin recording a run"
+  "logRun": "Log run",
+  "@logRun": {
+    "description": "Log sheet item: log a run (opens the recorder)"
   },
-  "logStartLift": "Start lift",
-  "@logStartLift": {
-    "description": "Log sheet item: begin logging a gym/lift workout"
+  "logLift": "Log lift",
+  "@logLift": {
+    "description": "Log sheet item: log a gym/lift workout"
   },
   "logFood": "Log food",
   "@logFood": {
