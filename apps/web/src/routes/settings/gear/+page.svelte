@@ -620,13 +620,17 @@
 	.wear-badge .material-symbols {
 		font-size: 0.85rem;
 	}
+	/* Solid "-strong" fill + white text: those tokens are theme-independent
+	   and pinned AA-with-white by contrast_guard.test.ts, so the badge stays
+	   legible in dark mode (a tinted bg + -strong *text* goes invisible on
+	   dark — the -strong tokens are background colours, not text colours). */
 	.wear-due {
-		color: var(--color-warning-strong, var(--color-warning));
-		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: #fff;
+		background: var(--color-warning-strong);
 	}
 	.wear-worn {
-		color: var(--color-danger);
-		background: var(--color-danger-light);
+		color: #fff;
+		background: var(--color-danger-strong);
 	}
 	.gear-actions {
 		display: flex;
