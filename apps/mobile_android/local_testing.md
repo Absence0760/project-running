@@ -95,11 +95,23 @@ Two ways to point a physical device at the local stack:
   ```bash
   adb reverse tcp:54321 tcp:54321   # Supabase REST/Auth/Storage/Functions
   adb reverse tcp:54322 tcp:54322   # Postgres, only if you hit the DB directly
+  adb reverse tcp:7777  tcp:7777    # web dev server — AI Coach (WEB_BASE_URL → /api/coach)
+  adb reverse tcp:8080  tcp:8080    # local Protomaps tile server (TILE_URL_TEMPLATE)
   ```
 
-  Then set `SUPABASE_URL=http://127.0.0.1:54321` in `.env.local`. This also works on the emulator, so it's the one setting that's correct for both. Re-run `adb reverse` after a reconnect/reboot (the forwards don't persist).
+  Then point every URL in `.env.local` at `127.0.0.1` (not `10.0.2.2`):
 
-- **Host LAN IP.** Set `SUPABASE_URL=http://<your-workstation-LAN-IP>:54321` (find it with `ip route get 1.1.1.1`) and make sure local Supabase binds beyond loopback + your firewall allows the port. No `adb` needed, but more setup than `adb reverse`.
+  ```
+  SUPABASE_URL=http://127.0.0.1:54321
+  WEB_BASE_URL=http://127.0.0.1:7777
+  TILE_URL_TEMPLATE=http://127.0.0.1:8080/styles/basic/{z}/{x}/{y}.png
+  ```
+
+  `127.0.0.1` also works on the emulator (via the same `adb reverse`), so it's the one set of values correct for both. `adb reverse` even bridges to a host listener bound only to IPv6 `[::1]` (Vite's default), so the web dev server needs no `--host`. Re-run the `adb reverse` lines after any reconnect/reboot (the forwards don't persist). `.env.local` is a bundled Flutter asset (`pubspec.yaml`), so **hot-restart (`R`) or relaunch after editing it** — a hot reload won't re-read it.
+
+- **Host LAN IP.** Set each URL to `http://<your-workstation-LAN-IP>:...` (find it with `ip route get 1.1.1.1`) and make sure each service binds beyond loopback (Supabase + the Protomaps Docker already publish on `0.0.0.0`; the Vite web dev server needs `--host`) and your firewall allows the ports. No `adb` needed, but more setup, and it breaks when your DHCP lease changes.
+
+**Local AI Coach (Ollama).** The mobile Coach POSTs to `WEB_BASE_URL/api/coach`, so the **web dev server must be running** (`npm run dev:run:web`) and configured for Ollama in `apps/web/.env.local`: `COACH_PROVIDER=openai`, `OPENAI_BASE_URL=http://localhost:11434/v1`, and `OPENAI_MODEL=<a model you've actually pulled>` (check with `ollama list` — a model name that isn't installed makes the coach 404). The web server reaches Ollama on the host directly, so no `adb reverse` is needed for port 11434.
 
 ## Google Sign-In (optional)
 
