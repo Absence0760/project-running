@@ -56,8 +56,9 @@ test.describe('/gym/records — per-exercise current bests', () => {
 			// The record card for this exercise shows its heaviest set (120 kg × 5).
 			const card = page.locator('.record-card', { hasText: exercise });
 			await expect(card).toBeVisible({ timeout: 10_000 });
-			await expect(card).toContainText('120');
-			await expect(card).toContainText('5');
+			// "× 5" is the heaviest-set rep suffix — unambiguous, unlike a bare
+			// "5" which could match a digit in the Date.now()-stamped name.
+			await expect(card).toContainText('120 kg × 5');
 		} finally {
 			await admin.from('gym_workouts').delete().eq('id', workoutId);
 		}
