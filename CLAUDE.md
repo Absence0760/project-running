@@ -83,6 +83,10 @@ Cheaper than `/safe-edit` (single pass, no review-and-fix loop), advisory only �
 
 The full rule + per-source-type test surface is in [`docs/architecture/conventions.md` § Test hygiene](docs/architecture/conventions.md#test-hygiene--review-then-unit-then-e2e).
 
+## /improve-round — ship one improvement to an area, then self-audit
+
+`/improve-round [area]` is the repeatable "do another round" loop: pick (or take) one area of the app, ship a genuinely useful, bounded improvement **web-first** in path-scoped per-piece commits (tests + twin parity + i18n + docs each in their own commit), then run the `code-reviewer` agent against the commit range and fix every finding — **verifying any numeric claim by computing it** before applying — until clean, capped at two review cycles. Unlike `/check` (advisory, working-diff, no fixes) and `/safe-edit` (one task, coder↔reviewer loop), this one *chooses the work*, commits as it goes, and closes the audit loop itself. Omit the arg to let it survey for a high-value target (a missing signal, a feature interconnection that doesn't exist yet, or a shipped-but-inconsistent surface) and propose it before building. Definition in [`.claude/commands/improve-round.md`](.claude/commands/improve-round.md).
+
 ## Always recommend the long-term solution
 
 When there's a choice between a quick patch and the durable fix, **lead with the durable one** — the root cause, the reusable abstraction, the consistent pattern, the proper schema change — not the band-aid. This applies to every recommendation: a one-off conversion vs. a shared component, papering over a failing test vs. fixing the bug it caught, a local workaround vs. closing the underlying gap, copy-paste vs. extracting the shared helper.
