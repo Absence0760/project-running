@@ -105,6 +105,14 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 >   consumed/target (the arc clamps at full, so an over day is invisible).
 >   Mirror by porting the budget helper to Dart (new parity pair) and
 >   recolouring the ceiling rings (calories/fat) + adding the headline chip.
+> - **Mobile hydration-goal mirror** — web shipped `hydration.ts` (pure:
+>   daily water target from bodyweight + today's exercise minutes, plus a
+>   remaining/reached budget) and gave the `/nutrition` water card a
+>   `consumed / target L` readout, an "X ml left" / "Goal reached" chip, and
+>   goal-relative pips. The mobile water tracker (`nutrition_screen.dart`,
+>   same per-day `water_ml_<date>` counter) is still goal-less. Mirror by
+>   porting `hydration.ts` to Dart (new parity pair) and adding the target
+>   readout + remaining chip to the mobile water card.
 
 - [ ] **G6 · Nutrition foundation (pure + schema)** — `nutrition_targets` parity pair (Mifflin-St Jeor BMR × activity-level); `body_metrics` migration (height on `user_profiles` + `body_metrics` weight time-series, owner RLS, cascade-delete); Settings height/weight entry; privacy-disclosure updates (iOS label / Play Data Safety / Open Food Facts sub-processor). **Feeds G1** (add `body_metrics` to export). Owns: `nutrition_targets.ts`/`.dart`, the new migration, Settings body-metrics entry.
   ```
