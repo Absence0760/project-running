@@ -1186,7 +1186,7 @@
 						Next hard session in ~{daysToHard} day{daysToHard === 1 ? '' : 's'} of easy running.
 					</p>
 				{/if}
-				{#if excludeGymFromReadiness && lifts.length > 0}
+				{#if excludeGymFromReadiness && hasRecentLift}
 					<p class="fitness-gym-note" data-testid="gym-readiness-note">
 						<span class="material-symbols" aria-hidden="true">fitness_center</span>
 						{m('dash.gymReadinessExcluded')}

@@ -437,6 +437,28 @@ test.describe('/settings/preferences', () => {
 		).toBeVisible({ timeout: 10_000 });
 		await expect(page.locator('.skel-card')).toHaveCount(0);
 	});
+
+	test('activity-level labels describe a non-exercise baseline (dynamic-TDEE double-count guard)', async ({
+		page,
+	}) => {
+		// Regression guard (decisions §134): the dynamic-TDEE "base + exercise"
+		// model treats nutrition_activity_level as a NON-exercise baseline and
+		// adds logged workout calories on top. The select renders from the
+		// `prefs.activity_*` i18n keys (not ACTIVITY_LEVELS[].label), so those
+		// strings must NOT describe weekly exercise frequency — that wording
+		// guides a runner into the exact double-count this avoids.
+		await page.goto('/settings/preferences');
+		const optionText = (
+			await page.getByTestId('activity-level').locator('option').allInnerTexts()
+		)
+			.join(' ')
+			.toLowerCase();
+		expect(optionText).not.toMatch(/\/\s*week|days\/week|twice a day|little exercise/);
+		// The hint discloses that logged workouts are added automatically.
+		await expect(
+			page.locator('.section-hint', { hasText: /added to your goal automatically/i })
+		).toBeVisible();
+	});
 });
 
 test.describe('/settings/preferences — anon', () => {
