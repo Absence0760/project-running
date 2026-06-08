@@ -158,9 +158,12 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
 
   /// Stamp `retired_at` to today.
   Future<void> retireLocal(String id) async {
+    // Local calendar date — `retired_at` is a DATE, and a UTC stamp rolls a
+    // day early/late for runners behind/ahead of UTC. A local `DateTime`'s
+    // `toIso8601String()` is the local wall-clock (no `Z`), so its first 10
+    // chars are the local YYYY-MM-DD. Mirrors web `retireGear`'s `todayISO()`.
     await updateLocal(id, {
-      'retired_at':
-          DateTime.now().toUtc().toIso8601String().substring(0, 10),
+      'retired_at': DateTime.now().toIso8601String().substring(0, 10),
     });
   }
 

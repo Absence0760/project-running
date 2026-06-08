@@ -203,10 +203,14 @@ void main() {
   });
 
   group('retire / unretire', () {
-    test('retireLocal stamps retired_at', () async {
+    test('retireLocal stamps retired_at with the LOCAL calendar date', () async {
       final stored = await store.createLocal(kind: 'shoe', name: 'X');
       await store.retireLocal(stored.id);
-      expect(store.rows.first['retired_at'], isNotNull);
+      // The DATE must be the runner's local day, not the UTC day — a UTC stamp
+      // rolls a day early/late near midnight (the gear-retire twin of the
+      // date_format UTC bug). Pin it to the local YYYY-MM-DD.
+      final localToday = DateTime.now().toIso8601String().substring(0, 10);
+      expect(store.rows.first['retired_at'], localToday);
     });
 
     test('unretireLocal clears retired_at', () async {

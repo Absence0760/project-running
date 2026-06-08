@@ -4425,8 +4425,11 @@ export async function setDefaultGear(
 /// around for historical mileage roll-ups on past runs that reference
 /// it. Use [deleteGear] to actually remove (cascades to run_gear).
 export async function retireGear(id: string): Promise<void> {
-	const today = new Date().toISOString().slice(0, 10);
-	await updateGear(id, { retired_at: today });
+	// Local-tz today — `toISOString().slice(0,10)` returns the UTC date, which
+	// rolls a calendar day early/late depending on the runner's TZ (same fix as
+	// the active-plan overview above).
+	const { todayISO } = await import('../training/training');
+	await updateGear(id, { retired_at: todayISO() });
 }
 
 /// Un-retire — restore an actively-tracked piece of gear without
