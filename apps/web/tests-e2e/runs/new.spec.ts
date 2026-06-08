@@ -7,7 +7,7 @@ import { USER_A } from '../fixtures/users';
 /**
  * /runs/new — standalone manual-run wrapper around RunEditor.
  *
- * The same RunEditor is mounted in a modal from /history (covered by
+ * The same RunEditor is mounted in a modal from /runs (covered by
  * runs/list.spec.ts). This standalone surface is the deep-linkable
  * version — kept as a thin page wrapper so /runs/new opens cleanly
  * from a back-button history or an external link.
@@ -149,7 +149,7 @@ test.describe('/runs/new', () => {
 		).toBeVisible();
 		await expect(
 			page.getByRole('link', { name: /Back to runs/ })
-		).toHaveAttribute('href', '/history');
+		).toHaveAttribute('href', '/runs');
 	});
 
 	test('save round-trip: fill form → submit → /runs/[id] with correct shape', async ({
@@ -451,7 +451,7 @@ test.describe('/runs/new', () => {
 		await page.locator('textarea').fill('Should never persist');
 
 		await page.getByRole('link', { name: /Back to runs/ }).click();
-		await page.waitForURL(/\/history(\?.*)?$/, { timeout: 10_000 });
+		await page.waitForURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
 
 		const afterCount = await admin
 			.from('runs')

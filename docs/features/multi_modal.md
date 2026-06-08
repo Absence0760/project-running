@@ -307,24 +307,25 @@ documented cross-modality contract — its column set and the windowed-read +
 redaction-boundary guarantees are pinned by
 `apps/backend/supabase/tests/activities_view_windowed_test.sql`.
 
-> **Status (web shipped):** `/history` (the run-history list; `/runs`
-> redirects to it, F14/D3) gains All/Runs/Lifts/Meals chips + a
-> day-grouped unified timeline over `fetchActivities` once a second modality
-> has data (data-gated, no flag — §63 amendment; chips for empty kinds
-> hidden). Rows link to their own detail route (`/runs/[id]`, `/gym/[id]`);
-> meals render read-only until the nutrition detail route lands. The **Runs**
-> chip drops back to the full existing run history (all its source / date /
-> sort filters, pagination, bulk-delete); a pure runner sees that unchanged
-> page with no chips. A **modality-aware Log action** sits opposite the chips
-> (mirroring the /gym + /nutrition headers): the **All** view shows a `Log`
-> menu (Log run / Log workout / Log food), a single-modality chip (**Lifts** /
-> **Meals**) shows just the one matching action, and the **Runs** chip hides
-> it (the run-list view below owns its own Add-run button). Each opens the
-> shared editor in an in-place modal (`RunEditor` / `GymEditor` /
-> `FoodLogEditor`) and refreshes the timeline on save — no navigation. This
-> replaces the old run-only `Add run` + `Heatmap` actions that read as page
-> chrome once gym/nutrition got dedicated pages; `Heatmap` stays scoped to the
-> Runs chip's run-list toolbar.
+> **Status (web shipped):** `/history` is the unified, cross-modal **timeline**
+> — a pure read view over `fetchActivities`. The full run-list management
+> surface (filters / pagination / bulk-delete / Add run / Heatmap) lives at its
+> own **`/runs`** page (un-redirected from the old F14/D3 `/runs`→`/history`
+> rename, §63 amendment) so runs sit parallel to `/gym` + `/nutrition`; the
+> sidebar gains a `Runs` item between History and Gym. All/Runs/Lifts/Meals
+> chips appear once a second modality has data (data-gated, no flag; empty-kind
+> chips hidden); **every tab — including Runs — renders the same timeline-row
+> shape** (run rows look like lift/meal rows), so the top section is consistent
+> across tabs. Rows link to their own detail route (`/runs/[id]`, `/gym/[id]`);
+> meals render read-only until the nutrition detail route lands. **One header
+> per tab** mirrors the /gym + /nutrition headers: the **All** view shows a
+> `Log` menu (Log run / Log workout / Log food); a single-modality tab
+> (**Runs** / **Lifts** / **Meals**) shows a `View all` link to that modality's
+> page (`/runs`, `/gym`, `/nutrition`) plus the single matching Log action.
+> Each Log opens the shared editor in an in-place modal (`RunEditor` /
+> `GymEditor` / `FoodLogEditor`) and refreshes the feed on save — no
+> navigation. A pure runner (no second modality) sees a chip-less run timeline
+> and reaches the full list via the sidebar `Runs` item.
 >
 > **Status (mobile shipped):** `runs_screen.dart` (the History tab) gains the
 > same All/Runs/Lifts/Meals chips + a day-grouped unified timeline
@@ -339,6 +340,14 @@ redaction-boundary guarantees are pinned by
 > Neither platform gates this behind `multi_modal_nav` (retired, §63
 > amendment) — the "second modality has data" gate carries the anti-clutter
 > contract on both.
+>
+> **Web/mobile divergence (intentional):** web split the run-list management
+> onto a dedicated `/runs` page and made `/history` a pure timeline (Runs tab =
+> timeline rows + a "View all" link to `/runs`). Mobile keeps the full run list
+> **inline under the Runs chip** in `runs_screen.dart` — it has no `/runs`
+> analog because the bottom nav is capped at five slots and runs are reached via
+> the centre Log FAB + the History tab (decisions §63). Both are correct for
+> their platform per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
 
 ```
   History            [ All ] [ Runs ] [ Lifts ] [ Meals ]

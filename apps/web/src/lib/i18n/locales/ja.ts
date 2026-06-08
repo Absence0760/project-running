@@ -3,6 +3,7 @@ import type { Messages } from '../messages';
 export const messages = {
 	'nav.dashboard': 'ダッシュボード',
 	'nav.history': '履歴',
+	'nav.runs': 'ラン',
 	'nav.routes': 'ルート',
 	'nav.coach': 'コーチ',
 	'nav.social': 'ソーシャル',
@@ -894,6 +895,9 @@ export const messages = {
 	"history.kcal": "{n} kcal",
 	"history.emptyTimeline": "このビューにはまだ記録がありません。",
 	"history.heading": "ランの履歴",
+	"history.timelineHeading": "履歴",
+	"history.timelineTitle": "履歴 — Threkir",
+	"history.viewAll": "すべて表示",
 	"runs.activityTypeGroup": "アクティビティの種類",
 	"runs.sourceLabel": "ソース",
 	"runs.dateRangeLabel": "期間",

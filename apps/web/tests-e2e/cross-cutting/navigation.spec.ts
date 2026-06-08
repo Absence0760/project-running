@@ -69,21 +69,22 @@ test.describe('sidebar collapse', () => {
 	});
 });
 
-test.describe('legacy /runs route', () => {
+test.describe('/runs run list', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('/runs redirects to /history (F14 rename, bookmarks keep working)', async ({
+	test('/runs is the dedicated run list (no longer a /history redirect)', async ({
 		page
 	}) => {
-		// The run-history list moved from /runs to /history (decision D3,
-		// F14 cosmetic half). /runs is kept as a client-side redirect so
-		// bookmarks + external deep links don't 404 — assert it lands on
-		// the renamed list and that list actually mounts (its visually-
-		// hidden h1 anchors the page).
+		// /runs was un-redirected into the dedicated run-management surface
+		// (decisions §63 amendment): full list + filters + Add run + Heatmap,
+		// parallel to /gym + /nutrition. /history is now the unified timeline.
+		// Assert /runs stays put (no bounce) and the run list mounts (its
+		// visually-hidden h1 + source-filter toolbar anchor the page).
 		await page.goto('/runs');
-		await page.waitForURL(/\/history$/, { timeout: 10_000 });
+		await expect(page).toHaveURL(/\/runs$/);
 		await expect(
 			page.getByRole('heading', { level: 1, name: 'Run history' })
 		).toBeAttached();
+		await expect(page.getByLabel('Source')).toBeVisible({ timeout: 10_000 });
 	});
 });

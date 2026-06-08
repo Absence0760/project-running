@@ -3,6 +3,7 @@ import type { Messages } from '../messages';
 export const messages = {
 	'nav.dashboard': 'Tableau de bord',
 	'nav.history': 'Historique',
+	'nav.runs': 'Courses',
 	'nav.routes': 'Itinéraires',
 	'nav.coach': 'Coach',
 	'nav.social': 'Social',
@@ -898,6 +899,9 @@ export const messages = {
 	"history.kcal": "{n} kcal",
 	"history.emptyTimeline": "Rien d'enregistré dans cette vue pour l'instant.",
 	"history.heading": "Historique des courses",
+	"history.timelineHeading": "Historique",
+	"history.timelineTitle": "Historique — Threkir",
+	"history.viewAll": "Tout voir",
 	"runs.activityTypeGroup": "Type d'activité",
 	"runs.sourceLabel": "Source",
 	"runs.dateRangeLabel": "Période",

@@ -3,6 +3,7 @@ import type { Messages } from '../messages';
 export const messages = {
 	'nav.dashboard': 'Übersicht',
 	'nav.history': 'Verlauf',
+	'nav.runs': 'Läufe',
 	'nav.routes': 'Routen',
 	'nav.coach': 'Coach',
 	'nav.social': 'Community',
@@ -898,6 +899,9 @@ export const messages = {
 	"history.kcal": "{n} kcal",
 	"history.emptyTimeline": "In dieser Ansicht ist noch nichts erfasst.",
 	"history.heading": "Laufverlauf",
+	"history.timelineHeading": "Verlauf",
+	"history.timelineTitle": "Verlauf — Threkir",
+	"history.viewAll": "Alle ansehen",
 	"runs.activityTypeGroup": "Aktivitätstyp",
 	"runs.sourceLabel": "Quelle",
 	"runs.dateRangeLabel": "Zeitraum",

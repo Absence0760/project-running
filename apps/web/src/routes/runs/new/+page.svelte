@@ -6,7 +6,8 @@
 	let cameFromRuns = $state(false);
 	afterNavigate(({ from }) => {
 		if (cameFromRuns || !from) return;
-		if (from.url.pathname === '/history' || from.url.pathname.startsWith('/history?')) {
+		const p = from.url.pathname;
+		if (p === '/runs' || p.startsWith('/runs?')) {
 			cameFromRuns = true;
 		}
 	});
@@ -20,7 +21,7 @@
 
 	function handleCancel(): void {
 		if (cameFromRuns) history.back();
-		else goto('/history');
+		else goto('/runs');
 	}
 </script>
 
@@ -29,7 +30,7 @@
 </svelte:head>
 
 <div class="page">
-	<a href="/history" class="back-link" onclick={handleBack}>
+	<a href="/runs" class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
 		{m('runsNewPage.backToRuns')}
 	</a>

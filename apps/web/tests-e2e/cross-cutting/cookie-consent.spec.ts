@@ -100,7 +100,7 @@ test.describe('Cookie consent banner', () => {
 		// Earlier the banner spanned a 42rem strip at bottom-centre of
 		// the viewport. It silently intercepted pointer events on
 		// whatever pixels it covered — including the "Save run" button
-		// on /runs/new and the floating bulk-action bar on /history. The
+		// on /runs/new and the floating bulk-action bar on /runs. The
 		// repro: brand-new visitor enters /runs/new, fills the form,
 		// clicks Save → click never lands → 30s timeout. The fix is the
 		// banner's geometry (compact bottom-RIGHT corner card, not a

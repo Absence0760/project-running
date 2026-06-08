@@ -230,7 +230,7 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		// Sanity that the Add-photo affordance is scoped to a real run
 		// page. A regression that mounted RunPhotos on a non-detail
 		// route (e.g. the run list) would surface here.
-		await page.goto('/history');
+		await page.goto('/runs');
 		await expect(page.getByRole('button', { name: /Add photo/ })).toHaveCount(0);
 	});
 });

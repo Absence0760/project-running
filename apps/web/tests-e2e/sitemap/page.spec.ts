@@ -60,8 +60,8 @@ test.describe('/sitemap.xml — prerendered SEO sitemap', () => {
 		// must not appear in the crawler-visible sitemap. A regression
 		// that listed them would invite Googlebot 401s + waste crawl
 		// budget. Pin the negative — these stay out of /sitemap.xml.
-		// /runs is the legacy redirect stub for /history; it must stay
-		// out too so crawlers never land on a bounce.
+		// /runs is the auth-gated run list (parallel to /history); it must
+		// stay out too so crawlers never land on a 401.
 		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
 		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/dashboard<\/loc>/);
 		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/history<\/loc>/);

@@ -117,6 +117,7 @@
 	const navItems: { href: string; labelKey: MessageKey; icon: string; accent: string }[] = [
 		{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
 		{ href: '/history', labelKey: 'nav.history', icon: 'timeline', accent: '#D97A54' },
+		{ href: '/runs', labelKey: 'nav.runs', icon: 'directions_run', accent: '#6FA8DC' },
 		{ href: '/gym', labelKey: 'nav.gym', icon: 'fitness_center', accent: '#8FBF9F' },
 		{ href: '/nutrition', labelKey: 'nav.nutrition', icon: 'nutrition', accent: '#E8C07D' },
 		{ href: '/routes', labelKey: 'nav.routes', icon: 'route', accent: '#B9A7E8' },

@@ -61,15 +61,17 @@
 
 	/// Track where the user came from so the in-page back button can
 	/// genuinely go BACK (history.back) — which pops the history entry
-	/// and lets /history's snapshot.restore fire, preserving the loaded
-	/// list + scroll position. Falling through to <a href="/history"> would
-	/// push a fresh entry and the user would land at the top of an
-	/// empty list. Captured on the first afterNavigate after mount so
-	/// SvelteKit's own forward navigations within this page (rare) don't
-	/// overwrite it.
+	/// and lets the source page's snapshot.restore fire, preserving the
+	/// loaded list + scroll position. A run can be opened from the /runs
+	/// list OR the /history timeline (both carry snapshots); either counts.
+	/// Falling through to <a href="/runs"> would push a fresh entry and the
+	/// user would land at the top of an empty list. Captured on the first
+	/// afterNavigate after mount so SvelteKit's own forward navigations
+	/// within this page (rare) don't overwrite it.
 	let cameFromRuns = $state(false);
 	afterNavigate(({ from }) => {
-		if (from?.url.pathname === '/history' && !cameFromRuns) {
+		const p = from?.url.pathname;
+		if ((p === '/runs' || p === '/history') && !cameFromRuns) {
 			cameFromRuns = true;
 		}
 	});
@@ -79,8 +81,8 @@
 			e.preventDefault();
 			history.back();
 		}
-		// else: <a href="/history"> falls through and SvelteKit does a
-		// normal soft-nav. The user gets a fresh /history.
+		// else: <a href="/runs"> falls through and SvelteKit does a
+		// normal soft-nav. The user gets a fresh /runs list.
 	}
 	let linkedWorkout = $state<PlanWorkout | null>(null);
 	/// Selected segment from the map. Set when the user clicks a point
@@ -461,7 +463,7 @@
 		showDeleteConfirm = false;
 		try {
 			await deleteRun(run.id);
-			goto('/history');
+			goto('/runs');
 		} catch (e) {
 			showToast(m('runDetail.deleteFailed', { error: String(e) }), 'error');
 		}
@@ -1032,13 +1034,13 @@
 	</div>
 {:else if !run}
 	<div class="run-detail">
-		<a href="/history" class="back-link page-back">
+		<a href="/runs" class="back-link page-back">
 			<span class="material-symbols">arrow_back</span> {m('runDetail.allRuns')}
 		</a>
 		<div class="not-found">
 			<h1>{m('runDetail.notFoundTitle')}</h1>
 			<p>{m('runDetail.notFoundBody')}</p>
-			<a href="/history" class="btn btn-primary">{m('runDetail.backToRuns')}</a>
+			<a href="/runs" class="btn btn-primary">{m('runDetail.backToRuns')}</a>
 		</div>
 	</div>
 {:else}
@@ -1164,7 +1166,7 @@
 		{#snippet left()}
 		{#if run}
 	<aside class="stats-panel">
-		<a href="/history" class="back-link panel-back" onclick={handleBack}>
+		<a href="/runs" class="back-link panel-back" onclick={handleBack}>
 			<span class="material-symbols">arrow_back</span>
 			{m('runDetail.allRuns')}
 		</a>

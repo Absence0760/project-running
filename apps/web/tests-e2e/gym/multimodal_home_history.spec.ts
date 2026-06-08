@@ -121,15 +121,30 @@ test.describe('multi-modal Home + History', () => {
 		await expect(page.getByRole('button', { name: 'Log', exact: true })).toHaveCount(0);
 	});
 
-	test('History holds a skeleton until activities resolve — no run-list flash', async ({
+	test('Runs chip shows run rows as a timeline + a View all link to /runs', async ({ page }) => {
+		await page.goto('/history');
+		await page.getByRole('button', { name: 'Runs', exact: true }).click();
+		// The full run-list toolbar (filters + Add run + Heatmap) now lives on
+		// /runs — under the Runs chip, runs render as timeline rows like
+		// lifts/meals, so /history must not paint a `.toolbar`.
+		await expect(page.locator('.toolbar')).toHaveCount(0);
+		// The header offers a consistent "View all" link (→ /runs) + the single
+		// Log run action, matching the Lifts/Meals tabs.
+		const viewAll = page.getByRole('link', { name: /View all/ });
+		await expect(viewAll).toBeVisible();
+		await expect(viewAll).toHaveAttribute('href', '/runs');
+		await expect(page.getByRole('button', { name: 'Log run', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Log', exact: true })).toHaveCount(0);
+	});
+
+	test('History holds a skeleton until activities resolve — no chip flash', async ({
 		page,
 	}) => {
-		// Regression guard for the run-list → timeline flip: a multi-modal
-		// account used to land on the run list, then have the whole page swap
-		// to the unified timeline the instant the activities feed resolved.
-		// The page now holds a neutral skeleton until the feed lands and paints
-		// the correct layout once. Gate the feed so the pre-resolve paint is
-		// observable.
+		// Regression guard: /history holds a neutral timeline skeleton until the
+		// activities feed lands, then paints the chips + timeline once — it never
+		// flashes a chip-less layout first. The full run-list toolbar lives on
+		// /runs now, so /history must never render a `.toolbar`. Gate the feed so
+		// the pre-resolve paint is observable.
 		let release!: () => void;
 		const gate = new Promise<void>((r) => (release = r));
 		await page.route('**/rest/v1/activities*', async (route) => {
@@ -140,10 +155,9 @@ test.describe('multi-modal Home + History', () => {
 
 		await page.goto('/history');
 
-		// While the feed is pending: the loading skeleton is shown and the
-		// run-list toolbar (the segmented activity filter + selects) must NOT
-		// have been painted — that toolbar only renders in run-list mode.
-		await expect(page.locator('.run-list-skel')).toBeVisible({ timeout: 15_000 });
+		// While the feed is pending: the timeline skeleton is shown and the
+		// run-list toolbar (which now lives on /runs) is never painted here.
+		await expect(page.locator('.timeline-skel')).toBeVisible({ timeout: 15_000 });
 		await expect(page.locator('.toolbar')).toHaveCount(0);
 
 		// Release the feed → the unified timeline takes over (a second modality

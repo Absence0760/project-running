@@ -54,11 +54,11 @@ test.describe('cross-user run isolation', () => {
 		).toBeVisible({ timeout: 10_000 });
 	});
 
-	test("User B's /history list excludes runner's runs (own list filter)", async ({
+	test("User B's /runs list excludes runner's runs (own list filter)", async ({
 		page,
 		browser
 	}) => {
-		// User B's /history list must contain ONLY user B's runs — never
+		// User B's /runs list must contain ONLY user B's runs — never
 		// runner's. fetchRuns explicitly filters by user_id; this
 		// asserts the UI honors that even after switching filters.
 		const ctx = await browser.newContext({
@@ -67,7 +67,7 @@ test.describe('cross-user run isolation', () => {
 		const bPage = await ctx.newPage();
 
 		try {
-			await bPage.goto('/history');
+			await bPage.goto('/runs');
 			await switchRunsToAllTime(bPage);
 			await expect(bPage.locator('.run-card').first()).toBeVisible();
 
@@ -84,7 +84,7 @@ test.describe('cross-user run isolation', () => {
 			}
 
 			// Stronger negative: alex must NOT see runner's pinned
-			// public run in their own /history list (different user, RLS
+			// public run in their own /runs list (different user, RLS
 			// hides regardless of is_public).
 			await expect(
 				bPage.locator(`.run-card[href$="${RUNNER_PUBLIC_RUN_ID}"]`)

@@ -13,7 +13,7 @@ import { USER_A } from '../fixtures/users';
  *   1. Plant a 25 km/week distance goal in localStorage.
  *   2. Snapshot dashboard initial state (Total Runs, Longest Run,
  *      Recent Runs first row).
- *   3. Add a 10 km manual run via /history UI (covers RunEditor +
+ *   3. Add a 10 km manual run via /runs UI (covers RunEditor +
  *      createManualRun + redirect to /runs/[new-id]).
  *   4. Re-open dashboard → verify Total Runs +1, the new run is
  *      first in Recent Runs, the goal-card shows 40% (10/25).
@@ -94,10 +94,10 @@ test.describe('dashboard end-to-end journey', () => {
 			await expect(goal.locator('.goal-overall')).toHaveText('0%');
 		});
 
-		// ── Phase 2: add a 10 km manual run via /history ──────────────
+		// ── Phase 2: add a 10 km manual run via /runs ──────────────
 		let newRunId = '';
-		await test.step('add a 10 km run via /history', async () => {
-			await page.goto('/history');
+		await test.step('add a 10 km run via /runs', async () => {
+			await page.goto('/runs');
 			await switchRunsToAllTime(page);
 			await page.getByRole('button', { name: '+ Add run' }).click();
 
@@ -165,8 +165,8 @@ test.describe('dashboard end-to-end journey', () => {
 			await expect(dialog).toBeVisible({ timeout: 5_000 });
 			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
-			// Redirects back to /history after delete.
-			await page.waitForURL(/\/history(\?.*)?$/, { timeout: 10_000 });
+			// Redirects back to /runs after delete.
+			await page.waitForURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
 		});
 
 		await test.step('dashboard widgets revert to initial', async () => {

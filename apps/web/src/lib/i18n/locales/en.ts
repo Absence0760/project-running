@@ -12,6 +12,7 @@ export const en = {
 	// App shell / sidebar (+layout.svelte)
 	'nav.dashboard': 'Dashboard',
 	'nav.history': 'History',
+	'nav.runs': 'Runs',
 	'nav.routes': 'Routes',
 	'nav.coach': 'Coach',
 	'nav.social': 'Social',
@@ -906,6 +907,9 @@ export const en = {
 	"history.kcal": "{n} kcal",
 	"history.emptyTimeline": "Nothing logged in this view yet.",
 	"history.heading": "Run history",
+	"history.timelineHeading": "History",
+	"history.timelineTitle": "History — Threkir",
+	"history.viewAll": "View all",
 	"runs.activityTypeGroup": "Activity type",
 	"runs.sourceLabel": "Source",
 	"runs.dateRangeLabel": "Date range",

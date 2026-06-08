@@ -105,20 +105,15 @@ export async function signOut(page: Page) {
 }
 
 /**
- * The /history page defaults its date filter to "today" (so cold loads
+ * The /runs page defaults its date filter to "today" (so cold loads
  * aren't slow on heavy users). For seed-data assertions we always
  * want everything — switch to "All time" via the toolbar select.
  *
  * The select is a native <select bind:value={dateRange}> with
  * aria-label="Date range" and an option `<option value="all">All time</option>`.
- *
- * When the account has a second modality (a logged lift/meal), /history
- * opens on the unified timeline and the run-list toolbar — including the
- * Date-range select — only renders under the "Runs" kind chip. Drop into
- * the run list first when that chip is present so the select exists.
+ * Call this with the page already on /runs (the run list); the unified
+ * /history timeline has no date filter.
  */
 export async function switchRunsToAllTime(page: Page) {
-	const runsChip = page.getByRole('button', { name: 'Runs', exact: true });
-	if (await runsChip.count()) await runsChip.first().click();
 	await page.getByLabel('Date range').selectOption('all');
 }
