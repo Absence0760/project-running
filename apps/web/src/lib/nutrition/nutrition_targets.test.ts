@@ -88,6 +88,35 @@ test('computeNutritionTargets — null on missing or non-physical metrics', () =
 	assert.equal(computeNutritionTargets({ ...base, heightCm: 400 }), null);
 });
 
+test('computeNutritionTargets — exerciseKcal adds on top of the base goal', () => {
+	const baseT = computeNutritionTargets(base)!;
+	const withExercise = computeNutritionTargets({ ...base, exerciseKcal: 450 })!;
+	assert.equal(withExercise.baseCalories, baseT.calories); // 2550, unchanged
+	assert.equal(withExercise.exerciseKcal, 450);
+	assert.equal(withExercise.calories, baseT.calories + 450); // 3000
+});
+
+test('computeNutritionTargets — omitting exerciseKcal is the static base (calories == baseCalories)', () => {
+	const t = computeNutritionTargets(base)!;
+	assert.equal(t.exerciseKcal, 0);
+	assert.equal(t.calories, t.baseCalories);
+});
+
+test('computeNutritionTargets — extra exercise calories flow into the macro budget', () => {
+	const baseT = computeNutritionTargets(base)!;
+	const withExercise = computeNutritionTargets({ ...base, exerciseKcal: 600 })!;
+	// Protein is bodyweight-based (unchanged); the added fuel lands in carbs.
+	assert.equal(withExercise.proteinG, baseT.proteinG);
+	assert.ok(withExercise.carbsG > baseT.carbsG);
+});
+
+test('computeNutritionTargets — a negative exerciseKcal can never lower the goal', () => {
+	const baseT = computeNutritionTargets(base)!;
+	const t = computeNutritionTargets({ ...base, exerciseKcal: -500 })!;
+	assert.equal(t.exerciseKcal, 0);
+	assert.equal(t.calories, baseT.calories);
+});
+
 test('ageFromDob — whole-year age, decremented before the birthday', () => {
 	const now = Date.UTC(2026, 5, 4); // 2026-06-04
 	assert.equal(ageFromDob('1990-06-04', now), 36); // birthday today

@@ -14,12 +14,20 @@
  *   is +5 (male) / −161 (female) / −78 (the male/female average) when sex
  *   is non-binary, withheld, or unknown — so a target still computes
  *   without forcing a binary answer.
- * - **TDEE:** BMR × an activity factor (sedentary…very active). A goal
- *   delta (−500 lose / 0 maintain / +300 gain kcal) is applied after.
+ * - **Base TDEE:** BMR × a *baseline* (non-exercise) activity factor
+ *   (sedentary…very active = daily lifestyle EXCLUDING workouts you log). A
+ *   goal delta (−500 lose / 0 maintain / +300 gain kcal) is applied after.
+ * - **Dynamic TDEE:** measured workout calories (`exerciseKcal`, from
+ *   `exercise_calories.ts`) are added ON TOP of the base — the "base +
+ *   exercise" model (decisions §63 amendment). So the activity level should
+ *   reflect daily life only; logged runs/lifts raise the goal separately and
+ *   double-counting is avoided. `calories` is the final eat-to goal,
+ *   `baseCalories` the non-exercise floor, `exerciseKcal` the day's add-on.
  * - **Macros:** protein at 1.8 g/kg bodyweight (endurance-athlete range
  *   1.6–2.0), fat at 30% of calories, carbohydrate filling the remainder —
- *   the running-friendly default. Carbs floor at 0 if protein+fat already
- *   exhaust the budget.
+ *   the running-friendly default, so the extra exercise calories land mostly
+ *   as fuel (carbs). Carbs floor at 0 if protein+fat already exhaust the
+ *   budget.
  *
  * `computeNutritionTargets` returns **null** when any required metric is
  * missing or non-physical, so the UI hides the rings rather than render a
@@ -35,14 +43,17 @@ export interface ActivityLevelOption {
 	factor: number;
 }
 
-/// Activity multipliers applied to BMR. Order is the display order in
-/// Settings (least → most active).
+/// Baseline (non-exercise) activity multipliers applied to BMR. Order is the
+/// display order in Settings (least → most active). Labels describe daily
+/// lifestyle EXCLUDING logged workouts — those are added separately as
+/// `exerciseKcal`, so a runner picking a high level here AND logging runs
+/// would double-count.
 export const ACTIVITY_LEVELS: ActivityLevelOption[] = [
-	{ key: 'sedentary', label: 'Sedentary (little exercise)', factor: 1.2 },
-	{ key: 'light', label: 'Light (1–3 days/week)', factor: 1.375 },
-	{ key: 'moderate', label: 'Moderate (3–5 days/week)', factor: 1.55 },
-	{ key: 'active', label: 'Active (6–7 days/week)', factor: 1.725 },
-	{ key: 'very_active', label: 'Very active (training twice a day)', factor: 1.9 },
+	{ key: 'sedentary', label: 'Mostly sitting (desk job)', factor: 1.2 },
+	{ key: 'light', label: 'Lightly active (light daily movement)', factor: 1.375 },
+	{ key: 'moderate', label: 'Moderately active (on your feet often)', factor: 1.55 },
+	{ key: 'active', label: 'Very active day (physical job)', factor: 1.725 },
+	{ key: 'very_active', label: 'Extremely active (hard physical labour)', factor: 1.9 },
 ];
 
 /// Daily calorie delta applied after TDEE for the user's weight goal.
@@ -66,7 +77,12 @@ const KCAL_PER_G_CARB = 4;
 const KCAL_PER_G_FAT = 9;
 
 export interface NutritionTargets {
+	/// Final daily eat-to goal = baseCalories + exerciseKcal.
 	calories: number;
+	/// Non-exercise goal (BMR × baseline factor + goal delta), floored.
+	baseCalories: number;
+	/// Measured workout calories added on top for the day (0 when none).
+	exerciseKcal: number;
 	proteinG: number;
 	carbsG: number;
 	fatG: number;
@@ -79,6 +95,9 @@ export interface BodyMetricsInput {
 	sex: string | null;
 	activityLevel: ActivityLevel;
 	goal: WeightGoal;
+	/// Calories burned by today's logged workouts, added on top of the base
+	/// (dynamic TDEE). Defaults to 0 — omit for the static base goal.
+	exerciseKcal?: number;
 }
 
 function sexOffset(sex: string | null | undefined): number {
@@ -133,8 +152,12 @@ export function computeNutritionTargets(input: BodyMetricsInput): NutritionTarge
 	if (weightKg > 500 || heightCm > 300 || ageYears > 120) return null;
 
 	const bmr = mifflinStJeorBmr(weightKg, heightCm, ageYears, sex);
-	const tdee = bmr * factorFor(activityLevel) + GOAL_KCAL_DELTA[goal];
-	const calories = Math.max(MIN_CALORIE_TARGET, Math.round(tdee / 10) * 10);
+	const baseTdee = bmr * factorFor(activityLevel) + GOAL_KCAL_DELTA[goal];
+	const baseCalories = Math.max(MIN_CALORIE_TARGET, Math.round(baseTdee / 10) * 10);
+	// Workout calories add on top of the non-exercise base. Clamp to a
+	// non-negative whole number so a stray negative can't lower the goal.
+	const exerciseKcal = Math.max(0, Math.round(input.exerciseKcal ?? 0));
+	const calories = baseCalories + exerciseKcal;
 
 	const proteinG = Math.round(PROTEIN_G_PER_KG * weightKg);
 	const fatG = Math.round((FAT_KCAL_FRACTION * calories) / KCAL_PER_G_FAT);
@@ -144,5 +167,5 @@ export function computeNutritionTargets(input: BodyMetricsInput): NutritionTarge
 	);
 	const carbsG = Math.round(carbsKcal / KCAL_PER_G_CARB);
 
-	return { calories, proteinG, carbsG, fatG };
+	return { calories, baseCalories, exerciseKcal, proteinG, carbsG, fatG };
 }

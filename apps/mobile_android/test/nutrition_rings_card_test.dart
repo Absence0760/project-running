@@ -19,8 +19,13 @@ Future<void> _pump(WidgetTester tester, Widget child) {
 void main() {
   const consumed =
       MacroTotals(calories: 1840, proteinG: 132, carbsG: 180, fatG: 61);
-  const targets =
-      NutritionTargets(calories: 2550, proteinG: 165, carbsG: 280, fatG: 85);
+  const targets = NutritionTargets(
+      calories: 2550,
+      baseCalories: 2550,
+      exerciseKcal: 0,
+      proteinG: 165,
+      carbsG: 280,
+      fatG: 85);
 
   group('NutritionRingsCard', () {
     testWidgets('renders four macro rings + the kcal value', (tester) async {

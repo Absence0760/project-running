@@ -10,11 +10,19 @@
 /// - **BMR (Mifflin-St Jeor):** `10*kg + 6.25*cm - 5*age + sexOffset`, where
 ///   the sex offset is +5 (male) / -161 (female) / -78 (the male/female
 ///   average) when sex is non-binary, withheld, or unknown.
-/// - **TDEE:** BMR x an activity factor (sedentary..very active). A goal delta
-///   (-500 lose / 0 maintain / +300 gain kcal) is applied after.
+/// - **Base TDEE:** BMR x a *baseline* (non-exercise) activity factor
+///   (sedentary..very active = daily lifestyle EXCLUDING workouts you log). A
+///   goal delta (-500 lose / 0 maintain / +300 gain kcal) is applied after.
+/// - **Dynamic TDEE:** measured workout calories (`exerciseKcal`, from
+///   `exercise_calories.dart`) are added ON TOP of the base — the "base +
+///   exercise" model (decisions §63 amendment). So the activity level should
+///   reflect daily life only; logged runs/lifts raise the goal separately and
+///   double-counting is avoided. `calories` is the final eat-to goal,
+///   `baseCalories` the non-exercise floor, `exerciseKcal` the day's add-on.
 /// - **Macros:** protein at 1.8 g/kg bodyweight (endurance-athlete range
-///   1.6-2.0), fat at 30% of calories, carbohydrate filling the remainder.
-///   Carbs floor at 0 if protein+fat already exhaust the budget.
+///   1.6-2.0), fat at 30% of calories, carbohydrate filling the remainder, so
+///   the extra exercise calories land mostly as fuel (carbs). Carbs floor at 0
+///   if protein+fat already exhaust the budget.
 ///
 /// [computeNutritionTargets] returns null when any required metric is missing
 /// or non-physical, so the UI hides the rings rather than render a
@@ -32,14 +40,17 @@ class ActivityLevelOption {
   const ActivityLevelOption(this.key, this.label, this.factor);
 }
 
-/// Activity multipliers applied to BMR. Order is the display order in
-/// Settings (least -> most active).
+/// Baseline (non-exercise) activity multipliers applied to BMR. Order is the
+/// display order in Settings (least -> most active). Labels describe daily
+/// lifestyle EXCLUDING logged workouts — those are added separately as
+/// `exerciseKcal`, so a runner picking a high level here AND logging runs
+/// would double-count.
 const activityLevels = <ActivityLevelOption>[
-  ActivityLevelOption('sedentary', 'Sedentary (little exercise)', 1.2),
-  ActivityLevelOption('light', 'Light (1-3 days/week)', 1.375),
-  ActivityLevelOption('moderate', 'Moderate (3-5 days/week)', 1.55),
-  ActivityLevelOption('active', 'Active (6-7 days/week)', 1.725),
-  ActivityLevelOption('very_active', 'Very active (training twice a day)', 1.9),
+  ActivityLevelOption('sedentary', 'Mostly sitting (desk job)', 1.2),
+  ActivityLevelOption('light', 'Lightly active (light daily movement)', 1.375),
+  ActivityLevelOption('moderate', 'Moderately active (on your feet often)', 1.55),
+  ActivityLevelOption('active', 'Very active day (physical job)', 1.725),
+  ActivityLevelOption('very_active', 'Extremely active (hard physical labour)', 1.9),
 ];
 
 /// Daily calorie delta applied after TDEE for the user's weight goal.
@@ -65,12 +76,21 @@ const _kcalPerGCarb = 4;
 const _kcalPerGFat = 9;
 
 class NutritionTargets {
+  /// Final daily eat-to goal = baseCalories + exerciseKcal.
   final int calories;
+
+  /// Non-exercise goal (BMR x baseline factor + goal delta), floored.
+  final int baseCalories;
+
+  /// Measured workout calories added on top for the day (0 when none).
+  final int exerciseKcal;
   final int proteinG;
   final int carbsG;
   final int fatG;
   const NutritionTargets({
     required this.calories,
+    required this.baseCalories,
+    required this.exerciseKcal,
     required this.proteinG,
     required this.carbsG,
     required this.fatG,
@@ -84,6 +104,10 @@ class BodyMetricsInput {
   final String? sex;
   final String activityLevel;
   final String goal;
+
+  /// Calories burned by today's logged workouts, added on top of the base
+  /// (dynamic TDEE). Defaults to 0 — omit for the static base goal.
+  final double exerciseKcal;
   const BodyMetricsInput({
     required this.weightKg,
     required this.heightCm,
@@ -91,6 +115,7 @@ class BodyMetricsInput {
     required this.sex,
     required this.activityLevel,
     required this.goal,
+    this.exerciseKcal = 0,
   });
 }
 
@@ -153,9 +178,13 @@ NutritionTargets? computeNutritionTargets(BodyMetricsInput input) {
   if (weightKg > 500 || heightCm > 300 || ageYears > 120) return null;
 
   final bmr = mifflinStJeorBmr(weightKg, heightCm, ageYears, input.sex);
-  final tdee =
+  final baseTdee =
       bmr * _factorFor(input.activityLevel) + (goalKcalDelta[input.goal] ?? 0);
-  final calories = math.max(minCalorieTarget, (tdee / 10).round() * 10);
+  final baseCalories = math.max(minCalorieTarget, (baseTdee / 10).round() * 10);
+  // Workout calories add on top of the non-exercise base. Clamp to a
+  // non-negative whole number so a stray negative can't lower the goal.
+  final exerciseKcal = math.max(0, input.exerciseKcal.round());
+  final calories = baseCalories + exerciseKcal;
 
   final proteinG = (proteinGPerKg * weightKg).round();
   final fatG = ((fatKcalFraction * calories) / _kcalPerGFat).round();
@@ -167,6 +196,8 @@ NutritionTargets? computeNutritionTargets(BodyMetricsInput input) {
 
   return NutritionTargets(
     calories: calories,
+    baseCalories: baseCalories,
+    exerciseKcal: exerciseKcal,
     proteinG: proteinG,
     carbsG: carbsG,
     fatG: fatG,

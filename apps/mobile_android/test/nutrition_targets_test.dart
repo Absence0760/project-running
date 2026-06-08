@@ -9,6 +9,7 @@ BodyMetricsInput baseWith({
   String? sex = 'male',
   String activityLevel = 'moderate',
   String goal = 'maintain',
+  double exerciseKcal = 0,
 }) {
   return BodyMetricsInput(
     weightKg: weightKg,
@@ -17,6 +18,7 @@ BodyMetricsInput baseWith({
     sex: sex,
     activityLevel: activityLevel,
     goal: goal,
+    exerciseKcal: exerciseKcal,
   );
 }
 
@@ -90,6 +92,40 @@ void main() {
     expect(computeNutritionTargets(baseWith(weightKg: 0)), null);
     expect(computeNutritionTargets(baseWith(weightKg: 600)), null);
     expect(computeNutritionTargets(baseWith(heightCm: 400)), null);
+  });
+
+  test('computeNutritionTargets — exerciseKcal adds on top of the base goal',
+      () {
+    final baseT = computeNutritionTargets(baseWith())!;
+    final withExercise = computeNutritionTargets(baseWith(exerciseKcal: 450))!;
+    expect(withExercise.baseCalories, baseT.calories); // 2550, unchanged
+    expect(withExercise.exerciseKcal, 450);
+    expect(withExercise.calories, baseT.calories + 450); // 3000
+  });
+
+  test(
+      'computeNutritionTargets — omitting exerciseKcal is the static base (calories == baseCalories)',
+      () {
+    final t = computeNutritionTargets(baseWith())!;
+    expect(t.exerciseKcal, 0);
+    expect(t.calories, t.baseCalories);
+  });
+
+  test('computeNutritionTargets — extra exercise calories flow into the macro budget',
+      () {
+    final baseT = computeNutritionTargets(baseWith())!;
+    final withExercise = computeNutritionTargets(baseWith(exerciseKcal: 600))!;
+    // Protein is bodyweight-based (unchanged); the added fuel lands in carbs.
+    expect(withExercise.proteinG, baseT.proteinG);
+    expect(withExercise.carbsG > baseT.carbsG, true);
+  });
+
+  test('computeNutritionTargets — a negative exerciseKcal can never lower the goal',
+      () {
+    final baseT = computeNutritionTargets(baseWith())!;
+    final t = computeNutritionTargets(baseWith(exerciseKcal: -500))!;
+    expect(t.exerciseKcal, 0);
+    expect(t.calories, baseT.calories);
   });
 
   test('ageFromDob — whole-year age, decremented before the birthday', () {
