@@ -374,7 +374,6 @@ class _GearScreenState extends State<GearScreen> {
     );
   }
 
-  // Returns null for ok / untracked — callers use `?wearBadge` to omit it.
   Widget? _wearBadge(GearWear wear, ThemeData theme, AppLocalizations l10n) {
     final dark = theme.brightness == Brightness.dark;
     final (Color bg, Color fg, IconData icon, String label) = switch (
