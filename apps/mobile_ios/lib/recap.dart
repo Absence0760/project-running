@@ -106,7 +106,11 @@ double _elevationOf(Run r) {
 YearInRunningRecap buildYearInRunningRecap(List<Run> runs, int year) {
   final inYear = <Run>[];
   for (final r in runs) {
-    if (r.startedAt.year == year) inYear.add(r);
+    // Classify by the run's *local* calendar year — the per-month / per-week
+    // breakdown below all works off `startedAt.toLocal()`, so filtering on the
+    // raw UTC year would misfile a New Year's Eve evening run (UTC next-year)
+    // into the wrong recap.
+    if (r.startedAt.toLocal().year == year) inYear.add(r);
   }
 
   double totalDistance = 0;

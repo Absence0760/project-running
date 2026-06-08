@@ -110,4 +110,41 @@ void main() {
       expect(formatMonthDayShort(d, 'en'), 'May 15');
     });
   });
+
+  group('UTC instants render in local time', () {
+    // Stored timestamps arrive as UTC `DateTime`s (parsed from `Z`-suffixed
+    // ISO). The helpers must convert to local before formatting, else a run
+    // recorded late in the evening shows the next UTC calendar day for a
+    // viewer behind UTC — the "manual run saved as tomorrow" bug. We assert
+    // the output equals formatting the explicitly-localized instant, which is
+    // the contract regardless of the machine's zone (on a UTC CI box the two
+    // coincide; on a developer box behind/ahead of UTC it would diverge if the
+    // normalization were dropped).
+    final utc = DateTime.utc(2026, 5, 15, 23, 30);
+
+    test('formatDateShort matches the local-day equivalent', () {
+      expect(formatDateShort(utc, 'en'), formatDateShort(utc.toLocal(), 'en'));
+    });
+    test('formatDateMed matches the local-day equivalent', () {
+      expect(formatDateMed(utc, 'en'), formatDateMed(utc.toLocal(), 'en'));
+    });
+    test('formatDateTime matches the local equivalent', () {
+      expect(formatDateTime(utc, 'en'), formatDateTime(utc.toLocal(), 'en'));
+    });
+    test('formatTime matches the local equivalent', () {
+      expect(formatTime(utc, 'en'), formatTime(utc.toLocal(), 'en'));
+    });
+    test('formatDowDateShort matches the local equivalent', () {
+      expect(
+          formatDowDateShort(utc, 'en'), formatDowDateShort(utc.toLocal(), 'en'));
+    });
+
+    test('a synthetic local calendar value is untouched (no double shift)', () {
+      // Month-name / weekday labels are built with the local `DateTime(...)`
+      // constructor; normalization must be a no-op for them.
+      final localMonth = DateTime(2026, 1, 15);
+      expect(formatMonthName(localMonth, 'en'), 'January');
+      expect(formatDateShort(localMonth, 'en'), '15 Jan');
+    });
+  });
 }
