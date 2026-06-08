@@ -97,6 +97,14 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 >   Food Facts hop, before a store submission that ships nutrition.
 > - **Translation review:** the de/es/fr/ja/pt-BR nutrition + consent
 >   strings (web + mobile ARB) are best-effort and want native review.
+> - **Mobile calories-remaining + over-budget mirror** — web shipped a
+>   `nutrition_budget.ts` (pure: per-macro remaining + ceiling-aware
+>   `exceeded`/`reached`) and surfaced a "X kcal left / over / on target"
+>   chip plus an over-budget ring state on `/nutrition`. The mobile
+>   `nutrition_rings_card.dart` + `nutrition_screen.dart` still only show
+>   consumed/target (the arc clamps at full, so an over day is invisible).
+>   Mirror by porting the budget helper to Dart (new parity pair) and
+>   recolouring the ceiling rings (calories/fat) + adding the headline chip.
 
 - [ ] **G6 · Nutrition foundation (pure + schema)** — `nutrition_targets` parity pair (Mifflin-St Jeor BMR × activity-level); `body_metrics` migration (height on `user_profiles` + `body_metrics` weight time-series, owner RLS, cascade-delete); Settings height/weight entry; privacy-disclosure updates (iOS label / Play Data Safety / Open Food Facts sub-processor). **Feeds G1** (add `body_metrics` to export). Owns: `nutrition_targets.ts`/`.dart`, the new migration, Settings body-metrics entry.
   ```
