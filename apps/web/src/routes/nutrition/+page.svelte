@@ -28,8 +28,11 @@
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import FoodLogEditor from '$lib/components/FoodLogEditor.svelte';
 
 	let loading = $state(true);
+	let showLog = $state(false);
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
 	let exerciseKcal = $state(0);
@@ -62,6 +65,11 @@
 			loading = false;
 			return;
 		}
+		await load();
+	});
+
+	async function load() {
+		if (!auth.user) return;
 		try {
 			const now = new Date();
 			const todayStart = dayStartIso(now);
@@ -127,7 +135,12 @@
 			console.warn('nutrition load failed', e);
 		}
 		loading = false;
-	});
+	}
+
+	function onLogged() {
+		showLog = false;
+		void load();
+	}
 
 	function addWater() {
 		waterMl += WATER_UNIT_ML;
@@ -182,7 +195,7 @@
 <div class="page">
 	<header class="page-head">
 		<h1>{m('nutrition.heading')}</h1>
-		<a class="btn btn-primary" href="/nutrition/log" data-testid="log-food">{m('nutrition.logFood')}</a>
+		<button class="btn btn-primary" type="button" onclick={() => (showLog = true)} data-testid="log-food">{m('nutrition.logFood')}</button>
 	</header>
 
 	{#if loading}
@@ -270,7 +283,7 @@
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
 				<h2>{m('nutrition.empty')}</h2>
 				<p class="muted">{m('nutrition.searchPlaceholder')}</p>
-				<a class="btn btn-primary" href="/nutrition/log">{m('nutrition.logFood')}</a>
+				<button class="btn btn-primary" type="button" onclick={() => (showLog = true)}>{m('nutrition.logFood')}</button>
 			</section>
 		{:else}
 			<section class="card-elevated meals-card">
@@ -345,6 +358,10 @@
 		{/if}
 	{/if}
 </div>
+
+<Modal open={showLog} title={m('nutrition.logHeading')} narrow onclose={() => (showLog = false)}>
+	<FoodLogEditor oncreated={onLogged} />
+</Modal>
 
 <style>
 	.page {

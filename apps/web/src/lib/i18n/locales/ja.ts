@@ -2869,6 +2869,7 @@ export const messages = {
 	"nutrition.cancel": "キャンセル",
 	"nutrition.add": "追加",
 	"nutrition.added": "記録しました。",
+	"nutrition.back": "戻る",
 	"gym.title": "ジム",
 	"gym.log": "ワークアウトを記録",
 	"gym.untitled": "無題のワークアウト",

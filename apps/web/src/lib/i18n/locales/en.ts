@@ -2881,6 +2881,7 @@ export const en = {
 	"nutrition.cancel": "Cancel",
 	"nutrition.add": "Add",
 	"nutrition.added": "Logged.",
+	"nutrition.back": "Back",
 	"gym.title": "Gym",
 	"gym.log": "Log workout",
 	"gym.untitled": "Untitled workout",

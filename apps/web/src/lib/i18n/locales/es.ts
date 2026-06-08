@@ -2873,6 +2873,7 @@ export const messages = {
 	"nutrition.cancel": "Cancelar",
 	"nutrition.add": "Añadir",
 	"nutrition.added": "Registrado.",
+	"nutrition.back": "Atrás",
 	"gym.title": "Gym",
 	"gym.log": "Registrar entreno",
 	"gym.untitled": "Entreno sin título",

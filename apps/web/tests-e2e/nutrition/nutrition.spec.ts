@@ -9,11 +9,14 @@ import { USER_A } from '../fixtures/users';
  *
  * Covers the manual-entry logging loop end to end (the Open Food Facts
  * search path needs the network and is unit-tested in food_search.test.ts):
- * open /nutrition/log, enter a food manually with macros + a meal slot, save,
- * land back on /nutrition, and confirm it renders under its meal-slot group
- * with the right calories. Also exercises the water tracker increment. The
- * /nutrition routes are always reachable (the Nutrition sidebar item is always
- * present now — decisions §63 amendment ungated it).
+ * open the log surface, enter a food manually with macros + a meal slot, save,
+ * and confirm it renders under its meal-slot group with the right calories.
+ * Exercised through BOTH hosts of the shared FoodLogEditor — the in-place modal
+ * opened from /nutrition (the canonical create-flow pattern, consistent with
+ * Log workout / Log run) and the standalone /nutrition/log page wrapper kept
+ * for deep links. Also exercises the water tracker increment. The /nutrition
+ * routes are always reachable (the Nutrition sidebar item is always present
+ * now — decisions §63 amendment ungated it).
  *
  * A unique item name per run keeps assertions + cleanup from colliding with
  * previous rows in the shared seed DB.
@@ -57,6 +60,44 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await expect(page.locator('.water-units')).toContainText('1 × 250 ml');
 
 		// Cleanup.
+		await admin.from('food_log').delete().eq('id', created![0].id);
+	});
+
+	test('log food via the in-place modal on /nutrition (no navigation)', async ({ page }) => {
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const item = `E2E Modal Oats ${stamp}`;
+
+		await page.goto('/nutrition');
+
+		// The primary action opens a modal in place — consistent with the
+		// gym/run create flows — rather than navigating to a separate page.
+		await page.getByTestId('log-food').click();
+		const modal = page.getByRole('dialog');
+		await expect(modal).toBeVisible();
+
+		await modal.getByTestId('meal-slot').selectOption('lunch');
+		await modal.getByRole('button', { name: 'Enter manually' }).click();
+		await modal.getByTestId('manual-name').fill(item);
+		const manual = modal.getByTestId('manual-entry');
+		await manual.locator('input[type="number"]').nth(0).fill('420'); // kcal
+		await manual.getByRole('button', { name: 'Add' }).click();
+
+		// Modal closes, we stay on /nutrition, and the item renders under Lunch.
+		await expect(modal).toBeHidden();
+		await expect(page).toHaveURL(/\/nutrition$/);
+		const row = page.locator('.meal-list li', { hasText: item });
+		await expect(row).toBeVisible();
+		await expect(row.locator('.item-kcal')).toHaveText('420');
+
+		const { data: created } = await admin
+			.from('food_log')
+			.select('id, meal_slot')
+			.eq('user_id', USER_A.id)
+			.eq('item_name', item);
+		expect(created?.length).toBe(1);
+		expect(created![0].meal_slot).toBe('lunch');
+
 		await admin.from('food_log').delete().eq('id', created![0].id);
 	});
 
