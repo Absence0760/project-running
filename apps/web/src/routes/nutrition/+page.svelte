@@ -178,11 +178,8 @@
 		{ key: 'carbs', label: m('nutrition.carbs'), consumed: consumed.carbsG, target: targets?.carbsG ?? null, unit: 'g', color: 'var(--color-secondary)' },
 		{ key: 'fat', label: m('nutrition.fat'), consumed: consumed.fatG, target: targets?.fatG ?? null, unit: 'g', color: 'var(--color-warning)' },
 	]);
-	// Per-macro budget — how much is left, and whether a ceiling macro
-	// (calories / fat) has been overshot. Null until targets exist.
 	const dayBudget = $derived(computeDayBudget(consumed, targets));
-	// Headline calorie-budget chip: how much is still eatable today, the one
-	// number the rings alone never showed (the arc clamps at full).
+	// The arc clamps at full, so an over day is invisible without this.
 	const calorieBudget = $derived(dayBudget?.calories ?? null);
 	const maxWeekCalories = $derived(Math.max(1, ...weekDays.map((d) => d.calories)));
 	const hasMeals = $derived(groups.length > 0);

@@ -1,24 +1,17 @@
 /**
  * Nutrition budget — how much of each macro is left (or over) for the day.
  *
- * Pure functions, no Supabase / runes, so this is node:test-runnable and
- * shared by the rings card. Sits on top of `nutrition_totals.ts` (the
- * day's consumed totals) and `nutrition_targets.ts` (the day's goal): it
- * answers the one question the rings alone don't — "how much can I still
- * eat?".
+ * Overshooting means different things per macro, which is why the budget is
+ * direction-aware rather than a single remaining number:
  *
- * The crucial nuance is that overshooting means different things per macro:
- *
- * - **Calories** and **fat** are *ceilings*: going over is a warning (you've
- *   eaten more than the goal). The ring should signal it, not silently sit
- *   full — `ringFraction` clamps to 1, so without this an over day looks
- *   identical to an exactly-on-target day.
+ * - **Calories** and **fat** are *ceilings*: going over is a warning. The
+ *   ring must signal it, since `ringFraction` clamps to 1 — without this an
+ *   over day looks identical to an exactly-on-target day.
  * - **Protein** and **carbs** are *goals to reach*: hitting or exceeding the
- *   target is success (a runner wants to clear their protein floor), not a
- *   warning. Over here is neutral/good and must never render as an alert.
+ *   target is success (clearing a protein floor), not a warning, and must
+ *   never render as an alert.
  *
- * Web-first; the mobile twin (`nutrition_totals.dart` + the rings card) does
- * not consume this yet — tracked in docs/product/followups.md.
+ * Web-only for now; the mobile mirror is tracked in docs/product/followups.md.
  */
 
 import type { FoodMacros } from './food_search';
@@ -59,13 +52,15 @@ export function macroBudget(
 	if (target == null || target <= 0) {
 		return { remaining: null, over: 0, exceeded: false, reached: false };
 	}
-	const remaining = Math.round(target - consumed);
+	const remaining = Math.round(target - consumed) || 0; // normalise -0 → 0
 	const over = Math.max(0, Math.round(consumed - target));
 	const isCeiling = MACRO_IS_CEILING[kind];
+	// `exceeded` keys off the rounded `over`, not raw `consumed > target`, so a
+	// sub-0.5 overage that rounds to 0 never renders the broken "0 over" chip.
 	return {
 		remaining,
 		over,
-		exceeded: isCeiling && consumed > target,
+		exceeded: isCeiling && over > 0,
 		reached: !isCeiling && consumed >= target,
 	};
 }

@@ -68,6 +68,15 @@ test('macroBudget: rounds fractional consumed/target', () => {
 	assert.equal(b.over, 0);
 });
 
+test('macroBudget: a sub-0.5 overage rounds to on-target, not "0 over"', () => {
+	// exceeded must key off the rounded `over`, never raw consumed > target —
+	// otherwise the chip renders a broken "0 kcal over".
+	const b = macroBudget(2000.4, 2000, 'calories');
+	assert.equal(b.over, 0);
+	assert.equal(b.exceeded, false);
+	assert.equal(b.remaining, 0);
+});
+
 test('MACRO_IS_CEILING: calories + fat are ceilings, protein + carbs goals', () => {
 	const expected: Record<MacroKind, boolean> = {
 		calories: true,
