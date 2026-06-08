@@ -3,10 +3,9 @@
  * distance is to its replacement target, so the UI can warn before a shoe is
  * run into the ground.
  *
- * Pure functions, no Supabase / auth. Web-only for now (the mobile gear screen
- * computes its own progress inline; mirroring this classification there is a
- * tracked follow-up — see docs/product/followups.md). When mobile adopts it,
- * add a Dart twin + register the parity pair.
+ * Pure functions, no Supabase / auth. TS↔Dart parity pair with
+ * `apps/mobile_android/lib/gear_wear.dart` — keep in lockstep (algorithm,
+ * thresholds, edge cases, test counts).
  *
  * Thresholds are deliberately simple: a shoe in the last ~15% of its planned
  * life is "due" (replace soon), and at/over its target is "worn". Untracked

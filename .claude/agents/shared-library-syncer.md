@@ -27,6 +27,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/nutrition/nutrition_targets.ts` | `apps/mobile_android/lib/nutrition_targets.dart` | `nutrition/nutrition_targets.test.ts` ↔ `test/nutrition_targets_test.dart` |
 | `apps/web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`) | `apps/mobile_android/lib/lift_load.dart` | `gym/lift_load.test.ts` ↔ `test/lift_load_test.dart` |
 | `apps/web/src/lib/nutrition/exercise_calories.ts` | `apps/mobile_android/lib/exercise_calories.dart` | `nutrition/exercise_calories.test.ts` ↔ `test/exercise_calories_test.dart` |
+| `apps/web/src/lib/gear/gear_wear.ts` | `apps/mobile_android/lib/gear_wear.dart` | `gear/gear_wear.test.ts` ↔ `test/gear_wear_test.dart` |
 
 The mobile_android side is the byte-identical twin source — `apps/mobile_ios/` mirrors it automatically (handled by `mobile-twin-mirror`), so you only compare web ↔ android.
 
