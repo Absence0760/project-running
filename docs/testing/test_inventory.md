@@ -760,7 +760,7 @@ tests-e2e/
     social.spec.ts             — /runs/[id] owner sees kudos count + comment list (RunSocial mounts for own runs); owner posts comment on own run
   gym/
     gym.spec.ts                — /gym lightweight loop: log a free-form workout (title + exercise + sets) → PR badge on the list → detail per-exercise PR chip + set rows → delete (DB assertions throughout)
-    multimodal_home_history.spec.ts — Phase 4 multi-modal Home + History (flag `multi_modal_nav` on, seed a lift): /dashboard shows the Recent-lifts card; /history shows the All/Runs/Lifts/Meals chips + a lift row in the unified timeline that links to /gym/[id]. Snapshots + restores user_settings.prefs so no other spec inherits the flipped flag
+    multimodal_home_history.spec.ts — Phase 4 multi-modal Home + History (data-gated, no flag — seeds a lift): sidebar always shows Gym + Nutrition; /dashboard shows the Recent-lifts card; /history shows the All/Runs/Lifts/Meals chips + a lift row in the unified timeline linking to /gym/[id]; the All-view modality-aware Log menu (run/workout/meal, keyboard-navigable) + the single-modality Log action; the Runs chip renders run rows as a timeline (no run toolbar) with a "View all" → /runs, and Lifts/Meals "View all" → /gym // /nutrition; back-nav restores the feed from the snapshot without a refetch; the timeline grid flows multi-column on a wide canvas
   nutrition/
     nutrition.spec.ts          — /nutrition manual-log loop: open /nutrition/log → pick a meal slot → manual entry (name + macros) → save → land on /nutrition with the item under its slot + calories → water tracker increments by a 250 ml unit (DB assertion + cleanup). The Open Food Facts search path is unit-tested in food_search.test.ts (no network in e2e)
   routes/

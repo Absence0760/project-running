@@ -330,16 +330,22 @@ redaction-boundary guarantees are pinned by
 > **Status (mobile shipped):** `runs_screen.dart` (the History tab) gains the
 > same All/Runs/Lifts/Meals chips + a day-grouped unified timeline
 > (`widgets/activity_timeline_list.dart` over the pure `activity_timeline.dart`
-> grouper) backed by `ApiClient.fetchActivities` → the `activities` view.
-> Chips appear once the gym store is wired in (multi-modal home shell) AND a
-> second modality has data — empty-kind chips hidden; a gym-/meal-only user
-> still sees their timeline rather than a "no runs" dead-end. The **Runs**
-> chip restores the full run list (range / sort / source filters, pagination,
-> bulk-delete). Run rows open run-detail (looked up locally, else
-> `fetchRunById`), lift rows open `GymDetailScreen`, meals are read-only.
-> Neither platform gates this behind `multi_modal_nav` (retired, §63
-> amendment) — the "second modality has data" gate carries the anti-clutter
-> contract on both.
+> grouper). The timeline is assembled from the **local stores** by
+> `lib/local_activities.dart` (`buildLocalActivities` over `LocalRunStore` +
+> `LocalGymStore` + `LocalFoodStore`) — offline-first, always all modalities,
+> and live (a run/lift/meal logged from the Log FAB shows at once); History
+> hydrates the gym + food stores itself on mount. Chips appear once the gym
+> store is wired in (multi-modal home shell) AND a second modality has data —
+> empty-kind chips hidden; a gym-/meal-only user still sees their timeline
+> rather than a "no runs" dead-end. **Every chip — including Runs — is the
+> timeline** (mirroring web); each single-modality tab shows a `View all` link
+> that pushes that modality's full surface (Runs → `RunsScreen` without a
+> `gymStore` = the offline-first run list with range / sort / source filters,
+> pagination, bulk-delete; Lifts → `GymScreen`; Meals → `NutritionScreen`). Run
+> rows open run-detail (looked up locally, else `fetchRunById`), lift rows open
+> `GymDetailScreen`, meals are read-only. Neither platform gates this behind
+> `multi_modal_nav` (retired, §63 amendment) — the "second modality has data"
+> gate carries the anti-clutter contract on both.
 >
 > **Web/mobile parity (converged 2026-06-08):** both platforms now make every
 > History tab — including Runs — a unified timeline, with a per-tab `View all`
@@ -394,16 +400,15 @@ redaction-boundary guarantees are pinned by
   window — no round-trip per chip. The `All` chip is default.
 - A pure runner with no lifts/meals sees only run rows and the chips for
   the empty kinds are **hidden**, not disabled.
-- **First paint is gated on the feed, so the layout never flips.** Because
-  the run-list-vs-timeline decision depends on whether a second modality
-  exists, the page holds a neutral skeleton until the `activities` feed
-  resolves, then paints the correct layout once — it never renders the run
-  list and then swap to the timeline. Web gates on an `activitiesLoaded`
-  flag (skeleton until ready); mobile gates a known-multi-modal account on a
-  persisted `Preferences.historyMultiModal` hint (a brief spinner until the
-  feed lands) so a pure runner still gets the run list instantly with no
-  gate. Back-nav (web snapshot) restores the timeline state directly so the
-  layout is stable on return too.
+- **First paint never flips the layout.** On **web** the run-list-vs-timeline
+  decision depends on whether a second modality exists, so `/history` holds a
+  neutral skeleton until the (server) `activities` feed resolves (the
+  `activitiesLoaded` flag), then paints once; back-nav restores the timeline
+  state from the page snapshot. On **mobile** there is nothing to wait for —
+  the timeline is assembled synchronously from the already-loaded local stores
+  (`buildLocalActivities`), so the correct layout paints immediately with no
+  spinner gate (the old `Preferences.historyMultiModal` hint was retired with
+  the server feed). It updates in place as the stores change.
 
 ## Gym — lightweight tier surfaces (mirror web `/gym`)
 
@@ -719,7 +724,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 |---|---|
 | Nav + Log sheet | `home_screen.dart` (bottom-nav reshape), `widgets/log_sheet.dart` — **shipped (G5)** |
 | Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` — **shipped (G5)** (run summary already lived on the dashboard) |
-| History | `screens/runs_screen.dart` (the History tab — hosts the kind chips + unified timeline) + `widgets/activity_timeline_list.dart` + the pure `activity_timeline.dart` day-grouper, over `ApiClient.fetchActivities` → the `activities` view — **shipped** |
+| History | `screens/runs_screen.dart` (the History tab — hosts the kind chips + unified timeline) + `widgets/activity_timeline_list.dart` + the pure `activity_timeline.dart` day-grouper, assembled from the local stores via `lib/local_activities.dart` (offline-first, not `fetchActivities`) — **shipped** |
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
