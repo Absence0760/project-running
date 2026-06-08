@@ -25,6 +25,7 @@
 		ringFraction,
 		type MealSlotGroup,
 	} from '$lib/nutrition/nutrition_totals';
+	import { computeDayBudget, type MacroKind } from '$lib/nutrition/nutrition_budget';
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -164,7 +165,7 @@
 	const R = 26;
 	const CIRC = 2 * Math.PI * R;
 	type RingDef = {
-		key: string;
+		key: MacroKind;
 		label: string;
 		consumed: number;
 		target: number | null;
@@ -177,6 +178,12 @@
 		{ key: 'carbs', label: m('nutrition.carbs'), consumed: consumed.carbsG, target: targets?.carbsG ?? null, unit: 'g', color: 'var(--color-secondary)' },
 		{ key: 'fat', label: m('nutrition.fat'), consumed: consumed.fatG, target: targets?.fatG ?? null, unit: 'g', color: 'var(--color-warning)' },
 	]);
+	// Per-macro budget — how much is left, and whether a ceiling macro
+	// (calories / fat) has been overshot. Null until targets exist.
+	const dayBudget = $derived(computeDayBudget(consumed, targets));
+	// Headline calorie-budget chip: how much is still eatable today, the one
+	// number the rings alone never showed (the arc clamps at full).
+	const calorieBudget = $derived(dayBudget?.calories ?? null);
 	const maxWeekCalories = $derived(Math.max(1, ...weekDays.map((d) => d.calories)));
 	const hasMeals = $derived(groups.length > 0);
 	const hasAnyData = $derived(entries.length > 0 || weekDays.some((d) => d.calories > 0));
@@ -206,23 +213,35 @@
 		</div>
 	{:else}
 		<section class="card-elevated rings-card" data-testid="macro-rings">
-			{#if targets}
+			{#if targets && calorieBudget}
 				<div class="card-head">
 					<span class="section-label">{m('dash.today')}</span>
-					<span class="card-meta">{consumed.calories} / {targets.calories} kcal</span>
+					<div class="budget-head">
+						<span class="card-meta">{consumed.calories} / {targets.calories} kcal</span>
+						{#if calorieBudget.exceeded}
+							<span class="budget-chip budget-over" data-testid="calorie-budget">{m('nutrition.over', { n: calorieBudget.over })}</span>
+						{:else if calorieBudget.remaining === 0}
+							<span class="budget-chip budget-on" data-testid="calorie-budget">{m('nutrition.onTarget')}</span>
+						{:else}
+							<span class="budget-chip budget-left" data-testid="calorie-budget">{m('nutrition.remaining', { n: calorieBudget.remaining ?? 0 })}</span>
+						{/if}
+					</div>
 				</div>
 			{/if}
 			<div class="rings" class:rings-untargeted={!targets}>
 				{#each rings as r (r.key)}
 					{@const frac = ringFraction(r.consumed, r.target)}
 					{@const pct = frac !== null ? Math.round(frac * 100) : null}
+					{@const b = dayBudget ? dayBudget[r.key] : null}
 					<div
 						class="ring"
 						class:ring-hero={r.key === 'calories'}
+						class:ring-over={b?.exceeded}
+						class:ring-reached={b?.reached}
 						role="group"
 						aria-label={`${r.label}: ${r.consumed} ${r.unit}${r.target !== null ? ` of ${r.target} ${r.unit} target` : ''}`}
 					>
-						<div class="ring-dial" style={`--ring-color: ${r.color}`}>
+						<div class="ring-dial" style={`--ring-color: ${b?.exceeded ? 'var(--color-danger)' : r.color}`}>
 							<svg viewBox="0 0 64 64" aria-hidden="true">
 								<circle class="ring-bg" cx="32" cy="32" r={R} stroke-width="7" fill="none" />
 								{#if frac !== null}
@@ -240,7 +259,15 @@
 							</div>
 						</div>
 						<span class="ring-label">{r.label}</span>
-						{#if pct !== null}<span class="ring-pct">{pct}%</span>{:else}<span class="ring-pct ring-pct-empty">{r.unit}</span>{/if}
+						{#if b?.exceeded}
+							<span class="ring-pct ring-pct-over" aria-label={m('nutrition.macroOver', { n: b.over })}>+{b.over}</span>
+						{:else if b?.reached}
+							<span class="ring-pct ring-pct-reached" aria-label={m('nutrition.macroReached')}><span class="material-symbols" aria-hidden="true">check</span>{pct}%</span>
+						{:else if pct !== null}
+							<span class="ring-pct">{pct}%</span>
+						{:else}
+							<span class="ring-pct ring-pct-empty">{r.unit}</span>
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -460,6 +487,51 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.ring-pct-empty { text-transform: lowercase; }
+	/* Over a ceiling macro (calories / fat): the one ring state worth
+	   flagging — the arc already recoloured to danger via --ring-color. */
+	.ring-pct-over {
+		color: var(--color-danger);
+		font-weight: 700;
+	}
+	/* A goal macro (protein / carbs) cleared — a quiet win, never an alert. */
+	.ring-pct-reached {
+		display: inline-flex;
+		align-items: center;
+		gap: 1px;
+		color: var(--color-success);
+		font-weight: 600;
+	}
+	.ring-pct-reached .material-symbols { font-size: 0.85rem; }
+
+	/* Calorie-budget headline chip — "X left" / "X over" / "On target".
+	   The single glanceable answer to "how much can I still eat today". */
+	.budget-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+	.budget-chip {
+		font-size: 0.8rem;
+		font-weight: 700;
+		padding: 2px 9px;
+		border-radius: 9999px;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.budget-left {
+		color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+	}
+	.budget-on {
+		color: var(--color-success);
+		background: color-mix(in srgb, var(--color-success) 16%, transparent);
+	}
+	.budget-over {
+		color: var(--color-danger);
+		background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+	}
 
 	.section-hint {
 		display: flex;

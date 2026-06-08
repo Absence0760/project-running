@@ -101,6 +101,42 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await admin.from('food_log').delete().eq('id', created![0].id);
 	});
 
+	test('eating past the calorie target shows an over-budget signal', async ({ page }) => {
+		const admin = getAdminClient();
+		// One enormous entry today guarantees the day is over any reasonable
+		// target regardless of other rows already logged in the shared seed DB.
+		const startedAt = new Date().toISOString();
+		const { data: created } = await admin
+			.from('food_log')
+			.insert({
+				user_id: USER_A.id,
+				started_at: startedAt,
+				item_name: `E2E Feast ${Date.now()}`,
+				calories: 9000,
+				meal_slot: 'dinner',
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/nutrition');
+			// Headline chip flips from "left" to "over" (the seed user has body
+			// metrics, so targets — and therefore the budget chip — render).
+			const chip = page.getByTestId('calorie-budget');
+			await expect(chip).toBeVisible({ timeout: 10_000 });
+			await expect(chip).toContainText(/kcal over/);
+			await expect(chip).toHaveClass(/budget-over/);
+
+			// The calorie (hero) ring recolours to the over-budget state, which
+			// was previously indistinguishable from an exactly-on-target day.
+			const heroRing = page.locator('.ring-hero');
+			await expect(heroRing).toHaveClass(/ring-over/);
+			await expect(heroRing.locator('.ring-pct-over')).toBeVisible();
+		} finally {
+			await admin.from('food_log').delete().eq('id', created!.id);
+		}
+	});
+
 	test("today's run raises the calorie goal (dynamic TDEE base + exercise)", async ({
 		page,
 	}) => {
