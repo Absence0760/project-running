@@ -1,27 +1,33 @@
 PODS:
   - Flutter (1.0.0)
+  - flutter_tts (0.0.1):
+    - Flutter
   - health (13.3.1):
     - Flutter
-  - sign_in_with_apple (0.0.1):
+  - workmanager_apple (0.0.1):
     - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
+  - flutter_tts (from `.symlinks/plugins/flutter_tts/ios`)
   - health (from `.symlinks/plugins/health/ios`)
-  - sign_in_with_apple (from `.symlinks/plugins/sign_in_with_apple/ios`)
+  - workmanager_apple (from `.symlinks/plugins/workmanager_apple/ios`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
+  flutter_tts:
+    :path: ".symlinks/plugins/flutter_tts/ios"
   health:
     :path: ".symlinks/plugins/health/ios"
-  sign_in_with_apple:
-    :path: ".symlinks/plugins/sign_in_with_apple/ios"
+  workmanager_apple:
+    :path: ".symlinks/plugins/workmanager_apple/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_tts: 35ac3c7d42412733e795ea96ad2d7e05d0a75113
   health: 4decf5d74e8f54c58a8c07a385fc72f629a831d9
-  sign_in_with_apple: c5dcc141574c8c54d5ac99dd2163c0c72ad22418
+  workmanager_apple: 904529ae31e97fc5be632cf628507652294a0778
 
 PODFILE CHECKSUM: 53a6aebc29ccee84c41f92f409fc20cd4ca011f1
 

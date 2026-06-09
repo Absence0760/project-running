@@ -7,7 +7,7 @@
 <svelte:head><title>{m('nutrition.logHeading')} — Threkir</title></svelte:head>
 
 <div class="page">
-	<header class="page-head">
+	<header class="page-header">
 		<a class="back-link" href="/nutrition">
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			{m('nutrition.heading')}
@@ -26,8 +26,8 @@
 		gap: var(--space-lg);
 		max-width: 44rem;
 	}
-	.page-head { display: flex; flex-direction: column; gap: var(--space-xs); }
-	.page-head h1 { margin: 0; }
+	.page-header { display: flex; flex-direction: column; gap: var(--space-xs); }
+	.page-header h1 { margin: 0; }
 	.back-link {
 		display: inline-flex;
 		align-items: center;

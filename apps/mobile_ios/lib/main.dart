@@ -122,7 +122,15 @@ void main() async {
   );
   if (kDebugMode) {
     try {
-      await dotenv.load(fileName: '.env.local', mergeWith: dotenv.env);
+      // flutter_dotenv's load() calls clean() (clearing its env map) before it
+      // applies mergeWith, so passing the live `dotenv.env` would self-wipe the
+      // dart-define values loaded just above. Snapshot them first.
+      final defineEnv = Map<String, String>.from(dotenv.env);
+      await dotenv.load(
+        fileName: '.env.local',
+        mergeWith: defineEnv,
+        isOptional: true,
+      );
     } catch (e) {
       debugPrint('main: optional .env.local load failed: $e');
     }
@@ -272,7 +280,11 @@ void main() async {
 
   final social = SocialService();
   final raceController = RaceController(social);
-  unawaited(raceController.start());
+  // start() -> _refresh() reads Supabase.instance.client, which throws until
+  // init resolves; the unawaited call would otherwise abort the isolate.
+  if (hasSupabase && api != null) {
+    unawaited(raceController.start());
+  }
   final training = TrainingService();
   final heartRate = BleHeartRate();
   // Kick off auto-reconnect in the background. If the user has paired a

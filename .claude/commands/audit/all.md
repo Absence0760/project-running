@@ -1,6 +1,6 @@
 ---
 description: Run the full audit sweep — security + privacy + invariants + dep health — in parallel
-argument-hint: [security|invariants|deps] (optional area filter)
+argument-hint: [security|invariants|data|deps|infra|cost|compliance] (optional area filter)
 ---
 
 Run the project's full audit sweep. By default, runs every audit; with an argument, runs the named subset.
@@ -8,9 +8,10 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
 ## Areas
 
 - **security** — `audit/auth`, `audit/rls`, `audit/storage`, `audit/edge-functions`, `audit/xss`, `audit/secrets`, `audit/public-rows`, `audit/paywall`
-- **privacy** — `audit/privacy-zones`
+- **privacy** — `audit/privacy-zones`, `audit/pii-in-logs`
 - **invariants** — `audit/twin-parity`, `audit/schema-drift`, `audit/metadata-keys`, `audit/architecture-guards`, `audit/layered-resilience`
-- **deps** — `audit/deps`
+- **data** — `audit/db-design`, `audit/db-performance`, `audit/migration-locks`
+- **deps** — `audit/deps`, `audit/licenses`
 - **infra** — `audit/infra` (AWS Terraform stacks)
 - **cost** — `audit/cost-controls` (per-user + global spend ceilings)
 - **compliance** — `audit/gdpr`, `audit/data-export-completeness`, `audit/account-deletion-completeness`, `audit/third-party-data-flows`, `audit/cookie-consent`, `audit/regional-availability`, `audit/accessibility`, `audit/app-store-privacy`, `audit/i18n-readiness`
@@ -21,13 +22,15 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
    - No argument → all audits
    - `security` → security + privacy
    - `invariants` → invariants subset
-   - `deps` → deps only
+   - `data` → data subset (db-design + db-performance + migration-locks)
+   - `deps` → deps + licenses
    - `infra` → infra only
    - `cost` → cost-controls only
    - `compliance` → compliance subset (international launch readiness)
 2. **Spawn the right agent per audit area, in parallel.** Send all dispatches in a single message with multiple tool calls.
    - Security + privacy areas (`auth`, `rls`, `storage`, `edge-functions`, `xss`, `secrets`, `public-rows`, `paywall`, `privacy-zones`): each is a separate `repo-security-auditor` invocation, with the audit area passed as the prompt's first sentence. Each gets the corresponding `.claude/commands/audit/<name>.md` body as its full instruction.
-   - Compliance areas (`gdpr`, `data-export-completeness`, `account-deletion-completeness`, `third-party-data-flows`, `cookie-consent`, `regional-availability`, `accessibility`): each is a separate `compliance-auditor` invocation with the audit area as the prompt's first sentence.
+   - Compliance areas (`gdpr`, `data-export-completeness`, `account-deletion-completeness`, `third-party-data-flows`, `cookie-consent`, `regional-availability`, `accessibility`, `pii-in-logs`, `licenses`): each is a separate `compliance-auditor` invocation with the audit area as the prompt's first sentence.
+   - Data areas (`db-design`, `db-performance`, `migration-locks`): each is a separate `data-architecture-auditor` invocation with the scope/area as the prompt's first sentence.
    - `app-store-privacy`: separate `app-store-privacy-auditor` invocation.
    - `i18n-readiness`: separate `i18n-readiness-auditor` invocation.
    - `metadata-keys`: spawn `metadata-key-keeper` for the per-key sweep, OR an Explore agent if you need broader codebase scan beyond a single diff.

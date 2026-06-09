@@ -59,10 +59,22 @@ Put your secrets in `apps/mobile_ios/dart_defines.json` (gitignored):
 
 Inline `--dart-define=` flags don't work on iOS when values are shaped like Supabase's `sb_publishable_…` keys — Flutter's Xcode build script rejects them as "improperly formatted define flag". The JSON file form is the supported path.
 
+`pubspec.yaml` declares `.env.local` as a bundled asset, so the **build** needs the file to exist even though iOS reads its secrets from `dart_defines.json`. Create an empty one once:
+
 ```bash
+touch apps/mobile_ios/.env.local
+```
+
+An empty file is enough — `main.dart` snapshots the `--dart-define` values *before* loading `.env.local`, so the dart-defines survive (you only need real keys in `.env.local` if you prefer the Android-style flow). A missing file fails the build with `No file or variants found for asset: .env.local`.
+
+`open -a Simulator` reopens whichever device was last booted — which may be an **Apple Watch**, not an iPhone. Boot an iPhone explicitly and target it by id:
+
+```bash
+xcrun simctl list devices available | grep -i iphone   # find an iPhone + its UDID
+xcrun simctl boot "<iphone-udid>"
 open -a Simulator
 cd apps/mobile_ios
-flutter run --dart-define-from-file=dart_defines.json
+flutter run -d <iphone-udid> --dart-define-from-file=dart_defines.json
 ```
 
 To target a specific simulator:
@@ -142,6 +154,18 @@ You're using inline `--dart-define=` flags. Switch to `--dart-define-from-file=d
 ### "Failed to find Package.resolved" during build
 
 SPM isn't enabled, or the iOS Runner project predates SPM support. Run `flutter config --enable-swift-package-manager`, then `rm -rf ios && flutter create --platforms=ios .` and redo the Podfile + `pod install` steps.
+
+### `INTERNAL ERROR … count of array (N) differs from count of index set (N-1)` during build
+
+An Xcode 26.x SwiftPM-resolution crash (you'll also see it as `Unable to load workspace 'Runner.xcworkspace'`). It's an Xcode-internal bug in resolving the Flutter-generated SwiftPM package graph, not a problem with the project — almost always a stale SwiftPM / DerivedData index. Fix with Xcode **closed**:
+
+```bash
+rm -rf ~/Library/Caches/org.swift.swiftpm ~/Library/org.swift.swiftpm
+rm -rf ~/Library/Developer/Xcode/DerivedData/Runner-* ~/Library/Developer/Xcode/DerivedData/Pods-*
+cd apps/mobile_ios && flutter clean && flutter pub get && (cd ios && pod install)
+```
+
+Then `flutter run` again. These are all regenerable caches; the tracked `Package.resolved` is left alone (it re-resolves on the next build). If it persists, wipe the whole `~/Library/Developer/Xcode/DerivedData`.
 
 ### "Target native_assets required define SdkRoot" on first run
 

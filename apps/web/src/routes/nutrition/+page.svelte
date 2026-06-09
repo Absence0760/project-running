@@ -212,7 +212,7 @@
 <svelte:head><title>{m('nutrition.heading')} — Threkir</title></svelte:head>
 
 <div class="page">
-	<header class="page-head">
+	<header class="page-header">
 		<h1>{m('nutrition.heading')}</h1>
 		<button class="btn btn-primary" type="button" onclick={() => (showLog = true)} data-testid="log-food">{m('nutrition.logFood')}</button>
 	</header>
@@ -330,7 +330,7 @@
 			<section class="card-elevated empty" data-testid="macro-rings-empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
 				<h2>{m('nutrition.empty')}</h2>
-				<p class="muted">{m('nutrition.searchPlaceholder')}</p>
+				<p class="empty-text">{m('nutrition.searchPlaceholder')}</p>
 				<button class="btn btn-primary" type="button" onclick={() => (showLog = true)}>{m('nutrition.logFood')}</button>
 			</section>
 		{:else}
@@ -438,15 +438,14 @@
 		flex-direction: column;
 		gap: var(--space-lg);
 	}
-	.page-head {
+	.page-header {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		gap: var(--space-md);
-		margin-bottom: var(--space-xs);
+		margin-bottom: var(--space-xl);
 	}
-	.page-head h1 { margin: 0; }
-	.muted { color: var(--color-text-secondary); }
+	.page-header h1 { margin: 0; }
 
 
 	.card-head {
@@ -622,13 +621,13 @@
 	.water-pips {
 		flex: 1;
 		display: flex;
-		gap: 4px;
+		gap: var(--space-xs);
 		min-width: 0;
 		flex-wrap: wrap;
 	}
 	.water-pip {
 		flex: 1;
-		min-width: 8px;
+		min-width: var(--space-sm);
 		height: 0.6rem;
 		border-radius: 9999px;
 		background: color-mix(in srgb, var(--color-text-tertiary) 22%, transparent);
@@ -689,7 +688,7 @@
 	.macro-chip {
 		font-size: 0.7rem;
 		font-weight: 600;
-		padding: 1px 6px;
+		padding: 1px var(--space-sm);
 		border-radius: var(--radius-sm);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
@@ -700,7 +699,7 @@
 	.item-kcal-wrap {
 		display: inline-flex;
 		align-items: baseline;
-		gap: 3px;
+		gap: var(--space-2xs);
 		white-space: nowrap;
 	}
 	.item-kcal {

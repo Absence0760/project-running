@@ -103,7 +103,8 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
                 child: Text(l10n.gymDelete),
               ),
             ],
@@ -331,6 +332,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onPrimary,
             fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
           ),
         ),
       );

@@ -131,7 +131,7 @@
 	{#if loading}
 		<ul class="workout-list" aria-hidden="true">
 			{#each Array(5) as _, i (i)}
-				<li class="skel-row">
+				<li class="card-elevated skel-row">
 					<span class="skel skel-line skel-w-40"></span>
 					<span class="skel skel-pill"></span>
 				</li>
@@ -139,10 +139,10 @@
 		</ul>
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if workouts.length === 0}
-		<div class="empty-card">
+		<div class="card-elevated empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">fitness_center</span>
-			<h2>{t('gym.empty.title')}</h2>
-			<p class="empty-text">{t('gym.empty.body')}</p>
+			<p class="empty-title empty-text">{t('gym.empty.title')}</p>
+			<p class="empty-text empty-body">{t('gym.empty.body')}</p>
 			<button class="btn btn-primary" onclick={() => (showCreate = true)}>
 				<span class="material-symbols" aria-hidden="true">add</span>
 				{t('gym.log')}
@@ -152,14 +152,14 @@
 		<ul class="workout-list">
 			{#each workouts as w (w.id)}
 				<li>
-					<a class="workout-row" href="/gym/{w.id}">
+					<a class="card-elevated workout-row" href="/gym/{w.id}">
 						<div class="row-main">
 							<span class="row-title">{w.title || t('gym.untitled')}</span>
 							<span class="row-date">{formatDate(w.started_at)}</span>
 						</div>
 						<div class="row-stats">
 							{#if prWorkoutIds.has(w.id)}
-								<span class="pr-badge" title={t('gym.pr.title')}>
+								<span class="pr-badge" aria-label={t('gym.pr.title')}>
 									<span class="material-symbols" aria-hidden="true">trophy</span>
 									{t('gym.pr.badge')}
 								</span>
@@ -205,7 +205,7 @@
 	.head-text {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: var(--space-2xs);
 	}
 	.page-header h1 {
 		margin: 0;
@@ -238,14 +238,12 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-2xl) var(--space-lg);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
 		text-align: center;
 	}
-	.empty-card h2 {
+	.empty-title {
 		margin: 0;
-		font-size: 1.15rem;
+		padding: 0;
+		font-size: 1.05rem;
 		font-weight: 600;
 		color: var(--color-text);
 	}
@@ -254,7 +252,7 @@
 		color: var(--color-text-tertiary);
 		opacity: 0.85;
 	}
-	.empty-text {
+	.empty-body {
 		max-width: 32rem;
 		margin: 0;
 		padding: 0;
@@ -286,18 +284,14 @@
 		align-items: center;
 		gap: var(--space-lg);
 		padding: var(--space-md) var(--space-lg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
-		background: var(--color-surface);
 		transition:
 			border-color var(--transition-fast),
-			box-shadow var(--transition-fast);
+			box-shadow var(--transition-base);
 	}
 	.workout-row:hover {
 		border-color: var(--color-primary);
-		box-shadow: var(--shadow-md);
 	}
 	.workout-row:focus-visible {
 		outline: 2px solid var(--color-primary);
@@ -330,7 +324,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 0.1rem;
+		gap: var(--space-2xs);
 		white-space: nowrap;
 	}
 	.stat-value {
@@ -345,13 +339,13 @@
 	.pr-badge {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.2rem;
+		gap: var(--space-2xs);
 		font-size: 0.7rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
-		color: #fff;
-		background: var(--color-primary);
-		padding: 0.2rem 0.45rem;
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+		padding: var(--space-2xs) var(--space-sm);
 		border-radius: var(--radius-sm);
 		align-self: center;
 	}
@@ -370,9 +364,6 @@
 		justify-content: space-between;
 		gap: var(--space-lg);
 		padding: var(--space-md) var(--space-lg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
 	}
 	.skel {
 		display: block;

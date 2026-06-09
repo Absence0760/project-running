@@ -157,9 +157,9 @@
 
 <svelte:head><title>{data?.workout.title || t('gym.title')} — Threkir</title></svelte:head>
 
-<div class="detail-page">
-	<a class="back" href="/gym">
-		<span class="material-symbols">arrow_back</span>{t('gym.back')}
+<div class="page">
+	<a class="back-link" href="/gym">
+		<span class="material-symbols" aria-hidden="true">arrow_back</span>{t('gym.back')}
 	</a>
 
 	{#if loading}
@@ -168,7 +168,7 @@
 			<span class="skel skel-line skel-w-30"></span>
 		</div>
 		{#each Array(2) as _, i (i)}
-			<div class="skel-block" aria-hidden="true">
+			<div class="card-elevated skel-block" aria-hidden="true">
 				<span class="skel skel-line skel-w-40"></span>
 				<span class="skel skel-line"></span>
 				<span class="skel skel-line"></span>
@@ -176,13 +176,13 @@
 		{/each}
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if notFound}
-		<div class="empty-card">
+		<div class="card-elevated empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>
 			<p class="empty-text">{t('gym.notFound')}</p>
 			<a href="/gym" class="btn btn-outline">{t('gym.back')}</a>
 		</div>
 	{:else if data}
-		<header class="detail-head">
+		<header class="page-header">
 			<div class="head-text">
 				<h1>{data.workout.title || t('gym.untitled')}</h1>
 				<p class="head-date">{formatDate(data.workout.started_at)}</p>
@@ -202,16 +202,16 @@
 		</header>
 
 		<div class="summary-grid">
-			<div class="summary-stat">
+			<div class="card-elevated summary-stat">
 				<span class="summary-value">{summary.exercises}</span>
 				<span class="summary-label section-label">{t('gym.exercisesLabel')}</span>
 			</div>
-			<div class="summary-stat">
+			<div class="card-elevated summary-stat">
 				<span class="summary-value">{summary.sets}</span>
 				<span class="summary-label section-label">{t('gym.setsLabel')}</span>
 			</div>
 			{#if summary.volume > 0}
-				<div class="summary-stat">
+				<div class="card-elevated summary-stat">
 					<span class="summary-value">{formatWeight(summary.volume)}</span>
 					<span class="summary-label section-label">{t('gym.volumeLabel')}</span>
 				</div>
@@ -220,7 +220,7 @@
 
 		{#each blocks as block (block.name)}
 			{@const lt = prevByExercise.get(block.name.trim().toLowerCase())}
-			<section class="exercise-block">
+			<section class="card-elevated exercise-block">
 				<div class="block-head">
 					<h2>{block.name}</h2>
 					{#each prByExercise.get(block.name.trim().toLowerCase()) ?? [] as kind (kind)}
@@ -264,7 +264,7 @@
 		{/each}
 
 		{#if data.workout.notes}
-			<section class="exercise-block notes">
+			<section class="card-elevated exercise-block notes">
 				<div class="block-head"><h2>{t('gym.notes')}</h2></div>
 				<p>{data.workout.notes}</p>
 			</section>
@@ -289,29 +289,28 @@
 />
 
 <style>
-	.detail-page {
+	.page {
 		padding: var(--page-padding-y) var(--page-padding-x);
-		max-width: 48rem;
 	}
-	.back {
+	.back-link {
 		display: inline-flex;
 		align-items: center;
-		gap: var(--space-2xs);
+		gap: var(--space-xs);
 		color: var(--color-text-secondary);
 		text-decoration: none;
 		margin-bottom: var(--space-lg);
-		font-size: 0.9rem;
+		font-size: 0.8rem;
 	}
-	.back:hover {
+	.back-link:hover {
 		color: var(--color-primary);
 	}
-	.back:focus-visible {
+	.back-link:focus-visible {
 		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 		border-radius: var(--radius-sm);
 	}
 
-	.detail-head {
+	.page-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
@@ -321,9 +320,8 @@
 	.head-text {
 		min-width: 0;
 	}
-	.detail-head h1 {
+	.page-header h1 {
 		margin: 0 0 var(--space-2xs);
-		font-size: 1.6rem;
 	}
 	.head-date {
 		margin: 0;
@@ -344,8 +342,8 @@
 		font-size: 1.05rem;
 	}
 
-	/* Summary stat strip — same surface-card language as the exercise
-	   cards, sitting above them. */
+	/* Summary stat strip — composes the shared .card-elevated; only the
+	   stacked layout lives here. */
 	.summary-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
@@ -355,11 +353,8 @@
 	.summary-stat {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: var(--space-2xs);
 		padding: var(--space-md) var(--space-lg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
 	}
 	.summary-value {
 		font-size: 1.35rem;
@@ -374,10 +369,6 @@
 
 	.exercise-block {
 		margin-bottom: var(--space-md);
-		padding: var(--space-lg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
 	}
 	.block-head {
 		display: flex;
@@ -394,13 +385,13 @@
 	.pr-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.2rem;
+		gap: var(--space-2xs);
 		font-size: 0.7rem;
 		font-weight: 700;
-		letter-spacing: 0.02em;
+		letter-spacing: 0.04em;
 		color: var(--color-primary);
 		background: var(--color-primary-light);
-		padding: 0.2rem 0.5rem;
+		padding: var(--space-2xs) var(--space-sm);
 		border-radius: var(--radius-sm);
 	}
 	.pr-chip .material-symbols {
@@ -502,16 +493,14 @@
 		line-height: 1.6;
 	}
 
-	/* Empty / not-found card — house empty-card shape. */
+	/* Empty / not-found card — composes .card-elevated; only the centered
+	   layout lives here. */
 	.empty-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-2xl) var(--space-lg);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
 		text-align: center;
 	}
 	.empty-icon {
@@ -540,10 +529,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		padding: var(--space-lg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
 		margin-bottom: var(--space-md);
 	}
 	.skel {
@@ -600,7 +585,7 @@
 	}
 
 	@media (max-width: 40rem) {
-		.detail-head {
+		.page-header {
 			flex-direction: column;
 			gap: var(--space-sm);
 		}
