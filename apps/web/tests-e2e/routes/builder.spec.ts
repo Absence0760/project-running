@@ -138,17 +138,14 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(streets).toHaveClass(/active/);
 	});
 
-	test('Calculate + Save + GPX buttons disabled before any waypoint exists', async ({
+	test('Save + GPX buttons disabled before any waypoint exists', async ({
 		page
 	}) => {
 		await page.goto('/routes/new');
 
-		// `disabled={waypointCount < 2}` on Calculate. With zero
-		// waypoints (the freshly-mounted state) Calculate is disabled.
-		await expect(page.getByRole('button', { name: /Calculate Route/ }))
-			.toBeDisabled();
-		// `disabled={!routed || saving}` on Save. Routed is false at
-		// mount → Save disabled.
+		// Routing is now automatic (no Calculate button). With zero
+		// waypoints `routed` is false → both gates stay armed.
+		// `disabled={!routed || saving}` on Save.
 		await expect(page.getByRole('button', { name: /Save Route/ }))
 			.toBeDisabled();
 		// `disabled={!routed}` on GPX export.
@@ -263,15 +260,14 @@ test.describe('/routes/new — Route Builder control surface', () => {
 	test('OSRM total failure → routed stays false → Save button stays disabled', async ({
 		page
 	}) => {
-		// Regression: handleCalculateRoute used to set routed=true
-		// unconditionally after awaiting builder.calculateRoute(), so a
-		// failed OSRM run still left Save enabled with a stale or
-		// empty polyline. The fix made calculateRoute() return a
-		// success boolean. Intercept every OSRM segment with a 503 so
-		// the call fails, drop two waypoints via the builder's dev-
-		// exposed addWaypoint API (synthetic canvas clicks don't land
-		// reliably on MapLibre's WebGL pointer pipeline in headless
-		// chromium), and assert the gate stays armed.
+		// Regression: a failed OSRM run must not leave Save enabled with
+		// a stale or empty polyline. Routing is now automatic — dropping
+		// the second waypoint kicks off the snap with no button press.
+		// Intercept every OSRM segment with a 503 so the auto-route
+		// fails, drop two waypoints via the builder's dev-exposed
+		// addWaypoint API (synthetic canvas clicks don't land reliably on
+		// MapLibre's WebGL pointer pipeline in headless chromium), and
+		// assert the gate stays armed.
 		await page.route('https://router.project-osrm.org/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' })
 		);
@@ -284,20 +280,98 @@ test.describe('/routes/new — Route Builder control surface', () => {
 			{ lng: 144.975, lat: -37.82 }
 		]);
 
-		const calc = page.getByRole('button', { name: /Calculate Route/ });
-		await expect(calc).toBeEnabled({ timeout: 5_000 });
-
-		await calc.click();
-		// Wait for the routing attempt to settle (3 segments × 2 retries × 8s timeout cap).
-		await page.waitForTimeout(2000);
-
-		// Error banner is red (.routing-error without .routing-warning).
+		// The auto-route fires after the debounce and settles (1 segment
+		// × 2 retries × 8s timeout cap). Error banner is red
+		// (.routing-error without .routing-warning).
 		const banner = page.locator('.routing-error');
-		await expect(banner).toBeVisible({ timeout: 10_000 });
+		await expect(banner).toBeVisible({ timeout: 30_000 });
 		await expect(banner).not.toHaveClass(/routing-warning/);
 
 		// Save button stays disabled — routed didn't flip true.
 		await expect(page.getByRole('button', { name: /Save Route/ })).toBeDisabled();
+	});
+
+	test('auto-routing fetches only the new segment per added waypoint (cache)', async ({
+		page,
+	}) => {
+		// The headline behaviour ported from mobile: dropping the Nth pin
+		// re-routes only the one new segment, reusing the N-2 already
+		// snapped before it. Without the per-segment cache, adding 4
+		// waypoints one at a time would cost 1+2+3 = 6 OSRM /route calls;
+		// with it, exactly 3 (A→B, then B→C, then C→D). Counting the
+		// calls is the cleanest proof that placement stays O(1), not
+		// O(n), as the route grows.
+		let routeCalls = 0;
+		await page.route('https://router.project-osrm.org/route/v1/**', (route) => {
+			routeCalls++;
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					code: 'Ok',
+					routes: [
+						{
+							geometry: {
+								coordinates: [
+									[0, 0],
+									[0.001, 0.001],
+								],
+							},
+							distance: 100,
+						},
+					],
+					waypoints: [{ location: [0, 0] }, { location: [0.001, 0.001] }],
+				}),
+			});
+		});
+		// Elevation is fetched after each successful snap — stub it so the
+		// route settles offline.
+		await page.route('https://api.open-meteo.com/**', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ elevation: Array(100).fill(10) }),
+			})
+		);
+
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		const addOne = async (lng: number, lat: number) => {
+			await page.evaluate(
+				(p) => {
+					(
+						window as unknown as {
+							__routeBuilder: { addWaypoint: (q: { lat: number; lng: number }) => void };
+						}
+					).__routeBuilder.addWaypoint(p);
+				},
+				{ lng, lat }
+			);
+		};
+
+		// First point: no segment yet (need >= 2 waypoints).
+		await addOne(144.97, -37.816);
+		await page.waitForTimeout(300);
+		expect(routeCalls).toBe(0);
+
+		// Second point → 1 segment fetched.
+		await addOne(144.975, -37.82);
+		await expect.poll(() => routeCalls, { timeout: 5_000 }).toBe(1);
+
+		// Third point → only B→C fetched (A→B reused from cache).
+		await addOne(144.98, -37.824);
+		await expect.poll(() => routeCalls, { timeout: 5_000 }).toBe(2);
+
+		// Fourth point → only C→D fetched. Total 3, not 6.
+		await addOne(144.985, -37.828);
+		await expect.poll(() => routeCalls, { timeout: 5_000 }).toBe(3);
+
+		// A real route was produced → Save enables with no button press.
+		await expect(page.getByRole('button', { name: /Save Route/ })).toBeEnabled({
+			timeout: 5_000,
+		});
 	});
 
 	test('routing-warning banner background differs from routing-error background', async ({
@@ -374,6 +448,13 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// WebGL surface aren't reliable in headless chromium. Plant
 		// them near the map's current center so the marker DOM lands
 		// inside the viewport (needed for the marker.click() below).
+		// Waypoint placement now auto-routes. Stub OSRM so the background
+		// snap is deterministic + offline (this test only cares about
+		// waypoint-count bookkeeping, not the snapped geometry).
+		await page.route('https://router.project-osrm.org/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' })
+		);
+
 		await page.goto('/routes/new');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 		await waitForRouteBuilder(page);

@@ -8,6 +8,7 @@
 	// PUBLIC_OSRM_URL so a self-hosted backend can replace the public
 	// demo server without code edits.
 	import { OSRM_BASE_URL, assertOsrmConfiguredForProd } from '$lib/routes/routing';
+	import { SegmentCache, segmentCacheKey } from '$lib/routes/segment_cache';
 	import {
 		DEFAULT_SCALE_FACTOR,
 		NEAR_POINT_M,
@@ -115,7 +116,39 @@
 	let mapStyle = $state<'streets' | 'satellite' | 'terrain'>('streets');
 	let nearStart = false;
 	let routeVersion = 0;
-	let preRouteWaypoints: TrackPoint[] = []; // snapshot for undo-recalculate
+	let preRouteWaypoints: TrackPoint[] = []; // generateLoop restore-on-failure snapshot
+	/// Caches OSRM-snapped segments across re-routes so each new
+	/// waypoint placement only fetches the one new segment instead of
+	/// re-running every prior segment. This is what keeps a long route
+	/// (50-100 points) responsive under the auto-route-on-every-pin
+	/// behaviour below — see segment_cache.ts.
+	const segmentCache = new SegmentCache();
+	/// Debounce for auto-routing. A human drops pins slower than this,
+	/// so each placement still routes promptly; the debounce only
+	/// coalesces bursts (a programmatic loop, or fast double-clicks)
+	/// into a single pass. Routing runs with `skipBusyToggle` so it
+	/// never raises `isRouting` — if it did, the map-click guard would
+	/// swallow the next pin and placement would feel sticky.
+	const AUTO_ROUTE_DEBOUNCE_MS = 140;
+	let autoRouteTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/// Schedule a road-snap of the current waypoints. Called after every
+	/// waypoint mutation so the user never has to press a button. The
+	/// `routeVersion` cancellation inside recalculateRoute makes a later
+	/// call supersede an in-flight one (latest pin wins), mirroring the
+	/// mobile builder.
+	function scheduleAutoRoute() {
+		clearTimeout(autoRouteTimer);
+		autoRouteTimer = setTimeout(() => {
+			// A generateLoop owns the routing pipeline while it iterates
+			// (it holds isRouting=true); don't fight it. Incremental
+			// auto-routing never raises isRouting, so this only guards
+			// against the generate path.
+			if (isRouting) return;
+			if (waypoints.length < 2) return;
+			recalculateRoute({ skipBusyToggle: true });
+		}, AUTO_ROUTE_DEBOUNCE_MS);
+	}
 	let searchQuery = $state('');
 	let searchResults = $state<{ name: string; lng: number; lat: number }[]>([]);
 	let showResults = $state(false);
@@ -272,6 +305,9 @@
 			// any that are still problematic.
 			clearImplicatedMarkers();
 			updateStraightLine();
+			// Re-snap automatically — only the two segments adjacent to
+			// the dragged pin are cache misses, so this is cheap.
+			scheduleAutoRoute();
 			// IMPORTANT: reset wasDragged here, not just in the click
 			// handler. The browser doesn't fire a `click` event after a
 			// drag (mouseup with movement skips the synthetic click),
@@ -525,6 +561,7 @@
 			for (let i = 0; i < waypoints.length - 1; i++) {
 				segments.push({ from: waypoints[i], to: waypoints[i + 1] });
 			}
+			const segKeys = segments.map((s) => segmentCacheKey(s.from, s.to));
 
 			async function fetchSegment(from: TrackPoint, to: TrackPoint, retries = 2): Promise<unknown> {
 				const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
@@ -563,24 +600,6 @@
 				return { code: 'Error' };
 			}
 
-			const results: unknown[] = [];
-			for (let b = 0; b < segments.length; b += BATCH_SIZE) {
-				if (currentVersion !== routeVersion) return false;
-
-				const batch = segments.slice(b, b + BATCH_SIZE);
-				const batchResults = await Promise.all(
-					batch.map(({ from, to }) => fetchSegment(from, to))
-				);
-				results.push(...batchResults);
-
-				// Small delay between batches to avoid rate limiting
-				if (b + BATCH_SIZE < segments.length) {
-					await new Promise((r) => setTimeout(r, 200));
-				}
-			}
-
-			if (currentVersion !== routeVersion) return false;
-
 			// Build per-segment results, falling back to a straight line
 			// for segments OSRM couldn't snap. The old behaviour silently
 			// dropped failed segments, which produced absurd-looking routes
@@ -589,38 +608,73 @@
 			// path killed the whole save. Now every segment contributes
 			// to the merged polyline — the warning banner tells the user
 			// which bits are straight-line fallbacks.
+			//
+			// Each entry starts as its straight-line fallback; a cache hit
+			// or a successful fetch upgrades it to ok=true. Only the
+			// uncached ("miss") segments hit OSRM, so re-routing after a
+			// single new waypoint costs one round-trip, not N.
 			const perSegment: {
 				ok: boolean;
 				from: TrackPoint;
 				to: TrackPoint;
 				polyline: [number, number][];
 				distanceM: number;
-			}[] = (results as {
-				code: string;
-				routes?: { geometry: { coordinates: [number, number][] }; distance?: number }[];
-			}[]).map((data, i) => {
-				const from = segments[i].from;
-				const to = segments[i].to;
-				if (data.code === 'Ok' && data.routes?.[0]) {
-					return {
+			}[] = segments.map((s) => ({
+				ok: false,
+				from: s.from,
+				to: s.to,
+				polyline: [
+					[s.from.lng, s.from.lat],
+					[s.to.lng, s.to.lat],
+				],
+				distanceM: routingHaversineM(s.from, s.to),
+			}));
+
+			const missIdx: number[] = [];
+			for (let i = 0; i < segments.length; i++) {
+				const hit = segmentCache.get(segKeys[i]);
+				if (hit) {
+					perSegment[i] = {
 						ok: true,
-						from,
-						to,
-						polyline: data.routes[0].geometry.coordinates,
-						distanceM: data.routes[0].distance ?? 0,
+						from: segments[i].from,
+						to: segments[i].to,
+						polyline: hit.polyline,
+						distanceM: hit.distanceM,
 					};
+				} else {
+					missIdx.push(i);
 				}
-				return {
-					ok: false,
-					from,
-					to,
-					polyline: [
-						[from.lng, from.lat],
-						[to.lng, to.lat],
-					],
-					distanceM: routingHaversineM(from, to),
-				};
-			});
+			}
+
+			// Fetch only the cache misses — batched in groups of 3 with a
+			// 200ms inter-batch cooldown, same shape as before.
+			for (let b = 0; b < missIdx.length; b += BATCH_SIZE) {
+				if (currentVersion !== routeVersion) return false;
+
+				const batchIdx = missIdx.slice(b, b + BATCH_SIZE);
+				const batchResults = await Promise.all(
+					batchIdx.map((i) => fetchSegment(segments[i].from, segments[i].to))
+				);
+				for (let j = 0; j < batchIdx.length; j++) {
+					const i = batchIdx[j];
+					const data = batchResults[j] as {
+						code: string;
+						routes?: { geometry: { coordinates: [number, number][] }; distance?: number }[];
+					};
+					if (data.code === 'Ok' && data.routes?.[0]) {
+						const polyline = data.routes[0].geometry.coordinates;
+						const distanceM = data.routes[0].distance ?? 0;
+						perSegment[i] = { ok: true, from: segments[i].from, to: segments[i].to, polyline, distanceM };
+						// Cache successes only — a straight-line fallback from
+						// a transient hiccup must re-try next pass, not stick.
+						segmentCache.set(segKeys[i], { polyline, distanceM });
+					}
+				}
+
+				if (b + BATCH_SIZE < missIdx.length) {
+					await new Promise((r) => setTimeout(r, 200));
+				}
+			}
 
 			if (currentVersion !== routeVersion) return false;
 
@@ -942,6 +996,7 @@
 		// and Calculate stays disabled until the user runs Calculate
 		// (which won't happen because Calculate is disabled).
 		emitUpdate();
+		scheduleAutoRoute();
 	}
 
 	export function insertWaypoint(lngLat: { lng: number; lat: number }, atIndex: number) {
@@ -955,6 +1010,7 @@
 		updateMarkerStyles();
 		updateStraightLine();
 		emitUpdate();
+		scheduleAutoRoute();
 	}
 
 	export function removeWaypoint(index: number) {
@@ -970,6 +1026,7 @@
 		updateMarkerStyles();
 		updateStraightLine();
 		emitUpdate();
+		scheduleAutoRoute();
 	}
 
 	export function undoWaypoint() {
@@ -999,12 +1056,16 @@
 		clearPreviewLine();
 		updateStraightLine();
 		emitUpdate();
+		scheduleAutoRoute();
 	}
 
 	export function clearWaypoints() {
 		// Invalidate any in-flight recalculateRoute — Esc during a slow
 		// OSRM batch must not let the late result repopulate the polyline.
 		routeVersion++;
+		// Drop any pending auto-route so a late timer doesn't re-snap a
+		// route the user just cleared.
+		clearTimeout(autoRouteTimer);
 		waypoints = [];
 		routeCoordinates = [];
 		routeElevations = [];
@@ -1019,53 +1080,6 @@
 		updateRouteLine();
 		updateStraightLine();
 		emitUpdate();
-	}
-
-	/**
-	 * Calculate the road-snapped route through all waypoints.
-	 * Saves a snapshot of waypoints for undo. Returns true only when
-	 * a usable route was produced (>= 1 OSRM segment succeeded). The
-	 * parent uses this to gate the Save button — a stale `routed`
-	 * flag after a failed call let the user "save" an empty route.
-	 */
-	export async function calculateRoute(): Promise<boolean> {
-		// Reject re-entry while a calculation is already running. The
-		// public OSRM demo is slow enough that a user impatient-clicking
-		// "Calculate Route" twice would otherwise fire two parallel
-		// batches that trample each other's state.
-		if (isRouting) return false;
-		preRouteWaypoints = waypoints.map((w) => ({ ...w }));
-		return await recalculateRoute();
-	}
-
-	/**
-	 * Undo route calculation — restore waypoints from before calculate was called.
-	 */
-	export function undoCalculate() {
-		if (preRouteWaypoints.length === 0) return;
-		// Invalidate any in-flight recalculateRoute — see invalidateCalculatedRoute.
-		routeVersion++;
-
-		// Clear existing
-		markers.forEach((m) => m.remove());
-		markers = [];
-		routeCoordinates = [];
-		routeElevations = [];
-		distanceMarkers.forEach((m) => m.remove());
-		distanceMarkers = [];
-
-		// Restore waypoints
-		waypoints = preRouteWaypoints.map((w) => ({ ...w }));
-		preRouteWaypoints = [];
-
-		// Recreate markers
-		for (let i = 0; i < waypoints.length; i++) {
-			const marker = createWaypointMarker({ lng: waypoints[i].lng, lat: waypoints[i].lat }, i);
-			markers.push(marker);
-		}
-		updateMarkerStyles();
-		updateRouteLine();
-		updateStraightLine();
 	}
 
 	/**
@@ -1120,10 +1134,12 @@
 		}
 		updateMarkerStyles();
 
-		// Clear any calculated route — user needs to recalculate
+		// Drop the old polyline; the auto-route below re-snaps the new
+		// (doubled / reversed) waypoint sequence.
 		routeCoordinates = [];
 		routeElevations = [];
 		updateStraightLine();
+		scheduleAutoRoute();
 	}
 
 	/**
@@ -1281,13 +1297,11 @@
 		let bestDistance = Infinity;
 		let bestDelta = Infinity;
 
-		// Snapshot the pre-generate state for restore-on-failure (and
-		// for the "Undo calculation" button, which calls undoCalculate
-		// to put preRouteWaypoints back). Without this, a Cancel or
-		// hard-failure exit would leave the iteration's scaffolding
-		// (8 waypoints, only `start` visible) on the map — the user
-		// is stranded with an inconsistent state they can't recover
-		// from short of pressing Esc.
+		// Snapshot the pre-generate state for restore-on-failure.
+		// Without this, a Cancel or hard-failure exit would leave the
+		// iteration's scaffolding (8 waypoints, only `start` visible) on
+		// the map — the user is stranded with an inconsistent state they
+		// can't recover from short of pressing Esc.
 		preRouteWaypoints = waypoints.map((w) => ({ ...w }));
 
 		// Hold isRouting=true across the whole iteration loop. Without

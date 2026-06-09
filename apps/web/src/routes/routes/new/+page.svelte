@@ -273,20 +273,6 @@
 
 	let canSave = $derived(routed && routeName.trim().length > 0);
 
-	async function handleCalculateRoute() {
-		// Only flip `routed` to true when OSRM actually produced a
-		// polyline. The old code set routed unconditionally after the
-		// awaited call, even if the routing service was down — and the
-		// Save button then submitted an empty/stale route.
-		const ok = await builder?.calculateRoute();
-		routed = !!ok;
-	}
-
-	function handleUndoCalculate() {
-		builder?.undoCalculate();
-		routed = false;
-	}
-
 	function handleOutAndBack() {
 		builder?.outAndBack();
 		routed = false;
@@ -633,26 +619,6 @@
 
 			<div class="primary-actions">
 				<button
-					class="btn btn-secondary"
-					disabled={waypointCount < 2 || builderBusy}
-					onclick={handleCalculateRoute}
-				>
-					{routed ? m('routeNew.recalculate') : m('routeNew.calculateRoute')}
-				</button>
-				{#if routed}
-					<button
-						class="btn btn-outline btn-sm"
-						disabled={builderBusy}
-						onclick={handleUndoCalculate}
-						aria-label={m('routeNew.undoCalculation')}
-					>
-						<span class="material-symbols">undo</span>
-					</button>
-				{/if}
-			</div>
-
-			<div class="primary-actions">
-				<button
 					class="btn btn-primary"
 					disabled={!routed || builderBusy}
 					onclick={openSaveModal}
@@ -712,7 +678,7 @@
 			<div class="canvas-empty" role="status">
 				<span class="material-symbols">add_location</span>
 				<h3>{m('routeNew.canvasEmptyTitle')}</h3>
-				<p>{m('routeNew.canvasEmptyPrefix')} <strong>{m('routeNew.canvasEmptyCalculate')}</strong> {m('routeNew.canvasEmptySuffix')}</p>
+				<p>{m('routeNew.canvasEmptyPrefix')} <strong>{m('routeNew.canvasEmptyAuto')}</strong> {m('routeNew.canvasEmptySuffix')}</p>
 			</div>
 		{/if}
 

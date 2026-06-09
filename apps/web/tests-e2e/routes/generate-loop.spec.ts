@@ -508,7 +508,7 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		expect(after).toBe(2);
 	});
 
-	test('Action buttons stay disabled mid-generation (Save / GPX / KML / Recalc)', async ({
+	test('Action buttons stay disabled mid-generation (Save / GPX / KML)', async ({
 		page,
 	}) => {
 		// Audit follow-up: emitUpdate fires routed=true after iter 1
@@ -545,8 +545,6 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await expect(page.getByRole('button', { name: /Save Route/ })).toBeDisabled();
 		await expect(page.getByRole('button', { name: 'GPX', exact: true })).toBeDisabled();
 		await expect(page.getByRole('button', { name: 'KML', exact: true })).toBeDisabled();
-		const calcOrRecalc = page.getByRole('button', { name: /Calculate Route|Recalculate/ });
-		await expect(calcOrRecalc).toBeDisabled();
 
 		// Cancel via the hook (the button is hidden because the panel
 		// isn't open in this flow).
