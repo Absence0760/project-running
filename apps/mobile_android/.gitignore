@@ -41,6 +41,9 @@ app.*.map.json
 
 # Environment
 .env.local
+# Committed local-dev defaults (DEBUG-only load; local-stack + public demo
+# key, no real secrets). See README "Quick start".
+!.env.local
 
 # Android Studio will place build artifacts here
 /android/app/debug

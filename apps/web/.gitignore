@@ -10,6 +10,9 @@ dist/
 .env
 .env.*
 !.env.example
+# Committed local-dev defaults — loaded only by `vite dev`, never `vite build`
+# (local-stack + public demo keys, no real secrets). See README "Quick start".
+!.env.development
 
 # OS
 .DS_Store
