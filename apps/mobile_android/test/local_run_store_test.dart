@@ -1085,4 +1085,97 @@ void main() {
       expect(ids.toSet(), {'a', 'b'});
     });
   });
+
+  group('windowed cold-load', () {
+    Run mk(String id, DateTime startedAt, {List<Waypoint>? track}) => Run(
+          id: id,
+          startedAt: startedAt,
+          duration: const Duration(minutes: 20),
+          distanceMetres: 5000,
+          track: track ?? const [],
+          source: RunSource.app,
+        );
+
+    // Seed the directory on disk via a throwaway store instance, then a fresh
+    // store cold-loads from those files.
+    Future<void> seed(List<Run> synced, {List<Run> unsynced = const []}) async {
+      final s = LocalRunStore();
+      await s.init(overrideDirectory: tempDir);
+      if (synced.isNotEmpty) await s.saveManyFromRemote(synced);
+      for (final r in unsynced) {
+        await s.save(r);
+      }
+    }
+
+    test('fast path: index loads all summaries, only the window is resident',
+        () async {
+      await seed([
+        mk('a', DateTime(2026, 1, 1)),
+        mk('b', DateTime(2026, 2, 1)),
+        mk('c', DateTime(2026, 3, 1)),
+      ]);
+      final store = LocalRunStore()..residentWindow = 2;
+      await store.init(overrideDirectory: tempDir);
+      // Summaries: full history, newest-first (proves the index was read).
+      expect(store.summaries.map((s) => s.id), ['c', 'b', 'a']);
+      // Resident runs: only the newest 2 — the windowed-hydration fast path
+      // (the full-walk fallback would put all 3 in `runs`).
+      expect(store.runs.map((r) => r.id), ['c', 'b']);
+    });
+
+    test('runById hydrates an out-of-window run from disk (with track)',
+        () async {
+      await seed([
+        mk('a', DateTime(2026, 1, 1), track: const [Waypoint(lat: 1, lng: 2)]),
+        mk('b', DateTime(2026, 2, 1)),
+        mk('c', DateTime(2026, 3, 1)),
+      ]);
+      final store = LocalRunStore()..residentWindow = 1;
+      await store.init(overrideDirectory: tempDir);
+      expect(store.runs.map((r) => r.id), ['c']);
+      final a = await store.runById('a'); // outside the window
+      expect(a, isNotNull);
+      expect(a!.track, hasLength(1), reason: 'hydrated from disk with its track');
+    });
+
+    test('residency: an unsynced run older than the window stays resident',
+        () async {
+      await seed(
+        [mk('s1', DateTime(2026, 2, 1)), mk('s2', DateTime(2026, 3, 1))],
+        unsynced: [mk('u-old', DateTime(2025, 1, 1))],
+      );
+      final store = LocalRunStore()..residentWindow = 1;
+      await store.init(overrideDirectory: tempDir);
+      final ids = store.runs.map((r) => r.id).toSet();
+      expect(ids.contains('s2'), isTrue, reason: 'newest synced is resident');
+      expect(ids.contains('u-old'), isTrue,
+          reason: 'unsynced is always resident regardless of age');
+      expect(store.unsyncedRuns.map((r) => r.id), ['u-old']);
+    });
+
+    test('drift rebuild: a missing index is rebuilt from the run files',
+        () async {
+      await seed([mk('a', DateTime(2026, 1, 1)), mk('b', DateTime(2026, 2, 1))]);
+      File('${tempDir.path}/index.json').deleteSync();
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.summaries.map((s) => s.id).toSet(), {'a', 'b'});
+      expect(await store.debugReadIndex(), isNotNull,
+          reason: 'rebuilt + persisted');
+    });
+
+    test('drift rebuild: an orphan run file not in the index forces a rebuild',
+        () async {
+      await seed([mk('a', DateTime(2026, 1, 1))]);
+      // Plant a run file the index doesn't know about.
+      File('${tempDir.path}/x.json').writeAsStringSync(jsonEncode({
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        'run': mk('x', DateTime(2026, 5, 1)).toJson(),
+        'synced': true,
+      }));
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.summaries.map((s) => s.id).toSet(), {'a', 'x'});
+    });
+  });
 }

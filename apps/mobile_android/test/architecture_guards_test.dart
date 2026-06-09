@@ -496,6 +496,31 @@ void main() {
       );
     });
 
+    test('_loadAll takes the index-first windowed fast path', () {
+      // Reason: the durable summary-index redesign exists so cold-load reads
+      // ONE index file and hydrates only the resident window — not N per-run
+      // files. The full directory walk (`Future.wait` above) is the
+      // self-heal / migration FALLBACK, taken only when the index is missing
+      // or drifted. A change that drops `_readIndex` from `_loadAll` reverts
+      // the windowing and silently reintroduces the O(n) cold-load.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _loadAll\(\)\s*async\s*\{',
+      );
+      expect(
+        body,
+        contains('_readIndex'),
+        reason: '_loadAll must read index.json first (the windowed fast path) '
+            'and fall back to the full walk only on a missing/drifted index.',
+      );
+      expect(
+        body,
+        contains('residentWindow'),
+        reason: '_loadAll must hydrate only the resident window on the fast '
+            'path (newest residentWindow ∪ all unsynced).',
+      );
+    });
+
     test('save() stamps metadata.last_modified_at', () {
       // Reason: sync uses `metadata.last_modified_at` for newer-wins
       // conflict resolution (see saveFromRemote). A local save that

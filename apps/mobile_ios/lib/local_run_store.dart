@@ -116,6 +116,12 @@ class LocalRunStore extends ChangeNotifier {
   /// always be reachable for the sync drain — see [unsyncedRuns]).
   static const int kResidentWindow = 200;
 
+  /// Effective resident-window size for cold-load hydration. Overridable in
+  /// tests so the windowing behaviour can be exercised without seeding hundreds
+  /// of run files.
+  @visibleForTesting
+  int residentWindow = kResidentWindow;
+
   /// The newest [count] resident runs ∪ all unsynced, newest-first. The History
   /// timeline + run-list feed read this rather than [summaries] when they need
   /// full [Run]s (not just scalars). Identical to [runs] until the store
@@ -327,24 +333,38 @@ class LocalRunStore extends ChangeNotifier {
   ///   we preserve it so we don't drop GPS data when syncing.
   Future<void> saveFromRemote(Run run) async {
     final existing = _runs.where((r) => r.id == run.id).firstOrNull;
-    if (existing != null) {
-      final localTs = _lastModifiedOf(existing);
-      final remoteTs = _lastModifiedOf(run);
-      if (localTs.isAfter(remoteTs)) {
-        // Local is newer — keep it.
-        return;
-      }
+    // Newer-wins must also catch a synced run that's been windowed out of
+    // `_runs` — its summary still carries the modification clock. Without this,
+    // a delta fetch would silently clobber a locally-newer out-of-window edit.
+    final existingSummary = existing == null
+        ? _summaries.where((s) => s.id == run.id).firstOrNull
+        : null;
+    final localTs = existing != null
+        ? _lastModifiedOf(existing)
+        : (existingSummary != null
+            ? _lastModifiedOf(existingSummary.toRun())
+            : null);
+    if (localTs != null && localTs.isAfter(_lastModifiedOf(run))) {
+      // Local is newer — keep it.
+      return;
     }
 
     // Preserve the local track if the remote one is empty (tracks live in
-    // Storage now and aren't returned by getRuns).
-    final merged = (run.track.isEmpty && existing != null && existing.track.isNotEmpty)
+    // Storage now and aren't returned by getRuns). The resident copy has it in
+    // memory; an out-of-window copy is hydrated from disk.
+    Run? existingFull = existing;
+    if (run.track.isEmpty && existingFull == null && existingSummary != null) {
+      existingFull = await runById(run.id);
+    }
+    final merged = (run.track.isEmpty &&
+            existingFull != null &&
+            existingFull.track.isNotEmpty)
         ? Run(
             id: run.id,
             startedAt: run.startedAt,
             duration: run.duration,
             distanceMetres: run.distanceMetres,
-            track: existing.track,
+            track: existingFull.track,
             routeId: run.routeId,
             source: run.source,
             externalId: run.externalId,
@@ -381,20 +401,30 @@ class LocalRunStore extends ChangeNotifier {
     final toWrite = <Run>[];
     for (final run in runs) {
       final existing = _runs.where((r) => r.id == run.id).firstOrNull;
-      if (existing != null) {
-        final localTs = _lastModifiedOf(existing);
-        final remoteTs = _lastModifiedOf(run);
-        if (localTs.isAfter(remoteTs)) continue;
+      // Newer-wins also against an out-of-window synced run via its summary
+      // clock; preserve a local track by hydrating the evicted copy from disk.
+      final existingSummary = existing == null
+          ? _summaries.where((s) => s.id == run.id).firstOrNull
+          : null;
+      final localTs = existing != null
+          ? _lastModifiedOf(existing)
+          : (existingSummary != null
+              ? _lastModifiedOf(existingSummary.toRun())
+              : null);
+      if (localTs != null && localTs.isAfter(_lastModifiedOf(run))) continue;
+      Run? existingFull = existing;
+      if (run.track.isEmpty && existingFull == null && existingSummary != null) {
+        existingFull = await runById(run.id);
       }
       final merged = (run.track.isEmpty &&
-              existing != null &&
-              existing.track.isNotEmpty)
+              existingFull != null &&
+              existingFull.track.isNotEmpty)
           ? Run(
               id: run.id,
               startedAt: run.startedAt,
               duration: run.duration,
               distanceMetres: run.distanceMetres,
-              track: existing.track,
+              track: existingFull.track,
               routeId: run.routeId,
               source: run.source,
               externalId: run.externalId,
@@ -852,6 +882,7 @@ class LocalRunStore extends ChangeNotifier {
 
   Future<void> _loadAll() async {
     _runs = [];
+    _summaries = [];
     _syncedIds.clear();
     _pendingRemoteDeletes.clear();
 
@@ -874,20 +905,72 @@ class LocalRunStore extends ChangeNotifier {
         .where((f) => !f.path.endsWith(_pendingRemoteDeletesFilename))
         .where((f) => !f.path.endsWith(_indexFilename))
         .toList();
+    final fileById = {for (final f in files) _runIdFromPath(f.path): f};
 
     // Read the sidecar first. If present, it's the authoritative source
     // of sync state — the per-run `synced` field is legacy and may be
     // stale (markSynced no longer rewrites the run file).
-    Set<String>? sidecarIds = await _readSyncedIdsSidecar();
+    final Set<String>? sidecarIds = await _readSyncedIdsSidecar();
+    final index = await _readIndex();
 
-    // Read all run files in parallel. Sequential reads meant cold-start
-    // scaled linearly with run count — a user with 500 runs would wait
-    // seconds on the first frame. `Future.wait` lets the scheduler batch
-    // the I/O while we decode whatever comes back.
-    final loaded = await Future.wait(
-      files.map(_readRunFile),
-      eagerError: false,
-    );
+    // Fast path: a valid index whose id-set matches the on-disk run files
+    // (membership only — names, no reads). Load `_summaries` from the index
+    // (ONE file) and hydrate only the resident window — the whole point of the
+    // windowed store. A missing / corrupt / drifted index (crash between a run
+    // write and the index flush, a hand-planted / removed file) falls through
+    // to the full-walk rebuild below: the post-crash self-heal + first-launch
+    // migration.
+    final indexMatches = index != null &&
+        index.length == fileById.length &&
+        index.every((s) => fileById.containsKey(s.id));
+    if (indexMatches) {
+      // Determine the authoritative synced set FIRST: the sidecar when present
+      // (markSynced writes the sidecar, not the index, so the index's per-row
+      // `synced` flag can lag), else fall back to the index's own flag.
+      if (sidecarIds != null) {
+        _syncedIds.addAll(sidecarIds.where(fileById.containsKey));
+      } else {
+        for (final s in index) {
+          if (s.synced) _syncedIds.add(s.id);
+        }
+      }
+      // Reconcile each summary's `synced` against that authoritative set so the
+      // in-memory index never serves a stale flag (the on-disk flag is repaired
+      // on the next mutation's index write).
+      _summaries = [
+        for (final s in index) s.withSynced(_syncedIds.contains(s.id)),
+      ];
+      _sortSummaries();
+      // Residency invariant: newest [kResidentWindow] by date ∪ ALL unsynced
+      // (unsynced runs carry their track + must always be drainable by sync).
+      final residentIds = <String>{};
+      for (final s in _summaries.take(residentWindow)) {
+        residentIds.add(s.id);
+      }
+      for (final s in _summaries) {
+        if (!_syncedIds.contains(s.id)) residentIds.add(s.id);
+      }
+      final loaded = await Future.wait(
+        residentIds.map((id) => _readRunFile(fileById[id]!)),
+        eagerError: false,
+      );
+      for (final entry in loaded) {
+        if (entry != null) _runs.add(entry.run);
+      }
+      _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+      if (sidecarIds == null && _syncedIds.isNotEmpty) {
+        await _persistSyncedIds();
+      }
+      notifyListeners();
+      return;
+    }
+
+    // Slow path (self-heal / migration): read every run file in parallel,
+    // rebuild `_summaries`, and persist the index so the next cold-start takes
+    // the fast path. `_runs` holds the full set for this one session (the read
+    // is already paid); the next launch windows it. `Future.wait` keeps the
+    // cold-start parallel rather than O(n) sequential.
+    final loaded = await Future.wait(files.map(_readRunFile), eagerError: false);
     for (final entry in loaded) {
       if (entry == null) continue;
       _runs.add(entry.run);
@@ -899,27 +982,29 @@ class LocalRunStore extends ChangeNotifier {
       }
     }
 
-    // If we migrated from legacy per-file flags, write the sidecar now so
-    // the next launch takes the fast path.
     if (sidecarIds == null && _syncedIds.isNotEmpty) {
       await _persistSyncedIds();
     }
 
-    // Sort newest first
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     _summaries = [
       for (final r in _runs)
         RunSummary.fromRun(r, synced: _syncedIds.contains(r.id)),
     ];
-    // Seed / refresh the index so the next cold-start can take the index-first
-    // fast path instead of walking + decoding every per-run file. Skip the
-    // write for a brand-new empty store (no runs AND no prior index) — there's
-    // nothing to cache, the rebuild-from-empty path is O(0) anyway, and it
-    // avoids a pointless disk write on every launch of a fresh install.
+    // Skip the write for a brand-new empty store (no runs AND no prior index).
     if (_runs.isNotEmpty || _indexFile.existsSync()) {
       await _persistIndex();
     }
     notifyListeners();
+  }
+
+  /// Extract a run id from its `<id>.json` file path. Run files are named for
+  /// their (UUID) id, which never contains a path separator or `.json`.
+  static String _runIdFromPath(String path) {
+    final name = path.split('/').last;
+    return name.endsWith('.json')
+        ? name.substring(0, name.length - '.json'.length)
+        : name;
   }
 
   Future<Set<String>?> _readSyncedIdsSidecar() async {
