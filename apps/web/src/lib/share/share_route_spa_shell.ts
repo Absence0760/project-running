@@ -38,12 +38,19 @@ export function injectShareRouteMeta(
 		'',
 	);
 	// Strip any existing canonical link + JSON-LD block so the per-route
-	// ones don't sit alongside a stale default.
+	// ones don't sit alongside a stale default. The JSON-LD strip repeats
+	// until the string stops changing so a crafted/overlapping
+	// `<script ...><script>…</script>` can't leave a residual `<script`
+	// behind (js/incomplete-multi-character-sanitization).
 	out = out.replace(/<link\s+rel="canonical"[^>]*>/gi, '');
-	out = out.replace(
-		/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/gi,
-		'',
-	);
+	let prev: string;
+	do {
+		prev = out;
+		out = out.replace(
+			/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/gi,
+			'',
+		);
+	} while (out !== prev);
 	// Splice the new tags in just before </head>.
 	const insertedAt = out.search(/<\/head>/i);
 	if (insertedAt === -1) {

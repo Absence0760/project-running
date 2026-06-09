@@ -69,6 +69,27 @@ test('injectShareRouteMeta — strips the stale JSON-LD block', () => {
 	assert.ok(out.includes('WebPage'));
 });
 
+test('injectShareRouteMeta — strips spliced JSON-LD blocks, no residual <script', () => {
+	// A single global replace scans the original once, so deleting one
+	// ld+json block can splice surrounding text into a brand-new
+	// `<script type="application/ld+json">…</script>` that a one-pass
+	// strip would leave behind. The strip repeats until stable so the
+	// spliced residual is also removed (js/incomplete-multi-character-sanitization).
+	const spliced =
+		'<sc<script type="application/ld+json">{"a":1}</script>' +
+		'ript type="application/ld+json">{"b":2}</script>';
+	const shell = SHELL.replace(
+		'<script type="application/ld+json">{"@type":"WebSite"}</script>',
+		spliced,
+	);
+	const out = injectShareRouteMeta(shell, head());
+	// Only the per-route WebPage block remains; the spliced residual is gone.
+	const ldMatches = out.match(/<script\s+type="application\/ld\+json">/g) ?? [];
+	assert.equal(ldMatches.length, 1);
+	assert.equal(out.includes('"a":1'), false);
+	assert.equal(out.includes('"b":2'), false);
+});
+
 test('injectShareRouteMeta — inserts a full set of meta tags', () => {
 	const out = injectShareRouteMeta(SHELL, head());
 	assert.ok(out.includes('og:title'));
