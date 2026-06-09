@@ -110,7 +110,7 @@ test.describe('Heatmap pin RPCs (backend contract)', () => {
 			expect(error).toBeNull();
 			const pins = data as Array<{
 				id: string;
-				featured: boolean;
+				is_featured: boolean;
 				run_count: number;
 				distance_m: number;
 				elevation_m: number | null;
@@ -119,22 +119,22 @@ test.describe('Heatmap pin RPCs (backend contract)', () => {
 			// Every pin must satisfy the filter contract.
 			for (const p of pins) {
 				expect(
-					p.featured || p.run_count > 0,
+					p.is_featured || p.run_count > 0,
 					`Route ${p.id} is neither featured nor popular`,
 				).toBe(true);
 				expect(p.distance_m).toBeGreaterThan(0);
 			}
 			// Order: featured first, then by run_count desc.
-			const firstFeaturedIdx = pins.findIndex((p) => p.featured);
+			const firstFeaturedIdx = pins.findIndex((p) => p.is_featured);
 			const lastFeaturedIdx = pins
 				.slice()
 				.reverse()
-				.findIndex((p) => p.featured);
+				.findIndex((p) => p.is_featured);
 			if (firstFeaturedIdx >= 0) {
 				// Everything before "last featured" must be featured.
 				const lastIdx = pins.length - 1 - lastFeaturedIdx;
 				for (let i = 0; i <= lastIdx; i++) {
-					expect(pins[i].featured, `pin ${i} should be featured`).toBe(true);
+					expect(pins[i].is_featured, `pin ${i} should be featured`).toBe(true);
 				}
 			}
 		});

@@ -43,7 +43,7 @@ const FIX_BBOX = {
 
 type Pin = {
 	id: string;
-	featured: boolean;
+	is_featured: boolean;
 	run_count: number;
 	distance_m: number;
 };
@@ -81,7 +81,7 @@ test.describe('discoverable_routes_in_bbox p_filter (backend contract)', () => {
 
 		expect(featured.length).toBeGreaterThanOrEqual(3);
 		for (const p of featured) {
-			expect(p.featured, `route ${p.id} under featured lens must be featured`).toBe(true);
+			expect(p.is_featured, `route ${p.id} under featured lens must be featured`).toBe(true);
 		}
 		// Every featured route is also "popular" (popular = featured OR run_count>0).
 		const popularIds = new Set(popular.map((p) => p.id));
@@ -132,7 +132,7 @@ test.describe('discoverable_routes_in_bbox p_filter (backend contract)', () => {
 			expect(gemIds, 'the >=1km un-run route is a hidden gem').toContain(gemId);
 			expect(gemIds, 'the 500m scribble is below the floor').not.toContain(tinyId);
 			for (const p of gems) {
-				expect(p.featured).toBe(false);
+				expect(p.is_featured).toBe(false);
 				expect(p.run_count).toBe(0);
 				expect(p.distance_m).toBeGreaterThanOrEqual(1000);
 			}
@@ -348,7 +348,7 @@ test.describe('Heatmap route-pin clustering (web)', () => {
 					name: `cluster fixture ${i}`,
 					distance_m: 4000,
 					is_public: true,
-					featured: true,
+					is_featured: true,
 					surface: 'road',
 					waypoints: [
 						{ lng: 9.0 + i * 0.0004, lat: 49.0 + i * 0.0004 },

@@ -183,6 +183,44 @@ export async function deleteRoute(routeId: string): Promise<void> {
 	}
 }
 
+/// Clear the seed's now()-relative "Morning easy 8K" run (and any other
+/// trailing-8-day runs) for `userId`, returning a callback that restores
+/// them verbatim. Why: a freshly planted current-week goal would
+/// otherwise read 32%, not the 0% baseline these tests assert — and the
+/// /nutrition + dashboard-readiness specs still need the seed run, so it
+/// must be put back (the 8-day window covers Monday- and Sunday-start
+/// weeks per goals.ts periodStart).
+export async function withCleanCurrentWeek(userId: string): Promise<() => Promise<void>> {
+	const admin = getAdminClient();
+	const since = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+	const { data, error } = await admin
+		.from('runs')
+		.select('*')
+		.eq('user_id', userId)
+		.gte('started_at', since);
+	if (error) {
+		throw new Error(`simulate.withCleanCurrentWeek snapshot failed: ${error.message}`);
+	}
+	const snapshot = (data ?? []) as Record<string, unknown>[];
+	if (snapshot.length > 0) {
+		const { error: delErr } = await admin
+			.from('runs')
+			.delete()
+			.eq('user_id', userId)
+			.gte('started_at', since);
+		if (delErr) {
+			throw new Error(`simulate.withCleanCurrentWeek delete failed: ${delErr.message}`);
+		}
+	}
+	return async () => {
+		if (snapshot.length === 0) return;
+		const { error: insErr } = await admin.from('runs').insert(snapshot);
+		if (insErr) {
+			throw new Error(`simulate.withCleanCurrentWeek restore failed: ${insErr.message}`);
+		}
+	};
+}
+
 export async function deletePlan(planId: string): Promise<void> {
 	// plan_weeks → plan_workouts cascade via FK ON DELETE CASCADE; the
 	// plans row delete sweeps everything beneath. Used by tests that
@@ -354,7 +392,7 @@ export async function insertRaceSession(opts: {
 	started_at?: string | null;
 	finished_at?: string | null;
 	started_by?: string | null;
-	auto_approve?: boolean;
+	is_auto_approve?: boolean;
 }): Promise<void> {
 	const { error } = await getAdminClient()
 		.from('race_sessions')
@@ -366,7 +404,7 @@ export async function insertRaceSession(opts: {
 				started_at: opts.started_at ?? null,
 				finished_at: opts.finished_at ?? null,
 				started_by: opts.started_by ?? null,
-				auto_approve: opts.auto_approve ?? true
+				is_auto_approve: opts.is_auto_approve ?? true
 			},
 			{ onConflict: 'event_id,instance_start' }
 		);
