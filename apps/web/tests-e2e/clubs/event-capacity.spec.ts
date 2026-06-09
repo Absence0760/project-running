@@ -37,7 +37,7 @@ test.describe('/clubs/[slug]/events/[id] — capacity + waitlist', () => {
 		const admin = getAdminClient();
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-capacity ${Date.now()}`,
 			starts_at: INSTANCE,
 			capacity: 1

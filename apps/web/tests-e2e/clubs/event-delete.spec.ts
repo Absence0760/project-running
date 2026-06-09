@@ -38,7 +38,7 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 		const title = `e2e-event-delete ${Date.now()}`;
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title
 		});
 
@@ -70,7 +70,7 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 		const startsAt = new Date(Date.now() + 4 * 24 * 3600 * 1000).toISOString();
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: startsAt
 		});

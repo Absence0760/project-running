@@ -216,7 +216,7 @@ export async function setPlanStatus(
 
 export async function insertEvent(opts: {
 	club_id: string;
-	created_by: string;
+	author_id: string;
 	title: string;
 	starts_at?: string;
 	duration_min?: number;
@@ -231,7 +231,7 @@ export async function insertEvent(opts: {
 		.from('events')
 		.insert({
 			club_id: opts.club_id,
-			created_by: opts.created_by,
+			author_id: opts.author_id,
 			title: opts.title,
 			starts_at:
 				opts.starts_at ??

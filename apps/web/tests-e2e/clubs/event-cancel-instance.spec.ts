@@ -36,7 +36,7 @@ test.describe('/clubs/[slug]/events/[id] — cancel one occurrence', () => {
 		const admin = getAdminClient();
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-cancel-instance ${Date.now()}`,
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
 			recurrence_freq: 'weekly'

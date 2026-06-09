@@ -40,7 +40,7 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 		const title = `e2e race-control ${Date.now()}`;
 		const eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // +1h
 		});
@@ -178,7 +178,7 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 		const title = `e2e race-cancel ${Date.now()}`;
 		const eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
 		});

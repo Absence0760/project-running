@@ -32,7 +32,7 @@ test.describe('/clubs/[slug]/events/[id] — finisher certificate', () => {
 		instanceStart = seed.toISOString();
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-cert ${Date.now()}`,
 			starts_at: instanceStart,
 			recurrence_freq: 'weekly'

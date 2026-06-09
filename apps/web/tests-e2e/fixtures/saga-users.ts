@@ -148,7 +148,7 @@ export async function createSagaUsers(
  */
 const OWNER_TABLES: { table: string; col: string }[] = [
 	{ table: 'club_posts', col: 'author_id' },
-	{ table: 'events', col: 'created_by' },
+	{ table: 'events', col: 'author_id' },
 	{ table: 'clubs', col: 'owner_id' },
 	{ table: 'route_reviews', col: 'user_id' },
 	{ table: 'training_plans', col: 'user_id' },

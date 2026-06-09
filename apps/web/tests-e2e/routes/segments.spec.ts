@@ -96,7 +96,7 @@ test.describe('/routes/[id] — SegmentsPanel (v2 tiered leaderboards)', () => {
 				name: 'e2e-Park Lap',
 				start_distance_m: 1000,
 				end_distance_m: 2000,
-				created_by: USER_A.id
+				author_id: USER_A.id
 			})
 			.select('id')
 			.single();

@@ -36,7 +36,7 @@ test.describe('saga: alex RSVPs runner-owned event → runner inbox row', () => 
 		await clearNotifications(USER_A.id);
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `E2E RSVP saga ${Date.now()}`
 		});
 	});

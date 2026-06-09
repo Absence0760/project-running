@@ -26,7 +26,7 @@ test.describe('/clubs/[slug]/events/[id] — results export', () => {
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-export ${Date.now()}`,
 			starts_at: instanceStart,
 			distance_m: 10000
@@ -85,7 +85,7 @@ test.describe('/clubs/[slug]/events/[id] — bib-only approval', () => {
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-approve-bib ${Date.now()}`,
 			starts_at: instanceStart,
 			distance_m: 10000

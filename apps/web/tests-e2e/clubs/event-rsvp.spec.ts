@@ -42,7 +42,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const title = `e2e RSVP ${Date.now()}`;
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
 		});
@@ -79,7 +79,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const title = `e2e RSVP upsert ${Date.now()}`;
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
 		});
@@ -124,7 +124,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const untilAt = new Date(startAt.getTime() + 28 * 24 * 3600 * 1000);
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: startAt.toISOString(),
 			recurrence_freq: 'weekly',
@@ -214,7 +214,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const title = `e2e submit time ${Date.now()}`;
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
 		});
@@ -263,7 +263,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const title = `e2e DNF ${Date.now()}`;
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
 		});
@@ -306,7 +306,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const body = `e2e-event-post ${Date.now()}`;
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
 		});
@@ -344,7 +344,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		const title = `e2e anon view ${Date.now()}`;
 		const localEventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title,
 			starts_at: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString()
 		});

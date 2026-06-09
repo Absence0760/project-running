@@ -42,7 +42,7 @@ test.describe('bib-result claim — claimant side', () => {
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-claim ${Date.now()}`,
 			starts_at: instanceStart,
 			distance_m: 10000
@@ -80,7 +80,7 @@ test.describe('bib-result claim — organiser approval', () => {
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-claim-approve ${Date.now()}`,
 			starts_at: instanceStart,
 			distance_m: 10000

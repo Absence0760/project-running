@@ -37,7 +37,7 @@ test.describe('/live/event/[id]/[instance]', () => {
 		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 		const eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e live-event pre-race ${Date.now()}`,
 			starts_at: startsAt
 		});
@@ -61,7 +61,7 @@ test.describe('/live/event/[id]/[instance]', () => {
 		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 		const eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e live-event running ${Date.now()}`,
 			starts_at: startsAt
 		});
@@ -171,7 +171,7 @@ test.describe('/live/event/[id]/[instance] — MapTiler consent gate', () => {
 		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 		const eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e live-event consent ${Date.now()}`,
 			starts_at: startsAt
 		});

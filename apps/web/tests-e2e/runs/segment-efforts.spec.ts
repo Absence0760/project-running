@@ -71,7 +71,7 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 				name: 'e2e-Hill Sprint',
 				start_distance_m: 2000,
 				end_distance_m: 3000,
-				created_by: USER_A.id
+				author_id: USER_A.id
 			})
 			.select('id')
 			.single();

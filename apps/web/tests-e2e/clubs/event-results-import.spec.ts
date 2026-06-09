@@ -26,7 +26,7 @@ test.describe('/clubs/[slug]/events/[id] — bulk results import', () => {
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-import ${Date.now()}`,
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
 			distance_m: 10000,
@@ -95,7 +95,7 @@ test.describe('bulk results import — re-import preserves a claimed owner', () 
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-reimport ${Date.now()}`,
 			starts_at: instanceStart,
 			distance_m: 10000
@@ -160,7 +160,7 @@ test.describe('bulk results import — non-organiser sees no organiser affordanc
 	test.beforeEach(async () => {
 		eventId = await insertEvent({
 			club_id: RICHMOND_RUN_CLUB_ID,
-			created_by: USER_A.id,
+			author_id: USER_A.id,
 			title: `e2e-noorg ${Date.now()}`,
 			starts_at: instanceStart,
 			distance_m: 10000
