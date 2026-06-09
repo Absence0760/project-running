@@ -322,6 +322,13 @@ Future<OsrmRouteResult> fetchRouteThrough(
   }
 
   final segments = [for (final s in slots) s!];
+  // Final cancellation gate — covers the all-cache-hit path (zero
+  // misses → the batch loop's between-batch checks never ran) so a
+  // superseded pass still drops its result. Mirrors web's post-loop
+  // version check.
+  if (isCancelled()) {
+    return _cancelledResult(segments);
+  }
   final okSegments = segments.where((s) => s.ok).length;
   // No throw here even when every segment failed — the caller
   // (route_builder_screen) decides whether to surface a banner by
