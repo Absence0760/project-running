@@ -582,8 +582,11 @@ test('run-photo delete sites sweep BOTH storage_path and thumb_512_path', () => 
 		);
 		assert.match(
 			body,
-			/storage[\s\S]*?from\(['"]run-photos['"]\)[\s\S]*?\.remove\(/,
-			`${label} must call storage.from('run-photos').remove(...) with the collected paths.`,
+			// Accept the F11 BUCKETS registry constant (BUCKETS.run_photos ===
+			// 'run-photos') as well as the bare literal — web routes storage
+			// access through core/schema.ts, not raw bucket-name strings.
+			/storage[\s\S]*?from\((?:['"]run-photos['"]|BUCKETS\.run_photos)\)[\s\S]*?\.remove\(/,
+			`${label} must call storage.from(BUCKETS.run_photos).remove(...) with the collected paths.`,
 		);
 	}
 
@@ -597,7 +600,9 @@ test('run-photo delete sites sweep BOTH storage_path and thumb_512_path', () => 
 	);
 	assert.match(
 		apiClient,
-		/Future<void> deleteRunPhoto\(RunPhotoRow photo\)[\s\S]*?thumb512Path[\s\S]*?run-photos[\s\S]*?\.remove\(/,
+		// StorageBuckets.runPhotos === 'run-photos' — the dart twin routes
+		// bucket access through the registry, same as the web BUCKETS const.
+		/Future<void> deleteRunPhoto\(RunPhotoRow photo\)[\s\S]*?thumb512Path[\s\S]*?(?:run-photos|StorageBuckets\.runPhotos)[\s\S]*?\.remove\(/,
 		'api_client.dart#deleteRunPhoto must include photo.thumb512Path in the storage remove list.',
 	);
 });
@@ -1845,7 +1850,10 @@ test('accessibility: every top-level page renders an h1 (WCAG 1.3.1 + 2.4.6)', (
 	const en = read('src/lib/i18n/locales/en.ts');
 	for (const [path, key, expectedText] of [
 		['src/routes/dashboard/+page.svelte', 'dash.pageHeading', 'Dashboard'],
-		['src/routes/history/+page.svelte', 'history.heading', 'Run history'],
+		// /history is the unified cross-modal timeline; the dedicated
+		// run-list page moved to /runs in the §63-amendment restructure.
+		['src/routes/history/+page.svelte', 'history.timelineHeading', 'History'],
+		['src/routes/runs/+page.svelte', 'history.heading', 'Run history'],
 		['src/routes/coach/+page.svelte', 'coachPage.h1', 'AI Coach'],
 	] as const) {
 		const src = read(path);
@@ -1971,24 +1979,28 @@ test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical
 		['app.html', html],
 		['app.css', css],
 	] as const) {
-		// URL-scheme-anchored regex (scheme on the left, `\b` on the
-		// right) so CodeQL sees a URL-shaped pattern with both ends
-		// bounded. A bare `.includes('host')` triggers
-		// js/incomplete-url-substring-sanitization; a bare regex
-		// /host/ triggered js/regex/missing-regexp-anchor. The
-		// scheme-anchored form satisfies both. We only need to catch
-		// our own accidental authoring of an absolute Google Fonts
-		// URL — protocol-relative `//host` is HTTPS-only-deprecated
-		// for app HTML and not a realistic regression vector here.
-		assert.doesNotMatch(
-			surface,
-			/\bhttps?:\/\/fonts\.googleapis\.com\b/,
+		// Extract the host of every absolute URL the file references and
+		// compare with exact equality — the CodeQL-recommended shape for a
+		// host check. A host-literal regex trips
+		// js/regex/missing-regexp-anchor and a `.includes('host')` trips
+		// js/incomplete-url-substring-sanitization; both warn about
+		// *partial* host matching, which exact-equality on a parsed host
+		// sidesteps entirely. The capture is a generic URL tokenizer (no
+		// host literal), so it isn't itself a host-checking regex. We only
+		// need to catch our own accidental authoring of an absolute Google
+		// Fonts URL — protocol-relative `//host` is not a realistic
+		// regression vector here.
+		const hosts = new Set<string>();
+		for (const m of surface.matchAll(/https?:\/\/([^/?#"'\s)]+)/gi)) {
+			hosts.add(m[1].split(':')[0].toLowerCase());
+		}
+		assert.ok(
+			!hosts.has('fonts.googleapis.com'),
 			`${name} must not reference fonts.googleapis.com — ` +
 				'the font is self-hosted via material-symbols (npm).',
 		);
-		assert.doesNotMatch(
-			surface,
-			/\bhttps?:\/\/fonts\.gstatic\.com\b/,
+		assert.ok(
+			!hosts.has('fonts.gstatic.com'),
 			`${name} must not reference fonts.gstatic.com.`,
 		);
 	}
