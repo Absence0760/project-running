@@ -2908,6 +2908,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 136. Route builder auto-routes on every waypoint, backed by a per-segment cache
+
+**Decided (2026-06-09):** the route builder snaps to roads **automatically as each waypoint is placed** (added, dragged, inserted, removed, undone, out-and-back'd) rather than behind an explicit "Calculate Route" button. Mobile already worked this way; web had drifted to a batch model where you placed every pin and then waited on one all-segments-at-once OSRM pass — the "place 100 points, wait minutes" complaint. The web Calculate / Recalculate / undo-recalculate buttons (and their i18n keys + the `calculateRoute` / `undoCalculate` exports) are gone; `features.md`'s spec already described per-click auto-draw, so this brings the implementation back to the spec.
+
+- **Per-segment cache (`SegmentCache` web / `RouteSegmentCache` mobile).** Re-routing the whole waypoint list on every placement would be O(n) OSRM calls per pin — fine for a 5-point route, minutes of waiting at 100. The cache is keyed by **endpoint coords + profile** (order-sensitive — A→B ≠ B→A on one-way streets; exact-coord match so a dragged pin's two adjacent segments miss and re-fetch while the rest stay hits). A re-route after one new pin fetches exactly the **one new segment**; the prior N−1 are cache hits. The route builder owns one instance for the editing session and clears it on Clear. Recency-bounded (2000 entries) as a memory backstop.
+- **Cache successes only.** A straight-line fallback from a transient OSRM hiccup is **never** cached — it must re-try on the next pass, or a momentary outage would freeze a wrong line in place after the service recovered.
+- **Incremental routing must not raise the busy flag (the load-bearing subtlety).** Web's map-click / marker / drag handlers all early-return while `isRouting` is true (that guard protects the multi-second `generateLoop`). If per-pin routing flipped `isRouting`, the next click during the ~1 s snap would be **swallowed** and placement would feel sticky. So incremental auto-routing runs with `skipBusyToggle: true` — it never raises `isRouting`; the existing `routeVersion` cancellation makes a newer placement supersede an in-flight one (latest pin wins). Mobile already relied on its generation counter for the same reason and deliberately doesn't gate taps on the routing flag.
+
+**Trade-off.** Adding a pin to an already-snapped route briefly reverts to the straight-line preview while the one new segment fetches (the existing invalidate-then-redraw path) — a sub-second flicker, the same visual the old drag path already produced, now auto-resolved instead of waiting on a button. The cache holds OSRM geometry for the session only (not persisted). `routing.ts`'s `segment_cache.ts` and `routing.dart`'s `RouteSegmentCache` mirror each other by design (same key shape, ok-only, recency cap); they aren't a formally-listed twin pair (neither is the rest of `routing.*`), so keep them in lockstep by hand.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -87,7 +87,7 @@ src/
     runs/heatmap/   # Personal run-track heatmap — the user's OWN tracks (PersonalHeatmap.svelte + lib/run_heatmap.ts). Distinct from the public /routes/heatmap community map. Persona #53.
     runs/[id]/      # Run detail with map, elevation, splits. In-page back-link returns to /runs (history.back() when arrived from /runs or /history so the list snapshot restores).
     routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab.
-    routes/new/     # Route builder (MapLibre + OSRM)
+    routes/new/     # Route builder (MapLibre + OSRM). Auto-routes per waypoint (no Calculate button); per-segment cache in routes/segment_cache.ts so each new pin fetches only its segment (decisions §136). Twin: routing.dart's RouteSegmentCache.
     routes/[id]/    # Route detail
     clubs/          # Thin client-side redirect to `/social?tab=clubs` (preserves `?tab=browse` as `clubs-sub=browse`). The /clubs/[slug] + /clubs/new + /clubs/[slug]/events/* + /clubs/join/[token] sub-routes are unchanged — only the top-level browse landing moved.
     clubs/new/      # Create a club (visibility + join policy)
