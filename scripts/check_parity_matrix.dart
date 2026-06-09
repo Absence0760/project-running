@@ -141,11 +141,13 @@ List<_Row> _parseRows(List<String> lines, List<_Issue> issues) {
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i].trim();
     if (!line.startsWith('|')) continue;
-    // Split on `|`. Markdown rows look like `| a | b | c |` — strip the
-    // leading/trailing empties, then trim each cell.
+    // Split on unescaped `|` only. Markdown rows look like `| a | b | c |`
+    // — but a cell may carry a literal pipe written as `\|` (the GFM
+    // escape), which must NOT start a new column. Split on `|` not
+    // preceded by a backslash, then unescape and trim each cell.
     final parts = line
-        .split('|')
-        .map((s) => s.trim())
+        .split(RegExp(r'(?<!\\)\|'))
+        .map((s) => s.replaceAll(r'\|', '|').trim())
         .toList();
     // Drop empties at both ends (artefacts of the wrapping pipes).
     if (parts.isNotEmpty && parts.first.isEmpty) parts.removeAt(0);
