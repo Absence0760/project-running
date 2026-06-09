@@ -1,0 +1,80 @@
+# GraphHopper config for the self-hosted `foot` round_trip engine.
+#
+# Trimmed from the upstream config-example.yml down to exactly what the
+# "Generate a route by distance" feature needs: one foot profile, flexible
+# mode (no CH), no elevation.
+#
+# WHY no Contraction Hierarchies: round_trip only runs in flexible mode. CH
+# (speed mode) cannot serve algorithm=round_trip. Leaving `profiles_ch` empty
+# means the foot profile is prepared for flexible routing, so a plain
+# round_trip request succeeds without ch.disable=true — which is exactly what
+# the generate-route core sends (apps/web/src/lib/routes/generate/graphhopper.ts).
+#
+# WHY no elevation: the stock foot profile references foot_elevation.json,
+# which requires graph.elevation.provider (SRTM tiles → extra disk + RAM +
+# download). round_trip distance shaping does not need elevation, so we use a
+# flat foot custom model and keep the box small.
+
+graphhopper:
+  # datareader.file + graph.location are injected at boot via -Ddw.* in the
+  # Dockerfile ENTRYPOINT (both point at the mounted /data volume), so they are
+  # intentionally left empty here.
+  datareader.file: ""
+  graph.location: graph-cache
+
+  # Flexible-only. CH and LM preparations are both left empty: round_trip needs
+  # flexible mode, and the route-generation traffic is one latency-tolerant
+  # call per seed, so the speed-mode preparations are not worth their import
+  # time or memory.
+  # Custom model copied verbatim from GraphHopper's stock foot.json (minus the
+  # elevation overlay in foot_elevation.json, which we deliberately drop — see
+  # WHY no elevation above). The encoded values it references (foot_access,
+  # foot_priority, foot_average_speed, …) are imported by default for the foot
+  # vehicle, so no extra graph.encoded_values config is needed.
+  profiles:
+    - name: foot
+      custom_model:
+        priority:
+          - if: "!foot_access || hike_rating >= 2"
+            multiply_by: "0"
+          - else: ""
+            multiply_by: "foot_priority"
+          - if: "foot_road_access == NO"
+            multiply_by: "0"
+          - if: "mtb_rating > 3"
+            multiply_by: "0.7"
+          - if: "road_environment == FERRY"
+            multiply_by: "0.5"
+        speed:
+          - if: "road_environment == FERRY"
+            limit_to: "ferry_speed"
+          - else: ""
+            limit_to: "foot_average_speed"
+
+  profiles_ch: []
+  profiles_lm: []
+
+  # Keep the import lean — runners' tracks live on footways/paths/residential
+  # streets, never motorways. Mirrors the OSRM foot.lua intent.
+  import.osm.ignored_highways: motorway,trunk
+
+# Dropwizard server block. 8989 is the application port the generate-route
+# Lambda's GRAPHHOPPER_URL points at (via the public Fly https service —
+# see fly.toml); 8990 is the admin/health connector.
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d %-5level %logger{36} - %msg%n"

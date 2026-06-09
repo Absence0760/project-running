@@ -1,0 +1,7 @@
+# The OSM PBF and the GraphHopper graph cache are large and reproducible
+# (the PBF is the same one apps/job_worker/osrm/Makefile downloads; the
+# graph-cache is built on first boot). Never commit them. On Fly both live on
+# the graphhopper_data volume, not in git.
+data/
+graph-cache/
+*.osm.pbf

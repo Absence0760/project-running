@@ -1,0 +1,70 @@
+# Fly.io app config for the self-hosted GraphHopper round_trip engine.
+# See apps/job_worker/deployment.md § GraphHopper app for the full plan
+# (sizing, graph build on first boot, the public-https rationale).
+#
+# IMPORTANT — differs from the OSRM app's networking on purpose:
+#
+#   OSRM is reached by the Go *worker*, which also runs on Fly, so OSRM stays
+#   6PN-internal (osrm.internal:5000, no public IP) and is unreachable from the
+#   internet. GraphHopper is reached by the generate-route *Lambda*, which runs
+#   on AWS — there is no 6PN path from AWS into Fly's private network. So this
+#   app MUST expose a public https service. The Lambda's GRAPHHOPPER_URL points
+#   at https://graphhopper.fly.dev (or a custom domain).
+#
+#   This is one latency-tolerant round_trip call per seed (a handful per
+#   generate request), not a hot path. /route has no GraphHopper-side auth, so
+#   abuse protection is the Lambda being the only intended caller plus Fly's
+#   edge; if public abuse shows up, front it with the same CloudFront+WAF the
+#   web stack already terminates, or move GRAPHHOPPER_URL behind a shared
+#   secret header checked by a tiny proxy. Noted as a follow-up in deployment.md.
+
+app = "graphhopper"
+primary_region = "lhr"
+
+[build]
+# No upstream image exists; build the runnable jar from the pinned source tag.
+dockerfile = "Dockerfile"
+
+[[mounts]]
+# Holds region.osm.pbf (operator-uploaded) + graph-cache/ (built on first
+# boot). Keeping both on the volume means a redeploy never rebuilds the graph.
+source = "graphhopper_data"
+destination = "/data"
+
+[http_service]
+# Public https. Fly terminates TLS at the edge and forwards to 8989.
+internal_port = 8989
+force_https = true
+auto_start_machines = true
+auto_stop_machines = false
+min_machines_running = 1
+
+[[http_service.checks]]
+# Graph import on a fresh volume can take several minutes; grace_period covers
+# the cold first boot. /health returns 200 once the graph is loaded.
+interval = "30s"
+timeout = "5s"
+grace_period = "10m"
+method = "GET"
+path = "/health"
+
+[[vm]]
+# GraphHopper holds the routable graph in memory. A single-country / UK-scale
+# foot graph in flexible mode sits comfortably in ~2-3 GB; JAVA_OPTS in the
+# Dockerfile pins the heap at 2.5 GB, so a 4 GB machine leaves headroom for the
+# JVM's non-heap + the OS. Bump to 8 GB (and JAVA_OPTS) for a continent extract.
+size = "shared-cpu-2x"
+memory = "4gb"
+cpus = 2
+
+# Volume creation (one-time, before first deploy):
+#   flyctl volumes create graphhopper_data --app graphhopper --region lhr --size 10
+#
+# Seed the PBF (one-time, the SAME region the OSRM graph uses):
+#   flyctl ssh sftp shell --app graphhopper
+#   put data/region.osm.pbf /data/region.osm.pbf
+#   exit
+#   flyctl machine restart <id> --app graphhopper   # first boot imports it
+#
+# No secrets required today — GraphHopper has no auth. See the public-abuse
+# follow-up in the header comment if that needs to change.

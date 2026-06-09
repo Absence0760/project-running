@@ -431,6 +431,91 @@ The worker code is the canonical knob — re-matches happen via `algorithm_versi
 
 ---
 
+## GraphHopper app — `graphhopper`
+
+**Status: plan.** Not deployed yet. The config lives in [`graphhopper/`](graphhopper/) ([`Dockerfile`](graphhopper/Dockerfile), [`config.yml`](graphhopper/config.yml), [`fly.toml`](graphhopper/fly.toml), [`README.md`](graphhopper/README.md)); standing it up is the operator's `flyctl deploy` + graph-seed step below.
+
+Serves the `foot` profile's `algorithm=round_trip` endpoint for the **"Generate a route by distance"** feature. The caller is the dedicated **generate-route Lambda** (`apps/web/lambda/generate-route/`), wired to `/api/routes/generate` via CloudFront; its `GRAPHHOPPER_URL` env points at this app.
+
+### Reached over public https — not 6PN
+
+This is the key way it differs from OSRM. OSRM is reached by the Go **worker** (also on Fly), so it stays 6PN-internal with no public IP. GraphHopper is reached by the **Lambda**, which runs on **AWS** — there is no 6PN path from AWS into Fly's private network — so this app exposes a **public https service** (`[http_service]` in `fly.toml`, Fly terminates TLS at the edge). `GRAPHHOPPER_URL = https://graphhopper.fly.dev`. It's one latency-tolerant `round_trip` call per seed (a few per generate request), not a hot path. `GRAPHHOPPER_URL` is server-only in every tier — never `PUBLIC_`, never in the browser bundle.
+
+`/route` has no GraphHopper-side auth (same posture as OSRM's `/match`). Today the protection is that the Lambda is the only intended caller plus Fly's edge. If public abuse shows up, front it with the web stack's CloudFront+WAF or put `GRAPHHOPPER_URL` behind a shared-secret header checked by a tiny proxy — **follow-up, not shipped.**
+
+### Sizing
+
+The driver is OSM extract size, same as OSRM. GraphHopper runs in **flexible mode** (no CH — see below), which keeps the import footprint smaller than the speed-mode default:
+
+| Region | PBF | RAM (flexible foot) | Fly machine |
+|---|---|---|---|
+| Single country (e.g. UK) | ~1.2 GB | ~2-3 GB | `shared-cpu-2x` 4 GB |
+| Small region (Victoria seed) | ~200 MB | ~1 GB | `shared-cpu-2x` 4 GB |
+| Continent extract | ~25 GB | ~16+ GB | `performance-4x` 16 GB+ |
+
+**Recommended v1: same UK extract as OSRM on `shared-cpu-2x` 4 GB.** The Dockerfile pins the JVM heap (`JAVA_OPTS=-Xmx2500m`); bump the heap and `[[vm]] memory` together for a larger extract. Keep the GraphHopper and OSRM graphs on the **same region extract** so "generatable" and "matchable" cover the same ground — a generate start point outside the imported region returns no path → the core surfaces a 502.
+
+### `Dockerfile` + `config.yml`
+
+There is **no official prebuilt GraphHopper image** (the `graphhopper/graphhopper` Docker Hub org is empty), so [`graphhopper/Dockerfile`](graphhopper/Dockerfile) builds the runnable `graphhopper-web-*.jar` from a pinned source tag (`GH_VERSION`, currently 10.0) in a Maven stage, then runs it on a slim JRE. The routing config is [`graphhopper/config.yml`](graphhopper/config.yml), which we own.
+
+**Flexible mode, no Contraction Hierarchies — load-bearing.** `round_trip` is a core algorithm but it only runs in **flexible** mode; CH (the default speed preparation) cannot serve it. `config.yml` leaves `profiles_ch: []` so the `foot` profile is import-prepared for flexible routing and a plain `round_trip` request succeeds **without** the caller sending `ch.disable=true` — which is what `apps/web/src/lib/routes/generate/graphhopper.ts` does (it doesn't send that param). Re-enabling CH breaks generation with "round trip not supported with CH".
+
+**No elevation.** The stock foot profile references `foot_elevation.json` (needs SRTM tiles → extra disk + RAM). round_trip distance shaping doesn't need it, so `config.yml` uses a flat foot custom model.
+
+### Volume — `graphhopper_data`
+
+```bash
+flyctl volumes create graphhopper_data --app graphhopper --region lhr --size 10
+```
+
+Holds the operator-uploaded `region.osm.pbf` plus the `graph-cache/` directory GraphHopper builds on first boot. Both on the volume means a redeploy never rebuilds the graph (same property as OSRM).
+
+### Initial graph build (on first boot from the PBF)
+
+Unlike OSRM, where the operator runs the three extract passes locally and ships the finished `.osrm.*` files, GraphHopper builds its graph **on first boot** from the PBF on the volume. The operator just uploads the PBF:
+
+```bash
+# 1. Deploy (builds the jar; machine boots with no graph yet):
+cd apps/job_worker/graphhopper && flyctl deploy --app graphhopper
+
+# 2. Upload the SAME region PBF the OSRM graph uses — reuse the one the OSRM
+#    Makefile already downloaded:
+flyctl ssh sftp shell --app graphhopper
+put ../osrm/data/region.osm.pbf /data/region.osm.pbf
+exit
+
+# 3. Restart so the first boot imports it into /data/graph-cache (several
+#    minutes for a country extract; the /health check grace_period covers it):
+flyctl machine list --app graphhopper
+flyctl machine restart <id> --app graphhopper
+```
+
+Verify: `curl -s https://graphhopper.fly.dev/health` returns 200 once the graph is loaded; a `round_trip` call near a seed-region point returns `paths[0].distance` close to the requested distance.
+
+### Region rebuild
+
+To refresh the graph (newer extract, or a region swap), upload the new `region.osm.pbf`, delete `/data/graph-cache/` over `flyctl ssh console`, and restart — the next boot re-imports. There is no separate algorithm-version re-match concept here (generation is request-time, not a stored derived artefact), so unlike OSRM there's no `AlgVersion` bump to coordinate.
+
+### Secrets
+
+None today — GraphHopper has no auth. See the public-abuse follow-up above if that changes.
+
+### Observability
+
+| What | Where |
+|---|---|
+| GraphHopper logs | `flyctl logs --app graphhopper` |
+| Per-machine metrics | Fly.io dashboard |
+| Health endpoint | `/health` (200 once the graph is loaded) — public https, so Better Stack can probe `https://graphhopper.fly.dev/health` directly (no proxy/tunnel needed, unlike OSRM) |
+| Generation success rate | The generate-route Lambda's CloudWatch logs / the 501/502/503 rate at `/api/routes/generate` |
+
+### Rollback
+
+The graph is on the volume, not in the image, so a redeploy is safe at any time — roll back by redeploying the prior `Dockerfile`/`config.yml`. If a fresh graph import is worse, restore the prior `/data/graph-cache/` from a backup copy and restart.
+
+---
+
 ## CI wiring
 
 Two workflows live under `.github/workflows/`:
@@ -481,6 +566,29 @@ jobs:
 
 The graph itself is on the volume, not in the image, so a redeploy doesn't touch the graph. That's deliberate — image deploys should be safe to do at any time.
 
+### `.github/workflows/release-graphhopper.yml`
+
+Triggered by `graphhopper@*`. Same shape as `release-osrm.yml` — redeploys the container (which rebuilds the jar from the pinned `GH_VERSION`) without touching the graph on the volume:
+
+```yaml
+on:
+  push:
+    tags: [ 'graphhopper@*' ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+      - run: flyctl deploy --app graphhopper --remote-only
+        working-directory: apps/job_worker/graphhopper
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+```
+
+The graph is on the volume, so a redeploy never re-imports — image deploys are safe at any time.
+
 ---
 
 ## Cost projection
@@ -490,8 +598,10 @@ The graph itself is on the volume, not in the image, so a redeploy doesn't touch
 | job_worker — `shared-cpu-1x` 256 MB | always-on, single machine | ~$5 |
 | OSRM — `performance-2x` 8 GB | always-on, single machine | ~$30 |
 | OSRM — 20 GB volume | per Fly volume pricing | ~$3 |
-| Bandwidth | mostly internal 6PN (free); Storage egress goes through Supabase | <$5 |
-| **Subtotal** | | **~$40** |
+| GraphHopper — `shared-cpu-2x` 4 GB | always-on, single machine | ~$15 |
+| GraphHopper — 10 GB volume | per Fly volume pricing | ~$1.50 |
+| Bandwidth | mostly internal 6PN (free); GraphHopper round_trip calls go out over public https (small JSON, latency-tolerant); Storage egress goes through Supabase | <$5 |
+| **Subtotal** | | **~$56** |
 
 Scaling drivers:
 
@@ -528,6 +638,21 @@ flyctl volumes create osrm_data --app osrm --region lhr --size 20
 ```
 
 RTO: ~30 min for build + restart. RPO: N/A (regenerable). The interim — between OSRM being down and being back up — is fine for the product: the worker treats OSRM unreachable as a transient (`defer_job(30s)`), so jobs back up rather than fail.
+
+### GraphHopper
+
+The graph is reproducible from the PBF, not backed up. Procedure to rebuild from scratch:
+
+```bash
+flyctl apps destroy graphhopper --yes
+flyctl launch --copy-config --no-deploy --name graphhopper --region lhr
+flyctl volumes create graphhopper_data --app graphhopper --region lhr --size 10
+flyctl deploy --app graphhopper
+# Then upload region.osm.pbf + restart (graph imports on first boot — see
+# the GraphHopper app § Initial graph build above).
+```
+
+RTO: ~20 min (deploy + PBF upload + first-boot import). RPO: N/A (regenerable). The interim is graceful for the product: the generate-route Lambda returns 502 while GraphHopper is unreachable, the web client shows "couldn't generate a route, try again," and every other route-builder capability (manual drawing, search, snapping) keeps working — generation is an additive convenience, not a core path.
 
 ### Re-match the world
 
@@ -571,3 +696,16 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 - [ ] Weekly rebuild cron designed (even if not yet implemented)
 - [ ] `release-osrm.yml` workflow merged
 - [ ] [`docs/product/parity.md`](../../docs/product/parity.md) "Server-side HMM map matching" row updated to reflect the live engine
+
+### GraphHopper
+
+- [ ] `graphhopper` app exists in `lhr`, same region extract as OSRM
+- [ ] 10 GB volume `graphhopper_data` created
+- [ ] `region.osm.pbf` (SAME region as the OSRM graph) uploaded to `/data/`
+- [ ] Machine restarted; first boot imported the graph (`flyctl logs` shows the import finish, then `/health` 200)
+- [ ] Public https service reachable (`curl https://graphhopper.fly.dev/health` 200), TLS terminated by Fly
+- [ ] A `round_trip` call near a seed-region point returns a path close to the requested distance
+- [ ] `GRAPHHOPPER_URL` set on the generate-route Lambda (Terraform), server-only, not `PUBLIC_`
+- [ ] Health probe wired (Better Stack against the public `/health`)
+- [ ] Public-abuse posture decided (Lambda-only caller for now; CloudFront+WAF or shared-secret header is the follow-up if needed)
+- [ ] `release-graphhopper.yml` workflow merged

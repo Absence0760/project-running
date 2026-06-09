@@ -266,7 +266,7 @@ be the natural follow-up.
 
 ## Deploying to production
 
-See [deployment.md](deployment.md) — two Fly.io apps (worker + OSRM) under one `runonward` org, talking over 6PN. Covers fly.toml shapes, Volume + graph build, weekly OSRM rebuild, secrets, rollback, DR, and the proposed `release-worker.yml` / `release-osrm.yml` workflows.
+See [deployment.md](deployment.md) — three Fly.io apps under one `runonward` org: the worker + OSRM talk over 6PN; GraphHopper (the `foot` round_trip engine for "Generate a route by distance", config in [`graphhopper/`](graphhopper/)) is reached by the generate-route Lambda on AWS over **public https**, not 6PN. Covers fly.toml shapes, Volume + graph build, weekly OSRM rebuild, secrets, rollback, DR, and the proposed `release-worker.yml` / `release-osrm.yml` / `release-graphhopper.yml` workflows.
 
 ## Local dev
 
