@@ -22,37 +22,34 @@ graphhopper:
   datareader.file: ""
   graph.location: graph-cache
 
-  # Flexible-only. CH and LM preparations are both left empty: round_trip needs
-  # flexible mode, and the route-generation traffic is one latency-tolerant
-  # call per seed, so the speed-mode preparations are not worth their import
-  # time or memory.
-  # Custom model copied verbatim from GraphHopper's stock foot.json (minus the
-  # elevation overlay in foot_elevation.json, which we deliberately drop — see
-  # WHY no elevation above). The encoded values it references (foot_access,
-  # foot_priority, foot_average_speed, …) are imported by default for the foot
-  # vehicle, so no extra graph.encoded_values config is needed.
+  # No Contraction Hierarchies (speed mode) — CH cannot serve round_trip, which
+  # only runs in flexible mode. Landmarks (LM / hybrid mode) ARE prepared below
+  # (profiles_lm): round_trip still routes flexibly, but LM accelerates the
+  # bidirectional-A* leg routing it does under the hood. That matters because
+  # each generate request fans out several round_trip seeds concurrently onto a
+  # single engine machine, so per-query CPU — not single-call latency — is the
+  # real bottleneck under load. LM costs a little import time + RAM and pays it
+  # back in p95.
+  # Encoded values the foot model references. GraphHopper 10 imports these into
+  # the graph only when listed here — neither an inline custom_model nor the
+  # built-in custom_model_files path auto-declares them, so a missing entry
+  # fails the boot with "Encoded values missing: foot_access, …". This is the
+  # exact set GH 10's bundled foot.json uses.
+  graph.encoded_values: foot_access, foot_priority, foot_average_speed, hike_rating, mtb_rating
+
+  # Foot profile via GraphHopper's BUILT-IN foot.json custom model, resolved
+  # from the jar classpath. Inlining a hand-copied model is fragile — GH 10
+  # renamed/retired encoded values, so a "verbatim" copy referenced ones that
+  # don't exist (foot_road_access). Deferring to the bundled model keeps this
+  # correct across GH releases. No foot_elevation.json overlay (see WHY no
+  # elevation above).
   profiles:
     - name: foot
-      custom_model:
-        priority:
-          - if: "!foot_access || hike_rating >= 2"
-            multiply_by: "0"
-          - else: ""
-            multiply_by: "foot_priority"
-          - if: "foot_road_access == NO"
-            multiply_by: "0"
-          - if: "mtb_rating > 3"
-            multiply_by: "0.7"
-          - if: "road_environment == FERRY"
-            multiply_by: "0.5"
-        speed:
-          - if: "road_environment == FERRY"
-            limit_to: "ferry_speed"
-          - else: ""
-            limit_to: "foot_average_speed"
+      custom_model_files: [foot.json]
 
   profiles_ch: []
-  profiles_lm: []
+  profiles_lm:
+    - profile: foot
 
   # Keep the import lean — runners' tracks live on footways/paths/residential
   # streets, never motorways. Mirrors the OSRM foot.lua intent.

@@ -459,9 +459,11 @@ The driver is OSM extract size, same as OSRM. GraphHopper runs in **flexible mod
 
 There is **no official prebuilt GraphHopper image** (the `graphhopper/graphhopper` Docker Hub org is empty), so [`graphhopper/Dockerfile`](graphhopper/Dockerfile) builds the runnable `graphhopper-web-*.jar` from a pinned source tag (`GH_VERSION`, currently 10.0) in a Maven stage, then runs it on a slim JRE. The routing config is [`graphhopper/config.yml`](graphhopper/config.yml), which we own.
 
-**Flexible mode, no Contraction Hierarchies — load-bearing.** `round_trip` is a core algorithm but it only runs in **flexible** mode; CH (the default speed preparation) cannot serve it. `config.yml` leaves `profiles_ch: []` so the `foot` profile is import-prepared for flexible routing and a plain `round_trip` request succeeds **without** the caller sending `ch.disable=true` — which is what `apps/web/src/lib/routes/generate/graphhopper.ts` does (it doesn't send that param). Re-enabling CH breaks generation with "round trip not supported with CH".
+**Flexible mode + Landmarks, no Contraction Hierarchies — load-bearing.** `round_trip` is a core algorithm but it only runs in **flexible** mode; CH (the default speed preparation) cannot serve it. `config.yml` leaves `profiles_ch: []` so a plain `round_trip` request succeeds **without** the caller sending `ch.disable=true` — which is what `apps/web/src/lib/routes/generate/graphhopper.ts` does (it doesn't send that param). It DOES prepare **Landmarks** (`profiles_lm: [{profile: foot}]`, hybrid mode) to accelerate the flexible leg-routing each `round_trip` does — worth the import cost because a generate request fans out several seeds concurrently, so per-query CPU is the bottleneck, not single-call latency. Re-enabling CH breaks generation with "round trip not supported with CH".
 
-**No elevation.** The stock foot profile references `foot_elevation.json` (needs SRTM tiles → extra disk + RAM). round_trip distance shaping doesn't need it, so `config.yml` uses a flat foot custom model.
+**Built-in foot model + explicit encoded values.** The `foot` profile uses GraphHopper's bundled `foot.json` via `custom_model_files: [foot.json]` rather than an inline copy (GH 10 retired names like `foot_road_access`, so a hand-copied model fails to compile). GH 10 does not auto-import the encoded values that model needs, so `config.yml` declares them in `graph.encoded_values` — a missing entry fails the boot with `Encoded values missing: …`.
+
+**No elevation.** The stock foot profile's elevation variant (`foot_elevation.json`) needs SRTM tiles → extra disk + RAM. round_trip distance shaping doesn't need it, so we use the flat `foot.json` and set no elevation provider.
 
 ### Volume — `graphhopper_data`
 

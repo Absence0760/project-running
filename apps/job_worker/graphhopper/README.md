@@ -12,9 +12,9 @@ overshot target distances on lopsided road networks. The engine is **server-only
 the browser never sees `GRAPHHOPPER_URL`, so user start-coordinates never leave
 our infra — privacy parity with the OSRM self-host ([decisions §45](../../../docs/architecture/decisions.md#45-server-side-map-matching-uses-osrm-not-valhalla-meili-or-graphhopper)).
 
-This is the **production Fly.io app**. There is no separate local dev stack for
-generation — point `GRAPHHOPPER_URL` at this app (or a locally-run jar) when
-developing `/api/routes/generate`.
+This directory is both the **production Fly.io app** and a **local dev stack**
+(`docker-compose.yml` + `Makefile`) — see [Run locally](#run-locally) to bring
+the engine up on your machine and point the web dev server at it.
 
 ## Why a custom Dockerfile (no upstream image)
 
@@ -39,13 +39,25 @@ every later boot. Two load-bearing details:
   502. Keep the two graphs on the same extract so "matchable" and "generatable"
   cover the same ground.
 
-- **Flexible mode, no CH.** `round_trip` is a core GraphHopper algorithm but it
-  only runs in **flexible mode** — Contraction Hierarchies (the default speed
-  preparation) cannot serve it. `config.yml` leaves `profiles_ch: []` so the
-  `foot` profile is import-prepared for flexible routing and a plain
-  `round_trip` request succeeds **without** the caller passing `ch.disable=true`
-  (the core doesn't send it). If you ever re-enable CH, generation breaks with a
-  "round trip not supported with CH" error.
+- **Flexible mode + Landmarks, no CH.** `round_trip` is a core GraphHopper
+  algorithm but it only runs in **flexible mode** — Contraction Hierarchies (the
+  default speed preparation) cannot serve it. `config.yml` leaves
+  `profiles_ch: []` so a plain `round_trip` request succeeds **without** the
+  caller passing `ch.disable=true` (the core doesn't send it). It DOES prepare
+  **Landmarks** (`profiles_lm: [{profile: foot}]`, hybrid mode), which accelerate
+  the flexible leg-routing each `round_trip` does — worth the import cost because
+  a generate request fans out several seeds concurrently, so per-query CPU is the
+  bottleneck. If you re-enable CH, generation breaks with a "round trip not
+  supported with CH" error.
+
+- **Encoded values must be declared.** The `foot` profile uses GraphHopper's
+  built-in `foot.json` custom model via `custom_model_files: [foot.json]`. GH 10
+  does **not** auto-import the encoded values that model references, so
+  `config.yml` lists them explicitly in `graph.encoded_values` (`foot_access,
+  foot_priority, foot_average_speed, hike_rating, mtb_rating`). A missing entry
+  fails the boot with `Encoded values missing: …`; an inline hand-copied model is
+  worse still (GH 10 retired names like `foot_road_access`). Let the bundled
+  model own the weighting.
 
 ## Build / seed the graph
 
@@ -84,6 +96,40 @@ curl -s 'https://graphhopper.fly.dev/route?profile=foot&point=-37.81,144.96&algo
 The second call should return a distance near 3000. A `400`/empty `paths`
 either means the point is outside the imported region or CH is still enabled.
 
+## Run locally
+
+Mirrors the OSRM local stack next door. The `docker-compose.yml` builds the same
+`Dockerfile` the Fly app ships (so local == prod, at the cost of a one-time
+from-source Maven build), mounts `./data`, and serves on `127.0.0.1:8989`.
+
+```bash
+# From the repo root:
+npm run dev:setup:graphhopper    # one-time: seed the PBF (reuses the OSRM
+                                 # extract if present) + build the image
+npm run dev:run:graphhopper      # boots it; first run imports the graph + LM
+                                 # (a few min for the Victoria seed), then caches
+```
+
+`dev:run:graphhopper` preflight-checks the PBF and prints the setup recipe if
+it's missing. Equivalent raw commands (from `apps/job_worker/graphhopper`):
+`make seed && docker compose up --build`.
+
+Then point the web dev server at it by adding to your gitignored
+`apps/web/.env.local` (higher priority than the committed `.env.development`,
+which leaves it empty so a fresh `vite dev` / CI uses the OSRM fallback):
+
+```
+GRAPHHOPPER_URL=http://127.0.0.1:8989
+```
+
+Restart `vite dev` and the route builder's "Generate a route by distance" now
+exercises the real server path. Without it, `/api/routes/generate` returns 501
+and the builder falls back to the in-browser OSRM heuristic — generation still
+works either way. Smoke-test the engine directly with `make smoke` (a `foot`
+`round_trip` near the Melbourne seed coords). After a `config.yml` change
+(profile, LM, encoded values), `make clean` wipes the graph so the next boot
+re-imports.
+
 ## How the generate-route Lambda points at it
 
 The production caller is the dedicated **generate-route Lambda**
@@ -115,6 +161,7 @@ the Lambda returns **501**. Engine down / no loop → **502**.
 
 The `Dockerfile` pins the JVM heap (`JAVA_OPTS=-Xmx2500m`) for the 4 GB box;
 bump both the heap and `[[vm]] memory` together for a larger extract. Flexible
-mode (no CH preparation) trades a little per-request latency for a much smaller
-import footprint than the speed-mode default — the right trade for a handful of
-latency-tolerant generation calls.
+mode (no CH) keeps the import footprint far below the speed-mode default; the
+Landmarks (LM) preparation adds a little import time + RAM in exchange for much
+lower per-query CPU, which is what matters when a generate request fans out
+several `round_trip` seeds at once.
