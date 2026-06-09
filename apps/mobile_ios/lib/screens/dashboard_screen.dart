@@ -92,6 +92,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// are absent (the rings then render unfilled — anti-clutter).
   NutritionTargets? _nutritionTargets;
 
+  /// Authoritative all-history personal records from the server cache. When
+  /// non-empty the best-effort card renders from this rather than scanning the
+  /// GPS tracks of the resident runs — which, under the windowed store, is only
+  /// a recent window (and never covered cloud-synced runs whose track lives in
+  /// Storage). Empty offline / signed-out → the track-scan fallback over the
+  /// resident runs is used instead.
+  List<PersonalRecordRow> _serverPbs = const [];
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +110,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.training?.addListener(_refreshPlanOverview);
     _refreshPlanOverview();
     _hydrateModalities();
+    _loadPersonalRecords();
+  }
+
+  /// Best-effort load of the server PB cache (L4 — a failure just leaves the
+  /// track-scan fallback in place).
+  Future<void> _loadPersonalRecords() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final pbs = await api.fetchPersonalRecords();
+      if (mounted) setState(() => _serverPbs = pbs);
+    } catch (e) {
+      debugPrint('dashboard: personal_records fetch failed: $e');
+    }
   }
 
   @override
@@ -403,18 +425,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (longest == null || r.distanceMetres > longest.distanceMetres) {
         longest = r;
       }
-      final runCache = _bestEffortCache.putIfAbsent(r.id, () => {});
-      for (final e in pbDistances.entries) {
-        if (r.distanceMetres < e.value) continue;
-        final cached =
-            runCache.putIfAbsent(e.value, () => fastestWindowOf(r.track, e.value));
-        if (cached != null &&
-            (!bestEfforts.containsKey(e.key) || cached < bestEfforts[e.key]!)) {
-          bestEfforts[e.key] = cached;
+      // Skip the per-run track scan (the hottest loop in the app) entirely when
+      // the authoritative server PB cache is available — it supersedes this
+      // fallback. Only pay it offline / signed-out.
+      if (_serverPbs.isEmpty) {
+        final runCache = _bestEffortCache.putIfAbsent(r.id, () => {});
+        for (final e in pbDistances.entries) {
+          if (r.distanceMetres < e.value) continue;
+          final cached = runCache.putIfAbsent(
+              e.value, () => fastestWindowOf(r.track, e.value));
+          if (cached != null &&
+              (!bestEfforts.containsKey(e.key) ||
+                  cached < bestEfforts[e.key]!)) {
+            bestEfforts[e.key] = cached;
+          }
         }
       }
     }
-    final hasAnyPb = longest != null || bestEfforts.isNotEmpty;
+    // Prefer the authoritative all-history server PB cache; fall back to the
+    // track-scan over resident runs when offline / signed-out / empty. (The
+    // track scan only sees resident runs, so under the windowed store it is a
+    // recent-window best-effort, not the all-history truth.)
+    final displayEfforts = _serverPbs.isNotEmpty
+        ? bestEffortsFromPersonalRecords(_serverPbs)
+        : bestEfforts;
+    final hasAnyPb = longest != null || displayEfforts.isNotEmpty;
 
     final api = widget.apiClient;
     final viewerId = api?.userId;
@@ -605,7 +640,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               value: UnitFormat.distance(
                                   longest.distanceMetres, unit),
                             ),
-                          for (final e in bestEfforts.entries) ...[
+                          for (final e in displayEfforts.entries) ...[
                             const SizedBox(height: 12),
                             _PbRow(
                               icon: Icons.emoji_events,

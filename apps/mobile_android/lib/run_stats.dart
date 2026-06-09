@@ -157,3 +157,34 @@ double haversineMetres(
       cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sinLng * sinLng;
   return r * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
+
+/// Map the trigger-maintained `personal_records` cache rows to the dashboard's
+/// label→Duration best-effort map, ordered shortest distance first. This is
+/// the authoritative all-history source the dashboard prefers over scanning
+/// the GPS tracks of whatever runs are resident in memory (which, under the
+/// windowed store, is only a recent window — and which never saw cloud-synced
+/// runs whose track lives in Storage). Mirrors web's `fetchPersonalRecords`
+/// label + ordering. Unknown brackets are dropped.
+Map<String, Duration> bestEffortsFromPersonalRecords(
+    List<PersonalRecordRow> records) {
+  const labels = <String, String>{
+    '1_mile': 'Mile',
+    '5k': '5 km',
+    '10k': '10 km',
+    'half_marathon': 'Half Marathon',
+    'marathon': 'Marathon',
+  };
+  const order = <String, int>{
+    '1_mile': 0,
+    '5k': 1,
+    '10k': 2,
+    'half_marathon': 3,
+    'marathon': 4,
+  };
+  final known = records.where((r) => labels.containsKey(r.distance)).toList()
+    ..sort(
+        (a, b) => (order[a.distance] ?? 99).compareTo(order[b.distance] ?? 99));
+  return {
+    for (final r in known) labels[r.distance]!: Duration(seconds: r.bestTimeS),
+  };
+}

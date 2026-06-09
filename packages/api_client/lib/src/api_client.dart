@@ -4317,6 +4317,27 @@ class ApiClient {
     return (data[BodyMetricRow.colWeightKg] as num?)?.toDouble();
   }
 
+  /// Read the trigger-maintained `personal_records` cache for the signed-in
+  /// user (fastest time per distance bracket, embedded best efforts within
+  /// longer runs, DNF-excluded). Mirrors web's `fetchPersonalRecords` — the
+  /// authoritative all-history source, so the mobile dashboard no longer
+  /// recomputes bests from whatever GPS tracks happen to be resident (which
+  /// also missed cloud-synced runs whose track lives only in Storage). The
+  /// cache is RLS-scoped to the caller; the explicit `user_id` filter is
+  /// defence-in-depth, matching the other personal-data reads. Newest brackets
+  /// first per the canonical order; returns [] when signed out or empty.
+  Future<List<PersonalRecordRow>> fetchPersonalRecords() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final data = await _client
+        .from(PersonalRecordRow.table)
+        .select()
+        .eq(PersonalRecordRow.colUserId, uid);
+    return data
+        .map<PersonalRecordRow>((r) => PersonalRecordRow.fromJson(r))
+        .toList();
+  }
+
   /// Record the GDPR Art 9(2)(a) health-data consent for the signed-in user
   /// via the `grant_health_data_consent()` SECURITY DEFINER RPC — the only
   /// sanctioned writer of `health_data_consent_at` (first-stamp-wins,

@@ -207,4 +207,34 @@ void main() {
       expect(best!.inSeconds, closeTo(2237, 2));
     });
   });
+
+  group('bestEffortsFromPersonalRecords', () {
+    PersonalRecordRow pr(String distance, int seconds) => PersonalRecordRow(
+          userId: 'u',
+          distance: distance,
+          bestTimeS: seconds,
+          achievedAt: DateTime.utc(2026, 1, 1),
+          updatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+    test('maps cache rows to labels ordered shortest-first', () {
+      // Deliberately out of order on input.
+      final efforts = bestEffortsFromPersonalRecords([
+        pr('marathon', 12000),
+        pr('5k', 1200),
+        pr('1_mile', 360),
+        pr('half_marathon', 5400),
+        pr('10k', 2500),
+      ]);
+      expect(efforts.keys.toList(),
+          ['Mile', '5 km', '10 km', 'Half Marathon', 'Marathon']);
+      expect(efforts['5 km'], const Duration(seconds: 1200));
+      expect(efforts['Marathon'], const Duration(seconds: 12000));
+    });
+
+    test('drops unknown brackets and returns empty for none', () {
+      expect(bestEffortsFromPersonalRecords([pr('50k', 99999)]), isEmpty);
+      expect(bestEffortsFromPersonalRecords(const []), isEmpty);
+    });
+  });
 }
