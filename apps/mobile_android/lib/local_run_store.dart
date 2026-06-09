@@ -834,8 +834,13 @@ class LocalRunStore extends ChangeNotifier {
         RunSummary.fromRun(r, synced: _syncedIds.contains(r.id)),
     ];
     // Seed / refresh the index so the next cold-start can take the index-first
-    // fast path instead of walking + decoding every per-run file.
-    await _persistIndex();
+    // fast path instead of walking + decoding every per-run file. Skip the
+    // write for a brand-new empty store (no runs AND no prior index) — there's
+    // nothing to cache, the rebuild-from-empty path is O(0) anyway, and it
+    // avoids a pointless disk write on every launch of a fresh install.
+    if (_runs.isNotEmpty || _indexFile.existsSync()) {
+      await _persistIndex();
+    }
     notifyListeners();
   }
 
