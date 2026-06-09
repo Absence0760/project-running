@@ -441,7 +441,7 @@ Serves the `foot` profile's `algorithm=round_trip` endpoint for the **"Generate 
 
 This is the key way it differs from OSRM. OSRM is reached by the Go **worker** (also on Fly), so it stays 6PN-internal with no public IP. GraphHopper is reached by the **Lambda**, which runs on **AWS** — there is no 6PN path from AWS into Fly's private network — so this app exposes a **public https service** (`[http_service]` in `fly.toml`, Fly terminates TLS at the edge). `GRAPHHOPPER_URL = https://graphhopper.fly.dev`. It's one latency-tolerant `round_trip` call per seed (a few per generate request), not a hot path. `GRAPHHOPPER_URL` is server-only in every tier — never `PUBLIC_`, never in the browser bundle.
 
-`/route` has no GraphHopper-side auth (same posture as OSRM's `/match`). Today the protection is that the Lambda is the only intended caller plus Fly's edge. If public abuse shows up, front it with the web stack's CloudFront+WAF or put `GRAPHHOPPER_URL` behind a shared-secret header checked by a tiny proxy — **follow-up, not shipped.**
+**Shared-secret guard (shipped).** Because the endpoint is public — unlike OSRM's `/match`, which stays 6PN-internal — a stranger who learned the hostname could hammer `/route` and bypass the CloudFront WAF rate-limit. So a small **Caddy** front (built into [`graphhopper/Dockerfile`](graphhopper/Dockerfile), config [`graphhopper/Caddyfile`](graphhopper/Caddyfile)) owns the public port and proxies to GraphHopper (bound to `127.0.0.1:8990`) only when the `X-Engine-Key` header matches the `GRAPHHOPPER_API_KEY` secret; `/health` stays open for the Fly check. The Lambda sends the header (`apps/web/src/lib/routes/generate/graphhopper.ts`), reading `GRAPHHOPPER_API_KEY` from its env (Terraform pulls just that key from the prod sops file). Set the **same value** as a Fly secret on this app. A missing/wrong key → Caddy 403 → handler 502 → the `generate-route-engine-unreachable` alarm fires, so a misconfig is loud, not silent.
 
 ### Sizing
 
@@ -501,7 +501,7 @@ To refresh the graph (newer extract, or a region swap), upload the new `region.o
 
 ### Secrets
 
-None today — GraphHopper has no auth. See the public-abuse follow-up above if that changes.
+One: `GRAPHHOPPER_API_KEY` — the shared-secret guard key (`flyctl secrets set GRAPHHOPPER_API_KEY=<value> --app graphhopper`). Use the SAME value stored under `GRAPHHOPPER_API_KEY` in the web prod sops file (so the Lambda sends a matching `X-Engine-Key`). Without it the Caddy guard 403s every `/route` and generation degrades to the OSRM fallback (and alarms).
 
 ### Observability
 

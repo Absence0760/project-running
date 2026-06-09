@@ -54,7 +54,8 @@ clean:
 	@echo "✓ Cleared graph-cache; PBF preserved. Run 'docker compose up' to re-import."
 
 # End-to-end smoke: a foot round_trip near the Melbourne seed coords. Asserts a
-# loop comes back. Requires this container up on :8989.
+# loop comes back. Requires this container up on :8989. Sends the dev shared
+# secret (the Caddy guard 403s /route without it; /health is open).
 smoke:
-	@curl -s 'http://127.0.0.1:8989/route?profile=foot&point=-37.81,144.96&algorithm=round_trip&round_trip.distance=3000&round_trip.seed=1&points_encoded=false&instructions=false' \
+	@curl -s -H 'X-Engine-Key: dev-graphhopper-key' 'http://127.0.0.1:8989/route?profile=foot&point=-37.81,144.96&algorithm=round_trip&round_trip.distance=3000&round_trip.seed=1&points_encoded=false&instructions=false' \
 		| grep -q '"points"' && echo "✓ round_trip OK" || (echo "✗ round_trip failed"; exit 1)

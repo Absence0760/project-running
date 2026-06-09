@@ -1,0 +1,36 @@
+# Shared-secret guard in front of GraphHopper.
+#
+# GraphHopper has no native auth and is exposed on a PUBLIC Fly endpoint (the
+# AWS generate-route Lambda can't reach it over Fly's private 6PN — see fly.toml
+# and the README). Without a guard, anyone who learns the hostname could hit
+# /route directly and bypass the CloudFront WAF rate-limit — an open
+# denial-of-wallet surface. Caddy owns the public port (8989) and only forwards
+# to GraphHopper (127.0.0.1:8990, localhost-bound) when the X-Engine-Key header
+# matches the GRAPHHOPPER_API_KEY secret.
+#
+# The Lambda + dev server send that header (apps/web/src/lib/routes/generate/
+# graphhopper.ts). The secret is a Fly app secret in prod, a committed dev value
+# locally (it gates nothing sensitive — GraphHopper only does public-map routing).
+{
+	admin off
+	auto_https off
+}
+
+:8989 {
+	# Health stays OPEN: Fly's machine health check + uptime monitors hit it
+	# without the key. It only exposes "graph loaded / serving", no map data.
+	handle /health {
+		reverse_proxy 127.0.0.1:8990
+	}
+
+	# Everything else (i.e. /route) requires the shared secret. With the key
+	# unset the matcher can't match a normal keyless request, so this fails
+	# CLOSED (403) rather than open — the safe direction on a misconfig.
+	@authorized header X-Engine-Key {$GRAPHHOPPER_API_KEY}
+	handle @authorized {
+		reverse_proxy 127.0.0.1:8990
+	}
+	handle {
+		respond "forbidden" 403
+	}
+}

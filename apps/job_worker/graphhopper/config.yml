@@ -55,18 +55,20 @@ graphhopper:
   # streets, never motorways. Mirrors the OSRM foot.lua intent.
   import.osm.ignored_highways: motorway,trunk
 
-# Dropwizard server block. 8989 is the application port the generate-route
-# Lambda's GRAPHHOPPER_URL points at (via the public Fly https service —
-# see fly.toml); 8990 is the admin/health connector.
+# Dropwizard server block. GraphHopper listens on 8990 bound to LOCALHOST only —
+# it is NOT the public port. The public 8989 is owned by the Caddy guard
+# (Caddyfile), which checks the X-Engine-Key shared secret and reverse-proxies
+# to 8990 here. Binding 127.0.0.1 means nothing outside the container can reach
+# GraphHopper directly, even by IP. 8081 is the unused Dropwizard admin port.
 server:
   application_connectors:
     - type: http
-      port: 8989
-      bind_host: 0.0.0.0
+      port: 8990
+      bind_host: 127.0.0.1
   admin_connectors:
     - type: http
-      port: 8990
-      bind_host: 0.0.0.0
+      port: 8081
+      bind_host: 127.0.0.1
   request_log:
     appenders: []
 

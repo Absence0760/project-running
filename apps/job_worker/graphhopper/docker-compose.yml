@@ -27,10 +27,17 @@ services:
         GH_VERSION: "10.0"
     container_name: job_worker_graphhopper
     restart: unless-stopped
+    environment:
+      # Shared-secret guard key (Caddy checks X-Engine-Key against it). Committed
+      # NON-SECRET dev value — it gates only public-map routing. The web side
+      # sends the SAME value via GRAPHHOPPER_API_KEY in apps/web/.env.development.
+      # Prod uses a real Fly secret + sops; see the README.
+      GRAPHHOPPER_API_KEY: dev-graphhopper-key
     ports:
-      # Localhost only — no auth on this surface, never publish it. The web dev
-      # server reaches it via GRAPHHOPPER_URL=http://127.0.0.1:8989 set in
-      # apps/web/.env.local (see apps/web/.env.development for the opt-in note).
+      # Localhost only — never publish it. The web dev server reaches it via
+      # GRAPHHOPPER_URL=http://127.0.0.1:8989 set in apps/web/.env.local (see
+      # apps/web/.env.development for the opt-in note); 8989 is Caddy, which
+      # proxies to GraphHopper on 8990 after checking the key.
       - "127.0.0.1:8989:8989"
     volumes:
       # The PBF lives here (make seed puts it there) and the built graph-cache

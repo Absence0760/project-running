@@ -12,11 +12,11 @@
 #   at https://graphhopper.fly.dev (or a custom domain).
 #
 #   This is one latency-tolerant round_trip call per seed (a handful per
-#   generate request), not a hot path. /route has no GraphHopper-side auth, so
-#   abuse protection is the Lambda being the only intended caller plus Fly's
-#   edge; if public abuse shows up, front it with the same CloudFront+WAF the
-#   web stack already terminates, or move GRAPHHOPPER_URL behind a shared
-#   secret header checked by a tiny proxy. Noted as a follow-up in deployment.md.
+#   generate request), not a hot path. Because the endpoint is public, a Caddy
+#   front (built into the Dockerfile) guards it: it rejects /route unless the
+#   X-Engine-Key header matches the GRAPHHOPPER_API_KEY secret, so a stranger who
+#   learns the hostname can't bypass the CloudFront WAF rate-limit. /health stays
+#   open for this check. The Lambda sends the header (sourced from sops).
 
 app = "graphhopper"
 primary_region = "lhr"
@@ -66,5 +66,9 @@ cpus = 2
 #   exit
 #   flyctl machine restart <id> --app graphhopper   # first boot imports it
 #
-# No secrets required today — GraphHopper has no auth. See the public-abuse
-# follow-up in the header comment if that needs to change.
+# Shared-secret guard (one-time, before first deploy): set the SAME value that's
+# in the sops secrets file under GRAPHHOPPER_API_KEY (the Lambda reads it there
+# and sends it as X-Engine-Key):
+#   flyctl secrets set GRAPHHOPPER_API_KEY=<value> --app graphhopper
+# Without it the Caddy guard 403s every /route, the Lambda returns 502, and the
+# engine-unreachable alarm fires.

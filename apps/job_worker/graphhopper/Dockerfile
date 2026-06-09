@@ -32,6 +32,12 @@ WORKDIR /gh
 COPY --from=build /graphhopper-web.jar /gh/graphhopper-web.jar
 COPY config.yml /gh/config.yml
 
+# Caddy fronts GraphHopper as the shared-secret guard (see Caddyfile). Pull the
+# binary from the official multi-arch image rather than curling a pinned tarball
+# so the arch matches the build platform.
+COPY --from=caddy:2.8 /usr/bin/caddy /usr/local/bin/caddy
+COPY Caddyfile /gh/Caddyfile
+
 # Graph cache + the source PBF both live on the mounted volume so the graph
 # survives redeploys and is reused across boots.
 ENV GH_DATA_DIR=/data
@@ -48,11 +54,17 @@ ENV GH_PBF=/data/region.osm.pbf
 # datareader.file is passed at boot; the first boot imports the PBF into
 # graph.location, later boots reuse the cache.
 ENV JAVA_OPTS="-Xmx2500m -Xms2500m"
+# 8989 = Caddy (public guard); GraphHopper itself binds 127.0.0.1:8990.
 EXPOSE 8989
 
-# A 200 from /health means the graph is loaded and the server is serving.
+# Health goes through Caddy (the open /health route) so the check validates both
+# the guard AND GraphHopper. A 200 means the graph is loaded and serving.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8989/health || exit 1
 
+# Start GraphHopper (binds 127.0.0.1:8990) in the background, then exec Caddy in
+# the foreground on the public 8989. If GraphHopper dies, /health stops
+# returning 200 and the healthcheck restarts the machine. Caddy reads the
+# GRAPHHOPPER_API_KEY secret from the environment (Caddyfile).
 ENTRYPOINT ["/bin/sh", "-c", \
-  "exec java $JAVA_OPTS -Ddw.graphhopper.datareader.file=$GH_PBF -Ddw.graphhopper.graph.location=$GH_DATA_DIR/graph-cache -jar /gh/graphhopper-web.jar server /gh/config.yml"]
+  "java $JAVA_OPTS -Ddw.graphhopper.datareader.file=$GH_PBF -Ddw.graphhopper.graph.location=$GH_DATA_DIR/graph-cache -jar /gh/graphhopper-web.jar server /gh/config.yml & exec caddy run --config /gh/Caddyfile --adapter caddyfile"]

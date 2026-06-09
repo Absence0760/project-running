@@ -75,26 +75,31 @@ flyctl ssh sftp shell --app graphhopper
 put ../osrm/data/region.osm.pbf /data/region.osm.pbf
 exit
 
-# 4. Restart so the first boot imports the PBF into /data/graph-cache
+# 4. Set the shared-secret guard key (the Caddy front rejects /route without it):
+flyctl secrets set GRAPHHOPPER_API_KEY=<same value as the sops GRAPHHOPPER_API_KEY> --app graphhopper
+
+# 5. Restart so the first boot imports the PBF into /data/graph-cache
 #    (several minutes for a country extract — the /health check's grace_period
 #    covers it):
 flyctl machine list --app graphhopper        # get the machine id
 flyctl machine restart <id> --app graphhopper
 ```
 
-Verify once it's up:
+Verify once it's up (`/route` needs the key; `/health` is open):
 
 ```bash
-# Health (200 once the graph is loaded):
+# Health (200 once the graph is loaded; no key needed):
 curl -s https://graphhopper.fly.dev/health && echo
 
-# A round_trip loop near the start point (lat,lng), ~3 km:
-curl -s 'https://graphhopper.fly.dev/route?profile=foot&point=-37.81,144.96&algorithm=round_trip&round_trip.distance=3000&round_trip.seed=1&points_encoded=false&instructions=false' \
+# A round_trip loop near the start point (lat,lng), ~3 km — WITH the guard key:
+curl -s -H "X-Engine-Key: $GRAPHHOPPER_API_KEY" \
+  'https://graphhopper.fly.dev/route?profile=foot&point=-37.81,144.96&algorithm=round_trip&round_trip.distance=3000&round_trip.seed=1&points_encoded=false&instructions=false' \
   | jq '.paths[0].distance'
 ```
 
-The second call should return a distance near 3000. A `400`/empty `paths`
-either means the point is outside the imported region or CH is still enabled.
+The second call should return a distance near 3000. A `403` means the key is
+missing/wrong; a `400`/empty `paths` means the point is outside the imported
+region or CH is still enabled.
 
 ## Run locally
 
@@ -149,7 +154,30 @@ one latency-tolerant `round_trip` call per seed, not a hot path. `GRAPHHOPPER_UR
 is server-only in every tier — never `PUBLIC_`, never bundled into the browser.
 
 `GRAPHHOPPER_URL` unset → the core throws `GraphHopperError('unconfigured')` and
-the Lambda returns **501**. Engine down / no loop → **502**.
+the Lambda returns **501**. Engine down / no loop / guard rejection → **502**.
+
+### Shared-secret guard
+
+Because the engine is **public** (no 6PN path from AWS), it would otherwise be an
+open denial-of-wallet surface — anyone who learns the hostname could hammer
+`/route` and bypass the CloudFront WAF rate-limit. So a tiny **Caddy** front
+([`Caddyfile`](Caddyfile)) owns the public port and only proxies to GraphHopper
+(localhost-bound on 8990) when the `X-Engine-Key` header matches the
+`GRAPHHOPPER_API_KEY` secret. `/health` stays open for Fly's machine check.
+
+- **Sender:** the generate core (`apps/web/src/lib/routes/generate/graphhopper.ts`)
+  sends the header. The Lambda reads `GRAPHHOPPER_API_KEY` from its env, injected
+  by Terraform from the sops secrets file (only that one key, not the whole bag).
+- **Engine:** set the SAME value as a Fly app secret (step 4 above). Caddy reads
+  it from the environment.
+- **Fail-closed + loud:** a missing/mismatched key → Caddy 403 → the handler
+  returns 502 → the `generate-route-engine-unreachable` CloudWatch alarm fires.
+  A key set on the engine but not in sops is a misconfiguration that pages, not
+  one that silently breaks.
+
+Locally this is transparent: `docker-compose.yml` defaults the container to
+`dev-graphhopper-key` and `apps/web/.env.development` sends the same value, so the
+opt-in local engine works without extra setup.
 
 ## Machine sizing
 
