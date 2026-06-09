@@ -549,6 +549,10 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// see "Couldn't generate a Xkm loop here", not the generic
 		// "Routing service unavailable" — service IS reachable, the
 		// scaffolding seeds just missed the road network.
+		// Loop generation tries the server endpoint first; force it
+		// unavailable so the builder falls back to the (failing) OSRM
+		// heuristic and surfaces its generation-specific error.
+		await page.route('**/api/routes/generate', (route) => route.fulfill({ status: 501, body: '{}' }));
 		await page.route('https://router.project-osrm.org/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' }),
 		);
@@ -650,6 +654,10 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// which bumps routeVersion → the in-flight recalculateRoute
 		// bails at its next checkpoint.
 		//
+		// Loop generation tries the server endpoint first; force it
+		// unavailable (fast 501) so the in-flight, cancellable work is the
+		// slow OSRM fallback below.
+		await page.route('**/api/routes/generate', (route) => route.fulfill({ status: 501, body: '{}' }));
 		// Slow-walk every OSRM call so we have time to observe the
 		// busy state before any of them finishes.
 		await page.route('https://router.project-osrm.org/**', async (route) => {

@@ -13,12 +13,20 @@ import { USER_A } from '../fixtures/users';
  * specs invoke the public API via the dev-only `window.__routeBuilder`
  * hook that /routes/new+page.svelte exposes in import.meta.env.DEV.
  *
+ * Loop generation (no distinct end pin) now goes server-side: the builder
+ * POSTs to /api/routes/generate (the GraphHopper round_trip Lambda) and
+ * renders the returned polyline directly. We mock that endpoint with a
+ * deterministic circular loop near the target. When it's unavailable
+ * (501 unconfigured / 5xx down) the builder falls back to the in-browser
+ * OSRM heuristic — exercised by its own test and still used for the
+ * point-to-point case (distinct end), which round_trip doesn't cover.
+ *
  * Every OSRM call is mocked to return a deterministic straight-line
  * polyline between the requested coords with the haversine distance.
- * That lets the bisection converge predictably, and the assertions can
- * pin: total polyline length is near the target, the first/last point
- * matches the user's start (loop closure), the post-collapse waypoint
- * count is ≤ 4, and the parent's `routed` flag flips true so Save enables.
+ * The assertions pin: total polyline length is near the target, the
+ * first/last point matches the user's start (loop closure), the
+ * post-collapse waypoint count is ≤ 4, and the parent's `routed` flag
+ * flips true so Save enables.
  */
 
 // Richmond, VA suburb — the coordinate the user actually exercises.
@@ -93,6 +101,59 @@ async function mockOpenMeteoElevation(page: Page) {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({ elevation: new Array(n).fill(0) }),
+		});
+	});
+}
+
+/**
+ * A closed circular loop of perimeter ≈ targetM, starting and ending exactly
+ * at `start` — the shape GraphHopper round_trip returns (loop anchored at the
+ * start point). Centre is offset north by the radius so `start` is the
+ * southernmost point on the circle.
+ */
+function loopPolyline(
+	start: { lat: number; lng: number },
+	targetM: number,
+	n = 24,
+): [number, number][] {
+	const r = targetM / (2 * Math.PI);
+	const rDeg = r / 111320;
+	const cosLat = Math.cos((start.lat * Math.PI) / 180);
+	const centerLat = start.lat + rDeg;
+	const pts: [number, number][] = [];
+	for (let i = 0; i <= n; i++) {
+		const a = -Math.PI / 2 + (i / n) * 2 * Math.PI;
+		pts.push([start.lng + (Math.cos(a) * rDeg) / cosLat, centerLat + Math.sin(a) * rDeg]);
+	}
+	// Pin the seam exactly to the start (round_trip starts + ends there).
+	pts[0] = [start.lng, start.lat];
+	pts[pts.length - 1] = [start.lng, start.lat];
+	return pts;
+}
+
+/**
+ * Mock the server-side generate endpoint with a round_trip-shaped loop near
+ * the requested target. Intercepts the POST before it reaches the dev server,
+ * so the test is independent of whether GraphHopper is configured.
+ */
+async function mockGenerateLoop(page: Page) {
+	await page.route('**/api/routes/generate', async (route: Route) => {
+		const body = route.request().postDataJSON() as {
+			start: { lat: number; lng: number };
+			targetDistanceM: number;
+		};
+		const coordinates = loopPolyline(body.start, body.targetDistanceM);
+		let distanceM = 0;
+		for (let i = 1; i < coordinates.length; i++) {
+			distanceM += haversineM(
+				{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+				{ lng: coordinates[i][0], lat: coordinates[i][1] },
+			);
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ coordinates, distanceM }),
 		});
 	});
 }
@@ -189,6 +250,7 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeEach(async ({ page }) => {
+		await mockGenerateLoop(page);
 		await mockOsrmStraightLines(page);
 		await mockOpenMeteoElevation(page);
 		await page.goto('/routes/new');
@@ -241,6 +303,39 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 			expect(result.waypoints[result.waypoints.length - 1].lng).toBe(FIELD_START.lng);
 		});
 	}
+
+	test('falls back to the OSRM heuristic when the generate endpoint is unavailable', async ({
+		page,
+	}) => {
+		// 501 = GraphHopper unconfigured (local dev / a degraded prod). The
+		// builder must still produce a loop via the in-browser OSRM heuristic
+		// rather than erroring — generate-by-distance survives an engine
+		// outage. The OSRM straight-line mock from beforeEach is the fallback.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', (route) =>
+			route.fulfill({
+				status: 501,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'route generation is not configured' }),
+			}),
+		);
+
+		const result = await generateLoopViaHook(page, {
+			targetDistanceM: 5000,
+			start: FIELD_START,
+		});
+
+		expect(result.ok).toBe(true);
+		expect(result.coordinates.length).toBeGreaterThan(1);
+		expect(result.waypoints.length).toBeLessThanOrEqual(4);
+		// Loop closure preserved by the fallback path too.
+		const first = result.coordinates[0];
+		expect(first[1]).toBeCloseTo(FIELD_START.lat, 4);
+		expect(first[0]).toBeCloseTo(FIELD_START.lng, 4);
+		const last = result.coordinates[result.coordinates.length - 1];
+		expect(last[1]).toBeCloseTo(FIELD_START.lat, 4);
+		expect(last[0]).toBeCloseTo(FIELD_START.lng, 4);
+	});
 
 	test('endAt within NEAR_POINT_M of start collapses to a true loop (close == start)', async ({
 		page,
@@ -390,10 +485,12 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 	});
 
 	test('Cancel mid-generation aborts the in-flight batch', async ({ page }) => {
-		// Replace the OSRM mock with a slow one so the batch is in
-		// flight long enough to cancel.
-		await page.unroute('https://router.project-osrm.org/**');
-		await page.route('https://router.project-osrm.org/**', async (route) => {
+		// Loop generation goes to the server endpoint first; make it slow so
+		// the request is in flight long enough to cancel. The post-fetch
+		// routeVersion guard in generateLoopFromServer bails the moment the
+		// cancel lands.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route) => {
 			await new Promise((r) => setTimeout(r, 3000));
 			await route.fulfill({ status: 503, body: '{}' });
 		});
@@ -437,8 +534,8 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		// mid-iteration. The restore in generateLoop's finally should
 		// repopulate the two manual waypoints, NOT leave the 8
 		// scaffolding pins (mostly invisible due to display:none).
-		await page.unroute('https://router.project-osrm.org/**');
-		await page.route('https://router.project-osrm.org/**', async (route) => {
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route) => {
 			await new Promise((r) => setTimeout(r, 3000));
 			await route.fulfill({ status: 503, body: '{}' });
 		});
@@ -515,8 +612,8 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		// completes — before the bisection's restore-best step. The
 		// parent must keep Save / GPX / KML disabled while builderBusy
 		// so the user can't save a pre-converged polyline.
-		await page.unroute('https://router.project-osrm.org/**');
-		await page.route('https://router.project-osrm.org/**', async (route) => {
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route) => {
 			await new Promise((r) => setTimeout(r, 2000));
 			await route.fulfill({ status: 503, body: '{}' });
 		});
@@ -558,9 +655,14 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await generatePromise;
 	});
 
-	test('hard failure: OSRM 503 → "Couldn\'t generate" error, no route, save disabled', async ({
+	test('hard failure: server + OSRM 503 → "Couldn\'t generate" error, no route, save disabled', async ({
 		page,
 	}) => {
+		// Server generation down AND the OSRM fallback also failing — the
+		// builder must surface its generation-specific error, not silently
+		// ship an empty route.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', (route) => route.fulfill({ status: 503, body: '{}' }));
 		await page.unroute('https://router.project-osrm.org/**');
 		await page.route('https://router.project-osrm.org/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' }),

@@ -1242,6 +1242,93 @@
 	}
 
 	/**
+	 * Try the server-side generator (GraphHopper round_trip via the
+	 * /api/routes/generate Lambda). Returns true when it produced a loop
+	 * and rendered it; false to tell the caller to fall back to the
+	 * in-browser OSRM heuristic — the endpoint is unconfigured (501, e.g.
+	 * local dev with no GraphHopper) or the engine is down (502/503).
+	 *
+	 * Bails to false WITHOUT mutating map state if a cancel (routeVersion
+	 * bump) lands during a fetch, and performs no mutation before the
+	 * success guards pass, so a fall-through leaves the pre-generate state
+	 * untouched for the OSRM path to take over.
+	 */
+	async function generateLoopFromServer(
+		start: { lat: number; lng: number },
+		targetDistanceM: number,
+		startVersion: number,
+	): Promise<boolean> {
+		let res: Response;
+		try {
+			res = await fetch('/api/routes/generate', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ start, targetDistanceM }),
+			});
+		} catch {
+			return false;
+		}
+		if (routeVersion !== startVersion || !res.ok) return false;
+		let data: { coordinates?: unknown; distanceM?: unknown };
+		try {
+			data = await res.json();
+		} catch {
+			return false;
+		}
+		if (routeVersion !== startVersion) return false;
+		const coords = data?.coordinates;
+		if (!Array.isArray(coords) || coords.length < 2) return false;
+		const polyline = coords as [number, number][];
+
+		// Render the finished server polyline directly — no OSRM re-route.
+		markers.forEach((mk) => mk.remove());
+		markers = [];
+		routeCoordinates = polyline;
+
+		const { sampled } = sampleCoordinates(routeCoordinates, 100);
+		const elevations = await fetchElevations(sampled);
+		if (routeVersion !== startVersion) return false;
+		routeElevations =
+			sampled.length < routeCoordinates.length
+				? interpolateElevations(elevations, sampled.length, routeCoordinates.length)
+				: elevations;
+
+		updateRouteLine();
+		clearPreviewLine();
+		const wpSrc = map.getSource('waypoint-lines') as maplibregl.GeoJSONSource | undefined;
+		wpSrc?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
+		updateDistanceMarkers();
+		// Collapse to start + two sampled midpoints + close so a later
+		// manual Recalculate reproduces the loop; rebuilds visible markers
+		// and emits the routed update.
+		collapseGeneratedScaffolding(start, undefined);
+
+		// Warn using the rendered polyline's own length (haversine sum) so
+		// the message matches the sidebar stat exactly. round_trip hits the
+		// target far more reliably than the old heuristic, so this rarely
+		// fires — but a genuinely constrained network can still fall short.
+		let actualDistance = 0;
+		for (let i = 1; i < routeCoordinates.length; i++) {
+			actualDistance += haversine(routeCoordinates[i - 1], routeCoordinates[i]);
+		}
+		if (!isWithinAcceptBand(targetDistanceM, actualDistance)) {
+			const longer = actualDistance > targetDistanceM;
+			const pct = Math.round((Math.abs(actualDistance - targetDistanceM) / targetDistanceM) * 100);
+			onerror(
+				t(longer ? 'routeBuilder.generatedDistanceLonger' : 'routeBuilder.generatedDistanceShorter', {
+					distance: formatDistance(actualDistance),
+					pct,
+					target: formatDistance(targetDistanceM),
+				}),
+				'warning',
+			);
+		} else {
+			onerror(null);
+		}
+		return true;
+	}
+
+	/**
 	 * Generate a loop route of approximately the target distance from the start point.
 	 */
 	export async function generateLoop(
@@ -1316,6 +1403,28 @@
 		// mutation race, every attempt failed to route).
 		let success = false;
 		try {
+
+		// Loop case (no distinct end pin): try the server-side GraphHopper
+		// round_trip generator first. It hits the target distance far more
+		// reliably than the radial-scaffold heuristic below, which is kept
+		// only as the fallback when the endpoint is unconfigured (dev) or
+		// the engine is down. Point-to-point (distinct end) stays on the
+		// heuristic — round_trip is loop-only.
+		const isLoopCase =
+			!endAt ||
+			routingHaversineM(
+				{ lng: start.lng, lat: start.lat },
+				{ lng: endAt.lng, lat: endAt.lat },
+			) < NEAR_POINT_M;
+		if (isLoopCase) {
+			const startVersion = routeVersion;
+			const served = await generateLoopFromServer(start, targetDistanceM, startVersion);
+			if (routeVersion !== startVersion) return false;
+			if (served) {
+				success = true;
+				return true;
+			}
+		}
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			// Capture before the iteration's mutations so we can detect a
