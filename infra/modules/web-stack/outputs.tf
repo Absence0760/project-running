@@ -23,6 +23,16 @@ output "lambda_alias" {
   value       = aws_lambda_alias.live.name
 }
 
+output "generate_route_lambda_function_name" {
+  description = "Generate-route Lambda function name. CI's `aws lambda update-function-code` targets it."
+  value       = aws_lambda_function.generate_route.function_name
+}
+
+output "generate_route_lambda_alias" {
+  description = "Live alias on the generate-route Lambda. Rollback retargets this alias."
+  value       = aws_lambda_alias.generate_route_live.name
+}
+
 output "kms_key_arn" {
   description = "ARN of the KMS key encrypting the env's sops-encrypted secrets file. Use as the `kms` value in .sops.yaml."
   value       = aws_kms_key.secrets.arn

@@ -73,6 +73,18 @@ variable "share_route_lambda_zip_path" {
   default     = null
 }
 
+variable "generate_route_lambda_zip_path" {
+  description = "Optional path to a pre-built generate-route Lambda zip (apps/web/lambda/generate-route/dist/generate-route.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Handles /api/routes/generate* — server-side round-trip route generation against the self-hosted GraphHopper engine."
+  type        = string
+  default     = null
+}
+
+variable "graphhopper_url" {
+  description = "Base URL of the self-hosted GraphHopper engine for the generate-route Lambda's round_trip calls. NON-SECRET (an internal engine URL, no key) — passed as a Terraform var like PUBLIC_SUPABASE_URL, NOT via sops. Empty string ('') leaves GRAPHHOPPER_URL unset so the endpoint returns 501 (unconfigured) and the client falls back to the OSRM heuristic. Prod sets the engine URL; preview defaults to '' so it stays on the heuristic."
+  type        = string
+  default     = ""
+}
+
 variable "public_site_url" {
   description = "Canonical public URL of this env (e.g. 'https://threkir.com' for prod, 'https://preview.threkir.com' for preview). Used by the share-run Lambda to build absolute og:url + og:image URLs in the per-run head tags. Defaults are env-specific; per-env stacks should set this explicitly."
   type        = string
@@ -81,6 +93,12 @@ variable "public_site_url" {
 
 variable "lambda_reserved_concurrency" {
   description = "Reserved concurrent executions for the coach Lambda — caps the function's worst-case concurrency so a burst can't rack up unbounded Anthropic spend. The lambda_throttles alarm fires when the cap is hit. Default 5 = safe-by-default ceiling; raise to ~50 for prod once real traffic is observed. Set explicitly in env stacks rather than relying on the default."
+  type        = number
+  default     = 5
+}
+
+variable "generate_route_reserved_concurrency" {
+  description = "Reserved concurrent executions for the generate-route Lambda — caps the function's worst-case concurrency so a burst can't fan out unbounded round_trip calls at the GraphHopper engine. Default 5 = safe-by-default ceiling; raise once real traffic is observed. Set explicitly in env stacks rather than relying on the default."
   type        = number
   default     = 5
 }
@@ -95,6 +113,12 @@ variable "waf_enabled" {
 
 variable "waf_rate_limit" {
   description = "Per-IP rate limit applied to /api/coach* requests across a 5-minute rolling window (the WAF v2 default). 100 is generous against the per-user daily cap of 2/day — a single legitimate user can never approach it from one IP. (Cap value tracked in apps/web/src/lib/coach/types.ts#TIER_LIMITS.free.dailyLimit — pinned to be kept in lockstep with this comment by security_guards.test.ts.)"
+  type        = number
+  default     = 100
+}
+
+variable "waf_generate_route_rate_limit" {
+  description = "Per-IP rate limit applied to /api/routes/generate* requests across a 5-minute rolling window. Each generate call fans out several round_trip requests to the GraphHopper engine, so this caps how hard one IP can push the engine. 100 is generous for legitimate interactive use (a handful of generations per session) while still backstopping a scripted hammer. Only applies when waf_enabled is true."
   type        = number
   default     = 100
 }

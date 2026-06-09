@@ -55,6 +55,15 @@ module "web" {
   # accidentally hammers preview.
   lambda_reserved_concurrency = 5
 
+  # Preview defaults to no GraphHopper engine ("" → endpoint returns 501),
+  # so the client falls back to the OSRM heuristic. Point it at an engine
+  # only if a preview specifically needs to exercise the server-side path.
+  graphhopper_url = var.graphhopper_url
+
+  # Tight cap — preview only ever drives a few generations from smoke
+  # tests / PR review.
+  generate_route_reserved_concurrency = 5
+
   # Explicit rather than module-default so a future module-default
   # change doesn't silently shift preview's throttle-alarm
   # sensitivity. 5 throttles in the 5-min eval window is enough to

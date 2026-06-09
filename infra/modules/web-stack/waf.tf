@@ -64,6 +64,50 @@ resource "aws_wafv2_web_acl" "coach" {
     }
   }
 
+  # Second rate-based rule on /api/routes/generate*. Each generate call
+  # fans out several round_trip requests to the self-hosted GraphHopper
+  # engine, so an unthrottled IP could pin the engine's CPU. The
+  # per-IP cap here is the engine's denial-of-service backstop —
+  # legitimate use is a handful of generations per session, nowhere
+  # near var.waf_generate_route_rate_limit in a 5-min window.
+  rule {
+    name     = "rate-limit-generate-route"
+    priority = 2
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = var.waf_generate_route_rate_limit
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            positional_constraint = "STARTS_WITH"
+            search_string         = "/api/routes/generate"
+
+            field_to_match {
+              uri_path {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-rate-limit-generate-route"
+      sampled_requests_enabled   = true
+    }
+  }
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${local.resource_prefix}-coach-acl"

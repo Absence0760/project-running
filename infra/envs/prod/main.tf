@@ -75,6 +75,18 @@ module "web" {
   # traffic data.
   lambda_reserved_concurrency = 50
 
+  # Self-hosted GraphHopper engine URL for server-side route generation.
+  # Non-secret (an internal engine URL), so it's a plain var, not sops.
+  # When empty the generate endpoint returns 501 and the client falls
+  # back to the OSRM heuristic.
+  graphhopper_url = var.graphhopper_url
+
+  # Caps the generate-route Lambda's concurrency. Each invocation fans
+  # out several round_trip calls at the GraphHopper engine, so this is
+  # the engine's load ceiling. 25 is comfortable for launch traffic;
+  # raise once real usage is observed.
+  generate_route_reserved_concurrency = 25
+
   # Email subscribers for the per-env SNS alerts topic. Validated as
   # RFC-shaped in the module — the validation rejects @example.com
   # placeholders so a copy-pasted tfvars can't slip an alarm into the

@@ -93,6 +93,71 @@ resource "aws_cloudwatch_metric_alarm" "lambda_p95_duration" {
   }
 }
 
+resource "aws_cloudwatch_metric_alarm" "generate_route_lambda_errors" {
+  alarm_name          = "${local.resource_prefix}-generate-route-lambda-errors"
+  alarm_description   = "Generate-route Lambda 4xx/5xx error rate over 2% across two consecutive 5-min windows (10 min sustained). Usually the GraphHopper engine being unreachable."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  metric_query {
+    id          = "errors_pct"
+    expression  = "(errors / invocations) * 100"
+    label       = "Error rate (%)"
+    return_data = true
+  }
+
+  metric_query {
+    id = "errors"
+    metric {
+      namespace   = "AWS/Lambda"
+      metric_name = "Errors"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = aws_lambda_function.generate_route.function_name
+      }
+    }
+  }
+
+  metric_query {
+    id = "invocations"
+    metric {
+      namespace   = "AWS/Lambda"
+      metric_name = "Invocations"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = aws_lambda_function.generate_route.function_name
+      }
+    }
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "generate_route_lambda_p95_duration" {
+  alarm_name          = "${local.resource_prefix}-generate-route-lambda-p95"
+  alarm_description   = "Generate-route Lambda p95 duration >12 s across two consecutive 5-min windows (approaching the 15 s timeout). Usually a slow / overloaded GraphHopper engine."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 12000
+  treat_missing_data  = "notBreaching"
+  metric_name         = "Duration"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  extended_statistic  = "p95"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  dimensions = {
+    FunctionName = aws_lambda_function.generate_route.function_name
+  }
+}
+
 resource "aws_cloudwatch_log_metric_filter" "coach_bypass_paywall" {
   name           = "${local.resource_prefix}-coach-bypass-paywall"
   log_group_name = aws_cloudwatch_log_group.lambda.name

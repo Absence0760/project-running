@@ -26,6 +26,12 @@ variable "extra_lambda_env" {
   default     = {}
 }
 
+variable "graphhopper_url" {
+  description = "Base URL of the self-hosted GraphHopper engine the generate-route Lambda calls for round_trip route generation (e.g. 'https://graphhopper.internal.threkir.com'). Non-secret. Empty string leaves the endpoint unconfigured (501) and the client falls back to the OSRM heuristic."
+  type        = string
+  default     = ""
+}
+
 variable "monthly_budget_limit_usd" {
   description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick something a few times the projected baseline (~$70/mo at launch per docs/ops/deployment.md)."
   type        = number

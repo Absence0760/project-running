@@ -29,6 +29,12 @@ variable "extra_lambda_env" {
   default = {}
 }
 
+variable "graphhopper_url" {
+  description = "Base URL of the self-hosted GraphHopper engine for the generate-route Lambda. Non-secret. Defaults to '' on preview so the endpoint stays unconfigured (501) and the client falls back to the OSRM heuristic; set it only if a preview must exercise the server-side path."
+  type        = string
+  default     = ""
+}
+
 # Email subscribers for the preview env's CloudWatch alarms (Lambda
 # throttling + 5xx error rate). Without subscribers the alarms fire
 # into an SNS topic nobody reads — a hit Lambda concurrency cap on

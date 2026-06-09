@@ -56,6 +56,16 @@ locals {
       PUBLIC_SITE_URL          = var.public_site_url
     },
   )
+
+  # generate-route Lambda env. Needs neither sops secrets nor the
+  # Supabase keys — the handler only fetches the self-hosted
+  # GraphHopper engine. GRAPHHOPPER_URL is non-secret (an internal
+  # engine URL), passed as a plain Terraform var. An empty string is
+  # omitted so the handler sees an unset env and returns 501
+  # (unconfigured); the client then falls back to the OSRM heuristic.
+  generate_route_lambda_env = merge(
+    var.graphhopper_url != "" ? { GRAPHHOPPER_URL = var.graphhopper_url } : {},
+  )
 }
 
 data "aws_caller_identity" "current" {}
@@ -77,9 +87,10 @@ data "archive_file" "placeholder" {
 }
 
 locals {
-  effective_zip_path             = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
-  effective_share_run_zip_path   = var.share_run_lambda_zip_path != null ? var.share_run_lambda_zip_path : data.archive_file.placeholder.output_path
-  effective_share_route_zip_path = var.share_route_lambda_zip_path != null ? var.share_route_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_zip_path                = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_run_zip_path      = var.share_run_lambda_zip_path != null ? var.share_run_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_route_zip_path    = var.share_route_lambda_zip_path != null ? var.share_route_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_generate_route_zip_path = var.generate_route_lambda_zip_path != null ? var.generate_route_lambda_zip_path : data.archive_file.placeholder.output_path
 }
 
 # ──────────────────────────── KMS key for sops ────────────────────────────
@@ -667,6 +678,120 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_route" {
   }
 }
 
+# ─── Generate-route Lambda (server-side round-trip route generation) ───
+#
+# Non-streaming JSON handler for POST /api/routes/generate. Replaces the
+# in-browser radial heuristic (which overshot target distances) with a
+# self-hosted GraphHopper round_trip call: the handler fans out seeds to
+# the engine and returns a finished loop polyline {coordinates, distanceM}.
+# GRAPHHOPPER_URL is a server-only, non-secret engine URL passed as a
+# Terraform var (NOT via sops); the browser never calls GraphHopper
+# directly. When the URL is unset the endpoint returns 501 and the client
+# falls back to the OSRM heuristic. See apps/web/lambda/generate-route/
+# for the bundle shape + lifecycle.
+#
+# Reuses the existing `aws_iam_role.lambda` execution role + CloudWatch
+# log group naming so the operator surface stays uniform across the
+# Lambdas — single role, single dashboard, single alarm fan-out.
+
+resource "aws_cloudwatch_log_group" "lambda_generate_route" {
+  name              = "/aws/lambda/${local.resource_prefix}-generate-route"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secrets.arn
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "generate_route" {
+  function_name = "${local.resource_prefix}-generate-route"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  # Node 24 — same runtime as the other Lambdas; the esbuild target in
+  # apps/web/lambda/generate-route/build.mjs is pinned to node24 to match.
+  runtime       = "nodejs24.x"
+  architectures = ["arm64"]
+  # 256 MB — the handler does a few fetch() round_trip calls and returns
+  # one small GeoJSON line; no PNG renderer, no streaming. The hot path
+  # is network-bound on the GraphHopper engine, not CPU.
+  memory_size                    = 256
+  timeout                        = 15
+  reserved_concurrent_executions = var.generate_route_reserved_concurrency
+
+  filename         = local.effective_generate_route_zip_path
+  source_code_hash = filebase64sha256(local.effective_generate_route_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.generate_route_lambda_env
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = var.tags
+
+  # Same rationale as the other Lambdas — CI updates code on every web@*
+  # tag; Terraform owns infra-shape (env, role, etc.).
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      qualified_arn,
+      version,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_generate_route]
+}
+
+resource "aws_lambda_alias" "generate_route_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.generate_route.function_name
+  function_version = aws_lambda_function.generate_route.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "generate_route" {
+  function_name      = aws_lambda_function.generate_route.function_name
+  qualifier          = aws_lambda_alias.generate_route_live.name
+  authorization_type = "AWS_IAM"
+  # Buffered (not streaming) — generate-route returns a single small JSON
+  # body, no SSE. RESPONSE_STREAM would add latency overhead with no benefit.
+  invoke_mode = "BUFFERED"
+
+  cors {
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["POST"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_generate_route" {
+  name                              = "${local.resource_prefix}-generate-route-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke_generate_route" {
+  statement_id           = "AllowCloudFrontInvokeGenerateRoute"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.generate_route.function_name
+  qualifier              = aws_lambda_alias.generate_route_live.name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ──────────────────────────── CloudFront ────────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -918,6 +1043,23 @@ resource "aws_cloudfront_origin_request_policy" "share_route" {
   }
 }
 
+# Origin request policy for the generate-route Lambda. The handler reads
+# the request body only (a coordinate + distance), no viewer JWT — so,
+# unlike the coach policy, no `x-supabase-authorization` is forwarded.
+# `Authorization` is still excluded: the Lambda OAC takes that header for
+# its sigv4 signature, and forwarding the viewer's would 403 the origin.
+resource "aws_cloudfront_origin_request_policy" "generate_route" {
+  name = "${local.resource_prefix}-generate-route-origin"
+  cookies_config { cookie_behavior = "none" }
+  query_strings_config { query_string_behavior = "none" }
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = ["content-type", "accept", "accept-encoding"]
+    }
+  }
+}
+
 # Trivy AWS-0010 (CloudFront access logging) is suppressed in
 # .trivyignore at the repo root. Rationale: real-time CloudWatch
 # metrics + per-Lambda alarms in alarms.tf already cover the
@@ -979,6 +1121,19 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
+  origin {
+    origin_id                = "lambda-generate-route"
+    domain_name              = replace(aws_lambda_function_url.generate_route.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda_generate_route.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     target_origin_id           = "s3-site"
     viewer_protocol_policy     = "redirect-to-https"
@@ -998,6 +1153,23 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = false
     cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Generate-route Lambda: server-side round-trip route generation for
+  # POST /api/routes/generate. Reuses the coach passthrough cache policy
+  # (no caching — a generate POST is unique per request and must never be
+  # served from cache), with a dedicated origin-request policy that
+  # forwards no viewer JWT. compress is off: the JSON body is tiny.
+  ordered_cache_behavior {
+    path_pattern               = "/api/routes/generate*"
+    target_origin_id           = "lambda-generate-route"
+    viewer_protocol_policy     = "https-only"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = false
+    cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.generate_route.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
