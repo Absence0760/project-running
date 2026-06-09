@@ -2894,6 +2894,20 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 135. Durable per-store summary index + windowed hydration for the offline-first local stores
+
+**Decided (2026-06-08):** the offline-first mobile stores (`LocalRunStore`, plus gym/food via `OfflineSyncStore`) loaded **every** row into memory on init — fine at a few thousand rows, a real memory footprint + slow cold-load at the tens-of-thousands a multi-year multi-modal user accumulates (roadmap "Windowed / paged local stores"). The durable fix is a per-store **summary index** + **windowed hydration**, not a naive "recent-N-in-memory" store (which an adversarial design pass showed silently breaks every all-history consumer).
+
+- **Summary index (the cold-load win).** Each store keeps one on-disk `index.json` holding a compact `RunSummary` (or `OfflineSyncStore.summaryOf`) per row — scalars only, never the GPS track or bulky metadata (`laps`, `workout_step_results`). Cold-load reads that ONE file into the full in-memory index instead of decoding N per-row files. The index is a **batched, atomic, crash-safe sidecar** (`writeJsonAtomic`, flushed once per mutation — never per-row) and is **a cache, never the source of truth**: a missing / corrupt / drifted index (id-set mismatch vs the on-disk run files) self-heals via a full parallel walk + rebuild — the post-crash recovery + first-launch migration.
+- **Windowed hydration (the memory win).** Only a **resident window** of full `Run` objects stays in memory: the newest `kResidentWindow` (200) by date **∪ all unsynced runs**. The residency-of-all-unsynced invariant is load-bearing — `unsyncedRuns` (and therefore the sync drain) reads the track-bearing resident `_runs`, never the track-less summaries, so a track-less summary can never be uploaded with an empty track. `runById` hydrates an out-of-window run from disk on demand; `recentWindow` / `hydrateOlder` / `iterateAllRuns` round out the API.
+- **All-history consumers read the index, not the window.** Fitness, mileage, goals, recap, gear backfill, period summary, import dedup, and run-detail route-comparison read `summaryRuns` (track-less full-history `Run`s) so they stay correct under windowing without holding every full run resident; the TS↔Dart parity helpers keep their `List<Run>` signatures unchanged because `RunSummary.toRun()` rebuilds a track-less run. `runs_screen` filters/sorts/summarises over the index and resolves only the visible page to resident full runs (thumbnails + detail-nav hydrate via `runById`). **Dashboard PBs moved to the authoritative server `personal_records` cache** (with an offline resident-window track-scan fallback) — the old in-memory track scan couldn't see windowed-out or cloud-synced runs anyway.
+
+**Why not naive recent-window-in-memory.** ~8 consumers need the *whole* history (all-time PBs, yearly mileage, route PB across years, import dedup against old `external_id`s). A store that only kept recent rows would silently corrupt all of them. The summary index keeps the whole history cheaply (scalars) while only the *full objects* are windowed — correctness + the memory/cold-load win together.
+
+**Trade-off / scope.** `summaryRuns` allocates transient track-less `Run`s per call (a GC spike on a filter change, not retained) — accepted over churning the parity-helper signatures; can be optimised to read summaries directly later. The slow-path rebuild holds the full set for that one session (the read is already paid); the next launch windows it. Gym/food keep hydrating all rows on load (their consumers read full rows directly) — the index there is the cold-load fast path + `loadInWindow` for the nutrition single-day view to adopt later; gear writes no index (no windowed surface). Pinned by the `_loadAll` index-first guard + the crash-atomic write guards in `architecture_guards_test.dart`, and the windowed cold-load suite in `local_run_store_test.dart`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

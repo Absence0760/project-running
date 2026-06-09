@@ -724,18 +724,16 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 
 ---
 
-## Future — Windowed / paged local stores for very large activity history
+## Shipped — Windowed / paged local stores for very large activity history
 
-The offline-first mobile stores (`LocalRunStore`, `LocalGymStore`, `LocalFoodStore`) load **every** row into memory on init — they're the source of truth for offline render + sync. The read/compute paths over them are already bounded: the History timeline build caps each newest-first source at `limit` before merging (`buildLocalActivities` is O(limit log limit) per rebuild regardless of total history), the web History feed is `fetchActivities(200)` (SQL `.limit(200)`), the mobile timeline renders through a lazy `ListView.builder`, and the run-list / gym / nutrition surfaces are paginated or date-windowed. The remaining unbounded piece is **in-memory store size**: a few thousand rows is a few MB and fine; tens of thousands (years of multi-modal logging) becomes a real memory footprint plus a slow cold-load.
+The offline-first mobile stores (`LocalRunStore`, `LocalGymStore`, `LocalFoodStore`) used to load **every** row into memory on init. They now keep a compact on-disk **summary index** (`index.json`, one lightweight `RunSummary`/summary per row) and hydrate only a **resident window** of full rows — so cold-load reads ONE index file instead of N per-row files, and full `Run` objects (with their GPS tracks + bulky metadata) are capped while the lightweight index still covers the whole history. See [decisions.md § 135](../architecture/decisions.md#135-durable-per-store-summary-index--windowed-hydration-for-the-offline-first-local-stores).
 
-Deferred until that scale is plausible — premature at today's volumes. The durable fix is a windowed / paged on-disk store: keep a recent working set in memory and page older rows from disk on demand, rather than materialising the whole history.
+- [x] **Windowed read API** — `LocalRunStore` exposes `summaries` / `summaryRuns` (full-history, track-less), `runs` (resident window ∪ all unsynced), `runById` (resident → disk hydrate), `recentWindow(N)`, `hydrateOlder(N)`, `iterateAllRuns`; `OfflineSyncStore` (gym/food) adds `summaryOf` + `loadInWindow` / `estimateRowsInWindow`.
+- [x] **`buildLocalActivities` + run-list pagination against the windowed API** — the History timeline reads `recentWindow()`; `runs_screen` filters / sorts / summarises over the full-history index and resolves only the visible page to resident full runs (hydrating older rows + detail-nav via `runById`).
+- [x] **Index-first cold-load + self-heal** — a valid index whose id-set matches the on-disk run files is reused (fast path); a missing / corrupt / drifted index falls back to the full parallel walk and rebuilds (post-crash self-heal + first-launch migration). All-history consumers (dashboard, fitness, mileage, goals, recap, gear backfill, period summary, import dedup) read the index; dashboard PBs read the authoritative server `personal_records` cache.
+- [x] **Sync never holds the full set** — the drain works the always-resident unsynced subset (`unsyncedRuns`), and the index is maintained as a batched, atomic, crash-safe sidecar (never a per-row write).
 
-- [ ] Profile cold-load time + memory at 10k / 25k / 50k rows to find the real threshold
-- [ ] Windowed read API on the local stores (recent N in memory; older paged from disk)
-- [ ] Keep `buildLocalActivities` + the run-list pagination working against the windowed API
-- [ ] Sync path streams batches instead of holding the full set in memory
-
-Not worth building before a real user hits that volume; the bounded read/compute paths above already keep the app responsive at the scales we see today.
+The profiling-to-find-a-threshold step was made moot by the design: cold-load is now bounded by the window + a single index decode regardless of total history, so there's no scale at which it degrades to the old O(n) behaviour.
 
 ---
 
