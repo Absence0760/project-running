@@ -562,11 +562,12 @@ class ApiClient {
     } else {
       await _client.from(RunRow.table).upsert(json);
     }
-    // L4 — best-effort plan-workout link. Mirrors `apps/web/src/lib/data.ts`
-    // `saveRun` / `createManualRun`. RPC failure must not break the core
+    // L4 — best-effort plan-workout link. Mirrors `apps/web/src/lib/core/data.ts`
+    // `saveRun` / `createManualRun`. A match failure must not break the core
     // upsert above (layered-resilience contract).
     try {
-      await autoMatchRunToPlanWorkout(run.id, run.startedAt.toUtc());
+      await autoMatchRunToPlanWorkout(
+          run.id, run.startedAt.toUtc(), run.distanceMetres);
     } catch (e) {
       debugPrint('autoMatchRunToPlanWorkout failed: $e');
     }
@@ -705,12 +706,13 @@ class ApiClient {
     }
     // L4 — best-effort plan-workout link for batch ingest (Strava ZIP,
     // Health Connect, etc.). Same auto-match the web `saveRun` path
-    // uses; a per-row RPC failure must not break the batch upsert.
+    // uses; a per-row match failure must not break the batch upsert.
     // Skip auto-match for runs whose track upload failed — their row
-    // wasn't upserted, so the RPC would dangle.
+    // wasn't upserted, so the link would dangle.
     for (final run in eligibleRuns) {
       try {
-        await autoMatchRunToPlanWorkout(run.id, run.startedAt.toUtc());
+        await autoMatchRunToPlanWorkout(
+            run.id, run.startedAt.toUtc(), run.distanceMetres);
       } catch (e) {
         debugPrint('autoMatchRunToPlanWorkout failed: $e');
       }
@@ -1761,23 +1763,70 @@ class ApiClient {
   }
 
   /// Best-effort auto-link of a freshly-saved run to a plan workout
-  /// scheduled for the same calendar date. Wraps the
-  /// `auto_match_run_to_plan_workout` SECURITY DEFINER RPC. Returns
-  /// the matched workout id, or null when no match is found. Mirrors
-  /// `autoMatchRunToPlanWorkout` in `apps/web/src/lib/data.ts`.
+  /// scheduled for the same calendar date, matched within 25% of the
+  /// workout's target distance. Client-side mirror of
+  /// `autoMatchRunToPlanWorkout` in `apps/web/src/lib/core/data.ts` —
+  /// there is no `auto_match_run_to_plan_workout` RPC; web does this with
+  /// direct queries and so do we. Returns the matched workout id, or null
+  /// when nothing matches.
   Future<String?> autoMatchRunToPlanWorkout(
     String runId,
     DateTime runDate,
+    double runDistanceM,
   ) async {
-    final iso =
-        '${runDate.year.toString().padLeft(4, '0')}-${runDate.month.toString().padLeft(2, '0')}-${runDate.day.toString().padLeft(2, '0')}';
-    final result = await _client.rpc(
-      'auto_match_run_to_plan_workout',
-      params: {'p_run_id': runId, 'p_run_date': iso},
-    );
-    if (result == null) return null;
-    if (result is String && result.isNotEmpty) return result;
-    return null;
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return null;
+    final isoDate = '${runDate.year.toString().padLeft(4, '0')}-'
+        '${runDate.month.toString().padLeft(2, '0')}-'
+        '${runDate.day.toString().padLeft(2, '0')}';
+
+    // Pre-fetch the user's plan + week ids and constrain the workout query
+    // with `inFilter(week_id, ...)`. RLS on `plan_workouts` already chains
+    // through `plan_weeks -> training_plans.user_id`, but the explicit
+    // scope is defence in depth: without it a future RLS edit that broke
+    // the chain could match a run to another user's workout. Mirrors the
+    // web client-realtime H2 data-isolation fix.
+    final plans = await _client
+        .from(TrainingPlanRow.table)
+        .select(
+            '${TrainingPlanRow.colId}, ${PlanWeekRow.table}(${PlanWeekRow.colId})')
+        .eq(TrainingPlanRow.colUserId, userId);
+    final weekIds = <String>[
+      for (final p in plans as List)
+        for (final w in ((p as Map)[PlanWeekRow.table] as List? ?? const []))
+          (w as Map)[PlanWeekRow.colId] as String,
+    ];
+    if (weekIds.isEmpty) return null;
+
+    final candidates = await _client
+        .from(PlanWorkoutRow.table)
+        .select('${PlanWorkoutRow.colId}, ${PlanWorkoutRow.colTargetDistanceM}, '
+            '${PlanWorkoutRow.colCompletedRunId}, ${PlanWorkoutRow.colWeekId}')
+        .inFilter(PlanWorkoutRow.colWeekId, weekIds)
+        .eq(PlanWorkoutRow.colScheduledDate, isoDate)
+        .isFilter(PlanWorkoutRow.colCompletedRunId, null);
+
+    // Closest target distance within 25% wins (mirrors web's sort-by-delta).
+    String? bestId;
+    double? bestDelta;
+    for (final c in candidates as List) {
+      final target = (c as Map)[PlanWorkoutRow.colTargetDistanceM];
+      if (target is! num || target <= 0) continue;
+      final delta = (target.toDouble() - runDistanceM).abs();
+      if (delta / target > 0.25) continue;
+      if (bestDelta == null || delta < bestDelta) {
+        bestId = c[PlanWorkoutRow.colId] as String;
+        bestDelta = delta;
+      }
+    }
+    if (bestId == null) return null;
+
+    await _client.from(PlanWorkoutRow.table).update({
+      PlanWorkoutRow.colCompletedRunId: runId,
+      PlanWorkoutRow.colManuallyCompleted: false,
+      PlanWorkoutRow.colCompletedAt: DateTime.now().toUtc().toIso8601String(),
+    }).eq(PlanWorkoutRow.colId, bestId);
+    return bestId;
   }
 
   /// Recent public runs from a single user — drives the runs tab on

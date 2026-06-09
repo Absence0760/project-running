@@ -106,6 +106,100 @@ void main() {
       expect(userId!.length, greaterThan(8));
     });
 
+    test(
+        'autoMatchRunToPlanWorkout links a run to a same-date workout '
+        'within 25% of target distance, and skips one that is further',
+        () async {
+      // Client-side mirror of the web `autoMatchRunToPlanWorkout` (there is
+      // no `auto_match_run_to_plan_workout` RPC). A real run id satisfies
+      // the plan_workouts.completed_run_id FK.
+      final runId = (await api.getRuns()).first.id;
+
+      // plan -> week -> two workouts on far-future dates so no seeded
+      // workout interferes; the plan cascade-deletes weeks + workouts.
+      final plan = await client
+          .from('training_plans')
+          .insert({
+            'user_id': userId,
+            'name': 'auto-match integration plan',
+            'goal_event': 'distance_5k',
+            'goal_distance_m': 5000,
+            'start_date': '2099-06-01',
+            'end_date': '2099-08-31',
+            // Non-active so it doesn't trip training_plans_one_active; the
+            // auto-match query is status-agnostic (mirrors web).
+            'status': 'completed',
+          })
+          .select('id')
+          .single();
+      final planId = plan['id'] as String;
+      addTearDown(() async {
+        try {
+          await client.from('training_plans').delete().eq('id', planId);
+        } catch (_) {}
+      });
+
+      final week = await client
+          .from('plan_weeks')
+          .insert({'plan_id': planId, 'week_index': 1})
+          .select('id')
+          .single();
+      final weekId = week['id'] as String;
+
+      final matchWo = await client
+          .from('plan_workouts')
+          .insert({
+            'week_id': weekId,
+            'scheduled_date': '2099-06-15',
+            'kind': 'easy',
+            'target_distance_m': 5000,
+          })
+          .select('id')
+          .single();
+      final matchWoId = matchWo['id'] as String;
+
+      final missWo = await client
+          .from('plan_workouts')
+          .insert({
+            'week_id': weekId,
+            'scheduled_date': '2099-06-16',
+            'kind': 'easy',
+            'target_distance_m': 20000,
+          })
+          .select('id')
+          .single();
+      final missWoId = missWo['id'] as String;
+
+      // 5000 m run on the matching date -> links to matchWo.
+      final matched = await api.autoMatchRunToPlanWorkout(
+          runId, DateTime.utc(2099, 6, 15), 5000.0);
+      expect(matched, matchWoId,
+          reason: 'a same-date run within 25% of target distance must '
+              'auto-link to that workout');
+      final linked = await client
+          .from('plan_workouts')
+          .select('completed_run_id, manually_completed, completed_at')
+          .eq('id', matchWoId)
+          .single();
+      expect(linked['completed_run_id'], runId);
+      expect(linked['manually_completed'], isFalse,
+          reason: 'auto-match is not a manual completion');
+      expect(linked['completed_at'], isNotNull);
+
+      // 5000 m run on the off-distance date -> no match (20000 m target is
+      // 75% away), workout stays open.
+      final unmatched = await api.autoMatchRunToPlanWorkout(
+          runId, DateTime.utc(2099, 6, 16), 5000.0);
+      expect(unmatched, isNull,
+          reason: 'a run > 25% from every same-date target must not link');
+      final stillOpen = await client
+          .from('plan_workouts')
+          .select('completed_run_id')
+          .eq('id', missWoId)
+          .single();
+      expect(stillOpen['completed_run_id'], isNull);
+    });
+
     test('getRuns returns the seeded runs for runner@test.com', () async {
       final runs = await api.getRuns();
       // seed.sql provisions exactly 12 runs for this user.
