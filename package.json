@@ -6,11 +6,11 @@
     "apps/backend"
   ],
   "scripts": {
-    "dev:up": "bin/dev-up.sh",
-    "dev:all:services": "bin/dev-services.sh up",
-    "dev:all:services:down": "bin/dev-services.sh down",
-    "dev:all:services:status": "bin/dev-services.sh status",
-    "dev:all:services:logs": "bin/dev-services.sh logs",
+    "dev:core": "bin/dev-core.sh",
+    "dev:full": "bin/dev-full.sh up",
+    "dev:full:down": "bin/dev-full.sh down",
+    "dev:full:status": "bin/dev-full.sh status",
+    "dev:full:logs": "bin/dev-full.sh logs",
     "dev:db:up": "cd apps/backend && supabase start",
     "dev:db:down": "cd apps/backend && supabase stop",
     "dev:db:reset": "cd apps/backend && supabase db reset && cd ../.. && node scripts/seed-run-tracks.mjs",

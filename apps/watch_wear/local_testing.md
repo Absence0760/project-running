@@ -47,7 +47,7 @@ Then launch the **Run** app from the Wear OS emulator's app launcher.
 
 A fresh clone needs no `-P` flags: the committed `apps/watch_wear/android/.env.development`
 (overlaid by a gitignored `.env.local` if you add one) points the **debug** build at the local stack (`SUPABASE_URL=http://127.0.0.1:54321`,
-seed-user auto-login, local Protomaps tiles). Run `npm run dev:up` from the repo
+seed-user auto-login, local Protomaps tiles). Run `npm run dev:core` from the repo
 root first — it starts the local stack and runs `adb reverse` so `127.0.0.1`
 reaches the host from the emulator/watch.
 
@@ -132,8 +132,8 @@ Wear OS emulators take 1–2 minutes to boot on first launch. Wait for the watch
 ### "Connection refused" from the watch
 
 The committed default is `http://127.0.0.1:54321`, which reaches the host only
-once `adb reverse tcp:54321 tcp:54321` is set — `npm run dev:up` does this for
-every attached device/emulator. If you skipped `dev:up`, either run those
+once `adb reverse tcp:54321 tcp:54321` is set — `npm run dev:core` does this for
+every attached device/emulator. If you skipped `dev:core`, either run those
 `adb reverse` lines (also 8080 for tiles) or, on the emulator only, change
 `SUPABASE_URL` to `http://10.0.2.2:54321` in `.env.local` (the emulator's host
 alias; don't commit that edit). Plain `localhost`/`127.0.0.1` without

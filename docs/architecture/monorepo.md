@@ -132,8 +132,8 @@ pnpm install
 
 Root-level `pnpm` shortcuts wrap the per-app commands so the common cases are one line from the repo root. Run `pnpm run` to see the full list; the groups are:
 
-- `dev:up` — quick core stack (Supabase + tiles + Ollama check + adb reverse)
-- `dev:all:services` — the full backend in one shot (the `dev:up` core **plus** the Go job worker, backgrounded, and the OSRM / GraphHopper engines when their graphs are built); then run a `dev:run:*` for your platform. `dev:all:services:status` / `:logs` / `:down` manage it
+- `dev:core` — quick core stack (Supabase + tiles + Ollama check + adb reverse)
+- `dev:full` — the full backend in one shot (the `dev:core` stack **plus** the Go job worker, backgrounded, and the OSRM / GraphHopper engines when their graphs are built); then run a `dev:run:*` for your platform. `dev:full:status` / `:logs` / `:down` manage it
 - `dev:db:*` — supabase local stack (`up`, `down`, `reset`, `status`, `studio`, `mailpit`, `psql`, `logs`)
 - `dev:run:*` — `web`, `web:preview`, `fns`, `android`, `ios`, `worker`, `osrm`
 - `emu:android:list` / `emu:android:launch <name>` — Flutter emulators

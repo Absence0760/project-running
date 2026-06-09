@@ -2,7 +2,7 @@
 # Full local BACKEND bringup — everything the apps talk to, in one shot.
 #
 # Starts (and returns; nothing blocks your terminal):
-#   • the core stack via bin/dev-up.sh — Supabase (:54321) + seed,
+#   • the core stack via bin/dev-core.sh — Supabase (:54321) + seed,
 #     Protomaps tiles (:8080), Ollama check, adb reverse
 #   • the Go job worker (queue drain + live-spectator hub), backgrounded
 #   • OSRM (:5000) + GraphHopper (:8989) routing engines, detached —
@@ -16,7 +16,7 @@
 #   (watch) cd apps/watch_wear/android && ./gradlew installDebug
 #
 # Subcommands:  up (default) | down | status | logs
-# Usage:  npm run dev:all:services   (= bin/dev-services.sh up)
+# Usage:  npm run dev:full   (= bin/dev-full.sh up)
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,7 +64,7 @@ start_engine() {
 cmd_up() {
   # Core stack (Supabase + seed + tiles + Ollama + adb reverse). Reuse the
   # existing bringup; suppress its footer so we print one combined summary.
-  DEV_UP_NO_FOOTER=1 bin/dev-up.sh
+  DEV_CORE_NO_FOOTER=1 bin/dev-core.sh
 
   start_engine "OSRM (map matching)" apps/job_worker/osrm 5000 \
     apps/job_worker/osrm/data/region.osrm "npm run dev:setup:osrm"
@@ -85,7 +85,7 @@ cmd_up() {
       ( cd apps/job_worker && nohup "$WORKER_BIN" >"$WORKER_LOG" 2>&1 & echo $! >"$WORKER_PID" )
       sleep 1
       if worker_running; then
-        ok "started (pid $(cat "$WORKER_PID"); logs: npm run dev:all:services:logs)"
+        ok "started (pid $(cat "$WORKER_PID"); logs: npm run dev:full:logs)"
       else
         err "exited immediately — check $WORKER_LOG"
       fi
@@ -100,7 +100,7 @@ cmd_up() {
   printf '  %snpm run dev:run:android%s    %s# mobile     → Flutter on a device/emulator%s\n' "$BOLD" "$RST" "$DIM" "$RST"
   printf '  %snpm run dev:run:ios%s        %s# mobile iOS → Flutter on a simulator/device%s\n' "$BOLD" "$RST" "$DIM" "$RST"
   printf '  %s(watch) cd apps/watch_wear/android && ./gradlew installDebug%s\n\n' "$DIM" "$RST"
-  printf '  %sstatus: npm run dev:all:services:status   ·   stop: npm run dev:all:services:down%s\n' "$DIM" "$RST"
+  printf '  %sstatus: npm run dev:full:status   ·   stop: npm run dev:full:down%s\n' "$DIM" "$RST"
   printf '  %spaywall (optional): npm run dev:payments   ·   secret-backed Edge fns: npm run dev:run:fns%s\n' "$DIM" "$RST"
 }
 
@@ -143,7 +143,7 @@ cmd_status() {
 }
 
 cmd_logs() {
-  [ -f "$WORKER_LOG" ] || { err "no worker log yet — start it with: npm run dev:all:services"; exit 1; }
+  [ -f "$WORKER_LOG" ] || { err "no worker log yet — start it with: npm run dev:full"; exit 1; }
   tail -f "$WORKER_LOG"
 }
 

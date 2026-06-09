@@ -16,7 +16,7 @@
 #   npm run dev:run:web        # web on http://localhost:7777
 #   npm run dev:run:android    # Flutter app on a device/emulator
 #
-# Usage: bin/dev-up.sh   (or: npm run dev:up)
+# Usage: bin/dev-core.sh   (or: npm run dev:core)
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -70,7 +70,7 @@ step "adb reverse (Android devices → host loopback)"
 if command -v adb >/dev/null 2>&1; then
   mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device"{print $1}')
   if [ "${#DEVICES[@]}" -eq 0 ]; then
-    warn "no Android device/emulator attached — start one and re-run 'npm run dev:up'"
+    warn "no Android device/emulator attached — start one and re-run 'npm run dev:core'"
   else
     for d in "${DEVICES[@]}"; do
       for p in 54321 54322 7777 8080; do adb -s "$d" reverse "tcp:$p" "tcp:$p" >/dev/null; done
@@ -105,13 +105,13 @@ else
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────
-# `dev:all:services` calls this script with DEV_UP_NO_FOOTER=1 so it can add
+# `dev:full` calls this script with DEV_CORE_NO_FOOTER=1 so it can add
 # the worker + routing engines and print one combined footer instead of two.
-if [ -z "${DEV_UP_NO_FOOTER:-}" ]; then
+if [ -z "${DEV_CORE_NO_FOOTER:-}" ]; then
   printf '\n%s%sLocal stack ready.%s Start the apps in their own terminals:\n\n' "$BOLD" "$GRN" "$RST"
   printf '  %snpm run dev:run:web%s      %s# web app on http://localhost:7777%s\n' "$BOLD" "$RST" "$DIM" "$RST"
   printf '  %snpm run dev:run:android%s  %s# Flutter app on a device/emulator%s\n\n' "$BOLD" "$RST" "$DIM" "$RST"
   printf '  %sseed login: runner@test.com / testtest (mobile auto-logs in)%s\n' "$DIM" "$RST"
-  printf '  %sre-run anytime (e.g. after replugging a phone): npm run dev:up%s\n' "$DIM" "$RST"
-  printf '  %sfull stack incl. job worker + routing engines: npm run dev:all:services%s\n' "$DIM" "$RST"
+  printf '  %sre-run anytime (e.g. after replugging a phone): npm run dev:core%s\n' "$DIM" "$RST"
+  printf '  %sfull stack incl. job worker + routing engines: npm run dev:full%s\n' "$DIM" "$RST"
 fi

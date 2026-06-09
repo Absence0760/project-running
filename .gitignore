@@ -84,7 +84,7 @@ apps/backend/supabase/.temp/
 .claude/session-tasks.md
 
 # Local dev-services scratch: backgrounded job-worker binary + pid + log
-# (written by bin/dev-services.sh — npm run dev:all:services).
+# (written by bin/dev-full.sh — npm run dev:full).
 .dev/
 
 # Audit / review working notes — local-only, not committed (see reviews/README.md)

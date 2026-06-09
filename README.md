@@ -26,26 +26,26 @@ files to copy or edit.**
 
 ```bash
 npm run setup        # install deps + generate Flutter platform dirs (run once)
-npm run dev:up       # start Supabase (seeded) + map tiles + adb reverse + Ollama check
+npm run dev:core     # start Supabase (seeded) + map tiles + adb reverse + Ollama check
 npm run dev:run:web  # web app on http://localhost:7777   (or: npm run dev:run:android)
 ```
 
 That's it. The committed dev defaults (a `.env.development` in each app) point
 every client at the local stack, on `127.0.0.1` so the same values work on an
-emulator **and** a physical device (`dev:up` runs `adb reverse` for any
+emulator **and** a physical device (`dev:core` runs `adb reverse` for any
 attached device). The mobile app auto-logs in as the seed user.
 
 **Seed login:** `runner@test.com` / `testtest`
 
-`dev:up` is idempotent — re-run it any time (e.g. after replugging a phone,
+`dev:core` is idempotent — re-run it any time (e.g. after replugging a phone,
 which clears the `adb reverse` forwards).
 
-**Want the whole backend in one shot?** `npm run dev:all:services` is the
-superset of `dev:up` — it also starts the Go job worker (live tracking +
+**Want the whole backend in one shot?** `npm run dev:full` is the
+superset of `dev:core` — it also starts the Go job worker (live tracking +
 background jobs) and, when their graphs are built, the OSRM / GraphHopper
 routing engines. It backgrounds everything and returns, so you then run the
 same `dev:run:*` command for whichever platform you're testing. Manage it with
-`dev:all:services:status` / `:logs` / `:down`.
+`dev:full:status` / `:logs` / `:down`.
 
 ### Using real external services
 
