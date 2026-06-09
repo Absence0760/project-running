@@ -223,7 +223,7 @@ class _RunsScreenState extends State<RunsScreen> {
     // listener tick would treat every existing run as "newly added"
     // and reset filters even when the user just opened History.
     _previousRunIds =
-        widget.runStore.runs.map((r) => r.id).toSet();
+        widget.runStore.summaries.map((s) => s.id).toSet();
     _hydrateFilters();
     _fetchRemote();
     _hydrateModalities();
@@ -275,7 +275,10 @@ class _RunsScreenState extends State<RunsScreen> {
       return;
     }
     _activities = buildLocalActivities(
-      runs: widget.runStore.runs,
+      // The timeline caps each source at its limit (200) and only needs the
+      // newest slice — the resident window covers it without materialising the
+      // whole history.
+      runs: widget.runStore.recentWindow(),
       workouts: gym.workouts,
       foods: widget.foodStore?.rows ?? const <Map<String, dynamic>>[],
     );
@@ -307,8 +310,9 @@ class _RunsScreenState extends State<RunsScreen> {
 
   void _onStoreChanged() {
     if (!mounted) return;
-    final allRuns = widget.runStore.runs;
-    final existing = allRuns.map((r) => r.id).toSet();
+    // Detect added runs against the FULL index, not the resident window — a
+    // sync can add older runs that never enter the window.
+    final existing = widget.runStore.summaries.map((s) => s.id).toSet();
     final added = existing.difference(_previousRunIds);
     setState(() {
       _recompute();
@@ -341,17 +345,25 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   void _recompute() {
+    // Filter / sort over the FULL-history index (track-less summary-runs) so
+    // every range / sort / "all time" stays correct once the store windows.
     _filtered = _filterAndSort(
-      widget.runStore.runs,
+      widget.runStore.summaryRuns,
       _lowerCutoff(),
       _upperCutoff(),
       _sort,
       _activityFilter,
       _sourceFilter,
     );
-    _visible = _filtered.length <= _visibleCount
+    final slice = _filtered.length <= _visibleCount
         ? _filtered
         : _filtered.sublist(0, _visibleCount);
+    // Resolve the visible slice to resident full runs where possible — the
+    // newest window carries the GPS track / track_url that drives the row
+    // thumbnail. Rows outside the window stay summary-runs (stats + a fallback
+    // icon, no thumbnail) and hydrate their full run on tap via runById.
+    final resident = {for (final r in widget.runStore.runs) r.id: r};
+    _visible = [for (final s in slice) resident[s.id] ?? s];
     _unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
   }
 
@@ -650,7 +662,10 @@ class _RunsScreenState extends State<RunsScreen> {
       // doesn't know about local filters, and asking for "before
       // 2024-06-12 amongst this-week runs" would skip rows the user
       // never had.
-      final all = widget.runStore.runs;
+      // Oldest run overall drives the cloud cursor — read it from the
+      // full-history index (the resident window's oldest would re-fetch runs
+      // already on disk). summaries are newest-first, so .last is the oldest.
+      final all = widget.runStore.summaries;
       final cursor = all.isEmpty ? DateTime.now() : all.last.startedAt;
       final remote =
           await api.getRuns(limit: _kRunsPageSize, before: cursor);
@@ -777,8 +792,14 @@ class _RunsScreenState extends State<RunsScreen> {
     final failedIds = <String>{};
     final api = widget.apiClient;
     if (api != null && api.userId != null) {
-      final runsToDelete =
-          widget.runStore.runs.where((r) => ids.contains(r.id));
+      // Hydrate the selected runs (some may be outside the resident window) —
+      // deleteRun reads metadata.track_url to clean up the Storage track, so a
+      // track-less summary wouldn't remove the blob.
+      final runsToDelete = <Run>[];
+      for (final id in ids) {
+        final run = await widget.runStore.runById(id);
+        if (run != null) runsToDelete.add(run);
+      }
       for (final run in runsToDelete) {
         try {
           await api.deleteRun(run);
@@ -827,7 +848,7 @@ class _RunsScreenState extends State<RunsScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
-    final totalCount = widget.runStore.runs.length;
+    final totalCount = widget.runStore.summaries.length;
 
     return PopScope(
       canPop: !_selecting,
@@ -1239,13 +1260,9 @@ class _RunsScreenState extends State<RunsScreen> {
   /// Open a run row from the timeline. The run is usually in the local store
   /// (same data backs both); for one beyond the cached page, fetch it by id.
   Future<void> _openActivityRun(ActivityRow row) async {
-    Run? run;
-    for (final r in widget.runStore.runs) {
-      if (r.id == row.id) {
-        run = r;
-        break;
-      }
-    }
+    // Local-first: a resident run or one hydrated from disk; only fall back to
+    // the cloud when the run isn't on the device at all.
+    var run = await widget.runStore.runById(row.id);
     run ??= await widget.apiClient?.fetchRunById(row.id);
     if (run == null || !mounted) return;
     Navigator.push(
@@ -1284,12 +1301,11 @@ class _RunsScreenState extends State<RunsScreen> {
     // +1 for the Load-more footer row when there's potentially another
     // page (more local rows under the filter or more on the cloud).
     final emptyAfterFilter = _visible.isEmpty;
-    final allRuns = widget.runStore.runs;
-    final oldestLocal = allRuns.isEmpty
-        ? null
-        : allRuns
-            .map((r) => r.startedAt)
-            .reduce((a, b) => a.isBefore(b) ? a : b);
+    // Oldest run overall (full index, newest-first → last is oldest) gates the
+    // cloud "load more" — not the resident window's oldest.
+    final allSummaries = widget.runStore.summaries;
+    final oldestLocal =
+        allSummaries.isEmpty ? null : allSummaries.last.startedAt;
     final showLoadMore = !emptyAfterFilter &&
         shouldShowRunsLoadMore(
           visibleCount: _visibleCount,
@@ -1408,16 +1424,20 @@ class _RunsScreenState extends State<RunsScreen> {
           isUnsynced: _unsyncedIds.contains(run.id),
           selecting: _selecting,
           selected: _selected.contains(run.id),
-          onTap: () {
+          onTap: () async {
             if (_selecting) {
               _toggleSelection(run.id);
               return;
             }
+            // `run` may be a track-less summary (a row outside the resident
+            // window) — hydrate the full run before opening detail.
+            final full = await widget.runStore.runById(run.id) ?? run;
+            if (!context.mounted) return;
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => RunDetailScreen(
-                  run: run,
+                  run: full,
                   runStore: widget.runStore,
                   routeStore: widget.routeStore,
                   preferences: widget.preferences,
