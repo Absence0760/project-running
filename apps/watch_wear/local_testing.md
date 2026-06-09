@@ -45,15 +45,19 @@ cd apps/watch_wear/android
 
 Then launch the **Run** app from the Wear OS emulator's app launcher.
 
-Override the Supabase backend for staging / prod:
+A fresh clone needs no `-P` flags: the committed `apps/watch_wear/android/.env.local`
+points the **debug** build at the local stack (`SUPABASE_URL=http://127.0.0.1:54321`,
+seed-user auto-login, local Protomaps tiles). Run `npm run dev:up` from the repo
+root first — it starts the local stack and runs `adb reverse` so `127.0.0.1`
+reaches the host from the emulator/watch.
+
+Point a **release** build at staging / prod (release ignores `.env.local`):
 
 ```bash
-./gradlew installDebug \
+./gradlew assembleRelease \
   -PSUPABASE_URL=https://your-project.supabase.co \
   -PSUPABASE_ANON_KEY=<publishable-key>
 ```
-
-The default `SUPABASE_URL` is `http://10.0.2.2:54321` — the emulator's loopback alias for the host machine, same pattern as `mobile_android`.
 
 ---
 
@@ -127,7 +131,13 @@ Wear OS emulators take 1–2 minutes to boot on first launch. Wait for the watch
 
 ### "Connection refused" from the watch
 
-Use `http://10.0.2.2:54321` for the Supabase URL (the default). `localhost` and `127.0.0.1` resolve to the emulator itself, not the host.
+The committed default is `http://127.0.0.1:54321`, which reaches the host only
+once `adb reverse tcp:54321 tcp:54321` is set — `npm run dev:up` does this for
+every attached device/emulator. If you skipped `dev:up`, either run those
+`adb reverse` lines (also 8080 for tiles) or, on the emulator only, change
+`SUPABASE_URL` to `http://10.0.2.2:54321` in `.env.local` (the emulator's host
+alias; don't commit that edit). Plain `localhost`/`127.0.0.1` without
+`adb reverse` resolves to the emulator itself, not the host.
 
 ### `./gradlew installDebug` hangs on "Connecting to devices"
 

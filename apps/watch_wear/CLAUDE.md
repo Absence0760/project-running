@@ -193,28 +193,34 @@ See [local_testing.md](local_testing.md).
 
 See [deployment.md](deployment.md) — separate Play listing under `app.threkir.watchwear`, separate upload keystore from the phone app, shared Play service account, observability, rollback, DR.
 
-Build and install on a Wear OS emulator:
+Build and install on a Wear OS emulator (after `npm run dev:up` from the repo
+root starts the local stack + runs `adb reverse` for the watch):
 
 ```bash
 cd apps/watch_wear/android
 ./gradlew installDebug
 ```
 
-Override the Supabase backend:
+That works on a fresh clone with **no `-P` flags**: the committed
+`apps/watch_wear/android/.env.local` is applied by the `debug` build type
+(local-stack Supabase on `127.0.0.1:54321`, seed-user auto-login, local
+Protomaps tiles). A **release** build reads `SUPABASE_URL` / `SUPABASE_ANON_KEY`
+from `-P` flags instead (the release workflow injects production values) and
+ignores `.env.local` entirely:
 
 ```bash
-./gradlew installDebug -PSUPABASE_URL=https://staging.example.co -PSUPABASE_ANON_KEY=...
+./gradlew assembleRelease -PSUPABASE_URL=https://staging.example.co -PSUPABASE_ANON_KEY=...
 ```
-
-The default `SUPABASE_URL` points at `http://10.0.2.2:54321` — the Android
-emulator's loopback alias for the host machine, matching the local Supabase
-stack that `mobile_android` also uses.
 
 ## Dev-only env flags (`.env.local`)
 
-Gitignored file at `apps/watch_wear/android/.env.local` — copy from
-`.env.example` and flip what you need. Values are read at Gradle-configure
-time and emitted as `BuildConfig` constants; changes require a rebuild
+`apps/watch_wear/android/.env.local` is **committed** with local-stack defaults
+(public Supabase demo key, `127.0.0.1` URLs, `BYPASS_LOGIN=true`, local tiles).
+It is read at Gradle-configure time and emitted as `BuildConfig` constants **by
+the `debug` build type only** — `defaultConfig`/`release` use a hardcoded
+safe-for-release baseline, so nothing here can leak into a release artifact.
+Edit it locally for a real MapTiler/Sentry key but **don't commit the change**
+(`git update-index --skip-worktree` it). Changes require a rebuild
 (`./gradlew installDebug`).
 
 | Flag | Default | Effect |

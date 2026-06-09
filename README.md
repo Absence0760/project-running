@@ -59,6 +59,15 @@ npm run dev:run:ios      # Flutter app on an iOS simulator/device
 npm run dev:run:worker   # Go background-job worker (live tracking, exports)
 ```
 
+The same committed-defaults pattern covers every client: **web**
+(`.env.development`), **mobile iOS** (`.env.local`, loaded by the simulator in
+debug), **Wear OS** (`.env.local` applied by the debug build type), and the
+**Apple Watch** (the DEBUG-only direct-sync path defaults to the local stack) —
+all point at `127.0.0.1` and are compiled/loaded only in dev/debug, never in a
+release build. The iOS **simulator** and Wear OS reach `127.0.0.1` directly /
+via `adb reverse`; a **physical iOS device** needs your Mac's LAN IP instead of
+`127.0.0.1` (it can't `adb reverse`).
+
 Running on a **physical device**, or want the emulator/`adb reverse` details?
 See [apps/mobile_android/local_testing.md](apps/mobile_android/local_testing.md).
 Per-app notes live in each `apps/<app>/local_testing.md`, and what's real vs
