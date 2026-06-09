@@ -213,6 +213,18 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Hold the Kotlin Gradle plugins at 2.3.x. CodeQL's Kotlin extractor
+      # can't analyse 2.4.0 yet ("kotlin-version-too-new"), so a 2.4.x bump
+      # turns the codeql-kotlin Security job red (this bit us when the
+      # minor-and-patch group shipped #68 → Kotlin 2.4.0). 2.3.x patches
+      # still flow. Drop these two entries once CodeQL supports 2.4.0; keep
+      # in lockstep with the pin + comment in
+      # apps/watch_wear/android/settings.gradle.kts and the CLAUDE.md note.
+      - dependency-name: "org.jetbrains.kotlin.plugin.compose"
+        versions: [">=2.4.0"]
+      - dependency-name: "org.jetbrains.kotlin.plugin.serialization"
+        versions: [">=2.4.0"]
 
   # ---------------------------------------------------------------------------
   # gradle — apps/mobile_android/android (Flutter Android shell)
