@@ -384,7 +384,7 @@ test.describe('/settings/preferences', () => {
 		await expect(page.getByTestId('save-demographics')).toBeVisible();
 
 		const consent = page
-			.locator('label.consent-checkbox', { hasText: 'gender and date of birth' })
+			.locator('label.consent-checkbox', { hasText: 'date of birth' })
 			.locator('input[type="checkbox"]');
 		const gender = page
 			.locator('select')
