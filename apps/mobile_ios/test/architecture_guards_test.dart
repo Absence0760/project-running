@@ -1858,29 +1858,30 @@ void main() {
     });
   });
 
-  group('release builds never load .env.local', () {
-    // Reason: pubspec.yaml ships .env.local as a Flutter asset for
-    // local development convenience. A developer building a release
-    // APK locally without first overwriting their .env.local would
-    // bake real SUPABASE_ANON_KEY, MAPTILER_KEY, dev creds, and any
-    // BYPASS_PAYWALL=true into the APK assets. The runtime guard is
-    // the kDebugMode gate around the dotenv.load call in main.dart —
-    // release builds skip the load entirely so the asset bytes,
-    // even if extractable from the APK, are never read by the app.
-    // /audit/all High (secrets agent, 2026-05-07).
-    test('main.dart only calls dotenv.load(\'.env.local\') under kDebugMode',
+  group('release builds never load .env.development', () {
+    // Reason: pubspec.yaml ships .env.development as a Flutter asset for
+    // local development convenience (decisions §137 — on mobile, dev
+    // defaults load from the bundled asset, not a .env.local file). A
+    // developer building a release APK locally without first overwriting
+    // their .env.development would bake real SUPABASE_ANON_KEY,
+    // MAPTILER_KEY, dev creds, and any BYPASS_PAYWALL=true into the APK
+    // assets. The runtime guard is the kDebugMode gate around the
+    // dotenv.load call in main.dart — release builds skip the load
+    // entirely so the asset bytes, even if extractable from the APK, are
+    // never read by the app. /audit/all High (secrets agent, 2026-05-07).
+    test('main.dart only calls dotenv.load(\'.env.development\') under kDebugMode',
         () {
       final source = File('lib/main.dart').readAsStringSync();
-      // Locate the `.env.local` filename argument. The call may be
+      // Locate the `.env.development` filename argument. The call may be
       // formatted across several lines (dart format splits it once the
       // argument list grows), so don't assume `dotenv.load(` and the
       // `fileName:` argument share a line.
-      final fileArgIdx = source.indexOf("fileName: '.env.local'");
+      final fileArgIdx = source.indexOf("fileName: '.env.development'");
       expect(
         fileArgIdx,
         greaterThan(0),
         reason:
-            'Expected dotenv.load(fileName: \'.env.local\', ...) in main.dart. '
+            'Expected dotenv.load(fileName: \'.env.development\', ...) in main.dart. '
             'If the call has been replaced or removed, update this guard.',
       );
       // That argument must belong to a dotenv.load(...) call.
@@ -1889,7 +1890,7 @@ void main() {
         loadIdx,
         greaterThan(0),
         reason:
-            'fileName: \'.env.local\' must be an argument to dotenv.load(...).',
+            'fileName: \'.env.development\' must be an argument to dotenv.load(...).',
       );
       // Walk backwards to find the nearest `if (` opening — the load
       // must sit inside an `if (kDebugMode) { ... }` block.
@@ -1899,7 +1900,7 @@ void main() {
         guardIdx,
         greaterThan(0),
         reason:
-            'dotenv.load(\'.env.local\', ...) must sit inside an '
+            'dotenv.load(\'.env.development\', ...) must sit inside an '
             '`if (kDebugMode) { ... }` block. Removing the guard re-opens '
             'the audit/secrets High where release-built APKs leak the '
             'developer\'s local secrets via the bundled asset.',
