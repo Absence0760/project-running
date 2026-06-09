@@ -111,6 +111,84 @@ class LocalRunStore extends ChangeNotifier {
 
   int get unsyncedCount => unsyncedRuns.length;
 
+  /// Default count of newest full [Run]s held resident once the store windows.
+  /// The resident set is this newest slice UNION all unsynced runs (which must
+  /// always be reachable for the sync drain — see [unsyncedRuns]).
+  static const int kResidentWindow = 200;
+
+  /// The newest [count] resident runs ∪ all unsynced, newest-first. The History
+  /// timeline + run-list feed read this rather than [summaries] when they need
+  /// full [Run]s (not just scalars). Identical to [runs] until the store
+  /// windows; afterwards it's an explicit, sized view.
+  List<Run> recentWindow([int count = kResidentWindow]) {
+    // Sort by date first — `save` inserts a new run at the front assuming it's
+    // the newest, which a manual back-dated add-run can violate, so `_runs`
+    // insertion order isn't a reliable date order.
+    final sorted = [..._runs]
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    final out = sorted.take(count).toList();
+    final ids = out.map((r) => r.id).toSet();
+    for (final r in sorted) {
+      if (!_syncedIds.contains(r.id) && ids.add(r.id)) out.add(r);
+    }
+    out.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    return out;
+  }
+
+  /// Resolve a full [Run] (with track + complete metadata) by id: a resident
+  /// copy if present, else hydrated from its on-disk file, else null when the id
+  /// isn't in the index at all. The on-demand hydration path every detail /
+  /// nav surface uses so it works for a run outside the resident window.
+  Future<Run?> runById(String id) async {
+    for (final r in _runs) {
+      if (r.id == id) return r;
+    }
+    if (!_summaries.any((s) => s.id == id)) return null;
+    final loaded = await _readRunFile(File('${_dir.path}/$id.json'));
+    return loaded?.run;
+  }
+
+  /// Hydrate the next [count] oldest not-yet-resident runs (by index order)
+  /// into [_runs] from disk, returning how many were added. The run-list's
+  /// "load more" calls this to extend the window before falling back to a cloud
+  /// fetch. A no-op (returns 0) while every row is already resident.
+  Future<int> hydrateOlder(int count) async {
+    if (count <= 0) return 0;
+    final residentIds = _runs.map((r) => r.id).toSet();
+    final missing = _summaries
+        .where((s) => !residentIds.contains(s.id))
+        .take(count)
+        .map((s) => s.id)
+        .toList();
+    if (missing.isEmpty) return 0;
+    final loaded = await Future.wait(
+      missing.map((id) => _readRunFile(File('${_dir.path}/$id.json'))),
+      eagerError: false,
+    );
+    var added = 0;
+    for (final entry in loaded) {
+      if (entry == null) continue;
+      _runs.add(entry.run);
+      added++;
+    }
+    if (added > 0) {
+      _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+      notifyListeners();
+    }
+    return added;
+  }
+
+  /// Lazily yield every run on disk (full [Run]s with tracks), newest-first by
+  /// the index order, without buffering the whole history in memory. Backs the
+  /// backup export, which must include the complete history — including unsynced
+  /// runs whose track lives only in the local file.
+  Stream<Run> iterateAllRuns() async* {
+    for (final s in _summaries) {
+      final run = await runById(s.id);
+      if (run != null) yield run;
+    }
+  }
+
   /// Run ids that the user asked to delete but whose remote-side
   /// `api.deleteRun` failed (network error, RLS, transient 5xx). The
   /// SyncService retries these on the next sync trigger. Surfaced as
