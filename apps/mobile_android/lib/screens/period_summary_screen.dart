@@ -238,7 +238,10 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   void _recompute() {
     final start = periodStart(_period, _anchor, weekStartDay: _weekStartDay);
     final end = periodEnd(_period, _anchor, weekStartDay: _weekStartDay);
-    _periodRuns = widget.runStore.runs
+    // Reads the full-history index (the all-time period needs every run); rows
+    // are track-less summaries — the tile shows only scalars, and tapping one
+    // hydrates the full run via runById before opening detail.
+    _periodRuns = widget.runStore.summaryRuns
         .where((r) => !r.startedAt.isBefore(start) && r.startedAt.isBefore(end))
         .toList()
       ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
@@ -364,18 +367,25 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                 run: run,
                 unit: unit,
                 theme: theme,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => RunDetailScreen(
-                      run: run,
-                      runStore: widget.runStore,
-                      routeStore: widget.routeStore,
-                      preferences: widget.preferences,
-                      settingsSync: widget.settingsSync,
+                onTap: () async {
+                  // `run` is a track-less summary; hydrate the full run (track
+                  // + complete metadata) before opening detail, falling back to
+                  // the summary if it can't be resolved.
+                  final full = await widget.runStore.runById(run.id) ?? run;
+                  if (!context.mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RunDetailScreen(
+                        run: full,
+                        runStore: widget.runStore,
+                        routeStore: widget.routeStore,
+                        preferences: widget.preferences,
+                        settingsSync: widget.settingsSync,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
           ],
         ],
