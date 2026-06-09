@@ -281,8 +281,8 @@
 		height: 2.4rem;
 		transition: border-color var(--transition-fast);
 	}
-	input[type='text']:focus,
-	input[type='number']:focus {
+	input[type='text']:focus-visible,
+	input[type='number']:focus-visible {
 		outline: none;
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px var(--color-primary-light);

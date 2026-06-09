@@ -262,7 +262,7 @@
 		color: var(--color-text-secondary);
 	}
 	.row-top-set {
-		margin-left: auto;
+		margin-inline-start: auto;
 		font-weight: 600;
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;

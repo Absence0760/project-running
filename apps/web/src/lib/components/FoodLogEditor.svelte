@@ -271,7 +271,7 @@
 	.results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
 	.result {
 		width: 100%;
-		text-align: left;
+		text-align: start;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);

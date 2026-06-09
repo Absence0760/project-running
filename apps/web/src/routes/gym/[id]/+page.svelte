@@ -439,7 +439,7 @@
 		color: var(--color-text-secondary);
 	}
 	.lt-chevron {
-		margin-left: auto;
+		margin-inline-start: auto;
 		font-size: 1.05rem;
 		color: var(--color-text-tertiary);
 	}

@@ -754,8 +754,7 @@
 	}
 	.trend-avg-line {
 		position: absolute;
-		left: 0;
-		right: 0;
+		inset-inline: 0;
 		border-top: 1px dashed var(--color-text-tertiary);
 		opacity: 0.55;
 		pointer-events: none;
@@ -764,8 +763,7 @@
 	   avg line, so "where I am" vs "where I'm aiming" read apart at a glance. */
 	.trend-goal-line {
 		position: absolute;
-		left: 0;
-		right: 0;
+		inset-inline: 0;
 		border-top: 1.5px dashed var(--color-primary);
 		opacity: 0.7;
 		pointer-events: none;
