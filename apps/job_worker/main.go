@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log/slog"
@@ -173,7 +174,56 @@ func (b *premiumBackend) FetchPremiumRuns(ctx context.Context, userID string, si
 // main wires environment → SupabaseClient → Worker.Run. Kept thin so
 // the worker logic can be exercised from tests against a mock backend
 // without booting an HTTP transport.
+// loadEnvFiles reads simple KEY=VALUE .env files in order and sets any
+// variable NOT already present in the process environment. Mirrors
+// godotenv.Load semantics — the existing env wins, and an earlier file
+// in the list wins over a later one — but stays stdlib-only: the
+// module pins a Go toolchain the build host may not have, so adding a
+// dependency (and a go.sum entry) for ~20 lines isn't worth it.
+//
+// Repo-wide convention (decisions §136): .env.local (gitignored, your
+// real secrets) overrides .env.development (committed, non-secret local
+// defaults). In production the multi-stage Docker image ships only the
+// compiled binary — neither file is present — so this is a no-op and
+// Fly secrets are the sole source. The "existing env wins" rule is a
+// second guard against a stray committed default reaching prod.
+func loadEnvFiles(paths ...string) {
+	for _, path := range paths {
+		f, err := os.Open(path)
+		if err != nil {
+			continue // missing file is fine (prod, or no local override)
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			key, val, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			key = strings.TrimSpace(key)
+			val = strings.TrimSpace(val)
+			// Strip one layer of matching surrounding quotes.
+			if len(val) >= 2 && (val[0] == '"' || val[0] == '\'') && val[len(val)-1] == val[0] {
+				val = val[1 : len(val)-1]
+			}
+			if key == "" {
+				continue
+			}
+			if _, present := os.LookupEnv(key); present {
+				continue // shell / Fly env (and earlier files) take precedence
+			}
+			_ = os.Setenv(key, val)
+		}
+		f.Close()
+	}
+}
+
 func main() {
+	loadEnvFiles(".env.local", ".env.development")
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	baseURL := requireEnv(logger, "SUPABASE_URL")

@@ -1,0 +1,6 @@
+# Keep env files out of the build context so a developer's gitignored
+# .env.local can never bake into a build layer. The runtime image is the
+# compiled binary only (multi-stage Dockerfile), so .env.development isn't
+# needed at build time either — Fly secrets supply prod env.
+.env
+.env.*
