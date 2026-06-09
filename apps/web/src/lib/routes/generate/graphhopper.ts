@@ -54,13 +54,26 @@ export interface RoundTripRequest {
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
+/// GraphHopper's round_trip systematically returns loops SHORTER than the
+/// requested `round_trip.distance` — it places via-points on a circle of the
+/// requested radius and the road path between them cuts the chord. Measured
+/// against the foot profile across 2-12 km and many seeds, returned/requested
+/// clustered around a 0.84 median (a ~16% undershoot). So we ask the engine for
+/// target × this factor; the returned distances then centre on the user's real
+/// target. This nudges only the REQUEST — candidate.distanceM stays the actual
+/// returned length and selection still compares against the un-inflated target,
+/// so an over/undershooting seed is judged honestly and the ±15% warning band
+/// fires on the real result. Tunable; re-measure if the profile or engine
+/// version changes.
+export const ROUND_TRIP_DISTANCE_INFLATION = 1.18;
+
 export function buildRoundTripUrl(req: RoundTripRequest): string {
 	const base = (req.baseUrl ?? '').replace(/\/+$/, '');
 	const params = new URLSearchParams({
 		profile: 'foot',
 		point: `${req.start.lat},${req.start.lng}`,
 		algorithm: 'round_trip',
-		'round_trip.distance': String(Math.round(req.targetDistanceM)),
+		'round_trip.distance': String(Math.round(req.targetDistanceM * ROUND_TRIP_DISTANCE_INFLATION)),
 		'round_trip.seed': String(req.seed),
 		points_encoded: 'false',
 		instructions: 'false',

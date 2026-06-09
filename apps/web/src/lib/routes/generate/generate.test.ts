@@ -6,6 +6,7 @@ import {
 	fetchRoundTrip,
 	GraphHopperError,
 	parseRoundTrip,
+	ROUND_TRIP_DISTANCE_INFLATION,
 	type Fetcher,
 } from './graphhopper';
 import { areaEfficiency, enclosedAreaM2, pickBestLoop } from './select';
@@ -50,10 +51,25 @@ test('buildRoundTripUrl carries the round_trip params + foot profile', () => {
 	assert.equal(u.pathname, '/route');
 	assert.equal(u.searchParams.get('profile'), 'foot');
 	assert.equal(u.searchParams.get('algorithm'), 'round_trip');
-	assert.equal(u.searchParams.get('round_trip.distance'), '5001'); // rounded
+	// Requested distance is the target inflated to counter round_trip's
+	// systematic undershoot: round(5000.6 * 1.18) = 5901.
+	assert.equal(
+		u.searchParams.get('round_trip.distance'),
+		String(Math.round(5000.6 * ROUND_TRIP_DISTANCE_INFLATION)),
+	);
 	assert.equal(u.searchParams.get('round_trip.seed'), '3');
 	assert.equal(u.searchParams.get('point'), '40,-74');
 	assert.equal(u.searchParams.get('points_encoded'), 'false');
+});
+
+test('buildRoundTripUrl inflates the requested distance above the target', () => {
+	// round_trip undershoots, so the engine is always asked for MORE than the
+	// user's target. The factor must be > 1 or we systematically return short.
+	assert.ok(ROUND_TRIP_DISTANCE_INFLATION > 1);
+	const url = buildRoundTripUrl({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 10000, seed: 0 });
+	const asked = Number(new URL(url).searchParams.get('round_trip.distance'));
+	assert.equal(asked, Math.round(10000 * ROUND_TRIP_DISTANCE_INFLATION));
+	assert.ok(asked > 10000);
 });
 
 test('buildRoundTripUrl strips a trailing slash on the base', () => {
