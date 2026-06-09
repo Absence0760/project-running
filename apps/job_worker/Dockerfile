@@ -6,7 +6,7 @@
 # PinnedDependenciesID — bumping the tag without re-pinning the
 # digest no-ops the pin, so resolve the new digest with
 # `docker manifest inspect golang:<tag>` when bumping.
-FROM golang:1.26-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d AS build
+FROM golang:1.26-alpine@sha256:f23e8b227fb4493eabe03bede4d5a32d04092da71962f1fb79b5f7d1e6c2a17f AS build
 WORKDIR /src
 
 # Cache go.mod / go.sum first so dependency-only changes don't
