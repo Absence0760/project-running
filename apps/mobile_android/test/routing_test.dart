@@ -624,4 +624,83 @@ void main() {
       expect(result.hadFallbacks, isTrue);
     });
   });
+
+  group('RouteSegmentCache (incremental routing)', () {
+    setUpAll(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      dotenv.loadFromString(isOptional: true);
+    });
+
+    String okBody() => jsonEncode({
+          'code': 'Ok',
+          'routes': [
+            {
+              'distance': 100.0,
+              'geometry': {
+                'coordinates': [
+                  [8.54, 47.37],
+                  [8.55, 47.38],
+                ],
+              },
+            },
+          ],
+        });
+
+    const a = Waypoint(lat: 47.37, lng: 8.54);
+    const b = Waypoint(lat: 47.38, lng: 8.55);
+    const c = Waypoint(lat: 47.39, lng: 8.56);
+
+    test('segmentCacheKey is order- and profile-sensitive', () {
+      expect(segmentCacheKey(a, b, OsrmProfile.foot),
+          segmentCacheKey(a, b, OsrmProfile.foot));
+      expect(segmentCacheKey(a, b, OsrmProfile.foot),
+          isNot(segmentCacheKey(b, a, OsrmProfile.foot)));
+      expect(segmentCacheKey(a, b, OsrmProfile.foot),
+          isNot(segmentCacheKey(a, b, OsrmProfile.car)));
+    });
+
+    test('reuses prior segments — adding a waypoint fetches only the new one',
+        () async {
+      final stub = _StubFetcher(okBody());
+      final cache = RouteSegmentCache();
+
+      await fetchRouteThrough(const [a, b], fetcher: stub.call, cache: cache);
+      expect(stub.callCount, 1, reason: 'A→B fetched once.');
+
+      await fetchRouteThrough(const [a, b, c],
+          fetcher: stub.call, cache: cache);
+      expect(stub.callCount, 2,
+          reason: 'A→B reused from cache; only B→C newly fetched. Without '
+              'the cache this would be 1 + 2 = 3.');
+      expect(cache.length, 2);
+    });
+
+    test('without a cache, every segment is re-fetched each pass', () async {
+      final stub = _StubFetcher(okBody());
+      await fetchRouteThrough(const [a, b, c], fetcher: stub.call);
+      await fetchRouteThrough(const [a, b, c], fetcher: stub.call);
+      expect(stub.callCount, 4, reason: 'No cache → 2 + 2 segment fetches.');
+    });
+
+    test('failed segments are not cached — they re-try next pass', () async {
+      final stub = _StubFetcher(jsonEncode({'code': 'NoRoute'}));
+      final cache = RouteSegmentCache();
+      await fetchRouteThrough(const [a, b], fetcher: stub.call, cache: cache);
+      await fetchRouteThrough(const [a, b], fetcher: stub.call, cache: cache);
+      expect(stub.callCount, 2,
+          reason: 'A straight-line fallback must re-try, never stick.');
+      expect(cache.length, 0);
+    });
+
+    test('clear() drops cached segments so the next pass re-fetches', () async {
+      final stub = _StubFetcher(okBody());
+      final cache = RouteSegmentCache();
+      await fetchRouteThrough(const [a, b], fetcher: stub.call, cache: cache);
+      expect(cache.length, 1);
+      cache.clear();
+      expect(cache.length, 0);
+      await fetchRouteThrough(const [a, b], fetcher: stub.call, cache: cache);
+      expect(stub.callCount, 2);
+    });
+  });
 }

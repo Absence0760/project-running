@@ -250,11 +250,15 @@ class OsrmRouteResult {
 /// Throws only when EVERY segment failed (`okSegments == 0` AND
 /// `totalSegments > 0`); a partial-success run returns the stitched
 /// polyline with `hadFallbacks == true`.
+///
+/// Pass a [cache] (held by the route builder across re-routes) so that
+/// re-routing after adding one waypoint fetches only the new segment.
 Future<OsrmRouteResult> fetchRouteThrough(
   List<Waypoint> points, {
   OsrmProfile profile = OsrmProfile.foot,
   OsrmFetcher? fetcher,
   OsrmCancellation? cancelled,
+  RouteSegmentCache? cache,
 }) async {
   if (points.length < 2) {
     return const OsrmRouteResult(coordinates: [], distanceMetres: 0);
@@ -265,34 +269,59 @@ Future<OsrmRouteResult> fetchRouteThrough(
   final segmentPairs = <List<Waypoint>>[
     for (var i = 0; i < points.length - 1; i++) [points[i], points[i + 1]],
   ];
-  // Batch parallelism — N pairs into batches of [kOsrmBatchSize].
-  // Web's `RouteBuilder.svelte` uses the same shape so a 10-waypoint
-  // route hits OSRM in ~3 round-trips instead of 9 sequential calls.
-  // 200 ms cooldown between batches prevents the public demo server
-  // from 429'ing on a complex polyline.
-  final segments = <_RoutedSegment>[];
-  for (var start = 0; start < segmentPairs.length; start += kOsrmBatchSize) {
+  final keys = [
+    for (final pair in segmentPairs) segmentCacheKey(pair[0], pair[1], profile),
+  ];
+  // Per-segment cache: a re-route after adding one waypoint reuses
+  // every prior segment and fetches only the new one, so placement
+  // stays O(1) instead of O(n) as the route grows. Mirrors the web
+  // `RouteBuilder` SegmentCache. Only the cache misses below hit OSRM.
+  final slots = List<_RoutedSegment?>.filled(segmentPairs.length, null);
+  final missIdx = <int>[];
+  for (var i = 0; i < segmentPairs.length; i++) {
+    final hit = cache?._get(keys[i]);
+    if (hit != null) {
+      slots[i] = hit;
+    } else {
+      missIdx.add(i);
+    }
+  }
+  // Batch parallelism — the cache misses into batches of
+  // [kOsrmBatchSize]. Web's `RouteBuilder.svelte` uses the same shape
+  // so a complex route hits OSRM in a few round-trips instead of one
+  // per segment. 200 ms cooldown between batches prevents the public
+  // demo server from 429'ing on a complex polyline.
+  for (var start = 0; start < missIdx.length; start += kOsrmBatchSize) {
     // Cancellation check between batches — the previous wave may
     // have run for several seconds (parallel × retries × timeout),
     // so a user who replaced the route mid-flight is waiting.
     if (isCancelled()) {
-      return _cancelledResult(segments);
+      return _cancelledResult(slots.whereType<_RoutedSegment>().toList());
     }
-    final batch = segmentPairs.skip(start).take(kOsrmBatchSize).toList();
+    final batchIdx = missIdx.skip(start).take(kOsrmBatchSize).toList();
     final results = await Future.wait(
-      batch.map(
-        (pair) => _routeOneSegment(pair[0], pair[1], profile, f, isCancelled),
+      batchIdx.map(
+        (i) => _routeOneSegment(
+          segmentPairs[i][0], segmentPairs[i][1], profile, f, isCancelled),
       ),
     );
-    segments.addAll(results);
-    if (isCancelled()) {
-      return _cancelledResult(segments);
+    for (var j = 0; j < batchIdx.length; j++) {
+      final i = batchIdx[j];
+      final seg = results[j];
+      slots[i] = seg;
+      // Cache successes only — a straight-line fallback from a
+      // transient hiccup must re-try next pass, never stick.
+      if (seg.ok) cache?._set(keys[i], seg);
     }
-    if (start + kOsrmBatchSize < segmentPairs.length) {
+    if (isCancelled()) {
+      return _cancelledResult(slots.whereType<_RoutedSegment>().toList());
+    }
+    if (start + kOsrmBatchSize < missIdx.length) {
       await Future<void>.delayed(kOsrmInterBatchDelay);
     }
   }
 
+  final segments = [for (final s in slots) s!];
   final okSegments = segments.where((s) => s.ok).length;
   // No throw here even when every segment failed — the caller
   // (route_builder_screen) decides whether to surface a banner by
@@ -336,6 +365,51 @@ class _RoutedSegment {
     required this.distanceMetres,
     required this.ok,
   });
+}
+
+/// Stable cache key for a routed segment. Order-sensitive (A→B is not
+/// the same as B→A — OSRM can return asymmetric geometry on a one-way
+/// street) and profile-scoped. Exact-coord match: a dragged waypoint
+/// yields a different key → a re-fetch of just the adjacent segment.
+/// Mirrors the web `segmentCacheKey` in `routes/segment_cache.ts`.
+String segmentCacheKey(Waypoint from, Waypoint to, OsrmProfile profile) {
+  return '${profile.path}|${from.lng},${from.lat}|${to.lng},${to.lat}';
+}
+
+/// Bounded, recency-ordered cache of successfully-routed segments. The
+/// route builder holds one instance across the editing session so a
+/// re-route after adding one waypoint fetches only the new segment
+/// instead of re-running every prior one — keeping a long route
+/// responsive on every pin placement. Mirrors the web `SegmentCache`.
+///
+/// Only *successful* segments are cached: a straight-line fallback from
+/// a transient OSRM hiccup must re-try on the next pass, never stick.
+class RouteSegmentCache {
+  RouteSegmentCache({this.maxEntries = 2000});
+
+  final int maxEntries;
+  final _entries = <String, _RoutedSegment>{};
+
+  _RoutedSegment? _get(String key) {
+    final hit = _entries.remove(key);
+    // Re-insert to mark most-recently-used (LinkedHashMap preserves
+    // insertion order, so the first key is the oldest — see _set).
+    if (hit != null) _entries[key] = hit;
+    return hit;
+  }
+
+  void _set(String key, _RoutedSegment seg) {
+    _entries
+      ..remove(key)
+      ..[key] = seg;
+    if (_entries.length > maxEntries) {
+      _entries.remove(_entries.keys.first);
+    }
+  }
+
+  void clear() => _entries.clear();
+
+  int get length => _entries.length;
 }
 
 /// Route a single segment from [from] → [to] with up to

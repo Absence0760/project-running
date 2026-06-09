@@ -132,6 +132,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// `routeVersion` counter on RouteBuilder.svelte.
   int _routeGeneration = 0;
 
+  /// Reused across re-routes so re-snapping after a new pin only fetches
+  /// the one new segment, not every prior one. See [RouteSegmentCache].
+  final RouteSegmentCache _segmentCache = RouteSegmentCache();
+
   // Drag state. When the user long-presses a marker, we enter drag
   // mode; subsequent map taps move that waypoint until the user taps
   // the marker again or hits the cancel chip.
@@ -289,6 +293,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         profile: _osrmProfile,
         fetcher: widget.osrmFetcher,
         cancelled: () => myGen != _routeGeneration,
+        cache: _segmentCache,
       );
       if (!mounted) return;
       if (routed.wasCancelled) {
@@ -605,6 +610,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   void _clear() {
     if (_routing || _saving) return;
+    _segmentCache.clear();
     setState(() {
       _waypoints.clear();
       _polyline = const [];
