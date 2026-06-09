@@ -12,8 +12,9 @@ Operational counterpart of [`apps/web/CLAUDE.md`](CLAUDE.md) (stack, conventions
 
 The web app has two parts:
 
-1. **Static site** — every route except `/api/coach`. SvelteKit prerenders / SPA-renders these. Served from S3 (private bucket) via CloudFront with Origin Access Control (OAC).
+1. **Static site** — every route except the server-backed `/api/*` paths. SvelteKit prerenders / SPA-renders these. Served from S3 (private bucket) via CloudFront with Origin Access Control (OAC).
 2. **Server-side `/api/coach/+server.ts`** — needs a runtime that can stream Anthropic responses back to the client. Deployed as a Node 24 Lambda Function URL; CloudFront routes `/api/coach/*` to it as a separate behaviour on the same distribution.
+3. **Server-side `/api/routes/generate/+server.ts`** — distance-targeted loop generation. Calls the self-hosted GraphHopper `round_trip` engine, which must never be reachable from the browser (the user's start coordinates would otherwise leave our infra). Deployed as its own Node 24 Lambda Function URL; CloudFront routes `/api/routes/generate*` to it as a separate behaviour. See [decisions.md § 137](../../docs/architecture/decisions.md#137-generate-a-route-by-distance-moves-server-side-to-a-dedicated-lambda--self-hosted-graphhopper-round_trip).
 
 Same domain, same CORS posture for both halves. No API Gateway in front of the Lambda — Function URLs are free, support response streaming, and skip the per-request API Gateway cost. ACM cert lives in `us-east-1` (CloudFront only reads from there, regardless of where the rest of the stack runs).
 
@@ -28,10 +29,11 @@ Route 53 (threkir.com, www.threkir.com)
    │  ALIAS / A
    ▼
 CloudFront distribution (one per env: prod, preview)
-   ├── default behaviour       → S3 origin (private, OAC) — SvelteKit static build
-   ├── /api/coach/* behaviour  → Lambda Function URL (Node 24, response streaming)
-   └── response headers policy → CSP / HSTS / X-Content-Type-Options / Referrer-Policy
-                                 / Permissions-Policy
+   ├── default behaviour              → S3 origin (private, OAC) — SvelteKit static build
+   ├── /api/coach/* behaviour         → Lambda Function URL (Node 24, response streaming)
+   ├── /api/routes/generate* behaviour → Lambda Function URL (Node 24, non-streaming JSON)
+   └── response headers policy        → CSP / HSTS / X-Content-Type-Options / Referrer-Policy
+                                        / Permissions-Policy
 
 ACM cert (us-east-1) — auto-renew via DNS validation in Route 53
 
@@ -40,11 +42,11 @@ GitHub Actions
    ▼
 IAM role  s3:PutObject       on the env's artifacts bucket prefix
           cloudfront:CreateInvalidation  on the env's distribution
-          lambda:UpdateFunctionCode      on the coach Lambda
+          lambda:UpdateFunctionCode      on the coach + generate-route + share Lambdas
           (and nothing else — least-privilege)
 ```
 
-**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, three Lambdas (coach + share-run + share-route). The Terraform setup uses one shared module (`infra/modules/web-stack`) consumed by per-env root modules (`infra/envs/{prod,preview}`) so the two stacks can't drift.
+**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, four Lambdas (coach + generate-route + share-run + share-route). The Terraform setup uses one shared module (`infra/modules/web-stack`) consumed by per-env root modules (`infra/envs/{prod,preview}`) so the two stacks can't drift.
 
 ---
 
@@ -69,8 +71,9 @@ Provisioned via Terraform — matches the workstation toolchain (`/home/jhoward/
 ```
 infra/
 ├── modules/
-│   └── web-stack/         # Reusable: S3 + CloudFront + 3 Lambdas (coach + share-run + share-route) +
-│                          # Function URLs + IAM + per-env KMS key + sops integration
+│   └── web-stack/         # Reusable: S3 + CloudFront + 4 Lambdas (coach + generate-route +
+│                          # share-run + share-route) + Function URLs + IAM + per-env KMS key
+│                          # + sops integration
 ├── envs/
 │   ├── prod/              # Root module — calls web-stack module
 │   │   ├── main.tf
@@ -147,6 +150,12 @@ The static SvelteKit build inlines `PUBLIC_*` vars at build time. The CI workflo
 | `COACH_PROVIDER` / `OPENAI_BASE_URL` | optional — set in `terraform.tfvars` per env | for self-hosted Ollama / OpenAI-compatible service |
 | `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` | non-secret — passed as Terraform vars from CI environment, written to Lambda env directly | the Lambda needs them to validate the user's JWT and call `is_pro()` / `increment_coach_usage` RPCs |
 
+The generate-route Lambda reads one additional non-secret var:
+
+| Lambda env var | Source | Notes |
+|---|---|---|
+| `GRAPHHOPPER_URL` | non-secret — set in `terraform.tfvars` per env (the self-hosted GraphHopper Fly app's internal base URL) | **server-only — never `PUBLIC_`** so the browser can't reach the engine and the user's start coordinates never leave our infra. Unset → the Lambda returns `501` and the client falls back to the in-browser OSRM heuristic. |
+
 ---
 
 ## CI deploy path
@@ -189,6 +198,32 @@ The only SSR route in the app, and the only one that costs money to run.
 
 ---
 
+## Generate-route `/api/routes/generate` specifics — Lambda
+
+Distance-targeted loop generation (decisions §137). `apps/web/lambda/generate-route/` wraps `$lib/routes/generate/handler` as a non-streaming JSON Function URL handler (mirroring `lambda/coach` + `lambda/share-route`); `build.mjs` bundles via esbuild → `dist/generate-route.zip`. CloudFront routes `/api/routes/generate*` to it; CI's `release-web.yml` updates the Lambda code on every `web@*` tag.
+
+**Why a server-side hop at all.** The browser must never call GraphHopper directly — the request carries the user's start coordinates, and `GRAPHHOPPER_URL` is a server-only env (never `PUBLIC_`) so those coordinates stay inside our infra (privacy parity with the self-hosted OSRM map-matcher). The Lambda is the only thing that talks to the engine.
+
+**Engine.** A self-hosted GraphHopper running the `round_trip` algorithm, deployed as its own Fly app alongside the OSRM map-matcher (`apps/job_worker/osrm/`). GraphHopper is loop-generation only; OSRM still owns map-matching and manual-waypoint snapping. The Lambda races a few seeds and picks the best-shaped loop by enclosed-area efficiency (`apps/web/src/lib/routes/generate/select.ts`).
+
+**Response contract.** Returns `{coordinates: [lng,lat][], distanceM}` on success. `501` when `GRAPHHOPPER_URL` is unconfigured, `502` when the engine is unreachable, `503` on an unhandled error. The web client treats any non-200 as "fall back to the in-browser OSRM radial heuristic" and surfaces the existing `routeBuilder.couldntGenerateLoop` / `generatedDistanceLonger` / `generatedDistanceShorter` copy — the server path is a quality upgrade, not a hard dependency.
+
+**Memory + timeout.** 512 MB memory, 15 s timeout. Loop generation is a few engine round-trips, not a streamed multi-second response; if a request runs past 15 s the engine is in trouble and the client should fall back rather than hang the route builder.
+
+**No secret, no paywall, no per-user state.** The Lambda holds no secret (the engine URL is non-secret config) and reads no user data — it forwards lat/lng + a target distance and returns geometry. It is not paywalled (route building is a free feature), so a per-IP WAF rate limit is the only abuse ceiling.
+
+**WAF rate limit.** CloudFront's `/api/routes/generate*` behaviour is fronted by a per-IP rate-based rule in the same `web-stack` WAF web ACL as the coach rule (`infra/modules/web-stack/waf.tf`) — a generous per-IP cap over the WAF v2 5-minute rolling window, sized so a legitimate route-builder session can never approach it from one IP while a scripted loop-generation flood is throttled before it reaches the Lambda or the engine. Gated behind the same `waf_enabled` toggle so an env running load tests / e2e suites against the endpoint can disable it.
+
+**CloudWatch alarms (wired by the `web-stack` module, same SNS topic as coach):**
+
+- generate-route Lambda error rate >2% over 5 min → `web-prod-alerts`
+- generate-route Lambda p95 duration >12 s over 5 min (approaching the 15 s timeout, a sign the engine is slow / overloaded) → same topic
+- generate-route Lambda throttles >0 in any 1 min window → same topic
+
+A spike in `502`s is the engine-down signal — the alarms above plus a Better Stack probe of the GraphHopper Fly app's health endpoint catch it; the client degrades to the OSRM heuristic in the meantime, so an engine outage is a quality regression, not an outage of the route builder.
+
+---
+
 ## Share Lambdas — per-request SSR for unfurls (`share-run` + `share-route`)
 
 Two near-identical Lambdas render the public share surfaces at request time so a brand-new (or post-build-public) run / route unfurls with the right per-entity `<head>` + a matching og:image, regardless of build cadence:
@@ -218,7 +253,7 @@ The `Notifications` row in the database carries the user's subscription endpoint
 | Surface | Tool | What |
 |---|---|---|
 | Static request logs | CloudFront access logs → S3 → Athena query when needed | request volume, status codes, cache hit ratio |
-| Lambda logs | CloudWatch Logs (`/aws/lambda/web-coach-prod`) | every invocation, structured JSON, source-mapped errors |
+| Lambda logs | CloudWatch Logs (per Lambda — `/aws/lambda/web-coach-prod`, `/aws/lambda/web-generate-route-prod`, the two share Lambdas) | every invocation, structured JSON, source-mapped errors |
 | Lambda metrics | CloudWatch — `Errors`, `Duration` (p50/p95/p99), `ConcurrentExecutions`, `Throttles`, `InitDuration` (cold-start latency) | tied to alarms |
 | Web Vitals | client-side via `@sentry/sveltekit` performance monitoring | LCP, CLS, INP, page views |
 | Client errors | Sentry (frontend project) | bundled via `@sentry/sveltekit`, source-mapped |
@@ -227,9 +262,10 @@ The `Notifications` row in the database carries the user's subscription endpoint
 
 **CloudWatch alarms (wired by the `web-stack` module):**
 
-- Lambda error rate >2% over 5 min → SNS topic `web-prod-alerts`
-- Lambda p95 duration >25 s over 5 min (approaching the 30 s timeout) → same topic
-- Lambda throttles >0 in any 1 min window → same topic
+- Coach Lambda error rate >2% over 5 min → SNS topic `web-prod-alerts`
+- Coach Lambda p95 duration >25 s over 5 min (approaching the 30 s timeout) → same topic
+- Coach Lambda throttles >0 in any 1 min window → same topic
+- generate-route Lambda error rate / p95 duration / throttles → same topic (thresholds in the generate-route section above — its timeout is 15 s, so the duration alarm fires at >12 s)
 - 4xx rate at the CloudFront distribution >5% over 5 min → same topic (catches mass auth failures, SPA fallback misconfig, etc.)
 - 5xx rate at the distribution >1% over 5 min → same topic
 
@@ -257,16 +293,17 @@ The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-laun
 |---|---|---|
 | S3 | <1 GB storage + PUTs at deploy time | <$0.20 |
 | CloudFront | Free tier 1 TB egress + 10M HTTPS req for the first 12 months; ~$0.085/GB after | $0 → ~$3 |
-| Lambda | Free tier 1M req + 400k GB-s/mo; coach is paywalled + tier-rate-limited so requests are bounded | $0 |
+| Lambda | Free tier 1M req + 400k GB-s/mo; coach is paywalled + tier-rate-limited, generate-route is WAF-rate-limited, so requests are bounded | $0 |
 | Lambda Function URL | Free | $0 |
+| GraphHopper Fly app | Smallest always-on Fly machine for the `round_trip` engine (sibling of the OSRM map-matcher) | ~$2–5 |
 | Route 53 | $0.50/mo per hosted zone + $0.40/M queries | ~$0.60 |
 | ACM cert | $0 | $0 |
 | CloudWatch Logs | <1 GB ingest at pre-launch | <$1 |
 | Secrets Manager | $0.40/secret/mo × ~3 secrets (Anthropic, Sentry, Sentry DSN) | $1.20 |
 | Anthropic API | Coach usage at launch | ~$15 |
 | Sentry | Free tier (5k errors/month) | $0 |
-| AWS WAF v2 | Web ACL $5 + rule $1 + ~$0.60/M requests | ~$6 |
-| **Subtotal — launch** | | **~$23–26** |
+| AWS WAF v2 | Web ACL $5 + 2 rules $2 (coach + generate-route) + ~$0.60/M requests | ~$7 |
+| **Subtotal — launch** | | **~$26–32** |
 
 **Egress is the variable that grows with users.** 1k users × 5 sessions/month × ~300 KB each ≈ 1.5 GB — far below the free tier. Once we're past 1 TB/month (≈ 3M sessions depending on cache hit rate), CloudFront billing kicks in at ~$0.085/GB.
 

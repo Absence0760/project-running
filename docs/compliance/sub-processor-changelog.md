@@ -66,6 +66,18 @@ will diff against this baseline.
 
 ---
 
+## 2026-06-09 — GraphHopper (self-hosted routing engine) — added (no new sub-processor)
+
+* **What changes**: distance-targeted route-loop generation (`/api/routes/generate`, decisions §137) is served by a **self-hosted GraphHopper `round_trip` engine** running on our existing **Fly.io** infrastructure — the sibling of the self-hosted OSRM map-matcher. **No new third-party sub-processor is introduced**: the only processor in the chain is Fly.io, already disclosed since the 2026-05-26 baseline. Logged here for a complete audit trail, not as an Art 28(2) addition requiring the 30-day objection window.
+* **Why**: the in-browser radius-bisect loop heuristic overshot the target distance on lopsided road networks; GraphHopper's `round_trip` hits the requested distance per engine call.
+* **Activation date**: n/a — no new sub-processor, so no objection window applies. The feature ships on the normal release cadence.
+* **Data categories affected**: route start lat/lng + target distance. **No data egress** — `GRAPHHOPPER_URL` is a server-only env (never `PUBLIC_`), so the browser never reaches the engine and the coordinates stay inside our infra (same posture as the self-hosted OSRM map-matcher).
+* **Region**: `lhr` (London) — same Fly.io primary region as OSRM + the Go worker.
+* **DPA**: Covered by the existing Fly.io DPA (<https://fly.io/legal/dpa/>); GraphHopper itself processes nothing on our behalf — we self-host it.
+* **Opt-out path**: n/a — server-side route building, no personal-data egress; when the engine is unconfigured/down the client falls back to the in-browser OSRM heuristic.
+
+---
+
 ## Template for future entries
 
 ```

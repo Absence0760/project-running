@@ -2920,6 +2920,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 137. Generate-a-route-by-distance moves server-side to a dedicated Lambda + self-hosted GraphHopper round_trip
+
+**Decided (2026-06-09):** the "generate a loop of N km from here" feature moves off the in-browser heuristic and onto a server-side call to a self-hosted **GraphHopper** `round_trip` engine, fronted by its own AWS Lambda Function URL (mirroring the coach + share Lambdas). The old client path scaffolded a radial polygon at a guessed radius, snapped it to roads via OSRM, and **bisected** the radius across ~4 latency-bound iterations to home in on the target distance. The single-radius knob is a poor lever on lopsided road networks — when the reachable streets are dense on one side and sparse on the other, scaling one radius can't hit the target without overshooting badly (a 5 km target produced an 8.22 km lasso), and each correction costs a full round-trip so the loop runs out of iterations before it converges. GraphHopper's `round_trip` algorithm targets the requested distance *inside* the engine per call, so a single request lands close; we race a few seeds (`heading`/seed variations) server-side and pick the best-shaped loop by **enclosed-area efficiency** (`apps/web/src/lib/routes/generate/select.ts`) so the result is a real loop, not a there-and-back spur.
+
+- **GraphHopper is loop-generation only; OSRM is retained.** OSRM still owns server-side **map-matching** (`apps/job_worker/`) and manual-waypoint **snapping** (`routing.ts` / `routing.dart`). GraphHopper is added *alongside* it for the one thing OSRM's `route` API can't do well — distance-targeted loop synthesis — not as a replacement. Two engines, two jobs.
+- **`GRAPHHOPPER_URL` is server-only (never `PUBLIC_`).** The browser never calls GraphHopper directly; it calls our `/api/routes/generate` endpoint, which calls the engine. The user's start coordinates therefore never reach a third party — privacy parity with the self-hosted OSRM posture (both engines run in our own infra; coordinates don't leave it). The Lambda returns `{coordinates, distanceM}`; it answers `501` when the engine URL is unconfigured, `502` when the engine is unreachable, `503` on an unhandled error.
+- **Graceful client fallback.** When the endpoint is unconfigured or down, the client falls back to the prior in-browser OSRM radial heuristic, surfacing the existing `routeBuilder.generatedDistanceLonger/Shorter/couldntGenerateLoop` copy — the server path is a quality upgrade, not a hard dependency, so a dev machine with no GraphHopper still generates loops.
+
+**Trade-off.** Adds a second routing engine to self-host (one more Fly app + Lambda + CloudFront behaviour + WAF rule + alarms to operate) for a single feature. Justified because the in-browser bisect couldn't be made to converge reliably on real networks without more latency-bound iterations than a responsive UI tolerates — the overshoot was a correctness problem, not a tuning one. The OSRM fallback means the new infra is never load-bearing for basic functionality.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
