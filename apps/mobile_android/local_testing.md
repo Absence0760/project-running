@@ -66,23 +66,22 @@ melos bootstrap
 
 ## Environment
 
-Copy the example env file and fill in your values:
+**Nothing to copy or edit for local dev.** `apps/mobile_android/.env.local` is
+**committed** with working local-stack defaults (the standard public Supabase
+demo anon key, `127.0.0.1` URLs for Supabase / the web Coach / Protomaps tiles,
+and the seed-user auto-login). It's loaded only by DEBUG builds, so it never
+ships in a release APK. `npm run dev:up` runs the `adb reverse` that makes
+`127.0.0.1` reach the host from a device or emulator.
 
-```bash
-cp apps/mobile_android/.env.example apps/mobile_android/.env.local
-```
+To use a **real** external key (MapTiler, Strava), edit the values locally —
+but **don't commit your change**. `.env.example` is the full annotated
+reference for every supported variable.
 
-Then edit `apps/mobile_android/.env.local` with your values:
-
-```
-SUPABASE_URL=http://10.0.2.2:54321
-SUPABASE_ANON_KEY=<publishable-key-from-supabase-status>
-MAPTILER_KEY=<your-maptiler-key>
-```
-
-Get your Supabase anon key from `supabase status`. Get a free MapTiler key at [maptiler.com/cloud](https://www.maptiler.com/cloud/).
-
-> **Important:** Use `10.0.2.2` instead of `localhost`. The Android emulator's `localhost` refers to the emulator itself, not your host machine. `10.0.2.2` is a special alias that routes to the host's loopback address.
+> **`127.0.0.1` vs `10.0.2.2`:** the committed default is `127.0.0.1`, which
+> works on a physical device **and** the emulator as long as `adb reverse` is
+> set (it is, after `npm run dev:up`). `10.0.2.2` is the emulator-only alias
+> for the host loopback and needs no `adb reverse`, but fails on a real device
+> — see the physical-device section below.
 
 ### Running on a physical device (not the emulator)
 
