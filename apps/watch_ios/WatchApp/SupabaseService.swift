@@ -13,19 +13,23 @@ actor SupabaseService {
     // In production the paired iPhone hands over baseURL + anonKey + token
     // over `WCSession.updateApplicationContext(_:)`.
     //
-    // Defaults to the LOCAL stack so a fresh `git clone` gets a working
-    // watch-sim-alone dev loop with nothing to copy or hand-edit. The
-    // anon key below is the STANDARD PUBLIC Supabase *local* demo JWT —
-    // identical on every `supabase start`, the same value committed in
-    // `apps/mobile_ios/.env.local`. It is NOT a secret and NOT a dev/prod
-    // project key: GoTrue rejects an empty `apikey` with 401, so without
-    // this default the DEBUG "Sync Direct" button can't sign in out of a
-    // clean checkout. This whole file is `#if DEBUG`, so the demo key
-    // never ships in a Release/Archive build. In production the paired
-    // iPhone overrides both via `applyCredentials(...)` from the WCSession
-    // handover.
+    // No anon key is baked in: audit pass-2 (commit 51046c2) forbids a
+    // hardcoded SUPABASE_ANON_KEY default in any watch client — the Wear OS
+    // `build.gradle.kts` likewise defaults it to "". For watch-sim-alone dev,
+    // set SUPABASE_ANON_KEY (and optionally SUPABASE_URL) in the WatchApp run
+    // scheme's environment — the public local demo JWT, the same value
+    // committed in `apps/mobile_ios/.env.local`. GoTrue rejects an empty
+    // `apikey` with 401, so a build with no key fails loudly instead of
+    // silently pointing at a baked-in default. In production the paired iPhone
+    // overrides both via `applyCredentials(...)` from the WCSession handover.
     private var baseURL = "http://127.0.0.1:54321"
-    private var anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+    private var anonKey = ""
+
+    init() {
+        let env = ProcessInfo.processInfo.environment
+        if let url = env["SUPABASE_URL"], !url.isEmpty { baseURL = url }
+        if let key = env["SUPABASE_ANON_KEY"], !key.isEmpty { anonKey = key }
+    }
 
     private var accessToken: String?
     private var userId: String?
