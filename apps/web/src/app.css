@@ -11,6 +11,14 @@
 	/* Colors — Cream + petrol + terracotta. Light-mode palette swaps the
 	   old purple primary for a deep teal that complements the cream
 	   background and the warm secondary accent. */
+	/* Render native form controls (the <select> dropdown popup, number
+	   spinners, the type=search clear button, date pickers, default
+	   scrollbars) in the matching light/dark chrome. Without this the
+	   browser draws every native popup in light mode, so the meal-slot
+	   dropdown rendered as a white list against the dark modal. The dark
+	   branches below flip this to `dark`. */
+	color-scheme: light;
+
 	--color-primary: #2C5F6E;
 	--color-primary-hover: #1F4854;
 	--color-primary-light: rgba(44, 95, 110, 0.10);
@@ -122,6 +130,8 @@
    toggle that writes `html[data-theme]`. */
 @media (prefers-color-scheme: dark) {
 	:root[data-theme="auto"], :root:not([data-theme]) {
+		color-scheme: dark;
+
 		--color-primary: #F2A07B;
 		--color-primary-hover: #D97A54;
 		--color-primary-light: rgba(242, 160, 123, 0.14);
@@ -169,6 +179,8 @@
 
 /* Explicit dark-mode override (wins over the light media query). */
 :root[data-theme="dark"] {
+	color-scheme: dark;
+
 	--color-primary: #F2A07B;
 	--color-primary-hover: #D97A54;
 	--color-primary-light: rgba(242, 160, 123, 0.14);
