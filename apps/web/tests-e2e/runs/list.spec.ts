@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { createSagaUsers, deleteSagaUsers } from '../fixtures/saga-users';
+import { withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -21,6 +22,28 @@ const uniqueText = (prefix: string) =>
 
 test.describe('/runs', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	// The gym/nutrition seed plants a now()-relative run (seed.sql
+	// "Morning easy 8K"), so real-wall-clock "today" is no longer empty.
+	// The filtered-empty test needs an empty "today", so clear the current
+	// week for it and restore the run after (/nutrition + dashboard-
+	// readiness specs still need it). Gated by title so the other tests in
+	// this describe keep counting the seed run.
+	const cleanWeekTitles = new Set([
+		'filtered-empty state offers a one-tap "Show all runs" escape'
+	]);
+	let restoreCleanWeek: (() => Promise<void>) | null = null;
+	test.beforeEach(async ({}, testInfo) => {
+		if (cleanWeekTitles.has(testInfo.title)) {
+			restoreCleanWeek = await withCleanCurrentWeek(USER_A.id);
+		}
+	});
+	test.afterEach(async () => {
+		if (restoreCleanWeek) {
+			await restoreCleanWeek();
+			restoreCleanWeek = null;
+		}
+	});
 
 	test('toolbar actions stay on the filter row, pinned right (not wrapped below)', async ({
 		page
@@ -202,8 +225,9 @@ test.describe('/runs', () => {
 		// default "today" filter with their (older) runs hidden — the
 		// dead-end the round-5 casual persona hit. The filtered-empty
 		// branch must give a way out, not just "try widening the range".
-		// Seed runs are March-April 2026 so real-wall-clock "today" is
-		// empty; force the default filter first.
+		// Seed runs are March-April 2026 and the describe's beforeEach
+		// cleared the current week, so real-wall-clock "today" is empty;
+		// force the default filter first.
 		await page.addInitScript(() => localStorage.removeItem('runs_filters_v1'));
 		await page.goto('/runs');
 

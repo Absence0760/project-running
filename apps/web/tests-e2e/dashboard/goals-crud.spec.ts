@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -34,6 +35,11 @@ test.describe('/dashboard Goals — CRUD UI', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	let savedWeeklyMileageGoal: number | null | undefined = undefined;
+	// The seed's now()-relative "Morning easy 8K" run lifts a freshly
+	// planted current-week goal off 0% (it'd read 32% / a non-zero run
+	// count), so clear the current week per test and restore the seed run
+	// after — other specs (/nutrition, dashboard readiness) still need it.
+	let restoreCurrentWeek: (() => Promise<void>) | null = null;
 
 	test.beforeEach(async ({ context }) => {
 		await context.addInitScript(() => {
@@ -66,9 +72,15 @@ test.describe('/dashboard Goals — CRUD UI', () => {
 			.from('user_settings')
 			.update({ prefs: nextPrefs })
 			.eq('user_id', USER_A.id);
+
+		restoreCurrentWeek = await withCleanCurrentWeek(USER_A.id);
 	});
 
 	test.afterEach(async ({ context }) => {
+		if (restoreCurrentWeek) {
+			await restoreCurrentWeek();
+			restoreCurrentWeek = null;
+		}
 		await context.addInitScript((args: { key: string }) => {
 			try {
 				localStorage.removeItem(args.key);

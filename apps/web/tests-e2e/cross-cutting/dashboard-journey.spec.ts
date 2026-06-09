@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { switchRunsToAllTime } from '../fixtures/helpers';
+import { withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -53,6 +54,21 @@ async function recentRunDistances(page: Page): Promise<string[]> {
 
 test.describe('dashboard end-to-end journey', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	// The seed gained a now()-relative 8 km run ("Morning easy 8K"), which
+	// would put a freshly planted 25 km/week goal at 32% instead of the 0%
+	// baseline this journey asserts. Clear the current week before the
+	// journey and restore the seed run after (other specs still need it).
+	let restoreCurrentWeek: (() => Promise<void>) | null = null;
+	test.beforeEach(async () => {
+		restoreCurrentWeek = await withCleanCurrentWeek(USER_A.id);
+	});
+	test.afterEach(async () => {
+		if (restoreCurrentWeek) {
+			await restoreCurrentWeek();
+			restoreCurrentWeek = null;
+		}
+	});
 
 	test('add run → goal pct lifts → edit goal → delete run reverts every widget', async ({
 		page,

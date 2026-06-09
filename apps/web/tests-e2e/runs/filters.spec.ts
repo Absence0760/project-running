@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -33,6 +34,31 @@ import { USER_A } from '../fixtures/users';
 
 test.describe('/runs — filters', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	// The gym/nutrition seed plants a now()-relative run (seed.sql
+	// "Morning easy 8K") that is the newest AND among the fastest, which
+	// skews the "today" baseline and the Fastest sort. The two tests that
+	// assert an exact current-week shape clear it first and restore it
+	// after — /nutrition + dashboard-readiness specs still need the run.
+	// Gated by title so every other filter test keeps counting the seed
+	// run. Registered before the navigating beforeEach below so the clean
+	// is already applied when the page first loads.
+	const cleanWeekTitles = new Set([
+		'Fastest puts the fastest-pace run at the top',
+		'selecting Custom with stale bounds in localStorage does NOT apply them — picker opens fresh'
+	]);
+	let restoreCleanWeek: (() => Promise<void>) | null = null;
+	test.beforeEach(async ({}, testInfo) => {
+		if (cleanWeekTitles.has(testInfo.title)) {
+			restoreCleanWeek = await withCleanCurrentWeek(USER_A.id);
+		}
+	});
+	test.afterEach(async () => {
+		if (restoreCleanWeek) {
+			await restoreCleanWeek();
+			restoreCleanWeek = null;
+		}
+	});
 
 	test.beforeEach(async ({ page, context }) => {
 		// Pre-accept cookie consent so the banner geometry doesn't
