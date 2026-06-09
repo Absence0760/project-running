@@ -73,6 +73,10 @@
 		const w = window as unknown as Record<string, unknown>;
 		w.__routeBuilder = builder;
 		w.__routeBuilderPage = {
+			// Lets e2e skip the Satellite/Terrain assertions when a local
+			// tileserver override is configured (which collapses the
+			// style switcher to Streets-only — see tileOverrideActive).
+			tileOverrideActive,
 			setStartPoint(p: { lat: number; lng: number } | null) {
 				startPoint = p;
 				startLabel = p ? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` : '';

@@ -22,6 +22,25 @@ async function waitForRouteBuilder(page: Page): Promise<void> {
 	);
 }
 
+/**
+ * True when a local Protomaps tileserver override is configured for the
+ * dev server (PUBLIC_TILE_STYLE_URL set). In that mode the style
+ * switcher collapses to Streets-only (decisions §68), so the
+ * Satellite / Terrain assertions don't apply. Read off the DEV-only
+ * page hook — call waitForRouteBuilder first so the hook is live.
+ */
+async function tileOverrideActive(page: Page): Promise<boolean> {
+	return page.evaluate(() =>
+		Boolean(
+			(
+				window as unknown as {
+					__routeBuilderPage?: { tileOverrideActive?: boolean };
+				}
+			).__routeBuilderPage?.tileOverrideActive
+		)
+	);
+}
+
 async function addWaypoints(page: Page, points: TestPoint[]): Promise<void> {
 	await page.evaluate((pts) => {
 		const b = (window as unknown as {
@@ -87,16 +106,21 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('page mounts with the canonical h1 + sidebar controls', async ({ page }) => {
 		await page.goto('/routes/new');
+		await waitForRouteBuilder(page);
 
 		await expect(page.getByRole('heading', { name: 'Route Builder', level: 1 }))
 			.toBeVisible({ timeout: 10_000 });
 		// Mode toggle (road / trail) — both buttons present.
 		await expect(page.getByRole('button', { name: /Road/, exact: false })).toBeVisible();
 		await expect(page.getByRole('button', { name: /Trail/, exact: false })).toBeVisible();
-		// Three style toggles.
+		// Streets is always present; Satellite + Terrain collapse to
+		// Streets-only under a local tileserver override (decisions §68),
+		// so only assert them when the override is off.
 		await expect(page.getByRole('button', { name: 'Streets' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Satellite' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Terrain' })).toBeVisible();
+		if (!(await tileOverrideActive(page))) {
+			await expect(page.getByRole('button', { name: 'Satellite' })).toBeVisible();
+			await expect(page.getByRole('button', { name: 'Terrain' })).toBeVisible();
+		}
 	});
 
 	test('mode toggle: road is active by default, click Trail flips the active class', async ({
@@ -122,6 +146,13 @@ test.describe('/routes/new — Route Builder control surface', () => {
 
 	test('map-style toggle cycles streets → satellite → terrain → streets', async ({ page }) => {
 		await page.goto('/routes/new');
+		await waitForRouteBuilder(page);
+		// The 3-way switcher only exists without a tileserver override
+		// (decisions §68); skip when one is configured for the dev server.
+		test.skip(
+			await tileOverrideActive(page),
+			'tileserver override collapses the style switcher to Streets-only'
+		);
 
 		const streets = page.locator('.style-btn', { hasText: 'Streets' });
 		const satellite = page.locator('.style-btn', { hasText: 'Satellite' });
