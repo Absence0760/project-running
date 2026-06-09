@@ -82,7 +82,7 @@ jobs:
           EOF
 
       - name: Copy dotenv
-        run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
+        run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
 
       - name: Build signed AAB
         working-directory: apps/mobile_android

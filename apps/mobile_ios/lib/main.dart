@@ -94,13 +94,16 @@ void main() async {
   //
   // Two paths run for every platform: a `String.fromEnvironment` block
   // that picks up `--dart-define`s (production CI passes these for
-  // both iOS and Android), and a debug-only `.env.local` load that
-  // gives local development a frictionless path. Release builds NEVER
-  // read `.env.local` even though pubspec.yaml ships it as an asset —
-  // this closes the audit High where a developer-built release APK
-  // would otherwise embed their real local SUPABASE_ANON_KEY,
-  // MAPTILER_KEY, dev creds, and BYPASS_PAYWALL=true. See decisions
-  // §13 for the iOS counterpart.
+  // both iOS and Android), and a debug-only `.env.development` load
+  // that gives local development a frictionless path. Release builds
+  // NEVER read `.env.development` even though pubspec.yaml ships it as
+  // an asset — this closes the audit High where a developer-built
+  // release APK would otherwise embed their real local
+  // SUPABASE_ANON_KEY, MAPTILER_KEY, dev creds, and BYPASS_PAYWALL=true.
+  // See decisions §13 for the iOS counterpart. Per-machine overrides go
+  // through `--dart-define` (merged on top below, winning); on mobile
+  // that is the override path, not a `.env.local` file, because
+  // flutter_dotenv loads from the asset bundle (decisions §136).
   const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
   const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
   const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
@@ -127,12 +130,12 @@ void main() async {
       // dart-define values loaded just above. Snapshot them first.
       final defineEnv = Map<String, String>.from(dotenv.env);
       await dotenv.load(
-        fileName: '.env.local',
+        fileName: '.env.development',
         mergeWith: defineEnv,
         isOptional: true,
       );
     } catch (e) {
-      debugPrint('main: optional .env.local load failed: $e');
+      debugPrint('main: optional .env.development load failed: $e');
     }
   }
 

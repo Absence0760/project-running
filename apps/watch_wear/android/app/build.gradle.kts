@@ -8,12 +8,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// Gradle-time .env.local reader. Mirrors the mobile_android pattern: a
-// gitignored file with DEV-only toggles. Missing file → every flag defaults
-// to the safe production value.
-val envFile = rootProject.file(".env.local")
+// Gradle-time env reader (repo-wide convention, decisions §136): load the
+// committed, non-secret `.env.development` defaults, then overlay a gitignored
+// `.env.local` if present so a per-machine override wins. Missing files → every
+// flag defaults to the safe production value. DEV-only; the release build type
+// reads nothing from these (see the defaultConfig note below).
 val envProps = Properties().apply {
-    if (envFile.exists()) envFile.inputStream().use { load(it) }
+    rootProject.file(".env.development").takeIf { it.exists() }
+        ?.inputStream()?.use { load(it) }
+    rootProject.file(".env.local").takeIf { it.exists() }
+        ?.inputStream()?.use { load(it) }
 }
 fun envFlag(key: String, default: Boolean = false): Boolean {
     val raw = envProps.getProperty(key) ?: project.findProperty(key) as? String
@@ -49,12 +53,12 @@ android {
         versionName = "0.1.0"
 
         // RELEASE-SAFE BASELINE. `defaultConfig` reads NOTHING from the
-        // committed `apps/watch_wear/android/.env.local` (envProps) — every
-        // value here comes from a `-P` gradle flag or is a hardcoded
+        // committed `apps/watch_wear/android/.env.development` (envProps) —
+        // every value here comes from a `-P` gradle flag or is a hardcoded
         // safe-for-release default — so a release artifact can never inherit a
-        // local-dev value. The committed `.env.local` is applied ONLY by the
-        // `debug { }` build type below, which re-reads these via envString /
-        // envFlag and overrides the baseline for local dev.
+        // local-dev value. The committed `.env.development` is applied ONLY by
+        // the `debug { }` build type below, which re-reads these via envString
+        // / envFlag and overrides the baseline for local dev.
         //
         // SUPABASE_URL / SUPABASE_ANON_KEY come from `-PSUPABASE_URL=...
         // -PSUPABASE_ANON_KEY=...` (the release workflow injects production

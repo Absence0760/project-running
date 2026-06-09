@@ -40,8 +40,8 @@ jobs:
           channel: stable
       - run: dart pub global activate melos
       - run: melos bootstrap
-      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
-      - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.local
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
+      - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
       # Warm Flutter's engine cache once before the parallel `melos exec`
       # below: two `flutter test` processes racing on `bin/cache/engine.stamp`
       # produces a malformed `flutter//engine_stamp.json` 404.
@@ -266,7 +266,7 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: gradle-mobile-android-${{ hashFiles('apps/mobile_android/android/**/*.gradle*', 'apps/mobile_android/android/gradle/wrapper/gradle-wrapper.properties', 'apps/mobile_android/pubspec.lock') }}
-      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       # `flutter build apk --release` exercises the full Gradle
       # toolchain (AGP, Kotlin compiler, plugin compileSdk overrides)
       # without needing a signing keystore — debug-style signing is
@@ -385,8 +385,8 @@ jobs:
           fi
       - run: dart pub global activate melos
       - run: melos bootstrap
-      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
-      - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.local
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
+      - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
       - run: flutter precache
       - name: Read Supabase URL + anon key
         id: sb

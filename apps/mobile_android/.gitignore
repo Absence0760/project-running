@@ -39,11 +39,11 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
-# Environment
+# Environment. `.env.development` (committed DEBUG-only local-dev defaults —
+# local-stack + public demo key, no real secrets) is tracked; `.env.local` is
+# your gitignored per-machine override. On mobile the runtime override path is
+# --dart-define (decisions §136); a .env.local here isn't on the asset path.
 .env.local
-# Committed local-dev defaults (DEBUG-only load; local-stack + public demo
-# key, no real secrets). See README "Quick start".
-!.env.local
 
 # Android Studio will place build artifacts here
 /android/app/debug

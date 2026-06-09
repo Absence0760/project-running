@@ -20,9 +20,11 @@ useDefault = true
 description = "Local-dev demo keys + seed creds in committed dev env defaults"
 paths = [
   '''apps/web/\.env\.development''',
-  '''apps/mobile_android/\.env\.local''',
-  '''apps/mobile_ios/\.env\.local''',
-  '''apps/watch_wear/android/\.env\.local''',
+  '''apps/backend/\.env\.development''',
+  '''apps/job_worker/\.env\.development''',
+  '''apps/mobile_android/\.env\.development''',
+  '''apps/mobile_ios/\.env\.development''',
+  '''apps/watch_wear/android/\.env\.development''',
   '''apps/watch_ios/WatchApp/SupabaseService\.swift''',
 ]
 regexes = [

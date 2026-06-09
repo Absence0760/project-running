@@ -14,7 +14,7 @@ void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
     try {
       WidgetsFlutterBinding.ensureInitialized();
-      await dotenv.load(fileName: '.env.local');
+      await dotenv.load(fileName: '.env.development');
 
       final supabaseUrl = dotenv.env['SUPABASE_URL'];
       final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
