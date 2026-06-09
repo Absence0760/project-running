@@ -81,6 +81,17 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
   StoredGear entryFromJson(Map<String, dynamic> json) =>
       StoredGear.fromJson(json);
 
+  // No windowed surface for gear — the index is only a cold-load fast path, so
+  // [summaryTimestampKey] stays null (the base default).
+  @override
+  Map<String, dynamic> summaryOf(StoredGear entry) => {
+        'id': entry.id,
+        'sync_state': entry.syncState.wire,
+        'kind': entry.row['kind'],
+        'name': entry.row['name'],
+        'retired_at': entry.row['retired_at'],
+      };
+
   @override
   StoredGear asSynced(StoredGear entry) => StoredGear(
         row: entry.row,

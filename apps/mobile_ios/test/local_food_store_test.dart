@@ -295,6 +295,7 @@ void main() {
         .whereType<File>()
         .map((f) => f.uri.pathSegments.last)
         .where((n) => n.endsWith('.json'))
+        .where((n) => n != 'index.json')
         .toList();
     List<String> tmpFiles() => dir
         .listSync()
@@ -437,6 +438,217 @@ void main() {
       final drained = await store.syncWithServer(api);
       expect(drained, 0);
       expect(api.calls, isEmpty);
+    });
+  });
+
+  group('summary index (index.json)', () {
+    Map<String, dynamic> readIndexFile() => jsonDecode(
+            File('${dir.path}/index.json').readAsStringSync())
+        as Map<String, dynamic>;
+    List<Map<String, dynamic>> indexSummaries() =>
+        (readIndexFile()['summaries'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+    test('a create writes a summary carrying the windowed fields', () async {
+      final stored = await store.createLocal(
+        startedAt: DateTime.utc(2026, 6, 2, 8),
+        itemName: 'Oatmeal',
+        calories: 350,
+      );
+      final s = indexSummaries().single;
+      expect(s['id'], stored.id);
+      expect(s['sync_state'], 'pending_create');
+      expect(s['item_name'], 'Oatmeal');
+      expect(s['calories'], 350);
+      expect(s['started_at'], isNotNull);
+      expect(readIndexFile()[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+    });
+
+    test('an update refreshes the summary in place', () async {
+      final stored = await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Snack', calories: 100);
+      await store.updateLocal(stored.id, itemName: 'Big snack', calories: 250);
+      final s = indexSummaries().single;
+      expect(s['item_name'], 'Big snack');
+      expect(s['calories'], 250);
+    });
+
+    test('a pendingCreate delete drops the summary', () async {
+      final stored = await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
+      await store.deleteLocal(stored.id);
+      expect(indexSummaries(), isEmpty);
+    });
+
+    test('a synced delete (tombstone) removes the row from the index', () async {
+      await store.replaceFromServer([_serverRow('kill-me')]);
+      expect(indexSummaries().map((s) => s['id']), contains('kill-me'));
+      await store.deleteLocal('kill-me');
+      expect(indexSummaries().map((s) => s['id']), isNot(contains('kill-me')));
+    });
+
+    test('rewriteAll (via replaceFromServer) rebuilds the index to live rows',
+        () async {
+      await store.replaceFromServer([_serverRow('f1'), _serverRow('f2')]);
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 4), itemName: 'Offline');
+      await store.replaceFromServer([_serverRow('f1')]);
+      final ids = indexSummaries().map((s) => s['id']).toSet();
+      expect(ids.contains('f1'), isTrue);
+      expect(ids.contains('f2'), isFalse);
+      expect(ids, hasLength(2));
+    });
+
+    test('restoreFromBackup writes the index once for the batch', () async {
+      final imported = await store.restoreFromBackup([
+        StoredFood(
+          row: {
+            'id': 'r1',
+            'item_name': 'A',
+            'started_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+          },
+          syncState: FoodSyncState.synced,
+        ).toJson(),
+        StoredFood(
+          row: {
+            'id': 'r2',
+            'item_name': 'B',
+            'started_at': DateTime.utc(2026, 6, 2).toIso8601String(),
+          },
+          syncState: FoodSyncState.synced,
+        ).toJson(),
+      ]);
+      expect(imported, 2);
+      expect(indexSummaries().map((s) => s['id']).toSet(), {'r1', 'r2'});
+    });
+
+    test('cold-load self-heals when index.json is deleted', () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Kept');
+      File('${dir.path}/index.json').deleteSync();
+
+      final reloaded = LocalFoodStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows, hasLength(1));
+      expect(File('${dir.path}/index.json').existsSync(), isTrue);
+    });
+
+    test('cold-load self-heals when an orphan row file is not in the index',
+        () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Kept');
+      final orphan = StoredFood(
+        row: {
+          'id': 'orphan',
+          'item_name': 'Orphan',
+          'started_at': DateTime.utc(2026, 6, 3).toIso8601String(),
+        },
+        syncState: FoodSyncState.synced,
+      );
+      File('${dir.path}/orphan.json')
+          .writeAsStringSync(jsonEncode(orphan.toJson()));
+
+      final reloaded = LocalFoodStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows.map((r) => r['id']), contains('orphan'),
+          reason: 'drift forced a rebuild that picked up the orphan');
+      expect(reloaded.rows, hasLength(2),
+          reason: 'the kept create + the orphan');
+      expect((jsonDecode(File('${dir.path}/index.json').readAsStringSync())
+              as Map<String, dynamic>)['summaries'],
+          hasLength(2));
+    });
+
+    test('debugReadIndex tolerates a structurally-invalid index', () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
+      File('${dir.path}/index.json')
+          .writeAsStringSync(jsonEncode({'_v': 1, 'summaries': 'nope'}));
+      expect(await store.debugReadIndex(), isNull);
+      File('${dir.path}/index.json').writeAsStringSync(jsonEncode({
+        '_v': 1,
+        'summaries': [
+          {'no_id': true}
+        ],
+      }));
+      expect(await store.debugReadIndex(), isNull);
+      File('${dir.path}/index.json').writeAsStringSync('{ not json');
+      expect(await store.debugReadIndex(), isNull);
+    });
+
+    test('a structurally-invalid index forces a clean cold-load rebuild',
+        () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Kept');
+      File('${dir.path}/index.json')
+          .writeAsStringSync(jsonEncode({'_v': 1, 'summaries': 'nope'}));
+
+      final reloaded = LocalFoodStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows, hasLength(1));
+      expect(await reloaded.debugReadIndex(), isNotNull);
+    });
+  });
+
+  group('windowed queries', () {
+    test('loadInWindow returns rows in the half-open [from, to) day window',
+        () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 1, 9), itemName: 'Day 1');
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2, 6), itemName: 'Day 2 AM');
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2, 20), itemName: 'Day 2 PM');
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 3, 0), itemName: 'Day 3');
+
+      final inDay2 = await store.loadInWindow(
+          DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
+      expect(inDay2.map((f) => f.row['item_name']).toSet(),
+          {'Day 2 AM', 'Day 2 PM'},
+          reason: 'the day-3 00:00 row is excluded by the half-open upper bound');
+    });
+
+    test('estimateRowsInWindow counts from the index without hydrating',
+        () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2, 6), itemName: 'A');
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2, 20), itemName: 'B');
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 4), itemName: 'C');
+      final n = await store.estimateRowsInWindow(
+          DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
+      expect(n, 2);
+    });
+
+    test('loadInWindow hydrates the full row from disk after a cold reload',
+        () async {
+      await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2, 8),
+          itemName: 'Oatmeal',
+          calories: 350);
+      final fresh = LocalFoodStore();
+      await fresh.init(overrideDirectory: dir);
+      final inWindow = await fresh.loadInWindow(
+          DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
+      expect(inWindow.single.row['item_name'], 'Oatmeal');
+      expect(inWindow.single.row['calories'], 350);
+    });
+  });
+
+  group('markSynced flow still works with the index', () {
+    test('a drained pendingCreate flips to synced in the index', () async {
+      final api = _FakeFoodApi();
+      final stored = await store.createLocal(
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
+      await store.syncWithServer(api);
+      expect(store.rows.any((r) => r['id'] == stored.id), isTrue);
+      final summaries = (jsonDecode(
+                  File('${dir.path}/index.json').readAsStringSync())
+              as Map<String, dynamic>)['summaries'] as List;
+      expect(summaries.single['sync_state'], 'synced');
     });
   });
 }

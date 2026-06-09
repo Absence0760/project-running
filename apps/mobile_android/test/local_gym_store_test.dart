@@ -322,6 +322,7 @@ void main() {
         .whereType<File>()
         .map((f) => f.uri.pathSegments.last)
         .where((n) => n.endsWith('.json'))
+        .where((n) => n != 'index.json')
         .toList();
     List<String> tmpFiles() => dir
         .listSync()
@@ -475,6 +476,233 @@ void main() {
       final drained = await store.syncWithServer(api);
       expect(drained, 0);
       expect(api.calls, isEmpty);
+    });
+  });
+
+  group('summary index (index.json)', () {
+    Map<String, dynamic> readIndexFile() => jsonDecode(
+            File('${dir.path}/index.json').readAsStringSync())
+        as Map<String, dynamic>;
+    List<Map<String, dynamic>> indexSummaries() =>
+        (readIndexFile()['summaries'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+    test('a create writes a summary carrying the windowed fields', () async {
+      final stored = await store.createLocal(
+        title: 'Push day',
+        startedAt: DateTime.utc(2026, 6, 2, 8),
+        sets: [_set('Bench', reps: 8, kg: 60), _set('Bench', reps: 8, kg: 60)],
+      );
+      final summaries = indexSummaries();
+      expect(summaries, hasLength(1));
+      final s = summaries.single;
+      expect(s['id'], stored.id);
+      expect(s['sync_state'], 'pending_create');
+      expect(s['title'], 'Push day');
+      expect(s['set_count'], 2);
+      expect(s['started_at'], isNotNull);
+      expect(readIndexFile()[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+    });
+
+    test('an update refreshes the summary in place', () async {
+      final stored = await store.createLocal(
+        title: 'Draft',
+        startedAt: DateTime.utc(2026, 6, 2),
+        sets: [_set('Bench', reps: 8, kg: 60)],
+      );
+      await store.updateLocal(stored.id,
+          title: 'Renamed', sets: [_set('Bench', reps: 8, kg: 60), _set('Row')]);
+      final s = indexSummaries().single;
+      expect(s['title'], 'Renamed');
+      expect(s['set_count'], 2);
+    });
+
+    test('a pendingCreate delete drops the summary', () async {
+      final stored =
+          await store.createLocal(startedAt: DateTime.utc(2026, 6, 2));
+      await store.deleteLocal(stored.id);
+      expect(indexSummaries(), isEmpty);
+    });
+
+    test('a synced delete (tombstone) removes the row from the index', () async {
+      await store.replaceFromServer([_serverWorkout('kill-me')]);
+      expect(indexSummaries().map((s) => s['id']), contains('kill-me'));
+      await store.deleteLocal('kill-me');
+      expect(indexSummaries().map((s) => s['id']), isNot(contains('kill-me')),
+          reason: 'a tombstone is not a live row and must leave the index');
+    });
+
+    test('rewriteAll (via replaceFromServer) rebuilds the index to live rows',
+        () async {
+      await store.replaceFromServer([
+        _serverWorkout('w1', title: 'One'),
+        _serverWorkout('w2', title: 'Two'),
+      ]);
+      await store.createLocal(
+          title: 'Offline', startedAt: DateTime.utc(2026, 6, 4));
+      await store.replaceFromServer([_serverWorkout('w1', title: 'One')]);
+      final ids = indexSummaries().map((s) => s['id']).toSet();
+      expect(ids.contains('w1'), isTrue);
+      expect(ids.contains('w2'), isFalse,
+          reason: 'a server-dropped row leaves the index');
+      expect(ids, hasLength(2), reason: 'w1 + the surviving pendingCreate');
+    });
+
+    test('restoreFromBackup writes the index once for the batch', () async {
+      final imported = await store.restoreFromBackup([
+        StoredGymWorkout(
+          row: {
+            'id': 'r1',
+            'title': 'Restored A',
+            'started_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+          },
+          sets: const [],
+          syncState: GymSyncState.synced,
+        ).toJson(),
+        StoredGymWorkout(
+          row: {
+            'id': 'r2',
+            'title': 'Restored B',
+            'started_at': DateTime.utc(2026, 6, 2).toIso8601String(),
+          },
+          sets: const [],
+          syncState: GymSyncState.synced,
+        ).toJson(),
+      ]);
+      expect(imported, 2);
+      expect(indexSummaries().map((s) => s['id']).toSet(), {'r1', 'r2'});
+    });
+
+    test('cold-load self-heals when index.json is deleted', () async {
+      await store.createLocal(
+          title: 'Kept', startedAt: DateTime.utc(2026, 6, 2));
+      File('${dir.path}/index.json').deleteSync();
+
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.workouts, hasLength(1));
+      expect(File('${dir.path}/index.json').existsSync(), isTrue,
+          reason: 'a missing index is rebuilt + persisted on cold-load');
+    });
+
+    test('cold-load self-heals when an orphan row file is not in the index',
+        () async {
+      await store.createLocal(
+          title: 'Kept', startedAt: DateTime.utc(2026, 6, 2));
+      // A row file the on-disk index doesn't know about (a crash between the
+      // row write and the index flush) — drift must trigger a full-walk
+      // rebuild so the orphan is picked up.
+      final orphan = StoredGymWorkout(
+        row: {
+          'id': 'orphan',
+          'title': 'Orphan',
+          'started_at': DateTime.utc(2026, 6, 3).toIso8601String(),
+        },
+        sets: const [],
+        syncState: GymSyncState.synced,
+      );
+      File('${dir.path}/orphan.json').writeAsStringSync(jsonEncode(orphan.toJson()));
+
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.workouts.map((w) => w.id), contains('orphan'),
+          reason: 'drift forced a rebuild that picked up the orphan');
+      expect(reloaded.workouts, hasLength(2),
+          reason: 'the kept create + the orphan');
+      expect((jsonDecode(File('${dir.path}/index.json').readAsStringSync())
+              as Map<String, dynamic>)['summaries'],
+          hasLength(2));
+    });
+
+    test('debugReadIndex tolerates a structurally-invalid index', () async {
+      await store.createLocal(startedAt: DateTime.utc(2026, 6, 2));
+      // summaries is not a List → structurally invalid → null, never a throw.
+      File('${dir.path}/index.json')
+          .writeAsStringSync(jsonEncode({'_v': 1, 'summaries': 'nope'}));
+      expect(await store.debugReadIndex(), isNull);
+      // A malformed element (no String id) is also a miss.
+      File('${dir.path}/index.json').writeAsStringSync(jsonEncode({
+        '_v': 1,
+        'summaries': [
+          {'no_id': true}
+        ],
+      }));
+      expect(await store.debugReadIndex(), isNull);
+      // Outright garbage.
+      File('${dir.path}/index.json').writeAsStringSync('{ not json');
+      expect(await store.debugReadIndex(), isNull);
+    });
+
+    test('a structurally-invalid index forces a clean cold-load rebuild',
+        () async {
+      await store.createLocal(
+          title: 'Kept', startedAt: DateTime.utc(2026, 6, 2));
+      File('${dir.path}/index.json')
+          .writeAsStringSync(jsonEncode({'_v': 1, 'summaries': 'nope'}));
+
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.workouts, hasLength(1));
+      expect(await reloaded.debugReadIndex(), isNotNull,
+          reason: 'cold-load rebuilt a valid index over the corrupt one');
+    });
+  });
+
+  group('windowed queries', () {
+    test('loadInWindow returns rows in the half-open [from, to) day window',
+        () async {
+      await store.createLocal(
+          title: 'Day 1', startedAt: DateTime.utc(2026, 6, 1, 9));
+      await store.createLocal(
+          title: 'Day 2 AM', startedAt: DateTime.utc(2026, 6, 2, 6));
+      await store.createLocal(
+          title: 'Day 2 PM', startedAt: DateTime.utc(2026, 6, 2, 20));
+      await store.createLocal(
+          title: 'Day 3', startedAt: DateTime.utc(2026, 6, 3, 0));
+
+      final inDay2 = await store.loadInWindow(
+          DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
+      expect(inDay2.map((w) => w.row['title']).toSet(), {'Day 2 AM', 'Day 2 PM'},
+          reason: 'the day-3 00:00 row is excluded by the half-open upper bound');
+    });
+
+    test('estimateRowsInWindow counts from the index without hydrating',
+        () async {
+      await store.createLocal(startedAt: DateTime.utc(2026, 6, 2, 6));
+      await store.createLocal(startedAt: DateTime.utc(2026, 6, 2, 20));
+      await store.createLocal(startedAt: DateTime.utc(2026, 6, 4));
+      final n = await store.estimateRowsInWindow(
+          DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
+      expect(n, 2);
+    });
+
+    test('loadInWindow hydrates the full row (with its sets)', () async {
+      await store.createLocal(
+        title: 'Leg day',
+        startedAt: DateTime.utc(2026, 6, 2, 8),
+        sets: [_set('Squat', reps: 5, kg: 100)],
+      );
+      final fresh = LocalGymStore();
+      await fresh.init(overrideDirectory: dir);
+      final inWindow = await fresh.loadInWindow(
+          DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
+      expect(inWindow.single.sets.single['exercise_name'], 'Squat');
+    });
+  });
+
+  group('markSynced flow still works with the index', () {
+    test('a drained pendingCreate flips to synced in the index', () async {
+      final api = _FakeGymApi();
+      final stored = await store.createLocal(
+          title: 'Push', startedAt: DateTime.utc(2026, 6, 2));
+      await store.syncWithServer(api);
+      expect(store.byId(stored.id)!.syncState, GymSyncState.synced);
+      final summaries = (jsonDecode(
+                  File('${dir.path}/index.json').readAsStringSync())
+              as Map<String, dynamic>)['summaries'] as List;
+      expect(summaries.single['sync_state'], 'synced',
+          reason: 'markSynced persists via asSynced → persist → index flush');
     });
   });
 }

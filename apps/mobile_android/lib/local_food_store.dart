@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
@@ -86,6 +84,18 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   @override
   StoredFood entryFromJson(Map<String, dynamic> json) =>
       StoredFood.fromJson(json);
+
+  @override
+  String? get summaryTimestampKey => 'started_at';
+
+  @override
+  Map<String, dynamic> summaryOf(StoredFood entry) => {
+        'id': entry.id,
+        'sync_state': entry.syncState.wire,
+        'started_at': entry.row['started_at'],
+        'item_name': entry.row['item_name'],
+        'calories': entry.row['calories'],
+      };
 
   @override
   StoredFood asSynced(StoredFood entry) => StoredFood(
@@ -209,10 +219,7 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     final existing = rowsById[id];
     if (existing == null) return;
     if (existing.syncState == SyncState.pendingCreate) {
-      rowsById.remove(id);
-      final file = File('${dir!.path}/$id.json');
-      if (file.existsSync()) file.deleteSync();
-      notifyListeners();
+      await dropRow(id);
       return;
     }
     final tombstone = StoredFood(

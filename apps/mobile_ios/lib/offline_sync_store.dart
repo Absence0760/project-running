@@ -79,11 +79,40 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   Directory? dir;
   final Map<String, S> rowsById = <String, S>{};
 
+  /// Compact on-disk summary index, keyed by row id. Each value is the
+  /// [summaryOf] map for a live (non-tombstone) row. Kept in lockstep with
+  /// [rowsById] in memory on every mutation (cheap, no disk); flushed once to
+  /// `<storeSubdir>/index.json` via [_persistIndex] at the end of each mutation
+  /// method (or batch). Cold-load reads this single file instead of N per-row
+  /// files when the index's id-set matches the on-disk file id-set.
+  final Map<String, Map<String, dynamic>> _summaries =
+      <String, Map<String, dynamic>>{};
+
+  /// Set when [_summaries] has drifted from what's on disk. Flushed (cleared)
+  /// by [_persistIndex]; a pending flag at the end of a mutation method
+  /// triggers exactly one index write per mutation.
+  bool _indexDirty = false;
+
+  static const _indexFilename = 'index.json';
+
+  File get _indexFile => File('${dir!.path}/$_indexFilename');
+
   /// Subdirectory under the app-documents dir, e.g. `gear` / `gym` / `food`.
   String get storeSubdir;
 
   /// Prefix for this store's debug log lines, e.g. `local_gear_store`.
   String get debugLabel;
+
+  /// Compact summary of [entry] for the on-disk index. MUST include `'id'`,
+  /// `'sync_state'`, and (when [summaryTimestampKey] is non-null) the windowing
+  /// timestamp. Subclasses add the few scalars their list / window surfaces
+  /// read so the index can answer those without hydrating the full row.
+  Map<String, dynamic> summaryOf(S entry);
+
+  /// The key in [summaryOf]'s map carrying the ISO-8601 timestamp that
+  /// [loadInWindow] / [estimateRowsInWindow] filter on. Null disables
+  /// windowing (the index is then only a cold-load fast path).
+  String? get summaryTimestampKey => null;
 
   /// Parse a stored record (the `{_v, row, sync_state, last_modified_at}`
   /// envelope plus any store-specific keys like gym's inline `sets`).
@@ -117,10 +146,20 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
 
   Future<void> loadAll() async {
     rowsById.clear();
+    _summaries.clear();
+    _indexDirty = false;
     final d = dir;
     if (d == null) return;
+
+    // Walk the per-row files. These stores expose full rows directly
+    // (`rowsById` drives `workouts` / `rows` / `byId`), so unlike the windowed
+    // LocalRunStore they always hydrate every row at cold-load. The index's
+    // payoff here is (a) a cheap drift-validated summary view + (b) the
+    // windowed `loadInWindow` / `estimateRowsInWindow` API that doesn't touch
+    // the whole store.
     for (final entity in d.listSync()) {
       if (entity is! File || !entity.path.endsWith('.json')) continue;
+      if (entity.path.endsWith(_indexFilename)) continue;
       try {
         final raw = entity.readAsStringSync();
         final json = jsonDecode(raw) as Map<String, dynamic>;
@@ -130,7 +169,104 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
         debugPrint('$debugLabel: corrupt row ${entity.path}: $e');
       }
     }
+
+    // Reuse a valid, matching on-disk index for the summary view — its id-set
+    // must equal the on-disk row-file id-set (membership only, no reads). A
+    // missing / corrupt / drifted index (crash between a row write and the
+    // index flush, a hand-planted / removed file) triggers a one-time rebuild
+    // + persist: the post-crash self-heal and the first-launch migration.
+    final liveRowIds = rowsById.values
+        .where((e) => !e.isTombstone)
+        .map((e) => e.id)
+        .toSet();
+    final index = await _readIndex();
+    if (index != null &&
+        index.keys.toSet().length == liveRowIds.length &&
+        index.keys.toSet().containsAll(liveRowIds)) {
+      _summaries.addAll(index);
+    } else {
+      _rebuildSummaries();
+      await _persistIndex();
+    }
     notifyListeners();
+  }
+
+  /// Rebuild [_summaries] from the resident [rowsById] (live rows only —
+  /// tombstones never enter the index). Marks the index dirty.
+  void _rebuildSummaries() {
+    _summaries.clear();
+    for (final entry in rowsById.values) {
+      if (entry.isTombstone) continue;
+      _summaries[entry.id] = summaryOf(entry);
+    }
+    _indexDirty = true;
+  }
+
+  /// Read + structurally validate the on-disk index. Returns a map keyed by id,
+  /// or null on any error / structural invalidity (missing file, bad JSON,
+  /// `summaries` absent or not a List, an element without a String `id`). A
+  /// null return is a cache miss, never a crash.
+  Future<Map<String, Map<String, dynamic>>?> _readIndex() async {
+    final d = dir;
+    if (d == null) return null;
+    final file = _indexFile;
+    if (!file.existsSync()) return null;
+    try {
+      final raw = await file.readAsString();
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final version = localStoreRecordVersion(data);
+      if (version > kLocalStoreSchemaVersion) {
+        debugPrint(
+            '$debugLabel: index has _v=$version (> $kLocalStoreSchemaVersion); reading known fields only');
+      }
+      final summaries = data['summaries'];
+      if (summaries is! List) return null;
+      final out = <String, Map<String, dynamic>>{};
+      for (final element in summaries) {
+        if (element is! Map) return null;
+        final summary = Map<String, dynamic>.from(element);
+        final id = summary['id'];
+        if (id is! String) return null;
+        out[id] = summary;
+      }
+      return out;
+    } catch (e) {
+      debugPrint('$debugLabel: corrupt index, falling back to full walk: $e');
+      return null;
+    }
+  }
+
+  /// Flush [_summaries] to `index.json` when dirty. Self-heals by dropping any
+  /// summary whose id is no longer resident before writing. A failed write is
+  /// non-fatal — the in-memory index stays correct for the session and the next
+  /// flush retries.
+  Future<void> _persistIndex() async {
+    // Only stores with a windowed surface persist the index — it's the backing
+    // store for `loadInWindow` / `estimateRowsInWindow`. A store with no
+    // windowing key (gear) reads its rows eagerly at cold-load and has no
+    // window query, so an on-disk index would be dead weight; `summaryOf` still
+    // exists for the in-memory summary view + any future opt-in.
+    if (summaryTimestampKey == null) {
+      _indexDirty = false;
+      return;
+    }
+    if (!_indexDirty) return;
+    final d = dir;
+    if (d == null) return;
+    final liveIds = rowsById.values
+        .where((e) => !e.isTombstone)
+        .map((e) => e.id)
+        .toSet();
+    _summaries.removeWhere((id, _) => !liveIds.contains(id));
+    try {
+      await writeJsonAtomic(_indexFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        'summaries': _summaries.values.toList(),
+      });
+      _indexDirty = false;
+    } catch (e) {
+      debugPrint('$debugLabel: failed to persist index: $e');
+    }
   }
 
   /// Forward-migration hook for a stored record read off disk. Resolves the
@@ -191,14 +327,32 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     rowsById.remove(id);
     final file = File('${dir!.path}/$id.json');
     if (file.existsSync()) file.deleteSync();
+    if (_summaries.remove(id) != null) _indexDirty = true;
+    await _persistIndex();
     notifyListeners();
   }
 
   Future<void> persist(S stored) async {
+    await _persistRow(stored);
+    await _persistIndex();
+    notifyListeners();
+  }
+
+  /// Write a single row + reflect it in [_summaries] without flushing the
+  /// index. Callers that persist a batch ([restoreFromBackup]) loop over this
+  /// then flush once via [_persistIndex]. A tombstone leaves the index (it's
+  /// not a live row) but still writes its on-disk file so the drain can push
+  /// the server DELETE.
+  Future<void> _persistRow(S stored) async {
     rowsById[stored.id] = stored;
     final file = File('${dir!.path}/${stored.id}.json');
     await writeJsonAtomic(file, stored.toJson());
-    notifyListeners();
+    if (stored.isTombstone) {
+      if (_summaries.remove(stored.id) != null) _indexDirty = true;
+    } else {
+      _summaries[stored.id] = summaryOf(stored);
+      _indexDirty = true;
+    }
   }
 
   /// Re-point the on-disk state at the current `rowsById`. Writes every row
@@ -225,6 +379,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     }
     for (final entity in d.listSync()) {
       if (entity is! File || !entity.path.endsWith('.json')) continue;
+      if (entity.path.endsWith(_indexFilename)) continue;
       if (keep.contains(entity.path)) continue;
       try {
         await entity.delete();
@@ -232,6 +387,8 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
         debugPrint('$debugLabel: orphan delete failed ${entity.path}: $e');
       }
     }
+    _rebuildSummaries();
+    await _persistIndex();
   }
 
   /// Hydrate rows from a backup archive (the entry `toJson()` shape). Each is
@@ -244,11 +401,15 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       try {
         final parsed = entryFromJson(json);
         if (rowsById.containsKey(parsed.id)) continue;
-        await persist(asPendingCreate(parsed));
+        await _persistRow(asPendingCreate(parsed));
         imported++;
       } catch (e) {
         debugPrint('$debugLabel: restore skipped a record: $e');
       }
+    }
+    if (imported > 0) {
+      await _persistIndex();
+      notifyListeners();
     }
     return imported;
   }
@@ -280,4 +441,76 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// getters.
   @visibleForTesting
   S? debugStored(String id) => rowsById[id];
+
+  /// Read the on-disk index as a list of summary maps (newest the file's own
+  /// order). Returns null on a missing / corrupt / structurally-invalid index.
+  /// Test-only — production cold-load consumes the index via [loadAll].
+  @visibleForTesting
+  Future<List<Map<String, dynamic>>?> debugReadIndex() async {
+    final index = await _readIndex();
+    return index?.values.toList();
+  }
+
+  /// Load the full rows whose [summaryTimestampKey] timestamp falls in the
+  /// half-open window `[from, to)`. Filters the in-memory index first, then
+  /// hydrates only the matching ids from disk (their `<id>.json` files). Throws
+  /// [StateError] when this store has no windowing timestamp.
+  ///
+  /// The single-day nutrition view uses this to replace its full-history scan.
+  Future<List<S>> loadInWindow(DateTime from, DateTime to) async {
+    final key = summaryTimestampKey;
+    if (key == null) {
+      throw StateError(
+          '$debugLabel: loadInWindow requires a summaryTimestampKey');
+    }
+    final ids = _idsInWindow(key, from, to);
+    final out = <S>[];
+    for (final id in ids) {
+      final resident = rowsById[id];
+      if (resident != null) {
+        if (!resident.isTombstone) out.add(resident);
+        continue;
+      }
+      final hydrated = await _readRow(id);
+      if (hydrated != null && !hydrated.isTombstone) out.add(hydrated);
+    }
+    return out;
+  }
+
+  /// Count the index rows whose timestamp falls in the half-open window
+  /// `[from, to)` — without hydrating any full row. Throws [StateError] when
+  /// this store has no windowing timestamp.
+  Future<int> estimateRowsInWindow(DateTime from, DateTime to) async {
+    final key = summaryTimestampKey;
+    if (key == null) {
+      throw StateError(
+          '$debugLabel: estimateRowsInWindow requires a summaryTimestampKey');
+    }
+    return _idsInWindow(key, from, to).length;
+  }
+
+  List<String> _idsInWindow(String key, DateTime from, DateTime to) {
+    final ids = <String>[];
+    for (final summary in _summaries.values) {
+      final raw = summary[key];
+      final at = raw is String ? DateTime.tryParse(raw) : null;
+      if (at == null) continue;
+      if (!at.isBefore(from) && at.isBefore(to)) {
+        ids.add(summary['id'] as String);
+      }
+    }
+    return ids;
+  }
+
+  Future<S?> _readRow(String id) async {
+    final file = File('${dir!.path}/$id.json');
+    if (!file.existsSync()) return null;
+    try {
+      final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      return entryFromJson(migrateRecord(json, file.path));
+    } catch (e) {
+      debugPrint('$debugLabel: corrupt row $id: $e');
+      return null;
+    }
+  }
 }

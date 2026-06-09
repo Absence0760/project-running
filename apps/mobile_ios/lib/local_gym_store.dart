@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
@@ -98,6 +96,18 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
   @override
   StoredGymWorkout entryFromJson(Map<String, dynamic> json) =>
       StoredGymWorkout.fromJson(json);
+
+  @override
+  String? get summaryTimestampKey => 'started_at';
+
+  @override
+  Map<String, dynamic> summaryOf(StoredGymWorkout entry) => {
+        'id': entry.id,
+        'sync_state': entry.syncState.wire,
+        'started_at': entry.row['started_at'],
+        'title': entry.row['title'],
+        'set_count': entry.sets.length,
+      };
 
   @override
   StoredGymWorkout asSynced(StoredGymWorkout entry) => StoredGymWorkout(
@@ -212,10 +222,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
     final existing = rowsById[id];
     if (existing == null) return;
     if (existing.syncState == SyncState.pendingCreate) {
-      rowsById.remove(id);
-      final file = File('${dir!.path}/$id.json');
-      if (file.existsSync()) file.deleteSync();
-      notifyListeners();
+      await dropRow(id);
       return;
     }
     final tombstone = StoredGymWorkout(
