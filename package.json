@@ -6,6 +6,7 @@
     "apps/backend"
   ],
   "scripts": {
+    "dev:up": "bin/dev-up.sh",
     "dev:db:up": "cd apps/backend && supabase start",
     "dev:db:down": "cd apps/backend && supabase stop",
     "dev:db:reset": "cd apps/backend && supabase db reset && cd ../.. && node scripts/seed-run-tracks.mjs",
