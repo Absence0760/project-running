@@ -30,9 +30,8 @@ npm run dev:up       # start Supabase (seeded) + map tiles + adb reverse + Ollam
 npm run dev:run:web  # web app on http://localhost:7777   (or: npm run dev:run:android)
 ```
 
-That's it. The committed dev defaults (`apps/web/.env.development`,
-`apps/mobile_android/.env.local`, `apps/mobile_ios/.env.local`) point every
-client at the local stack, on `127.0.0.1` so the same values work on an
+That's it. The committed dev defaults (a `.env.development` in each app) point
+every client at the local stack, on `127.0.0.1` so the same values work on an
 emulator **and** a physical device (`dev:up` runs `adb reverse` for any
 attached device). The mobile app auto-logs in as the seed user.
 
@@ -40,6 +39,13 @@ attached device). The mobile app auto-logs in as the seed user.
 
 `dev:up` is idempotent — re-run it any time (e.g. after replugging a phone,
 which clears the `adb reverse` forwards).
+
+**Want the whole backend in one shot?** `npm run dev:all:services` is the
+superset of `dev:up` — it also starts the Go job worker (live tracking +
+background jobs) and, when their graphs are built, the OSRM / GraphHopper
+routing engines. It backgrounds everything and returns, so you then run the
+same `dev:run:*` command for whichever platform you're testing. Manage it with
+`dev:all:services:status` / `:logs` / `:down`.
 
 ### Using real external services
 
@@ -59,9 +65,9 @@ npm run dev:run:ios      # Flutter app on an iOS simulator/device
 npm run dev:run:worker   # Go background-job worker (live tracking, exports)
 ```
 
-The same committed-defaults pattern covers every client: **web**
-(`.env.development`), **mobile iOS** (`.env.local`, loaded by the simulator in
-debug), **Wear OS** (`.env.local` applied by the debug build type), and the
+The same committed-defaults pattern covers every client: **web**, **mobile**
+(iOS + Android, the `.env.development` asset loaded only in debug), **Wear OS**
+(`.env.development` applied by the debug build type), and the
 **Apple Watch** (the DEBUG-only direct-sync path defaults to the local stack) —
 all point at `127.0.0.1` and are compiled/loaded only in dev/debug, never in a
 release build. The iOS **simulator** and Wear OS reach `127.0.0.1` directly /

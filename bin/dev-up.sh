@@ -105,8 +105,13 @@ else
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────
-printf '\n%s%sLocal stack ready.%s Start the apps in their own terminals:\n\n' "$BOLD" "$GRN" "$RST"
-printf '  %snpm run dev:run:web%s      %s# web app on http://localhost:7777%s\n' "$BOLD" "$RST" "$DIM" "$RST"
-printf '  %snpm run dev:run:android%s  %s# Flutter app on a device/emulator%s\n\n' "$BOLD" "$RST" "$DIM" "$RST"
-printf '  %sseed login: runner@test.com / testtest (mobile auto-logs in)%s\n' "$DIM" "$RST"
-printf '  %sre-run anytime (e.g. after replugging a phone): npm run dev:up%s\n' "$DIM" "$RST"
+# `dev:all:services` calls this script with DEV_UP_NO_FOOTER=1 so it can add
+# the worker + routing engines and print one combined footer instead of two.
+if [ -z "${DEV_UP_NO_FOOTER:-}" ]; then
+  printf '\n%s%sLocal stack ready.%s Start the apps in their own terminals:\n\n' "$BOLD" "$GRN" "$RST"
+  printf '  %snpm run dev:run:web%s      %s# web app on http://localhost:7777%s\n' "$BOLD" "$RST" "$DIM" "$RST"
+  printf '  %snpm run dev:run:android%s  %s# Flutter app on a device/emulator%s\n\n' "$BOLD" "$RST" "$DIM" "$RST"
+  printf '  %sseed login: runner@test.com / testtest (mobile auto-logs in)%s\n' "$DIM" "$RST"
+  printf '  %sre-run anytime (e.g. after replugging a phone): npm run dev:up%s\n' "$DIM" "$RST"
+  printf '  %sfull stack incl. job worker + routing engines: npm run dev:all:services%s\n' "$DIM" "$RST"
+fi

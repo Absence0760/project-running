@@ -59,13 +59,7 @@ Put your secrets in `apps/mobile_ios/dart_defines.json` (gitignored):
 
 Inline `--dart-define=` flags don't work on iOS when values are shaped like Supabase's `sb_publishable_…` keys — Flutter's Xcode build script rejects them as "improperly formatted define flag". The JSON file form is the supported path.
 
-`pubspec.yaml` declares `.env.local` as a bundled asset, so the **build** needs the file to exist even though iOS reads its secrets from `dart_defines.json`. Create an empty one once:
-
-```bash
-touch apps/mobile_ios/.env.local
-```
-
-An empty file is enough — `main.dart` snapshots the `--dart-define` values *before* loading `.env.local`, so the dart-defines survive (you only need real keys in `.env.local` if you prefer the Android-style flow). A missing file fails the build with `No file or variants found for asset: .env.local`.
+`pubspec.yaml` declares `.env.development` as a bundled asset, and that file is **committed** (non-secret local-stack defaults), so there's nothing to create — the build finds it. iOS reads its real secrets from `dart_defines.json` regardless: `main.dart` snapshots the `--dart-define` values *before* loading the `.env.development` asset, so the dart-defines win. On iOS the per-machine override is `dart_defines.json`, not a `.env.local` file (decisions §137).
 
 `open -a Simulator` reopens whichever device was last booted — which may be an **Apple Watch**, not an iPhone. Boot an iPhone explicitly and target it by id:
 

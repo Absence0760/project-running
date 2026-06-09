@@ -45,8 +45,8 @@ cd apps/watch_wear/android
 
 Then launch the **Run** app from the Wear OS emulator's app launcher.
 
-A fresh clone needs no `-P` flags: the committed `apps/watch_wear/android/.env.local`
-points the **debug** build at the local stack (`SUPABASE_URL=http://127.0.0.1:54321`,
+A fresh clone needs no `-P` flags: the committed `apps/watch_wear/android/.env.development`
+(overlaid by a gitignored `.env.local` if you add one) points the **debug** build at the local stack (`SUPABASE_URL=http://127.0.0.1:54321`,
 seed-user auto-login, local Protomaps tiles). Run `npm run dev:up` from the repo
 root first — it starts the local stack and runs `adb reverse` so `127.0.0.1`
 reaches the host from the emulator/watch.

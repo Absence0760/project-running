@@ -66,7 +66,7 @@ melos bootstrap
 
 ## Environment
 
-**Nothing to copy or edit for local dev.** `apps/mobile_android/.env.local` is
+**Nothing to copy or edit for local dev.** `apps/mobile_android/.env.development` is
 **committed** with working local-stack defaults (the standard public Supabase
 demo anon key, `127.0.0.1` URLs for Supabase / the web Coach / Protomaps tiles,
 and the seed-user auto-login). It's loaded only by DEBUG builds, so it never
@@ -106,7 +106,7 @@ Two ways to point a physical device at the local stack:
   TILE_URL_TEMPLATE=http://127.0.0.1:8080/styles/basic/{z}/{x}/{y}.png
   ```
 
-  `127.0.0.1` also works on the emulator (via the same `adb reverse`), so it's the one set of values correct for both. `adb reverse` even bridges to a host listener bound only to IPv6 `[::1]` (Vite's default), so the web dev server needs no `--host`. Re-run the `adb reverse` lines after any reconnect/reboot (the forwards don't persist). `.env.local` is a bundled Flutter asset (`pubspec.yaml`), so **hot-restart (`R`) or relaunch after editing it** — a hot reload won't re-read it.
+  `127.0.0.1` also works on the emulator (via the same `adb reverse`), so it's the one set of values correct for both. `adb reverse` even bridges to a host listener bound only to IPv6 `[::1]` (Vite's default), so the web dev server needs no `--host`. Re-run the `adb reverse` lines after any reconnect/reboot (the forwards don't persist). `.env.development` is a bundled Flutter asset (`pubspec.yaml`), so **hot-restart (`R`) or relaunch after editing it** — a hot reload won't re-read it.
 
 - **Host LAN IP.** Set each URL to `http://<your-workstation-LAN-IP>:...` (find it with `ip route get 1.1.1.1`) and make sure each service binds beyond loopback (Supabase + the Protomaps Docker already publish on `0.0.0.0`; the Vite web dev server needs `--host`) and your firewall allows the ports. No `adb` needed, but more setup, and it breaks when your DHCP lease changes.
 
