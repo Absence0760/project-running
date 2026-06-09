@@ -57,14 +57,18 @@ locals {
     },
   )
 
-  # generate-route Lambda env. Needs neither sops secrets nor the
-  # Supabase keys — the handler only fetches the self-hosted
-  # GraphHopper engine. GRAPHHOPPER_URL is non-secret (an internal
-  # engine URL), passed as a plain Terraform var. An empty string is
-  # omitted so the handler sees an unset env and returns 501
-  # (unconfigured); the client then falls back to the OSRM heuristic.
+  # generate-route Lambda env. GRAPHHOPPER_URL is non-secret (an internal
+  # engine URL), passed as a plain Terraform var; an empty string is omitted so
+  # the handler sees an unset env and returns 501 (unconfigured) and the client
+  # falls back to the OSRM heuristic. GRAPHHOPPER_API_KEY is the shared secret
+  # the handler sends as X-Engine-Key to clear the engine's Caddy guard — pulled
+  # from the sops file (ONLY that one key, not the whole secret bag the coach
+  # Lambda gets). Absent in sops → no header sent; if the engine's guard is
+  # active the engine 403s, the handler returns 502, and the engine-unreachable
+  # alarm fires — a loud misconfiguration, not a silent one.
   generate_route_lambda_env = merge(
     var.graphhopper_url != "" ? { GRAPHHOPPER_URL = var.graphhopper_url } : {},
+    local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if k == "GRAPHHOPPER_API_KEY" } : {},
   )
 }
 

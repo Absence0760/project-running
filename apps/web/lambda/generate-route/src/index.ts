@@ -50,7 +50,10 @@ export const handler = async (
 			return json(400, { error: 'invalid JSON' });
 		}
 
-		const result = await handleGenerate(rawBody, { graphhopperUrl: process.env.GRAPHHOPPER_URL });
+		const result = await handleGenerate(rawBody, {
+			graphhopperUrl: process.env.GRAPHHOPPER_URL,
+			graphhopperApiKey: process.env.GRAPHHOPPER_API_KEY,
+		});
 		if (result.status === 502) {
 			// Engine unreachable / failing. A 502 here is a CLEAN handled
 			// response, not a Lambda throw, so the Errors metric never sees

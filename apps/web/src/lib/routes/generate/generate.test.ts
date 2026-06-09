@@ -136,6 +136,29 @@ test('fetchRoundTrip returns the parsed candidate on success', async () => {
 	assert.equal(got.coordinates.length, 5);
 });
 
+test('fetchRoundTrip sends the X-Engine-Key header when an apiKey is set', async () => {
+	let seen: Record<string, string> | undefined;
+	const fetcher: Fetcher = async (_u, init) => {
+		seen = init?.headers as Record<string, string> | undefined;
+		return ghResponse(squareLoop(0, 0, 0.01), 5000);
+	};
+	await fetchRoundTrip(
+		{ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0, apiKey: 'sekret' },
+		fetcher,
+	);
+	assert.equal(seen?.['X-Engine-Key'], 'sekret');
+});
+
+test('fetchRoundTrip omits the X-Engine-Key header when no apiKey is set', async () => {
+	let seen: HeadersInit | undefined = { sentinel: 'unset' } as Record<string, string>;
+	const fetcher: Fetcher = async (_u, init) => {
+		seen = init?.headers;
+		return ghResponse(squareLoop(0, 0, 0.01), 5000);
+	};
+	await fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0 }, fetcher);
+	assert.equal(seen, undefined);
+});
+
 // --- select.ts ---
 
 test('enclosedAreaM2 of a square loop matches side² in metres', () => {

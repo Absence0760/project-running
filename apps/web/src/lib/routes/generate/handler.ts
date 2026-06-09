@@ -30,6 +30,9 @@ export interface GenerateRequest {
 
 export interface GenerateConfig {
 	graphhopperUrl: string | undefined;
+	/// Shared secret forwarded to the engine as `X-Engine-Key` (see
+	/// RoundTripRequest.apiKey). Undefined in dev when the guard is permissive.
+	graphhopperApiKey?: string;
 }
 
 export interface GenerateDeps {
@@ -99,6 +102,7 @@ export async function handleGenerate(
 					start: req.start,
 					targetDistanceM: req.targetDistanceM,
 					seed: i,
+					apiKey: config.graphhopperApiKey,
 				},
 				deps.fetcher,
 			).catch((e) => {

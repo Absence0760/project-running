@@ -42,6 +42,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	// generation through this endpoint, so user start-coordinates never reach
 	// the engine directly. Unset → the handler returns 501 and the client falls
 	// back to its in-browser OSRM heuristic.
-	const result = await handleGenerate(rawBody, { graphhopperUrl: env.GRAPHHOPPER_URL });
+	const result = await handleGenerate(rawBody, {
+		graphhopperUrl: env.GRAPHHOPPER_URL,
+		graphhopperApiKey: env.GRAPHHOPPER_API_KEY,
+	});
 	return json(result.status, result.body);
 };

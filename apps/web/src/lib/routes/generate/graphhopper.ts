@@ -49,6 +49,12 @@ export interface RoundTripRequest {
 	/// `round_trip.seed` — same start + distance + seed is deterministic;
 	/// different seeds radiate the loop in different directions.
 	seed: number;
+	/// Shared secret sent as `X-Engine-Key`. The self-hosted GraphHopper sits
+	/// behind a public Fly endpoint (the AWS Lambda can't reach it over Fly's
+	/// 6PN), so a header guard keeps anyone who learns the hostname from hitting
+	/// it directly and bypassing the CloudFront WAF rate-limit. Omitted → no
+	/// header (dev with the guard in permissive mode).
+	apiKey?: string;
 	timeoutMs?: number;
 }
 
@@ -121,7 +127,9 @@ export async function fetchRoundTrip(
 	const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 	let res: Response;
 	try {
-		res = await fetcher(url, { signal: controller.signal });
+		const init: RequestInit = { signal: controller.signal };
+		if (req.apiKey) init.headers = { 'X-Engine-Key': req.apiKey };
+		res = await fetcher(url, init);
 	} catch (e) {
 		throw new GraphHopperError(
 			'upstream',
