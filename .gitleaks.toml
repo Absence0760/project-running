@@ -1,0 +1,29 @@
+title = "project-running gitleaks config"
+
+# Extend (don't replace) gitleaks' built-in ruleset.
+[extend]
+useDefault = true
+
+# Allowlist the deliberately-public values committed for one-command local dev
+# (see README "Quick start"). These are NOT secrets:
+#   - the Supabase *local* demo anon + service-role JWTs — identical on every
+#     `supabase start`, published in Supabase's own docs;
+#   - the seed-user password (runner@test.com / testtest);
+#   - the `ollama` placeholder OPENAI_API_KEY.
+#
+# Scoped two ways: the committed dev-only env files by path, and the
+# demo-issuer JWT body by regex — so a *non-demo* JWT pasted anywhere is still
+# caught. The env-isolation workflow additionally greps these same files for
+# live Stripe / Anthropic / Supabase patterns, so "no real secret here" is
+# enforced, not just trusted.
+[allowlist]
+description = "Local-dev demo keys + seed creds in committed dev env defaults"
+paths = [
+  '''apps/web/\.env\.development''',
+  '''apps/mobile_android/\.env\.local''',
+  '''apps/mobile_ios/\.env\.local''',
+]
+regexes = [
+  # base64 of `{"iss":"supabase-demo"` — present only in the local demo JWTs.
+  '''eyJpc3MiOiJzdXBhYmFzZS1kZW1v''',
+]

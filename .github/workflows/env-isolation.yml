@@ -42,17 +42,24 @@ jobs:
         run: node --test apps/web/scripts/check_production_env.test.mjs
 
   env-example-scan:
-    name: .env.example files must not contain live values
+    name: committed env files must not contain live values
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - name: Scan committed env-example files
+      - name: Scan committed env files
         shell: bash
         run: |
           set -euo pipefail
+          # The .env.example templates AND the committed local-dev defaults
+          # (gitleaks-allowlisted in .gitleaks.toml) — both must stay free of
+          # any live key/URL. The dev defaults carry the PUBLIC Supabase local
+          # demo JWTs, which are fine; this scan catches a real one slipping in.
           FILES=(
             apps/web/.env.example
             apps/backend/.env.example
+            apps/web/.env.development
+            apps/mobile_android/.env.local
+            apps/mobile_ios/.env.local
           )
           errors=0
           for f in "${FILES[@]}"; do
