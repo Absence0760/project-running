@@ -48,16 +48,19 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Override via `-PSUPABASE_URL=... -PSUPABASE_ANON_KEY=...`.
-        // The release workflow injects production values from
-        // `secrets.SUPABASE_*`. For local dev set them in
-        // `~/.gradle/gradle.properties` or pass on the command line.
-        // No default URL or key is hardcoded — a misconfigured build
-        // fails the OkHttp request loudly rather than silently
-        // hitting the emulator address (which the URL fallback used
-        // to be) or the local-stack publishable key (which the anon
-        // key fallback used to be — both flagged in the audit
-        // because they baked dev defaults into release artifacts).
+        // RELEASE-SAFE BASELINE. `defaultConfig` reads NOTHING from the
+        // committed `apps/watch_wear/android/.env.local` (envProps) — every
+        // value here comes from a `-P` gradle flag or is a hardcoded
+        // safe-for-release default — so a release artifact can never inherit a
+        // local-dev value. The committed `.env.local` is applied ONLY by the
+        // `debug { }` build type below, which re-reads these via envString /
+        // envFlag and overrides the baseline for local dev.
+        //
+        // SUPABASE_URL / SUPABASE_ANON_KEY come from `-PSUPABASE_URL=...
+        // -PSUPABASE_ANON_KEY=...` (the release workflow injects production
+        // values from `secrets.SUPABASE_*`). No default URL or key is
+        // hardcoded — a misconfigured release fails the OkHttp request loudly
+        // rather than silently baking a dev default into the artifact (audit).
         val supabaseUrl: String = (project.findProperty("SUPABASE_URL") as String?)
             ?: ""
         val supabaseAnonKey: String = (project.findProperty("SUPABASE_ANON_KEY") as String?)
@@ -65,56 +68,30 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
-        // DEV-only toggles read from `apps/watch_wear/android/.env.local`
-        // (gitignored). All default false so the shipping build has no
-        // seed-creds and no emulator-synthesised HR leaking into runs.
-        buildConfigField("boolean", "BYPASS_LOGIN", envFlag("BYPASS_LOGIN").toString())
-        // HR defaults **on** so a real watch records optical heart rate
-        // (persona samsung #33) — the previous default-off shipped every
-        // release with HR silently disabled, so no run ever carried
-        // avg_bpm. The Wear OS emulator synthesises fake HR that looks
-        // real, so set DISABLE_HR=true in `.env.local` when developing on
-        // the emulator to keep fabricated readings out of the runs table.
-        buildConfigField("boolean", "ENABLE_HR", (!envFlag("DISABLE_HR")).toString())
-        // TTS defaults **on** — like ENABLE_HR, but there's no emulator
-        // quirk to guard against. The TTS engine degrades gracefully if
-        // a voice isn't installed. Set DISABLE_TTS=true in
-        // `.env.local` if you're developing in a quiet space.
-        buildConfigField(
-            "boolean", "ENABLE_TTS",
-            (!envFlag("DISABLE_TTS")).toString(),
-        )
-        // MapTiler raster tile API key. Empty string ⇒ tile rendering
-        // disabled and the mini-map falls back to polyline-only on the
-        // midnight background. Same env-var name the web app uses
-        // (`PUBLIC_MAPTILER_KEY`) for consistency. Set in
-        // `apps/watch_wear/android/.env.local`.
+        // Dev toggles — pinned to their safe-for-release defaults here (NOT
+        // read from `.env.local`, or the committed file would leak into
+        // release). BYPASS_LOGIN off (no seed-creds in a shipping build); HR +
+        // TTS on (real watches record optical HR / speak cues); no tile
+        // override (release uses the MapTiler `-P` key). The `debug { }` block
+        // re-reads all of these from `.env.local`.
+        buildConfigField("boolean", "BYPASS_LOGIN", "false")
+        buildConfigField("boolean", "ENABLE_HR", "true")
+        buildConfigField("boolean", "ENABLE_TTS", "true")
+        // MapTiler key + Sentry come from `-P` flags in release (empty ⇒ the
+        // feature is a no-op); the tile-URL override is debug-only so it is
+        // pinned empty here.
         buildConfigField(
             "String", "PUBLIC_MAPTILER_KEY",
-            "\"${envString("PUBLIC_MAPTILER_KEY")}\"",
+            "\"${(project.findProperty("PUBLIC_MAPTILER_KEY") as String?) ?: ""}\"",
         )
-        // Optional override that points the tile fetcher at a
-        // different raster-tile URL template — typically a local
-        // Protomaps tileserver-gl during dev so the watch doesn't
-        // burn MapTiler quota on tile requests it'll never see in
-        // production. Empty string ⇒ MapTiler path with the key
-        // above. See `docs/ops/protomaps_local_setup.md` and
-        // `decisions.md § 68`. Set in `.env.local`.
-        buildConfigField(
-            "String", "PUBLIC_TILE_URL_TEMPLATE",
-            "\"${envString("PUBLIC_TILE_URL_TEMPLATE")}\"",
-        )
-        // Sentry crash reporting. Empty DSN ⇒ Sentry is a no-op
-        // (matches the dotenv-gated behaviour in the mobile_android +
-        // mobile_ios twin: production builds with a DSN report; dev
-        // builds with an empty DSN don't.). Set in `.env.local`.
+        buildConfigField("String", "PUBLIC_TILE_URL_TEMPLATE", "\"\"")
         buildConfigField(
             "String", "SENTRY_DSN",
-            "\"${envString("SENTRY_DSN")}\"",
+            "\"${(project.findProperty("SENTRY_DSN") as String?) ?: ""}\"",
         )
         buildConfigField(
             "String", "APP_RELEASE",
-            "\"${envString("APP_RELEASE", "dev")}\"",
+            "\"${(project.findProperty("APP_RELEASE") as String?) ?: "dev"}\"",
         )
     }
 
@@ -146,6 +123,34 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Local-stack dev defaults from the committed
+            // `apps/watch_wear/android/.env.local`. These OVERRIDE the
+            // safe-for-release `defaultConfig` baseline above and are confined
+            // to the debug build type, so they can never reach a release
+            // artifact. A fresh clone gets a working local-stack build with no
+            // `-P` flags: SUPABASE_URL/ANON point at the loopback stack,
+            // BYPASS_LOGIN auto-signs-in the seed user, and the tile override
+            // uses the local Protomaps server.
+            buildConfigField("String", "SUPABASE_URL", "\"${envString("SUPABASE_URL")}\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"${envString("SUPABASE_ANON_KEY")}\"")
+            buildConfigField("boolean", "BYPASS_LOGIN", envFlag("BYPASS_LOGIN").toString())
+            buildConfigField("boolean", "ENABLE_HR", (!envFlag("DISABLE_HR")).toString())
+            buildConfigField("boolean", "ENABLE_TTS", (!envFlag("DISABLE_TTS")).toString())
+            buildConfigField(
+                "String", "PUBLIC_MAPTILER_KEY",
+                "\"${envString("PUBLIC_MAPTILER_KEY")}\"",
+            )
+            buildConfigField(
+                "String", "PUBLIC_TILE_URL_TEMPLATE",
+                "\"${envString("PUBLIC_TILE_URL_TEMPLATE")}\"",
+            )
+            buildConfigField("String", "SENTRY_DSN", "\"${envString("SENTRY_DSN")}\"")
+            buildConfigField(
+                "String", "APP_RELEASE",
+                "\"${envString("APP_RELEASE", "dev")}\"",
+            )
+        }
         release {
             isMinifyEnabled = false
             signingConfig = if (keystoreFile.exists()) {

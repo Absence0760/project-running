@@ -9,5 +9,8 @@ key.properties
 **/*.keystore
 **/*.jks
 
-# Dev-only build flags — BYPASS_LOGIN, ENABLE_HR, etc. Never commit this.
+# Dev-only build flags. The committed local-stack defaults are applied ONLY by
+# the debug build type (defaultConfig stays release-safe), so this is safe to
+# track. See the .env.local header + README "Quick start".
 .env.local
+!.env.local
