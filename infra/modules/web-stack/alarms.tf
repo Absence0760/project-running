@@ -158,6 +158,41 @@ resource "aws_cloudwatch_metric_alarm" "generate_route_lambda_p95_duration" {
   }
 }
 
+resource "aws_cloudwatch_log_metric_filter" "generate_route_engine_unreachable" {
+  name           = "${local.resource_prefix}-generate-route-engine-unreachable"
+  log_group_name = aws_cloudwatch_log_group.lambda_generate_route.name
+  # `console.error('[generate-route] engine_unreachable')` from the Lambda when
+  # handleGenerate returns 502. That 502 is a CLEAN handled response (the engine
+  # is down / unreachable), NOT a Lambda throw, so the AWS/Lambda Errors metric
+  # never sees it — and the client silently falls back to the worse in-browser
+  # OSRM heuristic. Without this filter a GraphHopper outage degrades every user
+  # with nobody paged. The pattern matches the tagged log shape so a future
+  # rephrase doesn't silently break the alarm.
+  pattern = "\"[generate-route] engine_unreachable\""
+
+  metric_transformation {
+    name          = "${local.resource_prefix}-generate-route-engine-unreachable-count"
+    namespace     = "Threkir/GenerateRoute"
+    value         = "1"
+    default_value = "0"
+  }
+}
+resource "aws_cloudwatch_metric_alarm" "generate_route_engine_unreachable" {
+  alarm_name          = "${local.resource_prefix}-generate-route-engine-unreachable"
+  alarm_description   = "GraphHopper is unreachable from the generate-route Lambda (>=5 engine_unreachable events in each of two consecutive 5-min windows). Route generation has silently degraded to the in-browser OSRM heuristic for all users. Check the GraphHopper Fly app."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+  metric_name         = aws_cloudwatch_log_metric_filter.generate_route_engine_unreachable.metric_transformation[0].name
+  namespace           = aws_cloudwatch_log_metric_filter.generate_route_engine_unreachable.metric_transformation[0].namespace
+  period              = 300
+  statistic           = "Sum"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+}
+
 resource "aws_cloudwatch_log_metric_filter" "coach_bypass_paywall" {
   name           = "${local.resource_prefix}-coach-bypass-paywall"
   log_group_name = aws_cloudwatch_log_group.lambda.name

@@ -51,6 +51,14 @@ export const handler = async (
 		}
 
 		const result = await handleGenerate(rawBody, { graphhopperUrl: process.env.GRAPHHOPPER_URL });
+		if (result.status === 502) {
+			// Engine unreachable / failing. A 502 here is a CLEAN handled
+			// response, not a Lambda throw, so the Errors metric never sees
+			// it — without this tagged line a GraphHopper outage silently
+			// degrades every user to the OSRM fallback and no operator is
+			// paged. The engine-unreachable CloudWatch alarm keys off it.
+			console.error('[generate-route] engine_unreachable');
+		}
 		return json(result.status, result.body);
 	} catch (e) {
 		console.error('[generate-route lambda] unhandled_error', {
