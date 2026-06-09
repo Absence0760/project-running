@@ -173,15 +173,17 @@ test.describe('/runs/new', () => {
 
 		const { data: row } = await admin
 			.from('runs')
-			.select('user_id, distance_m, duration_s, source, metadata')
+			.select('user_id, distance_m, duration_s, source, activity_type, metadata')
 			.eq('id', newId)
 			.single();
 		expect(row?.user_id).toBe(USER_A.id);
 		expect(Math.round((row?.distance_m as number) ?? 0)).toBe(3140);
 		expect(row?.duration_s).toBe(25 * 60);
 		expect(row?.source).toBe('app');
+		// activity_type was promoted out of metadata into a real column
+		// (migration 20261207_001); manual_entry stays in the bag.
+		expect(row?.activity_type).toBe('walk');
 		const meta = row?.metadata as Record<string, unknown>;
-		expect(meta?.activity_type).toBe('walk');
 		expect(meta?.manual_entry).toBe(true);
 	});
 
@@ -321,12 +323,11 @@ test.describe('/runs/new', () => {
 
 		const { data: row } = await admin
 			.from('runs')
-			.select('metadata')
+			.select('activity_type')
 			.eq('id', newId)
 			.single();
-		expect((row?.metadata as Record<string, unknown>)?.activity_type).toBe(
-			'run'
-		);
+		// activity_type is a real column since 20261207_001 (default 'run').
+		expect(row?.activity_type).toBe('run');
 	});
 
 	for (const activity of ['walk', 'hike', 'cycle'] as const) {
@@ -354,12 +355,11 @@ test.describe('/runs/new', () => {
 
 			const { data: row } = await admin
 				.from('runs')
-				.select('metadata')
+				.select('activity_type')
 				.eq('id', newId)
 				.single();
-			expect(
-				(row?.metadata as Record<string, unknown>)?.activity_type
-			).toBe(activity);
+			// activity_type is a real column since 20261207_001.
+			expect(row?.activity_type).toBe(activity);
 		});
 	}
 

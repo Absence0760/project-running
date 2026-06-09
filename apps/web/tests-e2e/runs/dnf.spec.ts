@@ -15,9 +15,10 @@ import { USER_A } from '../fixtures/users';
  * `updateRunMetadata` (whose title/notes normaliser drops unknown keys).
  *
  * This pins the round-trip:
- *   1. Toggling DNF on writes `is_dnf: true` to the row + shows the chip.
- *   2. Toggling it back off DELETES the key (not `false`) — matching the
- *      metadata-bag convention so the PR trigger treats it as "not a DNF".
+ *   1. Toggling DNF on sets the runs.is_dnf column true + shows the chip.
+ *   2. Toggling it back off clears the column to false so the PR trigger
+ *      treats it as "not a DNF". (is_dnf was promoted from metadata to a
+ *      real column in migration 20261207_001.)
  */
 
 test.describe('/runs/[id] — Mark as DNF', () => {
@@ -36,7 +37,7 @@ test.describe('/runs/[id] — Mark as DNF', () => {
 		}
 	});
 
-	test('owner toggles DNF on then off — metadata.is_dnf round-trips true → absent', async ({
+	test('owner toggles DNF on then off — is_dnf column round-trips true → false', async ({
 		page
 	}) => {
 		runId = await insertRun({
@@ -69,14 +70,14 @@ test.describe('/runs/[id] — Mark as DNF', () => {
 			.poll(async () => {
 				const { data } = await admin
 					.from('runs')
-					.select('metadata')
+					.select('is_dnf')
 					.eq('id', runId!)
 					.single();
-				return (data?.metadata as Record<string, unknown> | null)?.['is_dnf'];
+				return data?.is_dnf;
 			}, { timeout: 5_000 })
 			.toBe(true);
 
-		// Toggle back off — the key must be REMOVED, not set to false.
+		// Toggle back off — the is_dnf column must go back to false.
 		await page.getByRole('button', { name: 'Edit title and notes' }).click();
 		const dnfToggleAgain = page.getByTestId('dnf-toggle');
 		await expect(dnfToggleAgain).toBeChecked();
@@ -84,15 +85,16 @@ test.describe('/runs/[id] — Mark as DNF', () => {
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
 
 		await expect(page.getByTestId('dnf-chip')).toHaveCount(0, { timeout: 5_000 });
+		// Toggling DNF off clears the is_dnf column back to false (the PR
+		// refresher filters on is_dnf = false since 20261207_001).
 		await expect
 			.poll(async () => {
 				const { data } = await admin
 					.from('runs')
-					.select('metadata')
+					.select('is_dnf')
 					.eq('id', runId!)
 					.single();
-				const meta = (data?.metadata as Record<string, unknown> | null) ?? {};
-				return Object.prototype.hasOwnProperty.call(meta, 'is_dnf');
+				return data?.is_dnf;
 			}, { timeout: 5_000 })
 			.toBe(false);
 	});
