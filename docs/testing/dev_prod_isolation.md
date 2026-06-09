@@ -15,6 +15,26 @@ Loopback / emulator addresses accepted by the guard:
 | `http://10.0.2.2:*` | Android emulator alias for the host loopback |
 | `http://host.docker.internal:*` | Docker-on-Mac / Docker-on-Windows |
 
+## Env-file layout (every app)
+
+One convention repo-wide so a fresh clone runs locally without a copy step ([decisions §137](../architecture/decisions.md)):
+
+| File | Tracked? | Holds | Loaded by |
+|---|---|---|---|
+| `.env.example` | committed | placeholder template (real values blank) | nothing — reference only |
+| `.env.development` | committed | **non-secret** ready-to-run local defaults (loopback URLs + the public Supabase demo keys) | the app's loader (below) |
+| `.env.local` | **gitignored** | your real keys / per-machine overrides — **wins** over `.env.development` | the app's loader |
+
+Per-toolchain loader (only Vite has a real "mode", so the mechanics differ):
+
+- **web (Vite):** auto-loads `.env.development` for `vite dev`, `.env.local` at higher priority.
+- **backend (Supabase functions):** `supabase functions serve --env-file .env.development` (or `.env.local`); nothing auto-loads.
+- **mobile (flutter_dotenv):** loads the `.env.development` bundled asset; the per-machine override is **`--dart-define`**, not `.env.local`, because dotenv reads from the asset bundle. Release builds read neither (kDebugMode gate).
+- **Wear (Gradle):** reads `.env.development` then overlays `.env.local`; release reads neither.
+- **job_worker (Go):** a stdlib `loadEnvFiles(".env.local", ".env.development")` at startup; existing env wins. Prod ships only the binary (multi-stage image), so neither file is present and Fly secrets are the sole source.
+
+The committed `.env.development` files carry only the public Supabase demo JWTs; the `gitleaks` allowlist and the `env-isolation` workflow scan them by path so a *real* key slipping in fails the build.
+
 ## What is guarded
 
 The guard ships with two enforcement points and a shared check.

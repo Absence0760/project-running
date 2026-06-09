@@ -13,5 +13,5 @@ key.properties
 # `.env.development` (tracked, applied ONLY by the debug build type;
 # defaultConfig stays release-safe). `.env.local` is your gitignored
 # per-machine override, overlaid on top at Gradle-configure time
-# (decisions §136). See the .env.development header + README "Quick start".
+# (decisions §137). See the .env.development header + README "Quick start".
 .env.local

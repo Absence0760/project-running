@@ -181,7 +181,7 @@ func (b *premiumBackend) FetchPremiumRuns(ctx context.Context, userID string, si
 // module pins a Go toolchain the build host may not have, so adding a
 // dependency (and a go.sum entry) for ~20 lines isn't worth it.
 //
-// Repo-wide convention (decisions §136): .env.local (gitignored, your
+// Repo-wide convention (decisions §137): .env.local (gitignored, your
 // real secrets) overrides .env.development (committed, non-secret local
 // defaults). In production the multi-stage Docker image ships only the
 // compiled binary — neither file is present — so this is a no-op and

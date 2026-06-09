@@ -2932,6 +2932,29 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 137. One env-file convention across every app: `.env.example` · `.env.development` · `.env.local`
+
+**Decided (2026-06-09):** every app that needs env for local development uses the same three-file scheme, so a fresh clone runs without a copy step and there's one mental model:
+
+- **`.env.example`** — committed placeholder template. Documents every variable; real values blank.
+- **`.env.development`** — committed, **non-secret** ready-to-run local defaults (loopback URLs + the *public* Supabase local-demo keys, which are identical on every machine). This is the file each toolchain actually loads.
+- **`.env.local`** — gitignored per-machine override. Holds your real keys and **wins** over `.env.development`; the shell / deploy env wins over both.
+
+Before this, the three were inconsistent: web committed `.env.development` (Vite auto-loads it in dev), mobile + Wear committed `.env.local` (the opposite of the Vite idiom), and backend committed only `.env.example`. The trigger was a committed web `.env.development` shipping a localhost tileserver URL — Vite loads that file in CI too, which hid the map style switcher and reded the e2e suite (see the tile-override fix). Standardizing removed the "which file does this app use?" tax.
+
+**Per-toolchain mechanics differ because only Vite has a "mode":**
+- **Vite (web)** auto-loads `.env.development` for `vite dev`, with `.env.local` at higher priority — native three-file layering.
+- **Supabase functions (backend)** load no file automatically; you pass `--env-file .env.development` (or `.env.local`).
+- **flutter_dotenv (mobile)** loads a *named* asset from the bundle. It loads `.env.development`; the per-machine override is **`--dart-define`** (merged on top, winning), **not** a `.env.local` file — a gitignored file can't be a guaranteed-present build asset. Release builds read neither (the `kDebugMode` gate), so no local value ships in an APK.
+- **Gradle (Wear)** reads `.env.development` then overlays `.env.local` at configure time; the release build type reads neither.
+- **Go (job_worker)** has no `.env` convention at all, so a ~20-line stdlib `loadEnvFiles(".env.local", ".env.development")` runs at startup (existing env wins, earlier file wins). Chose stdlib over godotenv: the module pins a Go toolchain some build hosts can't satisfy with `GOTOOLCHAIN=local`, so adding a dependency + `go.sum` entry for 20 lines wasn't worth it. A `.dockerignore` keeps `.env*` out of the build context, and the multi-stage image ships only the binary, so prod sees neither file — Fly secrets are the sole source.
+
+**Safety:** the committed `.env.development` files carry only the public Supabase demo JWTs; both the `gitleaks` allowlist and the `env-isolation` workflow scan them (by path) to fail the build if a *real* key ever slips in.
+
+**Trade-off.** `.env.development` and `.env.example` are near-duplicates for an app whose only local values are blanks (backend) — accepted for uniformity. Mobile's override being `--dart-define` rather than `.env.local` is a documented exception forced by the asset-bundle loader, not a drift.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

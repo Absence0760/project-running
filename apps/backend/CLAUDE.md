@@ -310,7 +310,7 @@ supabase functions deploy parkrun-import --project-ref "${SUPABASE_PROJECT_REF}"
 
 ## Secrets and env vars
 
-Three committed-vs-local files, the repo-wide convention (decisions §136): `.env.example` is the placeholder template; `.env.development` is the committed, non-secret, ready-to-run local defaults you serve `--env-file .env.development` against; `.env.local` (gitignored) holds your real keys and is the file you point `--env-file` at when you need them — it wins. Keep all three in sync when you add a new variable.
+Three committed-vs-local files, the repo-wide convention (decisions §137): `.env.example` is the placeholder template; `.env.development` is the committed, non-secret, ready-to-run local defaults you serve `--env-file .env.development` against; `.env.local` (gitignored) holds your real keys and is the file you point `--env-file` at when you need them — it wins. Keep all three in sync when you add a new variable.
 
 Supabase Edge Functions read env vars via `Deno.env.get('NAME')`. At runtime in local dev, `--env-file .env.development` (or `.env.local`) on `supabase functions serve` is what populates them. In production, variables are set via `supabase secrets set` against the linked project — a separate flow from `.env.local`.
 

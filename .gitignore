@@ -45,7 +45,7 @@ apps/web/playwright/.cache/
 # `.env.development` (committed local-dev defaults — local-stack values only:
 # public Supabase demo keys + loopback URLs, no real secrets) is NOT matched by
 # the patterns above, so it stays tracked everywhere. `.env.local` is your
-# gitignored per-machine override that wins. See decisions §136.
+# gitignored per-machine override that wins. See decisions §137.
 
 # IDE
 .vscode/

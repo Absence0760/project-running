@@ -103,7 +103,7 @@ void main() async {
   // See decisions §13 for the iOS counterpart. Per-machine overrides go
   // through `--dart-define` (merged on top below, winning); on mobile
   // that is the override path, not a `.env.local` file, because
-  // flutter_dotenv loads from the asset bundle (decisions §136).
+  // flutter_dotenv loads from the asset bundle (decisions §137).
   const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
   const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
   const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');

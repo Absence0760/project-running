@@ -291,7 +291,7 @@ defaults — the loopback Supabase URL + demo service-role key + `WORKER_ID=dev`
 at startup, layered under a gitignored `.env.local` (your real keys) and the
 shell env, both of which win. So a bare `go run .` against a running local
 stack works out of the box; the explicit-export form above is only needed to
-override a value. Repo-wide convention: decisions §136.
+override a value. Repo-wide convention: decisions §137.
 
 Stops on SIGINT / SIGTERM.
 

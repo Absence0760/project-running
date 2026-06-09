@@ -8,7 +8,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// Gradle-time env reader (repo-wide convention, decisions §136): load the
+// Gradle-time env reader (repo-wide convention, decisions §137): load the
 // committed, non-secret `.env.development` defaults, then overlay a gitignored
 // `.env.local` if present so a per-machine override wins. Missing files → every
 // flag defaults to the safe production value. DEV-only; the release build type
