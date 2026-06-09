@@ -210,7 +210,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     // Networking
-    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
 
     // Local persistence
     implementation("androidx.datastore:datastore-preferences:1.2.1")
@@ -231,5 +231,5 @@ dependencies {
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:8.43.0")
+    implementation("io.sentry:sentry-android:8.43.1")
 }
