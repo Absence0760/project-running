@@ -15,10 +15,11 @@ import 'run_source.dart';
 /// pace), `source` + `activityType` (filter chips), `externalId` (import
 /// dedup), `avgBpm` (HR cards / training load), `elevationM` (year-in-running
 /// recap), `indoor` (fitness excludes indoor runs from the VDOT pool),
-/// `lastModifiedAt` (newer-wins clock), `createdByUserId` (owner tag,
-/// decisions §67), `synced` (unsynced badge + sync drain). Excluded — recovered
-/// on demand via the store's `runById`: `track`, `routeId`, `createdAt`, every
-/// other metadata key (`title`, `notes`, `laps`, `workout_step_results`, …).
+/// `routeId` (run-detail route-comparison / attempt history), `lastModifiedAt`
+/// (newer-wins clock), `createdByUserId` (owner tag, decisions §67), `synced`
+/// (unsynced badge + sync drain). Excluded — recovered on demand via the
+/// store's `runById`: `track`, `createdAt`, every other metadata key (`title`,
+/// `notes`, `laps`, `workout_step_results`, …).
 class RunSummary {
   final String id;
   final DateTime startedAt;
@@ -30,6 +31,7 @@ class RunSummary {
   final double? avgBpm;
   final double? elevationM;
   final bool indoor;
+  final String? routeId;
   final String? lastModifiedAt;
   final String? createdByUserId;
   final bool synced;
@@ -45,6 +47,7 @@ class RunSummary {
     this.avgBpm,
     this.elevationM,
     this.indoor = false,
+    this.routeId,
     this.lastModifiedAt,
     this.createdByUserId,
     this.synced = false,
@@ -65,6 +68,7 @@ class RunSummary {
       avgBpm: (meta?[MetadataKeys.avgBpm] as num?)?.toDouble(),
       elevationM: (meta?[MetadataKeys.elevationM] as num?)?.toDouble(),
       indoor: meta?[MetadataKeys.indoor] == true,
+      routeId: run.routeId,
       lastModifiedAt: meta?[MetadataKeys.lastModifiedAt] as String?,
       createdByUserId: meta?[MetadataKeys.createdByUserId] as String?,
       synced: synced,
@@ -84,6 +88,7 @@ class RunSummary {
         avgBpm: avgBpm,
         elevationM: elevationM,
         indoor: indoor,
+        routeId: routeId,
         lastModifiedAt: lastModifiedAt,
         createdByUserId: createdByUserId,
         synced: value,
@@ -113,6 +118,7 @@ class RunSummary {
       duration: duration,
       distanceMetres: distanceMetres,
       track: const [],
+      routeId: routeId,
       source: source,
       externalId: externalId,
       metadata: metadata.isEmpty ? null : metadata,
@@ -132,6 +138,7 @@ class RunSummary {
         'avg_bpm': avgBpm,
         'elevation_m': elevationM,
         'indoor': indoor,
+        'route_id': routeId,
         'last_modified_at': lastModifiedAt,
         'created_by_user_id': createdByUserId,
         'synced': synced,
@@ -148,6 +155,7 @@ class RunSummary {
         avgBpm: (j['avg_bpm'] as num?)?.toDouble(),
         elevationM: (j['elevation_m'] as num?)?.toDouble(),
         indoor: j['indoor'] == true,
+        routeId: j['route_id'] as String?,
         lastModifiedAt: j['last_modified_at'] as String?,
         createdByUserId: j['created_by_user_id'] as String?,
         synced: j['synced'] == true,

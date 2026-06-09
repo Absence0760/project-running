@@ -5,6 +5,7 @@ void main() {
   Run buildRun({
     Map<String, dynamic>? metadata,
     String? externalId,
+    String? routeId,
     RunSource source = RunSource.app,
     List<Waypoint> track = const [],
   }) =>
@@ -14,6 +15,7 @@ void main() {
         duration: const Duration(minutes: 30, seconds: 47),
         distanceMetres: 5234.5,
         track: track,
+        routeId: routeId,
         source: source,
         externalId: externalId,
         metadata: metadata,
@@ -25,6 +27,7 @@ void main() {
         buildRun(
           source: RunSource.strava,
           externalId: 'strava:99',
+          routeId: 'route-7',
           metadata: {
             MetadataKeys.activityType: 'trail',
             MetadataKeys.avgBpm: 162,
@@ -50,6 +53,7 @@ void main() {
       expect(summary.avgBpm, 162.0);
       expect(summary.elevationM, 845.0);
       expect(summary.indoor, true);
+      expect(summary.routeId, 'route-7');
       expect(summary.lastModifiedAt, '2026-04-23T09:00:00.000Z');
       expect(summary.createdByUserId, 'user-7');
       expect(summary.synced, true);
@@ -73,6 +77,7 @@ void main() {
         buildRun(
           source: RunSource.watch,
           externalId: 'x:1',
+          routeId: 'route-9',
           track: const [Waypoint(lat: 1, lng: 2)],
           metadata: {
             MetadataKeys.activityType: 'walk',
@@ -95,7 +100,7 @@ void main() {
       expect(run.externalId, 'x:1');
       // Track is never carried by the summary.
       expect(run.track, isEmpty);
-      expect(run.routeId, isNull);
+      expect(run.routeId, 'route-9');
       expect(run.createdAt, isNull);
       expect(run.metadata?[MetadataKeys.activityType], 'walk');
       expect(run.metadata?[MetadataKeys.avgBpm], 120.0);
