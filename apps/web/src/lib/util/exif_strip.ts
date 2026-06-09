@@ -30,7 +30,6 @@ export function stripJpegExif(input: Uint8Array): Uint8Array {
 			// Misaligned (corrupt / unexpected) — copy the remainder verbatim
 			// rather than risk dropping image data.
 			pushRange(out, input, i, input.length);
-			i = input.length;
 			break;
 		}
 		const marker = input[i + 1];
@@ -39,7 +38,6 @@ export function stripJpegExif(input: Uint8Array): Uint8Array {
 		if (marker === 0xd9) {
 			// EOI — emit and copy any trailing bytes.
 			pushRange(out, input, i, input.length);
-			i = input.length;
 			break;
 		}
 		if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
@@ -51,21 +49,18 @@ export function stripJpegExif(input: Uint8Array): Uint8Array {
 			// Start of Scan — the rest is entropy-coded image data. Copy
 			// verbatim to the end.
 			pushRange(out, input, i, input.length);
-			i = input.length;
 			break;
 		}
 
 		// Length-bearing segment: 2-byte big-endian length (includes itself).
 		if (i + 3 >= input.length) {
 			pushRange(out, input, i, input.length);
-			i = input.length;
 			break;
 		}
 		const len = (input[i + 2] << 8) | input[i + 3];
 		const segEnd = i + 2 + len;
 		if (len < 2 || segEnd > input.length) {
 			pushRange(out, input, i, input.length);
-			i = input.length;
 			break;
 		}
 		if (marker === 0xe1) {

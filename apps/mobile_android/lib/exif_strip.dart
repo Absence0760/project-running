@@ -30,7 +30,6 @@ Uint8List stripJpegExif(Uint8List input) {
       // Misaligned (corrupt / unexpected) — copy the remainder verbatim
       // rather than risk dropping image data.
       out.add(input.sublist(i));
-      i = input.length;
       break;
     }
     final marker = input[i + 1];
@@ -39,7 +38,6 @@ Uint8List stripJpegExif(Uint8List input) {
     if (marker == 0xD9) {
       // EOI — emit and copy any trailing bytes.
       out.add(input.sublist(i));
-      i = input.length;
       break;
     }
     if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
@@ -51,21 +49,18 @@ Uint8List stripJpegExif(Uint8List input) {
       // Start of Scan — the rest is entropy-coded image data. Copy
       // verbatim to the end.
       out.add(input.sublist(i));
-      i = input.length;
       break;
     }
 
     // Length-bearing segment: 2-byte big-endian length (includes itself).
     if (i + 3 >= input.length) {
       out.add(input.sublist(i));
-      i = input.length;
       break;
     }
     final len = (input[i + 2] << 8) | input[i + 3];
     final segEnd = i + 2 + len;
     if (len < 2 || segEnd > input.length) {
       out.add(input.sublist(i));
-      i = input.length;
       break;
     }
     if (marker == 0xE1) {
