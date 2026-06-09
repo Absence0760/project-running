@@ -30,6 +30,8 @@
     "dev:run:worker": "cd apps/job_worker && go run .",
     "dev:setup:osrm": "cd apps/job_worker/osrm && make download && make build",
     "dev:run:osrm": "node scripts/dev_run_osrm.mjs",
+    "dev:setup:graphhopper": "cd apps/job_worker/graphhopper && make seed && make build",
+    "dev:run:graphhopper": "node scripts/dev_run_graphhopper.mjs",
     "dev:tiles:up": "bin/protomaps-dev.sh start",
     "dev:tiles:down": "bin/protomaps-dev.sh stop",
     "dev:tiles:restart": "bin/protomaps-dev.sh restart",

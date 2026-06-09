@@ -1,0 +1,46 @@
+# Local-only GraphHopper round_trip engine for running development.
+#
+# Provisions a single GraphHopper container for the "Generate a route by
+# distance" feature's loop generator. Unlike the OSRM stack next door (which
+# runs the upstream osrm/osrm-backend image), there is no official GraphHopper
+# image, so this builds the SAME Dockerfile the Fly app ships — local matches
+# prod, at the cost of a one-time from-source Maven build.
+#
+# Workflow (mirrors osrm/):
+#   1.  cd apps/job_worker/graphhopper
+#   2.  make seed          # copies the region PBF from ../osrm/data (or downloads)
+#   3.  docker compose up   # builds the image, then imports the graph on first boot
+#
+# Or from the repo root: `npm run dev:setup:graphhopper` then
+# `npm run dev:run:graphhopper` (preflight-checks the PBF first).
+#
+# First boot imports the PBF at data/region.osm.pbf into data/graph-cache and
+# prepares the foot profile (incl. Landmarks) — a few minutes for the Victoria
+# extract. The graph is reused on later boots; `make clean` forces a rebuild.
+
+services:
+  graphhopper:
+    build:
+      context: .
+      args:
+        # Keep in lockstep with the Dockerfile default + the Fly app.
+        GH_VERSION: "10.0"
+    container_name: job_worker_graphhopper
+    restart: unless-stopped
+    ports:
+      # Localhost only — no auth on this surface, never publish it. The web dev
+      # server reaches it via GRAPHHOPPER_URL=http://127.0.0.1:8989 set in
+      # apps/web/.env.local (see apps/web/.env.development for the opt-in note).
+      - "127.0.0.1:8989:8989"
+    volumes:
+      # The PBF lives here (make seed puts it there) and the built graph-cache
+      # persists here across boots — same volume model as the Fly app.
+      - ./data:/data
+    healthcheck:
+      # /health returns 200 once the graph is loaded and the server is serving.
+      # Long start period: the first-boot graph import + LM prep takes minutes.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 600s
+      retries: 3
