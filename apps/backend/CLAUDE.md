@@ -7,8 +7,9 @@ Supabase project for the Run app. Postgres schema, Row-Level Security, Storage b
 ```
 apps/backend/
 ├── package.json              # scripts: gen:types, gen:types:check
-├── .env.example              # strava + parkrun env vars (public)
-├── .env.local                # real values (gitignored)
+├── .env.example              # placeholder template (committed)
+├── .env.development          # ready-to-run local defaults (committed, non-secret)
+├── .env.local                # your real secrets / overrides (gitignored, wins)
 └── supabase/
     ├── config.toml           # local-stack config — ports, auth, email
     ├── seed.sql              # test user + 12 runs + 5 routes + integrations + gym/nutrition
@@ -262,7 +263,7 @@ The client in the function is authenticated *as the user* (RLS applies) because 
 ```bash
 # Start the stack + function host (from apps/backend)
 supabase start
-supabase functions serve --env-file .env.local
+supabase functions serve --env-file .env.development   # or .env.local for your real keys
 
 # Hit one
 curl -X POST http://127.0.0.1:54321/functions/v1/parkrun-import \
@@ -309,9 +310,9 @@ supabase functions deploy parkrun-import --project-ref "${SUPABASE_PROJECT_REF}"
 
 ## Secrets and env vars
 
-`.env.local` (gitignored) holds real values. `.env.example` holds placeholder values and is committed. Keep the two in sync when you add a new variable.
+Three committed-vs-local files, the repo-wide convention (decisions §136): `.env.example` is the placeholder template; `.env.development` is the committed, non-secret, ready-to-run local defaults you serve `--env-file .env.development` against; `.env.local` (gitignored) holds your real keys and is the file you point `--env-file` at when you need them — it wins. Keep all three in sync when you add a new variable.
 
-Supabase Edge Functions read env vars via `Deno.env.get('NAME')`. At runtime in local dev, `--env-file .env.local` on `supabase functions serve` is what populates them. In production, variables are set via `supabase secrets set` against the linked project — a separate flow from `.env.local`.
+Supabase Edge Functions read env vars via `Deno.env.get('NAME')`. At runtime in local dev, `--env-file .env.development` (or `.env.local`) on `supabase functions serve` is what populates them. In production, variables are set via `supabase secrets set` against the linked project — a separate flow from `.env.local`.
 
 Variables currently used:
 
@@ -333,7 +334,7 @@ Variables currently used:
 - **Run every `supabase` command from `apps/backend/`.** The CLI looks for `config.toml` in the cwd and fails or misleads otherwise.
 - **`supabase db reset` blows away local data.** The seed repopulates it. If you had manual experiments in the local DB, export them first — the seed will not restore them.
 - **`supabase gen types typescript --local` writes `Connecting to db 5432` to stdout** before the real output. The `gen:types` npm script pipes through `grep -v '^Connecting to db'` to strip it. Don't remove that filter.
-- **`supabase functions serve` does not autoload `.env.local`**. You must pass `--env-file .env.local` explicitly. A missing env var shows up as a `Deno.env.get('X')!` assertion failure at runtime — the `!` eats the error.
+- **`supabase functions serve` does not autoload any env file**. You must pass `--env-file .env.development` (or `.env.local` for your real keys) explicitly. A missing env var shows up as a `Deno.env.get('X')!` assertion failure at runtime — the `!` eats the error.
 - **Docker must be running.** All local Supabase services run under Docker. If `supabase start` hangs or errors weirdly, check `docker ps`.
 - **`deno.lock` lives at the repo root and is committed.** Newer Supabase CLIs write it during `supabase db reset` / `functions serve` to pin Edge Function dependency resolutions (e.g. `https://esm.sh/@supabase/supabase-js@2 → 2.105.1` plus integrity hashes for every transitive Deno URL). The file is created inside the CLI's Docker container as `root:root`, so after a fresh resolution you may need to `sudo chown` it before staging. Treat it like `package-lock.json`: review the diff on dependency-version changes, but otherwise let it ride.
 
