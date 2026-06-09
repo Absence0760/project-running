@@ -52,6 +52,7 @@
     "test:web:e2e:ui": "pnpm -C apps/web test:e2e:ui",
     "test:flutter": "melos exec -- flutter test",
     "test:worker": "cd apps/job_worker && go test ./...",
+    "setup": "bash scripts/setup.sh",
     "setup:install": "pnpm install",
     "setup:flutter": "dart pub get && melos bootstrap",
     "test:scripts": "node scripts/check_root_scripts.mjs"

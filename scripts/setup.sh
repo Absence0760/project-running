@@ -81,16 +81,16 @@ else
 fi
 
 # --- Web env file ---
-if [ ! -f ".env.local" ] && [ -f ".env.example" ]; then
-  cp .env.example .env.local
-  echo "  ✓ .env.local created from .env.example (edit with your keys)"
-fi
+# No copy needed: apps/web/.env.development is committed with working local
+# defaults (Vite loads it for `vite dev`). Copying the empty .env.example to
+# .env.local here would SHADOW those defaults — so we deliberately don't.
+echo "  ✓ web uses committed apps/web/.env.development (no copy needed)"
 
-# --- Backend env file ---
+# --- Backend env file (only needed if you run the Edge Functions locally) ---
 cd "$ROOT/apps/backend"
 if [ ! -f ".env.local" ] && [ -f ".env.example" ]; then
   cp .env.example .env.local
-  echo "  ✓ Backend .env.local created"
+  echo "  ✓ Backend .env.local created (fill in secrets only to run Edge Functions)"
 fi
 
 cd "$ROOT"
@@ -98,13 +98,17 @@ cd "$ROOT"
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "To run each app:"
+echo "Next, bring the local stack up (Supabase + tiles + adb reverse + Ollama):"
 echo ""
-echo "  Web:           cd apps/web && pnpm dev"
-echo "  iOS:           cd apps/mobile_ios && flutter run -d iPhone"
-echo "  Android:       cd apps/mobile_android && flutter run -d emulator-5554"
-echo "  Wear OS:       cd apps/watch_wear && flutter run -d <wear-device>"
-echo "  Apple Watch:   open apps/watch_ios/WatchApp.xcodeproj → Cmd+R"
-echo "  Backend:       cd apps/backend && supabase start"
+echo "  npm run dev:up"
 echo ""
-echo "See docs/local_testing_*.md for detailed instructions."
+echo "Then run an app in its own terminal:"
+echo ""
+echo "  npm run dev:run:web        # web app on http://localhost:7777"
+echo "  npm run dev:run:android    # Flutter app on a device/emulator"
+echo "  npm run dev:run:ios        # Flutter app on an iOS simulator/device"
+echo ""
+echo "No env files to copy or edit — the committed dev defaults point at the"
+echo "local stack. Seed login: runner@test.com / testtest."
+echo ""
+echo "See README.md (Quick start) and apps/*/local_testing.md for details."
