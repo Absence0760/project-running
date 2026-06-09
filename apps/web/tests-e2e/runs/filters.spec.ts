@@ -37,15 +37,14 @@ test.describe('/runs — filters', () => {
 
 	// The gym/nutrition seed plants a now()-relative run (seed.sql
 	// "Morning easy 8K") that is the newest AND among the fastest, which
-	// skews the "today" baseline and the Fastest sort. The two tests that
-	// assert an exact current-week shape clear it first and restore it
-	// after — /nutrition + dashboard-readiness specs still need the run.
-	// Gated by title so every other filter test keeps counting the seed
-	// run. Registered before the navigating beforeEach below so the clean
-	// is already applied when the page first loads.
+	// makes the Fastest sort's top row == Newest's top row. The Fastest
+	// test clears it first and restores it after — /nutrition +
+	// dashboard-readiness specs still need the run. Gated by title so
+	// every other filter test keeps counting the seed run. Registered
+	// before the navigating beforeEach below so the clean is already
+	// applied when the page first loads.
 	const cleanWeekTitles = new Set([
-		'Fastest puts the fastest-pace run at the top',
-		'selecting Custom with stale bounds in localStorage does NOT apply them — picker opens fresh'
+		'Fastest puts the fastest-pace run at the top'
 	]);
 	let restoreCleanWeek: (() => Promise<void>) | null = null;
 	test.beforeEach(async ({}, testInfo) => {
@@ -387,6 +386,14 @@ test.describe('/runs — filters', () => {
 			// selecting Custom always opens a fresh picker; the list
 			// stays at the previous (non-custom) range until Apply.
 			await context.addInitScript(() => {
+				// Drop the SvelteKit page snapshot. The shared beforeEach
+				// selected dateRange='all', and SvelteKit captures that as a
+				// per-history-entry snapshot; on the goto below it would
+				// restore the snapshot (setting filtersHydrated=true) and the
+				// page would SKIP its localStorage read — defeating the stale-
+				// bounds setup. Clearing it makes this a genuine cold open,
+				// which is the scenario the test documents.
+				sessionStorage.clear();
 				localStorage.setItem(
 					'runs_filters_v1',
 					JSON.stringify({
