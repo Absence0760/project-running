@@ -1463,7 +1463,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (run.routeId == null) return const [];
 
     final thisActivity = run.metadata?[MetadataKeys.activityType] as String? ?? 'run';
-    final attempts = widget.runStore.runs
+    // Reads the full-history index so the route PB isn't lost once the run
+    // store windows — only routeId / distance / activityType / duration / id
+    // are used, all carried by the summary (no track, no detail nav here).
+    final attempts = widget.runStore.summaryRuns
         .where((r) =>
             r.routeId == run.routeId &&
             r.distanceMetres > 100 &&

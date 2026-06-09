@@ -381,7 +381,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
-    final runs = widget.runStore.runs;
+    // Stats + cards read the full-history index (track-less). Only the offline
+    // PB fallback below needs GPS tracks, and it scans the resident window
+    // (runStore.runs) directly.
+    final runs = widget.runStore.summaryRuns;
     final goals = widget.preferences.goals;
 
     final now = DateTime.now();
@@ -425,10 +428,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (longest == null || r.distanceMetres > longest.distanceMetres) {
         longest = r;
       }
-      // Skip the per-run track scan (the hottest loop in the app) entirely when
-      // the authoritative server PB cache is available — it supersedes this
-      // fallback. Only pay it offline / signed-out.
-      if (_serverPbs.isEmpty) {
+    }
+    // Offline / signed-out best-effort fallback: scan the resident runs' GPS
+    // tracks (runStore.runs — the window, which carries tracks — NOT the
+    // track-less summaries above). Skipped entirely when the authoritative
+    // server PB cache is present; that's also the app's hottest loop, so not
+    // paying it online is a real win.
+    if (_serverPbs.isEmpty) {
+      for (final r in widget.runStore.runs) {
+        if (!_isRunActivity(r)) continue;
         final runCache = _bestEffortCache.putIfAbsent(r.id, () => {});
         for (final e in pbDistances.entries) {
           if (r.distanceMetres < e.value) continue;
