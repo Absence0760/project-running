@@ -55,11 +55,15 @@ test.describe('search — by name', () => {
 			await followBtn.click();
 			await expect(followBtn).toContainText('Following', { timeout: 5_000 });
 		} finally {
+			// Restore the seeded runner→alex edge: this test removed it up
+			// front to start the toggle at "Follow", so it must put it back
+			// or it leaks an unseeded state to specs that rely on the seed.
 			await admin
 				.from('user_follows')
-				.delete()
-				.eq('follower_id', USER_A.id)
-				.eq('followee_id', USER_B.id);
+				.upsert(
+					{ follower_id: USER_A.id, followee_id: USER_B.id },
+					{ onConflict: 'follower_id,followee_id' }
+				);
 		}
 	});
 
