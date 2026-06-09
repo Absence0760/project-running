@@ -388,7 +388,7 @@
 						{/if}
 					</div>
 				</div>
-	<div class="trend-bars">
+				<div class="trend-bars">
 					<div class="trend-track">
 						{#if trendAvg > 0}
 							<div
