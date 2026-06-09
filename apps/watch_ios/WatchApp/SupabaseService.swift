@@ -13,15 +13,19 @@ actor SupabaseService {
     // In production the paired iPhone hands over baseURL + anonKey + token
     // over `WCSession.updateApplicationContext(_:)`.
     //
-    // No anon key is hardcoded: the audit pass flagged the previous
-    // literal because it baked the publishable key into git history.
-    // Set the value via `applyCredentials(...)` from the WCSession
-    // callback before any direct sign-in attempt; an empty default
-    // means a watch-sim-alone DEBUG run that hasn't received a
-    // handover gets a clear `apikey` rejection rather than silently
-    // hitting the dev project.
+    // Defaults to the LOCAL stack so a fresh `git clone` gets a working
+    // watch-sim-alone dev loop with nothing to copy or hand-edit. The
+    // anon key below is the STANDARD PUBLIC Supabase *local* demo JWT —
+    // identical on every `supabase start`, the same value committed in
+    // `apps/mobile_ios/.env.local`. It is NOT a secret and NOT a dev/prod
+    // project key: GoTrue rejects an empty `apikey` with 401, so without
+    // this default the DEBUG "Sync Direct" button can't sign in out of a
+    // clean checkout. This whole file is `#if DEBUG`, so the demo key
+    // never ships in a Release/Archive build. In production the paired
+    // iPhone overrides both via `applyCredentials(...)` from the WCSession
+    // handover.
     private var baseURL = "http://127.0.0.1:54321"
-    private var anonKey = ""
+    private var anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 
     private var accessToken: String?
     private var userId: String?

@@ -60,6 +60,8 @@ jobs:
             apps/web/.env.development
             apps/mobile_android/.env.local
             apps/mobile_ios/.env.local
+            apps/watch_wear/android/.env.local
+            apps/watch_ios/WatchApp/SupabaseService.swift
           )
           errors=0
           for f in "${FILES[@]}"; do
