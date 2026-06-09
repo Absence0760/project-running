@@ -241,7 +241,7 @@ void main() {
         'updated_at': null,
         'start_point': null,
         'tags': tags ?? const <String>[],
-        'featured': featured,
+        'is_featured': featured,
         'featured_at': null,
         'run_count': runCount,
         'club_id': null,

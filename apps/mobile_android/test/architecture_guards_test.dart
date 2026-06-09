@@ -1871,13 +1871,25 @@ void main() {
     test('main.dart only calls dotenv.load(\'.env.local\') under kDebugMode',
         () {
       final source = File('lib/main.dart').readAsStringSync();
-      final loadIdx = source.indexOf("dotenv.load(fileName: '.env.local'");
+      // Locate the `.env.local` filename argument. The call may be
+      // formatted across several lines (dart format splits it once the
+      // argument list grows), so don't assume `dotenv.load(` and the
+      // `fileName:` argument share a line.
+      final fileArgIdx = source.indexOf("fileName: '.env.local'");
       expect(
-        loadIdx,
+        fileArgIdx,
         greaterThan(0),
         reason:
             'Expected dotenv.load(fileName: \'.env.local\', ...) in main.dart. '
             'If the call has been replaced or removed, update this guard.',
+      );
+      // That argument must belong to a dotenv.load(...) call.
+      final loadIdx = source.lastIndexOf('dotenv.load(', fileArgIdx);
+      expect(
+        loadIdx,
+        greaterThan(0),
+        reason:
+            'fileName: \'.env.local\' must be an argument to dotenv.load(...).',
       );
       // Walk backwards to find the nearest `if (` opening — the load
       // must sit inside an `if (kDebugMode) { ... }` block.
