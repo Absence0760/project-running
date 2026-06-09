@@ -27,10 +27,13 @@ export interface PushPing {
 	ele?: number;
 }
 
-/// POST a ping to the hub the way the mobile recorder does. Permissive
-/// mode (no JWT) means no Authorization header is needed. Throws on a
-/// non-2xx so a misbehaving hub fails the test loudly rather than
-/// silently dropping the assertion's signal.
+/// POST a ping to the hub the way the mobile recorder does. The hub is
+/// booted in permissive (auth-OFF) mode by start-livehub.sh — it
+/// exports SUPABASE_JWT_SECRET="" to shadow the committed
+/// .env.development default, so the authorizer is nil and no
+/// Authorization header is needed. Throws on a non-2xx so a misbehaving
+/// hub fails the test loudly rather than silently dropping the
+/// assertion's signal.
 export async function pushLivePing(runId: string, ping: PushPing): Promise<void> {
 	const url = `${LIVEHUB_URL}/v1/live/${encodeURIComponent(runId)}/push`;
 	const res = await fetch(url, {

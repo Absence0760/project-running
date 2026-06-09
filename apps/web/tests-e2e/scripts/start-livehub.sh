@@ -6,7 +6,7 @@
 # starts; it kills the process on teardown.
 #
 # Permissive mode on purpose: SUPABASE_JWT_SECRET and
-# LIVEHUB_REQUIRE_AUTH are left unset so the hub accepts anon
+# LIVEHUB_REQUIRE_AUTH are exported empty (below) so the hub accepts anon
 # subscribe + unauthenticated push (the dev-only path documented in
 # apps/job_worker/main.go). The zone fetcher IS wired (service role)
 # so the privacy-zone clip still runs against the real seed — the test
@@ -43,4 +43,14 @@ export SUPABASE_URL="$API_URL"
 export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
 export HEALTH_PORT
 export WORKER_ID="livehub-e2e"
+# Force permissive (auth-OFF) mode. main.go auto-loads the committed
+# apps/job_worker/.env.development, which sets SUPABASE_JWT_SECRET to the
+# Supabase demo secret — that would flip the hub into Supabase-JWT auth
+# and 403 the anon pushLivePing the spec relies on. loadEnvFiles only
+# fills vars that are NOT already in the environment (os.LookupEnv), so
+# exporting these empty here shadows the .env.development defaults and
+# keeps the authorizer nil. The auth gate itself is covered by the Go
+# unit tests (internal/livehub/auth_test.go, server_test.go).
+export SUPABASE_JWT_SECRET=""
+export LIVEHUB_REQUIRE_AUTH=""
 exec "$BIN_DIR/jobworker-livehub-e2e"
