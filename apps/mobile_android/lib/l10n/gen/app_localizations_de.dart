@@ -1787,6 +1787,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String runDetailRouteSaveFailed(String name) {
+    return '\"$name\" konnte nicht als Route gespeichert werden.';
+  }
+
+  @override
   String runDetailMakePublicFailed(String error) {
     return 'Lauf konnte nicht öffentlich gemacht werden: $error';
   }

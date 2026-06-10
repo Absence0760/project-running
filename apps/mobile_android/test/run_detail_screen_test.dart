@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:core_models/core_models.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Route;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,8 +50,14 @@ Run _run({
           : const [],
     );
 
+class _ThrowingRouteStore extends LocalRouteStore {
+  @override
+  Future<void> save(Route route, {bool markSynced = false}) async =>
+      throw Exception('boom');
+}
+
 Future<void> _pump(WidgetTester tester, Run run,
-    {double? bodyWeightKg}) async {
+    {double? bodyWeightKg, LocalRouteStore? routeStore}) async {
   SharedPreferences.setMockInitialValues(
     bodyWeightKg != null ? {'body_weight_kg': bodyWeightKg} : {},
   );
@@ -69,7 +75,7 @@ Future<void> _pump(WidgetTester tester, Run run,
       home: RunDetailScreen(
         run: run,
         runStore: runStore,
-        routeStore: LocalRouteStore(),
+        routeStore: routeStore ?? LocalRouteStore(),
         preferences: prefs,
       ),
     ),
@@ -117,6 +123,32 @@ void main() {
       // Share is behind an overflow menu (Icons.more_vert or similar).
       // The screen uses an edit icon + more actions. Check the edit icon:
       expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    });
+
+    testWidgets('save-as-route shows an error banner when the store throws',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo', withTrack: true);
+      await _pump(tester, run, routeStore: _ThrowingRouteStore());
+
+      // Open the overflow menu → Save as route. Timed pumps (not
+      // pumpAndSettle, which spins the LiveRunMap pulse animation).
+      await tester.tap(find.byTooltip('More'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Save as route').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Confirm the save dialog → the store throws → error banner, not
+      // the success banner.
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.textContaining('as a route'), findsOneWidget);
+
+      // Drain the banner auto-dismiss timer before teardown.
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('renders activity type label', (tester) async {

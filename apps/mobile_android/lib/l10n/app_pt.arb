@@ -489,6 +489,7 @@
   "runDetailReSnapping": "Reajustando às ruas…",
   "runDetailRematchFailed": "Falha no reajuste: {error}",
   "runDetailRouteSaved": "\"{name}\" salva — {kept} pontos de passagem ({smoothed} suavizados)",
+  "runDetailRouteSaveFailed": "Não foi possível salvar \"{name}\" como rota.",
   "runDetailMakePublicFailed": "Não foi possível tornar a corrida pública: {error}",
   "runDetailMakePublicTitle": "Tornar esta corrida pública?",
   "runDetailMakePublicBodyZone": "Compartilhar torna esta corrida pública, para que qualquer pessoa com o link possa vê-la. Esta corrida começa ou termina dentro de uma das suas zonas de privacidade, então quem visualizar verá um trajeto recortado com os trechos dentro da zona ocultos.",

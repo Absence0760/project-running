@@ -489,6 +489,7 @@
   "runDetailReSnapping": "Réajustement aux routes…",
   "runDetailRematchFailed": "Échec du réajustement : {error}",
   "runDetailRouteSaved": "\"{name}\" enregistré — {kept} points de cheminement ({smoothed} lissés)",
+  "runDetailRouteSaveFailed": "Impossible d'enregistrer « {name} » comme itinéraire.",
   "runDetailMakePublicFailed": "Impossible de rendre la course publique : {error}",
   "runDetailMakePublicTitle": "Rendre cette course publique ?",
   "runDetailMakePublicBodyZone": "Le partage rend cette course publique afin que toute personne disposant du lien puisse la consulter. Cette course commence ou se termine dans l'une de vos zones de confidentialité, les spectateurs verront donc une trace écourtée, les segments situés dans la zone étant masqués.",

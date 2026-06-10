@@ -3041,6 +3041,12 @@ abstract class AppLocalizations {
   /// **'Saved \"{name}\" — {kept} waypoints ({smoothed} smoothed out)'**
   String runDetailRouteSaved(String name, int kept, int smoothed);
 
+  /// Banner shown when saving a run's track as a route fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save \"{name}\" as a route.'**
+  String runDetailRouteSaveFailed(String name);
+
   /// Banner shown when flipping a run to public fails
   ///
   /// In en, this message translates to:

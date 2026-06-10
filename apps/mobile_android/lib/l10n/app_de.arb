@@ -489,6 +489,7 @@
   "runDetailReSnapping": "Wird erneut an Straßen angepasst…",
   "runDetailRematchFailed": "Neuabgleich fehlgeschlagen: {error}",
   "runDetailRouteSaved": "\"{name}\" gespeichert — {kept} Wegpunkte ({smoothed} geglättet)",
+  "runDetailRouteSaveFailed": "\"{name}\" konnte nicht als Route gespeichert werden.",
   "runDetailMakePublicFailed": "Lauf konnte nicht öffentlich gemacht werden: {error}",
   "runDetailMakePublicTitle": "Diesen Lauf öffentlich machen?",
   "runDetailMakePublicBodyZone": "Durch das Teilen wird dieser Lauf öffentlich, sodass jeder mit dem Link ihn ansehen kann. Dieser Lauf beginnt oder endet in einer deiner Datenschutzzonen, daher sehen Betrachter eine beschnittene Aufzeichnung, bei der die Abschnitte innerhalb der Zone ausgeblendet sind.",

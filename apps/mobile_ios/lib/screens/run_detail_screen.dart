@@ -1947,7 +1947,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       elevationGainMetres: gain,
       createdAt: DateTime.now(),
     );
-    await widget.routeStore.save(route);
+    try {
+      await widget.routeStore.save(route);
+    } catch (e) {
+      debugPrint('run_detail: save-as-route persist failed: $e');
+      if (!mounted) return;
+      showTopBanner(context, l10n.runDetailRouteSaveFailed(name));
+      return;
+    }
 
     if (!mounted) return;
     showTopBanner(

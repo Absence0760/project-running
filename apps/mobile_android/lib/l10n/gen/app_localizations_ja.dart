@@ -1703,6 +1703,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String runDetailRouteSaveFailed(String name) {
+    return '「$name」をルートとして保存できませんでした。';
+  }
+
+  @override
   String runDetailMakePublicFailed(String error) {
     return 'ランを公開できませんでした: $error';
   }

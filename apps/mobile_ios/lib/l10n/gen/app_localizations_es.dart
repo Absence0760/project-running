@@ -1786,6 +1786,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String runDetailRouteSaveFailed(String name) {
+    return 'No se pudo guardar \"$name\" como ruta.';
+  }
+
+  @override
   String runDetailMakePublicFailed(String error) {
     return 'No se pudo hacer pública la carrera: $error';
   }

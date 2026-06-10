@@ -489,6 +489,7 @@
   "runDetailReSnapping": "道路に再スナップ中…",
   "runDetailRematchFailed": "再マッチに失敗しました: {error}",
   "runDetailRouteSaved": "\"{name}\" を保存しました — {kept} 個のウェイポイント（{smoothed} 個を平滑化）",
+  "runDetailRouteSaveFailed": "「{name}」をルートとして保存できませんでした。",
   "runDetailMakePublicFailed": "ランを公開できませんでした: {error}",
   "runDetailMakePublicTitle": "このランを公開しますか？",
   "runDetailMakePublicBodyZone": "共有すると、このランは公開され、リンクを知っている人なら誰でも閲覧できます。このランはプライバシーゾーンのいずれかの内側で開始または終了しているため、閲覧者にはゾーン内の区間が隠された切り取り済みのトラックが表示されます。",

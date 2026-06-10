@@ -1783,6 +1783,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String runDetailRouteSaveFailed(String name) {
+    return 'Não foi possível salvar \"$name\" como rota.';
+  }
+
+  @override
   String runDetailMakePublicFailed(String error) {
     return 'Não foi possível tornar a corrida pública: $error';
   }
@@ -9021,6 +9026,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String runDetailRouteSaved(String name, int kept, int smoothed) {
     return '\"$name\" salva — $kept pontos de passagem ($smoothed suavizados)';
+  }
+
+  @override
+  String runDetailRouteSaveFailed(String name) {
+    return 'Não foi possível salvar \"$name\" como rota.';
   }
 
   @override

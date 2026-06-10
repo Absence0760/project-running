@@ -1790,6 +1790,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String runDetailRouteSaveFailed(String name) {
+    return 'Impossible d\'enregistrer « $name » comme itinéraire.';
+  }
+
+  @override
   String runDetailMakePublicFailed(String error) {
     return 'Impossible de rendre la course publique : $error';
   }
