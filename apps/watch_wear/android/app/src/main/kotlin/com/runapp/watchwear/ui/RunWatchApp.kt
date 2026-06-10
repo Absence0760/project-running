@@ -1807,13 +1807,6 @@ private fun PostRunScreen(
     }
 }
 
-private fun formatLapSplit(lap: com.runapp.watchwear.FinishedLap): String {
-    val m = lap.splitSeconds / 60
-    val s = lap.splitSeconds % 60
-    val km = lap.splitDistanceM / 1000.0
-    return "%d:%02d · %.2f km".format(m, s, km)
-}
-
 private fun formatDuration(totalS: Int): String {
     val h = totalS / 3600
     val m = (totalS % 3600) / 60
