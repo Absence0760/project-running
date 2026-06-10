@@ -40,8 +40,10 @@ logs:
 
 # Run the server directly (no Docker) against the seeded PBF — fastest inner
 # loop. Needs Go (GOTOOLCHAIN=auto if your local toolchain is older than go.mod).
+# PORT 8991 matches the docker-compose host port so the dev GRAPH_CYCLE_URL is
+# the same either way, and leaves 8989 free for the local GraphHopper.
 dev:
-	GRAPH_CYCLE_PBF=$(PBF) GRAPH_CYCLE_API_KEY=$(DEV_KEY) go run .
+	GRAPH_CYCLE_PBF=$(PBF) GRAPH_CYCLE_API_KEY=$(DEV_KEY) PORT=8991 go run .
 
 test:
 	go test ./...
@@ -52,7 +54,7 @@ test:
 START ?= -37.81,144.96
 smoke:
 	@curl -s -H 'X-Engine-Key: $(DEV_KEY)' \
-		-X POST 'http://127.0.0.1:8989/cycle' \
+		-X POST 'http://127.0.0.1:8991/cycle' \
 		-H 'Content-Type: application/json' \
 		-d '{"start":{"lat":'"$$(echo $(START) | cut -d, -f1)"',"lng":'"$$(echo $(START) | cut -d, -f2)"'},"targetDistanceM":5000}' \
 		| grep -q '"found"' && echo "✓ /cycle responded" || (echo "✗ no response — is the server up + the PBF seeded for this region?" && exit 1)

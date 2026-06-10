@@ -62,13 +62,13 @@ make build && make serve
 Verify (override START for your seeded region — the default is Melbourne):
 
 ```bash
-curl -s 'http://127.0.0.1:8989/health' | jq .
+curl -s 'http://127.0.0.1:8991/health' | jq .
 # {"status":"ok","nodes":...,"edges":...,"ways":...}
 
 make smoke START=-37.81,144.96
 ```
 
-The web dev server reaches the sidecar via `GRAPH_CYCLE_URL=http://127.0.0.1:8989`
+The web dev server reaches the sidecar via `GRAPH_CYCLE_URL=http://127.0.0.1:8991`
 + `GRAPH_CYCLE_API_KEY=dev-graph-cycle-key` (set in `apps/web/.env.local`; see
 `apps/web/.env.development` for the opt-in note). Without `GRAPH_CYCLE_URL` the
 generate handler skips graph-cycle and uses round_trip.

@@ -24,9 +24,11 @@ services:
       GRAPH_CYCLE_API_KEY: dev-graph-cycle-key
       GRAPH_CYCLE_PBF: /data/region.osm.pbf
     ports:
-      # Localhost only — never publish it. The web dev server reaches it via
-      # GRAPH_CYCLE_URL=http://127.0.0.1:8989 set in apps/web/.env.local.
-      - "127.0.0.1:8989:8989"
+      # Localhost only — never publish it. Host port 8991 (NOT 8989) so it can
+      # run ALONGSIDE the local GraphHopper container, which owns 8989 — testing
+      # the graph-cycle -> round_trip fallback chain locally needs both up. The
+      # web dev server reaches it via GRAPH_CYCLE_URL=http://127.0.0.1:8991.
+      - "127.0.0.1:8991:8989"
     volumes:
       # The PBF lives here (make seed puts it there) — same volume model as the
       # Fly app. The in-memory graph is rebuilt from it on each boot.
