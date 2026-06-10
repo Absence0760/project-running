@@ -13,13 +13,15 @@ import { USER_A } from '../fixtures/users';
  * specs invoke the public API via the dev-only `window.__routeBuilder`
  * hook that /routes/new+page.svelte exposes in import.meta.env.DEV.
  *
- * Loop generation (no distinct end pin) now goes server-side: the builder
- * POSTs to /api/routes/generate (the GraphHopper round_trip Lambda) and
- * renders the returned polyline directly. We mock that endpoint with a
- * deterministic circular loop near the target. When it's unavailable
- * (501 unconfigured / 5xx down) the builder falls back to the in-browser
- * OSRM heuristic — exercised by its own test and still used for the
- * point-to-point case (distinct end), which round_trip doesn't cover.
+ * Loop generation (no distinct end pin) goes server-side: the builder POSTs
+ * to /api/routes/generate, which tries the graph_cycle sidecar FIRST (the v3
+ * graph-cycle generator) and falls back to GraphHopper round_trip, then renders
+ * the returned polyline directly. The client sees one {coordinates, distanceM}
+ * shape regardless of which engine served it, so we mock that endpoint per test
+ * with the shape the engine-under-test would emit. When the endpoint is
+ * unavailable (501 unconfigured / 5xx down) the builder falls back to the
+ * in-browser OSRM heuristic — exercised by its own test and still used for the
+ * point-to-point case (distinct end), which neither loop engine covers.
  *
  * Every OSRM call is mocked to return a deterministic straight-line
  * polyline between the requested coords with the haversine distance.
@@ -138,15 +140,14 @@ function loopPolyline(
 }
 
 /**
- * A compact polygon loop — the shape the server's sampled via-point generator
- * (loop_generate.ts) returns: OSRM traces `start → v1 → … → vK → start`, so the
- * polyline is a real K-gon anchored at the start, NOT a smooth circle. Built as
- * a regular K-gon (default triangle, the generator's primary shape) whose
+ * A real polygonal loop — the shape the graph_cycle sidecar (the v3 generator)
+ * returns: a clean cycle traced on the actual foot graph, anchored at the start,
+ * NOT a smooth circle. Built as a regular K-gon (default triangle) whose
  * perimeter ≈ targetM, with the first vertex pinned to `start`. Distinct from
  * `loopPolyline` (a 24-gon ≈ circle = the round_trip fallback shape) so the two
  * server paths render visibly different geometry.
  */
-function polygonLoopPolyline(
+function graphCycleLoopPolyline(
 	start: { lat: number; lng: number },
 	targetM: number,
 	k = 3,
@@ -157,8 +158,8 @@ function polygonLoopPolyline(
 	const circumradiusM = side / (2 * Math.sin(Math.PI / k));
 	const rDeg = circumradiusM / 111320;
 	const cosLat = Math.cos((start.lat * Math.PI) / 180);
-	// Centre offset so the first vertex lands exactly on `start` (the via-point
-	// generator anchors the loop at the start). First vertex due north of centre.
+	// Centre offset so the first vertex lands exactly on `start` (the generator
+	// anchors the loop at the start). First vertex due north of centre.
 	const centerLat = start.lat - rDeg;
 	const pts: [number, number][] = [];
 	for (let i = 0; i <= k; i++) {
@@ -171,18 +172,18 @@ function polygonLoopPolyline(
 }
 
 /**
- * Mock the server-side generate endpoint with a compact POLYGON loop — what the
- * client sees when OSRM is configured and the sampled via-point generator clears
- * the spur/snap bar (the dense/medium-start happy path). The traced K-gon is a
- * real loop with non-trivial enclosed area, unlike the round_trip out-and-back.
+ * Mock the server-side generate endpoint with a real polygonal loop — what the
+ * client sees when the graph_cycle sidecar finds a clean cycle on the foot graph
+ * (the dense/medium-start happy path). The traced loop has non-trivial enclosed
+ * area, unlike the round_trip out-and-back.
  */
-async function mockGeneratePolygonLoop(page: Page) {
+async function mockGenerateGraphCycleLoop(page: Page) {
 	await page.route('**/api/routes/generate', async (route: Route) => {
 		const body = route.request().postDataJSON() as {
 			start: { lat: number; lng: number };
 			targetDistanceM: number;
 		};
-		const coordinates = polygonLoopPolyline(body.start, body.targetDistanceM);
+		const coordinates = graphCycleLoopPolyline(body.start, body.targetDistanceM);
 		let distanceM = 0;
 		for (let i = 1; i < coordinates.length; i++) {
 			distanceM += haversineM(
@@ -201,7 +202,7 @@ async function mockGeneratePolygonLoop(page: Page) {
 /**
  * Twice-mounted enclosed-area metric (shoelace on a local equirectangular
  * projection, m²) — the same isoperimetric primitive `select.ts#enclosedAreaM2`
- * scores candidates with server-side. Used here to assert the polygon path
+ * scores candidates with server-side. Used here to assert the graph-cycle path
  * yields a real loop (non-zero area) and the degenerate fallback yields a
  * near-collinear spur (≈ zero area), without importing server code into the
  * browser context.
@@ -426,16 +427,16 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		expect(last[0]).toBeCloseTo(FIELD_START.lng, 4);
 	});
 
-	test('polygon path: compact via-point loop renders as a real loop near target', async ({
+	test('graph-cycle path: clean foot-graph loop renders as a real loop near target', async ({
 		page,
 	}) => {
-		// When OSRM is configured the server tries the sampled via-point polygon
-		// generator FIRST and returns its traced K-gon (loop_generate.ts). The
-		// builder must render that as a closed loop near the target with the same
-		// post-collapse anchor shape as the round_trip path — and it must be a
-		// REAL loop (non-trivial enclosed area), not an out-and-back.
+		// When the graph_cycle sidecar is configured the server tries it FIRST and
+		// returns the clean cycle it traced on the real foot graph. The builder must
+		// render that as a closed loop near the target with the same post-collapse
+		// anchor shape as the round_trip path — and it must be a REAL loop
+		// (non-trivial enclosed area), not an out-and-back.
 		await page.unroute('**/api/routes/generate');
-		await mockGeneratePolygonLoop(page);
+		await mockGenerateGraphCycleLoop(page);
 
 		const result = await generateLoopViaHook(page, {
 			targetDistanceM: 5000,
@@ -473,18 +474,17 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		expect(enclosedAreaM2(result.coordinates)).toBeGreaterThan(300_000);
 	});
 
-	test('loop-poor: degenerate polygon snaps fall through to the round_trip loop', async ({
+	test('loop-poor: graph-cycle falls through to the round_trip loop', async ({
 		page,
 	}) => {
-		// Server-side, a loop-poor start makes the via-point polygon generator
-		// return null (every candidate is a zero-area spur or snapped too far),
-		// and the handler falls through to the round_trip out-and-back. The
-		// client sees a single 200 either way — what changes is the SHAPE. Mock
-		// the endpoint to emit the round_trip circle (the fall-through result) and
-		// assert the builder still renders a closed loop near target. The
-		// server-side null→round_trip decision itself is unit-pinned in
-		// handler.test.ts ("falls back to round_trip when the polygon path is
-		// loop-poor", degenerate spur + 250 m over-snap inputs).
+		// Server-side, a loop-poor start makes the graph_cycle sidecar return
+		// found:false (no clean cycle on the foot graph), and the handler falls
+		// through to the round_trip out-and-back. The client sees a single 200
+		// either way — what changes is the SHAPE. Mock the endpoint to emit the
+		// round_trip circle (the fall-through result) and assert the builder still
+		// renders a closed loop near target. The server-side null→round_trip
+		// decision itself is unit-pinned in graph_cycle.test.ts ("falls back to
+		// round_trip when graph-cycle is loop-poor").
 		await page.unroute('**/api/routes/generate');
 		await mockGenerateLoop(page);
 
@@ -494,7 +494,7 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		});
 
 		expect(result.ok).toBe(true);
-		// Same ±1500 m re-trace band as the polygon test above (and the TARGETS
+		// Same ±1500 m re-trace band as the graph-cycle test above (and the TARGETS
 		// circle tests) — the collapse + straight-line re-route shrinks the
 		// rendered loop below the mocked perimeter.
 		expect(result.totalDistanceM).toBeGreaterThan(5000 - 1500);
