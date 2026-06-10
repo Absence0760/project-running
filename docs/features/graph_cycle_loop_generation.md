@@ -214,27 +214,20 @@ P1 is purely the prod graph build, with no remaining algorithm risk.)
   coverage as a middle tier.
 - Selection + the loop-poor shortfall banner are reused unchanged.
 
-## Phases + effort
+## Phases (all DONE — see § Built results)
 
 - **P0 — spike — ✅ DONE (2026-06-10, green-lit)**: validated the algorithm on a
-  live Overpass foot graph + stdlib Dijkstra/disjoint-path search — clean loops at
-  dense/medium (areaEff 0.42–0.60), report start confirmed loop-poor (§ P0
-  results). The remaining phases are pure build, not algorithm risk.
-- **P1 — Go graph sidecar (~3–4 days)**: the validated approach as a prod service —
-  PBF → foot graph (via an OSM graph library, not hand-rolled) +
-  `nearest`/`shortestPath`/`cycleNearTarget` HTTP API, validated against OSRM. The
-  graph build is the bulk of this.
-- **P2 — integration (~2 days)**: `graph_cycle.ts` + handler wiring
-  (graph-cycle-first + fallback chain) + selection reuse + unit tests (mocked
-  sidecar).
-- **P3 — ship (~2–3 days)**: e2e + measure across density tiers + Lambda parity +
-  **deploy the sidecar to prod (Fly, alongside OSRM/GraphHopper)** + docs/§137 +
-  sub-processor note (the sidecar is our infra, same posture as OSRM — no new
-  third party).
-
-**Remaining ≈ 7–9 days** (P1–P3; P0 is done). The new prod graph sidecar — not the
-algorithm — is the real cost; the P0 spike already answered the only question that
-gated it.
+  live Overpass foot graph + stdlib Dijkstra/disjoint-path search (§ P0 results).
+- **P1 — Go graph sidecar — ✅ DONE**: `apps/graph_cycle` — PBF → foot graph
+  (`paulmach/osm`) + `nearest`/`route`/`cycle` HTTP API, in-process guard,
+  distroless image + Fly config; ~40 Go tests; adversarial-reviewed + fixed.
+- **P2 — integration — ✅ DONE**: `graph_cycle.ts` + handler wiring
+  (graph-cycle-first + round_trip fallback) + selection reuse + unit tests (mocked
+  sidecar); polygon retired; `+server.ts` / Lambda parity; e2e reframed.
+- **P3 — ship — ✅ DONE (code) / operator-gated (deploy)**: live measurement (VA
+  extract), Lambda + Terraform wiring, `release-graph-cycle.yml`, docs/§137 +
+  sub-processor note. The Fly app create + volume + PBF seed + secret + first
+  deploy need operator access (§ Deploy handoff).
 
 ## Risks + mitigations
 
@@ -263,35 +256,22 @@ gated it.
 - **Algorithm = penalised-reuse disjoint-path cycles** (not strict removal) — the
   spike proved strict disjointness fails in bottlenecked sparse networks.
 
-**Still open (decide at P1 kickoff):**
-- **Where the cycle search runs** — in the Go sidecar (recommended: native, next
-  to the graph, fewer round-trips) vs the Node handler driving sidecar
-  `shortestPath` calls (simpler, chattier, more latency).
-- **Prod cost/ops** of a third map sidecar on Fly — acceptable standalone, or
-  co-locate with the OSRM container to save a service?
+**Resolved at P1 kickoff (2026-06-10):**
+- **Where the cycle search runs** → **in the Go sidecar** (`cycleNearTarget` =
+  `POST /cycle`): native, next to the graph, one HTTP round-trip per request
+  instead of dozens of Node-driven `shortestPath` calls.
+- **Prod cost/ops** → **standalone Fly app** (`graph-cycle`), not co-located on the
+  OSRM machine. OSRM runs the upstream image with `osrm-routed` as its only
+  process; a standalone app mirrors the GraphHopper sidecar exactly and shares the
+  same PBF, at the cost of one small auto-stop machine.
 
-## Recommendation + handoff (start here, next session)
+## Built — what to read instead of this proposal
 
-**The algorithm is validated (P0, green-lit) — build P1–P3.** Operating on the real
-street graph is the only thing that traces the neighbourhood loop geometry can't,
-and the spike confirmed it produces clean loops everywhere a loop exists while
-honestly detecting loop-poor starts. Concrete next steps:
-
-1. **Resolve the two open decisions** above (search in sidecar vs handler; co-locate
-   on Fly) at P1 kickoff.
-2. **P1 — Go graph sidecar**: PBF → foot graph (OSM graph library, not hand-rolled)
-   + `nearest` / `shortestPath(excludedEdges)` / `cycleNearTarget`. Port the spike's
-   validated search verbatim: direction-sampled far-points around `D/2`,
-   **penalised** (~×8) reuse on the return path, `areaEfficiency`-scored,
-   closest-to-target selection, and surface the **largest clean loop** found (feeds
-   the loop-poor UX).
-3. **P2 — `graph_cycle.ts`** + handler wiring (graph-cycle-first; retire polygon;
-   `round_trip` fallback) + unit tests (mocked sidecar).
-4. **P3 — ship**: e2e + measure + Lambda parity + deploy the sidecar to Fly +
-   docs/§137 + sub-processor note.
-
-The remaining cost is the prod graph sidecar, **not** the algorithm — the spike
-already paid down the algorithm risk.
+The proposal above is the original design record. For the as-shipped system see:
+**§ Built results** + **§ Deploy handoff** (above), `apps/graph_cycle/README.md`
+(the sidecar), and [decisions §137 amendment](../architecture/decisions.md). The
+algorithm was ported verbatim from the P0 spike; nothing in the design changed at
+build time beyond the two resolved decisions and the review fixes.
 
 ## Extension: route-design preferences (a layer on the graph)
 

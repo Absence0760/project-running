@@ -142,8 +142,15 @@ export async function handleGenerate(
 			if (loop) {
 				return { status: 200, body: { coordinates: loop.coordinates, distanceM: loop.distanceM } };
 			}
-		} catch {
-			// Unconfigured/unreachable sidecar → fall through to round_trip.
+		} catch (e) {
+			// Unconfigured/unreachable sidecar → fall through to round_trip (or 502
+			// below if no fallback engine is configured). Log so a prolonged sidecar
+			// outage is visible rather than silently degrading every request to the
+			// fallback — the request still ends 200, so nothing else would surface it.
+			console.warn(
+				'[generate] graph_cycle sidecar error, falling back:',
+				e instanceof Error ? e.message : String(e),
+			);
 		}
 		// graph-cycle produced no loop AND GraphHopper isn't configured for the
 		// fallback: a loop-poor location with no out-and-back engine to offer.

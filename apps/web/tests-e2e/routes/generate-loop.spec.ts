@@ -5,10 +5,12 @@ import { USER_A } from '../fixtures/users';
 /**
  * /routes/new — Generate-by-distance feature.
  *
- * The full feature: pick a start, set a target distance, click Generate,
- * watch the bisection iteration converge through 4 attempts, see the
- * scaffolding collapse to 4 anchors, end up with a routed loop the user
- * can Save. Driving every step from canvas pixel clicks is too brittle
+ * The full feature: pick a start, set a target distance, click Generate, get
+ * back a loop from a single POST to /api/routes/generate (graph-cycle sidecar
+ * first, then round_trip fallback) — a {coordinates, distanceM} shape the
+ * builder renders directly — see the scaffolding collapse to 4 anchors, end up
+ * with a routed loop the user can Save. Driving every step from canvas pixel
+ * clicks is too brittle
  * (MapTiler projection depends on style + zoom + viewport), so these
  * specs invoke the public API via the dev-only `window.__routeBuilder`
  * hook that /routes/new+page.svelte exposes in import.meta.env.DEV.
@@ -360,11 +362,11 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 			expect(result.ok).toBe(true);
 			expect(result.coordinates.length).toBeGreaterThan(1);
 
-			// Distance lands within tolerance. Wider than the production
-			// ±15% acceptance band because the mock's straight-line
-			// distance doesn't perfectly track the bisection's expected
-			// curve — but a 20-30% spread is still a tight regression
-			// guard against accidental scaleFactor / numPoints drift.
+			// Distance lands within tolerance. Wider than the production ±15%
+			// acceptance band because the builder collapses the loop to ≤4 anchors
+			// and re-routes them through the straight-line OSRM mock, whose chord
+			// total under-runs the mocked 24-gon's arc-length perimeter — a 20-30%
+			// spread absorbs that re-trace while still guarding the target distance.
 			expect(result.totalDistanceM).toBeGreaterThan(target.m - target.toleranceM);
 			expect(result.totalDistanceM).toBeLessThan(target.m + target.toleranceM);
 
@@ -1053,10 +1055,9 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 	test('Action buttons stay disabled mid-generation (Save / GPX / KML)', async ({
 		page,
 	}) => {
-		// Audit follow-up: emitUpdate fires routed=true after iter 1
-		// completes — before the bisection's restore-best step. The
-		// parent must keep Save / GPX / KML disabled while builderBusy
-		// so the user can't save a pre-converged polyline.
+		// While the server generate call is in flight (builderBusy=true), the
+		// parent must keep Save / GPX / KML disabled so the user can't save a
+		// route whose generation hasn't landed yet.
 		await page.unroute('**/api/routes/generate');
 		await page.route('**/api/routes/generate', async (route) => {
 			await new Promise((r) => setTimeout(r, 2000));

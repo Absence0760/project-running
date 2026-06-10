@@ -220,6 +220,19 @@ test('handleGenerate → 502 when graph-cycle is loop-poor and no fallback engin
 	assert.equal(res.status, 502);
 });
 
+test('handleGenerate → 502 when the sidecar THROWS and no fallback engine is configured', async () => {
+	// Distinct path from the loop-poor (found:false → null) case above: here the
+	// sidecar errors, fetchGraphCycle throws, the catch swallows it, and with no
+	// GraphHopper to fall back to the handler must still 502 (not crash).
+	const fetcher: Fetcher = async () => new Response('down', { status: 503 });
+	const res = await handleGenerate(
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
+		{ graphCycleUrl: GC, graphhopperUrl: undefined },
+		{ fetcher },
+	);
+	assert.equal(res.status, 502);
+});
+
 test('handleGenerate serves graph-cycle alone (no GraphHopper) on a clean loop', async () => {
 	const fetcher: Fetcher = async () => gcResponse(true, squareLoop(0, 0, 0.0056), 4990);
 	const res = await handleGenerate(

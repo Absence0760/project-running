@@ -7,9 +7,11 @@
 // `apps/web/src/lib/routes/generate/handler.ts` and is also wrapped (for dev
 // only) by the SvelteKit `+server.ts`. This file:
 //   1. Parses the Function-URL event body (string, maybe base64).
-//   2. Reads GRAPHHOPPER_URL from process.env (Terraform sets it).
-//   3. Calls the shared core, which fans out round_trip seeds to the
-//      self-hosted GraphHopper engine and returns a finished loop polyline.
+//   2. Reads GRAPH_CYCLE_URL + GRAPH_CYCLE_API_KEY (graph-cycle sidecar, tried
+//      FIRST) and GRAPHHOPPER_URL + GRAPHHOPPER_API_KEY (round_trip fallback)
+//      from process.env (Terraform sets them).
+//   3. Calls the shared core, which searches the foot graph (graph-cycle) and
+//      falls back to round_trip seeds, returning a finished loop polyline.
 //
 // Non-streaming JSON (unlike the coach Lambda) — the response is one small
 // GeoJSON line, so the simple LambdaFunctionURLResult shape is enough.
