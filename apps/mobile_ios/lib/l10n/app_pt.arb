@@ -1527,6 +1527,8 @@
   "runSocialRunnerFallback": "Corredor",
   "runSocialReply": "Responder",
   "runSocialDelete": "Excluir",
+  "runSocialDeleteCommentTitle": "Excluir este comentário?",
+  "runSocialDeleteCommentMessage": "Este comentário será removido permanentemente. Não é possível desfazer.",
   "runSocialPost": "Publicar",
   "runSocialCancel": "Cancelar",
   "runSocialKudosError": "Não foi possível atualizar os kudos: {error}",

@@ -5625,6 +5625,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runSocialDelete => 'Excluir';
 
   @override
+  String get runSocialDeleteCommentTitle => 'Excluir este comentário?';
+
+  @override
+  String get runSocialDeleteCommentMessage =>
+      'Este comentário será removido permanentemente. Não é possível desfazer.';
+
+  @override
   String get runSocialPost => 'Publicar';
 
   @override
@@ -12842,6 +12849,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runSocialDelete => 'Excluir';
+
+  @override
+  String get runSocialDeleteCommentTitle => 'Excluir este comentário?';
+
+  @override
+  String get runSocialDeleteCommentMessage =>
+      'Este comentário será removido permanentemente. Não é possível desfazer.';
 
   @override
   String get runSocialPost => 'Publicar';

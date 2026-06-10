@@ -5644,6 +5644,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runSocialDelete => 'Supprimer';
 
   @override
+  String get runSocialDeleteCommentTitle => 'Supprimer ce commentaire ?';
+
+  @override
+  String get runSocialDeleteCommentMessage =>
+      'Ce commentaire sera définitivement supprimé. Cette action est irréversible.';
+
+  @override
   String get runSocialPost => 'Publier';
 
   @override

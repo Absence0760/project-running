@@ -9279,6 +9279,18 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get runSocialDelete;
 
+  /// Confirm dialog title before deleting a run comment
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this comment?'**
+  String get runSocialDeleteCommentTitle;
+
+  /// Confirm dialog body before deleting a run comment
+  ///
+  /// In en, this message translates to:
+  /// **'This comment will be permanently removed. This can\'t be undone.'**
+  String get runSocialDeleteCommentMessage;
+
   /// Button to post a comment
   ///
   /// In en, this message translates to:

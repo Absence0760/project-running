@@ -1527,6 +1527,8 @@
   "runSocialRunnerFallback": "Läufer",
   "runSocialReply": "Antworten",
   "runSocialDelete": "Löschen",
+  "runSocialDeleteCommentTitle": "Diesen Kommentar löschen?",
+  "runSocialDeleteCommentMessage": "Dieser Kommentar wird dauerhaft entfernt. Das kann nicht rückgängig gemacht werden.",
   "runSocialPost": "Senden",
   "runSocialCancel": "Abbrechen",
   "runSocialKudosError": "Kudos konnten nicht aktualisiert werden: {error}",

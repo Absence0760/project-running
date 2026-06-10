@@ -1527,6 +1527,8 @@
   "runSocialRunnerFallback": "Coureur",
   "runSocialReply": "Répondre",
   "runSocialDelete": "Supprimer",
+  "runSocialDeleteCommentTitle": "Supprimer ce commentaire ?",
+  "runSocialDeleteCommentMessage": "Ce commentaire sera définitivement supprimé. Cette action est irréversible.",
   "runSocialPost": "Publier",
   "runSocialCancel": "Annuler",
   "runSocialKudosError": "Impossible de mettre à jour les kudos : {error}",

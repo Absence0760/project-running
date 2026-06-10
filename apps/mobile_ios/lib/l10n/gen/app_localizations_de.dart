@@ -5636,6 +5636,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runSocialDelete => 'Löschen';
 
   @override
+  String get runSocialDeleteCommentTitle => 'Diesen Kommentar löschen?';
+
+  @override
+  String get runSocialDeleteCommentMessage =>
+      'Dieser Kommentar wird dauerhaft entfernt. Das kann nicht rückgängig gemacht werden.';
+
+  @override
   String get runSocialPost => 'Senden';
 
   @override

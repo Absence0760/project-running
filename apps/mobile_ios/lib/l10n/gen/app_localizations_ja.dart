@@ -5300,6 +5300,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runSocialDelete => '削除';
 
   @override
+  String get runSocialDeleteCommentTitle => 'このコメントを削除しますか？';
+
+  @override
+  String get runSocialDeleteCommentMessage => 'このコメントは完全に削除されます。元に戻せません。';
+
+  @override
   String get runSocialPost => '投稿';
 
   @override

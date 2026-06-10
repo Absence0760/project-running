@@ -176,14 +176,41 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     }
   }
 
+  final Set<String> _deletingComments = {};
+
   Future<void> _deleteComment(String commentId) async {
+    if (_deletingComments.contains(commentId)) return;
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.runSocialDeleteCommentTitle),
+            content: Text(l10n.runSocialDeleteCommentMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.runSocialCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.runSocialDelete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    _deletingComments.add(commentId);
     try {
       await widget.api.deleteRunComment(commentId);
       await _load();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(
-          context, AppLocalizations.of(context).runSocialDeleteError('$e'));
+      showTopBanner(context, l10n.runSocialDeleteError('$e'));
+    } finally {
+      _deletingComments.remove(commentId);
     }
   }
 

@@ -1527,6 +1527,8 @@
   "runSocialRunnerFallback": "ランナー",
   "runSocialReply": "返信",
   "runSocialDelete": "削除",
+  "runSocialDeleteCommentTitle": "このコメントを削除しますか？",
+  "runSocialDeleteCommentMessage": "このコメントは完全に削除されます。元に戻せません。",
   "runSocialPost": "投稿",
   "runSocialCancel": "キャンセル",
   "runSocialKudosError": "称賛を更新できませんでした: {error}",

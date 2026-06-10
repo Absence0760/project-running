@@ -7104,6 +7104,14 @@
   "@runSocialDelete": {
     "description": "Button to delete a comment"
   },
+  "runSocialDeleteCommentTitle": "Delete this comment?",
+  "@runSocialDeleteCommentTitle": {
+    "description": "Confirm dialog title before deleting a run comment"
+  },
+  "runSocialDeleteCommentMessage": "This comment will be permanently removed. This can't be undone.",
+  "@runSocialDeleteCommentMessage": {
+    "description": "Confirm dialog body before deleting a run comment"
+  },
   "runSocialPost": "Post",
   "@runSocialPost": {
     "description": "Button to post a comment"

@@ -5629,6 +5629,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runSocialDelete => 'Eliminar';
 
   @override
+  String get runSocialDeleteCommentTitle => '¿Eliminar este comentario?';
+
+  @override
+  String get runSocialDeleteCommentMessage =>
+      'Este comentario se eliminará de forma permanente. No se puede deshacer.';
+
+  @override
   String get runSocialPost => 'Publicar';
 
   @override
