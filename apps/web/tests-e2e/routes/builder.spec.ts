@@ -1,6 +1,44 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+
+/**
+ * Stub OSRM (host-agnostic — the dev server points at localhost:5000
+ * locally and the public demo in CI, so match `** /route/v1/**`) so a
+ * segment snaps to a clean polyline that echoes the requested waypoints,
+ * plus the open-meteo elevation lookup. With this a dropped pair of
+ * waypoints auto-routes to a real (non-deviating) line and Save / GPX
+ * enable with no network.
+ */
+async function stubRoutingSuccess(page: Page): Promise<void> {
+	await page.route('**/route/v1/**', (route) => {
+		const url = route.request().url();
+		const m = url.match(/\/foot\/([-0-9.,;]+)/);
+		const coords: [number, number][] = m
+			? m[1].split(';').map((p) => p.split(',').map(Number) as [number, number])
+			: [
+					[0, 0],
+					[0.001, 0.001],
+				];
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				code: 'Ok',
+				routes: [{ geometry: { coordinates: coords }, distance: 1000 }],
+				waypoints: coords.map((c) => ({ location: c })),
+			}),
+		});
+	});
+	await page.route('https://api.open-meteo.com/**', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ elevation: Array(100).fill(10) }),
+		}),
+	);
+}
 
 /**
  * Dev-only test hooks (see /routes/new/+page.svelte). The page exposes
@@ -789,6 +827,119 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		});
 	});
 
+	test('typed coordinates: invalid input shows an error + sets no point, then valid clears it', async ({
+		page,
+	}) => {
+		// applyCoords validates the keyboard-entry fields (WCAG 2.1.1
+		// alternative to map-tap). Untested until now: a non-numeric or
+		// out-of-range entry must surface .coord-error AND leave the point
+		// unset, and a subsequent valid entry must clear the error + set it.
+		await page.goto('/routes/new');
+		await waitForRouteBuilder(page);
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+
+		const startRow = page.locator('.point-row').first();
+		const err = page.locator('.coord-error').first();
+
+		// Non-numeric → numeric error, start stays unset.
+		await page.getByLabel('Start latitude').fill('abc');
+		await page.getByLabel('Start longitude').fill('10');
+		await page.getByRole('button', { name: 'Set start', exact: true }).click();
+		await expect(err).toBeVisible();
+		await expect(err).toContainText(/numeric/i);
+		await expect(startRow.locator('.point-unset')).toBeVisible();
+
+		// Out-of-range latitude → range error, still unset.
+		await page.getByLabel('Start latitude').fill('200');
+		await page.getByLabel('Start longitude').fill('10');
+		await page.getByRole('button', { name: 'Set start', exact: true }).click();
+		await expect(err).toContainText(/-90\.\.90|range|180/i);
+		await expect(startRow.locator('.point-unset')).toBeVisible();
+
+		// Valid → error clears + the point pill renders the coords.
+		await page.getByLabel('Start latitude').fill('-37.8136');
+		await page.getByLabel('Start longitude').fill('144.9631');
+		await page.getByRole('button', { name: 'Set start', exact: true }).click();
+		await expect(err).toHaveCount(0);
+		await expect(startRow.locator('.point-set')).toContainText('-37.81');
+	});
+
+	test('Undo pops the last waypoint; Clear resets to the empty state', async ({ page }) => {
+		// The "disabled at zero waypoints" test only pins the gate; this
+		// drives the toolbar actions themselves. OSRM 503 so the background
+		// auto-route settles offline — we only assert waypoint bookkeeping.
+		await page.route('**/route/v1/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: -0.02, dLng: 0.02 },
+			{ dLat: 0, dLng: 0.04 },
+		]);
+
+		const points = page.locator('.builder-stat-value').nth(2);
+		await expect(points).toHaveText('3', { timeout: 5_000 });
+
+		await page.locator('.toolbar-group .btn', { hasText: 'Undo' }).click();
+		await expect(points).toHaveText('2');
+
+		await page.locator('.toolbar-group .btn', { hasText: 'Clear' }).click();
+		await expect(points).toHaveText('0');
+		// Empty-state onboarding card comes back once the route is cleared.
+		await expect(page.locator('.canvas-empty')).toBeVisible();
+	});
+
+	test('Out & back doubles the point-to-point sequence', async ({ page }) => {
+		// outAndBack on a non-loop [a,b,c] appends the reversed interior
+		// (minus the turnaround) → [a,b,c,b,a]; the points stat goes 3 → 5.
+		await page.route('**/route/v1/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: -0.02, dLng: 0.02 },
+			{ dLat: 0, dLng: 0.04 },
+		]);
+
+		const points = page.locator('.builder-stat-value').nth(2);
+		await expect(points).toHaveText('3', { timeout: 5_000 });
+
+		await page.locator('.toolbar-group .btn', { hasText: 'Out & back' }).click();
+		await expect(points).toHaveText('5', { timeout: 5_000 });
+	});
+
+	test('GPX + KML export buttons download a file once a route is calculated', async ({
+		page,
+	}) => {
+		// handleExportGpx / handleExportKml build the file in-browser from
+		// the snapped coordinates + elevations and trigger a download. The
+		// buttons are gated on `routed`; stub OSRM so a clean route exists.
+		await stubRoutingSuccess(page);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 },
+		]);
+
+		const gpx = page.getByRole('button', { name: 'GPX' });
+		await expect(gpx).toBeEnabled({ timeout: 10_000 });
+		const [gpxDownload] = await Promise.all([page.waitForEvent('download'), gpx.click()]);
+		expect(gpxDownload.suggestedFilename()).toMatch(/\.gpx$/);
+
+		const kml = page.getByRole('button', { name: 'KML' });
+		await expect(kml).toBeEnabled();
+		const [kmlDownload] = await Promise.all([page.waitForEvent('download'), kml.click()]);
+		expect(kmlDownload.suggestedFilename()).toMatch(/\.kml$/);
+	});
+
 	test('anon visitor is auth-walled to /login', async ({ browser }) => {
 		// /routes/new is not in publicPaths. Use a fresh context with
 		// no storage state to simulate anon.
@@ -904,5 +1055,62 @@ test.describe('/routes/new — "use my location" pans the map', () => {
 				{ timeout: 10_000 },
 			)
 			.toBeLessThan(0.5);
+	});
+});
+
+test.describe('/routes/new — save flow', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	// The new route row is written for real; delete it after each test so
+	// the suite stays idempotent (same shape as save-as-route.spec.ts).
+	let routeId: string | null = null;
+	test.afterEach(async () => {
+		if (routeId) {
+			try {
+				await deleteRoute(routeId);
+			} catch (_) {
+				/* best-effort */
+			}
+			routeId = null;
+		}
+	});
+
+	test('calculate → Save Route → modal → save → navigate to /routes/[id] with the chosen name', async ({
+		page,
+	}) => {
+		// The prior save test only force-enabled the gate + cancelled. This
+		// drives the whole flow: a stubbed OSRM route flips `routed` true,
+		// the sidebar Save opens the modal, the name persists, and Save
+		// writes the row + navigates to the detail page rendering that name.
+		await stubRoutingSuccess(page);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 },
+		]);
+
+		const saveBtn = page.getByRole('button', { name: /Save Route/ });
+		await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+		await saveBtn.click();
+
+		const name = `e2e-builder-${Date.now()}`;
+		const nameInput = page.getByPlaceholder('My Route');
+		await expect(nameInput).toBeVisible();
+		await nameInput.fill(name);
+
+		// Modal submit is "Save route" (lowercase r) — distinct from the
+		// sidebar "Save Route" behind it.
+		await page.getByRole('button', { name: 'Save route', exact: true }).click();
+
+		await page.waitForURL(/\/routes\/[0-9a-f-]+$/, { timeout: 15_000 });
+		const m = page.url().match(/\/routes\/([0-9a-f-]+)$/);
+		expect(m).not.toBeNull();
+		routeId = m![1];
+
+		await expect(page.getByRole('heading', { level: 1, name })).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 });
