@@ -55,3 +55,38 @@ test('the CTL/ATL/TSB card numbers read loadNow, not liveSnap', () => {
 		'the load numbers must not read liveSnap any more',
 	);
 });
+
+// --- Cross-modality wiring (multi_modal.md § Lift training-load spec) ---
+//
+// The training-load series the whole readiness block reads MUST be fed
+// real gym lifts, and that feed MUST stay separable so a future
+// exclude_gym_from_readiness toggle can drop lifts cleanly and leave the
+// run-only curve byte-for-byte recoverable. Pin the three links in that
+// chain so a refactor can't silently sever cross-modality (lifts stop
+// counting) or its opt-out (lifts can't be dropped).
+
+test('the training-load series is fed real gym lifts (cross-modality is wired)', () => {
+	assert.match(
+		SOURCE,
+		/computeTrainingLoadSeries\([\s\S]*?readinessLifts\s*\)/,
+		'computeTrainingLoadSeries must receive readinessLifts as its lifts arg',
+	);
+	assert.match(
+		SOURCE,
+		/let lifts = \$derived\(liftsFromSetHistory\(/,
+		'lifts must derive from real gym set history via liftsFromSetHistory',
+	);
+});
+
+test('readinessLifts honours the exclude_gym_from_readiness opt-out', () => {
+	assert.match(
+		SOURCE,
+		/let readinessLifts = \$derived\(\s*excludeGymFromReadiness \? \[\] : lifts\s*\)/,
+		'readinessLifts must drop to [] when excludeGymFromReadiness is set',
+	);
+	assert.match(
+		SOURCE,
+		/excludeGymFromReadiness = effective<boolean>\(settings, 'exclude_gym_from_readiness'\)/,
+		'the opt-out must read the exclude_gym_from_readiness setting',
+	);
+});
