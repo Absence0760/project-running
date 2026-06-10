@@ -140,9 +140,7 @@
 			const imported = (body.imported as number) ?? 0;
 			showToast(
 				imported > 0
-					? imported === 1
-						? m('settingsAccount.parkrunImportedOne')
-						: m('settingsAccount.parkrunImported', { n: imported })
+					? m('settingsAccount.parkrunImported', { n: imported })
 					: m('settingsAccount.parkrunNoneNew'),
 				'success',
 			);
