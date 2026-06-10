@@ -514,6 +514,10 @@
 		showShareConfirm = false;
 		try {
 			await makeRunPublic(run.id);
+			// Reflect the flip in-page immediately — the visibility chip and
+			// the share button both read `run.is_public` and would otherwise
+			// keep showing "Private" / "Make public" until a reload.
+			run = { ...run, is_public: true } as Run;
 			const url = `${window.location.origin}/share/run/${run.id}`;
 			await navigator.clipboard.writeText(url);
 			showToast(m('runDetail.shareLinkCopied'), 'success');
@@ -937,6 +941,11 @@
 	);
 	let hasMapTrack = $derived(baseTrack.length >= 2);
 	let elevations = $derived(baseTrack.map((p) => p.ele ?? 0));
+	// Gate the elevation chart on real samples. Without any `ele` the
+	// array is all-zero and the chart renders as a deceptive flat line
+	// (a Health Connect / summary import reads as a genuinely flat route).
+	// Mirrors mobile's `_hasElevation`.
+	let hasElevation = $derived(baseTrack.some((p) => p.ele != null));
 
 	/// Linked-cursor index — fed by ElevationProfile's onhover, consumed
 	/// by RunMap's hoverIdx. Null when the pointer is off the chart.
@@ -1434,7 +1443,7 @@
 		<!-- Elevation Profile — only render when we have real elevation
 		     samples. Without a track every point is 0 and the chart
 		     reads as a deceptive flat line. -->
-		{#if hasMapTrack}
+		{#if hasMapTrack && hasElevation}
 			<section class="section">
 				<h2>{m('runDetail.elevationProfile')}</h2>
 				<ElevationProfile
@@ -1631,7 +1640,11 @@
 							<tr>
 								<td>{split.km}</td>
 								<td class="split-pace">
-									{Math.floor(split.pace_s / 60)}:{String(split.pace_s % 60).padStart(2, '0')}
+									{#if split.pace_s > 0}
+										{Math.floor(split.pace_s / 60)}:{String(split.pace_s % 60).padStart(2, '0')}
+									{:else}
+										—
+									{/if}
 								</td>
 								{#if hasElevation}
 									<td class="split-elev" class:positive={(split.elevation_m ?? 0) > 0} class:negative={(split.elevation_m ?? 0) < 0}>

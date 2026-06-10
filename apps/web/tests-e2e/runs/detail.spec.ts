@@ -232,6 +232,13 @@ test.describe('/runs/[id]', () => {
 			await expect(page.locator('.toast', { hasText: /Share link copied/ }))
 				.toBeVisible({ timeout: 10_000 });
 
+			// In-page assertion (no reload): the visibility chip must flip
+			// to "Public" the instant the share succeeds. Pins the fix for
+			// the stale chip — proceedShare reassigns the local `run` so the
+			// chip + share button stop reading the old is_public=false.
+			await expect(page.locator('.visibility-chip.is-public'))
+				.toContainText('Public', { timeout: 5_000 });
+
 			// Backend assertion: runs.is_public flipped.
 			const admin = getAdminClient();
 			const { data: row } = await admin
