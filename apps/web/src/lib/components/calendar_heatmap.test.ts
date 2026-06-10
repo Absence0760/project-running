@@ -40,6 +40,31 @@ test('bucketRunsByLocalDay sums distances under one local-day key', () => {
 	assert.equal(map.size, 1);
 });
 
+test('bucketRunsByLocalDay defaults to bucketing the full history (no cutoff)', () => {
+	const map = bucketRunsByLocalDay([
+		makeRun('2020-01-01T12:00:00.000Z'),
+		makeRun('2026-06-08T12:00:00.000Z'),
+	]);
+	assert.equal(map.size, 2, 'with no cutoff every run is bucketed');
+});
+
+test('bucketRunsByLocalDay skips runs older than the window cutoff', () => {
+	// perf-hunt 2026-06-10: the heatmap renders a fixed window, so the helper
+	// must drop pre-window runs instead of bucketing (and spreading) the whole
+	// history. Bounds both the loop's productive work and the returned map.
+	const cutoffMs = new Date('2026-01-01T00:00:00.000Z').getTime();
+	const map = bucketRunsByLocalDay(
+		[makeRun('2020-01-01T12:00:00.000Z'), makeRun('2026-06-08T12:00:00.000Z')],
+		cutoffMs,
+	);
+	assert.equal(map.size, 1, 'the pre-cutoff run must not be bucketed');
+	assert.equal(
+		map.has(formatISO(new Date('2020-01-01T12:00:00.000Z'))),
+		false,
+		'the out-of-window day key must be absent from the bounded map',
+	);
+});
+
 test('bucketRunsByLocalDay keys match formatISO so cells light up', { skip: offsetMin <= 0 }, () => {
 	const iso = new Date('2026-01-16T02:00:00').toISOString();
 	const map = bucketRunsByLocalDay([makeRun(iso)]);

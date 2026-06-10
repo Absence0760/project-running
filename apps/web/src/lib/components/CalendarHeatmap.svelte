@@ -13,30 +13,39 @@
 	const cellGap = 3;
 	const totalSize = cellSize + cellGap;
 
-	// Build a map of local-day date -> total distance. Keys must match the
-	// grid cell keys below (`formatISO(date)`, also local) — keying by the
-	// UTC `started_at.slice(0,10)` would land evening runs on the wrong cell.
-	let dayMap = $derived(bucketRunsByLocalDay(runs));
-
-	let maxDistance = $derived(Math.max(...dayMap.values(), 1));
-
 	// `getDay()` is 0 = Sunday … 6 = Saturday. Map it to a row index that
 	// honours the user's `week_start_day`: row 0 is their chosen first day.
 	function rowFor(day: number): number {
 		return weekStartDay === 'monday' ? (day + 6) % 7 : day;
 	}
 
+	// First day of the rendered window — `weeks` back from today, aligned to
+	// the user's week start so the grid's last column ends on the current
+	// (partial) week. Computed once so the cell layout and the run bucketing
+	// share the exact same window: bucketing only the runs inside it (rather
+	// than the whole history) keeps the work + the dayMap bounded regardless
+	// of account age. perf-hunt 2026-06-10.
+	let gridStart = $derived.by(() => {
+		const today = new Date();
+		const start = new Date(today);
+		start.setDate(today.getDate() - weeks * 7 + (7 - rowFor(today.getDay())));
+		start.setHours(0, 0, 0, 0);
+		return start;
+	});
+
+	// Build a map of local-day date -> total distance, windowed to the grid.
+	// Keys must match the grid cell keys below (`formatISO(date)`, also local)
+	// — keying by the UTC `started_at.slice(0,10)` would land evening runs on
+	// the wrong cell.
+	let dayMap = $derived(bucketRunsByLocalDay(runs, gridStart.getTime()));
+
+	let maxDistance = $derived(Math.max(...dayMap.values(), 1));
+
 	// Generate grid: 20 weeks x 7 days
 	let cells = $derived.by(() => {
 		const result: { date: string; col: number; row: number; distance: number }[] = [];
 		const today = new Date();
-		const dayOfWeek = today.getDay(); // 0 = Sunday
-
-		// Start from (weeks) weeks ago, aligned to the user's week start so
-		// the grid's last column ends on the current (partial) week.
-		const start = new Date(today);
-		start.setDate(today.getDate() - weeks * 7 + (7 - rowFor(dayOfWeek)));
-		start.setHours(0, 0, 0, 0);
+		const start = gridStart;
 
 		for (let w = 0; w < weeks; w++) {
 			for (let d = 0; d < 7; d++) {
