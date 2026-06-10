@@ -11,11 +11,21 @@ export interface CoachContext {
 	data?: unknown;
 }
 
+/// The slice of the `get_my_profile()` row the coach context reads. The
+/// handler fetches this row for the consent gate and passes it in, so
+/// the same SECURITY DEFINER RPC isn't issued twice per coach message.
+export interface CoachProfileRow {
+	display_name: string | null;
+	preferred_unit: string | null;
+	health_data_consent_at: string | null;
+}
+
 export async function buildContext(
 	supabase: SupabaseClient,
 	userId: string,
 	planId: string | null,
 	runsLimit: number,
+	profileRow: CoachProfileRow | null,
 ): Promise<CoachContext> {
 	const { data: plan } = planId
 		? await supabase.from('training_plans').select('*').eq('id', planId).maybeSingle()
@@ -100,21 +110,17 @@ export async function buildContext(
 		metadata: pickAllowedRunMetadata(r.metadata as Record<string, unknown> | null),
 	}));
 
-	// Use the SECURITY DEFINER `get_my_profile` RPC because
-	// `subscription_tier` is column-level revoked from authenticated callers
-	// (see migration 20260707_001). `subscription_tier` is intentionally
-	// dropped from the profile projection emitted to Anthropic — the
-	// handler already knows tier and adjusts limits server-side; sending
-	// billing-tier metadata to a sub-processor violates Art 5(1)(c) data
-	// minimisation (audit/coach May 2026 Medium #9).
-	const { data: profileRow } = await supabase.rpc('get_my_profile');
-	const profileRowTyped = profileRow as
-		| {
-				display_name: string | null;
-				preferred_unit: string | null;
-				health_data_consent_at: string | null;
-		  }
-		| null;
+	// `profileRow` is the `get_my_profile()` result the handler already
+	// fetched for the coach-consent gate — passed in rather than re-queried
+	// so a duplicate SECURITY DEFINER RPC round-trip doesn't fire on every
+	// coach message. The RPC is the self-read path because `subscription_tier`
+	// is column-level revoked from authenticated callers (migration
+	// 20260707_001). `subscription_tier` is intentionally dropped from the
+	// profile projection emitted to Anthropic — the handler already knows
+	// tier and adjusts limits server-side; sending billing-tier metadata to
+	// a sub-processor violates Art 5(1)(c) data minimisation (audit/coach
+	// May 2026 Medium #9).
+	const profileRowTyped = profileRow;
 	const profile = profileRowTyped
 		? {
 				display_name: profileRowTyped.display_name,

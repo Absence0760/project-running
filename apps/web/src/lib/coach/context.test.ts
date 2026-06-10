@@ -41,6 +41,25 @@ test('subscription_tier is NOT projected into the Anthropic context', () => {
 	);
 });
 
+test('buildContext reuses the handler-fetched profile row (no duplicate get_my_profile)', () => {
+	// perf-hunt (coach request path): the handler already calls
+	// get_my_profile() for the coach-consent gate. buildContext used to
+	// call the SAME SECURITY DEFINER RPC a second time, a redundant
+	// round-trip on every coach message. The row is now threaded in as a
+	// parameter — pin both halves so a refactor can't reintroduce the
+	// duplicate.
+	assert.equal(
+		/rpc\(\s*['"]get_my_profile['"]/.test(SRC),
+		false,
+		'context.ts must NOT call get_my_profile — the handler passes the row in',
+	);
+	assert.match(
+		SRC,
+		/export async function buildContext\([\s\S]*?profileRow:\s*CoachProfileRow\s*\|\s*null,?\s*\):/,
+		'buildContext must accept the profile row as a parameter',
+	);
+});
+
 test('DOB + HR metrics gated on health_data_consent_at', () => {
 	// audit/coach May 2026 High #1 — GDPR Art 9(2)(a) explicit consent
 	// for special-category health data. When `health_data_consent_at`

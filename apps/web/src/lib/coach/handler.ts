@@ -17,7 +17,7 @@
 // off `content-type`.
 
 import { createClient } from '@supabase/supabase-js';
-import { buildContext } from './context';
+import { buildContext, type CoachProfileRow } from './context';
 import {
 	clampRunsLimit,
 	jsonError as buildJsonError,
@@ -130,9 +130,14 @@ export async function handleCoach(
 		return jsonError(500, 'consent check failed');
 	}
 	// `.maybeSingle()` on a SetofOptions RPC narrows to `{}` in
-	// supabase-js v2.106's generated types — cast to the row shape.
-	const consentRow = consentLookup.data as { coach_consent_at: string | null } | null;
-	if (!consentRow?.coach_consent_at) {
+	// supabase-js v2.106's generated types — cast to the row shape. This
+	// is the full `get_my_profile()` row; it carries the profile fields
+	// buildContext needs (display_name / preferred_unit / health consent),
+	// so it's threaded down instead of re-fetched there.
+	const profileRow = consentLookup.data as
+		| (CoachProfileRow & { coach_consent_at: string | null })
+		| null;
+	if (!profileRow?.coach_consent_at) {
 		return jsonError(
 			403,
 			'Coach consent required. Visit /coach in the app and accept ' +
@@ -188,7 +193,13 @@ export async function handleCoach(
 
 	const runsLimit = clampRunsLimit(body.recent_runs_limit, tier);
 
-	const context = await buildContext(supabase, authUser.id, body.plan_id ?? null, runsLimit);
+	const context = await buildContext(
+		supabase,
+		authUser.id,
+		body.plan_id ?? null,
+		runsLimit,
+		profileRow,
+	);
 
 	const personality = (context.data as Record<string, unknown>)?.runner_context as
 		| Record<string, unknown>
