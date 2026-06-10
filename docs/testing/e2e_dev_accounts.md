@@ -71,8 +71,10 @@ If you want to wire any of the below up, here's exactly what to create. Until th
 - E2E: button click → real Google account picker → return to /dashboard.
 - Stub mode (today): we can test the button renders + click handler is wired, but not the post-Google return.
 
-**Test strategy when wired:**
-A dedicated `e2e-test@gmail.com` test account; spec uses Playwright's `context.grantPermissions` and a `page.route()` to intercept the Google OAuth redirect with a synthetic id_token. The actual id-token validation happens server-side at Supabase, so a fully-mocked Google flow doesn't work — you need the real account OR a sandbox token from Google's auth-emulator (limited support).
+**Already covered by the mock-OIDC lane (`e2e-web-sso`, 2026-06-10):** the entire OAuth path *downstream of the provider redirect* — `signInWithOAuth` → GoTrue authorize → callback `?code` → `exchangeCodeForSession` → real Supabase session → the `/auth/confirm-age` age/terms gate → the app — is exercised end-to-end against a local `oauth2-mock-server`. GoTrue special-cases `google`/`apple` (validates them against the real providers), so the mock stands in as the generic `keycloak` provider; the **only** un-exercised piece is the provider *identity* (a literal Google account picker). See `apps/web/tests-e2e/sso/README.md`. A real Google dev account is therefore needed **only** for that final identity check, not for the callback/session/age-gate code.
+
+**Test strategy when wired (real provider-identity check):**
+A dedicated `e2e-test@gmail.com` test account. The actual id-token validation happens server-side at Supabase, so a fully-mocked *Google* flow doesn't work — you need the real account OR a sandbox token from Google's auth-emulator (limited support). This is a manual / non-CI check, since the post-redirect behaviour is already covered by the mock lane above.
 
 ### 2. Apple Sign-In — Apple Developer account
 
