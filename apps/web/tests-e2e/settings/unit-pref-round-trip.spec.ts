@@ -26,12 +26,17 @@ import { USER_A } from '../fixtures/users';
  * converted only the newest run, OR that cached the formatted
  * string at insert time, fails here.
  *
- * The planted runs are dated earlier this year, so the spec uses the
- * "This year" date range rather than "All time": "All time" flips the
- * list into paginated browse mode (PAGE_SIZE most-recent only), which
- * drops older runs in a busy DB, whereas any narrower range fetches the
- * full set and filters client-side — so both planted runs are always
- * present regardless of how many other runs the shared test DB holds.
+ * The planted runs are dated early March, deliberately NOT the most-
+ * recent runs (runner's seed has ~90 runs newer than them) so the
+ * "non-newest run still re-renders" axis is genuinely exercised. Since
+ * 269a3865 the /runs list windows full-filter renders to the 50 newest
+ * (a Show-more reveals the rest), so a "This year" view would push the
+ * March runs out of the rendered window. The spec instead seeds a tight
+ * CUSTOM date range bracketing exactly the two planted dates — only the
+ * planted runs (+ their two same-day seed neighbours) match, always
+ * inside the 50-cap, regardless of how busy the shared test DB is. The
+ * filter persists in localStorage (runs_filters_v1) and restores on
+ * load, so seeding it once via addInitScript survives every reload.
  */
 
 // Two runs with round-number distances in each unit system. 5000 m
@@ -81,11 +86,11 @@ test.describe('/runs — unit pref round-trip', () => {
 	let runIdB: string;
 
 	test.beforeAll(async () => {
-		// Plant two runs spanning the date window that /runs's default
-		// "Date range" filter ("Today") would hide. The spec changes
-		// the filter to "This year" so both surface. Distances chosen
-		// so the formatted strings are deterministic (5.00 / 3.11 /
-		// 10.00 / 6.21).
+		// Plant two runs in early March (NOT recent — runner's seed has
+		// ~90 runs newer than these). The spec views them through a tight
+		// custom date range so they surface inside the /runs render
+		// window. Distances chosen so the formatted strings are
+		// deterministic (5.00 / 3.11 / 10.00 / 6.21).
 		runIdA = await insertRun({
 			user_id: USER_A.id,
 			started_at: '2026-03-01T08:00:00.000Z',
@@ -112,10 +117,28 @@ test.describe('/runs — unit pref round-trip', () => {
 	test('km → mi → km: both planted runs follow the pref on every flip', async ({
 		page,
 	}) => {
+		// Seed the persisted /runs filter to a custom window bracketing
+		// exactly the two planted dates so they render inside the 50-newest
+		// cap (269a3865) instead of being buried under ~90 newer seed runs.
+		// addInitScript re-applies before every navigation; the page reads
+		// runs_filters_v1 on mount, so no in-UI date-picker driving needed.
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				'runs_filters_v1',
+				JSON.stringify({
+					sourceFilter: 'all',
+					activityFilter: 'all',
+					dateRange: 'custom',
+					customFrom: '2026-03-01',
+					customTo: '2026-03-02',
+					sortKey: 'newest',
+				}),
+			);
+		});
+
 		// ── Step 1: pref = km, both runs show km ──────────────────
 		await setPref(USER_A.id, 'km');
 		await page.goto('/runs');
-		await page.getByLabel('Date range').selectOption('year');
 
 		const rowA = page.locator(`a[href="/runs/${runIdA}"]`);
 		const rowB = page.locator(`a[href="/runs/${runIdB}"]`);
@@ -140,7 +163,6 @@ test.describe('/runs — unit pref round-trip', () => {
 		// mi-mode must render in mi with the correct converted value.
 		await setPref(USER_A.id, 'mi');
 		await page.goto('/runs');
-		await page.getByLabel('Date range').selectOption('year');
 		await expect(rowA).toBeVisible({ timeout: 10_000 });
 		await expect(rowB).toBeVisible();
 
@@ -170,7 +192,6 @@ test.describe('/runs — unit pref round-trip', () => {
 		// stay stuck at mi values.
 		await setPref(USER_A.id, 'km');
 		await page.goto('/runs');
-		await page.getByLabel('Date range').selectOption('year');
 		await expect(rowA).toBeVisible({ timeout: 10_000 });
 
 		await expect(rowA.locator('.run-stat-value').first()).toHaveText(
