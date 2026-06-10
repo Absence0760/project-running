@@ -193,12 +193,44 @@ Surfaced by the 2026-05-30 i18n-readiness audit. RTL *layout* is already complet
 
 ## Watch (Wear OS) — sized features awaiting hardware + a product green-light
 
-Surfaced by the persona round-5 samsung-watch hunt. Each needs the Wear build
-toolchain plus on-watch verification (Galaxy Watch / Pixel Watch) — the watch
-recording stack is not runtime-testable without a device, so these can't be
-closed from a host JVM. The audio-focus ducking fix from the same hunt shipped
+Surfaced by the persona round-5 samsung-watch hunt (plus the mi-preference item
+from the 2026-06-10 run-detail UX pass). Most need the Wear build toolchain plus
+on-watch verification (Galaxy Watch / Pixel Watch) — the recording stack isn't
+runtime-testable without a device — though the mi-preference item below is mostly
+pure parse/format logic that *is* host-JVM testable, with only the end-to-end
+readout needing a device. The audio-focus ducking fix from the same hunt shipped
 already (`TtsAnnouncer.kt` now requests `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`);
-these three are genuine features, not bug fixes.
+these four are genuine features, not bug fixes.
+
+- [ ] **Honour the mi distance preference on the watch** (~2-4 d, partly host-testable) —
+  surfaced by the 2026-06-10 run-detail UX pass. `PostRunScreen` and the running
+  screen always render distance in **km** (`R.string.distance_km` via `formatKm`)
+  and pace as raw sec/km (`formatPace` in `ui/RunWatchApp.kt`), regardless of the
+  user's `preferred_unit` — so a miles-preference runner who sees `/mi` everywhere
+  on web + mobile gets km on the wrist. The data source is **lighter than it first
+  looks**: `preferred_unit` is a universal-settings-bag key (`docs/backend/settings.md`
+  — dual-read with the legacy `user_profiles.preferred_unit` column), and the watch
+  *already* fetches that bag (`SupabaseClient.fetchUniversalSettings` →
+  `user_settings?select=prefs`, parsed by `parseUniversalSettings`, threaded through
+  `RunViewModel` exactly like `bodyWeightKg`). Scope:
+  - **Read** — add `preferredUnit: String?` to `UniversalSettings` (`SupabaseClient.kt`)
+    + parse `prefs["preferred_unit"]`; thread it through `RunViewModel.UiState` to the
+    screens (same path as `bodyWeightKg`). No new permission, no Samsung SDK / Health
+    Connect — unlike the body-weight item below.
+  - **Format** — `recording/UnitFormat.kt` is km-only today; add a unit-aware
+    `formatDistance(distanceM, unit, locale)` (÷1609.344 for mi) and a unit-aware pace
+    (the existing `formatPace` assumes per-km). Keep the locale decimal-separator
+    behaviour `UnitFormatTest` already pins.
+  - **Strings** — add `distance_mi` + `pace_per_mi` to `values/strings.xml` and **all
+    five** `values-*` (`L10nResourceParityTest` fails otherwise); apply at the PostRun
+    distance, running-screen distance + pace, the route "X.XX km to go" badge, and the
+    active-run tile (`tiles/ActiveRunTileService.kt` `formatStatRow`).
+  - **TTS (optional, for full parity)** — the split cue speaks "N kilometre(s)"
+    (`tts_*` resources / `TtsPhrases.kt`); a mile variant keeps the spoken cue consistent
+    with the displayed unit. Can ship as a follow-on if scoped out.
+  - **Testable on host JVM:** the parse + the new `UnitFormat` mile path + `formatStatRow`
+    are pure — extend `UnitFormatTest` / add a `preferred_unit` `parseUniversalSettings`
+    case. Only "the watch face actually flips to mi" needs a device.
 
 - [ ] **BLE chest-strap HR paired directly to the watch** (~1-1.5 wk + device) —
   today BLE chest-strap HR is **phone-only** (`apps/mobile_android/lib/ble_heart_rate.dart`);
