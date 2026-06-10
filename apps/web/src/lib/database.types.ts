@@ -3234,6 +3234,13 @@ export type Database = {
           id: string
         }[]
       }
+      segment_effort_ranks: {
+        Args: { p_run_id: string }
+        Returns: {
+          effort_id: string
+          rank: number
+        }[]
+      }
       segment_leaderboard_tiered: {
         Args: {
           p_age_band?: string

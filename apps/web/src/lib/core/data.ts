@@ -4728,21 +4728,30 @@ export async function fetchEffortsForRun(runId: string): Promise<SegmentEffortWi
 	const bySeg = new Map<string, Segment>();
 	for (const s of segments ?? []) bySeg.set(s.id, s as Segment);
 
-	// Rank query — one count per segment+effort. Cheap because the
-	// segment_efforts(segment_id, time_seconds) index covers it.
+	// Rank every effort in ONE round-trip via segment_effort_ranks (migration
+	// 20261223_001) instead of a serial count-per-effort loop — a run over a
+	// 30-segment route used to fire 30 sequential queries before the panel
+	// rendered. The RPC is SECURITY INVOKER so RLS gates the comparison set
+	// identically to the old client count; rank = 1 + strictly-faster visible
+	// efforts. On RPC failure ranks fall back to null so the panel still shows
+	// the efforts (degraded, not blank).
+	const { data: rankRows, error: rankErr } = await supabase.rpc('segment_effort_ranks', {
+		p_run_id: runId,
+	});
+	if (rankErr) console.error('segment_effort_ranks failed', rankErr);
+	const rankByEffort = new Map<string, number>();
+	for (const r of (rankRows ?? []) as { effort_id: string; rank: number }[]) {
+		rankByEffort.set(r.effort_id, r.rank);
+	}
+
 	const out: SegmentEffortWithSegment[] = [];
 	for (const e of efforts as SegmentEffort[]) {
 		const segment = bySeg.get(e.segment_id);
 		if (!segment) continue;
-		const { count } = await supabase
-			.from(TABLES.segment_efforts)
-			.select('*', { count: 'exact', head: true })
-			.eq('segment_id', e.segment_id)
-			.lt('time_seconds', e.time_seconds);
 		out.push({
 			effort: e,
 			segment,
-			rank: (count ?? 0) + 1,
+			rank: rankByEffort.get(e.id) ?? 1,
 		});
 	}
 	return out;
