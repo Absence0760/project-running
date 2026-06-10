@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchGymSetHistory } from '$lib/core/data';
-	import { exerciseRecords, type ExerciseRecord } from '$lib/gym/exercise_records';
+	import { fetchExerciseRecords, type ExerciseRecord } from '$lib/core/data';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -11,7 +10,7 @@
 	let loading = $state(true);
 
 	async function load() {
-		records = exerciseRecords(await fetchGymSetHistory());
+		records = await fetchExerciseRecords();
 		loading = false;
 	}
 

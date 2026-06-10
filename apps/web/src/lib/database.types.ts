@@ -2960,6 +2960,18 @@ export type Database = {
         }
       }
       grant_health_data_consent: { Args: never; Returns: string }
+      gym_exercise_records: {
+        Args: never
+        Returns: {
+          best_est_1rm_kg: number
+          best_volume_kg: number
+          exercise_name: string
+          heaviest_weight_kg: number
+          heaviest_weight_reps: number
+          last_performed_at: string
+          session_count: number
+        }[]
+      }
       heatmap_points_in_bbox: {
         Args: {
           p_max_lat: number

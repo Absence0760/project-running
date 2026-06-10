@@ -5486,6 +5486,56 @@ export async function fetchGymSetHistory(): Promise<GymSetWithDate[]> {
 	});
 }
 
+/// One per-exercise all-time strength record (heaviest set, best volume, best
+/// e1rm, last performed, session count). Computed server-side by the
+/// gym_exercise_records RPC (migration 20261224_001) so the client never pulls
+/// raw set history to recompute it. Records are all-time maxima, so a windowed
+/// read can't serve them — the aggregation lives in SQL, mirroring how run PRs
+/// are SQL-maintained (the gym_prs.ts badge engine stays client-side for the
+/// per-workout temporal badges). pgTAP gym_exercise_records_test.sql pins the
+/// metrics against the same fixture shape gym_prs.test.ts uses.
+export interface ExerciseRecord {
+	exerciseName: string;
+	heaviestWeightKg: number;
+	heaviestWeightReps: number | null;
+	bestVolumeKg: number | null;
+	bestEst1RmKg: number | null;
+	/// ISO timestamp of the most recent workout that included this exercise.
+	lastPerformedAt: string;
+	sessionCount: number;
+}
+
+/// Per-exercise all-time records for the signed-in user, most-recently-
+/// performed first. One round-trip; the SQL does the aggregation.
+export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
+	if (!auth.user?.id) return [];
+	const { data, error } = await supabase.rpc('gym_exercise_records');
+	if (error) {
+		console.error('fetchExerciseRecords failed', error);
+		return [];
+	}
+	type Row = {
+		exercise_name: string;
+		heaviest_weight_kg: number | string;
+		heaviest_weight_reps: number | null;
+		best_volume_kg: number | string | null;
+		best_est_1rm_kg: number | string | null;
+		last_performed_at: string;
+		session_count: number;
+	};
+	const num = (v: number | string | null): number | null =>
+		v == null ? null : Number(v);
+	return ((data ?? []) as Row[]).map((r) => ({
+		exerciseName: r.exercise_name,
+		heaviestWeightKg: Number(r.heaviest_weight_kg),
+		heaviestWeightReps: r.heaviest_weight_reps,
+		bestVolumeKg: num(r.best_volume_kg),
+		bestEst1RmKg: num(r.best_est_1rm_kg),
+		lastPerformedAt: r.last_performed_at,
+		sessionCount: r.session_count,
+	}));
+}
+
 async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<void> {
 	const { error: delErr } = await supabase
 		.from(TABLES.gym_sets)
