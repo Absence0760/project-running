@@ -4107,6 +4107,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'Não foi possível excluir o arquivo: $error';
+  }
+
+  @override
   String get coachCopied => 'Copiado para a área de transferência';
 
   @override
@@ -11318,6 +11323,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String coachOpenArchiveFailed(String error) {
     return 'Não foi possível abrir o arquivo: $error';
+  }
+
+  @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'Não foi possível excluir o arquivo: $error';
   }
 
   @override

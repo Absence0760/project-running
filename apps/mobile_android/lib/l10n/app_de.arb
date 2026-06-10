@@ -1114,6 +1114,7 @@
   "coachStreamFailed": "Stream fehlgeschlagen",
   "coachNewConversationFailed": "Neue Unterhaltung konnte nicht gestartet werden: {error}",
   "coachOpenArchiveFailed": "Archiv konnte nicht geöffnet werden: {error}",
+  "coachArchiveDeleteFailed": "Archiv konnte nicht gelöscht werden: {error}",
   "coachCopied": "In die Zwischenablage kopiert",
   "settingsAccountTitle": "Konto",
   "settingsAccountBackendNotConfigured": "Backend nicht konfiguriert",

@@ -5108,6 +5108,15 @@
       }
     }
   },
+  "coachArchiveDeleteFailed": "Couldn't delete archive: {error}",
+  "@coachArchiveDeleteFailed": {
+    "description": "Banner shown when deleting a coach archive fails; the swiped row snaps back",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "coachCopied": "Copied to clipboard",
   "@coachCopied": {
     "description": "Top-banner shown after copying a message"

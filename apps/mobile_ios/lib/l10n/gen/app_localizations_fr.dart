@@ -4123,6 +4123,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'Impossible de supprimer l\'archive : $error';
+  }
+
+  @override
   String get coachCopied => 'Copié dans le presse-papiers';
 
   @override

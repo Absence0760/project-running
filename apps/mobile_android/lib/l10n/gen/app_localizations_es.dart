@@ -4106,6 +4106,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'No se pudo eliminar el archivo: $error';
+  }
+
+  @override
   String get coachCopied => 'Copiado al portapapeles';
 
   @override

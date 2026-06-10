@@ -1114,6 +1114,7 @@
   "coachStreamFailed": "ストリームに失敗しました",
   "coachNewConversationFailed": "新しい会話を開始できませんでした：{error}",
   "coachOpenArchiveFailed": "アーカイブを開けませんでした：{error}",
+  "coachArchiveDeleteFailed": "アーカイブを削除できませんでした：{error}",
   "coachCopied": "クリップボードにコピーしました",
   "settingsAccountTitle": "アカウント",
   "settingsAccountBackendNotConfigured": "バックエンドが設定されていません",

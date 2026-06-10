@@ -4073,6 +4073,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'Couldn\'t delete archive: $error';
+  }
+
+  @override
   String get coachCopied => 'Copied to clipboard';
 
   @override

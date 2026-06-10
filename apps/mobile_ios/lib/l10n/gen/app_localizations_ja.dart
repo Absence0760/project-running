@@ -3850,6 +3850,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'アーカイブを削除できませんでした：$error';
+  }
+
+  @override
   String get coachCopied => 'クリップボードにコピーしました';
 
   @override

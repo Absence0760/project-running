@@ -722,19 +722,30 @@ class _CoachScreenState extends State<CoachScreen> {
     await _reloadAll();
   }
 
-  Future<void> _deleteArchive(DateTime t) async {
-    final wasViewing = _viewingArchiveAt == t;
+  /// Runs the delete behind the swipe's `confirmDismiss`: on success the
+  /// row animates away (true), on failure it snaps back (false) and a
+  /// banner explains why — so a failed delete can't leave a phantom-gone
+  /// row that silently reappears on the next reload.
+  Future<bool> _deleteArchive(DateTime t) async {
     try {
       await widget.api.deleteCoachArchive(archivedAt: t, planId: _planId);
-      if (!mounted) return;
-      setState(() {
-        _archives = _archives.where((x) => x != t).toList();
-        if (wasViewing) _viewingArchiveAt = null;
-      });
-      if (wasViewing) await _reloadAll();
+      return true;
     } catch (e) {
-      debugPrint('coach_screen: archive unarchive failed: $e');
+      if (mounted) {
+        showTopBanner(
+            context, AppLocalizations.of(context).coachArchiveDeleteFailed('$e'));
+      }
+      return false;
     }
+  }
+
+  void _onArchiveDismissed(DateTime t) {
+    final wasViewing = _viewingArchiveAt == t;
+    setState(() {
+      _archives = _archives.where((x) => x != t).toList();
+      if (wasViewing) _viewingArchiveAt = null;
+    });
+    if (wasViewing) _reloadAll();
   }
 
   Future<void> _react(String messageId, String reaction) async {
@@ -1027,7 +1038,8 @@ class _CoachScreenState extends State<CoachScreen> {
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
                       direction: DismissDirection.endToStart,
-                      onDismissed: (_) => _deleteArchive(t),
+                      confirmDismiss: (_) => _deleteArchive(t),
+                      onDismissed: (_) => _onArchiveDismissed(t),
                       child: ListTile(
                         title: Text(_archiveLabel(t)),
                         subtitle: Text(l10n.coachArchiveTapToView),

@@ -6791,6 +6791,12 @@ abstract class AppLocalizations {
   /// **'Could not open archive: {error}'**
   String coachOpenArchiveFailed(String error);
 
+  /// Banner shown when deleting a coach archive fails; the swiped row snaps back
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete archive: {error}'**
+  String coachArchiveDeleteFailed(String error);
+
   /// Top-banner shown after copying a message
   ///
   /// In en, this message translates to:

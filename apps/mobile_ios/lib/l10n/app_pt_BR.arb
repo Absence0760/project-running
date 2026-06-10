@@ -1114,6 +1114,7 @@
   "coachStreamFailed": "falha no fluxo",
   "coachNewConversationFailed": "Não foi possível iniciar uma nova conversa: {error}",
   "coachOpenArchiveFailed": "Não foi possível abrir o arquivo: {error}",
+  "coachArchiveDeleteFailed": "Não foi possível excluir o arquivo: {error}",
   "coachCopied": "Copiado para a área de transferência",
   "settingsAccountTitle": "Conta",
   "settingsAccountBackendNotConfigured": "Backend não configurado",

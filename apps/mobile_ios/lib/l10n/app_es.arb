@@ -1114,6 +1114,7 @@
   "coachStreamFailed": "error de transmisión",
   "coachNewConversationFailed": "No se pudo iniciar una nueva conversación: {error}",
   "coachOpenArchiveFailed": "No se pudo abrir el archivo: {error}",
+  "coachArchiveDeleteFailed": "No se pudo eliminar el archivo: {error}",
   "coachCopied": "Copiado al portapapeles",
   "settingsAccountTitle": "Cuenta",
   "settingsAccountBackendNotConfigured": "Backend no configurado",

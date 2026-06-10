@@ -4113,6 +4113,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String coachArchiveDeleteFailed(String error) {
+    return 'Archiv konnte nicht gelöscht werden: $error';
+  }
+
+  @override
   String get coachCopied => 'In die Zwischenablage kopiert';
 
   @override
