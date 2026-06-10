@@ -679,6 +679,7 @@ export const messages = {
 	"routeNew.canvasEmptyAuto": "automaticamente",
 	"routeNew.canvasEmptySuffix": "conforme você cria.",
 	"routeNew.dismiss": "Dispensar",
+	"routeNew.useThisDistance": "Usar {distance}",
 	"routeNew.saveModalTitle": "Salvar rota",
 	"routeNew.nameLabel": "Nome",
 	"routeNew.namePlaceholder": "Minha rota",

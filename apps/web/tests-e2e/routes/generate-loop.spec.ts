@@ -337,6 +337,58 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		expect(last[0]).toBeCloseTo(FIELD_START.lng, 4);
 	});
 
+	test('loop-poor shortfall: offers the achievable distance and applies it on click', async ({
+		page,
+	}) => {
+		// Simulate a road network that can't form a loop at the target: return a
+		// loop ~22% short, below the ±15% accept band. The warning must carry an
+		// actionable "use the achievable distance" button (not a dead-end), and
+		// clicking it aligns the target to the drawn route + clears the warning.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+			};
+			const coordinates = loopPolyline(body.start, body.targetDistanceM * 0.78);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ coordinates, distanceM }),
+			});
+		});
+
+		// Open the distance panel so the Generate button (its label carries the
+		// current target) is visible to assert the applied change against.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		const genBtn = page.getByRole('button', { name: /Generate .* loop/i });
+		const targetBefore = ((await genBtn.textContent()) ?? '').trim();
+
+		const result = await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		expect(result.ok).toBe(true);
+
+		// Shortfall warning + the actionable button both appear.
+		const banner = page.locator('.routing-error.routing-warning').first();
+		await expect(banner).toBeVisible({ timeout: 5_000 });
+		await expect(banner).toContainText(/shorter than/i);
+		const useBtn = page.getByRole('button', { name: /instead/i });
+		await expect(useBtn).toBeVisible();
+
+		// Applying it clears the warning + action and re-targets to the
+		// achievable distance (the Generate-button label changes).
+		await useBtn.click();
+		await expect(banner).toBeHidden();
+		await expect(useBtn).toBeHidden();
+		await expect(genBtn).not.toHaveText(targetBefore);
+	});
+
 	test('endAt within NEAR_POINT_M of start collapses to a true loop (close == start)', async ({
 		page,
 	}) => {

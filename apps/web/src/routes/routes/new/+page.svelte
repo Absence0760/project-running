@@ -44,6 +44,10 @@
 	let saveError = $state('');
 	let routingError = $state<string | null>(null);
 	let routingErrorSeverity = $state<'error' | 'warning'>('error');
+	// Set when a generated loop lands outside the accept band because the road
+	// network can't form a loop at that distance here. Drives the one-click
+	// "use the achievable distance" action in the warning banner.
+	let generateShortfall = $state<{ achievedM: number } | null>(null);
 	let showSaveModal = $state(false);
 	let showHelp = $state(false);
 	// Mirrors the builder's internal isRouting so the Generate button
@@ -329,6 +333,8 @@
 	}
 
 	async function handleGenerateLoop() {
+		// Clear any prior shortfall affordance — this run decides anew.
+		generateShortfall = null;
 		// Pass startPoint through verbatim (or undefined when the user
 		// hasn't picked one). The builder's own zoom-sanity guard
 		// refuses with a pan-first message when start is undefined AND
@@ -341,6 +347,16 @@
 
 		const ok = await builder?.generateLoop(targetKm * 1000, start, end);
 		routed = !!ok;
+	}
+
+	// Accept the distance the road network could actually loop. Aligns the target
+	// to the drawn route and clears the shortfall warning; the route itself stays
+	// exactly as generated.
+	function useAchievedDistance() {
+		if (!generateShortfall) return;
+		targetKm = Math.round(generateShortfall.achievedM / 100) / 10;
+		generateShortfall = null;
+		routingError = null;
 	}
 
 	// Mirror the picked start / end into the map as a transient marker
@@ -690,6 +706,7 @@
 			onmapclick={handleMapPick}
 			onerror={handleRoutingError}
 			onbusy={(b) => (builderBusy = b)}
+			ongeneratemismatch={(achievedM) => (generateShortfall = { achievedM })}
 		/>
 
 		{#if waypointCount === 0 && !pickingPoint}
@@ -713,10 +730,18 @@
 				<button
 					class="routing-error-dismiss"
 					aria-label={m('routeNew.dismiss')}
-					onclick={() => (routingError = null)}
+					onclick={() => { routingError = null; generateShortfall = null; }}
 				>
 					<span class="material-symbols">close</span>
 				</button>
+				{#if generateShortfall}
+					{@const sd = distanceInPreferred(generateShortfall.achievedM)}
+					<div class="routing-error-action">
+						<button class="btn btn-secondary btn-sm" onclick={useAchievedDistance}>
+							{m('routeNew.useThisDistance', { distance: `${sd.value.toFixed(1)} ${sd.unit}` })}
+						</button>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</main>
@@ -1413,6 +1438,7 @@
 		z-index: 10;
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: var(--space-sm);
 		max-width: 28rem;
 		padding: var(--space-sm) var(--space-md);
@@ -1433,6 +1459,10 @@
 	.routing-error-text {
 		flex: 1;
 		line-height: 1.35;
+	}
+	/* Drops to its own row under the message (the banner is flex-wrap). */
+	.routing-error-action {
+		flex: 0 0 100%;
 	}
 	.routing-error-dismiss {
 		background: transparent;

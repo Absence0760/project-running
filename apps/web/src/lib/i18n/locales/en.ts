@@ -688,6 +688,7 @@ export const en = {
 	"routeNew.canvasEmptyAuto": "automatically",
 	"routeNew.canvasEmptySuffix": "as you build.",
 	"routeNew.dismiss": "Dismiss",
+	"routeNew.useThisDistance": "Use {distance} instead",
 	"routeNew.saveModalTitle": "Save route",
 	"routeNew.nameLabel": "Name",
 	"routeNew.namePlaceholder": "My Route",

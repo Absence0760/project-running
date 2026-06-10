@@ -50,7 +50,8 @@
 		}) => {},
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
 		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
-		onbusy = (_busy: boolean) => {}
+		onbusy = (_busy: boolean) => {},
+		ongeneratemismatch = (_achievedM: number, _targetM: number) => {}
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -83,6 +84,13 @@
 		 * particular can take ~30s on slow connections.
 		 */
 		onbusy?: (busy: boolean) => void;
+		/**
+		 * Called after generateLoop when the produced loop falls outside the
+		 * accept band — the road network couldn't form a loop at the target.
+		 * Carries the achieved + target distances (metres) so the parent can
+		 * offer to accept the achievable distance instead of a dead-end warning.
+		 */
+		ongeneratemismatch?: (achievedM: number, targetM: number) => void;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -1322,6 +1330,10 @@
 				}),
 				'warning',
 			);
+			// Hand the parent the structured shortfall so it can offer to accept
+			// the achievable distance — the road network here can't form a loop
+			// at the target, and a one-click "use X" beats a dead-end warning.
+			ongeneratemismatch(actualDistance, targetDistanceM);
 		} else {
 			onerror(null);
 		}

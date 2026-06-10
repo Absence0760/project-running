@@ -680,6 +680,7 @@ export const messages = {
 	"routeNew.canvasEmptyAuto": "automatiquement",
 	"routeNew.canvasEmptySuffix": "au fur et à mesure.",
 	"routeNew.dismiss": "Fermer",
+	"routeNew.useThisDistance": "Utiliser {distance} à la place",
 	"routeNew.saveModalTitle": "Enregistrer l'itinéraire",
 	"routeNew.nameLabel": "Nom",
 	"routeNew.namePlaceholder": "Mon itinéraire",

@@ -676,6 +676,7 @@ export const messages = {
 	"routeNew.canvasEmptyAuto": "自動的に",
 	"routeNew.canvasEmptySuffix": "スナップします。",
 	"routeNew.dismiss": "閉じる",
+	"routeNew.useThisDistance": "代わりに{distance}を使う",
 	"routeNew.saveModalTitle": "ルートを保存",
 	"routeNew.nameLabel": "名前",
 	"routeNew.namePlaceholder": "マイルート",
