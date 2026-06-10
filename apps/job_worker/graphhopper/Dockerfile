@@ -19,7 +19,12 @@
 
 ARG GH_VERSION=10.0
 
-FROM maven:3.9-eclipse-temurin-21 AS build
+# Base images pinned by manifest-list (multi-arch index) digest, not a bare
+# tag, so a re-pushed upstream tag can't silently change the build (Scorecard
+# Pinned-Dependencies). The digest is the index, not a single-arch manifest, so
+# the build host still gets its matching arch. Re-pin on a deliberate bump:
+#   skopeo inspect --raw docker://maven:3.9-eclipse-temurin-21 | sha256.
+FROM maven:3.9-eclipse-temurin-21@sha256:d7e7f57407437c014571f1ad5a9955f03fc3edcb1d964067ef351fa38e798665 AS build
 ARG GH_VERSION
 WORKDIR /src
 # Shallow-clone the pinned release tag rather than vendoring the source tree.
@@ -27,15 +32,16 @@ RUN git clone --depth 1 --branch ${GH_VERSION} https://github.com/graphhopper/gr
  && mvn -q -DskipTests clean package \
  && cp web/target/graphhopper-web-*.jar /graphhopper-web.jar
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre@sha256:194b590649efee5555de080c634905a30c2885190210e37ada26370ed2a9c781
 WORKDIR /gh
 COPY --from=build /graphhopper-web.jar /gh/graphhopper-web.jar
 COPY config.yml /gh/config.yml
 
 # Caddy fronts GraphHopper as the shared-secret guard (see Caddyfile). Pull the
 # binary from the official multi-arch image rather than curling a pinned tarball
-# so the arch matches the build platform.
-COPY --from=caddy:2.8 /usr/bin/caddy /usr/local/bin/caddy
+# so the arch matches the build platform. Digest-pinned (manifest-list index, so
+# arch-matching is preserved) for the same supply-chain reason as the FROM lines.
+COPY --from=caddy:2.8@sha256:226d1f059b75399fe19182893c7184591c07b97afc8dfcf44eeb80c9a77a530f /usr/bin/caddy /usr/local/bin/caddy
 COPY Caddyfile /gh/Caddyfile
 
 # Graph cache + the source PBF both live on the mounted volume so the graph
