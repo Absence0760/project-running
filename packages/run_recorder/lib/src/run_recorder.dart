@@ -588,10 +588,19 @@ class RunRecorder {
         // positions processed in a tight loop still get clamped correctly.
         // A corrupt GPS fix can easily imply 50+ m/s — dropping those here
         // stops one bad sample from inflating total distance.
+        //
+        // A non-positive dt (two fixes sharing a timestamp, or a backwards
+        // clock — both happen when Android batches queued fixes or after an
+        // NTP correction) makes the speed undefined, so treat it as
+        // implausible: with `dtSec > 0` guarding the ratio, a same-timestamp
+        // teleport would otherwise skip the speed check and slip through on
+        // the < 100 m hop filter alone, inflating distance. Rejecting it here
+        // is lossless — the next fix with a real timestamp accumulates the
+        // delta from this last-good position over the true elapsed time.
         final dtSec =
             pos.timestamp.difference(lastAt).inMilliseconds / 1000.0;
         final implausible =
-            dtSec > 0 && (delta / dtSec) > _maxSpeedMps;
+            dtSec <= 0 || (delta / dtSec) > _maxSpeedMps;
 
         // Only grow the track + accumulate distance on real movement. Ignore
         // GPS jitter below the threshold, implausible jumps (>100m in one

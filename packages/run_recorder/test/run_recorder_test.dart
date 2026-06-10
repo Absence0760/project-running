@@ -185,6 +185,32 @@ void main() {
       expect(r.debugTrack.length, 1);
       expect(r.debugDistanceMetres, 0);
     });
+
+    test('teleport on a duplicate (zero-dt) GPS timestamp is rejected', () {
+      // Two fixes sharing a timestamp (batched/queued fixes, or a clock
+      // correction): dt = 0 makes speed undefined. A 90 m hop must not slip
+      // through the < 100 m filter — the speed clamp can't vet it.
+      final r = RunRecorder()..debugPrepareWithoutStream(maxSpeedMps: 10);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 5));
+      r.debugInjectPosition(makePosition(metresEast: 90, secondsFromStart: 5));
+      expect(r.debugTrack.length, 1);
+      expect(r.debugDistanceMetres, 0);
+    });
+
+    test('zero-dt rejection is lossless — next valid fix still accumulates', () {
+      // After a rejected same-timestamp fix, a later fix with a real
+      // timestamp accumulates the delta from the last good position over the
+      // true elapsed time (20 m in 10 s = 2 m/s, within the clamp).
+      final r = RunRecorder()..debugPrepareWithoutStream(maxSpeedMps: 10);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 90, secondsFromStart: 0));
+      expect(r.debugDistanceMetres, 0);
+      r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 10));
+      expect(r.debugDistanceMetres, closeTo(20, 0.5));
+      expect(r.debugTrack.length, 2);
+    });
   });
 
   group('pause and resume', () {
