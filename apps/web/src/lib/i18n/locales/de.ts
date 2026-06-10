@@ -2164,6 +2164,8 @@ export const messages = {
 	"runSocial.runnerFallback": "Läufer",
 	"runSocial.reportComment": "Kommentar melden",
 	"runSocial.deleteComment": "Kommentar löschen",
+	"runSocial.deleteCommentTitle": "Diesen Kommentar löschen?",
+	"runSocial.deleteCommentMessage": "Dieser Kommentar wird dauerhaft entfernt. Das kann nicht rückgängig gemacht werden.",
 	"runSocial.reply": "Antworten",
 	"runSocial.reportReply": "Antwort melden",
 	"runSocial.deleteReply": "Antwort löschen",

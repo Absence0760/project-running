@@ -16,6 +16,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	interface Props {
 		runId: string;
@@ -24,6 +25,8 @@
 	let { runId, runOwnerId }: Props = $props();
 
 	let reportCommentId = $state<string | null>(null);
+	let confirmDeleteCommentId = $state<string | null>(null);
+	let deletingComment = $state(false);
 
 	let kudos = $state<RunKudosSummary>({ count: 0, viewer_has_kudos: false });
 	let comments = $state<RunCommentWithAuthor[]>([]);
@@ -95,12 +98,18 @@
 		}
 	}
 
-	async function removeComment(commentId: string) {
+	async function removeComment() {
+		const commentId = confirmDeleteCommentId;
+		if (!commentId || deletingComment) return;
+		deletingComment = true;
 		try {
 			await deleteRunComment(commentId);
+			confirmDeleteCommentId = null;
 			await load();
 		} catch (e) {
 			showToast(t('runSocial.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			deletingComment = false;
 		}
 	}
 
@@ -182,7 +191,7 @@
 									class="icon-btn"
 									type="button"
 									aria-label={t('runSocial.deleteComment')}
-									onclick={() => removeComment(comment.id)}
+									onclick={() => (confirmDeleteCommentId = comment.id)}
 								>
 									<span class="material-symbols">close</span>
 								</button>
@@ -229,7 +238,7 @@
 														class="icon-btn"
 														type="button"
 														aria-label={t('runSocial.deleteReply')}
-														onclick={() => removeComment(reply.id)}
+														onclick={() => (confirmDeleteCommentId = reply.id)}
 													>
 														<span class="material-symbols">close</span>
 													</button>
@@ -285,6 +294,16 @@
 	targetKind="comment"
 	targetId={reportCommentId ?? ''}
 	onclose={() => (reportCommentId = null)}
+/>
+
+<ConfirmDialog
+	open={confirmDeleteCommentId !== null}
+	title={t('runSocial.deleteCommentTitle')}
+	message={t('runSocial.deleteCommentMessage')}
+	confirmLabel={t('runSocial.deleteComment')}
+	onconfirm={removeComment}
+	oncancel={() => (confirmDeleteCommentId = null)}
+	danger
 />
 
 <style>

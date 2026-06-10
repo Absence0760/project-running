@@ -2160,6 +2160,8 @@ export const messages = {
 	"runSocial.runnerFallback": "ランナー",
 	"runSocial.reportComment": "コメントを報告",
 	"runSocial.deleteComment": "コメントを削除",
+	"runSocial.deleteCommentTitle": "このコメントを削除しますか？",
+	"runSocial.deleteCommentMessage": "このコメントは完全に削除されます。元に戻せません。",
 	"runSocial.reply": "返信",
 	"runSocial.reportReply": "返信を報告",
 	"runSocial.deleteReply": "返信を削除",

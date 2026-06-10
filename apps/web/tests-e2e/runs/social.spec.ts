@@ -77,8 +77,20 @@ test.describe('/runs/[id] — owner-side engagement panel', () => {
 
 		// Owner can delete the comment via the per-row × button (the
 		// `auth.user?.id === comment.author_id || isOwn` guard exposes
-		// the icon-btn). Click it; row disappears.
+		// the icon-btn). It now confirms first: Cancel keeps the comment,
+		// confirm removes it.
 		await social.getByRole('button', { name: 'Delete comment' }).click();
+		const confirm = page.locator('.modal', { hasText: 'Delete this comment?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Cancel' }).click();
+		await expect(confirm).toBeHidden({ timeout: 5_000 });
+		await expect(
+			social.locator('article.comment', { hasText: 'e2e-owner-social' })
+		).toBeVisible();
+
+		await social.getByRole('button', { name: 'Delete comment' }).click();
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Delete comment' }).click();
 		await expect(
 			social.locator('article.comment', { hasText: 'e2e-owner-social' })
 		).toHaveCount(0, { timeout: 5_000 });
