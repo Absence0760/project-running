@@ -50,6 +50,19 @@ test('evenSplitPacing: 10.5 km gives 11 splits, last one partial', () => {
 	assert.equal(s.splitsSec[10], 150);
 });
 
+test('evenSplitPacing: splits sum to the target time even when avg/unit is fractional', () => {
+	// 10 km at 3005 s → avgPerUnit 300.5. Independently rounding each split
+	// drifts the total to 3010; the last split must absorb the remainder.
+	const s = evenSplitPacing(10_000, 3005);
+	assert.equal(s.splitsSec.length, 10);
+	assert.equal(s.splitsSec.reduce((a, b) => a + b, 0), 3005);
+});
+
+test('evenSplitPacing: partial-tail total is preserved with a fractional avg', () => {
+	const s = evenSplitPacing(10_300, 3091); // 8.6 → 11 splits, fractional avg
+	assert.equal(s.splitsSec.reduce((a, b) => a + b, 0), 3091);
+});
+
 test('evenSplitPacing: marathon at 3:30:00 → 4:58/km', () => {
 	const total = 3 * 3600 + 30 * 60; // 12600
 	const s = evenSplitPacing(42195, total);

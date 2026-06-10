@@ -67,10 +67,14 @@ export function evenSplitPacing(
 	for (let i = 0; i < units - 1; i++) {
 		splits.push(Math.round(avgPerUnit));
 	}
-	// Last split takes any rounding remainder (and is a partial unit if
-	// the race distance isn't a whole-unit multiple).
-	const remainderUnits = distanceM / unitMetres - (units - 1);
-	splits.push(Math.round(avgPerUnit * remainderUnits));
+	// Last split absorbs the leftover — the partial-unit tail (when the race
+	// distance isn't a whole-unit multiple) AND the accumulated per-split
+	// rounding error. Rounding each full split independently drifts the total
+	// by up to ~units/2 seconds (e.g. 10 km at 300.5 s/km → 10×301 = 3010,
+	// not 3005), so derive the last split from the running total to preserve
+	// the documented invariant that the splits sum to the target time.
+	const summed = splits.reduce((a, b) => a + b, 0);
+	splits.push(Math.round(totalSec) - summed);
 	return { avgSecPerKm, splitsSec: splits, label: 'even' };
 }
 
