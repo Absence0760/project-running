@@ -6929,6 +6929,63 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymPrE1rm => 'Melhor 1RM est.';
 
   @override
+  String get gymRecordsLink => 'Recordes';
+
+  @override
+  String get gymRecordsTitle => 'Recordes pessoais';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'A tua melhor marca em cada exercício com peso.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'Ainda não há exercícios com peso registados. Adiciona um peso a uma série para começar a acompanhar os teus recordes.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Último $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessões',
+      one: '1 sessão',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Voltar aos recordes';
+
+  @override
+  String get gymExerciseEmpty => 'Ainda não há histórico deste exercício.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '+$delta desde a primeira sessão';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '−$delta desde a primeira sessão';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'sem alteração desde a primeira sessão';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Última vez $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volume';
+
+  @override
   String get gymDeleteConfirmTitle => 'Excluir treino?';
 
   @override
@@ -13996,6 +14053,63 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymPrE1rm => 'Melhor 1RM est.';
+
+  @override
+  String get gymRecordsLink => 'Recordes';
+
+  @override
+  String get gymRecordsTitle => 'Recordes pessoais';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'Sua melhor marca em cada exercício com peso.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'Nenhum exercício com peso registrado ainda. Adicione um peso a uma série para começar a acompanhar seus recordes.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Último $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessões',
+      one: '1 sessão',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Voltar aos recordes';
+
+  @override
+  String get gymExerciseEmpty => 'Ainda não há histórico deste exercício.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '+$delta desde a primeira sessão';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '−$delta desde a primeira sessão';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'sem mudança desde a primeira sessão';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Última vez $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volume';
 
   @override
   String get gymDeleteConfirmTitle => 'Excluir treino?';

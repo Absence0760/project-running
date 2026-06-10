@@ -6862,6 +6862,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymPrE1rm => 'Best est. 1RM';
 
   @override
+  String get gymRecordsLink => 'Records';
+
+  @override
+  String get gymRecordsTitle => 'Personal records';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'Your best lift for every weighted exercise.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'No weighted lifts logged yet. Add a weight to a set to start tracking your bests.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Last $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessions',
+      one: '1 session',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Back to records';
+
+  @override
+  String get gymExerciseEmpty => 'No history for this exercise yet.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return 'up $delta since first session';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return 'down $delta since first session';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'no change since first session';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Last time $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volume';
+
+  @override
   String get gymDeleteConfirmTitle => 'Delete workout?';
 
   @override

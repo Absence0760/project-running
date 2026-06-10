@@ -11469,6 +11469,84 @@ abstract class AppLocalizations {
   /// **'Best est. 1RM'**
   String get gymPrE1rm;
 
+  /// No description provided for @gymRecordsLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Records'**
+  String get gymRecordsLink;
+
+  /// No description provided for @gymRecordsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal records'**
+  String get gymRecordsTitle;
+
+  /// No description provided for @gymRecordsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your best lift for every weighted exercise.'**
+  String get gymRecordsSubtitle;
+
+  /// No description provided for @gymRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No weighted lifts logged yet. Add a weight to a set to start tracking your bests.'**
+  String get gymRecordsEmpty;
+
+  /// Records card: when an exercise was last performed
+  ///
+  /// In en, this message translates to:
+  /// **'Last {date}'**
+  String gymRecordsLastDone(String date);
+
+  /// Records card: distinct session count for an exercise
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 session} other{{count} sessions}}'**
+  String gymRecordsSessions(int count);
+
+  /// No description provided for @gymExerciseBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to records'**
+  String get gymExerciseBack;
+
+  /// No description provided for @gymExerciseEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No history for this exercise yet.'**
+  String get gymExerciseEmpty;
+
+  /// Exercise progression: est-1RM gain since first session
+  ///
+  /// In en, this message translates to:
+  /// **'up {delta} since first session'**
+  String gymSinceFirstUp(String delta);
+
+  /// Exercise progression: est-1RM loss since first session
+  ///
+  /// In en, this message translates to:
+  /// **'down {delta} since first session'**
+  String gymSinceFirstDown(String delta);
+
+  /// No description provided for @gymSinceFirstFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'no change since first session'**
+  String get gymSinceFirstFlat;
+
+  /// Workout detail: vs-last-time hint date for an exercise
+  ///
+  /// In en, this message translates to:
+  /// **'Last time {date}'**
+  String gymDetailLastTime(String date);
+
+  /// No description provided for @gymVolumeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Volume'**
+  String get gymVolumeLabel;
+
   /// No description provided for @gymDeleteConfirmTitle.
   ///
   /// In en, this message translates to:

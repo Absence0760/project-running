@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../exercise_history.dart';
 import '../gym_prs.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -8,7 +9,8 @@ import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
-import 'gym_screen.dart' show gymExerciseSuggestions;
+import 'gym_exercise_screen.dart';
+import 'gym_screen.dart' show gymExerciseSuggestions, gymSetHistory;
 
 typedef _SetRef = ({int index, Map<String, dynamic> set});
 typedef _Block = ({String name, List<_SetRef> sets});
@@ -144,6 +146,40 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     return out;
   }
 
+  /// "vs last time" per exercise: the previous weighted session of this
+  /// exercise (before this workout) + how this session's heaviest set compares
+  /// to it — the progressive-overload cue the all-time PR chips can't give.
+  /// Keyed by normalised exercise name.
+  Map<String, ({ExerciseSession prev, double? deltaKg})> _prevByExercise(
+    StoredGymWorkout w,
+    List<_Block> blocks,
+  ) {
+    final out = <String, ({ExerciseSession prev, double? deltaKg})>{};
+    final startedAt = w.row['started_at'] as String? ?? '';
+    if (startedAt.isEmpty) return out;
+    final history = gymSetHistory(widget.store.workouts);
+    for (final block in blocks) {
+      final key = normaliseExerciseName(block.name);
+      if (key == '' || out.containsKey(key)) continue;
+      final prev = previousExerciseSession(history, block.name, startedAt);
+      if (prev == null) continue;
+      double? thisTop;
+      for (final ref in block.sets) {
+        final weight = (ref.set['weight_kg'] as num?)?.toDouble();
+        if (weight != null && weight > 0 && (thisTop == null || weight > thisTop)) {
+          thisTop = weight;
+        }
+      }
+      final deltaKg =
+          thisTop != null ? (thisTop - prev.topWeightKg) * 10 : null;
+      out[key] = (
+        prev: prev,
+        deltaKg: deltaKg == null ? null : deltaKg.roundToDouble() / 10,
+      );
+    }
+    return out;
+  }
+
   List<_Block> _blocks(StoredGymWorkout w) {
     final blocks = <_Block>[];
     for (var i = 0; i < w.sets.length; i++) {
@@ -224,6 +260,8 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final tag = localeToTag(Localizations.localeOf(context));
     final started = w.startedAt;
     final prByExercise = _prByExercise(w);
+    final blocks = _blocks(w);
+    final prevByExercise = _prevByExercise(w, blocks);
     final notes = w.workout.notes?.trim();
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -235,8 +273,8 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                 ?.copyWith(color: theme.colorScheme.outline),
           ),
         const SizedBox(height: 16),
-        for (final block in _blocks(w))
-          _exerciseBlock(block, prByExercise, theme, l10n),
+        for (final block in blocks)
+          _exerciseBlock(block, prByExercise, prevByExercise, theme, l10n),
         if (notes != null && notes.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
@@ -257,10 +295,13 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   Widget _exerciseBlock(
     _Block block,
     Map<String, List<PrKind>> prByExercise,
+    Map<String, ({ExerciseSession prev, double? deltaKg})> prevByExercise,
     ThemeData theme,
     AppLocalizations l10n,
   ) {
-    final prs = prByExercise[normaliseExerciseName(block.name)] ?? const [];
+    final key = normaliseExerciseName(block.name);
+    final prs = prByExercise[key] ?? const [];
+    final lastTime = prevByExercise[key];
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -280,6 +321,10 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                 for (final kind in prs) _prChip(kind, theme, l10n),
               ],
             ),
+            if (lastTime != null) ...[
+              const SizedBox(height: 6),
+              _lastTimeHint(block.name, lastTime, theme, l10n),
+            ],
             const SizedBox(height: 8),
             for (final ref in block.sets)
               Padding(
@@ -318,6 +363,84 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         ),
       ),
     );
+  }
+
+  Widget _lastTimeHint(
+    String exerciseName,
+    ({ExerciseSession prev, double? deltaKg}) lt,
+    ThemeData theme,
+    AppLocalizations l10n,
+  ) {
+    final tag = localeToTag(Localizations.localeOf(context));
+    final dt = DateTime.tryParse(lt.prev.startedAt);
+    final dateText = dt == null ? lt.prev.startedAt : formatDateMed(dt.toLocal(), tag);
+    final prevSet = _topSetLine(lt.prev);
+    final delta = lt.deltaKg;
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GymExerciseScreen(
+            api: widget.api,
+            store: widget.store,
+            exerciseName: exerciseName,
+          ),
+        ),
+      ),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Flexible(
+              child: Text(
+                '${l10n.gymDetailLastTime(dateText)}: $prevSet',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (delta != null && delta != 0) ...[
+              const SizedBox(width: 6),
+              Icon(
+                delta > 0 ? Icons.trending_up : Icons.trending_down,
+                size: 14,
+                color: delta > 0
+                    ? Color.alphaBlend(
+                        Colors.green.withValues(alpha: 0.5),
+                        theme.colorScheme.onSurface,
+                      )
+                    : theme.colorScheme.outline,
+              ),
+              Text(
+                _deltaText(delta),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: delta > 0
+                      ? Color.alphaBlend(
+                          Colors.green.withValues(alpha: 0.5),
+                          theme.colorScheme.onSurface,
+                        )
+                      : theme.colorScheme.outline,
+                ),
+              ),
+            ],
+            Icon(Icons.chevron_right, size: 16, color: theme.colorScheme.outline),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _topSetLine(ExerciseSession prev) {
+    final w = WeightFormat.format(prev.topWeightKg, activeWeightUnit);
+    return prev.topWeightReps != null
+        ? '$w × ${_numStr(prev.topWeightReps!)}'
+        : w;
+  }
+
+  String _deltaText(double delta) {
+    final mag = WeightFormat.format(delta.abs(), activeWeightUnit);
+    return '${delta > 0 ? '+' : '−'}$mag';
   }
 
   Widget _prChip(PrKind kind, ThemeData theme, AppLocalizations l10n) =>

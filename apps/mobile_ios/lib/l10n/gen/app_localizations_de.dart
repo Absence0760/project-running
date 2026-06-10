@@ -6938,6 +6938,63 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gymPrE1rm => 'Beste gesch. 1RM';
 
   @override
+  String get gymRecordsLink => 'Rekorde';
+
+  @override
+  String get gymRecordsTitle => 'Persönliche Rekorde';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'Deine Bestleistung für jede gewichtete Übung.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'Noch keine gewichteten Übungen erfasst. Trage ein Gewicht zu einem Satz ein, um deine Bestleistungen zu verfolgen.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Zuletzt $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Einheiten',
+      one: '1 Einheit',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Zurück zu Rekorden';
+
+  @override
+  String get gymExerciseEmpty => 'Noch kein Verlauf für diese Übung.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '+$delta seit der ersten Einheit';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '−$delta seit der ersten Einheit';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'keine Veränderung seit der ersten Einheit';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Letztes Mal $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volumen';
+
+  @override
   String get gymDeleteConfirmTitle => 'Training löschen?';
 
   @override

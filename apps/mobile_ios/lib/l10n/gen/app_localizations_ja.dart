@@ -6551,6 +6551,60 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymPrE1rm => '推定1RM最高';
 
   @override
+  String get gymRecordsLink => '記録';
+
+  @override
+  String get gymRecordsTitle => '自己ベスト';
+
+  @override
+  String get gymRecordsSubtitle => '重量種目ごとのあなたのベスト記録。';
+
+  @override
+  String get gymRecordsEmpty => '重量種目の記録はまだありません。セットに重量を入力すると自己ベストの記録が始まります。';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return '最終 $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countセッション',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => '記録に戻る';
+
+  @override
+  String get gymExerciseEmpty => 'この種目の履歴はまだありません。';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '初回から+$delta';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '初回から−$delta';
+  }
+
+  @override
+  String get gymSinceFirstFlat => '初回から変化なし';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return '前回 $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'ボリューム';
+
+  @override
   String get gymDeleteConfirmTitle => 'ワークアウトを削除しますか？';
 
   @override

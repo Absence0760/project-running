@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../exercise_records.dart';
 import '../gym_prs.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -9,6 +10,7 @@ import '../local_gym_store.dart';
 import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
 import 'gym_detail_screen.dart';
+import 'gym_records_screen.dart';
 
 /// Total working volume (Σ reps·weight, rounded) for a stored workout — the
 /// list-row stat. Sets missing reps or weight contribute nothing.
@@ -40,6 +42,27 @@ List<GymSetLike> _setsToLikes(StoredGymWorkout w) => [
           weightKg: s['weight_kg'] as num?,
         ),
     ];
+
+/// Flatten every stored workout's sets into the dated set list the records
+/// + progression surfaces consume (mirrors web `fetchGymSetHistory`). Each
+/// set inherits its workout's id + started_at so the roll-up can group by
+/// session and date.
+List<DatedGymSet> gymSetHistory(List<StoredGymWorkout> workouts) {
+  final out = <DatedGymSet>[];
+  for (final w in workouts) {
+    final startedAt = w.row['started_at'] as String? ?? '';
+    for (final s in w.sets) {
+      out.add(DatedGymSet(
+        workoutId: w.id,
+        startedAt: startedAt,
+        exerciseName: (s['exercise_name'] as String?) ?? '',
+        reps: s['reps'] as num?,
+        weightKg: s['weight_kg'] as num?,
+      ));
+    }
+  }
+  return out;
+}
 
 /// Which workouts set at least one PR. Walk oldest→newest accumulating prior
 /// sets so each workout is judged against everything logged before it —
@@ -181,6 +204,19 @@ class _GymScreenState extends State<GymScreen> {
       appBar: AppBar(
         title: Text(l10n.gymTitle),
         actions: [
+          if (exerciseRecords(gymSetHistory(workouts)).isNotEmpty)
+            IconButton(
+              tooltip: l10n.gymRecordsTitle,
+              icon: const Icon(Icons.emoji_events_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => GymRecordsScreen(
+                    api: widget.api,
+                    store: widget.store,
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             tooltip: l10n.gymLog,
             icon: const Icon(Icons.add),
