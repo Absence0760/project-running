@@ -1625,6 +1625,27 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// squarely within the Art 20 right to receive. height_cm lives on
 		// user_profiles and ships in that export entry.
 		{name: "body_metrics.json", table: schema.TableBodyMetrics, filter: uidEq, sel: "*"},
+		// safety_contacts — the opt-in finish-alert relationships
+		// (migration 20261218_001). The subject is on BOTH legs: rows they
+		// OWN (owner_id — the contacts they designated) and rows where they
+		// are the designated contact (contact_user_id, set once they confirm
+		// in-app). Both are the subject's own personal data under Art 20.
+		// The guard's `user_id`-keyed scan can't see this table (it uses
+		// owner_id / contact_user_id), so it is wired in explicitly.
+		// `confirm_token` is a capability credential — anyone holding it can
+		// confirm the contact via confirm_safety_contact_by_token — so the
+		// narrow select omits it, mirroring coach_athletes' invite_token and
+		// integrations' vault columns.
+		{
+			name: "safety_contacts_owned.json", table: schema.TableSafetyContacts,
+			filter: "owner_id=eq." + uid,
+			sel:    "id,owner_id,contact_user_id,contact_email,confirmed_at,created_at,updated_at",
+		},
+		{
+			name: "safety_contacts_as_contact.json", table: schema.TableSafetyContacts,
+			filter: "contact_user_id=eq." + uid,
+			sel:    "id,owner_id,contact_user_id,contact_email,confirmed_at,created_at,updated_at",
+		},
 	}
 }
 

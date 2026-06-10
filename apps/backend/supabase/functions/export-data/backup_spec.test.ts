@@ -21,10 +21,11 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// user_blocks, club_posts, event_exceptions + the persona round-5
 	// addition: user_settings + the Phase 4 multi-modal gym/nutrition
 	// pair: gym_workouts, food_log + the nutrition body_metrics weight
-	// series); a regression that drops one of these is a silent Art 20
-	// completeness gap. Keep in lockstep with the Go worker's
-	// `FetchExportPersonalDataTables` spec list.
-	assertEquals(specs.length, 37, `expected 37 specs, got ${specs.length}`);
+	// series + the safety_contacts finish-alert relationships in both
+	// directions: owned + as-contact); a regression that drops one of
+	// these is a silent Art 20 completeness gap. Keep in lockstep with
+	// the Go worker's `FetchExportPersonalDataTables` spec list.
+	assertEquals(specs.length, 39, `expected 39 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -64,8 +65,38 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'gym_workouts.json',
 		'food_log.json',
 		'body_metrics.json',
+		'safety_contacts_owned.json',
+		'safety_contacts_as_contact.json',
 	]) {
 		assertEquals(entries.has(expected), true, `missing entry: ${expected}`);
+	}
+});
+
+Deno.test('safety_contacts exported both ways without the confirm_token credential (GDPR Art 20)', () => {
+	// followups.md G1 + safety_contacts Art 20 sub-item. The subject is on
+	// both legs of a safety-contact relationship: rows they OWN (owner_id —
+	// the contacts they designated) and rows where they ARE the confirmed
+	// contact (contact_user_id). Both are the subject's own personal data.
+	// The Go guard's user_id-keyed scan can't see this table (owner_id /
+	// contact_user_id), so it is wired explicitly. `confirm_token` is a
+	// redeemable capability — anyone holding it can confirm the contact via
+	// confirm_safety_contact_by_token — so the narrow select must omit it.
+	const specs = buildBackupSpecs(TEST_UID);
+	const owned = specs.find((s) => s.entry === 'safety_contacts_owned.json');
+	const asContact = specs.find((s) => s.entry === 'safety_contacts_as_contact.json');
+	assertExists(owned);
+	assertExists(asContact);
+	assertEquals(owned.filter, `owner_id=eq.${TEST_UID}`);
+	assertEquals(asContact.filter, `contact_user_id=eq.${TEST_UID}`);
+	for (const spec of [owned, asContact]) {
+		assertEquals(spec.table, 'safety_contacts');
+		assertEquals(
+			spec.select.includes('confirm_token'),
+			false,
+			'confirm_token is a redeemable capability and must never ship in the export',
+		);
+		assertEquals(spec.select.includes('contact_email'), true);
+		assertEquals(spec.select.includes('confirmed_at'), true);
 	}
 });
 
