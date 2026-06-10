@@ -55,10 +55,26 @@ internal fun classifyDrainError(e: Throwable): DrainAction {
             else -> DrainAction.SkipAndContinue
         }
     }
+    // Network-layer failures must classify transient so the drain loop
+    // short-circuits and arms backoff, mirroring the Go worker's isTransient
+    // (apps/job_worker/internal/worker.go). OkHttp / java.net surface a
+    // dropped connection as "Failed to connect to …", "ECONNREFUSED
+    // (Connection refused)", "Connection reset", or a truncated body as
+    // "unexpected end of stream" — none of which match a bare "timeout", so
+    // without these markers a real outage was mis-classified permanent,
+    // hammered every queued run, and reset backoff via onSuccess.
     val msg = e.message.orEmpty()
-    val transient = msg.contains("timeout", ignoreCase = true) ||
-        msg.contains("Unable to resolve", ignoreCase = true) ||
-        msg.contains("Software caused", ignoreCase = true)
+    val transientMarkers = listOf(
+        "timeout",
+        "Unable to resolve",
+        "Software caused",
+        "connection refused",
+        "connection reset",
+        "failed to connect",
+        "no such host",
+        "unexpected end of stream",
+    )
+    val transient = transientMarkers.any { msg.contains(it, ignoreCase = true) }
     return if (transient) DrainAction.StopAndRetryLater else DrainAction.SkipAndContinue
 }
 

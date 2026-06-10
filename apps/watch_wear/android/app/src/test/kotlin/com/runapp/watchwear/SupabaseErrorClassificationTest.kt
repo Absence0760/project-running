@@ -143,6 +143,37 @@ class SupabaseErrorClassificationTest {
     }
 
     @Test
+    fun `connection-refused routes to stop-and-retry-later`() {
+        // OkHttp/java.net wording when the backend is unreachable — the most
+        // common offline error on a watch, previously mis-classified
+        // permanent (defeating short-circuit + backoff).
+        val action = classifyDrainError(
+            RuntimeException("Failed to connect to threkir.supabase.co/1.2.3.4:443"),
+        )
+        assertSame(DrainAction.StopAndRetryLater, action)
+    }
+
+    @Test
+    fun `connection-reset routes to stop-and-retry-later`() {
+        val action = classifyDrainError(java.net.SocketException("Connection reset"))
+        assertSame(DrainAction.StopAndRetryLater, action)
+    }
+
+    @Test
+    fun `econnrefused routes to stop-and-retry-later`() {
+        val action = classifyDrainError(
+            RuntimeException("connect failed: ECONNREFUSED (Connection refused)"),
+        )
+        assertSame(DrainAction.StopAndRetryLater, action)
+    }
+
+    @Test
+    fun `truncated body routes to stop-and-retry-later`() {
+        val action = classifyDrainError(java.io.IOException("unexpected end of stream"))
+        assertSame(DrainAction.StopAndRetryLater, action)
+    }
+
+    @Test
     fun `unknown non-http error routes to skip-and-continue`() {
         val action = classifyDrainError(RuntimeException("nothing in particular"))
         assertSame(DrainAction.SkipAndContinue, action)
