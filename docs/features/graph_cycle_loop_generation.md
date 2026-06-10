@@ -134,29 +134,27 @@ lives next to the graph. Reuse `apps/job_worker/osrm/data/region.osm.pbf`.
 — foot-access tags (`foot=no`/`access`/`highway` filtering), barriers, splitting
 ways at intersections into routable edges — is most of P1. It's a slice of what
 OSRM/GraphHopper do at build time, **not a trivial parse**, so use an existing OSM
-graph library rather than hand-rolling it. And **prototype in Python first** (see
-Phases): `osmnx.graph_from_point(..., network_type='walk')` yields a ready foot
-graph plus `networkx` shortest-path / edge-disjoint helpers in a few lines, so the
-*algorithm* can be validated in hours before committing to the Go graph build.
+graph library rather than hand-rolling it. (The **P0 spike already validated the
+algorithm** on a live Overpass foot graph + stdlib Dijkstra — see § P0 results — so
+P1 is purely the prod graph build, with no remaining algorithm risk.)
 
 ## Architecture + fallback chain
 
 - New `graph_cycle.ts` core in `apps/web/src/lib/routes/generate/`, transport-
   agnostic; the SvelteKit route + the Lambda both pass it the sidecar URL.
 - **Generate order:** graph-cycle FIRST (when the sidecar is configured) →
-  `round_trip` + multi-distance fallback → loop-poor UX. The v2 polygon generator
-  is likely **retired** once graph-cycle ships (it's strictly weaker), or kept as
-  a cheap middle tier — decide after the spike.
+  `round_trip` + multi-distance fallback → loop-poor UX. **Retire the v2 polygon
+  generator** when graph-cycle ships — the P0 spike showed graph-cycle beats it at
+  every start (clean loops areaEff 0.42–0.60 vs polygon's zero), so it adds no
+  coverage as a middle tier.
 - Selection + the loop-poor shortfall banner are reused unchanged.
 
 ## Phases + effort
 
-- **P0 — Python spike (de-risk the algorithm, ~½–1 day)**: `osmnx` foot graph +
-  `networkx` edge-disjoint-path cycles + the `areaEfficiency` / distance scoring.
-  Prove it traces a clean loop at `37.6518` (where 432 polygon placements found
-  nothing) and on dense/medium starts. **Gate everything below on this** — it
-  answers "does graph-cycle search actually beat geometry here?" before any prod
-  infra is touched.
+- **P0 — spike — ✅ DONE (2026-06-10, green-lit)**: validated the algorithm on a
+  live Overpass foot graph + stdlib Dijkstra/disjoint-path search — clean loops at
+  dense/medium (areaEff 0.42–0.60), report start confirmed loop-poor (§ P0
+  results). The remaining phases are pure build, not algorithm risk.
 - **P1 — Go graph sidecar (~3–4 days)**: the validated approach as a prod service —
   PBF → foot graph (via an OSM graph library, not hand-rolled) +
   `nearest`/`shortestPath`/`cycleNearTarget` HTTP API, validated against OSRM. The
@@ -169,9 +167,9 @@ graph plus `networkx` shortest-path / edge-disjoint helpers in a few lines, so t
   sub-processor note (the sidecar is our infra, same posture as OSRM — no new
   third party).
 
-**Total ≈ 8–10 days** (P0 a fraction of that). The new prod graph sidecar — not
-the algorithm — is the real cost; the **P0 spike answers the only question that
-matters before you pay it**.
+**Remaining ≈ 7–9 days** (P1–P3; P0 is done). The new prod graph sidecar — not the
+algorithm — is the real cost; the P0 spike already answered the only question that
+gated it.
 
 ## Risks + mitigations
 
@@ -189,26 +187,46 @@ matters before you pay it**.
 - **Scope creep into a full routing engine.** Mitigate: disjoint-paths only;
   budgeted-DFS is explicitly a *later* upgrade, not part of this build (P0–P3).
 
-## Open decisions (resolve before building)
+## Decisions
 
-1. **Prod sidecar stack** — Go (matches `job_worker`; recommended) once the P0
-   `osmnx` spike validates the algorithm. Don't ship `osmnx`/Python to prod (a new
-   runtime to operate); it's a spike tool only.
-2. **Does graph-cycle replace the v2 polygon generator** or layer above it?
-3. **Where the cycle search runs** — in the sidecar (recommended, native) vs in
-   the Node handler driving sidecar `shortestPath` calls (simpler, more chatty).
-4. **Prod cost/ops** of a third map sidecar — acceptable, or co-locate with OSRM?
+**Resolved (by the P0 spike / analysis):**
+- **Prod sidecar stack = Go** (matches `job_worker`). `osmnx`/Python was the spike
+  tool only — don't ship a Python runtime to prod.
+- **Retire the v2 polygon generator** once graph-cycle ships — it beat polygon at
+  every spike start, so polygon adds no coverage. Keep `round_trip` (+ multi-
+  distance) as the sole fallback.
+- **Algorithm = penalised-reuse disjoint-path cycles** (not strict removal) — the
+  spike proved strict disjointness fails in bottlenecked sparse networks.
 
-## Recommendation
+**Still open (decide at P1 kickoff):**
+- **Where the cycle search runs** — in the Go sidecar (recommended: native, next
+  to the graph, fewer round-trips) vs the Node handler driving sidecar
+  `shortestPath` calls (simpler, chattier, more latency).
+- **Prod cost/ops** of a third map sidecar on Fly — acceptable standalone, or
+  co-locate with the OSRM container to save a service?
 
-Build it — operating on the **real street graph** (rather than guessing geometry)
-is the only thing that can trace the neighbourhood loop the user wants, proven by
-the fact that a loop exists at the reported start which 432 geometric placements
-could not find. Disjoint-path cycles are the recommended graph method (budgeted
-DFS is a later upgrade). **But run the P0 Python spike first** (`osmnx` +
-edge-disjoint-path prototype, validated at `37.6518` and on dense/medium starts) —
-it confirms in hours whether graph-cycle search actually beats geometry, before
-you commit to the prod graph sidecar that is the real cost here, not the algorithm.
+## Recommendation + handoff (start here, next session)
+
+**The algorithm is validated (P0, green-lit) — build P1–P3.** Operating on the real
+street graph is the only thing that traces the neighbourhood loop geometry can't,
+and the spike confirmed it produces clean loops everywhere a loop exists while
+honestly detecting loop-poor starts. Concrete next steps:
+
+1. **Resolve the two open decisions** above (search in sidecar vs handler; co-locate
+   on Fly) at P1 kickoff.
+2. **P1 — Go graph sidecar**: PBF → foot graph (OSM graph library, not hand-rolled)
+   + `nearest` / `shortestPath(excludedEdges)` / `cycleNearTarget`. Port the spike's
+   validated search verbatim: direction-sampled far-points around `D/2`,
+   **penalised** (~×8) reuse on the return path, `areaEfficiency`-scored,
+   closest-to-target selection, and surface the **largest clean loop** found (feeds
+   the loop-poor UX).
+3. **P2 — `graph_cycle.ts`** + handler wiring (graph-cycle-first; retire polygon;
+   `round_trip` fallback) + unit tests (mocked sidecar).
+4. **P3 — ship**: e2e + measure + Lambda parity + deploy the sidecar to Fly +
+   docs/§137 + sub-processor note.
+
+The remaining cost is the prod graph sidecar, **not** the algorithm — the spike
+already paid down the algorithm risk.
 
 ## Extension: route-design preferences (a layer on the graph)
 
