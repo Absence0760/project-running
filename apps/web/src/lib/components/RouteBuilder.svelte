@@ -19,6 +19,7 @@
 		isWithinAcceptBand,
 		selectLoopAnchors,
 	} from '$lib/routes/route_loop';
+	import { nearestInsertIndex } from '$lib/routes/insert_index';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { searchPlaces } from '$lib/routes/geocoding';
@@ -901,24 +902,11 @@
 
 	// --- Click on route to insert waypoint ---
 
+	// Which segment a mid-route click lands on. Delegates to the pure,
+	// unit-tested helper that uses true point-to-segment distance — see
+	// insert_index.ts for why the old midpoint heuristic mis-picked.
 	function findInsertIndex(lngLat: maplibregl.LngLat): number {
-		if (waypoints.length < 2) return waypoints.length;
-
-		let bestIdx = waypoints.length;
-		let bestDist = Infinity;
-
-		for (let i = 0; i < waypoints.length - 1; i++) {
-			const a = waypoints[i];
-			const b = waypoints[i + 1];
-			// Distance from click to the midpoint of segment a-b
-			const mid: [number, number] = [(a.lng + b.lng) / 2, (a.lat + b.lat) / 2];
-			const d = haversine([lngLat.lng, lngLat.lat], mid);
-			if (d < bestDist) {
-				bestDist = d;
-				bestIdx = i + 1;
-			}
-		}
-		return bestIdx;
+		return nearestInsertIndex(waypoints, { lat: lngLat.lat, lng: lngLat.lng });
 	}
 
 	function isClickOnRoute(e: maplibregl.MapMouseEvent): boolean {

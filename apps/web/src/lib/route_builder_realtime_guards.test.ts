@@ -549,3 +549,30 @@ test('routes/new/+page.svelte: export filename has a non-empty basename fallback
 		);
 	}
 });
+
+// 5. RouteBuilder mid-route insertion must use the pure point-to-segment
+//    helper, not a distance-to-midpoint heuristic. The midpoint version
+//    mis-picked the segment for a click near the far end of a long
+//    segment (a shorter neighbour's midpoint scored closer), inserting
+//    the new waypoint into the wrong segment. See insert_index.ts +
+//    insert_index.test.ts.
+test('RouteBuilder.svelte: findInsertIndex delegates to nearestInsertIndex', () => {
+	const src = read('src/lib/components/RouteBuilder.svelte');
+	assert.match(
+		src,
+		/import \{ nearestInsertIndex \} from '\$lib\/routes\/insert_index'/,
+		'RouteBuilder must import the pure nearestInsertIndex helper.',
+	);
+	const fn = src.match(/function findInsertIndex\([^)]*\)[^{]*\{[\s\S]*?\n\t\}/);
+	assert.ok(fn, 'findInsertIndex must exist');
+	assert.match(
+		fn![0],
+		/nearestInsertIndex\(/,
+		'findInsertIndex must delegate to nearestInsertIndex (point-to-segment).',
+	);
+	assert.doesNotMatch(
+		fn![0],
+		/midpoint|\(a\.lng \+ b\.lng\) \/ 2/,
+		'findInsertIndex must NOT reintroduce the distance-to-midpoint heuristic.',
+	);
+});
