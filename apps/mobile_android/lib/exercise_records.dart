@@ -1,8 +1,10 @@
 /// Per-exercise personal-record roll-up (Phase 4 multi-modal, decisions §63;
 /// spec: docs/features/multi_modal.md § Gym). Drives the gym records surface.
 ///
-/// Dart twin of `apps/web/src/lib/gym/exercise_records.ts` — keep the
-/// algorithm, edge cases, outputs, and test counts in lockstep.
+/// Mobile-only: the web records surface moved to the server-side
+/// `gym_exercise_records()` RPC (all-time bests can't be served by a windowed
+/// client read), so there is no web twin to keep in lockstep. Mobile still
+/// computes records client-side here until it too moves to the RPC.
 ///
 /// The PR engine (gym_prs.dart) already computes each exercise's bests, but
 /// only transiently — to decide whether a workout earned a badge. There was no
