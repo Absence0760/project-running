@@ -593,6 +593,19 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     await widget.runStore.update(updated);
     if (!mounted) return;
     setState(() => run = updated);
+
+    // Push the edited columns (is_dnf / metadata / stats) straight to the
+    // server so other clients reflect the change now, not on the next
+    // batch sync (up to an hour out). Column-only — no track re-upload.
+    // L4 best-effort: a failure leaves the change for the batch sync.
+    final api = widget.apiClient;
+    if (api != null) {
+      try {
+        await api.updateRunFields(updated);
+      } catch (e) {
+        debugPrint('updateRunFields failed for ${run.id}: $e');
+      }
+    }
   }
 
   Widget _durationSubField(TextEditingController ctl, String suffix) {

@@ -573,6 +573,23 @@ class ApiClient {
     }
   }
 
+  /// Patch the editable columns of a run row in place — duration, distance,
+  /// the promoted `is_dnf` flag, and the metadata bag — WITHOUT re-uploading
+  /// the track. The web run-detail `saveEdit` writes these columns directly;
+  /// the mobile edit dialog mirrors it so a DNF / title / notes / stat edit
+  /// is reflected on other clients immediately instead of waiting for the
+  /// next batch sync (which would re-gzip + re-upload the whole track for a
+  /// one-flag change). Owner-only by RLS. Best-effort caller — a failure
+  /// just leaves the change to land on the next batch sync.
+  Future<void> updateRunFields(Run run) async {
+    await _client.from(RunRow.table).update({
+      RunRow.colDurationS: run.duration.inSeconds,
+      RunRow.colDistanceM: run.distanceMetres,
+      RunRow.colIsDnf: run.metadata?['is_dnf'] == true,
+      RunRow.colMetadata: _metadataWithoutPromotedColumns(run.metadata),
+    }).eq(RunRow.colId, run.id);
+  }
+
   /// Mark a run as publicly visible so it can be viewed at
   /// `/share/run/{id}` without authentication.
   Future<void> makeRunPublic(String runId) async {
