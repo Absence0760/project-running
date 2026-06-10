@@ -2685,8 +2685,11 @@
 		background: transparent;
 		border: 1px solid transparent;
 		border-radius: var(--radius-sm);
-		width: 2.25rem;
-		height: 2.25rem;
+		/* 44px touch target (Material / WCAG 2.5.5 AAA) — the glyph stays
+		   1.1rem; only the hit area grows. The danger Delete sits behind
+		   an action-divider so the larger targets don't crowd it. */
+		width: 2.75rem;
+		height: 2.75rem;
 		padding: 0;
 		cursor: pointer;
 		color: var(--color-text-secondary);
