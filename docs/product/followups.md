@@ -180,6 +180,10 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 - [ ] **Tighten the polygon path toward target + multi-distance for the polygon radius** — the `round_trip` path now races a spread of request distances and lands in-band ([fix](../architecture/decisions.md)), but the polygon path's in-band selection still prefers the *roundest* loop, which can return ~+8–11% in dense areas when a closer loop exists. Apply the same closest-to-target weighting + race the polygon radius fraction, not just a fixed [0.12–0.16] band. Small, web-only.
 
+- [ ] **Route-design preferences** — once the graph-cycle generator exists, expose preference knobs (avoid highways, stick to neighbourhoods, scenic/quiet, elevation-aware, opt-in cul-de-sacs) as edge weights/filters + a multi-objective scoring layer on the graph search. The avoid-highways/prefer-residential half is cheaply doable today via a GraphHopper custom profile. Design in [graph_cycle_loop_generation.md § Extension](../features/graph_cycle_loop_generation.md). ~2–3 d on top of v3.
+
+- [ ] **AI route assistant** — an LLM *bookend* around the generator: plain-English request → validated generation constraints (tool-use extraction), and generated route → plain-English description. The LLM never routes (graph search owns correctness); it translates intent + writes prose, reusing the existing Anthropic/AI-Coach transport + paywall. Build the description half first (cheap, has a templated fallback). Design in [ai_route_assistant.md](../features/ai_route_assistant.md). ~4–7 d, generator-agnostic.
+
 ## Blocked on external credentials / accounts
 
 - [ ] **Push notifications (FCM + APNs + web Push)** — operator: create a Firebase project, drop `google-services.json` (Android) / `GoogleService-Info.plist` (iOS), enable an APNs auth key in the Apple Developer portal + upload to Firebase, generate `VAPID_PRIVATE_KEY` for web. Then add `firebase_messaging`, register tokens to `user_devices.push_token`, write the workout-reminder + kudos receive handlers, and wire `apps/web/src/lib/util/push.ts`.

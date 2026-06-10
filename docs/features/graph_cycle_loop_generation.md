@@ -176,3 +176,41 @@ DFS is a later upgrade). **But run the P0 Python spike first** (`osmnx` +
 edge-disjoint-path prototype, validated at `37.6518` and on dense/medium starts) —
 it confirms in hours whether graph-cycle search actually beats geometry, before
 you commit to the prod graph sidecar that is the real cost here, not the algorithm.
+
+## Extension: route-design preferences (a layer on the graph)
+
+A follow-on to the P0–P3 core — **not** part of it. Once the graph search traces
+real loops, user preferences fall out of the substrate as **edge weights, filters,
+and scoring terms, not new algorithms**:
+
+- **Hard filters** exclude edges. *Avoid highways* = drop OSM
+  `highway=motorway/trunk/primary` (+ their `_link`s) from the search graph.
+  Over-filtering can disconnect the graph and force a `null` (loop-poor) → fall
+  back; apply as a soft weight first, hard-exclude only on explicit ask.
+- **Soft weights** bias the per-edge shortest-path cost. *Stick to neighbourhoods*
+  = cheap `residential`/`living_street`, expensive arterials; *quiet / scenic* =
+  cheaper near `leisure=park` / `natural=water` / lower road class; *elevation
+  preference* = weight by per-edge grade. The disjoint-path search then routes
+  through the preferred streets on its own — no special-casing.
+- **Post-hoc scoring** ranks candidate loops by a weighted multi-objective:
+  distance error + `areaEfficiency` + preference terms (km on quiet roads,
+  park/water adjacency, total vert vs a target). "Design principles" live here —
+  they're weights in one tunable scoring function.
+
+**Cul-de-sacs are the deliberate exception.** A cul-de-sac is an out-and-back spur
+— exactly what `areaEfficiency` penalises and what the user disliked elsewhere. So
+*add cul-de-sacs* is an explicit opt-in mode that **inverts** part of the score:
+permit a capped number/length of short stubs into quiet dead-ends, crediting
+quietness/distance instead of penalising the spur. Separate scoring path, off by
+default.
+
+**Some of this needs no v3.** The avoid-highways / prefer-residential pair is
+mostly a GraphHopper **custom profile** (weight by road class); a `round_trip`
+variant could honour it today as a cheap interim. The full set (scenic,
+elevation-aware, cul-de-sac mode, multi-objective ranking) needs the graph search,
+where we own the edges + the scoring.
+
+**Effort:** ~2–3 days on top of a working graph-cycle generator — road-class /
+elevation weights are the easy half; scenic/park-adjacency and cul-de-sac mode the
+harder half. The natural-language front-end that *sets* these preferences from a
+plain-English request is its own proposal: [ai_route_assistant.md](ai_route_assistant.md).
