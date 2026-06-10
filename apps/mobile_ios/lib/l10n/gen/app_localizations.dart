@@ -5759,6 +5759,30 @@ abstract class AppLocalizations {
   /// **'Remove mine'**
   String get eventRemoveMine;
 
+  /// Confirm dialog title for removing the viewer's own event result
+  ///
+  /// In en, this message translates to:
+  /// **'Remove your result?'**
+  String get eventRemoveResultTitle;
+
+  /// Confirm dialog body for removing the viewer's own event result
+  ///
+  /// In en, this message translates to:
+  /// **'Your submitted finish time will be removed from this event\'s leaderboard. You can submit again later.'**
+  String get eventRemoveResultBody;
+
+  /// Confirm button to remove the viewer's own event result
+  ///
+  /// In en, this message translates to:
+  /// **'Remove result'**
+  String get eventRemoveResultConfirm;
+
+  /// Banner shown when removing the viewer's own event result fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t remove your result: {error}'**
+  String eventRemoveResultFailed(String error);
+
   /// Button to submit the viewer's result
   ///
   /// In en, this message translates to:

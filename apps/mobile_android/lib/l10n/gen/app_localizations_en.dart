@@ -3448,6 +3448,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get eventRemoveMine => 'Remove mine';
 
   @override
+  String get eventRemoveResultTitle => 'Remove your result?';
+
+  @override
+  String get eventRemoveResultBody =>
+      'Your submitted finish time will be removed from this event\'s leaderboard. You can submit again later.';
+
+  @override
+  String get eventRemoveResultConfirm => 'Remove result';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return 'Couldn\'t remove your result: $error';
+  }
+
+  @override
   String get eventSubmitMyTime => 'Submit my time';
 
   @override

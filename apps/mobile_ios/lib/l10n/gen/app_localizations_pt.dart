@@ -3478,6 +3478,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get eventRemoveMine => 'Remover o meu';
 
   @override
+  String get eventRemoveResultTitle => 'Remover seu resultado?';
+
+  @override
+  String get eventRemoveResultBody =>
+      'Seu tempo de chegada enviado será removido da classificação deste evento. Você pode enviar novamente mais tarde.';
+
+  @override
+  String get eventRemoveResultConfirm => 'Remover resultado';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return 'Não foi possível remover seu resultado: $error';
+  }
+
+  @override
   String get eventSubmitMyTime => 'Enviar meu tempo';
 
   @override
@@ -10675,6 +10690,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get eventRemoveMine => 'Remover o meu';
+
+  @override
+  String get eventRemoveResultTitle => 'Remover seu resultado?';
+
+  @override
+  String get eventRemoveResultBody =>
+      'Seu tempo de chegada enviado será removido da classificação deste evento. Você pode enviar novamente mais tarde.';
+
+  @override
+  String get eventRemoveResultConfirm => 'Remover resultado';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return 'Não foi possível remover seu resultado: $error';
+  }
 
   @override
   String get eventSubmitMyTime => 'Enviar meu tempo';

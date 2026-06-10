@@ -4287,6 +4287,27 @@
   "@eventRemoveMine": {
     "description": "Button to remove the viewer's own result"
   },
+  "eventRemoveResultTitle": "Remove your result?",
+  "@eventRemoveResultTitle": {
+    "description": "Confirm dialog title for removing the viewer's own event result"
+  },
+  "eventRemoveResultBody": "Your submitted finish time will be removed from this event's leaderboard. You can submit again later.",
+  "@eventRemoveResultBody": {
+    "description": "Confirm dialog body for removing the viewer's own event result"
+  },
+  "eventRemoveResultConfirm": "Remove result",
+  "@eventRemoveResultConfirm": {
+    "description": "Confirm button to remove the viewer's own event result"
+  },
+  "eventRemoveResultFailed": "Couldn't remove your result: {error}",
+  "@eventRemoveResultFailed": {
+    "description": "Banner shown when removing the viewer's own event result fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "eventSubmitMyTime": "Submit my time",
   "@eventSubmitMyTime": {
     "description": "Button to submit the viewer's result"

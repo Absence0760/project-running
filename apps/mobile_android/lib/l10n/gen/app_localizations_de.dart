@@ -3485,6 +3485,21 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventRemoveMine => 'Meines entfernen';
 
   @override
+  String get eventRemoveResultTitle => 'Dein Ergebnis entfernen?';
+
+  @override
+  String get eventRemoveResultBody =>
+      'Deine eingereichte Zielzeit wird aus der Bestenliste dieser Veranstaltung entfernt. Du kannst später erneut einreichen.';
+
+  @override
+  String get eventRemoveResultConfirm => 'Ergebnis entfernen';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return 'Dein Ergebnis konnte nicht entfernt werden: $error';
+  }
+
+  @override
   String get eventSubmitMyTime => 'Meine Zeit einreichen';
 
   @override

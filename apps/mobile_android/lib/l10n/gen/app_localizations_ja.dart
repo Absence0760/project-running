@@ -3255,6 +3255,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventRemoveMine => '自分のを削除';
 
   @override
+  String get eventRemoveResultTitle => '結果を削除しますか？';
+
+  @override
+  String get eventRemoveResultBody =>
+      '登録したフィニッシュタイムがこのイベントのリーダーボードから削除されます。後で再度登録できます。';
+
+  @override
+  String get eventRemoveResultConfirm => '結果を削除';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return '結果を削除できませんでした: $error';
+  }
+
+  @override
   String get eventSubmitMyTime => '自分のタイムを送信';
 
   @override

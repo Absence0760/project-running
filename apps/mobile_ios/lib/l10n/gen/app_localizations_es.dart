@@ -3475,6 +3475,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get eventRemoveMine => 'Quitar el mío';
 
   @override
+  String get eventRemoveResultTitle => '¿Eliminar tu resultado?';
+
+  @override
+  String get eventRemoveResultBody =>
+      'Tu tiempo de meta enviado se eliminará de la clasificación de este evento. Puedes volver a enviarlo más tarde.';
+
+  @override
+  String get eventRemoveResultConfirm => 'Eliminar resultado';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return 'No se pudo eliminar tu resultado: $error';
+  }
+
+  @override
   String get eventSubmitMyTime => 'Enviar mi tiempo';
 
   @override

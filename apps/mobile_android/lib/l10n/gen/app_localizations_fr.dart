@@ -3489,6 +3489,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get eventRemoveMine => 'Supprimer le mien';
 
   @override
+  String get eventRemoveResultTitle => 'Supprimer votre résultat ?';
+
+  @override
+  String get eventRemoveResultBody =>
+      'Votre temps d\'arrivée soumis sera retiré du classement de cet événement. Vous pourrez le soumettre à nouveau plus tard.';
+
+  @override
+  String get eventRemoveResultConfirm => 'Supprimer le résultat';
+
+  @override
+  String eventRemoveResultFailed(String error) {
+    return 'Impossible de supprimer votre résultat : $error';
+  }
+
+  @override
   String get eventSubmitMyTime => 'Soumettre mon temps';
 
   @override

@@ -279,9 +279,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _removeMyResult() async {
     final e = _event;
     final inst = _activeInstance;
-    if (e == null || inst == null) return;
-    await widget.social.removeEventResult(e.row.id, inst);
-    await _load();
+    if (e == null || inst == null || _submittingResult) return;
+    setState(() => _submittingResult = true);
+    try {
+      await widget.social.removeEventResult(e.row.id, inst);
+      await _load();
+    } catch (err) {
+      if (mounted) {
+        showTopBanner(
+            context, AppLocalizations.of(context).eventRemoveResultFailed('$err'));
+      }
+    } finally {
+      if (mounted) setState(() => _submittingResult = false);
+    }
   }
 
   /// Arm / Fire Go / End dispatcher. Uses the current `_raceSession`
@@ -555,7 +565,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ],
             ),
           const SizedBox(height: 24),
-          _ResultsSection(
+          EventResultsSection(
             results: _results,
             myUserId: widget.social.currentUserId,
             submitting: _submittingResult,
@@ -864,19 +874,49 @@ class _SubmitResultChoice {
   });
 }
 
-class _ResultsSection extends StatelessWidget {
+@visibleForTesting
+class EventResultsSection extends StatelessWidget {
   final List<EventResultView> results;
   final String? myUserId;
   final bool submitting;
   final VoidCallback onSubmit;
   final VoidCallback onRemove;
-  const _ResultsSection({
+  const EventResultsSection({
+    super.key,
     required this.results,
     required this.myUserId,
     required this.submitting,
     required this.onSubmit,
     required this.onRemove,
   });
+
+  // The result removal is destructive (it deletes the runner's
+  // submitted finish time), so it asks to confirm before invoking
+  // onRemove. The host owns the actual deletion + error banner.
+  Future<void> _confirmRemove(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.eventRemoveResultTitle),
+            content: Text(l10n.eventRemoveResultBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.eventSubmitCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.eventRemoveResultConfirm),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok) onRemove();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -895,7 +935,7 @@ class _ResultsSection extends StatelessWidget {
             const Spacer(),
             if (hasMine)
               TextButton(
-                onPressed: onRemove,
+                onPressed: submitting ? null : () => _confirmRemove(context),
                 child: Text(l10n.eventRemoveMine),
               )
             else
