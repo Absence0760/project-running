@@ -120,6 +120,7 @@
 	/** Thread state. Key is parent post id. */
 	let expandedThreads = $state<Record<string, ClubPostWithAuthor[] | null>>({});
 	let replyDrafts = $state<Record<string, string>>({});
+	let replyBusyId = $state<string | null>(null);
 
 	let isAdmin = $derived(
 		club?.viewer_role === 'owner' || club?.viewer_role === 'admin'
@@ -494,15 +495,20 @@
 	}
 
 	async function sendReply(postId: string) {
-		if (!club) return;
+		if (!club || replyBusyId) return;
 		const body = replyDrafts[postId]?.trim();
 		if (!body) return;
-		await createClubPost({ club_id: club.id, body, parent_post_id: postId });
-		replyDrafts = { ...replyDrafts, [postId]: '' };
-		const replies = await fetchPostReplies(postId);
-		expandedThreads = { ...expandedThreads, [postId]: replies };
-		// Refresh reply counts on the top-level post list.
-		posts = await fetchClubPosts(club.id, 20);
+		replyBusyId = postId;
+		try {
+			await createClubPost({ club_id: club.id, body, parent_post_id: postId });
+			replyDrafts = { ...replyDrafts, [postId]: '' };
+			const replies = await fetchPostReplies(postId);
+			expandedThreads = { ...expandedThreads, [postId]: replies };
+			// Refresh reply counts on the top-level post list.
+			posts = await fetchClubPosts(club.id, 20);
+		} finally {
+			replyBusyId = null;
+		}
 	}
 
 	async function submitPost(e: Event) {
@@ -986,7 +992,7 @@
 											<button
 												class="btn-primary btn-sm"
 												type="submit"
-												disabled={!replyDrafts[post.id]?.trim()}
+												disabled={!replyDrafts[post.id]?.trim() || replyBusyId === post.id}
 											>
 												{tr('clubHome.reply')}
 											</button>

@@ -115,4 +115,61 @@ test.describe('/clubs/[slug] — threaded replies', () => {
 			await ctxRunner.close();
 		}
 	});
+
+});
+
+test.describe('/clubs/[slug] — reply double-submit guard', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('reply submit disables while the insert is in flight', async ({ page }) => {
+		const admin = getAdminClient();
+		const parentBody = `e2e-reply-guard-parent ${Date.now()}`;
+		const replyBody = `e2e-reply-guard ${Date.now()}`;
+
+		const { data: planted } = await admin
+			.from('club_posts')
+			.insert({ club_id: SYDNEY_RUN_CLUB_ID, author_id: USER_A.id, body: parentBody })
+			.select('id')
+			.single();
+		const parentId = (planted as { id: string }).id;
+
+		// Delay the reply insert so the in-flight window is observable; the
+		// guard must keep the submit button disabled for its duration so a
+		// second tap can't fire a duplicate insert.
+		await page.route('**/rest/v1/club_posts*', async (route) => {
+			if (route.request().method() === 'POST') {
+				await new Promise((r) => setTimeout(r, 1500));
+			}
+			await route.continue();
+		});
+
+		try {
+			await page.goto('/clubs/richmond-run-club');
+			const parent = page.locator('article.post', { hasText: parentBody });
+			await expect(parent).toBeVisible({ timeout: 10_000 });
+			await parent.getByRole('button', { name: 'Reply' }).click();
+			const replyInput = parent.locator('.reply-form input[type="text"]');
+			await expect(replyInput).toBeVisible({ timeout: 5_000 });
+			await replyInput.fill(replyBody);
+
+			const submit = parent.locator('.reply-form button[type="submit"]');
+			await submit.click();
+			// While the (delayed) insert is in flight the guard disables the
+			// button — the proof that a second tap is a no-op.
+			await expect(submit).toBeDisabled({ timeout: 1_000 });
+
+			await expect(parent.locator('.reply', { hasText: replyBody })).toBeVisible({
+				timeout: 10_000
+			});
+
+			const { data: replies } = await admin
+				.from('club_posts')
+				.select('id')
+				.eq('parent_post_id', parentId)
+				.eq('body', replyBody);
+			expect(replies?.length).toBe(1);
+		} finally {
+			await admin.from('club_posts').delete().eq('id', parentId);
+		}
+	});
 });
