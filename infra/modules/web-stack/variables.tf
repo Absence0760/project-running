@@ -85,6 +85,12 @@ variable "graphhopper_url" {
   default     = ""
 }
 
+variable "graph_cycle_url" {
+  description = "Base URL of the self-hosted graph_cycle map sidecar (apps/graph_cycle) — the v3 graph-cycle loop generator the generate-route Lambda tries FIRST, ahead of GraphHopper round_trip. NON-SECRET (an internal engine URL); the matching GRAPH_CYCLE_API_KEY shared secret is pulled from sops. Empty string ('') leaves GRAPH_CYCLE_URL unset so the handler skips graph-cycle and serves round_trip — no regression. Prod sets the sidecar URL once deployed; preview defaults to ''."
+  type        = string
+  default     = ""
+}
+
 variable "public_site_url" {
   description = "Canonical public URL of this env (e.g. 'https://threkir.com' for prod, 'https://preview.threkir.com' for preview). Used by the share-run Lambda to build absolute og:url + og:image URLs in the per-run head tags. Defaults are env-specific; per-env stacks should set this explicitly."
   type        = string

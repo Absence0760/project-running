@@ -57,18 +57,20 @@ locals {
     },
   )
 
-  # generate-route Lambda env. GRAPHHOPPER_URL is non-secret (an internal
-  # engine URL), passed as a plain Terraform var; an empty string is omitted so
-  # the handler sees an unset env and returns 501 (unconfigured) and the client
-  # falls back to the OSRM heuristic. GRAPHHOPPER_API_KEY is the shared secret
-  # the handler sends as X-Engine-Key to clear the engine's Caddy guard — pulled
-  # from the sops file (ONLY that one key, not the whole secret bag the coach
-  # Lambda gets). Absent in sops → no header sent; if the engine's guard is
-  # active the engine 403s, the handler returns 502, and the engine-unreachable
-  # alarm fires — a loud misconfiguration, not a silent one.
+  # generate-route Lambda env. Engine URLs (GRAPH_CYCLE_URL + GRAPHHOPPER_URL)
+  # are non-secret internal URLs passed as plain Terraform vars; an empty string
+  # is omitted so the handler sees that env unset and simply skips that engine
+  # (GRAPH_CYCLE_URL unset → skip graph-cycle, fall to round_trip; both unset →
+  # 501 and the client falls back to the OSRM heuristic). The matching API keys
+  # (GRAPH_CYCLE_API_KEY + GRAPHHOPPER_API_KEY) are the shared secrets the handler
+  # sends as X-Engine-Key to clear each engine's guard — pulled from the sops file
+  # (ONLY those keys, not the whole secret bag the coach Lambda gets). Absent in
+  # sops → no header sent; if the engine's guard is active it 403s, the handler
+  # falls back, and (for round_trip) the engine-unreachable alarm fires.
   generate_route_lambda_env = merge(
+    var.graph_cycle_url != "" ? { GRAPH_CYCLE_URL = var.graph_cycle_url } : {},
     var.graphhopper_url != "" ? { GRAPHHOPPER_URL = var.graphhopper_url } : {},
-    local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if k == "GRAPHHOPPER_API_KEY" } : {},
+    local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if k == "GRAPHHOPPER_API_KEY" || k == "GRAPH_CYCLE_API_KEY" } : {},
   )
 }
 

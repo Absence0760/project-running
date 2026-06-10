@@ -32,6 +32,12 @@ variable "graphhopper_url" {
   default     = ""
 }
 
+variable "graph_cycle_url" {
+  description = "Base URL of the self-hosted graph_cycle map sidecar the generate-route Lambda tries FIRST for v3 graph-cycle loop generation (e.g. 'https://graph-cycle.fly.dev'). Non-secret; the GRAPH_CYCLE_API_KEY shared secret comes from sops. Empty string leaves graph-cycle unconfigured so the handler serves round_trip — no regression."
+  type        = string
+  default     = ""
+}
+
 variable "monthly_budget_limit_usd" {
   description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick something a few times the projected baseline (~$70/mo at launch per docs/ops/deployment.md)."
   type        = number

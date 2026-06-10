@@ -1,0 +1,79 @@
+name: Release graph_cycle
+
+# Per-app tag convention: `graph-cycle@1.2.3`. The workflow redeploys the
+# graph_cycle map sidecar (apps/graph_cycle). It does NOT touch the OSM PBF: the
+# PBF lives on the Fly Volume (`graph_cycle_data` mounted at `/data`) and
+# persists across image deploys. The sidecar reparses it into the in-memory foot
+# graph on boot (no cached graph), so a redeploy costs the boot-time parse but no
+# operator graph build.
+#
+# Secret required:
+#   FLY_API_TOKEN  — same token as release-osrm.yml / release-worker.yml.
+
+on:
+  push:
+    tags:
+      - 'graph-cycle@*'
+
+# Least-privilege default; the release job opts up to `contents: write` for the
+# GitHub Release step.
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    name: flyctl deploy (graph_cycle) + GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the GitHub Release
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          ref="${GITHUB_REF#refs/tags/graph-cycle@}"
+          echo "version=${ref}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${ref}"
+
+      - name: Setup flyctl
+        # SHA-pinned to the v1 tag, same as release-osrm.yml — this workflow
+        # consumes secrets.FLY_API_TOKEN to deploy a production app, so the pin
+        # closes a supply-chain risk. Bump by re-resolving the v1 tag's commit
+        # SHA: `gh api repos/superfly/flyctl-actions/git/refs/tags/v1`.
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+
+      - name: Deploy to Fly.io
+        # The fly.toml in apps/graph_cycle/ pins app=graph-cycle, the Dockerfile
+        # build, and the graph_cycle_data volume mount. The PBF on the volume
+        # rides along untouched; the sidecar reparses it on boot.
+        run: flyctl deploy --remote-only
+        working-directory: apps/graph_cycle
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployment
+        run: flyctl status --app graph-cycle
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: graph-cycle ${{ steps.version.outputs.version }}
+          body: |
+            Deployed the graph_cycle map sidecar
+            `${{ steps.version.outputs.version }}` to Fly.io (`graph-cycle` app,
+            `lhr` region) via `flyctl deploy --remote-only`. The OSM PBF on the
+            `graph_cycle_data` Volume was NOT touched; the sidecar reparses it
+            into the in-memory foot graph on boot.
+
+            See [`apps/graph_cycle/README.md`](apps/graph_cycle/README.md) and
+            [`docs/features/graph_cycle_loop_generation.md`](docs/features/graph_cycle_loop_generation.md)
+            for the full deploy + measurement notes.

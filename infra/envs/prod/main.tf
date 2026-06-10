@@ -81,6 +81,10 @@ module "web" {
   # back to the OSRM heuristic.
   graphhopper_url = var.graphhopper_url
 
+  # graph_cycle map sidecar — the v3 graph-cycle generator the Lambda tries
+  # FIRST. When empty the handler skips it and serves round_trip (no regression).
+  graph_cycle_url = var.graph_cycle_url
+
   # Caps the generate-route Lambda's concurrency. Each invocation fans
   # out several round_trip calls at the GraphHopper engine, so this is
   # the engine's load ceiling. 25 is comfortable for launch traffic;
