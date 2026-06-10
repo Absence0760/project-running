@@ -371,7 +371,9 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// calls is the cleanest proof that placement stays O(1), not
 		// O(n), as the route grows.
 		let routeCalls = 0;
-		await page.route('https://router.project-osrm.org/route/v1/**', (route) => {
+		// Host-agnostic so the per-segment counter works against both CI's
+		// demo host and the local localhost:5000 OSRM override.
+		await page.route('**/route/v1/**', (route) => {
 			routeCalls++;
 			route.fulfill({
 				status: 200,
@@ -695,7 +697,10 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// unavailable so the builder falls back to the (failing) OSRM
 		// heuristic and surfaces its generation-specific error.
 		await page.route('**/api/routes/generate', (route) => route.fulfill({ status: 501, body: '{}' }));
-		await page.route('https://router.project-osrm.org/**', (route) =>
+		// Host-agnostic OSRM match (route + nearest both contain `/v1/foot/`;
+		// elevation is `/v1/elevation`) so the mock intercepts both the CI
+		// demo host and the local localhost:5000 OSRM override.
+		await page.route('**/v1/foot/**', (route) =>
 			route.fulfill({ status: 503, body: '{}' }),
 		);
 		await page.goto('/routes/new');
@@ -800,9 +805,9 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		// unavailable (fast 501) so the in-flight, cancellable work is the
 		// slow OSRM fallback below.
 		await page.route('**/api/routes/generate', (route) => route.fulfill({ status: 501, body: '{}' }));
-		// Slow-walk every OSRM call so we have time to observe the
-		// busy state before any of them finishes.
-		await page.route('https://router.project-osrm.org/**', async (route) => {
+		// Slow-walk every OSRM call (route + nearest, host-agnostic) so we
+		// have time to observe the busy state before any of them finishes.
+		await page.route('**/v1/foot/**', async (route) => {
 			await new Promise((r) => setTimeout(r, 4000));
 			await route.fulfill({ status: 503, body: '{}' });
 		});
@@ -938,6 +943,106 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(kml).toBeEnabled();
 		const [kmlDownload] = await Promise.all([page.waitForEvent('download'), kml.click()]);
 		expect(kmlDownload.suggestedFilename()).toMatch(/\.kml$/);
+	});
+
+	test('clicking the START marker with 3+ waypoints closes the loop', async ({ page }) => {
+		// The marker click handler has a distinct branch for the start
+		// marker (index 0) once there are >= 3 waypoints: it appends a
+		// closing waypoint at the start coords so OSRM routes back to the
+		// origin. The existing back-track test only clicks a MIDDLE marker,
+		// so this close-the-loop branch was uncovered.
+		await page.route('**/route/v1/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: -0.03, dLng: 0.03 },
+			{ dLat: 0.03, dLng: 0.03 },
+		]);
+
+		const points = page.locator('.builder-stat-value').nth(2);
+		await expect(points).toHaveText('3', { timeout: 5_000 });
+
+		// First marker = the start (index 0, green).
+		await page.locator('.maplibregl-marker').first().click({ force: true });
+		await expect(points).toHaveText('4');
+
+		// The appended closing waypoint sits exactly on the start.
+		const wp = await page.evaluate(
+			() =>
+				(
+					window as unknown as {
+						__routeBuilder: {
+							getRouteData: () => { waypoints: { lat: number; lng: number }[] };
+						};
+					}
+				).__routeBuilder.getRouteData().waypoints,
+		);
+		expect(wp.length).toBe(4);
+		expect(wp[wp.length - 1].lat).toBeCloseTo(wp[0].lat, 9);
+		expect(wp[wp.length - 1].lng).toBeCloseTo(wp[0].lng, 9);
+	});
+
+	test('dragging a waypoint marker moves that waypoint (and only that one)', async ({
+		page,
+	}) => {
+		// The marker dragend handler rewrites waypoints[currentIndex] to the
+		// dropped position, invalidates the snapped polyline, and re-routes.
+		// Pixel-drag the second marker and assert its underlying coord moved
+		// while the first marker's coord is untouched.
+		await stubRoutingSuccess(page);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: 0.03, dLng: 0.03 },
+		]);
+		await expect(page.getByRole('button', { name: /Save Route/ })).toBeEnabled({
+			timeout: 10_000,
+		});
+
+		const readWaypoints = () =>
+			page.evaluate(
+				() =>
+					(
+						window as unknown as {
+							__routeBuilder: {
+								getRouteData: () => { waypoints: { lat: number; lng: number }[] };
+							};
+						}
+					).__routeBuilder.getRouteData().waypoints,
+			);
+		const before = await readWaypoints();
+
+		const marker = page.locator('.maplibregl-marker').nth(1);
+		const box = await marker.boundingBox();
+		expect(box).not.toBeNull();
+		const cx = box!.x + box!.width / 2;
+		const cy = box!.y + box!.height / 2;
+		await page.mouse.move(cx, cy);
+		await page.mouse.down();
+		await page.mouse.move(cx + 70, cy + 50, { steps: 10 });
+		await page.mouse.up();
+
+		// dragend updates the model; poll until waypoint[1] differs.
+		await expect
+			.poll(
+				async () => {
+					const w = await readWaypoints();
+					return w[1].lat !== before[1].lat || w[1].lng !== before[1].lng;
+				},
+				{ timeout: 5_000 },
+			)
+			.toBe(true);
+
+		const after = await readWaypoints();
+		// The start (index 0) is untouched by dragging marker 1.
+		expect(after[0].lat).toBe(before[0].lat);
+		expect(after[0].lng).toBe(before[0].lng);
 	});
 
 	// --- Adversarial: failure + boundary paths ---
