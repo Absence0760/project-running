@@ -45,7 +45,10 @@ export interface RoundTripRequest {
 	/// Raw `GRAPHHOPPER_URL` (may be undefined/empty → unconfigured error).
 	baseUrl: string | undefined;
 	start: { lat: number; lng: number };
-	targetDistanceM: number;
+	/// The distance to ASK the engine for (`round_trip.distance`) — NOT
+	/// necessarily the user's target. The handler races a spread of these around
+	/// the target (REQUEST_MULTIPLIERS) and keeps the actual result closest to it.
+	requestDistanceM: number;
 	/// `round_trip.seed` — same start + distance + seed is deterministic;
 	/// different seeds radiate the loop in different directions.
 	seed: number;
@@ -60,22 +63,21 @@ export interface RoundTripRequest {
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-/// We request `round_trip.distance` at the RAW target distance — no inflation.
-/// An earlier ×1.18 factor "centred" results in DENSE road networks (where
-/// round_trip undershoots, placing via-points on a circle whose chord cuts the
-/// path), but it badly OVERSHOT in sparse rural networks (which already
-/// overrun): a 5 km target inflated to 5.9 km came back as 9-13 km. Re-measured
-/// on the foot profile, requesting the raw target across DEFAULT_SEEDS seeds +
-/// closest-to-target selection (see ./select) lands ~5.0 km dense and ~5.2 km
-/// sparse for a 5 km ask, so the inflation is removed and selection does the
-/// centring. Re-measure if the profile or engine version changes.
+/// `round_trip.distance` is whatever the caller passes in `requestDistanceM`.
+/// round_trip's actual/requested ratio swings wildly by location — a 5 km ask
+/// returns ~4.3 km at one start and ~6.4 km at another ~30 m away — so no fixed
+/// factor centres both. The handler races a SPREAD of request distances
+/// (REQUEST_MULTIPLIERS × target) and keeps the actual result closest to target
+/// (see handler.ts + ./select). An earlier flat ×1.18 inflation was removed for
+/// the same reason: it helped undershooting networks but made overshooting ones
+/// far worse. Re-measure if the profile or engine version changes.
 export function buildRoundTripUrl(req: RoundTripRequest): string {
 	const base = (req.baseUrl ?? '').replace(/\/+$/, '');
 	const params = new URLSearchParams({
 		profile: 'foot',
 		point: `${req.start.lat},${req.start.lng}`,
 		algorithm: 'round_trip',
-		'round_trip.distance': String(Math.round(req.targetDistanceM)),
+		'round_trip.distance': String(Math.round(req.requestDistanceM)),
 		'round_trip.seed': String(req.seed),
 		points_encoded: 'false',
 		instructions: 'false',

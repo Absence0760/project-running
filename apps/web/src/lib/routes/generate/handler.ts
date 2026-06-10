@@ -49,12 +49,21 @@ export type GenerateResult =
 	| { status: 200; body: { coordinates: [number, number][]; distanceM: number } }
 	| { status: 400 | 501 | 502; body: { error: string } };
 
-/// Race the full seed budget by default. round_trip's actual distance varies
-/// wildly per seed in sparse road networks (a 5 km ask can return anywhere from
-/// 4 to 14 km), so more seeds materially raises the odds of landing a loop near
-/// the target for closest-to-target selection to pick (see ./select).
-export const DEFAULT_SEEDS = 8;
+/// Seeds raced at EACH request multiplier (so total round_trip calls is
+/// seeds × REQUEST_MULTIPLIERS). round_trip's actual distance varies wildly per
+/// seed in sparse networks (a 5 km ask can return 4–14 km), so several seeds per
+/// magnitude raises the odds of landing near target for selection to pick.
+export const DEFAULT_SEEDS = 5;
 export const MAX_SEEDS = 8;
+
+/// Request-distance multipliers raced around the user's target. round_trip's
+/// actual/requested ratio is location-specific — some networks overshoot the
+/// requested distance, some undershoot — so a single request can't land near
+/// target everywhere. Racing a spread and keeping the actual result closest to
+/// target (./select) self-corrects both directions. Validated: a start that
+/// returns 6.4 km at a 5 km request returns ~5.2 km at a 3.25 km (0.65×) request,
+/// while a start ~30 m away needs 1.1× the other way.
+export const REQUEST_MULTIPLIERS = [0.65, 0.8, 1.0, 1.2] as const;
 
 function isValidCoord(p: { lat: number; lng: number }): boolean {
 	return (
@@ -123,20 +132,22 @@ export async function handleGenerate(
 	const seeds = Math.max(1, Math.min(MAX_SEEDS, Math.round(req.seeds ?? DEFAULT_SEEDS)));
 	let lastError: unknown;
 	const results = await Promise.all(
-		Array.from({ length: seeds }, (_, i) =>
-			fetchRoundTrip(
-				{
-					baseUrl: config.graphhopperUrl,
-					start: req.start,
-					targetDistanceM: req.targetDistanceM,
-					seed: i,
-					apiKey: config.graphhopperApiKey,
-				},
-				deps.fetcher,
-			).catch((e) => {
-				lastError = e;
-				return null;
-			}),
+		REQUEST_MULTIPLIERS.flatMap((mult) =>
+			Array.from({ length: seeds }, (_, i) =>
+				fetchRoundTrip(
+					{
+						baseUrl: config.graphhopperUrl,
+						start: req.start,
+						requestDistanceM: req.targetDistanceM * mult,
+						seed: i,
+						apiKey: config.graphhopperApiKey,
+					},
+					deps.fetcher,
+				).catch((e) => {
+					lastError = e;
+					return null;
+				}),
+			),
 		),
 	);
 

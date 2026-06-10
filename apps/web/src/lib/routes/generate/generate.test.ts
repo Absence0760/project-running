@@ -9,7 +9,7 @@ import {
 	type Fetcher,
 } from './graphhopper';
 import { areaEfficiency, enclosedAreaM2, pickBestLoop } from './select';
-import { DEFAULT_SEEDS, handleGenerate, parseGenerateRequest } from './handler';
+import { DEFAULT_SEEDS, handleGenerate, parseGenerateRequest, REQUEST_MULTIPLIERS } from './handler';
 
 const BASE = 'http://gh.local';
 
@@ -45,7 +45,7 @@ function ghResponse(coords: [number, number][], distanceM: number): Response {
 // --- graphhopper.ts ---
 
 test('buildRoundTripUrl carries the round_trip params + foot profile', () => {
-	const url = buildRoundTripUrl({ baseUrl: BASE, start: { lat: 40, lng: -74 }, targetDistanceM: 5000.6, seed: 3 });
+	const url = buildRoundTripUrl({ baseUrl: BASE, start: { lat: 40, lng: -74 }, requestDistanceM: 5000.6, seed: 3 });
 	const u = new URL(url);
 	assert.equal(u.pathname, '/route');
 	assert.equal(u.searchParams.get('profile'), 'foot');
@@ -57,17 +57,17 @@ test('buildRoundTripUrl carries the round_trip params + foot profile', () => {
 	assert.equal(u.searchParams.get('points_encoded'), 'false');
 });
 
-test('buildRoundTripUrl requests the raw target distance (no inflation)', () => {
-	// The old ×1.18 inflation overshot badly in sparse networks; closest-to-
-	// target selection now centres the result, so the engine is asked for exactly
-	// the target distance.
-	const url = buildRoundTripUrl({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 10000, seed: 0 });
+test('buildRoundTripUrl asks for exactly requestDistanceM', () => {
+	// The handler races a spread of request distances (REQUEST_MULTIPLIERS ×
+	// target) and keeps the actual result closest to target; the URL builder just
+	// forwards whatever distance it's handed.
+	const url = buildRoundTripUrl({ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 10000, seed: 0 });
 	const asked = Number(new URL(url).searchParams.get('round_trip.distance'));
 	assert.equal(asked, 10000);
 });
 
 test('buildRoundTripUrl strips a trailing slash on the base', () => {
-	const url = buildRoundTripUrl({ baseUrl: `${BASE}/`, start: { lat: 1, lng: 2 }, targetDistanceM: 1000, seed: 0 });
+	const url = buildRoundTripUrl({ baseUrl: `${BASE}/`, start: { lat: 1, lng: 2 }, requestDistanceM: 1000, seed: 0 });
 	assert.ok(url.startsWith(`${BASE}/route?`));
 });
 
@@ -101,7 +101,7 @@ test('parseRoundTrip defaults distance to 0 when absent', () => {
 
 test('fetchRoundTrip throws unconfigured when the base URL is empty', async () => {
 	await assert.rejects(
-		() => fetchRoundTrip({ baseUrl: undefined, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0 }),
+		() => fetchRoundTrip({ baseUrl: undefined, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0 }),
 		(e: unknown) => e instanceof GraphHopperError && e.kind === 'unconfigured',
 	);
 });
@@ -109,7 +109,7 @@ test('fetchRoundTrip throws unconfigured when the base URL is empty', async () =
 test('fetchRoundTrip throws upstream on a non-2xx response', async () => {
 	const fetcher: Fetcher = async () => new Response('boom', { status: 500 });
 	await assert.rejects(
-		() => fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0 }, fetcher),
+		() => fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0 }, fetcher),
 		(e: unknown) => e instanceof GraphHopperError && e.kind === 'upstream',
 	);
 });
@@ -118,14 +118,14 @@ test('fetchRoundTrip throws no_route on an empty path set', async () => {
 	const fetcher: Fetcher = async () =>
 		new Response(JSON.stringify({ paths: [] }), { status: 200 });
 	await assert.rejects(
-		() => fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0 }, fetcher),
+		() => fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0 }, fetcher),
 		(e: unknown) => e instanceof GraphHopperError && e.kind === 'no_route',
 	);
 });
 
 test('fetchRoundTrip returns the parsed candidate on success', async () => {
 	const fetcher: Fetcher = async () => ghResponse(squareLoop(0, 0, 0.01), 5005);
-	const got = await fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0 }, fetcher);
+	const got = await fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0 }, fetcher);
 	assert.equal(got.distanceM, 5005);
 	assert.equal(got.coordinates.length, 5);
 });
@@ -137,7 +137,7 @@ test('fetchRoundTrip sends the X-Engine-Key header when an apiKey is set', async
 		return ghResponse(squareLoop(0, 0, 0.01), 5000);
 	};
 	await fetchRoundTrip(
-		{ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0, apiKey: 'sekret' },
+		{ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0, apiKey: 'sekret' },
 		fetcher,
 	);
 	assert.equal(seen?.['X-Engine-Key'], 'sekret');
@@ -149,7 +149,7 @@ test('fetchRoundTrip omits the X-Engine-Key header when no apiKey is set', async
 		seen = init?.headers;
 		return ghResponse(squareLoop(0, 0, 0.01), 5000);
 	};
-	await fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seed: 0 }, fetcher);
+	await fetchRoundTrip({ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0 }, fetcher);
 	assert.equal(seen, undefined);
 });
 
@@ -248,7 +248,7 @@ test('handleGenerate races N seeds and returns the best-shaped loop', async () =
 		OK_CFG,
 		{ fetcher },
 	);
-	assert.equal(calls, 4); // fanned out one request per seed
+	assert.equal(calls, 4 * REQUEST_MULTIPLIERS.length); // one request per seed per multiplier
 	assert.equal(res.status, 200);
 	if (res.status === 200) {
 		// The spur's first point is [0,0]; a square's bounding box is non-degenerate.
@@ -265,8 +265,8 @@ test('handleGenerate defaults to DEFAULT_SEEDS when none requested', async () =>
 	};
 	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher });
 	assert.equal(res.status, 200);
-	assert.equal(DEFAULT_SEEDS, 8); // pin the raised default
-	assert.equal(calls, DEFAULT_SEEDS); // omitted `seeds` → one request per default seed
+	assert.equal(DEFAULT_SEEDS, 5); // seeds raced per request multiplier
+	assert.equal(calls, DEFAULT_SEEDS * REQUEST_MULTIPLIERS.length); // omitted `seeds` → DEFAULT_SEEDS × multipliers
 });
 
 test('handleGenerate tolerates partial seed failures', async () => {
@@ -290,5 +290,25 @@ test('handleGenerate clamps the seed count to MAX_SEEDS', async () => {
 		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	};
 	await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seeds: 99 }, OK_CFG, { fetcher });
-	assert.equal(calls, 8);
+	assert.equal(calls, 8 * REQUEST_MULTIPLIERS.length); // clamped to MAX_SEEDS, raced at each multiplier
+});
+
+test('handleGenerate races request multipliers and keeps the result closest to target', async () => {
+	// Simulate a network that overshoots EVERY round_trip request by 30%. Only the
+	// 0.8× multiplier (req 4000 → 5200, +4%) lands in the ±15% band; the raw 1.0×
+	// (req 5000 → 6500, +30%) does not. The multi-distance race must surface the
+	// ~5200 result, not the raw-request overshoot — the exact failure the user hit.
+	const fetcher: Fetcher = async (url) => {
+		const reqDist = Number(new URL(url).searchParams.get('round_trip.distance'));
+		return ghResponse(squareLoop(0, 0, 0.0056), reqDist * 1.3);
+	};
+	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher });
+	assert.equal(res.status, 200);
+	if (res.status === 200) {
+		// 0.8 × 5000 × 1.3 = 5200, the sole in-band candidate across the spread.
+		assert.ok(
+			Math.abs(res.body.distanceM - 5200) < 1,
+			`expected the 0.8x result ~5200, got ${res.body.distanceM}`,
+		);
+	}
 });
