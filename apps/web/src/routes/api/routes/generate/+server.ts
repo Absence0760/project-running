@@ -9,7 +9,6 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { env as publicEnv } from '$env/dynamic/public';
 import { handleGenerate } from '$lib/routes/generate/handler';
 
 export const prerender = false;
@@ -39,19 +38,16 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json(400, { error: 'invalid JSON' });
 	}
 
-	// GRAPHHOPPER_URL is a server-only env (never PUBLIC_): the browser routes
-	// generation through this endpoint, so user start-coordinates never reach
-	// the engine directly. Unset → the handler returns 501 and the client falls
-	// back to its in-browser OSRM heuristic.
+	// GRAPH_CYCLE_URL + GRAPHHOPPER_URL are server-only envs (never PUBLIC_): the
+	// browser routes generation through this endpoint, so user start-coordinates
+	// never reach an engine directly. Both unset → the handler returns 501 and
+	// the client falls back to its in-browser OSRM heuristic.
 	const result = await handleGenerate(rawBody, {
+		// graph_cycle sidecar — the v3 graph-cycle generator, tried FIRST.
+		graphCycleUrl: env.GRAPH_CYCLE_URL,
+		graphCycleApiKey: env.GRAPH_CYCLE_API_KEY,
 		graphhopperUrl: env.GRAPHHOPPER_URL,
 		graphhopperApiKey: env.GRAPHHOPPER_API_KEY,
-		// Self-hosted OSRM for the polygon-loop generator (tried first when set).
-		// A server-only OSRM_URL wins; else reuse PUBLIC_OSRM_URL (the same
-		// self-hosted engine the route builder already snaps against). The start
-		// coordinate is forwarded server-side, so even the PUBLIC_ value never
-		// leaks user coordinates to a third party.
-		osrmUrl: env.OSRM_URL || publicEnv.PUBLIC_OSRM_URL,
 	});
 	return json(result.status, result.body);
 };

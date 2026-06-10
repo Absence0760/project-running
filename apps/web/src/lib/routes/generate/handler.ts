@@ -4,12 +4,20 @@
  * Wrapped twice — once by the SvelteKit dev route
  * (`src/routes/api/routes/generate/+server.ts`) and once by the production AWS
  * Lambda (`apps/web/lambda/generate-route/src/index.ts`) — mirroring the coach
- * handler's two-wrapper shape (decisions §53). Validates the request, fans out
- * a few round_trip seeds, picks the best-shaped loop, and returns a finished
- * polyline the client renders directly (no further OSRM routing).
+ * handler's two-wrapper shape (decisions §53). Validates the request, then runs
+ * the generator chain and returns a finished polyline the client renders
+ * directly (no further OSRM routing).
  *
- * Fail-closed: a missing engine URL → 501 (operator config), an engine that's
- * down or can't build a loop → 502, bad input → 400.
+ * Generator chain (docs/features/graph_cycle_loop_generation.md, v3):
+ *   1. graph-cycle FIRST — the self-hosted graph_cycle sidecar searches the real
+ *      foot graph for a clean loop near target. This is the durable generator;
+ *      it traces the neighbourhood loop geometry can't find.
+ *   2. round_trip fallback — GraphHopper's `round_trip` (multi-distance race)
+ *      when graph-cycle is loop-poor or unreachable.
+ * The v2 polygon generator is retired: graph-cycle beat it at every spike start.
+ *
+ * Fail-closed: no engine URL → 501 (operator config); an engine that's down or
+ * can't build a loop → 502; bad input → 400.
  */
 
 import {
@@ -18,8 +26,8 @@ import {
 	type Fetcher,
 	type LoopCandidate,
 } from './graphhopper';
+import { fetchGraphCycle } from './graph_cycle';
 import { pickBestLoop } from './select';
-import { generatePolygonLoop } from './loop_generate';
 import { isValidTargetDistance } from '../route_loop';
 
 export interface GenerateRequest {
@@ -30,15 +38,18 @@ export interface GenerateRequest {
 }
 
 export interface GenerateConfig {
+	/// graph_cycle sidecar base URL (server-only `GRAPH_CYCLE_URL`). When set,
+	/// the handler searches the real foot graph FIRST and only falls back to
+	/// round_trip when it returns loop-poor or is unreachable. Unset → graph-cycle
+	/// is skipped entirely (round_trip only).
+	graphCycleUrl?: string;
+	/// Shared secret forwarded to the sidecar as `X-Engine-Key`. Undefined in dev
+	/// when the guard is permissive.
+	graphCycleApiKey?: string;
 	graphhopperUrl: string | undefined;
 	/// Shared secret forwarded to the engine as `X-Engine-Key` (see
 	/// RoundTripRequest.apiKey). Undefined in dev when the guard is permissive.
 	graphhopperApiKey?: string;
-	/// Self-hosted OSRM base URL for the sampled via-point polygon generator
-	/// (route_loop_generation.md). When set, the handler tries the polygon loop
-	/// FIRST and only falls back to round_trip when it returns loop-poor. Unset →
-	/// polygon path is skipped entirely (round_trip only).
-	osrmUrl?: string;
 }
 
 export interface GenerateDeps {
@@ -107,23 +118,35 @@ export async function handleGenerate(
 	if (!isValidTargetDistance(req.targetDistanceM)) {
 		return { status: 400, body: { error: 'invalid targetDistanceM' } };
 	}
-	if (!config.graphhopperUrl && !config.osrmUrl) {
+	if (!config.graphCycleUrl && !config.graphhopperUrl) {
 		return { status: 501, body: { error: 'route generation is not configured' } };
 	}
 
-	// Polygon-first: when OSRM is configured, try the sampled via-point loop
-	// (route_loop_generation.md). A real result wins; null means loop-poor (or
-	// OSRM unreachable) and we fall through to round_trip below.
-	if (config.osrmUrl) {
-		const fetcher: Fetcher = deps.fetcher ?? ((u, i) => fetch(u, i));
-		const polygon = await generatePolygonLoop(req.start, req.targetDistanceM, fetcher, {
-			osrmUrl: config.osrmUrl,
-		});
-		if (polygon) {
-			return { status: 200, body: polygon };
+	const fetcher: Fetcher = deps.fetcher ?? ((u, i) => fetch(u, i));
+
+	// graph-cycle FIRST: search the real foot graph. A real loop wins; null means
+	// loop-poor (or the sidecar is unreachable) and we fall through to round_trip.
+	// A sidecar error is never fatal — graph-cycle is a quality upgrade, not a
+	// hard dependency — so we swallow the throw and let round_trip serve.
+	if (config.graphCycleUrl) {
+		try {
+			const loop = await fetchGraphCycle(
+				{
+					baseUrl: config.graphCycleUrl,
+					start: req.start,
+					targetDistanceM: req.targetDistanceM,
+					apiKey: config.graphCycleApiKey,
+				},
+				fetcher,
+			);
+			if (loop) {
+				return { status: 200, body: { coordinates: loop.coordinates, distanceM: loop.distanceM } };
+			}
+		} catch {
+			// Unconfigured/unreachable sidecar → fall through to round_trip.
 		}
-		// OSRM produced no loop AND GraphHopper isn't configured for the fallback:
-		// this is a loop-poor location with no out-and-back engine to offer.
+		// graph-cycle produced no loop AND GraphHopper isn't configured for the
+		// fallback: a loop-poor location with no out-and-back engine to offer.
 		if (!config.graphhopperUrl) {
 			return { status: 502, body: { error: 'no usable route' } };
 		}
@@ -142,7 +165,7 @@ export async function handleGenerate(
 						seed: i,
 						apiKey: config.graphhopperApiKey,
 					},
-					deps.fetcher,
+					fetcher,
 				).catch((e) => {
 					lastError = e;
 					return null;
