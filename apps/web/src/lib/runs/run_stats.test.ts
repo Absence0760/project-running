@@ -158,6 +158,18 @@ test('computeRealSplits — even-paced 3 km run produces three full splits at th
 	);
 });
 
+test('computeRealSplits — first split is timed even when track[0] lacks a timestamp', () => {
+	// First GPS fix lands before the clock is stamped: point 0 has no ts,
+	// every later point is timed. The first split must still report the real
+	// pace, not 0:00 from a NaN start anchor.
+	const pts = track(10, 2, 301);
+	delete pts[0].ts;
+	const splits = computeRealSplits(pts);
+	assert.equal(splits.length, 3);
+	assert.ok(splits[0].pace_s > 0, `first split pace was ${splits[0].pace_s}`);
+	assert.ok(Math.abs(splits[0].pace_s - 200) <= 4, `first split pace ${splits[0].pace_s} not near 200`);
+});
+
 test('computeRealSplits — final partial split is emitted when remainder > 50 m', () => {
 	// 1500 m → one full km plus a 500 m tail.
 	const pts = track(10, 2, 151);

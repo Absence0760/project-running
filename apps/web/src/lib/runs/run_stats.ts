@@ -80,8 +80,16 @@ export function computeRealSplits(track: TrackPoint[], tickMetres = 1000): Split
 	const hasEle = track.some((p) => p.ele != null);
 
 	// Accumulate cumulative distance and find the indices at each boundary.
+	// Seed the first split's start time from the first point that actually
+	// carries a parseable timestamp, not track[0]: a first GPS fix that lands
+	// before the clock is stamped (ts missing on point 0, present after) would
+	// otherwise seed NaN, fail the duration guard, and emit the first split at
+	// pace 0:00 even though the run was timed from point 1 on. `hasTs`
+	// guarantees at least one timed point exists.
 	let cumDist = 0;
-	let splitStart = { idx: 0, dist: 0, timeMs: Date.parse(track[0].ts ?? ''), ele: track[0].ele };
+	const firstTimed = track.find((p) => p.ts != null && Number.isFinite(Date.parse(p.ts)));
+	const startMs = firstTimed ? Date.parse(firstTimed.ts as string) : NaN;
+	let splitStart = { idx: 0, dist: 0, timeMs: startMs, ele: track[0].ele };
 	const splits: Split[] = [];
 
 	for (let i = 1; i < track.length; i++) {
