@@ -7,11 +7,17 @@
 // shared-secret guard on a public https endpoint (the generate-route Lambda runs
 // on AWS and has no 6PN path into Fly) — same posture as GraphHopper.
 //
+// Deployed to Fly alongside OSRM + GraphHopper. Unlike the Java GraphHopper
+// (which needs a Caddy reverse-proxy to add an auth header), this Go server
+// enforces the X-Engine-Key guard in-process (api.Guard), so it binds the
+// public Fly port directly with no sidecar.
+//
 // Env:
-//   - GRAPH_CYCLE_PBF   path to the OSM PBF (default /data/region.osm.pbf,
+//   - GRAPH_CYCLE_PBF      path to the OSM PBF (default /data/region.osm.pbf,
 //     mirroring the volume layout of the OSRM/GraphHopper apps).
-//   - PORT              localhost bind port for the Go server (default 8990);
-//     Caddy owns the public 8989 and proxies here after the key check.
+//   - PORT                 public bind port (default 8989, matches fly.toml).
+//   - GRAPH_CYCLE_API_KEY  shared secret; required header for all routes except
+//     /health. Unset → guarded routes fail closed (403).
 package main
 
 import (
@@ -32,7 +38,7 @@ func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	pbf := envOr("GRAPH_CYCLE_PBF", "/data/region.osm.pbf")
-	port := envOr("PORT", "8990")
+	port := envOr("PORT", "8989")
 
 	log.Info("building foot graph", "pbf", pbf)
 	started := time.Now()
@@ -56,9 +62,16 @@ func main() {
 	mux := http.NewServeMux()
 	srv.RegisterRoutes(mux)
 
+	// In-process shared-secret guard on the public endpoint (see api.Guard).
+	// Unset key fails closed for guarded routes; warn so a dev run is obvious.
+	apiKey := os.Getenv("GRAPH_CYCLE_API_KEY")
+	if apiKey == "" {
+		log.Warn("GRAPH_CYCLE_API_KEY is unset — all routes except /health will 403 (fail-closed)")
+	}
+
 	httpSrv := &http.Server{
-		Addr:              "127.0.0.1:" + port,
-		Handler:           mux,
+		Addr:              ":" + port,
+		Handler:           api.Guard(apiKey, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
