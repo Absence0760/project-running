@@ -13,7 +13,8 @@
 		"test:unit": "tsx --test 'src/lib/**/*.test.ts'",
 		"test:e2e": "playwright test --config=tests-e2e/playwright.config.ts",
 		"test:e2e:ui": "playwright test --config=tests-e2e/playwright.config.ts --ui",
-		"test:e2e:livehub": "playwright test --config=tests-e2e/playwright.livehub.config.ts"
+		"test:e2e:livehub": "playwright test --config=tests-e2e/playwright.livehub.config.ts",
+		"test:e2e:sso": "playwright test --config=tests-e2e/playwright.sso.config.ts"
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "1.2.76",
@@ -27,6 +28,7 @@
 		"esbuild": "0.28.0",
 		"mdsvex": "^0.12.7",
 		"normalize.css": "8.0.1",
+		"oauth2-mock-server": "8.2.3",
 		"svelte": "5.56.3",
 		"svelte-check": "4.6.0",
 		"typescript": "6.0.3",
