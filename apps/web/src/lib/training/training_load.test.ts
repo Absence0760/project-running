@@ -53,6 +53,36 @@ test('computeStress — zero distance + zero duration gives 0', () => {
 	assert.equal(computeStress({ started_at: '2026-04-01T00:00:00Z', distance_m: 0, duration_s: 0 }), 0);
 });
 
+test('computeStress — distance mode with positive duration but no distance gives 0, not NaN', () => {
+	// A run with duration but no distance_m (manual log / treadmill / GPS-less
+	// import) passes the zero-guard (duration is positive) and reaches the
+	// distance-fallback branch. It must contribute 0, never NaN.
+	const noDistance = { started_at: '2026-04-01T07:00:00Z', duration_s: 1800 } as RunForLoad;
+	const stress = computeStress(noDistance);
+	assert.ok(!Number.isNaN(stress), 'stress must not be NaN');
+	assert.equal(stress, 0);
+});
+
+test('aggregateDailyStress — a distance-less run never poisons the series with NaN', () => {
+	const good: RunForLoad = { started_at: '2026-04-01T07:00:00Z', distance_m: 5000, duration_s: 1800 };
+	const noDistance = { started_at: '2026-04-01T18:00:00Z', duration_s: 1800 } as RunForLoad;
+	const m = aggregateDailyStress([good, noDistance]);
+	const key = localDateKey(new Date(good.started_at));
+	assert.ok(!Number.isNaN(m.get(key)), 'daily total must not be NaN');
+	assert.equal(m.get(key), 50);
+});
+
+test('computeTrainingLoadSeries — a distance-less run does not blank the whole curve', () => {
+	const end = new Date('2026-04-10T12:00:00Z');
+	const runs: RunForLoad[] = [
+		{ started_at: '2026-04-05T07:00:00Z', distance_m: 10000, duration_s: 3600 },
+		{ started_at: '2026-04-06T07:00:00Z', duration_s: 1800 } as RunForLoad,
+	];
+	const series = computeTrainingLoadSeries(runs, {}, 90, end);
+	assert.ok(series.every((p) => !Number.isNaN(p.ctl) && !Number.isNaN(p.atl) && !Number.isNaN(p.tsb)));
+	assert.ok(series.some((p) => p.ctl > 0), 'the good run should still build fitness');
+});
+
 test('aggregateDailyStress — sums same-day runs', () => {
 	const a: RunForLoad = { started_at: '2026-04-01T07:00:00Z', distance_m: 5000, duration_s: 1500 };
 	const b: RunForLoad = { started_at: '2026-04-01T18:00:00Z', distance_m: 3000, duration_s: 900 };

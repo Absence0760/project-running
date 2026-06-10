@@ -134,8 +134,12 @@ export function computeStress(
 	}
 
 	// Distance fallback — used when the user has no HR prefs / no
-	// HR-eligible runs in the window at all.
-	return (run.distance_m / 1000) * 10;
+	// HR-eligible runs in the window at all. Guard distance_m like every
+	// other branch: a run with positive duration but no distance (manual
+	// log, treadmill, GPS-less import) passes the line-112 guard and would
+	// otherwise emit NaN here, which `aggregateDailyStress`'s `stress <= 0`
+	// skip can't catch (NaN <= 0 is false) — poisoning the whole series.
+	return ((run.distance_m ?? 0) / 1000) * 10;
 }
 
 function numericOrNull(v: unknown): number | null {
