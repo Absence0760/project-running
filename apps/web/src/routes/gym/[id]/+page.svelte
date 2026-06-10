@@ -5,13 +5,13 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchGymWorkoutWithSets,
-		fetchGymSetHistory,
+		fetchExerciseSetHistory,
 		deleteGymWorkout,
 		type GymWorkoutWithSets,
 		type GymSet,
 		type GymSetWithDate,
 	} from '$lib/core/data';
-	import { workoutPrs, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
+	import { workoutPrs, normaliseExerciseName, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
 	import { previousExerciseSession, type ExerciseSession } from '$lib/gym/exercise_history';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight, weightUnitLabel } from '$lib/format/units.svelte';
@@ -34,10 +34,28 @@
 
 	async function load() {
 		loading = true;
-		const [w, h] = await Promise.all([fetchGymWorkoutWithSets(id), fetchGymSetHistory()]);
+		const w = await fetchGymWorkoutWithSets(id);
 		data = w;
-		history = h;
 		notFound = w == null;
+		// The PR badges + "vs last time" only judge THIS workout's exercises
+		// against their own earlier sessions, so fetch just those exercises'
+		// history (one bounded RPC each) instead of the user's entire gym_sets
+		// log. Dedup by the normalised key so a differently-cased pair isn't
+		// fetched twice (the RPC already matches normalised names).
+		// perf-hunt 2026-06-10.
+		if (w) {
+			const byKey = new Map<string, string>();
+			for (const s of w.sets) {
+				const key = normaliseExerciseName(s.exercise_name);
+				if (key && !byKey.has(key)) byKey.set(key, s.exercise_name);
+			}
+			const histories = await Promise.all(
+				[...byKey.values()].map((nm) => fetchExerciseSetHistory(nm)),
+			);
+			history = histories.flat();
+		} else {
+			history = [];
+		}
 		loading = false;
 	}
 
