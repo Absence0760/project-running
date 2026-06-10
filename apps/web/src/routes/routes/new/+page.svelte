@@ -183,18 +183,26 @@
 		routed = false;
 	}
 
+	// Strip a route name down to a filesystem-safe ASCII basename for the
+	// export filename. A non-Latin name (ja/zh/emoji) — or even the
+	// localized `untitledRoute` fallback in a non-Latin locale — reduces
+	// to an empty string here, which previously produced a bare ".gpx" /
+	// ".kml". Guard with a constant so the download always has a real
+	// basename. The file's <name> tag still carries the full Unicode name.
+	function exportBasename(name: string): string {
+		return name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') || 'route';
+	}
+
 	function handleExportGpx() {
 		const name = routeName || m('routeNew.untitledRoute');
 		const gpx = toGpx(name, coordinates, elevations);
-		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
-		downloadFile(gpx, filename, 'application/gpx+xml');
+		downloadFile(gpx, `${exportBasename(name)}.gpx`, 'application/gpx+xml');
 	}
 
 	function handleExportKml() {
 		const name = routeName || m('routeNew.untitledRoute');
 		const kml = toKml(name, coordinates, elevations);
-		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
-		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
+		downloadFile(kml, `${exportBasename(name)}.kml`, 'application/vnd.google-earth.kml+xml');
 	}
 
 	let routed = $state(false);

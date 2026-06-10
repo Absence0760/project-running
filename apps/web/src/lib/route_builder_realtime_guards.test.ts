@@ -521,3 +521,31 @@ test('routes/new/+page.svelte: applyCoords pans the map to the typed point', () 
 			'(likely off-screen) is brought into view.',
 	);
 });
+
+// 4. routes/new export filenames must survive a non-ASCII route name.
+//    The basename sanitizer strips every non-[A-Za-z0-9-_ ] char, so a
+//    Japanese / emoji name (or the localized "untitled" fallback in a
+//    non-Latin locale) collapses to "" and the download was named just
+//    ".gpx" / ".kml". exportBasename() guards with an 'route' fallback.
+test('routes/new/+page.svelte: export filename has a non-empty basename fallback', () => {
+	const src = read('src/routes/routes/new/+page.svelte');
+	const fn = src.match(/function exportBasename\([^)]*\)[^{]*\{[\s\S]*?\n\t\}/);
+	assert.ok(fn, 'exportBasename() helper must exist');
+	assert.match(
+		fn![0],
+		/\|\|\s*['"]route['"]/,
+		"exportBasename must fall back to a constant ('route') so a non-Latin " +
+			'name never yields a bare ".gpx" / ".kml" filename.',
+	);
+	// Both export handlers must route through it (no inline sanitizer left).
+	for (const h of ['handleExportGpx', 'handleExportKml']) {
+		const hh = src.match(new RegExp(`function ${h}\\([^)]*\\)\\s*\\{[\\s\\S]*?\\n\\t\\}`));
+		assert.ok(hh, `${h} must exist`);
+		assert.match(
+			hh![0],
+			/exportBasename\(/,
+			`${h} must build its filename via exportBasename(), not an inline ` +
+				'sanitizer that can produce an empty basename.',
+		);
+	}
+});

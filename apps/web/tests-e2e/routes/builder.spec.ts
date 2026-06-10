@@ -940,6 +940,225 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		expect(kmlDownload.suggestedFilename()).toMatch(/\.kml$/);
 	});
 
+	// --- Adversarial: failure + boundary paths ---
+
+	test('partial OSRM failure keeps the route — warning banner + Save stays enabled', async ({
+		page,
+	}) => {
+		// Contract: when SOME segments snap and some don't, the builder
+		// keeps the route (straight-line fallback through the gaps) and
+		// surfaces a soft warning — Save must stay enabled. 3 waypoints =
+		// 2 segments; fail only the segment that touches the 3rd (a
+		// distinctive lng) so okSegments=1 < total=2 → partial success.
+		const BAD_LNG = '145.999';
+		await page.route('**/route/v1/**', (route) => {
+			const url = route.request().url();
+			if (url.includes(BAD_LNG)) {
+				route.fulfill({ status: 503, body: '{}' });
+				return;
+			}
+			const m = url.match(/\/foot\/([-0-9.,;]+)/);
+			const coords: [number, number][] = m
+				? m[1].split(';').map((p) => p.split(',').map(Number) as [number, number])
+				: [
+						[0, 0],
+						[0.001, 0.001],
+					];
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					code: 'Ok',
+					routes: [{ geometry: { coordinates: coords }, distance: 1000 }],
+					waypoints: coords.map((c) => ({ location: c })),
+				}),
+			});
+		});
+		await page.route('https://api.open-meteo.com/**', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ elevation: Array(100).fill(10) }),
+			}),
+		);
+
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 },
+			{ lng: 145.999, lat: -37.83 },
+		]);
+
+		// Soft warning banner (distinct .routing-warning class), not a hard
+		// error — and Save is still reachable.
+		await expect(page.locator('.routing-error.routing-warning')).toBeVisible({
+			timeout: 20_000,
+		});
+		await expect(page.getByRole('button', { name: /Save Route/ })).toBeEnabled();
+	});
+
+	test('coordinate entry accepts the 90/180 boundary but rejects just beyond it', async ({
+		page,
+	}) => {
+		// The validation is `lat < -90 || lat > 90 || lng < -180 || lng >
+		// 180` — so the exact poles / antimeridian are valid and anything
+		// past them is not. Pins the off-by-one boundary.
+		await page.goto('/routes/new');
+		await waitForRouteBuilder(page);
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+
+		const err = page.locator('.coord-error').first();
+		const startRow = page.locator('.point-row').first();
+
+		await page.getByLabel('Start latitude').fill('90');
+		await page.getByLabel('Start longitude').fill('180');
+		await page.getByRole('button', { name: 'Set start', exact: true }).click();
+		await expect(err).toHaveCount(0);
+		await expect(startRow.locator('.point-set')).toContainText('90.00');
+
+		await page.getByLabel('Start latitude').fill('90.0001');
+		await page.getByLabel('Start longitude').fill('180');
+		await page.getByRole('button', { name: 'Set start', exact: true }).click();
+		await expect(err).toBeVisible();
+		await expect(err).toContainText(/-90\.\.90|180|range/i);
+	});
+
+	test('whitespace-only name keeps the modal Save button disabled', async ({ page }) => {
+		// canSave = routed && name.trim().length > 0. A naive name.length
+		// check would let three spaces through; the trim gate must not.
+		await stubRoutingSuccess(page);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 },
+		]);
+		const saveBtn = page.getByRole('button', { name: /Save Route/ });
+		await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+		await saveBtn.click();
+
+		await page.getByPlaceholder('My Route').fill('   ');
+		await expect(
+			page.getByRole('button', { name: 'Save route', exact: true }),
+		).toBeDisabled();
+	});
+
+	test('save server error surfaces in the modal + does NOT navigate away', async ({ page }) => {
+		// The route INSERT fails (500). handleSaveRoute must catch it,
+		// show .save-error, keep the modal open, and leave the user on
+		// /routes/new with their work intact — never a half-navigated
+		// dead end. Fail only the POST so detail-page reads still work.
+		await stubRoutingSuccess(page);
+		await page.route('**/rest/v1/routes**', async (route) => {
+			if (route.request().method() === 'POST') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated insert failure', code: '' }),
+				});
+			} else {
+				await route.fallback();
+			}
+		});
+
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 },
+		]);
+		const saveBtn = page.getByRole('button', { name: /Save Route/ });
+		await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+		await saveBtn.click();
+		await page.getByPlaceholder('My Route').fill('e2e-failsave');
+		await page.getByRole('button', { name: 'Save route', exact: true }).click();
+
+		await expect(page.locator('.save-error')).toBeVisible({ timeout: 10_000 });
+		// Still on the builder, modal still open, nothing lost.
+		await expect(page).toHaveURL(/\/routes\/new$/);
+		await expect(page.getByPlaceholder('My Route')).toHaveValue('e2e-failsave');
+	});
+
+	test('use-my-location with permission denied shows an error toast + sets no point', async ({
+		page,
+	}) => {
+		// Round-1 fix: the locate buttons must not fail silently. Force
+		// geolocation to report PERMISSION_DENIED (code 1) and assert the
+		// sidebar "use my location" surfaces the toast + leaves start unset.
+		await page.addInitScript(() => {
+			const denied = (_ok: PositionCallback, err?: PositionErrorCallback | null) => {
+				err?.({ code: 1, message: 'denied' } as GeolocationPositionError);
+			};
+			navigator.geolocation.getCurrentPosition = denied;
+			navigator.geolocation.watchPosition = () => 0;
+		});
+		await page.goto('/routes/new');
+		await waitForRouteBuilder(page);
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await page.getByRole('button', { name: 'Use my location for start' }).click();
+
+		const toast = page.locator('.toast.toast-error');
+		await expect(toast).toBeVisible({ timeout: 5_000 });
+		await expect(toast).toContainText(/permission denied/i);
+		await expect(page.locator('.point-row').first().locator('.point-unset')).toBeVisible();
+	});
+
+	test('map "locate me" with permission denied shows an error toast', async ({ page }) => {
+		// Same fail-loud contract on the map's own locate button
+		// (goToMyLocation) — a separate code path from the sidebar one.
+		await page.addInitScript(() => {
+			const denied = (_ok: PositionCallback, err?: PositionErrorCallback | null) => {
+				err?.({ code: 1, message: 'denied' } as GeolocationPositionError);
+			};
+			navigator.geolocation.getCurrentPosition = denied;
+			navigator.geolocation.watchPosition = () => 0;
+		});
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await page.locator('.locate-btn').click();
+
+		const toast = page.locator('.toast.toast-error');
+		await expect(toast).toBeVisible({ timeout: 5_000 });
+		await expect(toast).toContainText(/permission denied/i);
+	});
+
+	test('export filename stays usable for a non-ASCII route name (never a bare ".gpx")', async ({
+		page,
+	}) => {
+		// Bug found this round: the export filename sanitizer strips every
+		// non-Latin character, so a Japanese / emoji route name collapsed
+		// to "" and the download was named just ".gpx". Set such a name via
+		// the Save modal (routeName persists after Cancel), then export and
+		// assert the filename has a real basename.
+		await stubRoutingSuccess(page);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypoints(page, [
+			{ lng: 144.97, lat: -37.816 },
+			{ lng: 144.975, lat: -37.82 },
+		]);
+		const saveBtn = page.getByRole('button', { name: /Save Route/ });
+		await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+		await saveBtn.click();
+		await page.getByPlaceholder('My Route').fill('マラソン大会');
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		const [dl] = await Promise.all([
+			page.waitForEvent('download'),
+			page.getByRole('button', { name: 'GPX' }).click(),
+		]);
+		const fname = dl.suggestedFilename();
+		expect(fname).toMatch(/\.gpx$/);
+		expect(fname).not.toBe('.gpx');
+		expect(fname.length).toBeGreaterThan('.gpx'.length);
+	});
+
 	test('anon visitor is auth-walled to /login', async ({ browser }) => {
 		// /routes/new is not in publicPaths. Use a fresh context with
 		// no storage state to simulate anon.
