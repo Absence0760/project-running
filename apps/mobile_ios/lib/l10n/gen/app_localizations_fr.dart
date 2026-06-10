@@ -7213,6 +7213,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionDelete => 'Supprimer';
 
   @override
+  String get nutritionDeleteEntryTitle => 'Supprimer cette entrée ?';
+
+  @override
+  String nutritionDeleteEntryMessage(String item) {
+    return '$item sera retiré du journal d\'aujourd\'hui.';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Hors ligne — les modifications se synchroniseront à la reconnexion';
 

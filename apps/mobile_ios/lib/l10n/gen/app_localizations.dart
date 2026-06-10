@@ -11895,6 +11895,18 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get nutritionDelete;
 
+  /// No description provided for @nutritionDeleteEntryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this entry?'**
+  String get nutritionDeleteEntryTitle;
+
+  /// Confirm dialog body before deleting a logged food entry
+  ///
+  /// In en, this message translates to:
+  /// **'{item} will be removed from today\'s log.'**
+  String nutritionDeleteEntryMessage(String item);
+
   /// No description provided for @nutritionOfflineQueued.
   ///
   /// In en, this message translates to:

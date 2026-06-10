@@ -6802,6 +6802,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionDelete => '削除';
 
   @override
+  String get nutritionDeleteEntryTitle => 'この項目を削除しますか？';
+
+  @override
+  String nutritionDeleteEntryMessage(String item) {
+    return '$item を今日の記録から削除します。';
+  }
+
+  @override
   String get nutritionOfflineQueued => 'オフライン — 再接続時に変更を同期します';
 
   @override

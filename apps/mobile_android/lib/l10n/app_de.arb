@@ -1976,6 +1976,8 @@
   "nutritionSlotDinner": "Abendessen",
   "nutritionSlotSnack": "Snack",
   "nutritionDelete": "Löschen",
+  "nutritionDeleteEntryTitle": "Diesen Eintrag löschen?",
+  "nutritionDeleteEntryMessage": "{item} wird aus dem heutigen Protokoll entfernt.",
   "nutritionOfflineQueued": "Offline – Änderungen werden später synchronisiert",
   "nutritionOfflineCached": "Offline – gespeicherte Einträge werden angezeigt",
   "nutritionLogTitle": "Essen erfassen",

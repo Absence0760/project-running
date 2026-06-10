@@ -1976,6 +1976,8 @@
   "nutritionSlotDinner": "Dîner",
   "nutritionSlotSnack": "En-cas",
   "nutritionDelete": "Supprimer",
+  "nutritionDeleteEntryTitle": "Supprimer cette entrée ?",
+  "nutritionDeleteEntryMessage": "{item} sera retiré du journal d'aujourd'hui.",
   "nutritionOfflineQueued": "Hors ligne — les modifications se synchroniseront à la reconnexion",
   "nutritionOfflineCached": "Hors ligne — affichage des entrées enregistrées",
   "nutritionLogTitle": "Enregistrer un aliment",

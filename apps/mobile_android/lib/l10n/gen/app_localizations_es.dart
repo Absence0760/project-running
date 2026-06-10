@@ -7195,6 +7195,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nutritionDelete => 'Eliminar';
 
   @override
+  String get nutritionDeleteEntryTitle => '¿Eliminar esta entrada?';
+
+  @override
+  String nutritionDeleteEntryMessage(String item) {
+    return '$item se eliminará del registro de hoy.';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Sin conexión: los cambios se sincronizarán al reconectar';
 

@@ -68,6 +68,71 @@ void main() {
     }
   });
 
+  testWidgets('deleting an entry asks to confirm; Cancel keeps it',
+      (tester) async {
+    final f = await _store('del_cancel_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Oats'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete this entry?'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Oats'), findsOneWidget);
+      expect(f.store.rows.length, 1);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('deleting an entry → confirm removes it', (tester) async {
+    final f = await _store('del_confirm_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+
+      // _delete (and the deleteLocal file I/O it awaits after the confirm)
+      // is anchored to the zone the row tap fires in, so both taps run
+      // under runAsync; real I/O only resolves there.
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Delete'));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Delete this entry?'), findsOneWidget);
+
+      final confirm = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Delete'),
+      );
+      await tester.runAsync(() async {
+        await tester.tap(confirm);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('Oats'), findsNothing);
+      expect(f.store.rows.length, 0);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('water card shows the litre readout + a remaining chip',
       (tester) async {
     final f = await _store('water_target_');

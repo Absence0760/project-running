@@ -1976,6 +1976,8 @@
   "nutritionSlotDinner": "Cena",
   "nutritionSlotSnack": "Tentempié",
   "nutritionDelete": "Eliminar",
+  "nutritionDeleteEntryTitle": "¿Eliminar esta entrada?",
+  "nutritionDeleteEntryMessage": "{item} se eliminará del registro de hoy.",
   "nutritionOfflineQueued": "Sin conexión: los cambios se sincronizarán al reconectar",
   "nutritionOfflineCached": "Sin conexión: mostrando entradas guardadas",
   "nutritionLogTitle": "Registrar comida",

@@ -216,8 +216,30 @@ class _NutritionScreenState extends State<NutritionScreen> {
     if (saved == true) await _maybeSync();
   }
 
-  Future<void> _delete(String id) async {
-    await widget.store.deleteLocal(id);
+  Future<void> _delete(FoodEntry e) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.nutritionDeleteEntryTitle),
+            content: Text(l10n.nutritionDeleteEntryMessage(e.itemName)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.nutritionCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.nutritionDelete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    await widget.store.deleteLocal(e.id);
     await _maybeSync();
   }
 
@@ -597,7 +619,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
                       tooltip: l10n.nutritionDelete,
-                      onPressed: () => _delete(e.id),
+                      onPressed: () => _delete(e),
                     ),
                   ],
                 ),

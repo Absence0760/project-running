@@ -1976,6 +1976,8 @@
   "nutritionSlotDinner": "Jantar",
   "nutritionSlotSnack": "Lanche",
   "nutritionDelete": "Excluir",
+  "nutritionDeleteEntryTitle": "Excluir este item?",
+  "nutritionDeleteEntryMessage": "{item} será removido do registro de hoje.",
   "nutritionOfflineQueued": "Offline — as alterações serão sincronizadas ao reconectar",
   "nutritionOfflineCached": "Offline — mostrando entradas salvas",
   "nutritionLogTitle": "Registrar comida",

@@ -7192,6 +7192,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionDelete => 'Excluir';
 
   @override
+  String get nutritionDeleteEntryTitle => 'Excluir este item?';
+
+  @override
+  String nutritionDeleteEntryMessage(String item) {
+    return '$item será removido do registro de hoje.';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Offline — as alterações serão sincronizadas ao reconectar';
 
@@ -14416,6 +14424,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionDelete => 'Excluir';
+
+  @override
+  String get nutritionDeleteEntryTitle => 'Excluir este item?';
+
+  @override
+  String nutritionDeleteEntryMessage(String item) {
+    return '$item será removido do registro de hoje.';
+  }
 
   @override
   String get nutritionOfflineQueued =>

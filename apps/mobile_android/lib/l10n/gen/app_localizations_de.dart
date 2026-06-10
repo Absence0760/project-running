@@ -7199,6 +7199,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get nutritionDelete => 'Löschen';
 
   @override
+  String get nutritionDeleteEntryTitle => 'Diesen Eintrag löschen?';
+
+  @override
+  String nutritionDeleteEntryMessage(String item) {
+    return '$item wird aus dem heutigen Protokoll entfernt.';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Offline – Änderungen werden später synchronisiert';
 
