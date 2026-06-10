@@ -59,8 +59,8 @@ func TestAreaEfficiency(t *testing.T) {
 
 func TestInitialBearing(t *testing.T) {
 	cases := []struct {
-		name                   string
-		toLat, toLng, wantDeg  float64
+		name                  string
+		toLat, toLng, wantDeg float64
 	}{
 		{"north", 1, 0, 0},
 		{"east", 0, 1, 90},
