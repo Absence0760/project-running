@@ -5602,6 +5602,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get goalEditorDelete => '削除';
 
   @override
+  String get goalEditorDeleteTitle => 'この目標を削除しますか？';
+
+  @override
+  String get goalEditorDeleteMessage => 'この目標と進捗の記録が削除されます。いつでも新しく作成できます。';
+
+  @override
   String get goalEditorCancel => 'キャンセル';
 
   @override

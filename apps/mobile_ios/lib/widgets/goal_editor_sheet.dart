@@ -352,6 +352,27 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     final l10n = AppLocalizations.of(context);
     final id = widget.existing?.id;
     if (id == null) return;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.goalEditorDeleteTitle),
+            content: Text(l10n.goalEditorDeleteMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.goalEditorCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.goalEditorDelete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
     await widget.preferences.removeGoal(id);
     await widget.settingsSync?.pushWeeklyDistanceGoal();
     if (mounted) Navigator.pop(context, l10n.goalEditorDeletedAnnounce);

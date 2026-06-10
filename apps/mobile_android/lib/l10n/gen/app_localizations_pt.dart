@@ -5934,6 +5934,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get goalEditorDelete => 'Excluir';
 
   @override
+  String get goalEditorDeleteTitle => 'Excluir esta meta?';
+
+  @override
+  String get goalEditorDeleteMessage =>
+      'Esta meta e o acompanhamento de progresso serão removidos. Você pode criar uma nova quando quiser.';
+
+  @override
   String get goalEditorCancel => 'Cancelar';
 
   @override
@@ -13166,6 +13173,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get goalEditorDelete => 'Excluir';
+
+  @override
+  String get goalEditorDeleteTitle => 'Excluir esta meta?';
+
+  @override
+  String get goalEditorDeleteMessage =>
+      'Esta meta e o acompanhamento de progresso serão removidos. Você pode criar uma nova quando quiser.';
 
   @override
   String get goalEditorCancel => 'Cancelar';

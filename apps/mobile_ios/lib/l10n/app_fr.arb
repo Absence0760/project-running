@@ -1617,6 +1617,8 @@
   "goalEditorSuffixMin": "min",
   "goalEditorSuffixRuns": "courses",
   "goalEditorDelete": "Supprimer",
+  "goalEditorDeleteTitle": "Supprimer cet objectif ?",
+  "goalEditorDeleteMessage": "Cet objectif et son suivi de progression seront supprimés. Vous pouvez en créer un nouveau à tout moment.",
   "goalEditorCancel": "Annuler",
   "goalEditorSave": "Enregistrer",
   "goalEditorErrDistance": "Distance : saisissez un nombre positif",

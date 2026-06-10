@@ -1617,6 +1617,8 @@
   "goalEditorSuffixMin": "分",
   "goalEditorSuffixRuns": "ラン",
   "goalEditorDelete": "削除",
+  "goalEditorDeleteTitle": "この目標を削除しますか？",
+  "goalEditorDeleteMessage": "この目標と進捗の記録が削除されます。いつでも新しく作成できます。",
   "goalEditorCancel": "キャンセル",
   "goalEditorSave": "保存",
   "goalEditorErrDistance": "距離：正の数を入力してください",

@@ -1617,6 +1617,8 @@
   "goalEditorSuffixMin": "min",
   "goalEditorSuffixRuns": "carreras",
   "goalEditorDelete": "Eliminar",
+  "goalEditorDeleteTitle": "¿Eliminar este objetivo?",
+  "goalEditorDeleteMessage": "Este objetivo y su seguimiento de progreso se eliminarán. Puedes crear uno nuevo cuando quieras.",
   "goalEditorCancel": "Cancelar",
   "goalEditorSave": "Guardar",
   "goalEditorErrDistance": "Distancia: introduce un número positivo",

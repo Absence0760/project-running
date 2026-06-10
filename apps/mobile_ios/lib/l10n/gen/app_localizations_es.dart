@@ -5939,6 +5939,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get goalEditorDelete => 'Eliminar';
 
   @override
+  String get goalEditorDeleteTitle => '¿Eliminar este objetivo?';
+
+  @override
+  String get goalEditorDeleteMessage =>
+      'Este objetivo y su seguimiento de progreso se eliminarán. Puedes crear uno nuevo cuando quieras.';
+
+  @override
   String get goalEditorCancel => 'Cancelar';
 
   @override

@@ -183,10 +183,45 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.ensureVisible(find.text('Delete'));
       await tester.tap(find.text('Delete'));
+      // pumpAndSettle hangs on the editor's blinking-cursor TextField;
+      // use timed pumps for the dialog slide-in (same as _pumpSheet).
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Delete this goal?'), findsOneWidget);
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Delete'),
+      ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 800));
       expect(result, 'Goal deleted');
       expect(prefs.goals, isEmpty);
+    });
+
+    testWidgets('Cancelling the delete confirm keeps the goal', (tester) async {
+      final prefs = await _makePrefs();
+      final goal = RunGoal(
+        id: 'g1',
+        period: GoalPeriod.week,
+        distanceMetres: 20000,
+      );
+      await prefs.upsertGoal(goal);
+      await tester.binding.setSurfaceSize(const Size(400, 900));
+      await _pumpSheet(tester, prefs, existing: goal);
+
+      await tester.ensureVisible(find.text('Delete'));
+      await tester.tap(find.text('Delete'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Delete this goal?'), findsOneWidget);
+
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Cancel'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(prefs.goals, isNotEmpty);
     });
   });
 }

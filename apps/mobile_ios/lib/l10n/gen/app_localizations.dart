@@ -9819,6 +9819,18 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get goalEditorDelete;
 
+  /// Confirm dialog title before deleting a goal
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this goal?'**
+  String get goalEditorDeleteTitle;
+
+  /// Confirm dialog body before deleting a goal
+  ///
+  /// In en, this message translates to:
+  /// **'This goal and its progress tracking will be removed. You can create a new one anytime.'**
+  String get goalEditorDeleteMessage;
+
   /// Button to cancel the goal editor
   ///
   /// In en, this message translates to:

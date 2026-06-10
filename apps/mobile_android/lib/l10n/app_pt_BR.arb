@@ -1617,6 +1617,8 @@
   "goalEditorSuffixMin": "min",
   "goalEditorSuffixRuns": "corridas",
   "goalEditorDelete": "Excluir",
+  "goalEditorDeleteTitle": "Excluir esta meta?",
+  "goalEditorDeleteMessage": "Esta meta e o acompanhamento de progresso serão removidos. Você pode criar uma nova quando quiser.",
   "goalEditorCancel": "Cancelar",
   "goalEditorSave": "Salvar",
   "goalEditorErrDistance": "Distância: insira um número positivo",

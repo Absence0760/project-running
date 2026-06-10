@@ -7548,6 +7548,14 @@
   "@goalEditorDelete": {
     "description": "Button to delete a goal"
   },
+  "goalEditorDeleteTitle": "Delete this goal?",
+  "@goalEditorDeleteTitle": {
+    "description": "Confirm dialog title before deleting a goal"
+  },
+  "goalEditorDeleteMessage": "This goal and its progress tracking will be removed. You can create a new one anytime.",
+  "@goalEditorDeleteMessage": {
+    "description": "Confirm dialog body before deleting a goal"
+  },
   "goalEditorCancel": "Cancel",
   "@goalEditorCancel": {
     "description": "Button to cancel the goal editor"

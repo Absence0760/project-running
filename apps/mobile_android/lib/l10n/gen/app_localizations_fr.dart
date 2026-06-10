@@ -5954,6 +5954,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get goalEditorDelete => 'Supprimer';
 
   @override
+  String get goalEditorDeleteTitle => 'Supprimer cet objectif ?';
+
+  @override
+  String get goalEditorDeleteMessage =>
+      'Cet objectif et son suivi de progression seront supprimés. Vous pouvez en créer un nouveau à tout moment.';
+
+  @override
   String get goalEditorCancel => 'Annuler';
 
   @override
