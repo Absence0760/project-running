@@ -35,7 +35,10 @@ export default defineConfig({
 		'**/node_modules/**',
 		'**/.auth/**',
 		'**/fixtures/**',
-		'**/live/spectator_websocket.spec.ts'
+		'**/live/spectator_websocket.spec.ts',
+		// The SSO/OAuth lane (tests-e2e/sso) needs the mock OIDC provider +
+		// GoTrue wired to it, which only playwright.sso.config.ts boots.
+		'**/sso/**'
 	],
 
 	// Stable on CI even with the dev server taking a beat to warm up.

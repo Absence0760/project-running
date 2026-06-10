@@ -21,8 +21,13 @@ export function loadSupabaseEnv(): LocalEnv {
 	if (envCache) return envCache;
 
 	// `supabase` looks for config.toml in cwd. apps/backend is two
-	// levels up from tests-e2e/fixtures.
-	const backendDir = resolve(import.meta.dirname, '..', '..', '..', 'backend');
+	// levels up from tests-e2e/fixtures. SUPABASE_STATUS_WORKDIR overrides
+	// it so a lane running against an isolated stack (e.g. local SSO e2e
+	// verification on a throwaway instance) can point the fixtures at that
+	// stack instead of the shared apps/backend one. CI leaves it unset.
+	const backendDir =
+		process.env.SUPABASE_STATUS_WORKDIR ??
+		resolve(import.meta.dirname, '..', '..', '..', 'backend');
 
 	let out: string;
 	try {
