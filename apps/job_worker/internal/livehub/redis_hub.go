@@ -57,11 +57,16 @@ type RedisHub struct {
 }
 
 type redisRoom struct {
-	mu            sync.Mutex
-	zonesLoaded   bool
-	zones         []PrivacyZone
-	runMetaLoaded bool
-	runMeta       *RunMeta
+	mu sync.Mutex
+	// `zonesAt` / `runMetaAt` record the last successful fetch so both
+	// caches refresh every CacheRefreshTTL — same privacy contract as
+	// the in-process Hub. A non-zero timestamp with nil zones / nil
+	// runMeta means "fetched, and there genuinely are none / the run
+	// doesn't exist", which is distinct from "never fetched".
+	zonesAt   time.Time
+	zones     []PrivacyZone
+	runMetaAt time.Time
+	runMeta   *RunMeta
 }
 
 // NewRedisHub builds a hub backed by an existing redis.Client. The
@@ -248,13 +253,15 @@ func (h *RedisHub) History(runID string, max int) []Ping {
 	return out
 }
 
-// LoadZones lazily fetches + caches privacy zones for `runID`. Same
-// API + semantics as the in-process Hub. The cache is per-process
-// — two replicas serving the same publisher will each fetch once.
+// LoadZones lazily fetches + caches privacy zones for `runID`, refreshing
+// every CacheRefreshTTL. Same API + semantics as the in-process Hub: a
+// mid-run privacy-zone change starts being honoured within the TTL. The
+// cache is per-process — each replica serving the publisher fetches on
+// its own TTL.
 func (h *RedisHub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) ([]PrivacyZone, error) {
 	r := h.roomFor(runID)
 	r.mu.Lock()
-	if r.zonesLoaded {
+	if !r.zonesAt.IsZero() && time.Since(r.zonesAt) < CacheRefreshTTL() {
 		out := append([]PrivacyZone(nil), r.zones...)
 		r.mu.Unlock()
 		return out, nil
@@ -266,23 +273,25 @@ func (h *RedisHub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetc
 		return nil, err
 	}
 	r.mu.Lock()
-	if !r.zonesLoaded {
-		r.zonesLoaded = true
-		r.zones = zones
-	}
+	r.zonesAt = time.Now()
+	r.zones = zones
 	out := append([]PrivacyZone(nil), r.zones...)
 	r.mu.Unlock()
 	return out, nil
 }
 
-// LoadRunMeta lazily fetches + caches run metadata for `runID`.
-// Same API + semantics as the in-process Hub. A nil result + nil
-// error after a successful fetch means "the run row doesn't exist"
-// — the JWTAuthorizer treats that as deny.
+// LoadRunMeta lazily fetches + caches run metadata for `runID`,
+// refreshing every CacheRefreshTTL. Same API + semantics as the
+// in-process Hub: a mid-run `is_public = false` flip stops serving anon
+// spectators within the TTL — without the refresh the cached
+// `is_public: true` would live for the room's lifetime and leak a
+// now-private run's live location indefinitely. A nil result + nil error
+// after a successful fetch means "the run row doesn't exist" — the
+// JWTAuthorizer treats that as deny.
 func (h *RedisHub) LoadRunMeta(ctx context.Context, runID string, fetcher RunMetaFetcher) (*RunMeta, error) {
 	r := h.roomFor(runID)
 	r.mu.Lock()
-	if r.runMetaLoaded {
+	if !r.runMetaAt.IsZero() && time.Since(r.runMetaAt) < CacheRefreshTTL() {
 		meta := r.runMeta
 		r.mu.Unlock()
 		return meta, nil
@@ -294,10 +303,8 @@ func (h *RedisHub) LoadRunMeta(ctx context.Context, runID string, fetcher RunMet
 		return nil, err
 	}
 	r.mu.Lock()
-	if !r.runMetaLoaded {
-		r.runMetaLoaded = true
-		r.runMeta = meta
-	}
+	r.runMetaAt = time.Now()
+	r.runMeta = meta
 	out := r.runMeta
 	r.mu.Unlock()
 	return out, nil

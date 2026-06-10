@@ -233,6 +233,61 @@ func TestRedisHub_LoadRunMetaCachesPerRoom(t *testing.T) {
 	}
 }
 
+func TestRedisHub_LoadRunMetaRefreshesAfterTTL(t *testing.T) {
+	// Privacy contract: a mid-run is_public flip must stop being served
+	// within CacheRefreshTTL. The old load-once cache never refreshed, so
+	// anon spectators kept streaming a now-private run indefinitely.
+	defer SetCacheRefreshTTL(10 * time.Millisecond)()
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{"run-A": {UserID: "user-1", IsPublic: true}}}
+
+	meta, err := hub.LoadRunMeta(context.Background(), "run-A", f)
+	if err != nil || meta == nil || !meta.IsPublic {
+		t.Fatalf("first load: meta=%+v err=%v", meta, err)
+	}
+
+	// Runner flips the run private; after the TTL elapses the cache must
+	// re-fetch and surface the new value.
+	f.rows["run-A"] = &RunMeta{UserID: "user-1", IsPublic: false}
+	time.Sleep(20 * time.Millisecond)
+
+	meta, err = hub.LoadRunMeta(context.Background(), "run-A", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta == nil || meta.IsPublic {
+		t.Fatalf("after TTL the flip to private must be visible; got %+v", meta)
+	}
+	if f.calls < 2 {
+		t.Fatalf("expected a refresh fetch after the TTL; calls=%d", f.calls)
+	}
+}
+
+func TestRedisHub_LoadZonesRefreshesAfterTTL(t *testing.T) {
+	// A privacy zone added mid-run must start being honoured within the
+	// TTL, matching the in-process Hub.
+	defer SetCacheRefreshTTL(10 * time.Millisecond)()
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+	f := &fakeZoneFetcher{zones: nil}
+
+	if zones, err := hub.LoadZones(context.Background(), "run-A", f); err != nil || len(zones) != 0 {
+		t.Fatalf("first load: zones=%v err=%v", zones, err)
+	}
+
+	f.zones = []PrivacyZone{{Lat: 1, Lng: 2, RadiusM: 100}}
+	time.Sleep(20 * time.Millisecond)
+
+	zones, err := hub.LoadZones(context.Background(), "run-A", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(zones) != 1 {
+		t.Fatalf("after TTL the new zone must be visible; got %d zones", len(zones))
+	}
+}
+
 func TestRedisHub_LoadRunMetaCachesNilResult(t *testing.T) {
 	hub, _, teardown := newRedisTestHub(t)
 	defer teardown()
