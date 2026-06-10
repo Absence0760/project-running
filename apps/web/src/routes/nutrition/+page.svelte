@@ -32,10 +32,13 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import FoodLogEditor from '$lib/components/FoodLogEditor.svelte';
 
 	let loading = $state(true);
 	let showLog = $state(false);
+	let confirmDeleteEntry = $state<FoodEntry | null>(null);
+	let deletingEntry = $state(false);
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
 	let exerciseKcal = $state(0);
@@ -165,12 +168,18 @@
 		localStorage.setItem(waterStorageKey(), String(waterMl));
 	}
 
-	async function removeEntry(id: string) {
+	async function removeEntry() {
+		const entry = confirmDeleteEntry;
+		if (!entry || deletingEntry) return;
+		deletingEntry = true;
 		try {
-			await deleteFoodEntry(id);
-			entries = entries.filter((e) => e.id !== id);
+			await deleteFoodEntry(entry.id);
+			entries = entries.filter((e) => e.id !== entry.id);
+			confirmDeleteEntry = null;
 		} catch (e) {
-			showToast(`Delete failed: ${(e as Error).message}`, 'error');
+			showToast(m('nutrition.deleteFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			deletingEntry = false;
 		}
 	}
 
@@ -358,7 +367,7 @@
 											{/if}
 										</div>
 										<span class="item-kcal-wrap"><span class="item-kcal">{e.calories ?? 0}</span><span class="item-kcal-unit">kcal</span></span>
-										<button class="icon-btn" type="button" onclick={() => removeEntry(e.id)} aria-label={`${m('nutrition.delete')} ${e.item_name}`}>
+										<button class="icon-btn" type="button" onclick={() => (confirmDeleteEntry = e)} aria-label={`${m('nutrition.delete')} ${e.item_name}`}>
 											<span class="material-symbols" aria-hidden="true">close</span>
 										</button>
 									</li>
@@ -430,6 +439,16 @@
 <Modal open={showLog} title={m('nutrition.logHeading')} narrow onclose={() => (showLog = false)}>
 	<FoodLogEditor oncreated={onLogged} />
 </Modal>
+
+<ConfirmDialog
+	open={confirmDeleteEntry !== null}
+	title={m('nutrition.deleteEntryTitle')}
+	message={m('nutrition.deleteEntryMessage', { item: confirmDeleteEntry?.item_name ?? '' })}
+	confirmLabel={m('nutrition.delete')}
+	onconfirm={removeEntry}
+	oncancel={() => (confirmDeleteEntry = null)}
+	danger
+/>
 
 <style>
 	.page {

@@ -144,6 +144,52 @@ test.describe('/nutrition — manual log, render, water', () => {
 		});
 	});
 
+	test('deleting a food entry confirms first: cancel keeps it, confirm removes it', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const item = `E2E Delete ${Date.now()}`;
+		const { data: created } = await admin
+			.from('food_log')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				item_name: item,
+				calories: 200,
+				meal_slot: 'snack',
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/nutrition');
+			const row = page.locator('.meal-list li', { hasText: item });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+
+			// Cancel keeps the entry.
+			await row.getByRole('button', { name: `Delete ${item}` }).click();
+			const dialog = page.locator('.modal', { hasText: 'Delete this entry?' });
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.getByRole('button', { name: 'Cancel' }).click();
+			await expect(dialog).toBeHidden({ timeout: 5_000 });
+			await expect(row).toBeVisible();
+
+			// Confirm removes it from the list + the DB.
+			await row.getByRole('button', { name: `Delete ${item}` }).click();
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+			await expect(row).toHaveCount(0, { timeout: 10_000 });
+
+			const { data: after } = await admin
+				.from('food_log')
+				.select('id')
+				.eq('id', created!.id);
+			expect(after?.length ?? 0).toBe(0);
+		} finally {
+			await admin.from('food_log').delete().eq('id', created!.id);
+		}
+	});
+
 	test('eating past the calorie target shows an over-budget signal', async ({ page }) => {
 		const admin = getAdminClient();
 		// One enormous entry today guarantees the day is over any reasonable
