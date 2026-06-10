@@ -1500,6 +1500,22 @@ SECURITY DEFINER RPC for privacy-zone clipping (decisions §33). Reads `user_set
 
 SECURITY DEFINER RPC for the routes equivalent of `clip_track_for_user` (decisions §33, migration `20260625_001`). Self-contained: caller passes only the route id. Looks up the row internally, applies the same visibility gate as the routes SELECT policies (owner / public / club member; raises `42501` otherwise so private-route reads are loud), and returns either the unclipped `waypoints` (owner) or the clipped output (non-owner, delegated to `clip_track_for_user` so the zone walk has one implementation). Granted to `anon` + `authenticated`. Anon callers can only read `is_public = true` routes — private-route reads from anon raise `42501`. Routes carry waypoints inline (no Storage indirection like runs) so this is a straight RPC rather than an Edge Function.
 
+### `segment_effort_ranks(p_run_id uuid)`
+
+Returns `(effort_id, rank)` for every segment effort on a run in one round-trip — replaces a client-side N+1 count-per-effort loop in `fetchEffortsForRun` (migration `20261223_001`, perf-hunt 2026-06-10). `rank = 1 +` the number of strictly-faster efforts on the same segment **visible to the caller**. SECURITY INVOKER, so the `segment_efforts` RLS (EXISTS-through-route → `routes.is_public`) gates the comparison set identically to the old per-effort client count. Tie semantics = standard competition ranking (tied fastest both rank 1, next ranks 3). Granted to `anon` + `authenticated`. pgTAP `segment_effort_ranks_test.sql`.
+
+### `gym_exercise_records()`
+
+Returns one row per exercise — `(exercise_name, heaviest_weight_kg, heaviest_weight_reps, best_volume_kg, best_est_1rm_kg, last_performed_at, session_count)` — for the `/gym/records` surface (migration `20261224_001`, perf-hunt follow-up). All-time per-exercise bests can't be served by a windowed client read, so the aggregation lives in SQL (mirroring how run PRs are SQL-maintained); the client-side `exercise_records.ts` stopgap was retired. The SQL is the mirror of `gym_prs.ts#computeExercisePrs` + `exercise_records.ts` (normalised name key, Epley e1rm with the rep clamp, bodyweight-only excluded). SECURITY INVOKER (owner-scoped via `gym_workouts`/`gym_sets` RLS + explicit `auth.uid()`). The `gym_prs.ts` badge engine stays client-side for the per-workout temporal badges. pgTAP `gym_exercise_records_test.sql` pins the metrics against the `gym_prs.test.ts` fixture shape.
+
+### `gym_exercise_set_history(p_name text)`
+
+Returns one exercise's sets — `(workout_id, started_at, exercise_name, reps, weight_kg, rpe)` — matched on the **normalised** name (trim → lowercase → collapse whitespace, the same key `gym_prs.ts#normaliseExerciseName` uses), for the `/gym/exercise` progression view and `/gym/[id]`'s per-exercise PR badges + vs-last-time (migration `20261225_001`, perf-hunt follow-up). Bounds the read to one exercise instead of pulling the whole history; the normalised match picks up sessions logged under a different capitalisation (an exact `=` would drop them). SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_set_history_test.sql`.
+
+### `gym_exercise_names()`
+
+Returns `(exercise_name, uses)` — distinct trimmed exercise names + use counts, most-used first — for the gym editor's autocomplete datalist (migration `20261226_001`, perf-hunt follow-up). Bounded to the count of distinct exercises (dozens) so the History page never pulls raw set history just to derive names. Names stay case-preserved (trim only), matching the prior client behaviour. SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_names_test.sql`.
+
 ---
 
 ## Supabase Storage

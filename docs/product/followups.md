@@ -164,38 +164,42 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 The 2026-06-10 perf-hunt over the web read/query layer fixed the migration-free
 hot spots inline (coach request path: dropped a duplicate `get_my_profile` RPC +
 fanned out `buildContext`'s five serial reads with `Promise.all`; `CalendarHeatmap`:
-windowed the run bucketing to the rendered weeks). These three survivors need a
-migration or a `/safe-edit`-grade change and were deferred with their durable
-designs rather than patched with throwaway interim fixes:
+windowed the run bucketing to the rendered weeks). The three migration / `/safe-edit`-grade
+survivors were then completed (2026-06-10 follow-up):
 
-- [ ] **`fetchGymSetHistory` reads the entire lifting history on 4 hot surfaces** —
-  `core/data.ts` `fetchGymSetHistory` selects every `gym_sets` row for the user (no
-  `limit`, no window) and ships it to the browser, where the `gym_prs` engine recomputes
-  all badges in JS. Called on `/dashboard`, `/gym`, `/gym/[id]`, `/gym/exercise` on every
-  load — payload + client CPU grow O(total sets) unbounded (a 3-year lifter ≈ 15k rows).
-  **Durable fix:** a trigger-maintained per-exercise PR/records cache (the
-  [derived_state.md](../backend/derived_state.md) cache=authoritative-recompute contract
-  already does this for run PRs) or a server-side RPC returning only the per-exercise
-  bests, so the client never pulls raw set history. Migration → `/safe-migration`.
-- [ ] **`fetchEffortsForRun` ranks segments with an N+1 count loop** — `core/data.ts`
-  `fetchEffortsForRun` runs one `count(*)`-faster-than query per segment effort, awaited
-  one at a time, on every `/runs/[id]` load (a 30-segment ultra route ⇒ 30 serial round-
-  trips). **Durable fix:** a single RPC returning rank-per-effort via a window function —
-  the same server-side pattern the sibling `fetchSegmentLeaderboardTiered` already uses via
-  `segment_leaderboard_tiered`. Migration → `/safe-migration`. (A migration-free interim
-  `Promise.all` over the count queries would cut wall-clock N×RTT→~1×RTT but the RPC
-  eliminates the N queries entirely, so the interim patch would be thrown away — skipped in
-  favour of the durable fix.)
-- [ ] **`/runs` renders the entire filtered history (one `RunTrackPreview` per card)** —
-  the moment any filter is set, `/runs` flips to full-fetch and the `{#each filteredRuns}`
-  renders **every** matching card, each mounting a track-preview SVG; a 1,500-run account
-  paints 1,500 preview components at once. Pagination/Load-More only exists in unfiltered
-  browse mode. **Durable fix:** a render-window cap + "Show more" applied in full-filter
-  mode too (or push the filters into the `fetchRuns` query so DB pagination survives
-  narrowing — the code comment at `runs/+page.svelte:86` flags this as the real backlog
-  item). Touches select-all / bulk-delete / persistence + ~6 count-asserting e2e specs, so
-  route through `/safe-edit` with a Playwright window guard. Web-first; mobile list is
-  separate.
+- [x] **`fetchEffortsForRun` N+1 rank loop → one RPC** — `segment_effort_ranks(p_run_id)`
+  (migration `20261223_001`, SECURITY INVOKER so RLS gates the comparison set identically)
+  ranks every effort on a run in one round-trip; `fetchEffortsForRun` calls it instead of a
+  count-per-effort loop. pgTAP `segment_effort_ranks_test.sql`.
+- [x] **`/runs` unbounded full-filter render → windowed + Show-more** — the render is capped
+  at `PAGE_SIZE` in full-fetch mode with a Show-more reveal (paginated browse mode unchanged,
+  DB Load-More already bounds it); cap resets on filter/sort change. e2e plants 55 hikes and
+  asserts the cap + reveal. i18n `runs.showMore` in all six locales.
+- [x] **`fetchGymSetHistory` whole-history reads → bounded/aggregated per surface.** Each
+  hot surface now reads only what it needs instead of the user's entire `gym_sets` log:
+  - **/gym/records** → `gym_exercise_records()` RPC (migration `20261224_001`): per-exercise
+    all-time bests aggregated server-side (all-time maxima can't be windowed). Mirrors how
+    run PRs live in SQL, so the client-side `exercise_records.ts` stopgap was retired; pgTAP
+    pins the metrics to the `gym_prs.test.ts` fixture shape.
+  - **/dashboard** → `fetchGymSetHistory({ sinceDays: 180 })`: it only reasons about recent
+    training (90-day load curve + 5 most-recent-lift cards). Source guard in
+    `dashboard_fitness_source_guard.test.ts`.
+  - **/gym/exercise** → `gym_exercise_set_history(p_name)` RPC (migration `20261225_001`):
+    one exercise's sets, matched on the normalised name so a differently-cased session still
+    matches. pgTAP covers the case/whitespace-insensitive match.
+  - **/gym/[id]** → the same per-exercise RPC, fetched per distinct exercise in the workout
+    (deduped by normalised key) — the PR badges + vs-last-time only judge the workout's own
+    exercises.
+  - **/history** autocomplete → `gym_exercise_names()` RPC (migration `20261226_001`):
+    distinct names + use counts, most-used first.
+  - **Residual — /gym list temporal PR badges (`prWorkoutIds`)** still reads the full set
+    history: judging "did each of the ~100 displayed workouts set an all-time PR up to that
+    point" inherently needs every prior set across all exercises, so it can't be windowed.
+    Fully eliminating it needs a **write-time PR flag** — a trigger-maintained
+    `gym_workouts.pr_kinds` computed when a workout's sets change (against the then-current
+    records), with a cascading recompute of later workouts of the same exercises (changing a
+    record-holder flips later badges). That cascade-correctness + the SQL PR math is a
+    multi-day feature in its own right; tracked here as the one remaining gym read.
 
 The lower-ranked data findings (`fetchEngagementSummaries` / `hydratePeopleSuggestions` /
 `enrichPosts` fetch-rows-to-count, `fetchClubMembers` unbounded roster) only bite at

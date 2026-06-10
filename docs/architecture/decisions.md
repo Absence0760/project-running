@@ -2963,6 +2963,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 138. Web gym reads that need all-time or distinct-only data moved server-side; per-surface RPCs replace whole-history client reads
+
+**Decided (2026-06-10, perf-hunt follow-up):** the web gym surfaces stopped pulling the user's entire `gym_sets` history (`fetchGymSetHistory()` — unbounded, a 3-year lifter ≈ 15k rows shipped to the browser on every load) and now each reads only what it renders, via four owner-scoped SECURITY-INVOKER RPCs: `gym_exercise_records()` (per-exercise all-time bests → `/gym/records`), `gym_exercise_set_history(p_name)` (one exercise's sets, normalised-name matched → `/gym/exercise` + `/gym/[id]`), `gym_exercise_names()` (distinct names → History autocomplete), plus a `sinceDays` window on `fetchGymSetHistory` for the dashboard's recent-only needs. Migrations `20261224`–`20261226`; each pinned by pgtap.
+
+**Why server-side.** All-time records are *maxima* — a windowed client read can't produce them, and the only alternatives were "keep shipping everything" or "aggregate on the server." This mirrors the run-PR precedent (PR aggregation already lives only in SQL, `refresh_personal_records_for_user`), so the web client-side `exercise_records.ts` roll-up was retired and its math moved into the RPC, with pgtap pinning it to the same `gym_prs.ts` fixture the badge engine uses. The single-exercise + names reads went to RPCs (not client filters) because the match must be on the *normalised* exercise name, which PostgREST can't express as a filter.
+
+**Trade-off — a parity pair was intentionally broken.** `exercise_records.ts` was a documented byte-identical TS↔Dart pair; the web side is now the RPC while mobile keeps its client-side `exercise_records.dart` + `gym_records_screen.dart`. The two compute the same bests via different paths, each pinned by its own tests, and are no longer kept byte-identical (removed from the parity-pairs list). The `gym_prs.ts`↔`.dart` PR-engine pair and `exercise_history`↔`.dart` stay byte-identical. Mobile still reads its full set history client-side — the same perf issue exists there and is a separate, Dart-side follow-up.
+
+**Residual.** The `/gym` list's temporal per-workout PR badges (`prWorkoutIds`) still read the full history: deciding "did each displayed workout set an all-time PR up to that point" inherently needs every prior set across all exercises, so it can't be windowed or served by a bests RPC. Fully eliminating it needs a write-time `gym_workouts.pr_kinds` flag with a cascading recompute (changing a record-holder flips later workouts' badges) — a multi-day feature tracked in `followups.md`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
