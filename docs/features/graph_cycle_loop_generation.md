@@ -1,6 +1,6 @@
 # Graph-cycle loop generation (v3) — design proposal
 
-**Status: PROPOSAL — not built.** The durable fix for "Generate a route by
+**Status: PROPOSAL — P0 spike run + green-lit (2026-06-10); P1–P3 not built.** The durable fix for "Generate a route by
 distance" producing *clean neighbourhood loops* everywhere, not just where the
 street grid happens to be roughly circular. Successor to the polygon generator
 ([route_loop_generation.md](route_loop_generation.md), v2) and the GraphHopper
@@ -29,6 +29,37 @@ it doesn't *search the streets*.
 The only thing that reliably traces the circuit a human would pick is to operate
 on the **actual local street graph** and search it for cycles.
 
+## P0 spike — results (2026-06-10, green-light)
+
+Ran the P0 spike (Overpass foot graph + Dijkstra + disjoint-path cycle search +
+`areaEfficiency`, pure stdlib — `osmnx` wraps the same Overpass→graph step).
+Verdict: **build it.**
+
+| Start | result | areaEff | |
+|---|---|---|---|
+| Medium (Reston) | 5246 m (+5%) | **0.60** | clean round loop ✓ |
+| Dense (Arlington) | 4391 m (−12%) | **0.42** | clean loop ✓ |
+| Sparse (report `37.6518`) | 4942 m (−1%) | 0.06 | spur — no clean 5 km loop ✗ |
+
+- **Graph-cycle search decisively beats geometry** where loops exist — real clean
+  loops (areaEff 0.42–0.60, confirmed visually) vs the v2 polygon generator's
+  *zero* at the same starts.
+- **The sparse report start is genuinely loop-poor** — a 4th independent
+  confirmation. Strict edge-disjoint paths fail at *every* far-point there
+  (`p2_strict = 0`: a bottlenecked network with no second way back), and even with
+  edge reuse the best shape is areaEff 0.06 (a spur). No generator can conjure a
+  loop the streets don't contain.
+- **Bonus — it answers the loop-poor case for free.** Sweeping targets at that
+  start, the search reports the *largest clean loop achievable*: ~4.5 km (areaEff
+  0.22), clean up to ~4 km, then collapsing to spurs at 5 km. That is exactly the
+  data the deferred loop-poor 3-way probe needs, so graph-cycle **subsumes that
+  follow-up**.
+
+Two P1 implementation notes the spike surfaced: (1) use **penalised edge reuse**
+(~×8), not strict edge removal — strict disjointness fails in bottlenecked sparse
+networks; (2) wire the largest-clean-loop the search already finds into the
+loop-poor UX.
+
 ## Goal / success criteria
 
 - Trace a **real loop on the local street network** of length ≈ ±10% of target,
@@ -51,13 +82,15 @@ Operate on a **pre-extracted routable foot graph** (nodes = intersections, edges
    and keep whichever *actual* loop lands closest to target rather than trusting a
    single divisor.
 2. For each `F`, find **two near-disjoint shortest paths** `S→F` and `F→S` and
-   concatenate them into a **cycle**. Suurballe's algorithm gives the optimal
-   edge-disjoint pair; the cheap heuristic (route `S→F`, remove *both directions*
-   of its edges, route `F→S`) is fine for the spike. Disjointness is what kills the
-   out-and-back tail `round_trip` leaves. Edge-disjoint still permits **node
-   reuse** (a figure-8 touching one intersection twice) — the shape score below
-   penalises that; node-disjoint is cleaner but fails far more often in sparse
-   graphs, so prefer edge-disjoint + scoring.
+   concatenate them into a **cycle**. **P0 finding:** strict *removal* of the
+   `S→F` corridor disconnects the return in bottlenecked sparse networks
+   (`p2_strict = 0` at the report start), so **penalise** those edges (~×8) rather
+   than removing them — the return prefers disjoint roads but may reuse a lone
+   connector where there's no alternative. Disjointness is what kills the
+   out-and-back tail `round_trip` leaves; edge-disjoint still permits **node
+   reuse** (a figure-8) which the shape score below penalises. (Suurballe's gives
+   the optimal *strict* edge-disjoint pair, but penalised reuse is the robust
+   choice given the spike.)
 3. **Score** each cycle: distance error `|len − D|` (primary), the existing
    `areaEfficiency` shape metric (enclosed area vs equal-perimeter circle), and a
    self-overlap penalty. Reject near-degenerate results.
