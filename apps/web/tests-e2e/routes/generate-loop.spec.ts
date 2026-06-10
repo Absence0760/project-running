@@ -828,6 +828,62 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		expect(last[0]).toBeCloseTo(distantEnd.lng, 4);
 	});
 
+	test('undo after a generated loop pops the closing pin AND the last interior pin', async ({
+		page,
+	}) => {
+		// undoWaypoint has a loop-aware branch: when the popped waypoint was
+		// the closing pin (≈ the start), the remaining sequence is a half-
+		// loop that wouldn't route sensibly, so it pops one more. Pin that
+		// two-for-one behaviour (Ctrl+Z right after Generate).
+		const r = await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		expect(r.ok).toBe(true);
+		const n = r.waypoints.length;
+		expect(n).toBeGreaterThanOrEqual(3);
+
+		await page.locator('.toolbar-group .btn', { hasText: 'Undo' }).click();
+
+		const wp = await page.evaluate(
+			() =>
+				(
+					window as unknown as {
+						__routeBuilder: { getRouteData: () => { waypoints: { lat: number; lng: number }[] } };
+					}
+				).__routeBuilder.getRouteData().waypoints,
+		);
+		// First pop removes the closing pin; because it sat on the start and
+		// >= 2 waypoints remain, a second pop fires → n - 2.
+		expect(wp.length).toBe(n - 2);
+	});
+
+	test('out & back on a generated LOOP reverses direction without doubling the pins', async ({
+		page,
+	}) => {
+		// outAndBack has two branches. The non-loop branch appends the
+		// reversed interior (point-to-point doubles); the LOOP branch (start
+		// ≈ end, the generate-loop shape) instead reverses the interior in
+		// place, so the pin count is UNCHANGED. The builder.spec covers the
+		// doubling branch; this pins the loop branch.
+		const r = await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		expect(r.ok).toBe(true);
+		const n = r.waypoints.length;
+		expect(n).toBeGreaterThanOrEqual(3);
+
+		await page.locator('.toolbar-group .btn', { hasText: 'Out & back' }).click();
+
+		const wp = await page.evaluate(
+			() =>
+				(
+					window as unknown as {
+						__routeBuilder: { getRouteData: () => { waypoints: { lat: number; lng: number }[] } };
+					}
+				).__routeBuilder.getRouteData().waypoints,
+		);
+		// Reversed in place — same count, still a closed loop.
+		expect(wp.length).toBe(n);
+		expect(wp[wp.length - 1].lat).toBeCloseTo(wp[0].lat, 9);
+		expect(wp[wp.length - 1].lng).toBeCloseTo(wp[0].lng, 9);
+	});
+
 	test('rejects invalid targetDistanceM (NaN, 0, negative, absurd)', async ({ page }) => {
 		// Drive the public API with each invalid input and assert
 		// generateLoop returns false without mutating the route.
