@@ -25,7 +25,7 @@ export function currentLocale(): Locale {
 // key degrades gracefully rather than rendering blank.
 export function m(key: MessageKey, params?: Record<string, string | number>): string {
 	const value: string = dict[key] ?? en[key] ?? key;
-	return interpolate(value, params);
+	return interpolate(value, params, locale);
 }
 
 function applyDocumentLocale(next: Locale): void {

@@ -64,6 +64,15 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		await expect(block.locator('.pr-chip').first()).toBeVisible();
 		await expect(block.locator('.sets li:not(.sets-head)').first()).toContainText('60');
 
+		// ICU plural runtime: this workout has exactly one exercise, so the
+		// dashboard recent-lifts row renders the singular "1 exercise", not
+		// "1 exercises" (gym.exercisesShort → Intl.PluralRules `one` branch).
+		await page.goto('/dashboard');
+		const liftRow = page.locator('.run-row', { hasText: title });
+		await expect(liftRow).toBeVisible({ timeout: 10_000 });
+		await expect(liftRow.locator('.run-pace')).toHaveText('1 exercise');
+		await page.goto(`/gym/${workoutId}`);
+
 		// Delete it via the confirm dialog → back to the list, row gone.
 		await page.getByRole('button', { name: 'Delete', exact: true }).click();
 		await page
