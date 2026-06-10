@@ -2557,6 +2557,8 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **The trade-off.** Extraction is incremental — strings move into the catalogue surface-by-surface (shell first), and an un-extracted literal simply stays English until its turn. A bare `<html lang="en">` in `app.html` is correct as the *prerender default* only; never read it as the live locale. RTL has a switch-point (`dirForLocale`) but no RTL locale ships yet; the CSS is already logical-property-clean (rtl_css_guards). **Don't** add an `Accept-Language` server hook for the static site, and **don't** statically import the non-English catalogues.
 
+**Amendment (2026-06-10) — plurals are encoded inline in the message value, ICU-style, not as `*One`/`*Other` key pairs.** `interpolate()` now resolves `{var, plural, one {…} other {…}}` blocks by selecting the CLDR category via `Intl.PluralRules` for the active locale (`#` → the count, `=N` exact matches win, named placeholders still substitute). This matches mobile's ARB `{n, plural, …}` shape, so a count string can't render "1 sets" on web while mobile says "1 set". The convention for any new countable-noun string: write one ICU value with `one`/`other` branches (add other CLDR categories only for locales that need them; `ja` collapses to a lone `other`) — **do not** add sibling `fooOne`/`fooOther` keys. The pre-existing hand-rolled `*One`/`*Other` pairs predate this and migrate to the ICU runtime incrementally. Invariant counts (parentheticals, units, ordinals) stay plain — there's no noun to inflect.
+
 ---
 
 ## 109. The dashboard's CTL/ATL/TSB numbers, recovery advice, and readiness ring read the same training-load series as the chart
