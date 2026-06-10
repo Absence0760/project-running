@@ -1,8 +1,14 @@
 # Route loop generation v2 — design + build notes
 
-**Status: BUILT — generator + polygon-first integration shipped; the
-first-class loop-poor UX (§Loop-poor fallback) is deferred.** Augments the
-GraphHopper `round_trip` generator
+**Status: RETIRED (2026-06-10) — superseded by v3 graph-cycle.** This polygon
+generator (`loop_polygon.ts` / `loop_select.ts` / `loop_generate.ts`) was deleted
+when the v3 graph-cycle generator shipped: graph-cycle searches the real foot
+graph and beat the polygon sweep at every test start (clean loops where the
+polygon found zero), so polygon added no coverage as a middle tier. See
+[graph_cycle_loop_generation.md](graph_cycle_loop_generation.md) +
+[decisions §137 amendment](../architecture/decisions.md). Kept as a historical
+design record. *Original status (2026-06-09): BUILT — generator + polygon-first
+integration shipped.* Augmented the GraphHopper `round_trip` generator
 ([decisions §137](../architecture/decisions.md)) for the "Generate a route by
 distance" feature. Written 2026-06-09 after a user reported generated loops
 radiating out on a long road instead of using the dense street grid near the

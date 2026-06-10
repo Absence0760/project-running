@@ -78,6 +78,18 @@ will diff against this baseline.
 
 ---
 
+## 2026-06-10 — graph_cycle map sidecar (self-hosted routing engine) — added (no new sub-processor)
+
+* **What changes**: the v3 graph-cycle loop generator (`/api/routes/generate`, decisions §137) is served by a **self-hosted Go map sidecar** (`apps/graph_cycle`) running on our existing **Fly.io** infrastructure — a sibling of the self-hosted OSRM map-matcher + the GraphHopper engine. It parses the same regional OSM PBF into an in-memory foot graph and searches it for clean loops; `handleGenerate` tries it ahead of GraphHopper `round_trip`. **No new third-party sub-processor is introduced**: the only processor in the chain is Fly.io, disclosed since the 2026-05-26 baseline. Logged for a complete audit trail, not as an Art 28(2) addition requiring the 30-day objection window.
+* **Why**: geometric generators (the retired v2 polygon path + `round_trip`) can't trace the neighbourhood loop on irregular street grids; the sidecar searches the real foot graph and finds it (decisions §137 amendment).
+* **Activation date**: n/a — no new sub-processor, so no objection window applies. Ships on the normal release cadence once deployed.
+* **Data categories affected**: route start lat/lng + target distance. **No data egress** — `GRAPH_CYCLE_URL` is a server-only env (never `PUBLIC_`), so the browser never reaches the sidecar and the coordinates stay inside our infra (same posture as the self-hosted OSRM + GraphHopper engines).
+* **Region**: `lhr` (London) — same Fly.io primary region as OSRM, GraphHopper, + the Go worker.
+* **DPA**: Covered by the existing Fly.io DPA (<https://fly.io/legal/dpa/>); the sidecar is our own code self-hosted — it processes nothing on our behalf as a third party.
+* **Opt-out path**: n/a — server-side route building, no personal-data egress; when the sidecar is unconfigured/down the handler falls back to GraphHopper round_trip, then the in-browser OSRM heuristic.
+
+---
+
 ## Template for future entries
 
 ```

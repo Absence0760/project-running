@@ -1,12 +1,21 @@
-# Graph-cycle loop generation (v3) — design proposal
+# Graph-cycle loop generation (v3) — BUILT
 
-**Status: PROPOSAL — P0 spike run + green-lit (2026-06-10); P1–P3 not built.** The durable fix for "Generate a route by
-distance" producing *clean neighbourhood loops* everywhere, not just where the
-street grid happens to be roughly circular. Successor to the polygon generator
-([route_loop_generation.md](route_loop_generation.md), v2) and the GraphHopper
-`round_trip` fallback ([decisions §137](../architecture/decisions.md)). Written
-2026-06-10 after a user observed that even with good distance accuracy, the
-generated route "still didn't use the loop in the neighbourhood."
+**Status: BUILT (2026-06-10) — code-complete + live-validated; prod deploy is operator-gated.** The durable fix for
+"Generate a route by distance" producing *clean neighbourhood loops* everywhere,
+not just where the street grid happens to be roughly circular. Successor to the
+polygon generator ([route_loop_generation.md](route_loop_generation.md), v2, now
+retired) and the GraphHopper `round_trip` fallback
+([decisions §137](../architecture/decisions.md)). Written 2026-06-10 after a user
+observed that even with good distance accuracy, the generated route "still didn't
+use the loop in the neighbourhood."
+
+**What shipped (see § Built results):** the `apps/graph_cycle` Go sidecar (foot
+graph from the OSM PBF + disjoint-path cycle search + HTTP API), `graph_cycle.ts`
+wired graph-cycle-FIRST into `handleGenerate` with the `round_trip` fallback, the
+polygon path deleted, `GRAPH_CYCLE_URL`/`GRAPH_CYCLE_API_KEY` threaded through the
+SvelteKit `+server.ts` and the generate-route Lambda in parity, unit + e2e tests,
+a CI job, and a `release-graph-cycle.yml`. **Operator-gated remainder:** the Fly
+app create + volume + PBF seed + secret + first deploy (see § Deploy handoff).
 
 ## Problem — why v2 (polygon) and round_trip both fall short
 
@@ -59,6 +68,62 @@ Two P1 implementation notes the spike surfaced: (1) use **penalised edge reuse**
 (~×8), not strict edge removal — strict disjointness fails in bottlenecked sparse
 networks; (2) wire the largest-clean-loop the search already finds into the
 loop-poor UX.
+
+## Built — results (P1–P3, 2026-06-10)
+
+P1–P3 are code-complete. The validated P0 algorithm was ported verbatim into a
+standalone Go sidecar; the only remaining work is the operator-gated Fly deploy.
+
+**What landed:**
+- **P1 — `apps/graph_cycle` Go sidecar.** Two-pass OSM PBF parse (`paulmach/osm`)
+  → in-memory foot graph (OSRM-foot-profile-equivalent access filtering, CSR
+  adjacency, uniform-grid nearest-node index); sparse radius-capped Dijkstra with
+  penalised (×8) edge reuse; `SearchCycle` (direction-sampled far-points,
+  disjoint-path cycles, `areaEfficiency` scoring, in-band→roundest else
+  closest-to-target selection + largest-clean-loop); HTTP API
+  (`/health` · `/cycle` · `/route` · `/nearest`) behind an in-process,
+  fail-closed `X-Engine-Key` guard. Distroless image + `fly.toml` +
+  `docker-compose` + `Makefile` + CI `test-graph-cycle` job. ~40 Go unit tests.
+- **P2 — web wiring.** `graph_cycle.ts` (sidecar client mirroring `graphhopper.ts`)
+  wired **graph-cycle-FIRST → round_trip fallback** in `handleGenerate`; the v2
+  polygon generator deleted; `GRAPH_CYCLE_URL`/`GRAPH_CYCLE_API_KEY` threaded
+  through the SvelteKit `+server.ts` and the generate-route Lambda in parity;
+  unit tests for the client + the full fallback chain; the e2e
+  `generate-loop.spec.ts` reframed onto graph-cycle.
+- **P3 — `release-graph-cycle.yml`** (deploys the Fly app on a `graph-cycle@*`
+  tag, mirroring `release-osrm.yml`), Terraform Lambda-env wiring, docs (this
+  doc + decisions §137 + the sub-processor changelog).
+
+**Live measurement** (local Virginia extract, 405 MB → **14.2 M nodes / 29.4 M
+edges**, graph built in **27.7 s**; 5 km target):
+
+| Start | tier | result | areaEff | latency | largest clean loop |
+|---|---|---|---|---|---|
+| Richmond downtown `37.5407,-77.4360` | dense | 4715 m (−6%) | **0.574** | 537 ms | 6530 m @ 0.49 |
+| The Fan `37.5545,-77.4620` | dense residential | 4451 m (−11%) | **0.502** | 482 ms | 6323 m @ 0.26 |
+| Report start `37.6518,-77.3614` | sparse / loop-poor | 5676 m (+14%) | 0.145 | 260 ms | 12822 m @ **0.637** |
+
+The dense starts trace genuinely round loops (areaEff 0.50–0.57) where the v2
+polygon sweep found *zero*. The report start is confirmed loop-poor a 5th way:
+the best ~5 km cycle barely clears the 0.12 spur floor (0.145), and the only
+truly round loop there needs ~12.8 km — exactly the data the deferred loop-poor
+probe wanted, surfaced for free as `largestClean`. Per-request latency (82–537 ms
+on a 14 M-node graph) sits comfortably inside the few-seconds budget.
+
+## Deploy handoff (operator-gated)
+
+Everything up to the Fly deploy is shipped. To go live (needs Fly + sops access):
+
+1. `flyctl volumes create graph_cycle_data --app graph-cycle --region lhr --size 10`
+2. `cd apps/graph_cycle && flyctl deploy --app graph-cycle`
+3. Seed the PBF (the SAME extract OSRM uses): `flyctl ssh sftp shell --app graph-cycle` → `put data/region.osm.pbf /data/region.osm.pbf`
+4. Set the shared secret equal to the Lambda's `GRAPH_CYCLE_API_KEY` (sops): `flyctl secrets set GRAPH_CYCLE_API_KEY=<value> --app graph-cycle`
+5. Add `GRAPH_CYCLE_URL=https://graph-cycle.fly.dev` + the `GRAPH_CYCLE_API_KEY` secret to the generate-route Lambda env (Terraform var + sops; the wiring is in `infra/` — supply the values and `terraform apply`).
+6. `flyctl machine restart <id> --app graph-cycle` to parse the PBF, then confirm `/health` reports `nodes > 0` and a `/cycle` call returns a loop.
+
+Until step 5's `GRAPH_CYCLE_URL` is set, `handleGenerate` simply skips graph-cycle
+and serves round_trip — no regression. See `apps/graph_cycle/README.md` for the
+full recipe.
 
 ## Goal / success criteria
 
