@@ -20,6 +20,17 @@ test('parseDurationToSeconds rejects garbage', () => {
 	assert.equal(parseDurationToSeconds('-5'), null);
 });
 
+test('parseDurationToSeconds rejects out-of-range minute/second fields', () => {
+	// A non-leading field >= 60 is a malformed time, not 40m90s.
+	assert.equal(parseDurationToSeconds('40:90'), null);
+	assert.equal(parseDurationToSeconds('1:60'), null);
+	assert.equal(parseDurationToSeconds('1:99:99'), null);
+	assert.equal(parseDurationToSeconds('1:60:00'), null);
+	// The leading field stays unbounded (90 minutes is a valid way to type it).
+	assert.equal(parseDurationToSeconds('90:00'), 5400);
+	assert.equal(parseDurationToSeconds('100:00:00'), 360000);
+});
+
 test('parses a clean chip-timing CSV', () => {
 	const csv = 'Bib,Name,Time\n101,Alice Anon,00:24:00\n102,Bob Bibonly,00:27:00\n';
 	const { rows, errors } = parseChipTimingCsv(csv, D);

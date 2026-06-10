@@ -90,9 +90,15 @@ export function parseDurationToSeconds(raw: string | undefined): number | null {
 		const parts = s.split(':');
 		if (parts.length > 3) return null;
 		let total = 0;
-		for (const p of parts) {
-			const n = Number(p);
+		for (let i = 0; i < parts.length; i++) {
+			const n = Number(parts[i]);
 			if (!Number.isFinite(n) || n < 0) return null;
+			// Only the leading field is unbounded (hours, or total minutes in
+			// MM:SS). A minutes/seconds field >= 60 is a malformed time
+			// (e.g. "40:90" should be "41:30") — reject it so an organiser's
+			// timing-sheet typo surfaces as a bad row instead of being
+			// silently mis-parsed.
+			if (i > 0 && n >= 60) return null;
 			total = total * 60 + n;
 		}
 		return Math.round(total);
