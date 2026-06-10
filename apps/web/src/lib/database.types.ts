@@ -2960,6 +2960,13 @@ export type Database = {
         }
       }
       grant_health_data_consent: { Args: never; Returns: string }
+      gym_exercise_names: {
+        Args: never
+        Returns: {
+          exercise_name: string
+          uses: number
+        }[]
+      }
       gym_exercise_records: {
         Args: never
         Returns: {

@@ -5581,6 +5581,20 @@ export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithD
 	}));
 }
 
+/// Distinct exercise names the user has logged, most-used first — for the gym
+/// editor's autocomplete datalist. Bounded to the count of distinct exercises
+/// (dozens), so a caller that only needs the names never pulls raw set history.
+/// perf-hunt follow-up 2026-06-10.
+export async function fetchGymExerciseNames(): Promise<string[]> {
+	if (!auth.user?.id) return [];
+	const { data, error } = await supabase.rpc('gym_exercise_names');
+	if (error) {
+		console.error('fetchGymExerciseNames failed', error);
+		return [];
+	}
+	return ((data ?? []) as Array<{ exercise_name: string }>).map((r) => r.exercise_name);
+}
+
 async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<void> {
 	const { error: delErr } = await supabase
 		.from(TABLES.gym_sets)

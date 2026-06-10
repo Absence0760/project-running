@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
-	import { fetchActivities, fetchGymSetHistory, type ActivityRow } from '$lib/core/data';
+	import { fetchActivities, fetchGymExerciseNames, type ActivityRow } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
@@ -177,14 +177,9 @@
 		if (gymSuggestionsLoaded) return;
 		gymSuggestionsLoaded = true;
 		try {
-			const hist = await fetchGymSetHistory();
-			const counts = new Map<string, number>();
-			for (const s of hist) {
-				const name = s.exercise_name.trim();
-				if (name === '') continue;
-				counts.set(name, (counts.get(name) ?? 0) + 1);
-			}
-			gymSuggestions = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+			// Distinct names come straight from the server (most-used first)
+			// instead of pulling the whole set history just to count them.
+			gymSuggestions = await fetchGymExerciseNames();
 		} catch (_) {
 			/* leave empty — datalist hints are optional */
 		}
