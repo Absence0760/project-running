@@ -188,6 +188,20 @@ test('computeRealSplits — elevation gain or loss carried per split', () => {
 	assert.ok(Math.abs(splits[0].elevation_m! - 1000) <= 20);
 });
 
+test('computeRealSplits — mile tick produces mile-long splits, pace stays sec/km', () => {
+	// ~1610 m at 5 m/s. A km tick gives one full km + a ~600 m tail; a
+	// mile tick (1609.344 m) gives a single ~1609 m split with no tail.
+	const pts = track(10, 2, 162);
+	const kmSplits = computeRealSplits(pts);
+	const miSplits = computeRealSplits(pts, 1609.344);
+	assert.equal(kmSplits.length, 2);
+	assert.equal(miSplits.length, 1);
+	assert.ok(Math.abs(miSplits[0].distance_m - 1609) <= 20, `dist ${miSplits[0].distance_m}`);
+	// pace_s is canonical seconds-per-km regardless of tick length — the
+	// caller converts to /mi for display. 5 m/s → ~200 s/km either way.
+	assert.ok(Math.abs(miSplits[0].pace_s - 200) <= 2, `pace ${miSplits[0].pace_s}`);
+});
+
 test('computeRealSplits — track without elevation leaves elevation_m null', () => {
 	const pts = track(10, 2, 105);
 	const splits = computeRealSplits(pts);

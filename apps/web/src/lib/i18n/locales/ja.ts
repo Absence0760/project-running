@@ -862,6 +862,7 @@ export const messages = {
 	"runDetail.avgPower": "平均パワー",
 	"runDetail.splits": "スプリット",
 	"runDetail.km": "km",
+	"runDetail.mi": "mi",
 	"runDetail.heartRateZones": "心拍ゾーン",
 	"runDetail.avg": "平均",
 	"runDetail.min": "最小",

@@ -866,6 +866,7 @@ export const messages = {
 	"runDetail.avgPower": "Ø Leistung",
 	"runDetail.splits": "Splits",
 	"runDetail.km": "km",
+	"runDetail.mi": "mi",
 	"runDetail.heartRateZones": "Herzfrequenzzonen",
 	"runDetail.avg": "Ø",
 	"runDetail.min": "Min",

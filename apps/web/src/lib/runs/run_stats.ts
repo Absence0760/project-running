@@ -59,21 +59,27 @@ export interface Split {
 }
 
 /**
- * Compute per-km splits from a GPS track. Requires timestamps on track
+ * Compute per-unit splits from a GPS track. Requires timestamps on track
  * points; returns [] when fewer than two points carry timestamps. Mirrors
  * the Android `run_detail_screen.dart` split logic.
  *
+ * `tickMetres` is the split boundary length — 1000 for km splits,
+ * 1609.344 for mile splits, so a miles-preference user gets mile-long
+ * splits instead of km ones (mobile already does this via `tickLength`).
+ * `pace_s` stays canonical seconds-per-km regardless of tick length; the
+ * caller converts to the display unit (`formatPaceNoSuffix`).
+ *
  * Elevation per split is the net gain/loss (positive = gain) over that
- * km segment. Null when the track has no elevation data.
+ * segment. Null when the track has no elevation data.
  */
-export function computeRealSplits(track: TrackPoint[]): Split[] {
+export function computeRealSplits(track: TrackPoint[], tickMetres = 1000): Split[] {
 	if (track.length < 2) return [];
 	const hasTs = track.some((p) => p.ts != null);
 	if (!hasTs) return [];
 
 	const hasEle = track.some((p) => p.ele != null);
 
-	// Accumulate cumulative distance and find the indices at each km boundary.
+	// Accumulate cumulative distance and find the indices at each boundary.
 	let cumDist = 0;
 	let splitStart = { idx: 0, dist: 0, timeMs: Date.parse(track[0].ts ?? ''), ele: track[0].ele };
 	const splits: Split[] = [];
@@ -84,7 +90,7 @@ export function computeRealSplits(track: TrackPoint[]): Split[] {
 		cumDist += haversineMetres(a.lat, a.lng, b.lat, b.lng);
 		const boundary = splits.length + 1;
 
-		if (cumDist >= boundary * 1000) {
+		if (cumDist >= boundary * tickMetres) {
 			const endTimeMs = b.ts ? Date.parse(b.ts) : NaN;
 			const durationS = Number.isFinite(endTimeMs) ? (endTimeMs - splitStart.timeMs) / 1000 : 0;
 			const splitDist = cumDist - splitStart.dist;

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fmtPace } from '$lib/format/units.svelte';
+	import { fmtPace, getUnit, formatPaceNoSuffix } from '$lib/format/units.svelte';
+
+	const METRES_PER_MILE = 1609.344;
 	import { env } from '$env/dynamic/public';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
@@ -400,8 +402,14 @@
 
 	function paceDeltaLabel(s: WorkoutStepResult): string {
 		if (s.actual_pace_sec_per_km == null) return '—';
-		const d = s.actual_pace_sec_per_km - s.target_pace_sec_per_km;
-		if (Math.abs(d) < 1) return m('runDetail.onPace');
+		const dPerKm = s.actual_pace_sec_per_km - s.target_pace_sec_per_km;
+		if (Math.abs(dPerKm) < 1) return m('runDetail.onPace');
+		// The pace column shows /mi for miles users; the delta must match
+		// or "+12s" reads as sec/km against a sec/mi pace. Convert the
+		// displayed seconds to the preferred unit (the on/amber/off colour
+		// band in paceDeltaClass stays canonical sec/km — a fixed adherence
+		// tolerance, not a display number).
+		const d = getUnit() === 'mi' ? dPerKm * (METRES_PER_MILE / 1000) : dPerKm;
 		const sign = d > 0 ? '+' : '−';
 		return `${sign}${Math.abs(Math.round(d))}s`;
 	}
@@ -972,7 +980,13 @@
 		return pt ? [pt.lng, pt.lat] : null;
 	});
 
-	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
+	// Mile-preference users get mile-long splits + a "Mi" header, matching
+	// mobile. `getUnit()` reads the reactive unit signal so this recomputes
+	// when the preference flips. pace_s stays sec/km; the cell converts.
+	let splitsAreMiles = $derived(getUnit() === 'mi');
+	let splits = $derived(
+		run?.track ? computeRealSplits(run.track, splitsAreMiles ? METRES_PER_MILE : 1000) : []
+	);
 
 	/// Manually-marked laps. The recorder writes `metadata.laps` as an
 	/// array of `{ index, start_offset_s, distance_m, duration_s }` where
@@ -1630,7 +1644,7 @@
 				<table class="splits-table">
 					<thead>
 						<tr>
-							<th>{m('runDetail.km')}</th>
+							<th>{splitsAreMiles ? m('runDetail.mi') : m('runDetail.km')}</th>
 							<th>{m('runDetail.pace')}</th>
 							{#if hasElevation}<th>{m('runDetail.elev')}</th>{/if}
 						</tr>
@@ -1641,7 +1655,7 @@
 								<td>{split.km}</td>
 								<td class="split-pace">
 									{#if split.pace_s > 0}
-										{Math.floor(split.pace_s / 60)}:{String(split.pace_s % 60).padStart(2, '0')}
+										{formatPaceNoSuffix(split.pace_s, 1000)}
 									{:else}
 										—
 									{/if}

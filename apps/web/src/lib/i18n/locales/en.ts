@@ -874,6 +874,7 @@ export const en = {
 	"runDetail.avgPower": "Avg power",
 	"runDetail.splits": "Splits",
 	"runDetail.km": "Km",
+	"runDetail.mi": "Mi",
 	"runDetail.heartRateZones": "Heart Rate Zones",
 	"runDetail.avg": "Avg",
 	"runDetail.min": "Min",
