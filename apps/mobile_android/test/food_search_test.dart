@@ -55,6 +55,35 @@ void main() {
     expect(out[0].protein100g, 10);
   });
 
+  test('parseOffSearch drops a product whose calorie field is a blank string',
+      () {
+    // double.tryParse('') is null in Dart (unlike JS Number('') === 0), so the
+    // blank-energy products drop and the genuine numeric 0 (water) is kept —
+    // parity with the web twin's blank-guard.
+    final out = parseOffSearch({
+      'products': [
+        {
+          'code': 'a',
+          'product_name': 'Blank Energy',
+          'nutriments': {'energy-kcal_100g': ''},
+        },
+        {
+          'code': 'b',
+          'product_name': 'Whitespace Energy',
+          'nutriments': {'energy-kcal_100g': '   '},
+        },
+        {
+          'code': 'c',
+          'product_name': 'Water',
+          'nutriments': {'energy-kcal_100g': 0},
+        },
+      ],
+    });
+    expect(out.length, 1);
+    expect(out[0].code, 'c');
+    expect(out[0].calories100g, 0);
+  });
+
   test('parseOffSearch returns [] on malformed input', () {
     expect(parseOffSearch(null), isEmpty);
     expect(parseOffSearch(const {}), isEmpty);

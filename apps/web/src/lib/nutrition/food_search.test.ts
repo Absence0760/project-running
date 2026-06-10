@@ -55,6 +55,23 @@ test('parseOffSearch tolerates string-typed nutriment numbers', () => {
 	assert.equal(out[0].per100g.proteinG, 10);
 });
 
+test('parseOffSearch drops a product whose calorie field is a blank string', () => {
+	// Open Food Facts very commonly returns "" for a nutriment it has no value
+	// for. Number('') === 0, so without a blank-guard this kept the product as a
+	// phantom 0-kcal entry — contradicting the "drops … no calorie figure" contract.
+	const out = parseOffSearch({
+		products: [
+			{ code: 'a', product_name: 'Blank Energy', nutriments: { 'energy-kcal_100g': '' } },
+			{ code: 'b', product_name: 'Whitespace Energy', nutriments: { 'energy-kcal_100g': '   ' } },
+			// a genuine numeric 0 (e.g. water) is loggable and must be KEPT
+			{ code: 'c', product_name: 'Water', nutriments: { 'energy-kcal_100g': 0 } },
+		],
+	});
+	assert.equal(out.length, 1);
+	assert.equal(out[0].code, 'c');
+	assert.equal(out[0].per100g.calories, 0);
+});
+
 test('parseOffSearch returns [] on malformed input', () => {
 	assert.deepEqual(parseOffSearch(null), []);
 	assert.deepEqual(parseOffSearch({}), []);

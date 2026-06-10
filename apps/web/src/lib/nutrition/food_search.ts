@@ -33,7 +33,19 @@ export type Fetcher = (url: string) => Promise<Response>;
 const SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
 
 function num(v: unknown): number | null {
-	const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN;
+	// Number('') and Number('   ') both coerce to 0, so a blank Open Food Facts
+	// nutriment field (very common upstream) would otherwise read as a real 0 —
+	// keeping an unloggable product as a phantom 0-kcal row. Treat blank as missing,
+	// matching the Dart twin's double.tryParse('') === null.
+	let n: number;
+	if (typeof v === 'string') {
+		if (v.trim() === '') return null;
+		n = Number(v);
+	} else if (typeof v === 'number') {
+		n = v;
+	} else {
+		return null;
+	}
 	return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
