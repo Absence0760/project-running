@@ -19,6 +19,7 @@
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
 	let hasMore = $state(true);
+	let searchError = $state(false);
 	let query = $state('');
 	let distanceFilter = $state<string>('any');
 	let surfaceFilter = $state<string>('any');
@@ -83,18 +84,30 @@
 
 	async function search() {
 		loading = true;
-		routes = await searchPublicRoutes(searchOptions(0));
-		hasMore = routes.length >= PAGE_SIZE;
-		loading = false;
+		try {
+			routes = await searchPublicRoutes(searchOptions(0));
+			hasMore = routes.length >= PAGE_SIZE;
+			searchError = false;
+		} catch (e) {
+			searchError = true;
+			showToast(t('routeExplorer.searchError', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			loading = false;
+		}
 	}
 
 	async function loadMore() {
 		if (loading || !hasMore) return;
 		loading = true;
-		const more = await searchPublicRoutes(searchOptions(routes.length));
-		routes = [...routes, ...more];
-		hasMore = more.length >= PAGE_SIZE;
-		loading = false;
+		try {
+			const more = await searchPublicRoutes(searchOptions(routes.length));
+			routes = [...routes, ...more];
+			hasMore = more.length >= PAGE_SIZE;
+		} catch (e) {
+			showToast(t('routeExplorer.searchError', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			loading = false;
+		}
 	}
 
 	function toggleTag(tag: string) {
@@ -267,7 +280,17 @@
 	{/if}
 	{/if}
 
-	{#if routes.length === 0 && !loading}
+	{#if searchError && routes.length === 0}
+		<div class="empty-card">
+			<span class="material-symbols empty-icon" aria-hidden="true">error_outline</span>
+			<h3>{t('routeExplorer.searchErrorTitle')}</h3>
+			<div class="empty-actions">
+				<button class="btn btn-primary" onclick={search}>{t('routeExplorer.searchErrorRetry')}</button>
+			</div>
+		</div>
+	{/if}
+
+	{#if routes.length === 0 && !loading && !searchError}
 		<div class="empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">explore</span>
 			<h3>{query ? t('routeExplorer.emptyNoMatch') : t('routeExplorer.emptyNone')}</h3>

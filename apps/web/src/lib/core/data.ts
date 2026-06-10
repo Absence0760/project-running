@@ -1007,8 +1007,12 @@ export async function searchPublicRoutes(options?: {
 		p_limit: limit,
 		p_offset: offset,
 	});
-	if (error || !data) return [];
-	return data as Route[];
+	// Throw on error rather than collapsing to []: the sole caller
+	// (RouteExplorer) needs to tell a genuine load failure apart from a
+	// legitimately empty result so it can show a retry affordance instead
+	// of a misleading "no matches" empty state.
+	if (error) throw error;
+	return (data ?? []) as Route[];
 }
 
 /// The set of tags currently used across any public route, ordered by
