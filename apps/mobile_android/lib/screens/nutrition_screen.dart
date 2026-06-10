@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart' show FoodEntry;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../exercise_calories.dart';
 import '../food_search.dart' show FoodMacros;
 import '../hydration.dart';
 import '../l10n/date_format.dart';
@@ -27,8 +28,9 @@ import '../widgets/nutrition_log_sheet.dart';
 /// Replaces the former hard-coded `moderate` / `maintain` defaults.
 Future<NutritionTargets?> loadNutritionTargets(
   ApiClient api,
-  SettingsService? settings,
-) async {
+  SettingsService? settings, {
+  double exerciseKcal = 0,
+}) async {
   try {
     final profile = await api.fetchMyProfile();
     final weightKg = await api.fetchLatestBodyWeightKg();
@@ -44,6 +46,7 @@ Future<NutritionTargets?> loadNutritionTargets(
               'moderate',
       goal: settings?.effective<String>(SettingsKeys.nutritionGoal) ??
           'maintain',
+      exerciseKcal: exerciseKcal,
     ));
   } catch (_) {
     return null;
@@ -147,8 +150,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
       await widget.store.replaceFromServer([for (final r in fresh) r.toJson()]);
       if (widget.store.hasPending) await widget.store.syncWithServer(api);
       _weightKg = await api.fetchLatestBodyWeightKg();
-      _exerciseMinutes = await _todayExerciseMinutes(api);
-      _targets = await loadNutritionTargets(api, widget.settingsSync?.service);
+      final exercise = await _todayExercise(api, _weightKg);
+      _exerciseMinutes = exercise.minutes;
+      _targets = await loadNutritionTargets(
+        api,
+        widget.settingsSync?.service,
+        exerciseKcal: exercise.kcal.toDouble(),
+      );
       _isOnline = true;
     } catch (e) {
       _isOnline = false;
@@ -158,24 +166,42 @@ class _NutritionScreenState extends State<NutritionScreen> {
     }
   }
 
-  /// Sum today's run + gym session durations into whole minutes — the
-  /// hydration goal's exercise add. Best-effort; failures leave it at 0.
-  Future<int> _todayExerciseMinutes(ApiClient api) async {
+  /// Today's run + gym exercise reduced to (a) whole active minutes for the
+  /// hydration goal's sweat-replacement add and (b) estimated burned kcal for
+  /// the dynamic-TDEE "base + exercise" calorie goal (decisions §134). Both
+  /// best-effort; a failure leaves them at 0 so the goal stays base-only.
+  Future<({int minutes, int kcal})> _todayExercise(
+    ApiClient api,
+    double? weightKg,
+  ) async {
     try {
       final activities = await api.fetchActivities(limit: 50);
       final start = _todayStart;
       final end = _tomorrow;
       var seconds = 0.0;
+      final runs = <RunForCalories>[];
+      final gym = <GymSessionForCalories>[];
       for (final a in activities) {
         if (a.kind != 'run' && a.kind != 'gym') continue;
         final at = a.startedAt.toLocal();
         if (at.isBefore(start) || !at.isBefore(end)) continue;
-        seconds += (a.summary['duration_s'] as num?)?.toDouble() ?? 0;
+        final durationS = (a.summary['duration_s'] as num?)?.toDouble();
+        seconds += durationS ?? 0;
+        if (a.kind == 'run') {
+          runs.add(RunForCalories((a.summary['distance_m'] as num?)?.toDouble()));
+        } else {
+          gym.add(GymSessionForCalories(durationS));
+        }
       }
-      return (seconds / 60).round();
+      final kcal = exerciseCaloriesForDay(
+        runs: runs,
+        gymSessions: gym,
+        weightKg: weightKg,
+      );
+      return (minutes: (seconds / 60).round(), kcal: kcal);
     } catch (e) {
-      debugPrint('nutrition_screen: exercise-minutes fetch failed: $e');
-      return 0;
+      debugPrint('nutrition_screen: exercise fetch failed: $e');
+      return (minutes: 0, kcal: 0);
     }
   }
 
@@ -298,6 +324,27 @@ class _NutritionScreenState extends State<NutritionScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [for (final r in rings) _ringWidget(theme, r)],
             ),
+            if (_targets != null && _targets!.exerciseKcal > 0) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.local_fire_department,
+                      size: 14, color: theme.colorScheme.outline),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      l10n.nutritionGoalBreakdown(
+                        _targets!.baseCalories,
+                        _targets!.exerciseKcal,
+                      ),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.outline),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (_targets == null) ...[
               const SizedBox(height: 12),
               Text(

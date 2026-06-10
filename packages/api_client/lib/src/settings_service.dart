@@ -65,6 +65,12 @@ class SettingsKeys {
   /// `'lose' | 'maintain' (default) | 'gain'` (−500 / 0 / +300 kcal). Same
   /// placement rationale as [nutritionActivityLevel]. Phase 4 nutrition.
   static const nutritionGoal = 'nutrition_goal';
+  /// Opt-out (default false) that drops logged gym sessions from the run
+  /// fitness/fatigue/form (CTL/ATL/TSB) curve, so a runner who wants a pure
+  /// run-only readiness picture isn't dragged down by lifting. The gym cards
+  /// + lift→load math elsewhere are unaffected; only the readiness series
+  /// drops lifts. Web twin: `exclude_gym_from_readiness` (decisions §134).
+  static const excludeGymFromReadiness = 'exclude_gym_from_readiness';
 
   // Device (D)
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';

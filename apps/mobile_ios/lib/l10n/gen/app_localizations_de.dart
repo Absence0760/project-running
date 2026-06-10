@@ -611,19 +611,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get safetyUnknownRunner => 'Ein Threkir-Läufer';
 
   @override
-  String get activitySedentary => 'Kaum aktiv';
+  String get activitySedentary => 'Überwiegend sitzend (Bürojob)';
 
   @override
-  String get activityLight => 'Leicht aktiv';
+  String get activityLight => 'Leicht aktiv (wenig Alltagsbewegung)';
 
   @override
-  String get activityModerate => 'Mäßig aktiv';
+  String get activityModerate => 'Mäßig aktiv (oft auf den Beinen)';
 
   @override
-  String get activityVeryActive => 'Sehr aktiv';
+  String get activityVeryActive => 'Sehr aktiver Tag (körperliche Arbeit)';
 
   @override
-  String get activityExtraActive => 'Extrem aktiv';
+  String get activityExtraActive => 'Extrem aktiv (schwere körperliche Arbeit)';
 
   @override
   String get goalLose => 'Abnehmen';
@@ -7127,6 +7127,27 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get nutritionGoalLine => 'Tagesziel';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Ziel $base + $exercise kcal heute verbrannt';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Aktuelle Gym-Einheiten fließen in deine Ermüdung ein.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'Gym-Belastung ist von deiner Lauf-Bereitschaft ausgenommen.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Gym-Belastung von der Lauf-Bereitschaft ausschließen';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Standardmäßig erhöhen Gym-Einheiten deine Ermüdung und senken deine Bereitschaft, wie ein Lauf. Aktiviere dies, um Fitness, Ermüdung und Form nur auf Läufen basieren zu lassen.';
 
   @override
   String get nutritionEmptyTitle => 'Heute noch nichts erfasst';

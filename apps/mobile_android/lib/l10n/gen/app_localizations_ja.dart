@@ -594,19 +594,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get safetyUnknownRunner => 'Threkir のランナー';
 
   @override
-  String get activitySedentary => 'ほとんど運動しない';
+  String get activitySedentary => 'ほとんど座っている（デスクワーク）';
 
   @override
-  String get activityLight => '軽い運動';
+  String get activityLight => '軽い活動（日常の動きが少ない）';
 
   @override
-  String get activityModerate => '中程度の運動';
+  String get activityModerate => '中程度の活動（よく立っている）';
 
   @override
-  String get activityVeryActive => '活発';
+  String get activityVeryActive => 'とても活動的な一日（肉体労働）';
 
   @override
-  String get activityExtraActive => '非常に活発';
+  String get activityExtraActive => '非常に活動的（激しい肉体労働）';
 
   @override
   String get goalLose => '減量';
@@ -6735,6 +6735,24 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get nutritionGoalLine => '1日の目標';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return '目標 $base + 本日消費 $exercise kcal';
+  }
+
+  @override
+  String get dashGymReadinessIncluded => '最近のジムのセッションは疲労に反映されています。';
+
+  @override
+  String get dashGymReadinessExcluded => 'ジムの負荷はランの準備度から除外されています。';
+
+  @override
+  String get prefsExcludeGymFromReadiness => 'ジムの負荷をランの準備度から除外する';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'デフォルトでは、ジムのセッションはランと同様に疲労を増やし準備度を下げます。フィットネス・疲労・フォームをランのみに基づかせるにはこれをオンにしてください。';
 
   @override
   String get nutritionEmptyTitle => '今日はまだ何も記録していません';

@@ -348,15 +348,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return liftsFromSetHistory(flat);
   }
 
+  /// Opt-out (Settings → Preferences): a runner who wants a pure run-only
+  /// readiness curve drops gym load from the fitness/fatigue/form math. The
+  /// gym cards + lift→load math elsewhere are unaffected.
+  bool get _excludeGymFromReadiness =>
+      widget.settingsSync?.service
+          ?.effective<bool>(SettingsKeys.excludeGymFromReadiness) ==
+      true;
+
+  /// Lifts that actually feed the readiness series — empty when the opt-out is
+  /// on, so the curve is the byte-for-byte run-only series.
+  List<LiftForLoad> _readinessLifts() =>
+      _excludeGymFromReadiness ? const [] : _liftsForLoad();
+
+  /// True when a logged lift lands inside the ~fatigue-relevant window, so the
+  /// "factored in" / "excluded" note only shows when gym is actually relevant.
+  bool _hasRecentLift(DateTime now) {
+    final cutoff = now.toUtc().subtract(const Duration(days: 14));
+    for (final w in widget.gymStore.workouts) {
+      if (w.isTombstone) continue;
+      final at = w.startedAt;
+      if (at != null && !at.toUtc().isBefore(cutoff)) return true;
+    }
+    return false;
+  }
+
   Widget _buildTrainingLoadChart(List<Run> runs, DateTime now) {
     final hrPrefs = _hrPrefs();
-    final lifts = _liftsForLoad();
+    final lifts = _readinessLifts();
     final series = computeTrainingLoadSeries(runs,
         prefs: hrPrefs, endDate: now, lifts: lifts);
     return TrainingLoadChart(
       points: series,
       hasHr: hasTrimpSignal(runs, hrPrefs),
       includesLifts: series.any((p) => p.liftStress > 0),
+    );
+  }
+
+  Widget _gymReadinessNote(ThemeData theme, AppLocalizations l10n) {
+    final excluded = _excludeGymFromReadiness;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(Icons.fitness_center,
+              size: 16, color: theme.colorScheme.outline),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              excluded
+                  ? l10n.dashGymReadinessExcluded
+                  : l10n.dashGymReadinessIncluded,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -672,6 +720,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   now: now,
                 ),
                 _buildTrainingLoadChart(runs, now),
+                if (_hasRecentLift(now)) _gymReadinessNote(theme, l10n),
                 // Recent lifts trend list — self-hides for a pure runner (empty
                 // gym store), mirrors web /dashboard's recent-lifts card.
                 if (widget.gymStore.workouts.isNotEmpty) ...[

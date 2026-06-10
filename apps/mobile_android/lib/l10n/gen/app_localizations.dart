@@ -1088,31 +1088,31 @@ abstract class AppLocalizations {
   /// Nutrition activity level: little exercise
   ///
   /// In en, this message translates to:
-  /// **'Sedentary'**
+  /// **'Mostly sitting (desk job)'**
   String get activitySedentary;
 
   /// Nutrition activity level: 1-3 days/week
   ///
   /// In en, this message translates to:
-  /// **'Lightly active'**
+  /// **'Lightly active (light daily movement)'**
   String get activityLight;
 
   /// Nutrition activity level: 3-5 days/week
   ///
   /// In en, this message translates to:
-  /// **'Moderately active'**
+  /// **'Moderately active (on your feet often)'**
   String get activityModerate;
 
   /// Nutrition activity level: 6-7 days/week
   ///
   /// In en, this message translates to:
-  /// **'Very active'**
+  /// **'Very active day (physical job)'**
   String get activityVeryActive;
 
   /// Nutrition activity level: training twice a day
   ///
   /// In en, this message translates to:
-  /// **'Extra active'**
+  /// **'Extremely active (hard physical labour)'**
   String get activityExtraActive;
 
   /// Nutrition weight goal: calorie deficit
@@ -11780,6 +11780,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Daily goal'**
   String get nutritionGoalLine;
+
+  /// Calorie goal breakdown: base goal + exercise kcal added today
+  ///
+  /// In en, this message translates to:
+  /// **'Goal {base} + {exercise} kcal burned today'**
+  String nutritionGoalBreakdown(int base, int exercise);
+
+  /// No description provided for @dashGymReadinessIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent gym sessions are factored into your fatigue.'**
+  String get dashGymReadinessIncluded;
+
+  /// No description provided for @dashGymReadinessExcluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Gym load is excluded from your run readiness.'**
+  String get dashGymReadinessExcluded;
+
+  /// No description provided for @prefsExcludeGymFromReadiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude gym load from run readiness'**
+  String get prefsExcludeGymFromReadiness;
+
+  /// No description provided for @prefsExcludeGymFromReadinessHint.
+  ///
+  /// In en, this message translates to:
+  /// **'By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.'**
+  String get prefsExcludeGymFromReadinessHint;
 
   /// No description provided for @nutritionEmptyTitle.
   ///

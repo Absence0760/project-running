@@ -613,19 +613,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get safetyUnknownRunner => 'Un coureur Threkir';
 
   @override
-  String get activitySedentary => 'Sédentaire';
+  String get activitySedentary => 'Surtout assis (travail de bureau)';
 
   @override
-  String get activityLight => 'Légèrement actif';
+  String get activityLight => 'Légèrement actif (peu de mouvement quotidien)';
 
   @override
-  String get activityModerate => 'Modérément actif';
+  String get activityModerate => 'Modérément actif (souvent debout)';
 
   @override
-  String get activityVeryActive => 'Très actif';
+  String get activityVeryActive => 'Journée très active (travail physique)';
 
   @override
-  String get activityExtraActive => 'Extrêmement actif';
+  String get activityExtraActive =>
+      'Extrêmement actif (travail physique intense)';
 
   @override
   String get goalLose => 'Perdre du poids';
@@ -7140,6 +7141,27 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get nutritionGoalLine => 'Objectif quotidien';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Objectif $base + $exercise kcal brûlées aujourd\'hui';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Tes séances de muscu récentes sont prises en compte dans ta fatigue.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'La charge de muscu est exclue de ta forme à la course.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Exclure la charge de muscu de la forme à la course';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Par défaut, les séances de muscu augmentent ta fatigue et réduisent ta forme, comme une course. Active ceci pour que ta forme, ta fatigue et ta fraîcheur ne reposent que sur les courses.';
 
   @override
   String get nutritionEmptyTitle => 'Rien d\'enregistré aujourd\'hui';

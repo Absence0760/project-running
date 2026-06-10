@@ -649,6 +649,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     await _putUniversal(SettingsKeys.discoverableInSearch, !current);
   }
 
+  Future<void> _editExcludeGymFromReadiness() async {
+    final current =
+        _bagValue<bool>(SettingsKeys.excludeGymFromReadiness) ?? false;
+    await _putUniversal(SettingsKeys.excludeGymFromReadiness, !current);
+  }
+
   Future<void> _editDateOfBirth() async {
     final raw = _bagValue<String>(SettingsKeys.dateOfBirth);
     final current = raw != null ? DateTime.tryParse(raw) : null;
@@ -1076,6 +1082,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editWeekStartDay,
+            ),
+            SwitchListTile(
+              title: Text(l10n.prefsExcludeGymFromReadiness),
+              subtitle: Text(l10n.prefsExcludeGymFromReadinessHint),
+              value:
+                  _bagValue<bool>(SettingsKeys.excludeGymFromReadiness) ?? false,
+              onChanged: _bagReady
+                  ? (_) => _editExcludeGymFromReadiness()
+                  : null,
             ),
 
             _sectionLabel(l10n.prefsSectionPrivacySharing),

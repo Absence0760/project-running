@@ -610,19 +610,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetyUnknownRunner => 'Um corredor do Threkir';
 
   @override
-  String get activitySedentary => 'Sedentário';
+  String get activitySedentary =>
+      'Maior parte sentado (trabalho de escritório)';
 
   @override
-  String get activityLight => 'Levemente ativo';
+  String get activityLight => 'Levemente ativo (pouca movimentação diária)';
 
   @override
-  String get activityModerate => 'Moderadamente ativo';
+  String get activityModerate => 'Moderadamente ativo (muito tempo em pé)';
 
   @override
-  String get activityVeryActive => 'Muito ativo';
+  String get activityVeryActive => 'Dia muito ativo (trabalho físico)';
 
   @override
-  String get activityExtraActive => 'Extremamente ativo';
+  String get activityExtraActive =>
+      'Extremamente ativo (trabalho físico pesado)';
 
   @override
   String get goalLose => 'Perder peso';
@@ -7120,6 +7122,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionGoalLine => 'Meta diária';
 
   @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas hoje';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'As tuas sessões recentes de ginásio entram na tua fadiga.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'A carga do ginásio fica de fora do teu preparo para correr.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Excluir a carga do ginásio do preparo para correr';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Por padrão, as sessões de ginásio aumentam a tua fadiga e reduzem o teu preparo, como uma corrida. Ativa isto para que o teu condicionamento, fadiga e forma se baseiem apenas nas corridas.';
+
+  @override
   String get nutritionEmptyTitle => 'Nada registrado hoje';
 
   @override
@@ -7786,19 +7809,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get safetyUnknownRunner => 'Um corredor do Threkir';
 
   @override
-  String get activitySedentary => 'Sedentário';
+  String get activitySedentary =>
+      'Maior parte sentado (trabalho de escritório)';
 
   @override
-  String get activityLight => 'Levemente ativo';
+  String get activityLight => 'Levemente ativo (pouca movimentação diária)';
 
   @override
-  String get activityModerate => 'Moderadamente ativo';
+  String get activityModerate => 'Moderadamente ativo (muito tempo em pé)';
 
   @override
-  String get activityVeryActive => 'Muito ativo';
+  String get activityVeryActive => 'Dia muito ativo (trabalho físico)';
 
   @override
-  String get activityExtraActive => 'Extremamente ativo';
+  String get activityExtraActive =>
+      'Extremamente ativo (trabalho físico pesado)';
 
   @override
   String get goalLose => 'Perder peso';
@@ -14294,6 +14319,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionGoalLine => 'Meta diária';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas hoje';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Suas sessões recentes de musculação entram na sua fadiga.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'A carga da musculação fica de fora do seu preparo para correr.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Excluir a carga da musculação do preparo para correr';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Por padrão, as sessões de musculação aumentam sua fadiga e reduzem seu preparo, como uma corrida. Ative isto para que seu condicionamento, fadiga e forma se baseiem apenas nas corridas.';
 
   @override
   String get nutritionEmptyTitle => 'Nada registrado hoje';

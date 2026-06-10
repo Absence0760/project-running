@@ -612,19 +612,20 @@ class AppLocalizationsEs extends AppLocalizations {
   String get safetyUnknownRunner => 'Una persona de Threkir';
 
   @override
-  String get activitySedentary => 'Sedentario';
+  String get activitySedentary => 'Mayormente sentado (trabajo de oficina)';
 
   @override
-  String get activityLight => 'Poco activo';
+  String get activityLight => 'Ligeramente activo (poco movimiento diario)';
 
   @override
-  String get activityModerate => 'Moderadamente activo';
+  String get activityModerate => 'Moderadamente activo (a menudo de pie)';
 
   @override
-  String get activityVeryActive => 'Muy activo';
+  String get activityVeryActive => 'Día muy activo (trabajo físico)';
 
   @override
-  String get activityExtraActive => 'Extremadamente activo';
+  String get activityExtraActive =>
+      'Extremadamente activo (trabajo físico intenso)';
 
   @override
   String get goalLose => 'Perder peso';
@@ -7122,6 +7123,27 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get nutritionGoalLine => 'Objetivo diario';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal quemadas hoy';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Tus sesiones de gimnasio recientes se incluyen en tu fatiga.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'La carga del gimnasio se excluye de tu preparación para correr.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Excluir la carga del gimnasio de la preparación para correr';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'De forma predeterminada, las sesiones de gimnasio aumentan tu fatiga y reducen tu preparación, igual que una carrera. Actívalo para que tu forma, fatiga y frescura se basen solo en las carreras.';
 
   @override
   String get nutritionEmptyTitle => 'Aún no has registrado comida hoy';

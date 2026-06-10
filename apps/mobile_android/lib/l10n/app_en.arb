@@ -447,23 +447,23 @@
   "@safetyUnknownRunner": {
     "description": "Fallback name when an incoming request's owner has no display name"
   },
-  "activitySedentary": "Sedentary",
+  "activitySedentary": "Mostly sitting (desk job)",
   "@activitySedentary": {
     "description": "Nutrition activity level: little exercise"
   },
-  "activityLight": "Lightly active",
+  "activityLight": "Lightly active (light daily movement)",
   "@activityLight": {
     "description": "Nutrition activity level: 1-3 days/week"
   },
-  "activityModerate": "Moderately active",
+  "activityModerate": "Moderately active (on your feet often)",
   "@activityModerate": {
     "description": "Nutrition activity level: 3-5 days/week"
   },
-  "activityVeryActive": "Very active",
+  "activityVeryActive": "Very active day (physical job)",
   "@activityVeryActive": {
     "description": "Nutrition activity level: 6-7 days/week"
   },
-  "activityExtraActive": "Extra active",
+  "activityExtraActive": "Extremely active (hard physical labour)",
   "@activityExtraActive": {
     "description": "Nutrition activity level: training twice a day"
   },
@@ -8864,6 +8864,12 @@
   "nutritionWeekOverGoal": "{n} over goal/day",
   "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
   "nutritionGoalLine": "Daily goal",
+  "nutritionGoalBreakdown": "Goal {base} + {exercise} kcal burned today",
+  "dashGymReadinessIncluded": "Recent gym sessions are factored into your fatigue.",
+  "dashGymReadinessExcluded": "Gym load is excluded from your run readiness.",
+  "prefsExcludeGymFromReadiness": "Exclude gym load from run readiness",
+  "prefsExcludeGymFromReadinessHint": "By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.",
+  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
   "nutritionEmptyTitle": "No food logged today",
   "nutritionEmptyBody": "Log a meal to track your calories and macros.",
   "nutritionSlotBreakfast": "Breakfast",

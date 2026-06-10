@@ -607,19 +607,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyUnknownRunner => 'A Threkir runner';
 
   @override
-  String get activitySedentary => 'Sedentary';
+  String get activitySedentary => 'Mostly sitting (desk job)';
 
   @override
-  String get activityLight => 'Lightly active';
+  String get activityLight => 'Lightly active (light daily movement)';
 
   @override
-  String get activityModerate => 'Moderately active';
+  String get activityModerate => 'Moderately active (on your feet often)';
 
   @override
-  String get activityVeryActive => 'Very active';
+  String get activityVeryActive => 'Very active day (physical job)';
 
   @override
-  String get activityExtraActive => 'Extra active';
+  String get activityExtraActive => 'Extremely active (hard physical labour)';
 
   @override
   String get goalLose => 'Lose weight';
@@ -7050,6 +7050,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nutritionGoalLine => 'Daily goal';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Goal $base + $exercise kcal burned today';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Recent gym sessions are factored into your fatigue.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'Gym load is excluded from your run readiness.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Exclude gym load from run readiness';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.';
 
   @override
   String get nutritionEmptyTitle => 'No food logged today';
