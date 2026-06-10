@@ -561,6 +561,171 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await expect(genBtn).not.toHaveText(targetBefore);
 	});
 
+	test('over-target shortfall: warns "longer than" + the action retargets upward', async ({
+		page,
+	}) => {
+		// Mirror of the "shorter than" shortfall, for the opposite branch:
+		// a road network that overshoots. Return a loop 40% LONGER than the
+		// target (well outside the ±15% accept band). The warning must read
+		// "longer than" and the actionable button must retarget UP to the
+		// achievable distance.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+			};
+			const coordinates = loopPolyline(body.start, body.targetDistanceM * 1.4);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ coordinates, distanceM }),
+			});
+		});
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		const result = await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		expect(result.ok).toBe(true);
+		// Sanity: the rendered loop really is over target so "longer" is correct.
+		expect(result.totalDistanceM).toBeGreaterThan(5000 * 1.15);
+
+		const banner = page.locator('.routing-error.routing-warning').first();
+		await expect(banner).toBeVisible({ timeout: 5_000 });
+		await expect(banner).toContainText(/longer than/i);
+
+		const useBtn = page.getByRole('button', { name: /instead/i });
+		await expect(useBtn).toBeVisible();
+		await useBtn.click();
+		await expect(banner).toBeHidden();
+		await expect(useBtn).toBeHidden();
+	});
+
+	test('shortfall action retargets to the ACHIEVED distance (numeric, not just "changed")', async ({
+		page,
+	}) => {
+		// The existing shortfall test only asserts the Generate label
+		// changed. Pin the math: after "use X instead", the new target must
+		// equal the drawn route's distance (the sidebar stat) — that's the
+		// entire point of the affordance. A unit/rounding bug (km vs metres,
+		// mi vs km) would surface as a large mismatch here.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+			};
+			const coordinates = loopPolyline(body.start, body.targetDistanceM * 0.72);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ coordinates, distanceM }),
+			});
+		});
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+
+		// The drawn-route distance shown in the sidebar stat (user's unit).
+		const statValue = page.locator('.builder-stat-value').first();
+		const statLabel = page.locator('.builder-stat-label').first();
+		const drawn = parseFloat((await statValue.textContent()) ?? '0');
+		const unit = ((await statLabel.textContent()) ?? '').trim();
+
+		await page.getByRole('button', { name: /instead/i }).click();
+
+		// The Generate button label now carries the retargeted distance.
+		const genBtn = page.getByRole('button', { name: /Generate .* (loop|route)/i });
+		const label = (await genBtn.textContent()) ?? '';
+		const m = label.match(/([\d.]+)\s*(mi|km)/);
+		expect(m, `Generate label "${label}" should carry a distance`).not.toBeNull();
+		const retargeted = parseFloat(m![1]);
+		expect(m![2]).toBe(unit);
+		// New target == drawn distance, within the 100 m quantization +
+		// 1-decimal display rounding of the retarget (≈ 0.15 of either unit).
+		expect(Math.abs(retargeted - drawn)).toBeLessThan(0.15);
+	});
+
+	test('dismissing the shortfall banner clears it WITHOUT changing the target', async ({
+		page,
+	}) => {
+		// The banner's X (dismiss) must drop both the warning and the
+		// shortfall action, but — unlike "use X instead" — leave the
+		// target untouched so the user can re-Generate at the same distance.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+			};
+			const coordinates = loopPolyline(body.start, body.targetDistanceM * 0.72);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ coordinates, distanceM }),
+			});
+		});
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		const genBtn = page.getByRole('button', { name: /Generate .* (loop|route)/i });
+		const targetBefore = ((await genBtn.textContent()) ?? '').trim();
+
+		await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		const banner = page.locator('.routing-error.routing-warning').first();
+		await expect(banner).toBeVisible({ timeout: 5_000 });
+
+		// Dismiss via the X — NOT the "use X instead" action.
+		await page.getByRole('button', { name: /dismiss/i }).click();
+		await expect(banner).toBeHidden();
+		await expect(page.getByRole('button', { name: /instead/i })).toBeHidden();
+		// Target is unchanged.
+		await expect(genBtn).toHaveText(targetBefore);
+	});
+
+	test('Generate button label switches from "loop" to "route" once an end point is set', async ({
+		page,
+	}) => {
+		// handleGenerateLoop passes the page's endPoint through to the
+		// builder; the button copy must follow — "Generate X loop" with no
+		// end (round-trip), "Generate X route" once a distinct end is set
+		// (point-to-point). Drive page state via the dev hook.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await expect(page.getByRole('button', { name: /Generate .* loop/i })).toBeVisible();
+
+		await page.evaluate(() => {
+			(
+				window as unknown as {
+					__routeBuilderPage: {
+						setEndPoint: (p: { lat: number; lng: number } | null) => void;
+					};
+				}
+			).__routeBuilderPage.setEndPoint({ lat: 37.69, lng: -77.36 });
+		});
+
+		await expect(page.getByRole('button', { name: /Generate .* route/i })).toBeVisible();
+		await expect(page.getByRole('button', { name: /Generate .* loop/i })).toHaveCount(0);
+	});
+
 	test('endAt within NEAR_POINT_M of start collapses to a true loop (close == start)', async ({
 		page,
 	}) => {
