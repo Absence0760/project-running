@@ -14,8 +14,16 @@
 		);
 
 		if (authError) {
-			error = authError.message;
-			return;
+			// The client's detectSessionInUrl bootstrap can win a race with
+			// this explicit exchange — it consumes the code + PKCE verifier
+			// first, leaving our call to fail with "code verifier not found"
+			// even though a valid session now exists. Treat that as success:
+			// only surface the error when no session was established.
+			const { data: { session } } = await supabase.auth.getSession();
+			if (!session) {
+				error = authError.message;
+				return;
+			}
 		}
 
 		// OAuth-path age + terms capture (audit/gdpr Critical). The
