@@ -1803,11 +1803,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           ? 1.0 - ((sec - fastestSec) / secRange) * 0.6
           : 0.7;
 
+      // The bar carries white pace text, so every fill must clear WCAG AA
+      // against white. The old emerald-400 / red-400 / primary@0.5 fills
+      // were all too light (~1.8–2.3:1). Length already encodes fast/slow;
+      // these darker shades keep the green/red cue and read at any size.
       final barColor = isFastest
-          ? const Color(0xFF34D399)
+          ? const Color(0xFF047857) // emerald-700, ~5.4:1 on white
           : isSlowest
-              ? const Color(0xFFF87171)
-              : theme.colorScheme.primary.withOpacity(0.5);
+              ? const Color(0xFFB91C1C) // red-700, ~6.4:1 on white
+              : theme.colorScheme.primary;
 
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
@@ -1846,7 +1850,6 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
-                        fontSize: 11,
                       ),
                     ),
                   ),
@@ -2103,12 +2106,18 @@ class _StatSmall extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           value,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
         ),
         Text(
           label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.outline,
             fontSize: 10,
@@ -2450,8 +2459,11 @@ class _ElevationPacePainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
 
-    // Min/max labels.
-    final labelStyle = TextStyle(color: theme.dividerColor, fontSize: 10);
+    // Min/max labels. `dividerColor` (~#E0E0E0 in the light theme) on the
+    // chart's surface fails WCAG contrast — use the secondary-text token,
+    // which is contrast-checked against the surface in both themes.
+    final labelStyle =
+        TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 10);
     final maxText = TextPainter(
       text: TextSpan(text: '${maxEle.round()}m', style: labelStyle),
       textDirection: TextDirection.ltr,
