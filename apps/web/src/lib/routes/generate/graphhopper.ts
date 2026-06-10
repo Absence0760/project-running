@@ -60,26 +60,22 @@ export interface RoundTripRequest {
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-/// GraphHopper's round_trip systematically returns loops SHORTER than the
-/// requested `round_trip.distance` — it places via-points on a circle of the
-/// requested radius and the road path between them cuts the chord. Measured
-/// against the foot profile across 2-12 km and many seeds, returned/requested
-/// clustered around a 0.84 median (a ~16% undershoot). So we ask the engine for
-/// target × this factor; the returned distances then centre on the user's real
-/// target. This nudges only the REQUEST — candidate.distanceM stays the actual
-/// returned length and selection still compares against the un-inflated target,
-/// so an over/undershooting seed is judged honestly and the ±15% warning band
-/// fires on the real result. Tunable; re-measure if the profile or engine
-/// version changes.
-export const ROUND_TRIP_DISTANCE_INFLATION = 1.18;
-
+/// We request `round_trip.distance` at the RAW target distance — no inflation.
+/// An earlier ×1.18 factor "centred" results in DENSE road networks (where
+/// round_trip undershoots, placing via-points on a circle whose chord cuts the
+/// path), but it badly OVERSHOT in sparse rural networks (which already
+/// overrun): a 5 km target inflated to 5.9 km came back as 9-13 km. Re-measured
+/// on the foot profile, requesting the raw target across DEFAULT_SEEDS seeds +
+/// closest-to-target selection (see ./select) lands ~5.0 km dense and ~5.2 km
+/// sparse for a 5 km ask, so the inflation is removed and selection does the
+/// centring. Re-measure if the profile or engine version changes.
 export function buildRoundTripUrl(req: RoundTripRequest): string {
 	const base = (req.baseUrl ?? '').replace(/\/+$/, '');
 	const params = new URLSearchParams({
 		profile: 'foot',
 		point: `${req.start.lat},${req.start.lng}`,
 		algorithm: 'round_trip',
-		'round_trip.distance': String(Math.round(req.targetDistanceM * ROUND_TRIP_DISTANCE_INFLATION)),
+		'round_trip.distance': String(Math.round(req.targetDistanceM)),
 		'round_trip.seed': String(req.seed),
 		points_encoded: 'false',
 		instructions: 'false',

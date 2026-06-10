@@ -6,11 +6,10 @@ import {
 	fetchRoundTrip,
 	GraphHopperError,
 	parseRoundTrip,
-	ROUND_TRIP_DISTANCE_INFLATION,
 	type Fetcher,
 } from './graphhopper';
 import { areaEfficiency, enclosedAreaM2, pickBestLoop } from './select';
-import { handleGenerate, parseGenerateRequest } from './handler';
+import { DEFAULT_SEEDS, handleGenerate, parseGenerateRequest } from './handler';
 
 const BASE = 'http://gh.local';
 
@@ -51,25 +50,20 @@ test('buildRoundTripUrl carries the round_trip params + foot profile', () => {
 	assert.equal(u.pathname, '/route');
 	assert.equal(u.searchParams.get('profile'), 'foot');
 	assert.equal(u.searchParams.get('algorithm'), 'round_trip');
-	// Requested distance is the target inflated to counter round_trip's
-	// systematic undershoot: round(5000.6 * 1.18) = 5901.
-	assert.equal(
-		u.searchParams.get('round_trip.distance'),
-		String(Math.round(5000.6 * ROUND_TRIP_DISTANCE_INFLATION)),
-	);
+	// Requested distance is the RAW target (no inflation): round(5000.6) = 5001.
+	assert.equal(u.searchParams.get('round_trip.distance'), '5001');
 	assert.equal(u.searchParams.get('round_trip.seed'), '3');
 	assert.equal(u.searchParams.get('point'), '40,-74');
 	assert.equal(u.searchParams.get('points_encoded'), 'false');
 });
 
-test('buildRoundTripUrl inflates the requested distance above the target', () => {
-	// round_trip undershoots, so the engine is always asked for MORE than the
-	// user's target. The factor must be > 1 or we systematically return short.
-	assert.ok(ROUND_TRIP_DISTANCE_INFLATION > 1);
+test('buildRoundTripUrl requests the raw target distance (no inflation)', () => {
+	// The old ×1.18 inflation overshot badly in sparse networks; closest-to-
+	// target selection now centres the result, so the engine is asked for exactly
+	// the target distance.
 	const url = buildRoundTripUrl({ baseUrl: BASE, start: { lat: 0, lng: 0 }, targetDistanceM: 10000, seed: 0 });
 	const asked = Number(new URL(url).searchParams.get('round_trip.distance'));
-	assert.equal(asked, Math.round(10000 * ROUND_TRIP_DISTANCE_INFLATION));
-	assert.ok(asked > 10000);
+	assert.equal(asked, 10000);
 });
 
 test('buildRoundTripUrl strips a trailing slash on the base', () => {
@@ -186,6 +180,16 @@ test('pickBestLoop prefers the rounder loop when distances tie', () => {
 	assert.equal(best, square);
 });
 
+test('pickBestLoop picks the closest-to-target when nothing is in-band', () => {
+	// Sparse start: every seed over/undershoots. Closeness must beat shape —
+	// a 6.9 km spur beats a perfectly round 9.2 km loop when 5 km was asked
+	// (both are outside the ±25% band, so the old "roundest wins" surfaced 9.2).
+	const farRound = { coordinates: squareLoop(0, 0, 0.0103), distanceM: 9200 };
+	const nearSpur = { coordinates: spurLoop(0, 0, 0.031), distanceM: 6900 };
+	const best = pickBestLoop([farRound, nearSpur], 5000);
+	assert.equal(best, nearSpur);
+});
+
 test('pickBestLoop returns null when no candidate is usable', () => {
 	assert.equal(pickBestLoop([], 5000), null);
 	assert.equal(pickBestLoop([{ coordinates: [[0, 0]], distanceM: 5000 }], 5000), null);
@@ -251,6 +255,18 @@ test('handleGenerate races N seeds and returns the best-shaped loop', async () =
 		const xs = res.body.coordinates.map((c) => c[0]);
 		assert.ok(Math.min(...xs) < 0); // square spans negative x; spur never does
 	}
+});
+
+test('handleGenerate defaults to DEFAULT_SEEDS when none requested', async () => {
+	let calls = 0;
+	const fetcher: Fetcher = async () => {
+		calls++;
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher });
+	assert.equal(res.status, 200);
+	assert.equal(DEFAULT_SEEDS, 8); // pin the raised default
+	assert.equal(calls, DEFAULT_SEEDS); // omitted `seeds` → one request per default seed
 });
 
 test('handleGenerate tolerates partial seed failures', async () => {

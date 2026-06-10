@@ -43,7 +43,11 @@ export type GenerateResult =
 	| { status: 200; body: { coordinates: [number, number][]; distanceM: number } }
 	| { status: 400 | 501 | 502; body: { error: string } };
 
-export const DEFAULT_SEEDS = 4;
+/// Race the full seed budget by default. round_trip's actual distance varies
+/// wildly per seed in sparse road networks (a 5 km ask can return anywhere from
+/// 4 to 14 km), so more seeds materially raises the odds of landing a loop near
+/// the target for closest-to-target selection to pick (see ./select).
+export const DEFAULT_SEEDS = 8;
 export const MAX_SEEDS = 8;
 
 function isValidCoord(p: { lat: number; lng: number }): boolean {
