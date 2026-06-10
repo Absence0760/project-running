@@ -5452,15 +5452,30 @@ export async function fetchGymWorkoutWithSets(
 	return { workout: workout as GymWorkout, sets: (sets ?? []) as GymSet[] };
 }
 
-/// Every set the user has logged, joined to its workout start time. Used by
-/// gym_prs to compute PR badges. Owner-scoped.
-export async function fetchGymSetHistory(): Promise<GymSetWithDate[]> {
+/// Sets the user has logged, joined to their workout start time. Owner-scoped.
+///
+/// `sinceDays` bounds the read to workouts started within the last N days —
+/// pass it on surfaces that only reason about recent training (e.g. the
+/// dashboard's 90-day training-load curve + its 5 most-recent-lift cards) so a
+/// multi-year lifter's whole gym_sets history (~15k rows) isn't shipped to the
+/// browser on every load. Surfaces that need all-time data (the per-workout PR
+/// badges on /gym + /gym/[id]) pass nothing and read the full set; all-time
+/// per-exercise bests go through fetchExerciseRecords (server-aggregated)
+/// instead. perf-hunt follow-up 2026-06-10.
+export async function fetchGymSetHistory(opts?: {
+	sinceDays?: number;
+}): Promise<GymSetWithDate[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
-	const { data, error } = await supabase
+	let query = supabase
 		.from(TABLES.gym_sets)
 		.select('workout_id, exercise_name, reps, weight_kg, rpe, gym_workouts!inner(started_at, user_id)')
 		.eq('gym_workouts.user_id', userId);
+	if (opts?.sinceDays != null) {
+		const since = new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString();
+		query = query.gte('gym_workouts.started_at', since);
+	}
+	const { data, error } = await query;
 	if (error) {
 		console.error('fetchGymSetHistory failed', error);
 		return [];

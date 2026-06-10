@@ -414,7 +414,11 @@
 		try {
 			[gymWorkouts, gymHistory] = await Promise.all([
 				fetchGymWorkouts(50),
-				fetchGymSetHistory(),
+				// The dashboard only reasons about recent training — the 90-day
+				// training-load curve and the 5 most-recent-lift cards. Bound the
+				// gym-set read to 180 days so a multi-year lifter's whole history
+				// isn't shipped here on every dashboard load. perf-hunt 2026-06-10.
+				fetchGymSetHistory({ sinceDays: 180 }),
 			]);
 		} catch (_) {
 			/* silent — gym cards + lift-load are additive */

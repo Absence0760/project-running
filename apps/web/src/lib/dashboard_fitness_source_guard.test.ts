@@ -90,3 +90,21 @@ test('readinessLifts honours the exclude_gym_from_readiness opt-out', () => {
 		'the opt-out must read the exclude_gym_from_readiness setting',
 	);
 });
+
+// perf-hunt 2026-06-10: the dashboard only needs recent gym data (the 90-day
+// training-load curve + the 5 most-recent-lift cards), so its gym-set read MUST
+// stay windowed — pulling the whole multi-year history (~15k rows for a 3-year
+// lifter) on every dashboard load is the unbounded read this guard prevents
+// from creeping back.
+test('dashboard reads gym history with a bounded window, not the whole history', () => {
+	assert.match(
+		SOURCE,
+		/fetchGymSetHistory\(\{\s*sinceDays:\s*\d+\s*\}\)/,
+		'the dashboard must pass a sinceDays window to fetchGymSetHistory',
+	);
+	assert.doesNotMatch(
+		SOURCE,
+		/fetchGymSetHistory\(\s*\)/,
+		'the dashboard must not call fetchGymSetHistory() unbounded',
+	);
+});
