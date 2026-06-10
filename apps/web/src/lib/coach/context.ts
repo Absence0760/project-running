@@ -27,89 +27,6 @@ export async function buildContext(
 	runsLimit: number,
 	profileRow: CoachProfileRow | null,
 ): Promise<CoachContext> {
-	const { data: plan } = planId
-		? await supabase.from('training_plans').select('*').eq('id', planId).maybeSingle()
-		: await supabase
-				.from('training_plans')
-				.select('*')
-				.eq('status', 'active')
-				.maybeSingle();
-
-	let weeks: unknown[] = [];
-	let workouts: unknown[] = [];
-	if (plan && typeof plan === 'object' && 'id' in plan) {
-		const weekRes = await supabase
-			.from('plan_weeks')
-			.select('*')
-			.eq('plan_id', (plan as { id: string }).id)
-			.order('week_index', { ascending: true });
-		weeks = weekRes.data ?? [];
-		if (weeks.length > 0) {
-			const ids = (weeks as { id: string }[]).map((w) => w.id);
-			const wkRes = await supabase
-				.from('plan_workouts')
-				.select('*')
-				.in('week_id', ids)
-				.order('scheduled_date', { ascending: true });
-			workouts = wkRes.data ?? [];
-		}
-	}
-
-	const { data: rawRecentRuns } = await supabase
-		.from(TABLES.runs)
-		.select('id, started_at, distance_m, duration_s, metadata, route_id')
-		.order('started_at', { ascending: false })
-		.limit(runsLimit);
-
-	// Tier-1 multi-modal coach context (docs/features/multi_modal.md §
-	// "Cross-modality touches"). The coach SEES recent lift sessions +
-	// a 7-day nutrition rollup and reasons about them — advisory, it
-	// never auto-mutates a plan. Both are BOUNDED so prompt size + per-
-	// call cost stay flat as history grows: a fixed cap of recent lift
-	// sessions (summaries, not raw sets) and a 7-day rolling nutrition
-	// summary (daily averages, not every food row). When the user logs
-	// neither, both self-hide (empty array / null) and the JSON stays
-	// the same size as today's running-only payload.
-	//
-	// RLS scopes both queries to the caller (gym_workouts / gym_sets /
-	// food_log are owner-only), so no user_id filter is needed — the
-	// forwarded JWT does the scoping, same as recent_runs above.
-	const { data: liftWorkouts } = await supabase
-		.from(TABLES.gym_workouts)
-		.select('id, title, started_at')
-		.order('started_at', { ascending: false })
-		.limit(COACH_LIFTS_CAP);
-	let recentLifts: LiftSummary[] = [];
-	if (liftWorkouts && liftWorkouts.length > 0) {
-		const ids = (liftWorkouts as { id: string }[]).map((w) => w.id);
-		const { data: liftSets } = await supabase
-			.from(TABLES.gym_sets)
-			.select('workout_id, exercise_name, reps, weight_kg')
-			.in('workout_id', ids);
-		recentLifts = summarizeRecentLifts(
-			liftWorkouts as LiftWorkoutRow[],
-			(liftSets ?? []) as LiftSetRow[],
-		);
-	}
-	// Persona-hunt Round 2 finding Pro #3. `metadata` is a free-form
-	// jsonb bag (docs/backend/metadata.md). Some keys are useful coaching
-	// signal (activity_type, avg_bpm, workout_kind, etc.); many are
-	// not — `notes` (free-form, anything the runner typed), `event`
-	// + `position` (parkrun athlete + finishing place), raw `laps[]`
-	// arrays, `imported_from`, `strava_id` / `garmin_id`, internal
-	// flags like `recovered_from_crash`, owner-only data the
-	// `public_runs` view explicitly strips. Selecting metadata whole
-	// shipped all of it to Anthropic — defence-in-depth violation
-	// against the same Art 5(1)(c) minimisation the surrounding code
-	// (subscription_tier strip, health-consent gate) defends elsewhere.
-	//
-	// Allowlist the keys the coach actually uses for advice. Pre-fix
-	// behaviour for unallowlisted keys: included. Post-fix: dropped.
-	const recentRuns = (rawRecentRuns ?? []).map((r) => ({
-		...r,
-		metadata: pickAllowedRunMetadata(r.metadata as Record<string, unknown> | null),
-	}));
-
 	// `profileRow` is the `get_my_profile()` result the handler already
 	// fetched for the coach-consent gate — passed in rather than re-queried
 	// so a duplicate SECURITY DEFINER RPC round-trip doesn't fire on every
@@ -128,22 +45,150 @@ export async function buildContext(
 			}
 		: null;
 
-	const { data: userSettings } = await supabase
-		.from('user_settings')
-		.select('prefs')
-		.eq('user_id', userId)
-		.maybeSingle();
-	const prefs = (userSettings?.prefs ?? {}) as Record<string, unknown>;
-
 	// GDPR Art 9(2)(a): special-category health-adjacent data (DOB +
-	// HR metrics) only flows to Anthropic when the user has actively
-	// granted health-data consent via Settings → Preferences. The
-	// `coach_consent_at` (Art 6(1)(a) AI consent) gate in handler.ts
-	// authorises using the Coach AT ALL; this guard is the second,
-	// distinct gate for the *health* category. See migration
-	// `20260921_001_user_profiles_gdpr_consent_timestamps.sql` for
-	// the two-gate design and audit/coach May 2026 High #1.
+	// HR metrics, dietary intake) only flows to Anthropic when the user
+	// has actively granted health-data consent via Settings → Preferences.
+	// The `coach_consent_at` (Art 6(1)(a) AI consent) gate in handler.ts
+	// authorises using the Coach AT ALL; this is the second, distinct gate
+	// for the *health* category. See migration
+	// `20260921_001_user_profiles_gdpr_consent_timestamps.sql` for the
+	// two-gate design and audit/coach May 2026 High #1. Derived from the
+	// passed-in profile row, so it's known before any query — the nutrition
+	// lane below can join the parallel fan-out instead of waiting on a
+	// profile fetch.
 	const healthConsentGranted = profileRowTyped?.health_data_consent_at != null;
+
+	// These five reads are mutually independent: the active plan (+ its
+	// week→workout sub-chain), recent runs, recent lifts (+ their sets),
+	// user settings, and the consent-gated 7-day nutrition rollup. They
+	// used to run as five sequential awaits, so every coach message stacked
+	// ~5 Supabase round-trips of latency before the first token streamed.
+	// Fan them out with Promise.all so the endpoint pays ~one round-trip
+	// instead (perf-hunt 2026-06-10). Each lane keeps its own internal
+	// sequential sub-chain where one query genuinely feeds the next.
+	const planLane = (async (): Promise<{
+		plan: unknown;
+		weeks: unknown[];
+		workouts: unknown[];
+	}> => {
+		const { data: plan } = planId
+			? await supabase.from('training_plans').select('*').eq('id', planId).maybeSingle()
+			: await supabase
+					.from('training_plans')
+					.select('*')
+					.eq('status', 'active')
+					.maybeSingle();
+		let weeks: unknown[] = [];
+		let workouts: unknown[] = [];
+		if (plan && typeof plan === 'object' && 'id' in plan) {
+			const weekRes = await supabase
+				.from('plan_weeks')
+				.select('*')
+				.eq('plan_id', (plan as { id: string }).id)
+				.order('week_index', { ascending: true });
+			weeks = weekRes.data ?? [];
+			if (weeks.length > 0) {
+				const ids = (weeks as { id: string }[]).map((w) => w.id);
+				const wkRes = await supabase
+					.from('plan_workouts')
+					.select('*')
+					.in('week_id', ids)
+					.order('scheduled_date', { ascending: true });
+				workouts = wkRes.data ?? [];
+			}
+		}
+		return { plan: plan ?? null, weeks, workouts };
+	})();
+
+	// Persona-hunt Round 2 finding Pro #3. `metadata` is a free-form
+	// jsonb bag (docs/backend/metadata.md). Some keys are useful coaching
+	// signal (activity_type, avg_bpm, workout_kind, etc.); many are
+	// not — `notes` (free-form, anything the runner typed), `event`
+	// + `position` (parkrun athlete + finishing place), raw `laps[]`
+	// arrays, `imported_from`, `strava_id` / `garmin_id`, internal
+	// flags like `recovered_from_crash`, owner-only data the
+	// `public_runs` view explicitly strips. Selecting metadata whole
+	// shipped all of it to Anthropic — defence-in-depth violation
+	// against the same Art 5(1)(c) minimisation the surrounding code
+	// (subscription_tier strip, health-consent gate) defends elsewhere.
+	//
+	// Allowlist the keys the coach actually uses for advice. Pre-fix
+	// behaviour for unallowlisted keys: included. Post-fix: dropped.
+	const runsLane = (async () => {
+		const { data: rawRecentRuns } = await supabase
+			.from(TABLES.runs)
+			.select('id, started_at, distance_m, duration_s, metadata, route_id')
+			.order('started_at', { ascending: false })
+			.limit(runsLimit);
+		return (rawRecentRuns ?? []).map((r) => ({
+			...r,
+			metadata: pickAllowedRunMetadata(r.metadata as Record<string, unknown> | null),
+		}));
+	})();
+
+	// Tier-1 multi-modal coach context (docs/features/multi_modal.md §
+	// "Cross-modality touches"). The coach SEES recent lift sessions +
+	// a 7-day nutrition rollup and reasons about them — advisory, it
+	// never auto-mutates a plan. Both are BOUNDED so prompt size + per-
+	// call cost stay flat as history grows: a fixed cap of recent lift
+	// sessions (summaries, not raw sets) and a 7-day rolling nutrition
+	// summary (daily averages, not every food row). When the user logs
+	// neither, both self-hide (empty array / null) and the JSON stays
+	// the same size as today's running-only payload.
+	//
+	// RLS scopes both queries to the caller (gym_workouts / gym_sets /
+	// food_log are owner-only), so no user_id filter is needed — the
+	// forwarded JWT does the scoping, same as recent_runs above.
+	const liftsLane = (async (): Promise<LiftSummary[]> => {
+		const { data: liftWorkouts } = await supabase
+			.from(TABLES.gym_workouts)
+			.select('id, title, started_at')
+			.order('started_at', { ascending: false })
+			.limit(COACH_LIFTS_CAP);
+		if (!liftWorkouts || liftWorkouts.length === 0) return [];
+		const ids = (liftWorkouts as { id: string }[]).map((w) => w.id);
+		const { data: liftSets } = await supabase
+			.from(TABLES.gym_sets)
+			.select('workout_id, exercise_name, reps, weight_kg')
+			.in('workout_id', ids);
+		return summarizeRecentLifts(
+			liftWorkouts as LiftWorkoutRow[],
+			(liftSets ?? []) as LiftSetRow[],
+		);
+	})();
+
+	const settingsLane = (async (): Promise<Record<string, unknown>> => {
+		const { data: userSettings } = await supabase
+			.from('user_settings')
+			.select('prefs')
+			.eq('user_id', userId)
+			.maybeSingle();
+		return (userSettings?.prefs ?? {}) as Record<string, unknown>;
+	})();
+
+	// Nutrition is health-adjacent (dietary intake), so it crosses the
+	// same Art 9(2)(a) special-category boundary as DOB / HR and is
+	// gated on the SAME health-data consent. Lifts (working-set tonnage)
+	// are activity data like runs — ungated, sent whenever logged. A 200-
+	// row cap over a 7-day window is plenty to compute daily averages and
+	// bounds the worst case (a power-logger).
+	const nutritionLane = (async (): Promise<NutritionSummary | null> => {
+		if (healthConsentGranted) {
+			const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+			const { data: foodRows } = await supabase
+				.from(TABLES.food_log)
+				.select('started_at, calories, protein_g, carbs_g, fat_g')
+				.gte('started_at', sevenDaysAgo)
+				.order('started_at', { ascending: false })
+				.limit(200);
+			return summarizeNutrition((foodRows ?? []) as FoodLogRow[], new Date());
+		}
+		return null;
+	})();
+
+	const [{ plan, weeks, workouts }, recentRuns, recentLifts, prefs, nutrition7d] =
+		await Promise.all([planLane, runsLane, liftsLane, settingsLane, nutritionLane]);
+
 	const runnerContext = {
 		// Non-health prefs are always safe to send.
 		weekly_mileage_goal_m: prefs.weekly_mileage_goal_m ?? null,
@@ -157,24 +202,6 @@ export async function buildContext(
 		max_hr_bpm: healthConsentGranted ? (prefs.max_hr_bpm ?? null) : null,
 		hr_zones: healthConsentGranted ? (prefs.hr_zones ?? null) : null,
 	};
-
-	// Nutrition is health-adjacent (dietary intake), so it crosses the
-	// same Art 9(2)(a) special-category boundary as DOB / HR and is
-	// gated on the SAME health-data consent. Lifts (working-set tonnage)
-	// are activity data like runs — ungated, sent whenever logged. A 200-
-	// row cap over a 7-day window is plenty to compute daily averages and
-	// bounds the worst case (a power-logger).
-	let nutrition7d: NutritionSummary | null = null;
-	if (healthConsentGranted) {
-		const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-		const { data: foodRows } = await supabase
-			.from(TABLES.food_log)
-			.select('started_at, calories, protein_g, carbs_g, fat_g')
-			.gte('started_at', sevenDaysAgo)
-			.order('started_at', { ascending: false })
-			.limit(200);
-		nutrition7d = summarizeNutrition((foodRows ?? []) as FoodLogRow[], new Date());
-	}
 
 	return {
 		data: {

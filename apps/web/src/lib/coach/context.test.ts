@@ -105,12 +105,38 @@ test('nutrition_7d is gated on health-data consent', () => {
 	// here rather than silently shipping intake data to Anthropic.
 	// The table name routes through the F11 registry (core/schema.ts),
 	// so the guard matches `from(TABLES.food_log)`, not the bare literal.
+	// Indentation-tolerant: the query now lives inside the nutrition lane's
+	// async IIFE, so the `if` block is nested one level deeper. Match from
+	// the consent check through the food_log query up to the next closing
+	// brace (the if-block's), regardless of indent.
 	const guard = SRC.match(
-		/if \(healthConsentGranted\) \{([\s\S]*?from\(TABLES\.food_log\)[\s\S]*?)\n\t\}/,
+		/if \(healthConsentGranted\) \{[\s\S]*?from\(TABLES\.food_log\)[\s\S]*?\}/,
 	);
 	assert.ok(
 		guard,
 		'the food_log query MUST live inside an `if (healthConsentGranted)` block',
+	);
+});
+
+test('buildContext runs its independent reads in parallel, not serially', () => {
+	// perf-hunt 2026-06-10 (coach request path): plan, recent_runs,
+	// recent_lifts, user_settings and the consent-gated nutrition rollup
+	// are mutually independent. They used to run as five sequential awaits,
+	// stacking ~5 Supabase round-trips of latency onto every coach message
+	// before the first token streamed. Pin the Promise.all fan-out so a
+	// refactor can't quietly re-serialise them.
+	assert.match(
+		SRC,
+		/await Promise\.all\(\[/,
+		'independent reads must be issued via Promise.all',
+	);
+	// Each independent read is an async IIFE lane handed to Promise.all —
+	// count them so collapsing one back to a bare top-level await trips
+	// this guard.
+	const lanes = SRC.match(/const \w+Lane = \(async \(/g) ?? [];
+	assert.ok(
+		lanes.length >= 5,
+		`expected >=5 parallel query lanes, found ${lanes.length}`,
 	);
 });
 
