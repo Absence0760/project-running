@@ -159,6 +159,49 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 - [ ] **Externalise the RevenueCat web SDK behind hosted checkout** — `@revenuecat/purchases-js` is a top-level static import in `apps/web/src/lib/billing/revenuecat.ts`, so the full SDK (~178 KB gzipped) ships in the `/settings/upgrade` route bundle and is the second-largest single lib after maplibre-gl. The `web-bundle-budget.yml` total ceiling was raised 1500 → 1900 on 2026-06-10 to acknowledge legitimate cumulative growth (the app measured 1689 KB), but that metric sums *all* chunks incl. lazy ones, so code-splitting won't recover the weight — only removing the SDK does. Durable fix: drive Pro checkout + the management-URL link through RevenueCat's hosted-checkout redirect instead of the embedded JS SDK, dropping ~178 KB and buying back headroom under the *old* 1500 ceiling. Rewrites the billing flow (`startProCheckout` / `managementUrl` / the configured-vs-unconfigured fallback) + needs its own e2e + a mobile-parity check, so it was out of scope for the CI fix that surfaced it.
 
+## Performance — deferred hot spots (perf-hunt 2026-06-10)
+
+The 2026-06-10 perf-hunt over the web read/query layer fixed the migration-free
+hot spots inline (coach request path: dropped a duplicate `get_my_profile` RPC +
+fanned out `buildContext`'s five serial reads with `Promise.all`; `CalendarHeatmap`:
+windowed the run bucketing to the rendered weeks). These three survivors need a
+migration or a `/safe-edit`-grade change and were deferred with their durable
+designs rather than patched with throwaway interim fixes:
+
+- [ ] **`fetchGymSetHistory` reads the entire lifting history on 4 hot surfaces** —
+  `core/data.ts` `fetchGymSetHistory` selects every `gym_sets` row for the user (no
+  `limit`, no window) and ships it to the browser, where the `gym_prs` engine recomputes
+  all badges in JS. Called on `/dashboard`, `/gym`, `/gym/[id]`, `/gym/exercise` on every
+  load — payload + client CPU grow O(total sets) unbounded (a 3-year lifter ≈ 15k rows).
+  **Durable fix:** a trigger-maintained per-exercise PR/records cache (the
+  [derived_state.md](../backend/derived_state.md) cache=authoritative-recompute contract
+  already does this for run PRs) or a server-side RPC returning only the per-exercise
+  bests, so the client never pulls raw set history. Migration → `/safe-migration`.
+- [ ] **`fetchEffortsForRun` ranks segments with an N+1 count loop** — `core/data.ts`
+  `fetchEffortsForRun` runs one `count(*)`-faster-than query per segment effort, awaited
+  one at a time, on every `/runs/[id]` load (a 30-segment ultra route ⇒ 30 serial round-
+  trips). **Durable fix:** a single RPC returning rank-per-effort via a window function —
+  the same server-side pattern the sibling `fetchSegmentLeaderboardTiered` already uses via
+  `segment_leaderboard_tiered`. Migration → `/safe-migration`. (A migration-free interim
+  `Promise.all` over the count queries would cut wall-clock N×RTT→~1×RTT but the RPC
+  eliminates the N queries entirely, so the interim patch would be thrown away — skipped in
+  favour of the durable fix.)
+- [ ] **`/runs` renders the entire filtered history (one `RunTrackPreview` per card)** —
+  the moment any filter is set, `/runs` flips to full-fetch and the `{#each filteredRuns}`
+  renders **every** matching card, each mounting a track-preview SVG; a 1,500-run account
+  paints 1,500 preview components at once. Pagination/Load-More only exists in unfiltered
+  browse mode. **Durable fix:** a render-window cap + "Show more" applied in full-filter
+  mode too (or push the filters into the `fetchRuns` query so DB pagination survives
+  narrowing — the code comment at `runs/+page.svelte:86` flags this as the real backlog
+  item). Touches select-all / bulk-delete / persistence + ~6 count-asserting e2e specs, so
+  route through `/safe-edit` with a Playwright window guard. Web-first; mobile list is
+  separate.
+
+The lower-ranked data findings (`fetchEngagementSummaries` / `hydratePeopleSuggestions` /
+`enrichPosts` fetch-rows-to-count, `fetchClubMembers` unbounded roster) only bite at
+engagement/club scales the prod tables haven't reached; each wants a grouped-count RPC or
+`.range()` pagination when those tables grow — not worth a migration today.
+
 ## Route loop generation — loop-poor UX (designed, P3 half unbuilt)
 
 - [ ] **Largest-achievable-loop probe + 3-way choice** — the v2 sampled via-point loop generator ([decisions §137 amendment](../architecture/decisions.md), [route_loop_generation.md](../features/route_loop_generation.md)) ships polygon-first with a `round_trip` fall-through, but the doc's *first-class loop-poor UX* is **not built**. Today a loop-poor start (polygon generator returns `null`) falls through to `round_trip` and reuses the pre-existing "shorter than X — use Y instead" shortfall banner. Remaining: have `generatePolygonLoop` / `handleGenerate` surface the **largest in-band-free real loop** it actually found so the client can offer "best loop near you is ~X km", plus the explicit three-way choice — (a) generate that shorter real loop, (b) accept the out-and-back to the requested distance, (c) try a different start — across `RouteBuilder.svelte`, the SvelteKit `+server.ts`, and the generate-route Lambda. ~1 day. Durable fix for the reported sparse start.
