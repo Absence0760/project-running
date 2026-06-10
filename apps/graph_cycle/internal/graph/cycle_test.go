@@ -46,6 +46,34 @@ func TestSearchCycleLoopPoor(t *testing.T) {
 	}
 }
 
+func TestSearchCycleDeterministic(t *testing.T) {
+	// The far-point selection iterates a map; without the lower-index tiebreaker
+	// in pickFarPoints, equal-error nodes would make the chosen loop flip between
+	// runs. Same inputs must yield byte-identical geometry every time.
+	g := gridGraph(9, 9, 100, 40.0, -77.0)
+	cLat := 40.0 + 4*metresToDegLat(100)
+	cLng := -77.0 + 4*metresToDegLng(100, 40)
+
+	first := g.SearchCycle(cLat, cLng, 800)
+	if first.Best == nil {
+		t.Fatal("expected a loop")
+	}
+	for i := 0; i < 5; i++ {
+		next := g.SearchCycle(cLat, cLng, 800)
+		if next.Best == nil || next.Best.DistanceM != first.Best.DistanceM {
+			t.Fatalf("run %d: distance %v != %v (non-deterministic)", i, next.Best.DistanceM, first.Best.DistanceM)
+		}
+		if len(next.Best.Coords) != len(first.Best.Coords) {
+			t.Fatalf("run %d: coord count differs (non-deterministic)", i)
+		}
+		for j := range first.Best.Coords {
+			if next.Best.Coords[j] != first.Best.Coords[j] {
+				t.Fatalf("run %d: coord %d differs (non-deterministic)", i, j)
+			}
+		}
+	}
+}
+
 func TestSearchCycleOffGraph(t *testing.T) {
 	g := newBuilder().finalize()
 	res := g.SearchCycle(0, 0, 1000)

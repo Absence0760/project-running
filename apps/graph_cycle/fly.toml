@@ -35,12 +35,13 @@ auto_stop_machines = false
 min_machines_running = 1
 
 [[http_service.checks]]
-# The PBF parse + in-memory graph build runs on every boot; grace_period covers
-# it (seconds for a metro extract, a couple of minutes for a country). /health
-# returns 200 only once the graph is built and serving.
+# The PBF parse + in-memory graph build runs on EVERY boot (no persisted
+# graph-cache), so grace_period must cover a cold country-extract parse — matched
+# to GraphHopper's 10m for the same reason. /health returns 200 only once the
+# graph is built and serving.
 interval = "30s"
 timeout = "5s"
-grace_period = "5m"
+grace_period = "10m"
 method = "GET"
 path = "/health"
 

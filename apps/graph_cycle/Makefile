@@ -48,13 +48,18 @@ dev:
 test:
 	go test ./...
 
-# Smoke the guard + cycle search. Expects the server up (compose or `make dev`)
-# and a PBF whose coverage includes the query point — override START for your
-# seeded region.
+# Smoke the guard + graph load + cycle search. Expects the server up (compose or
+# `make dev`) and a PBF whose coverage includes the query point — override START
+# for your seeded region.
 START ?= -37.81,144.96
 smoke:
+	@echo "→ /health (proves the PBF loaded — a mis-seeded region reports nodes:0)"
+	@curl -s 'http://127.0.0.1:8991/health' | grep -qE '"nodes":[1-9]' \
+		&& echo "✓ graph loaded" \
+		|| (echo "✗ graph empty — wrong/missing PBF? re-run 'make seed'" && exit 1)
+	@echo "→ /cycle through the guard"
 	@curl -s -H 'X-Engine-Key: $(DEV_KEY)' \
 		-X POST 'http://127.0.0.1:8991/cycle' \
 		-H 'Content-Type: application/json' \
 		-d '{"start":{"lat":'"$$(echo $(START) | cut -d, -f1)"',"lng":'"$$(echo $(START) | cut -d, -f2)"'},"targetDistanceM":5000}' \
-		| grep -q '"found"' && echo "✓ /cycle responded" || (echo "✗ no response — is the server up + the PBF seeded for this region?" && exit 1)
+		| grep -q '"found"' && echo "✓ /cycle responded" || (echo "✗ no response — is the server up?" && exit 1)

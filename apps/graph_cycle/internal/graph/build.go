@@ -66,6 +66,13 @@ func footAllowed(tags osm.Tags) bool {
 	if highway == "" {
 		return false
 	}
+	// Non-routable placeholders are never walkable, even with foot=yes — OSRM's
+	// foot.lua has no speed-table entry for them at all, so a pedestrian-detour
+	// foot tag on a construction site must NOT route through it. This precedes
+	// the foot= override (which legitimately lets foot=yes onto a motorway/trunk).
+	if highway == "construction" || highway == "proposed" {
+		return false
+	}
 	switch tags.Find("foot") {
 	case "no", "private":
 		return false

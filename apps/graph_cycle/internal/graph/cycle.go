@@ -19,10 +19,11 @@ const (
 // farFractions are the outbound (S→F) graph distances to sample, as fractions
 // of the target loop length. A clean out-and-back would put F at exactly D/2;
 // the penalised return leg runs longer than the outbound, so the actual loop
-// overshoots a 0.5 sample — hence we sample BELOW 0.5 too and keep whichever
+// overshoots a 0.5 sample — hence we sample BELOW 0.5 and keep whichever
 // concatenated loop lands closest to target (the doc's "don't trust a single
-// divisor"). Centred on ~0.44·D.
-var farFractions = []float64{0.34, 0.40, 0.46, 0.52}
+// divisor"). The 0.58 sample covers sparse/circuitous networks whose only loop
+// needs an outbound leg past D/2.
+var farFractions = []float64{0.34, 0.40, 0.46, 0.52, 0.58}
 
 // Loop is one candidate (or chosen) cycle: its geometry in [lng,lat] order, its
 // true length in metres (measured from geometry, not Dijkstra's penalised cost),
@@ -98,8 +99,9 @@ func (g *Graph) SearchCycle(startLat, startLng, targetM float64) CycleResult {
 	fars := g.pickFarPoints(src, targetM, outDist)
 
 	var candidates []*Loop
-	// The return leg may legitimately detour well past the outbound length;
-	// cap generously so a real but circuitous loop isn't pruned.
+	// The return leg may legitimately detour well past the outbound length; cap
+	// generously (in TRUE metres — dijkstra bounds by real distance, not penalised
+	// cost) so a real but circuitous loop isn't pruned.
 	returnRadius := targetM * 2.0
 	for _, f := range fars {
 		out := reconstruct(outPrev, src, f)
@@ -148,7 +150,12 @@ func (g *Graph) pickFarPoints(src int32, targetM float64, outDist map[int32]floa
 		sector := int(bearing/(360.0/numBearings)) % numBearings
 		for fi, frac := range farFractions {
 			err := math.Abs(d - frac*targetM)
-			if err < best[sector][fi].err {
+			cur := best[sector][fi]
+			// Strict-less on error, with the LOWER node index winning ties — the
+			// map iteration order over outDist is random, so without this tiebreak
+			// two equal-error nodes would make the chosen far-point (and the whole
+			// result) non-deterministic across runs / JSON round-trips.
+			if err < cur.err || (err == cur.err && (cur.node < 0 || node < cur.node)) {
 				best[sector][fi] = pick{node: node, err: err}
 			}
 		}

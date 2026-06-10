@@ -79,9 +79,17 @@ func (g *Graph) NearestNode(lat, lng float64) (int32, bool) {
 			}
 		})
 		if best >= 0 {
-			// Minimum possible distance to anything in ring+1.
-			ringInnerM := float64(ring) * gridCellM
-			if ringInnerM > bestD {
+			// Minimum possible distance to anything in ring+1, in TRUE metres.
+			// The latitude cell is latitude-independent (cellLat·mPerDegLat ==
+			// gridCellM), but the longitude cell was sized at the graph's MEAN
+			// latitude — so at a query latitude away from the mean a column is a
+			// different number of metres wide. Using a flat gridCellM here would
+			// over-estimate the lng inner edge above the mean latitude and break
+			// early, missing a closer node one column out (a wrong-node bug on a
+			// country-scale extract). Take the smaller of the two real edges.
+			latEdgeM := float64(ring) * gr.cellLat * mPerDegLat
+			lngEdgeM := float64(ring) * gr.cellLng * mPerDegLat * math.Cos(lat*math.Pi/180)
+			if math.Min(latEdgeM, lngEdgeM) > bestD {
 				break
 			}
 		}

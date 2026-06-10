@@ -20,20 +20,24 @@ import "container/heap"
 //   - src:        start node index.
 //   - target:     stop early once this node is settled; -1 builds the full tree
 //     out to maxRadiusM.
-//   - maxRadiusM: never settle a node whose tentative distance exceeds this
-//     (penalised distance — the cap is intentionally generous on penalised
-//     searches so a forced reuse doesn't trip it).
+//   - maxRadiusM: never relax an edge that would put a node beyond this many
+//     TRUE metres from src. The cap is on real distance, NOT penalised cost — a
+//     penalised return leg accrues ×reusePenalty cost, and capping on that would
+//     silently FORBID reuse (prune a real loop) instead of merely discouraging
+//     it, defeating the whole point of penalised reuse.
 //   - penalised:  undirected keys whose cost is scaled; nil for an unpenalised
 //     search.
 //
 // Returns the (penalised) distance map and predecessor map. A node absent from
-// distTo was not reached within the cap.
+// distTo was not reached within the cap. For an unpenalised search the penalised
+// distance equals the real distance, so distTo is exact real metres (the forward
+// far-point search relies on this).
 func (g *Graph) dijkstra(src, target int32, maxRadiusM float64, penalised map[uint64]struct{}) (distTo map[int32]float64, prev map[int32]int32) {
 	distTo = map[int32]float64{src: 0}
 	prev = map[int32]int32{src: -1}
 	settled := map[int32]struct{}{}
 
-	pq := &nodeHeap{{node: src, dist: 0}}
+	pq := &nodeHeap{{node: src, dist: 0, real: 0}}
 	for pq.Len() > 0 {
 		top := heap.Pop(pq).(heapItem)
 		u := top.node
@@ -45,25 +49,28 @@ func (g *Graph) dijkstra(src, target int32, maxRadiusM float64, penalised map[ui
 			return distTo, prev
 		}
 		du := top.dist
+		duReal := top.real
 
 		start := g.edgeHead[u]
 		end := g.edgeHead[u+1]
 		for e := start; e < end; e++ {
 			v := g.edgeTo[e]
-			w := float64(g.edgeLen[e])
+			realW := float64(g.edgeLen[e])
+			w := realW
 			if penalised != nil {
 				if _, p := penalised[edgeKey(u, v)]; p {
 					w *= reusePenalty
 				}
 			}
-			nd := du + w
-			if nd > maxRadiusM {
-				continue
+			ndReal := duReal + realW
+			if ndReal > maxRadiusM {
+				continue // bound exploration by real geographic extent
 			}
+			nd := du + w
 			if old, ok := distTo[v]; !ok || nd < old {
 				distTo[v] = nd
 				prev[v] = u
-				heap.Push(pq, heapItem{node: v, dist: nd})
+				heap.Push(pq, heapItem{node: v, dist: nd, real: ndReal})
 			}
 		}
 	}
@@ -101,15 +108,16 @@ func reconstruct(prev map[int32]int32, src, dst int32) []int32 {
 // container/heap keeps the dependency surface at stdlib.
 type heapItem struct {
 	node int32
-	dist float64
+	dist float64 // penalised tentative cost — the priority key
+	real float64 // true metres along this path — used only for the radius cap
 }
 
 type nodeHeap []heapItem
 
-func (h nodeHeap) Len() int            { return len(h) }
-func (h nodeHeap) Less(i, j int) bool  { return h[i].dist < h[j].dist }
-func (h nodeHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *nodeHeap) Push(x any)         { *h = append(*h, x.(heapItem)) }
+func (h nodeHeap) Len() int           { return len(h) }
+func (h nodeHeap) Less(i, j int) bool { return h[i].dist < h[j].dist }
+func (h nodeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *nodeHeap) Push(x any)        { *h = append(*h, x.(heapItem)) }
 func (h *nodeHeap) Pop() any {
 	old := *h
 	n := len(old)

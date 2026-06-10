@@ -104,6 +104,7 @@ func TestCycleValidation(t *testing.T) {
 	cases := []struct {
 		name, body string
 	}{
+		{"empty body", ``},
 		{"bad json", `{`},
 		{"unknown field", `{"start":{"lat":40,"lng":-77},"targetDistanceM":800,"x":1}`},
 		{"nan target via missing", `{"start":{"lat":40,"lng":-77}}`},

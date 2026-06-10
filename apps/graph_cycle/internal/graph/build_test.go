@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"math"
 	"testing"
 
 	"github.com/paulmach/osm"
@@ -31,6 +32,10 @@ func TestFootAllowed(t *testing.T) {
 		{"access=private", tags("highway", "service", "access", "private"), false},
 		{"foot=designated wins over access=private", tags("highway", "path", "access", "private", "foot", "designated"), true},
 		{"unknown highway value", tags("highway", "elevator"), false},
+		// construction/proposed are absent from OSRM foot.lua entirely — a
+		// pedestrian-detour foot=yes must NOT route through them.
+		{"construction with foot=yes still excluded", tags("highway", "construction", "foot", "yes"), false},
+		{"proposed with foot=designated still excluded", tags("highway", "proposed", "foot", "designated"), false},
 	}
 	for _, c := range cases {
 		if got := footAllowed(c.tags); got != c.want {
@@ -87,5 +92,60 @@ func TestNearestNodeEmpty(t *testing.T) {
 	g := newBuilder().finalize()
 	if _, ok := g.NearestNode(0, 0); ok {
 		t.Fatal("empty graph should report no nearest node")
+	}
+}
+
+// TestNearestNodeMatchesBruteForceHighLat pins the ring-termination invariant
+// that broke at latitudes far from the graph mean. Southern anchor nodes drag
+// meanLat well below a northern query cluster, so the grid's cellLng (sized at
+// meanLat) is metres-wider than a cell at the query latitude — the exact
+// condition under which the old flat-gridCellM inner-edge estimate terminated
+// early and returned a node that wasn't actually nearest. NearestNode must match
+// a brute-force scan at every query point.
+func TestNearestNodeMatchesBruteForceHighLat(t *testing.T) {
+	b := newBuilder()
+	// Southern anchors: pull meanLat far below the northern cluster.
+	for i := 0; i < 200; i++ {
+		b.addNode(int64(100000+i), Coord{Lat: 0, Lng: float64(i) * 0.0005})
+	}
+	// Northern cluster at 60°N, ~120 m grid, several columns so a query between
+	// columns has a non-trivial nearest.
+	var k int64
+	for r := 0; r < 8; r++ {
+		for c := 0; c < 8; c++ {
+			b.addNode(k, Coord{
+				Lat: 60.0 + float64(r)*metresToDegLat(120),
+				Lng: -1.0 + float64(c)*metresToDegLng(120, 60),
+			})
+			k++
+		}
+	}
+	g := b.finalize()
+
+	bruteNearestDist := func(qLat, qLng float64) float64 {
+		best := math.Inf(1)
+		for i := int32(0); i < int32(g.NumNodes()); i++ {
+			if d := haversineM(qLat, qLng, g.lat[i], g.lng[i]); d < best {
+				best = d
+			}
+		}
+		return best
+	}
+
+	for qi := 0; qi < 7; qi++ {
+		for qj := 0; qj < 7; qj++ {
+			qLat := 60.0 + (float64(qi)+0.5)*metresToDegLat(120)
+			qLng := -1.0 + (float64(qj)+0.5)*metresToDegLng(120, 60)
+			got, ok := g.NearestNode(qLat, qLng)
+			if !ok {
+				t.Fatalf("query (%.5f,%.5f): no nearest", qLat, qLng)
+			}
+			gotD := haversineM(qLat, qLng, g.lat[got], g.lng[got])
+			// Compare by distance, not index, so ties are acceptable.
+			if math.Abs(gotD-bruteNearestDist(qLat, qLng)) > 1e-6 {
+				t.Fatalf("query (%.5f,%.5f): NearestNode dist %.4f != brute-force %.4f",
+					qLat, qLng, gotD, bruteNearestDist(qLat, qLng))
+			}
+		}
 	}
 }

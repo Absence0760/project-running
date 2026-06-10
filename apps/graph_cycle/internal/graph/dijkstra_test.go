@@ -78,6 +78,34 @@ func TestDijkstraPenaltyReroutes(t *testing.T) {
 	}
 }
 
+func TestDijkstraCapsOnRealNotPenalisedDistance(t *testing.T) {
+	// Chain 0—1—2, each edge ~100 m. Penalise edge 0-1 (×8). From node 0 with a
+	// 250 m REAL cap: node 2 sits at 200 m real (reachable), even though its
+	// penalised cost is 100×8 + 100 = 900 (far over 250). The old cap-on-penalised
+	// code would prune node 1 (penalised 800 > 250) and never reach node 2 — a
+	// false loop-poor on any return leg forced to reuse a long outbound segment.
+	b := newBuilder()
+	b.addNode(0, Coord{Lat: 0, Lng: 0})
+	b.addNode(1, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
+	b.addNode(2, Coord{Lat: 0, Lng: 2 * metresToDegLng(100, 0)})
+	b.addSegment(0, 1)
+	b.addSegment(1, 2)
+	g := b.finalize()
+
+	penalised := map[uint64]struct{}{edgeKey(0, 1): {}}
+	distTo, _ := g.dijkstra(0, -1, 250, penalised)
+
+	cost, ok := distTo[2]
+	if !ok {
+		t.Fatal("node 2 (~200 m real) must be reachable under a 250 m REAL cap despite its ~900 penalised cost")
+	}
+	// The recorded distance is the PENALISED cost (~9× a 100 m edge), proving the
+	// cap that admitted it was on real metres, not this value.
+	if cost < 800 {
+		t.Fatalf("node 2 cost = %.1f, want the penalised ~900 (not the ~200 real distance)", cost)
+	}
+}
+
 func TestReconstructUnreachable(t *testing.T) {
 	prev := map[int32]int32{0: -1}
 	if p := reconstruct(prev, 0, 9); p != nil {

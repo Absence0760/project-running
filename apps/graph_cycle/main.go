@@ -3,14 +3,11 @@
 // an OSM PBF into an in-memory foot graph at boot and serves a cycle search over
 // the real street network.
 //
-// Deployed to Fly alongside OSRM + GraphHopper, fronted by Caddy as a
-// shared-secret guard on a public https endpoint (the generate-route Lambda runs
-// on AWS and has no 6PN path into Fly) — same posture as GraphHopper.
-//
-// Deployed to Fly alongside OSRM + GraphHopper. Unlike the Java GraphHopper
-// (which needs a Caddy reverse-proxy to add an auth header), this Go server
-// enforces the X-Engine-Key guard in-process (api.Guard), so it binds the
-// public Fly port directly with no sidecar.
+// Deployed to Fly alongside OSRM + GraphHopper on a public https endpoint (the
+// generate-route Lambda runs on AWS and has no 6PN path into Fly). Unlike the
+// Java GraphHopper (which needs a Caddy reverse-proxy to add an auth header),
+// this Go server enforces the X-Engine-Key guard in-process (api.Guard), so it
+// binds the public Fly port directly with no sidecar.
 //
 // Env:
 //   - GRAPH_CYCLE_PBF      path to the OSM PBF (default /data/region.osm.pbf,
@@ -70,9 +67,16 @@ func main() {
 	}
 
 	httpSrv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           api.Guard(apiKey, mux),
+		Addr:    ":" + port,
+		Handler: api.Guard(apiKey, mux),
+		// Bound every phase so a slow-loris (drip-feeding headers or a body) can't
+		// pin a goroutine indefinitely. WriteTimeout is generous because the
+		// /cycle search runs synchronously in the handler and can take a few
+		// seconds on a dense graph; ReadTimeout/ReadHeaderTimeout are tight since
+		// bodies are ≤ 4 KB.
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

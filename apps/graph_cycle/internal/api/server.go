@@ -2,15 +2,13 @@
 // probe, a nearest-node lookup, a shortest-path route (for validating the graph
 // against OSRM), and the cycle search that powers "Generate a route by distance".
 //
-// The server binds localhost only in production — Caddy fronts it as the
-// shared-secret guard on the public port (see the Caddyfile), exactly mirroring
-// the GraphHopper sidecar. No auth lives here; /health is the one route Caddy
-// leaves open.
+// The server binds the public Fly port directly and enforces the X-Engine-Key
+// shared-secret guard in-process (Guard, guard.go) — no Caddy sidecar, unlike
+// the Java GraphHopper app. /health is the one route the guard leaves open.
 package api
 
 import (
 	"encoding/json"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -19,9 +17,12 @@ import (
 	"github.com/Absence0760/project-running/apps/graph_cycle/internal/graph"
 )
 
-// maxTargetDistanceM mirrors route_loop.ts#MAX_TARGET_DISTANCE_M (1000 km) so
-// the sidecar rejects the same absurd asks the web validator does.
-const maxTargetDistanceM = 1_000_000.0
+// maxTargetDistanceM bounds the cycle search's per-request cost. The web
+// validator allows up to 1000 km (route_loop.ts), but the search radius — and
+// thus the Dijkstra exploration on a country-scale graph — scales with the
+// target, so the sidecar caps far lower: 100 km is already an unrealistically
+// large neighbourhood loop, and a larger ask harmlessly falls back to round_trip.
+const maxTargetDistanceM = 100_000.0
 
 // maxBodyBytes caps request bodies; these payloads are a handful of numbers.
 const maxBodyBytes = 4 << 10
@@ -176,7 +177,10 @@ func (s *Server) handleCycle(w http.ResponseWriter, r *http.Request) {
 }
 
 // decodeBody reads a size-capped JSON body that rejects unknown fields, writing
-// a 400 and returning false on any malformation.
+// a 400 and returning false on any malformation. An EMPTY body is rejected too:
+// decoding it into the zero-value struct would otherwise sail through as
+// {start:{0,0}, target:0} and only fail later (or, on /route, silently route
+// null-island→null-island). Requiring a real object keeps the failure honest.
 func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -185,7 +189,9 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil && err != io.EOF {
+	if err := dec.Decode(dst); err != nil {
+		// io.EOF == empty body; any other error is malformed JSON / oversize /
+		// unknown field. All are a 400.
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return false
 	}
