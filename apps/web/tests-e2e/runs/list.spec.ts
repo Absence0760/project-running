@@ -271,6 +271,62 @@ test.describe('/runs', () => {
 		await page.getByLabel('Source').selectOption('all');
 	});
 
+	test('full-filter mode windows the render to PAGE_SIZE with a Show-more reveal', async ({
+		page
+	}) => {
+		// perf-hunt 2026-06-10: setting any filter flips /runs to full-fetch,
+		// and the list used to render EVERY matching card — each mounting a
+		// RunTrackPreview. A multi-year filtered account painted thousands of
+		// preview SVGs at once. The render is now windowed; pin the cap + the
+		// Show-more reveal so the regression can't return.
+		const PAGE_SIZE = 50;
+		const PLANT = 55; // > PAGE_SIZE, all 'hike' so the Hike filter selects them
+		const { getAdminClient } = await import('../fixtures/local-supabase');
+		const admin = getAdminClient();
+		const now = Date.now();
+		const rows = Array.from({ length: PLANT }, (_, i) => ({
+			user_id: USER_A.id,
+			started_at: new Date(now - i * 60_000).toISOString(),
+			duration_s: 1800,
+			distance_m: 5000 + i,
+			source: 'app',
+			is_public: false,
+			activity_type: 'hike',
+			is_dnf: false,
+			metadata: {}
+		}));
+		const { data: inserted, error } = await admin.from('runs').insert(rows).select('id');
+		if (error) throw new Error(`plant failed: ${error.message}`);
+		const plantedIds = (inserted ?? []).map((r: { id: string }) => r.id);
+
+		try {
+			await page.goto('/runs');
+			await switchRunsToAllTime(page);
+
+			// Hike → full-fetch mode (any activity filter flips fetchMode). All
+			// 55+ planted hikes are in memory but only PAGE_SIZE render.
+			await page.getByRole('button', { name: 'Hike', exact: true }).click();
+			const cards = page.locator('.run-card');
+			await expect.poll(() => cards.count(), { timeout: 10_000 }).toBe(PAGE_SIZE);
+
+			const showMore = page.getByTestId('runs-show-more');
+			await expect(showMore).toBeVisible();
+
+			// Reveal the next window — more cards render and, once everything
+			// is shown, the button retires.
+			await showMore.click();
+			await expect
+				.poll(() => cards.count(), { timeout: 5_000 })
+				.toBeGreaterThan(PAGE_SIZE);
+			await expect(showMore).toHaveCount(0);
+
+			// Restore the default activity filter so later tests see the wide set.
+			await page.getByRole('button', { name: 'All', exact: true }).click();
+		} finally {
+			await admin.from('runs').delete().in('id', plantedIds);
+		}
+	});
+
 	test('Sort by Longest puts the longest-distance run first', async ({
 		page
 	}) => {

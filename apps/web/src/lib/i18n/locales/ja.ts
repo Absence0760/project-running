@@ -944,6 +944,7 @@ export const messages = {
 	"runs.delete": "削除",
 	"runs.bulkConfirmMessage": "ランとそのGPSトラックを完全に削除します。元に戻せません。",
 	"runs.loadMore": "さらに{count}件読み込む",
+	"runs.showMore": "さらに{count}件表示",
 	"runs.emptyNoData": "まだランがありません。",
 	"runs.emptyNoDataHintPrefix": "アプリで最初のランを記録するか、次からインポートしましょう：",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",

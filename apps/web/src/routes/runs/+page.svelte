@@ -268,6 +268,32 @@
 		return out;
 	});
 
+	/// Render-window cap for full-fetch mode. In `paginated` mode the DB
+	/// `loadMore` already bounds what's in memory, so render everything
+	/// loaded. In `full` mode (any filter active) the whole matching set is
+	/// in memory and the old `{#each filteredRuns}` mounted one
+	/// `RunTrackPreview` per card — a multi-year account that set a filter
+	/// painted thousands of preview SVGs at once. Cap the rendered slice and
+	/// reveal more on demand. perf-hunt 2026-06-10.
+	let renderLimit = $state(PAGE_SIZE);
+	let visibleRuns = $derived(
+		fetchMode === 'full' ? filteredRuns.slice(0, renderLimit) : filteredRuns,
+	);
+
+	$effect(() => {
+		// Reset the render window whenever the filter / sort set changes, so
+		// narrowing a list never carries a previously-expanded window into a
+		// smaller result. Reading the signals registers the dependencies;
+		// renderLimit is written but not read here, so there's no loop.
+		void sourceFilter;
+		void activityFilter;
+		void dateRange;
+		void sortKey;
+		void customFrom;
+		void customTo;
+		renderLimit = PAGE_SIZE;
+	});
+
 	// $derived (not plain const) so the m() labels recompute when the locale
 	// changes — a top-level const would call m() once at init, capture the
 	// pre-load locale, and never update (the live-switch + async-chunk race).
@@ -630,7 +656,7 @@
 		{@render listSkeleton()}
 	{:else}
 		<div class="run-list">
-			{#each filteredRuns as run}
+			{#each visibleRuns as run}
 				{@const isSelected = selected.has(run.id)}
 				<svelte:element
 					this={selecting ? 'button' : 'a'}
@@ -771,6 +797,19 @@
 					onclick={loadMore}
 				>
 					{loadingMore ? m('shell.loading') : m('runs.loadMore', { count: PAGE_SIZE })}
+				</button>
+			</div>
+		{:else if fetchMode === 'full' && renderLimit < filteredRuns.length}
+			<div class="load-more-row">
+				<button
+					type="button"
+					class="btn btn-outline"
+					data-testid="runs-show-more"
+					onclick={() => (renderLimit += PAGE_SIZE)}
+				>
+					{m('runs.showMore', {
+						count: Math.min(PAGE_SIZE, filteredRuns.length - renderLimit)
+					})}
 				</button>
 			</div>
 		{/if}

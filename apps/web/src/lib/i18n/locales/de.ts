@@ -948,6 +948,7 @@ export const messages = {
 	"runs.delete": "Löschen",
 	"runs.bulkConfirmMessage": "Dies entfernt die Läufe und ihre GPS-Tracks dauerhaft. Kann nicht rückgängig gemacht werden.",
 	"runs.loadMore": "{count} weitere laden",
+	"runs.showMore": "{count} weitere anzeigen",
 	"runs.emptyNoData": "Noch keine Läufe.",
 	"runs.emptyNoDataHintPrefix": "Zeichne deinen ersten Lauf in der App auf oder importiere von",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",

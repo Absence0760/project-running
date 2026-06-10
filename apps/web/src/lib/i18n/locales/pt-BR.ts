@@ -947,6 +947,7 @@ export const messages = {
 	"runs.delete": "Excluir",
 	"runs.bulkConfirmMessage": "Isso remove permanentemente as corridas e seus trajetos GPS. Não pode ser desfeito.",
 	"runs.loadMore": "Carregar mais {count}",
+	"runs.showMore": "Mostrar mais {count}",
 	"runs.emptyNoData": "Ainda não há corridas.",
 	"runs.emptyNoDataHintPrefix": "Grave sua primeira corrida no app ou importe de",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",

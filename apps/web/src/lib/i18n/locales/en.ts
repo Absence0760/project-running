@@ -956,6 +956,7 @@ export const en = {
 	"runs.delete": "Delete",
 	"runs.bulkConfirmMessage": "This permanently removes the runs and their GPS tracks. Can't be undone.",
 	"runs.loadMore": "Load {count} more",
+	"runs.showMore": "Show {count} more",
 	"runs.emptyNoData": "No runs yet.",
 	"runs.emptyNoDataHintPrefix": "Record your first run on the app, or import from",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",
