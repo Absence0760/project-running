@@ -26,6 +26,7 @@ import { TABLES, METADATA_KEYS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
 import { parseFitBuffer, garminExternalId, type ParsedFitRun, type FitHrZones } from './garmin-fit';
 import { loadSettings, effective, updateUniversal } from '../settings/settings';
+import { compositeKey } from './garmin_dedupe';
 
 export interface GarminZipProgress {
 	total: number;
@@ -79,8 +80,10 @@ export async function importGarminBundle(
 	const lower = file.name.toLowerCase();
 
 	// Existing Garmin-sourced runs → dedupe key. `metadata.garmin_id`
-	// is the canonical identity for FIT-sourced runs; `composite_key`
-	// (`{started_at}|{distance_m}`) catches the GPX/TCX fallback path.
+	// is the canonical identity for FIT-sourced runs; the normalised
+	// `compositeKey` (started_at + distance) catches the GPX/TCX
+	// fallback path against DB rows, the FIT entries, and other entries
+	// in the same bundle.
 	const { data: existing } = await supabase
 		.from(TABLES.runs)
 		.select('metadata, started_at, distance_m')
@@ -92,7 +95,7 @@ export async function importGarminBundle(
 		const md = r.metadata as Record<string, unknown> | null;
 		const gid = md?.garmin_id;
 		if (gid) seenIds.add(String(gid));
-		seenComposite.add(`${r.started_at}|${r.distance_m}`);
+		seenComposite.add(compositeKey(r.started_at, r.distance_m));
 	}
 	const hrZoneCollector: HrZoneCollector = { hrZones: null };
 
@@ -222,7 +225,7 @@ async function importFitFile(
 	if (parsed.garmin_file_id && seenIds.has(parsed.garmin_file_id)) {
 		return 'skipped';
 	}
-	const composite = `${parsed.startedAt}|${parsed.distance_m}`;
+	const composite = compositeKey(parsed.startedAt, parsed.distance_m);
 	if (seenComposite.has(composite)) return 'skipped';
 
 	const metadata: Record<string, unknown> = {
@@ -291,7 +294,7 @@ async function importRouteFile(
 			? Math.max(0, Math.round((Date.parse(lastTs) - Date.parse(firstTs)) / 1000))
 			: 0;
 
-	const composite = `${new Date(startedAt).toISOString()}|${Math.round(r.distance_m)}`;
+	const composite = compositeKey(startedAt, r.distance_m);
 	if (seenComposite.has(composite)) return 'skipped';
 
 	await saveRun({
