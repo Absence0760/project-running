@@ -134,9 +134,34 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
     });
   });
 
+  // Dedupe per-user against existing imports, then plain-insert the rest.
+  // We can't upsert with `onConflict` here: the global unique on
+  // runs.external_id was dropped for a PER-USER partial unique index
+  // (runs_user_external_id ... where external_id is not null,
+  // migration 20260528000003), and Postgres won't use a PARTIAL index as
+  // an ON CONFLICT arbiter unless the index predicate is also supplied —
+  // which PostgREST's `onConflict` param can't express, so any onConflict
+  // target raised 42P10 and the import 500'd, importing nothing.
+  let imported = 0;
+  let skipped = 0;
   if (runs.length > 0) {
-    await supabase.from('runs').upsert(runs, { onConflict: 'external_id' });
+    const externalIds = runs.map((r) => r.external_id as string);
+    const { data: existing } = await supabase
+      .from('runs')
+      .select('external_id')
+      .eq('user_id', user.id)
+      .in('external_id', externalIds);
+    const seen = new Set((existing ?? []).map((r) => r.external_id as string));
+    const fresh = runs.filter((r) => !seen.has(r.external_id as string));
+    skipped = runs.length - fresh.length;
+    if (fresh.length > 0) {
+      const { error } = await supabase.from('runs').insert(fresh);
+      if (error) {
+        return Response.json({ error: 'parkrun import failed to save' }, { status: 500 });
+      }
+      imported = fresh.length;
+    }
   }
 
-  return Response.json({ imported: runs.length, skipped: 0 });
+  return Response.json({ imported, skipped });
 }));
