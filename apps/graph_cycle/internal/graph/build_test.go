@@ -1,0 +1,91 @@
+package graph
+
+import (
+	"testing"
+
+	"github.com/paulmach/osm"
+)
+
+func tags(kv ...string) osm.Tags {
+	var t osm.Tags
+	for i := 0; i+1 < len(kv); i += 2 {
+		t = append(t, osm.Tag{Key: kv[i], Value: kv[i+1]})
+	}
+	return t
+}
+
+func TestFootAllowed(t *testing.T) {
+	cases := []struct {
+		name string
+		tags osm.Tags
+		want bool
+	}{
+		{"residential", tags("highway", "residential"), true},
+		{"footway", tags("highway", "footway"), true},
+		{"path", tags("highway", "path"), true},
+		{"motorway excluded", tags("highway", "motorway"), false},
+		{"trunk excluded", tags("highway", "trunk"), false},
+		{"no highway", tags("building", "yes"), false},
+		{"foot=no on residential", tags("highway", "residential", "foot", "no"), false},
+		{"foot=yes on trunk overrides", tags("highway", "trunk", "foot", "yes"), true},
+		{"access=private", tags("highway", "service", "access", "private"), false},
+		{"foot=designated wins over access=private", tags("highway", "path", "access", "private", "foot", "designated"), true},
+		{"unknown highway value", tags("highway", "elevator"), false},
+	}
+	for _, c := range cases {
+		if got := footAllowed(c.tags); got != c.want {
+			t.Errorf("%s: footAllowed = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestBuilderDedupAndCSR(t *testing.T) {
+	// A 3-node triangle, with one segment added twice (both orientations) to
+	// prove dedup. Expect 3 nodes, 3 undirected segments → 6 directed edges.
+	b := newBuilder()
+	b.addNode(1, Coord{Lat: 0, Lng: 0})
+	b.addNode(2, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
+	b.addNode(3, Coord{Lat: metresToDegLat(100), Lng: 0})
+	b.addSegment(1, 2)
+	b.addSegment(2, 1) // duplicate (reverse) — should be ignored
+	b.addSegment(2, 3)
+	b.addSegment(3, 1)
+	b.addSegment(1, 1) // self-loop — ignored
+	g := b.finalize()
+
+	if g.NumNodes() != 3 {
+		t.Fatalf("nodes = %d, want 3", g.NumNodes())
+	}
+	if g.NumEdges() != 6 {
+		t.Fatalf("directed edges = %d, want 6 (3 undirected × 2)", g.NumEdges())
+	}
+	// Every node should have degree ≥ 1 and CSR ranges must be well-formed.
+	for i := int32(0); i < int32(g.NumNodes()); i++ {
+		if g.edgeHead[i] > g.edgeHead[i+1] {
+			t.Fatalf("CSR head not monotonic at %d", i)
+		}
+	}
+}
+
+func TestNearestNode(t *testing.T) {
+	g := gridGraph(5, 5, 100, 40.0, -77.0)
+	// Query a point a few metres off node (2,2).
+	id := int64(2*5 + 2)
+	want := g // capture
+	wantIdx, ok := want.NearestNode(40.0+2*metresToDegLat(100)+metresToDegLat(3), -77.0+2*metresToDegLng(100, 40))
+	if !ok {
+		t.Fatal("NearestNode found nothing")
+	}
+	// The builder assigned dense indices in insertion order = grid scan order,
+	// so node (2,2)'s dense index equals its synthetic id here.
+	if int64(wantIdx) != id {
+		t.Fatalf("nearest idx = %d, want %d", wantIdx, id)
+	}
+}
+
+func TestNearestNodeEmpty(t *testing.T) {
+	g := newBuilder().finalize()
+	if _, ok := g.NearestNode(0, 0); ok {
+		t.Fatal("empty graph should report no nearest node")
+	}
+}
