@@ -97,6 +97,32 @@ test('parsePlanMarkdown accepts a hand-written table with mile distances', () =>
 	assert.equal(flat[1].notes, 'recovery');
 });
 
+test('parsePlanMarkdown accepts a hand-written row that omits the trailing Notes column', () => {
+	const md = [
+		'# Coach plan',
+		'| Week | Date | Type | Distance | Pace |',
+		'| --- | --- | --- | --- | --- |',
+		'| 1 | 2026-07-05 | easy | 5 km | 5:00 |',
+	].join('\n');
+	const parsed = parsePlanMarkdown(md);
+	const flat = flatten(parsed);
+	assert.equal(flat.length, 1, 'the notes-less row must not be silently dropped');
+	assert.equal(flat[0].kind, 'easy');
+	assert.equal(flat[0].notes, null);
+});
+
+test('fmtPaceCell / fmtHmsCell never emit a :60 seconds field for a fractional input', () => {
+	// 359.6 s/km must format as 6:00, not 5:60 (which re-parses a minute off).
+	const withFractionalPace = {
+		...SAMPLE,
+		workouts: [{ ...SAMPLE.workouts[0], target_pace_sec_per_km: 359.6 }],
+	};
+	const md = planToMarkdown(withFractionalPace);
+	assert.ok(!/:60\b/.test(md), `markdown contained a :60 field:\n${md}`);
+	const parsed = parsePlanMarkdown(md);
+	assert.equal(flatten(parsed)[0].target_pace_sec_per_km, 360);
+});
+
 // ─────────────────────── error handling ───────────────────────
 
 test('parsePlanMarkdown throws on an unknown workout kind', () => {

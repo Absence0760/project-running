@@ -82,16 +82,22 @@ function fmtKmCell(metres: number | null): string {
 
 function fmtPaceCell(secPerKm: number | null): string {
 	if (secPerKm == null || secPerKm <= 0) return '';
-	const m = Math.floor(secPerKm / 60);
-	const s = Math.round(secPerKm % 60);
+	// Round to whole seconds first — rounding the seconds field in isolation
+	// (Math.round(x % 60)) can produce a malformed ":60" for a fractional
+	// input (e.g. 359.6 → "5:60" instead of "6:00") that then re-parses to
+	// the wrong minute.
+	const total = Math.round(secPerKm);
+	const m = Math.floor(total / 60);
+	const s = total % 60;
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function fmtHmsCell(sec: number | null): string {
 	if (sec == null || sec <= 0) return '';
-	const h = Math.floor(sec / 3600);
-	const m = Math.floor((sec % 3600) / 60);
-	const s = Math.round(sec % 60);
+	const total = Math.round(sec);
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = total % 60;
 	return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
@@ -217,7 +223,12 @@ export function parsePlanMarkdown(text: string): ParsedPlan {
 				.split('|')
 				.slice(1, -1)
 				.map((c) => c.trim());
-			if (cells.length < 6) continue;
+			// Notes is the only optional column; a hand-written table may omit
+			// its trailing cell, leaving the five required columns (Week, Date,
+			// Kind, Distance, Pace). Require those five — fewer is a non-table
+			// line to skip; a short-but-present row then surfaces a readable
+			// validation error below instead of being silently dropped.
+			if (cells.length < 5) continue;
 			if (isSeparatorRow(cells)) continue;
 			// Header row (the `Week | Date | …` titles) — skip once.
 			if (!sawHeaderRow && /week/i.test(cells[0]) && /date/i.test(cells[1])) {
