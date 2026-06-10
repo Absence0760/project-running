@@ -1659,6 +1659,18 @@
 	export function getMapCenter() { return map ? map.getCenter() : null; }
 
 	/**
+	 * Pan + zoom the map to a point. Used by the sidebar's "use my
+	 * location" / typed-coordinate / pick affordances so setting a
+	 * Generate start/end gives visual confirmation — pre-fix those only
+	 * updated a sidebar label and painted a marker that could be
+	 * off-screen, so on the default world view the click looked dead.
+	 */
+	export function flyTo(lngLat: { lng: number; lat: number }, zoom = 15) {
+		if (!map) return;
+		map.flyTo({ center: [lngLat.lng, lngLat.lat], zoom });
+	}
+
+	/**
 	 * Show straight dashed lines between waypoints as a preview before routing.
 	 */
 	function updateStraightLine() {
@@ -2178,11 +2190,16 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* Keyboard shortcuts hint */
+	/* Keyboard shortcuts hint. Pinned bottom-RIGHT, not bottom-left:
+	   the parent page's "Click anywhere to start" empty-state card
+	   (.canvas-empty) owns the bottom-left corner, and the two used to
+	   stack — this hint (z-index 10) covered the onboarding card
+	   (z-index 5). Bottom-right is otherwise free (MapLibre's nav
+	   control is top-right). */
 	.shortcuts-hint {
 		position: absolute;
 		bottom: 12px;
-		inset-inline-start: 12px;
+		inset-inline-end: 12px;
 		z-index: 10;
 		display: flex;
 		gap: 12px;

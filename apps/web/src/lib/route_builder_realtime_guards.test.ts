@@ -450,3 +450,74 @@ test('events page also broadcasts race-state-changed alongside DB writes', () =>
 		);
 	}
 });
+
+// 3. Route-builder "locate / set point" affordances must recentre the
+//    map, and the keyboard-shortcuts hint must not share the bottom-left
+//    corner with the empty-state onboarding card. Both came from the
+//    "this page feels very unusable" field report:
+//      - the start/end "use my location" + typed-coord buttons set a
+//        sidebar label + painted a marker but never panned the map, so
+//        on the default world view the click looked dead;
+//      - the "Click anywhere to start" card (.canvas-empty, z-index 5)
+//        sat UNDER the shortcuts hint (.shortcuts-hint, z-index 10),
+//        both pinned bottom-left.
+
+test('RouteBuilder.svelte: exposes a flyTo export for sidebar recentring', () => {
+	const src = read('src/lib/components/RouteBuilder.svelte');
+	assert.match(
+		src,
+		/export function flyTo\(\s*lngLat[^)]*\)\s*\{[\s\S]*?map\.flyTo\(/,
+		'RouteBuilder must export flyTo() that calls map.flyTo — the page ' +
+			'uses it to recentre on a located / typed Generate start/end so ' +
+			'the click has visible feedback.',
+	);
+});
+
+test('RouteBuilder.svelte: shortcuts hint is pinned bottom-RIGHT, not bottom-left', () => {
+	const src = read('src/lib/components/RouteBuilder.svelte');
+	const block = src.match(/\.shortcuts-hint\s*\{[\s\S]*?\}/);
+	assert.ok(block, '.shortcuts-hint rule must exist');
+	assert.match(
+		block![0],
+		/inset-inline-end:/,
+		'.shortcuts-hint must pin to inset-inline-end (bottom-right) so it ' +
+			'stops covering the bottom-left .canvas-empty onboarding card.',
+	);
+	assert.doesNotMatch(
+		block![0],
+		/inset-inline-start:/,
+		'.shortcuts-hint must NOT use inset-inline-start — that puts it back ' +
+			'in the bottom-left corner on top of the .canvas-empty card.',
+	);
+});
+
+test('routes/new/+page.svelte: useMyLocation pans the map + guards geolocation', () => {
+	const src = read('src/routes/routes/new/+page.svelte');
+	const fn = src.match(/function useMyLocation\([^)]*\)\s*\{[\s\S]*?\n\t\}/);
+	assert.ok(fn, 'useMyLocation must exist');
+	assert.match(
+		fn![0],
+		/if \(!navigator\.geolocation\)/,
+		'useMyLocation must guard a missing navigator.geolocation (insecure ' +
+			'context) instead of throwing uncaught — matches the map locate button.',
+	);
+	assert.match(
+		fn![0],
+		/builder\?\.flyTo\(/,
+		'useMyLocation must call builder.flyTo on success so the map recentres ' +
+			'on the located point — without it the button looks dead on the ' +
+			'default world view.',
+	);
+});
+
+test('routes/new/+page.svelte: applyCoords pans the map to the typed point', () => {
+	const src = read('src/routes/routes/new/+page.svelte');
+	const fn = src.match(/function applyCoords\([^)]*\)\s*\{[\s\S]*?\n\t\}/);
+	assert.ok(fn, 'applyCoords must exist');
+	assert.match(
+		fn![0],
+		/builder\?\.flyTo\(/,
+		'applyCoords must call builder.flyTo so a typed Generate start/end ' +
+			'(likely off-screen) is brought into view.',
+	);
+});

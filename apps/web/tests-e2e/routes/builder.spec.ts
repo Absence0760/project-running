@@ -545,6 +545,79 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(page.locator('.shortcuts-hint')).toBeVisible({ timeout: 10_000 });
 	});
 
+	test('shortcuts hint does NOT overlap the "Click anywhere to start" card', async ({
+		page,
+	}) => {
+		// Field report: "the click anywhere to start modal is underneath
+		// another info modal in the bottom left." Both the empty-state
+		// onboarding card (.canvas-empty, z-index 5) and the keyboard
+		// shortcuts hint (.shortcuts-hint, z-index 10) used to live in the
+		// bottom-left corner, so the hint covered the onboarding card. The
+		// fix moves the hint to bottom-right. Assert the two boxes don't
+		// intersect so the regression can't silently come back.
+		await page.goto('/routes/new');
+		await waitForRouteBuilder(page);
+
+		const card = page.locator('.canvas-empty');
+		const hint = page.locator('.shortcuts-hint');
+		await expect(card).toBeVisible({ timeout: 10_000 });
+		await expect(hint).toBeVisible({ timeout: 10_000 });
+
+		const cardBox = await card.boundingBox();
+		const hintBox = await hint.boundingBox();
+		expect(cardBox).not.toBeNull();
+		expect(hintBox).not.toBeNull();
+
+		const a = cardBox!;
+		const b = hintBox!;
+		const disjoint =
+			a.x + a.width <= b.x ||
+			b.x + b.width <= a.x ||
+			a.y + a.height <= b.y ||
+			b.y + b.height <= a.y;
+		expect(
+			disjoint,
+			`shortcuts hint ${JSON.stringify(b)} overlaps the empty-state ` +
+				`card ${JSON.stringify(a)} — they must not share the corner`,
+		).toBe(true);
+	});
+
+	test('builder.flyTo pans the map to the given point', async ({ page }) => {
+		// New export backing the sidebar's "use my location" + typed-coord
+		// affordances: setting a Generate start/end now recentres the map so
+		// the click has visible feedback. Drive the export directly and
+		// assert getMapCenter() moves to the requested point.
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		const target = { lat: 51.5074, lng: -0.1278 }; // London
+		await page.evaluate((p) => {
+			(
+				window as unknown as {
+					__routeBuilder: { flyTo: (q: { lat: number; lng: number }, z?: number) => void };
+				}
+			).__routeBuilder.flyTo(p, 14);
+		}, target);
+
+		await expect
+			.poll(
+				async () => {
+					const c = await page.evaluate(() =>
+						(
+							window as unknown as {
+								__routeBuilder: { getMapCenter: () => { lat: number; lng: number } | null };
+							}
+						).__routeBuilder.getMapCenter(),
+					);
+					if (!c) return Infinity;
+					return Math.abs(c.lat - target.lat) + Math.abs(c.lng - target.lng);
+				},
+				{ timeout: 8_000 },
+			)
+			.toBeLessThan(0.5);
+	});
+
 	test('Generate-by-distance: distance presets update the slider label', async ({ page }) => {
 		await page.goto('/routes/new');
 		// Open the distance-target panel.
@@ -727,5 +800,109 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		} finally {
 			await ctx.close();
 		}
+	});
+});
+
+test.describe('/routes/new — "use my location" pans the map', () => {
+	// Field report: "the locate start marker doesnt do anything." The
+	// start/end "use my location" buttons set a sidebar label + painted a
+	// marker, but never recentred the map — so on the default world view
+	// (geolocation denied at mount) the click looked dead. The fix flies
+	// the map to the located point. Grant geolocation + a fixed position
+	// so the button resolves a real fix.
+	const FIX = { latitude: 48.8566, longitude: 2.3522 }; // Paris
+	test.use({
+		storageState: USER_A.storageStatePath,
+		permissions: ['geolocation'],
+		geolocation: FIX,
+	});
+
+	async function mapCenter(page: Page): Promise<{ lat: number; lng: number } | null> {
+		return page.evaluate(() =>
+			(
+				window as unknown as {
+					__routeBuilder: { getMapCenter: () => { lat: number; lng: number } | null };
+				}
+			).__routeBuilder.getMapCenter(),
+		);
+	}
+
+	test('clicking "Use my location for start" recentres the map + paints the start marker', async ({
+		page,
+	}) => {
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		// The on-mount geolocation may already centre near the fix; move
+		// the map far away (Sydney) first so the locate click has an
+		// observable effect to assert.
+		const SYDNEY = { lat: -33.8688, lng: 151.2093 };
+		await page.evaluate((s) => {
+			(
+				window as unknown as {
+					__routeBuilder: { flyTo: (q: { lat: number; lng: number }, z?: number) => void };
+				}
+			).__routeBuilder.flyTo(s, 12);
+		}, SYDNEY);
+		await expect
+			.poll(
+				async () => {
+					const c = await mapCenter(page);
+					if (!c) return Infinity;
+					return Math.abs(c.lat - SYDNEY.lat) + Math.abs(c.lng - SYDNEY.lng);
+				},
+				{ timeout: 8_000 },
+			)
+			.toBeLessThan(0.5);
+
+		// Open the distance-target panel so the start point-row (with the
+		// my_location button) is mounted, then click it.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await page.getByRole('button', { name: 'Use my location for start' }).click();
+
+		// Map flies back to the geolocation fix...
+		await expect
+			.poll(
+				async () => {
+					const c = await mapCenter(page);
+					if (!c) return Infinity;
+					return Math.abs(c.lat - FIX.latitude) + Math.abs(c.lng - FIX.longitude);
+				},
+				{ timeout: 10_000 },
+			)
+			.toBeLessThan(0.5);
+
+		// ...and the green start marker is painted (driven by the page's
+		// $effect → setGenerationStart) + the sidebar reads "My location".
+		await expect(
+			page.locator('[data-testid="generation-endpoint-start"]'),
+		).toBeVisible({ timeout: 5_000 });
+		await expect(page.locator('.point-set').first()).toContainText('My location');
+	});
+
+	test('typed start coordinates recentre the map', async ({ page }) => {
+		// Same visual-confirmation fix on the keyboard-accessible coord
+		// entry: typing a start lat/lng + "Set start" flies the map there.
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		// New York — far from the Paris geolocation fix the map mounts at.
+		await page.getByLabel('Start latitude').fill('40.7128');
+		await page.getByLabel('Start longitude').fill('-74.0060');
+		await page.getByRole('button', { name: 'Set start', exact: true }).click();
+
+		await expect
+			.poll(
+				async () => {
+					const c = await mapCenter(page);
+					if (!c) return Infinity;
+					return Math.abs(c.lat - 40.7128) + Math.abs(c.lng - -74.006);
+				},
+				{ timeout: 10_000 },
+			)
+			.toBeLessThan(0.5);
 	});
 });

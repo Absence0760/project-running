@@ -240,6 +240,10 @@
 		const label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 		if (target === 'start') { startPoint = point; startLabel = label; }
 		else { endPoint = point; endLabel = label; }
+		// Bring the typed point into view — same visual-confirmation
+		// reasoning as useMyLocation. Typed coords are just as likely to
+		// land off-screen as a geolocated fix.
+		builder?.flyTo(point);
 	}
 
 	let estimatedTime = $derived.by(() => {
@@ -292,12 +296,25 @@
 	}
 
 	function useMyLocation(target: 'start' | 'end') {
+		// Match the map's locate button: `navigator.geolocation` is
+		// undefined on an insecure (http-over-LAN) context, where calling
+		// getCurrentPosition would throw uncaught and the button would
+		// truly do nothing. Surface it instead.
+		if (!navigator.geolocation) {
+			showToast(m('routeBuilder.geolocationNeedsHttps'), 'error');
+			return;
+		}
 		navigator.geolocation.getCurrentPosition(
 			(pos) => {
 				const point = { lat: pos.coords.latitude, lng: pos.coords.longitude };
 				const label = m('routeNew.myLocation');
 				if (target === 'start') { startPoint = point; startLabel = label; }
 				else { endPoint = point; endLabel = label; }
+				// Pan the map to the located point. Without this the click
+				// only updated the sidebar label + painted a marker that
+				// could be off-screen, so on the default world view the
+				// button looked dead — the reported "does nothing".
+				builder?.flyTo(point);
 			},
 			(err) => {
 				// Don't fail silently — the old empty callback left the button
