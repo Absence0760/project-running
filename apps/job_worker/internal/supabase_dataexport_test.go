@@ -1012,3 +1012,63 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 		}
 	}
 }
+
+// followups.md G1 + the safety_contacts "Art 20 DSAR export" sub-item:
+// safety_contacts (migration 20261218_001) keys on owner_id /
+// contact_user_id, NOT user_id, so the export-completeness guard's
+// user_id-column scan can't flag it — it is wired into the spec
+// explicitly. The subject is on both legs (rows they own + rows where
+// they are the confirmed contact), so both must ship, and the
+// confirm_token capability credential must never appear in the export's
+// select projection. Keep in lockstep with the TS twin.
+func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing.T) {
+	var queries []string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/rest/v1/safety_contacts") {
+			queries = append(queries, r.URL.RawQuery)
+			if strings.Contains(r.URL.RawQuery, "owner_id=eq.user-A") {
+				_, _ = w.Write([]byte(`[{"id":"sc1","owner_id":"user-A","contact_email":"pal@example.com","confirmed_at":"2026-06-01T00:00:00Z"}]`))
+				return
+			}
+			_, _ = w.Write([]byte(`[{"id":"sc2","contact_user_id":"user-A","contact_email":"me@example.com","confirmed_at":"2026-06-02T00:00:00Z"}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{"safety_contacts_owned.json", "safety_contacts_as_contact.json"} {
+		if rows, ok := out[key]; !ok || len(rows) == 0 {
+			t.Errorf("%s must appear in the export manifest with at least one row — safety_contacts Art 20 gap; got out=%v", key, extraTableKeys(out))
+		}
+	}
+
+	var sawOwner, sawContact bool
+	for _, q := range queries {
+		if strings.Contains(q, "owner_id=eq.user-A") {
+			sawOwner = true
+		}
+		if strings.Contains(q, "contact_user_id=eq.user-A") {
+			sawContact = true
+		}
+		// confirm_token is a capability credential — anyone holding it can
+		// confirm the contact via confirm_safety_contact_by_token — so the
+		// narrow select must omit it (no `select=*`).
+		if strings.Contains(q, "confirm_token") {
+			t.Errorf("confirm_token is a redeemable capability and must never ship in the export select; got query=%q", q)
+		}
+		if strings.Contains(q, "select=%2A") || strings.Contains(q, "select=*") {
+			t.Errorf("safety_contacts must use a narrow select that omits confirm_token, not select=*; got query=%q", q)
+		}
+	}
+	if !sawOwner {
+		t.Error("safety_contacts must be fetched scoped to owner_id (the contacts the subject designated)")
+	}
+	if !sawContact {
+		t.Error("safety_contacts must be fetched scoped to contact_user_id (rows where the subject is the contact)")
+	}
+}

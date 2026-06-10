@@ -193,6 +193,25 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// 20261216_001). Special-category health data, owner-scoped, squarely
 		// within Art 20. height_cm ships in the user_profiles export entry.
 		{ entry: 'body_metrics.json', table: 'body_metrics', filter: uidEq, select: '*' },
+		// safety_contacts — opt-in finish-alert relationships (migration
+		// 20261218_001). The subject is on both legs: rows they own
+		// (owner_id) and rows where they are the confirmed contact
+		// (contact_user_id). `confirm_token` is a redeemable capability —
+		// anyone holding it can confirm the contact via
+		// confirm_safety_contact_by_token — so the narrow select omits it,
+		// mirroring coach_athletes' invite_token exclusion.
+		{
+			entry: 'safety_contacts_owned.json',
+			table: 'safety_contacts',
+			filter: `owner_id=eq.${uid}`,
+			select: 'id,owner_id,contact_user_id,contact_email,confirmed_at,created_at,updated_at',
+		},
+		{
+			entry: 'safety_contacts_as_contact.json',
+			table: 'safety_contacts',
+			filter: `contact_user_id=eq.${uid}`,
+			select: 'id,owner_id,contact_user_id,contact_email,confirmed_at,created_at,updated_at',
+		},
 	];
 }
 

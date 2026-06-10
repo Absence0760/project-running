@@ -63,6 +63,7 @@ const (
 	TableGymWorkouts        = "gym_workouts"
 	TableFoodLog            = "food_log"
 	TableBodyMetrics        = "body_metrics"
+	TableSafetyContacts     = "safety_contacts"
 )
 
 // Bucket is a Supabase Storage bucket name — the `<bucket>` in

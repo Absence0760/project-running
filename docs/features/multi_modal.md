@@ -677,7 +677,15 @@ Data Safety disclosable). Plan:
   same PostgREST embed `training_plans` uses for its weeks/workouts.
   `body_metrics` (migration `20261216_001`) is now wired into **both**
   paths (`body_metrics.json`); `height_cm` ships in the `user_profiles`
-  export entry. Account *deletion* is already covered — all
+  export entry. `safety_contacts` (migration `20261218_001`) is wired in
+  both directions — `safety_contacts_owned.json` (rows the subject owns,
+  filtered `owner_id`) and `safety_contacts_as_contact.json` (rows where
+  the subject is the confirmed contact, filtered `contact_user_id`). It
+  keys on `owner_id` / `contact_user_id`, **not** `user_id`, so the Go
+  export-completeness guard's `user_id`-column scan can't auto-flag it —
+  it is wired explicitly. The `confirm_token` capability credential is
+  omitted from the select projection (same rationale as `coach_athletes`'
+  `invite_token`). Account *deletion* is already covered — all
   FK-cascade from `auth.users`, so deleting the auth user removes them —
   but **export is not automatic**, so wire each new modality table into
   the export path as it gains real data; don't ship a modality to real
