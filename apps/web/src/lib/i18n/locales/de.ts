@@ -305,6 +305,8 @@ export const messages = {
 	"dash.fieldRunCount": "Anzahl Läufe",
 	"dash.goalEditorHint": "Fülle beliebige Felder aus. Leer = kein Ziel für diese Kennzahl. Speichern ohne Eingabe löscht das Ziel.",
 	"dash.deleteButton": "Löschen",
+	"dash.deleteGoalTitle": "Dieses Ziel löschen?",
+	"dash.deleteGoalMessage": "Dieses Ziel und seine Fortschrittsverfolgung werden entfernt. Du kannst jederzeit ein neues erstellen.",
 	"dash.cancelButton": "Abbrechen",
 	"dash.saveButton": "Speichern",
 	"onboarding.pageTitle": "Willkommen — Threkir",

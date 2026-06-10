@@ -305,6 +305,8 @@ export const messages = {
 	"dash.fieldRunCount": "Número de carreras",
 	"dash.goalEditorHint": "Rellena los que quieras. En blanco = sin objetivo para esa métrica. Guardar sin nada borra el objetivo.",
 	"dash.deleteButton": "Eliminar",
+	"dash.deleteGoalTitle": "¿Eliminar este objetivo?",
+	"dash.deleteGoalMessage": "Este objetivo y su seguimiento de progreso se eliminarán. Puedes crear uno nuevo cuando quieras.",
 	"dash.cancelButton": "Cancelar",
 	"dash.saveButton": "Guardar",
 	"onboarding.pageTitle": "Bienvenido — Threkir",

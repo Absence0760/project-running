@@ -313,6 +313,8 @@ export const en = {
 	"dash.fieldRunCount": "Run count",
 	"dash.goalEditorHint": "Fill any subset. Blank = no target for that metric. Saving with nothing filled deletes the goal.",
 	"dash.deleteButton": "Delete",
+	"dash.deleteGoalTitle": "Delete this goal?",
+	"dash.deleteGoalMessage": "This goal and its progress tracking will be removed. You can create a new one anytime.",
 	"dash.cancelButton": "Cancel",
 	"dash.saveButton": "Save",
 	"onboarding.pageTitle": "Welcome — Threkir",

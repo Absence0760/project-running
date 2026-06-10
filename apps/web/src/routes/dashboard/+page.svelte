@@ -31,6 +31,7 @@
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import { loadSettings, peekCachedSettings, effective, updateUniversal } from '$lib/settings/settings';
 	import { relativeAge } from '$lib/runs/pr_recency';
@@ -252,6 +253,7 @@
 	let goals = $state<RunGoal[]>([]);
 	let showGoalEditor = $state(false);
 	let editingGoal = $state<RunGoal | null>(null);
+	let confirmDeleteGoalId = $state<string | null>(null);
 
 	/// The legacy `weekly_mileage_goal_m` setting (shared with Android
 	/// via Settings → Preferences) is folded into the same Goals
@@ -322,9 +324,12 @@
 		editingGoal = null;
 	}
 
-	function deleteGoal(id: string) {
+	function deleteGoal() {
+		const id = confirmDeleteGoalId;
+		if (!id) return;
 		goals = goals.filter((g) => g.id !== id);
 		saveGoals(auth.user?.id, goals);
+		confirmDeleteGoalId = null;
 		showGoalEditor = false;
 		editingGoal = null;
 	}
@@ -1623,7 +1628,7 @@
 		</p>
 		<div class="goal-editor-actions">
 			{#if goals.some((x) => x.id === eg.id)}
-				<button type="button" class="btn btn-danger" onclick={() => deleteGoal(eg.id)}>
+				<button type="button" class="btn btn-danger" onclick={() => (confirmDeleteGoalId = eg.id)}>
 					{m('dash.deleteButton')}
 				</button>
 			{/if}
@@ -1636,6 +1641,16 @@
 		</div>
 	{/if}
 </Modal>
+
+<ConfirmDialog
+	open={confirmDeleteGoalId !== null}
+	title={m('dash.deleteGoalTitle')}
+	message={m('dash.deleteGoalMessage')}
+	confirmLabel={m('dash.deleteButton')}
+	onconfirm={deleteGoal}
+	oncancel={() => (confirmDeleteGoalId = null)}
+	danger
+/>
 
 <style>
 	.page {

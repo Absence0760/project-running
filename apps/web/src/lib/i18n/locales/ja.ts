@@ -301,6 +301,8 @@ export const messages = {
 	"dash.fieldRunCount": "ラン回数",
 	"dash.goalEditorHint": "任意の項目を入力してください。空欄＝その指標の目標なし。何も入力せずに保存すると目標が削除されます。",
 	"dash.deleteButton": "削除",
+	"dash.deleteGoalTitle": "この目標を削除しますか？",
+	"dash.deleteGoalMessage": "この目標と進捗の記録が削除されます。いつでも新しく作成できます。",
 	"dash.cancelButton": "キャンセル",
 	"dash.saveButton": "保存",
 	"onboarding.pageTitle": "ようこそ — Threkir",

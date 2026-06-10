@@ -177,11 +177,14 @@ test.describe('/dashboard Goals — CRUD UI', () => {
 			await expect(card.locator('.goal-overall')).toHaveText(/^\d+%$/);
 		});
 
-		await test.step('click card → Delete → card disappears, empty state returns', async () => {
+		await test.step('click card → Delete → confirm → card disappears, empty state returns', async () => {
 			await page.locator('.goal-card').click();
-			const modal = page.locator('.modal');
+			const modal = page.locator('.modal', { hasText: 'Edit goal' });
 			await expect(modal).toBeVisible({ timeout: 5_000 });
 			await modal.getByRole('button', { name: 'Delete', exact: true }).click();
+			const confirm = page.locator('.modal', { hasText: 'Delete this goal?' });
+			await expect(confirm).toBeVisible({ timeout: 5_000 });
+			await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
 			await expect(page.locator('.modal')).toHaveCount(0);
 
 			await expect(page.locator('.goal-card')).toHaveCount(0);
@@ -218,8 +221,12 @@ test.describe('/dashboard Goals — CRUD UI', () => {
 		await expect(targets.nth(1)).toContainText(/0 \/ 4/);
 
 		await card.click();
-		await expect(modal).toBeVisible();
-		await modal.getByRole('button', { name: 'Delete', exact: true }).click();
+		const editGoalModal = page.locator('.modal', { hasText: 'Edit goal' });
+		await expect(editGoalModal).toBeVisible();
+		await editGoalModal.getByRole('button', { name: 'Delete', exact: true }).click();
+		const confirm = page.locator('.modal', { hasText: 'Delete this goal?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
 		await expect(page.locator('.goal-card')).toHaveCount(0);
 	});
 });
