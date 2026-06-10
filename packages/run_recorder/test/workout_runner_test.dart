@@ -191,6 +191,99 @@ void main() {
       expect(transitions, [0, 1]);
     });
 
+    test('a single snapshot that overshoots clears multiple distance steps',
+        () async {
+      // A GPS gap (tunnel / elevator) lands one snapshot 250 m past the
+      // start, covering two 100 m steps plus into a third. All three
+      // crossed boundaries must fire — not just the first.
+      final steps = [
+        _step(distance: 100, label: 'A'),
+        _step(distance: 100, label: 'B'),
+        _step(distance: 100, label: 'C'),
+      ];
+      final runner = WorkoutRunner(steps: steps);
+      final transitions = <int>[];
+      runner.events.listen((e) {
+        if (e is StepTransitionEvent) transitions.add(e.currentIndex);
+      });
+
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 250, elapsedSec: 50));
+
+      expect(runner.currentStepIndex, 2,
+          reason: 'A and B both complete in the one snapshot; C is active');
+      final results = runner.snapshotResults();
+      // A + B completed, C in-progress (skipped convention).
+      expect(results, hasLength(3));
+      expect(results[0].status, WorkoutStepStatus.completed);
+      expect(results[1].status, WorkoutStepStatus.completed);
+      // Each completed step records its TARGET, not the full 250 m overshoot.
+      expect(results[0].actualDistanceMetres, closeTo(100, 1e-9));
+      expect(results[1].actualDistanceMetres, closeTo(100, 1e-9));
+      // C carries the leftover 50 m (250 − 100 − 100).
+      expect(runner.stepDistanceMetres, closeTo(50, 1e-9));
+
+      await Future<void>.delayed(Duration.zero);
+      runner.dispose();
+      expect(transitions, [0, 1, 2]);
+    });
+
+    test('a single snapshot clears multiple short duration steps', () async {
+      // Three 10 s steps but the tick lands 25 s in — the first two must
+      // both auto-complete with the time overshoot carried into the third.
+      final steps = [
+        _durStep(durationSec: 10, label: 'A'),
+        _durStep(durationSec: 10, label: 'B'),
+        _durStep(durationSec: 10, label: 'C'),
+      ];
+      final runner = WorkoutRunner(steps: steps);
+      final transitions = <int>[];
+      runner.events.listen((e) {
+        if (e is StepTransitionEvent) transitions.add(e.currentIndex);
+      });
+
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 100, elapsedSec: 25));
+
+      expect(runner.currentStepIndex, 2);
+      final results = runner.snapshotResults();
+      expect(results, hasLength(3));
+      expect(results[0].status, WorkoutStepStatus.completed);
+      expect(results[1].status, WorkoutStepStatus.completed);
+      // Each completed step records its 10 s target, not the full 25 s.
+      expect(results[0].durationSeconds, 10);
+      expect(results[1].durationSeconds, 10);
+      // C carries the leftover 5 s (25 − 10 − 10).
+      expect(runner.stepElapsed, const Duration(seconds: 5));
+
+      await Future<void>.delayed(Duration.zero);
+      runner.dispose();
+      expect(transitions, [0, 1, 2]);
+    });
+
+    test('a single snapshot can complete the entire workout', () async {
+      // Exercises the loop's terminate-via-isComplete branch: the jump
+      // clears every step at once. The workout must finish, not strand
+      // the runner mid-list.
+      final steps = [
+        _step(distance: 100, label: 'A'),
+        _step(distance: 100, label: 'B'),
+      ];
+      final runner = WorkoutRunner(steps: steps);
+      var completed = 0;
+      runner.events.listen((e) {
+        if (e is WorkoutCompleteEvent) completed++;
+      });
+
+      runner.onSnapshot(_snap(distance: 0, elapsedSec: 0));
+      runner.onSnapshot(_snap(distance: 500, elapsedSec: 120));
+
+      expect(runner.isComplete, isTrue);
+      await Future<void>.delayed(Duration.zero);
+      expect(completed, 1, reason: 'exactly one WorkoutCompleteEvent');
+      runner.dispose();
+    });
+
     test('emits the initial transition for the first step', () async {
       final runner = WorkoutRunner(steps: [_step()]);
       final events = <WorkoutExecEvent>[];

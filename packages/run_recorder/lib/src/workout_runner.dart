@@ -194,13 +194,21 @@ class WorkoutRunner {
       }
     }
 
-    // Auto-advance — duration steps trip on elapsed time, distance
-    // steps on distance covered.
-    final endHit = step.isDurationBased
-        ? stepSecs >= step.targetDurationSec!
-        : stepDist >= step.targetDistanceMetres;
-    if (endHit) {
-      _advance(s, status: WorkoutStepStatus.completed);
+    // Auto-advance — duration steps trip on elapsed time, distance steps
+    // on distance covered. Loop, carrying the overshoot forward: a single
+    // snapshot can cover more than one step's target (duration steps
+    // shorter than the tick interval, or a distance jump past a short
+    // rep + its recovery after a GPS gap). Advancing once and re-anchoring
+    // to the current snapshot would skip those steps and stretch the next
+    // one by the discarded overshoot. The loop is bounded by steps.length
+    // (each iteration increments _idx).
+    while (!isComplete) {
+      final cur = steps[_idx];
+      final hit = cur.isDurationBased
+          ? stepElapsed.inSeconds >= cur.targetDurationSec!
+          : stepDistanceMetres >= cur.targetDistanceMetres;
+      if (!hit) break;
+      _advance(s, status: WorkoutStepStatus.completed, carryOvershoot: true);
     }
   }
 
@@ -325,20 +333,66 @@ class WorkoutRunner {
     _events.close();
   }
 
-  void _advance(RunSnapshot s, {required WorkoutStepStatus status}) {
+  /// Advance off the current step.
+  ///
+  /// [carryOvershoot] distinguishes the two reasons we leave a step:
+  ///  - Auto-completion (true): the step ended at its own target, but the
+  ///    snapshot may have covered past it (and past later steps). Record
+  ///    the step as having consumed exactly its target on its end axis —
+  ///    not the full overshoot — with the off axis allocated proportionally
+  ///    (constant-pace assumption across the gap), and anchor the next
+  ///    step to that consumed boundary so the overshoot flows into it.
+  ///  - Manual skip (false): the runner bailed mid-step, so the covered
+  ///    amount IS the actual, and the next step starts fresh from the
+  ///    current snapshot.
+  void _advance(
+    RunSnapshot s, {
+    required WorkoutStepStatus status,
+    bool carryOvershoot = false,
+  }) {
     final step = steps[_idx];
+
+    double consumedDistance;
+    Duration consumedElapsed;
+    if (carryOvershoot) {
+      final coveredDistance = stepDistanceMetres;
+      final coveredElapsed = stepElapsed;
+      if (step.isDurationBased) {
+        consumedElapsed = Duration(seconds: step.targetDurationSec!);
+        final ratio = coveredElapsed.inMicroseconds > 0
+            ? (consumedElapsed.inMicroseconds / coveredElapsed.inMicroseconds)
+                .clamp(0.0, 1.0)
+            : 1.0;
+        consumedDistance = coveredDistance * ratio;
+      } else {
+        consumedDistance = step.targetDistanceMetres;
+        final ratio = coveredDistance > 0
+            ? (step.targetDistanceMetres / coveredDistance).clamp(0.0, 1.0)
+            : 1.0;
+        consumedElapsed = coveredElapsed * ratio;
+      }
+    } else {
+      consumedDistance = stepDistanceMetres;
+      consumedElapsed = stepElapsed;
+    }
+
     _results.add(_resultForStep(
       index: _idx,
       step: step,
-      actualDistance: stepDistanceMetres,
-      actualElapsed: stepElapsed,
+      actualDistance: consumedDistance,
+      actualElapsed: consumedElapsed,
       status: status,
     ));
 
     final prev = _idx;
     _idx += 1;
-    _stepStartDistanceMetres = s.distanceMetres;
-    _stepStartElapsed = s.elapsed;
+    if (carryOvershoot) {
+      _stepStartDistanceMetres += consumedDistance;
+      _stepStartElapsed += consumedElapsed;
+    } else {
+      _stepStartDistanceMetres = s.distanceMetres;
+      _stepStartElapsed = s.elapsed;
+    }
     _firedHalfway = false;
     _firedLastFifty = false;
     _lastDriftCueAt = null;
