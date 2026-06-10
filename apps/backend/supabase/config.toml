@@ -6,7 +6,7 @@ port = 54322
 
 [auth]
 site_url = "http://localhost:7777"
-additional_redirect_urls = ["http://localhost:7777/auth/callback"]
+additional_redirect_urls = ["http://localhost:7777/auth/callback", "http://localhost:7779/auth/callback"]
 enable_signup = true
 
 [auth.email]
@@ -27,6 +27,23 @@ enabled = false
 
 [auth.external.apple]
 enabled = false
+
+# Generic OIDC provider used ONLY by the SSO e2e lane (apps/web,
+# tests-e2e/sso). GoTrue special-cases `google`/`apple` and validates
+# them against the real Google/Apple, so they cannot point at a mock —
+# `keycloak` is the canonical generic OIDC provider that accepts a custom
+# `url`. In the SSO lane that url points at a local oauth2-mock-server
+# (see apps/web/tests-e2e/sso/README.md). When the env vars are unset
+# (every other job + local dev) the provider is enabled but inert: GoTrue
+# fetches the OIDC endpoints lazily at request time, so an unreachable
+# url never breaks `supabase start`, and nothing initiates a keycloak
+# sign-in. The values below are non-secret test placeholders; the lane
+# overrides url/client_id/secret via env() at start time.
+[auth.external.keycloak]
+enabled = true
+client_id = "env(SSO_MOCK_OIDC_CLIENT_ID)"
+secret = "env(SSO_MOCK_OIDC_SECRET)"
+url = "env(SSO_MOCK_OIDC_URL)"
 
 # Edge Function defaults bake in verify_jwt = true, which gates the
 # function on a Supabase-issued JWT (anon or user). The three handlers
