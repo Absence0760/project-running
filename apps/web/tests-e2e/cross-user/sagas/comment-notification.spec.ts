@@ -101,7 +101,10 @@ test.describe('saga: alex comments runner → runner inbox row + bell + click-th
 				runner.locator('.comment p').filter({ hasText: commentBody })
 			).toBeVisible({ timeout: 10_000 });
 		} finally {
-			// Alex cleans up the comment so the seed state survives.
+			// Alex cleans up the comment so the seed state survives. The
+			// per-row × opens a ConfirmDialog (mis-tap guard); confirm it
+			// so the UI cleanup actually removes the row (the afterEach
+			// DB delete is the backstop).
 			await alex.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
 			const deleteBtn = alex
 				.locator('article.comment')
@@ -109,6 +112,9 @@ test.describe('saga: alex comments runner → runner inbox row + bell + click-th
 				.getByRole('button', { name: 'Delete comment' });
 			if (await deleteBtn.count()) {
 				await deleteBtn.click();
+				const confirm = alex.locator('.modal', { hasText: 'Delete this comment?' });
+				await expect(confirm).toBeVisible({ timeout: 5_000 });
+				await confirm.getByRole('button', { name: 'Delete comment' }).click();
 			}
 			await ctxAlex.close();
 			await ctxRunner.close();

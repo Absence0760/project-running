@@ -56,8 +56,12 @@ test.describe('cross-user comments', () => {
 			timeout: 10_000
 		});
 
-		// Delete (rescind), so the spec is idempotent across runs.
+		// Delete (rescind), so the spec is idempotent across runs. The
+		// per-row × opens a ConfirmDialog (mis-tap guard); confirm it.
 		await page.getByRole('button', { name: 'Delete comment' }).first().click();
+		const confirm = page.locator('.modal', { hasText: 'Delete this comment?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Delete comment' }).click();
 		await expect(page.locator('.comment')).toHaveCount(0);
 		await expect(page.locator('.comment-count')).toContainText('0 comments');
 	});
@@ -116,10 +120,14 @@ test.describe('cross-user comments', () => {
 		});
 		await expect(replyP).toBeVisible();
 
-		// Cleanup: deleting the parent cascades the reply.
+		// Cleanup: deleting the parent cascades the reply. The per-row ×
+		// opens a ConfirmDialog (mis-tap guard); confirm it.
 		await parentArticle
 			.getByRole('button', { name: 'Delete comment' })
 			.click();
+		const confirm = page.locator('.modal', { hasText: 'Delete this comment?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Delete comment' }).click();
 		await expect(
 			page.locator('article.comment', {
 				has: page.locator('p', { hasText: parentBody })

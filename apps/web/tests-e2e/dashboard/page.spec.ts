@@ -115,7 +115,12 @@ test.describe('/dashboard', () => {
 			.click();
 		await expect(page.locator('.modal-header h2', { hasText: 'Edit goal' }))
 			.toBeVisible({ timeout: 5_000 });
+		// Delete inside the editor opens a ConfirmDialog (mis-tap guard);
+		// stepping through it leaves both modals (edit + confirm) closed.
 		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		const confirm = page.locator('.modal', { hasText: 'Delete this goal?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
 		await expect(page.locator('.modal')).toHaveCount(0);
 
 		// Card count returns to baseline.
