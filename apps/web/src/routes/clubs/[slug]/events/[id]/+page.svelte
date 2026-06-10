@@ -115,6 +115,7 @@
 	let autoApproveOnArm = $state(true);
 	let showEndRaceConfirm = $state<'finished' | 'cancelled' | null>(null);
 	let showDeleteEventConfirm = $state(false);
+	let showRemoveResultConfirm = $state(false);
 	let exceptions = $state<EventException[]>([]);
 	let showCancelInstance = $state(false);
 	let cancelReason = $state('');
@@ -493,9 +494,17 @@
 	}
 
 	async function removeMyResult() {
-		if (!event || !activeInstance) return;
-		await removeEventResult(event.id, activeInstance);
-		await reloadInstance();
+		if (!event || !activeInstance || submitting) return;
+		submitting = true;
+		try {
+			await removeEventResult(event.id, activeInstance);
+			showRemoveResultConfirm = false;
+			await reloadInstance();
+		} catch (e) {
+			error = e instanceof Error ? e.message : m('clubEvent.resultRemoveFailed');
+		} finally {
+			submitting = false;
+		}
 	}
 
 	function formatDuration(s: number): string {
@@ -1363,7 +1372,7 @@
 					{/if}
 					{#if myUserId}
 						{#if hasMyResult}
-							<button type="button" class="btn-link" onclick={removeMyResult}>{m('clubEvent.removeMine')}</button>
+							<button type="button" class="btn-link" onclick={() => (showRemoveResultConfirm = true)} disabled={submitting}>{m('clubEvent.removeMine')}</button>
 						{:else}
 							<button type="button" class="btn btn-primary-sm" onclick={openResultPicker} disabled={submitting}>
 								{submitting ? m('clubEvent.submitting') : m('clubEvent.submitMyTime')}
@@ -1633,6 +1642,16 @@
 	confirmLabel={showEndRaceConfirm === 'cancelled' ? m('clubEvent.cancelRaceTitle') : m('clubEvent.endRaceTitle')}
 	onconfirm={confirmEndRace}
 	oncancel={() => showEndRaceConfirm = null}
+	danger
+/>
+
+<ConfirmDialog
+	open={showRemoveResultConfirm}
+	title={m('clubEvent.removeMyResultTitle')}
+	message={m('clubEvent.removeMyResultMessage')}
+	confirmLabel={m('clubEvent.removeResultConfirm')}
+	onconfirm={removeMyResult}
+	oncancel={() => (showRemoveResultConfirm = false)}
 	danger
 />
 
