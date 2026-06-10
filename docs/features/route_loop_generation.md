@@ -1,11 +1,42 @@
-# Route loop generation v2 — design proposal
+# Route loop generation v2 — design + build notes
 
-**Status: PROPOSAL — not built.** Would augment the GraphHopper `round_trip`
-generator ([decisions §137](../architecture/decisions.md)) for the "Generate a
-route by distance" feature. Written 2026-06-09 after a user reported generated
-loops radiating out on a long road instead of using the dense street grid near
-the start. **Refined after a multi-start, multi-distance proof-of-concept — read
-"What the PoC found" before committing to a build.**
+**Status: BUILT — generator + polygon-first integration shipped; the
+first-class loop-poor UX (§Loop-poor fallback) is deferred.** Augments the
+GraphHopper `round_trip` generator
+([decisions §137](../architecture/decisions.md)) for the "Generate a route by
+distance" feature. Written 2026-06-09 after a user reported generated loops
+radiating out on a long road instead of using the dense street grid near the
+start; built 2026-06-10. **Refined after a multi-start, multi-distance
+proof-of-concept — read "What the PoC found" before changing the search.**
+
+**Result (2026-06-10):** dense + medium starts get a real compact loop within
+band where round_trip only produced a radial out-and-back; loop-poor starts fall
+through to round_trip and reuse the existing shortfall banner. The
+largest-achievable-loop probe + the 3-way choice are NOT yet built — see
+§Loop-poor fallback.
+
+The generator lives at `apps/web/src/lib/routes/generate/`: `loop_polygon.ts`
+(via-point placement + sampling grid), `loop_select.ts` (`areaEfficiency` +
+spur/snap/distance gating), `loop_generate.ts` (two-stage search + OSRM
+`/route/v1/foot` driving). `handler.ts` tries the polygon path FIRST when
+`OSRM_URL`/`PUBLIC_OSRM_URL` is set and falls through to `round_trip` on a
+loop-poor `null`. Unit tests sit beside each module
+(`loop_generate.test.ts`, …); the browser-rendered loop + the loop-poor
+fall-through are e2e-covered in
+`apps/web/tests-e2e/routes/generate-loop.spec.ts`.
+
+### Live measurement (self-hosted OSRM `127.0.0.1:5000`, 5 km target, 2026-06-10)
+
+| Start | path | achieved | vs target | areaEfficiency |
+|---|---|---|---|---|
+| Dense (Arlington `38.8807,-77.0911`) | polygon | 5408 m | +8.2% | 0.308 |
+| Medium (Reston `38.9586,-77.3411`) | polygon | 5539 m | +10.8% | 0.325 |
+| Sparse (`37.6520,-77.3611`) | round_trip fallback | — (polygon `null`) | — | — |
+
+Both dense + medium clear the spur floor with a real compact loop inside the
+±15% band; the sparse start is loop-poor (every candidate a zero-area spur), so
+the polygon path returns `null` and the handler falls through to `round_trip` —
+exactly the PoC's prediction. Re-measure if the OSRM profile/version changes.
 
 ## Problem
 
@@ -53,8 +84,10 @@ a max-distance metric.
 - Distance within ~±10% of target **where a loop exists**.
 - Real loop shape: `areaEfficiency` above a spur floor (~0.12–0.15).
 - Latency: a few seconds (user-initiated "Generate").
-- **Honest, helpful behaviour where no loop exists** (see the fallback below) —
-  not today's generic "13% short, try a different start."
+- **Honest, helpful behaviour where no loop exists** (see the fallback below).
+  *Partially met:* a loop-poor start falls through to round_trip and shows the
+  existing "shorter than X — use Y instead" shortfall banner (one-click apply).
+  The richer largest-achievable-loop probe + 3-way choice is deferred.
 
 ## Approach: sampled via-point polygons + areaEfficiency selection
 
@@ -76,13 +109,24 @@ K = 3 (triangle) is the primary shape — K = 4 blew up far more often in the Po
 Total ≈ 35–45 engine calls per generate; OSRM route calls are ~10–50 ms and
 parallelizable → ~0.5–1 s wall-clock.
 
-### Loop-poor fallback (first-class, not an afterthought)
-When no candidate clears the distance + shape bar (the reported case):
+### Loop-poor fallback (DEFERRED — designed, not built)
+When no candidate clears the distance + shape bar (the reported case), the
+intended UX is:
 - Probe + report the **largest real compact loop achievable** nearby (e.g.
   "best loop near you is ~2 km").
 - Offer three honest choices: (a) generate that shorter real loop, (b) accept an
   out-and-back to the requested distance (today's `round_trip`), (c) try a
   different start. Strictly better than the current generic warning.
+
+**Status: not yet built.** Today, a loop-poor start where the polygon generator
+returns `null` falls straight through to `round_trip` in `handleGenerate`, and
+`RouteBuilder` surfaces the pre-existing shortfall banner
+(`generateLoopFromServer` → `ongeneratemismatch` → "shorter than X — use Y
+instead", one-click apply) when the rendered loop lands outside the ±15% accept
+band. There is **no largest-achievable-loop probe** (the polygon path doesn't
+surface the best loop distance it found) and **no explicit 3-way choice**. Building
+the probe + choice is the remaining P3 work; it is the durable fix for the
+reported sparse start and is tracked as a follow-up.
 
 ## Architecture
 
@@ -107,9 +151,10 @@ good loop, replacing `round_trip`'s seed re-roll.
   retired the core research risk.)*
 - **P2 — refinement**: radius sample-refine, variety re-roll, selection polish.
   ~0.5–1 day.
-- **P3 — loop-poor UX + integration**: largest-achievable-loop probe + the 3-way
-  choice; wire into `/api/routes/generate` (polygon-first, `round_trip`
-  fallback). ~1 day.
+- **P3 — loop-poor UX + integration**: *integration done* (polygon-first wiring
+  into `/api/routes/generate`, `round_trip` fallback on loop-poor `null`); the
+  *largest-achievable-loop probe + 3-way choice is DEFERRED* (see §Loop-poor
+  fallback). ~1 day remaining.
 - **P4 — tests + ship**: unit tests (pure placement/scoring, mocked engine) +
   e2e happy path + measure across density tiers + docs/§137 + Lambda parity +
   tuning. ~1 day.
@@ -128,9 +173,9 @@ good loop, replacing `round_trip`'s seed re-roll.
 - Self-overlap / figure-8 placements. `areaEfficiency` already penalises
   low-area shapes.
 
-## Recommendation
+## Recommendation (retained as the rationale for what shipped)
 
-**Build it — with eyes open.** Validated as a clear win in dense + medium areas
+**Built — with eyes open.** Validated as a clear win in dense + medium areas
 (where most users start: real ~5 km loops at −1% vs radial out-and-backs), and it
 forces a genuinely better loop-poor fallback UX. **It will not fix the specific
 start in the report** — that location cannot form a compact loop at any distance,

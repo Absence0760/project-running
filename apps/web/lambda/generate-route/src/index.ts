@@ -53,6 +53,9 @@ export const handler = async (
 		const result = await handleGenerate(rawBody, {
 			graphhopperUrl: process.env.GRAPHHOPPER_URL,
 			graphhopperApiKey: process.env.GRAPHHOPPER_API_KEY,
+			// OSRM for the polygon-loop generator (tried first when set), parity
+			// with the SvelteKit wrapper: OSRM_URL override else PUBLIC_OSRM_URL.
+			osrmUrl: process.env.OSRM_URL || process.env.PUBLIC_OSRM_URL,
 		});
 		if (result.status === 502) {
 			// Engine unreachable / failing. A 502 here is a CLEAN handled

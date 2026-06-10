@@ -32,6 +32,12 @@ import { USER_A } from '../fixtures/users';
 // Richmond, VA suburb — the coordinate the user actually exercises.
 const FIELD_START = { lat: 37.6519, lng: -77.3611 };
 
+// Match the client OSRM heuristic's calls by PATH, not host: the demo
+// (router.project-osrm.org) in CI, but localhost:5000 locally when
+// PUBLIC_OSRM_URL is set + the dev server is reused. A host-pinned mock misses
+// the latter and the client hits the real engine.
+const OSRM_ROUTE = /\/route\/v1\/foot\//;
+
 const TARGETS = [
 	{ label: '3.1 mi (5 km)', m: 5000, toleranceM: 1500 },
 	{ label: '5 km', m: 5000, toleranceM: 1500 },
@@ -45,7 +51,7 @@ const TARGETS = [
  * route builder treats every segment as a successful snap.
  */
 async function mockOsrmStraightLines(page: Page) {
-	await page.route('https://router.project-osrm.org/**', async (route: Route) => {
+	await page.route(OSRM_ROUTE, async (route: Route) => {
 		const url = route.request().url();
 		const match = url.match(/\/foot\/([^?]+)/);
 		if (!match) {
@@ -129,6 +135,89 @@ function loopPolyline(
 	pts[0] = [start.lng, start.lat];
 	pts[pts.length - 1] = [start.lng, start.lat];
 	return pts;
+}
+
+/**
+ * A compact polygon loop — the shape the server's sampled via-point generator
+ * (loop_generate.ts) returns: OSRM traces `start → v1 → … → vK → start`, so the
+ * polyline is a real K-gon anchored at the start, NOT a smooth circle. Built as
+ * a regular K-gon (default triangle, the generator's primary shape) whose
+ * perimeter ≈ targetM, with the first vertex pinned to `start`. Distinct from
+ * `loopPolyline` (a 24-gon ≈ circle = the round_trip fallback shape) so the two
+ * server paths render visibly different geometry.
+ */
+function polygonLoopPolyline(
+	start: { lat: number; lng: number },
+	targetM: number,
+	k = 3,
+): [number, number][] {
+	// Regular K-gon side s has perimeter k·s; its circumradius is
+	// s / (2·sin(π/k)). Solve for the circumradius that gives perimeter targetM.
+	const side = targetM / k;
+	const circumradiusM = side / (2 * Math.sin(Math.PI / k));
+	const rDeg = circumradiusM / 111320;
+	const cosLat = Math.cos((start.lat * Math.PI) / 180);
+	// Centre offset so the first vertex lands exactly on `start` (the via-point
+	// generator anchors the loop at the start). First vertex due north of centre.
+	const centerLat = start.lat - rDeg;
+	const pts: [number, number][] = [];
+	for (let i = 0; i <= k; i++) {
+		const a = -Math.PI / 2 + (i / k) * 2 * Math.PI;
+		pts.push([start.lng + (Math.cos(a) * rDeg) / cosLat, centerLat + Math.sin(a) * rDeg]);
+	}
+	pts[0] = [start.lng, start.lat];
+	pts[pts.length - 1] = [start.lng, start.lat];
+	return pts;
+}
+
+/**
+ * Mock the server-side generate endpoint with a compact POLYGON loop — what the
+ * client sees when OSRM is configured and the sampled via-point generator clears
+ * the spur/snap bar (the dense/medium-start happy path). The traced K-gon is a
+ * real loop with non-trivial enclosed area, unlike the round_trip out-and-back.
+ */
+async function mockGeneratePolygonLoop(page: Page) {
+	await page.route('**/api/routes/generate', async (route: Route) => {
+		const body = route.request().postDataJSON() as {
+			start: { lat: number; lng: number };
+			targetDistanceM: number;
+		};
+		const coordinates = polygonLoopPolyline(body.start, body.targetDistanceM);
+		let distanceM = 0;
+		for (let i = 1; i < coordinates.length; i++) {
+			distanceM += haversineM(
+				{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+				{ lng: coordinates[i][0], lat: coordinates[i][1] },
+			);
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ coordinates, distanceM }),
+		});
+	});
+}
+
+/**
+ * Twice-mounted enclosed-area metric (shoelace on a local equirectangular
+ * projection, m²) — the same isoperimetric primitive `select.ts#enclosedAreaM2`
+ * scores candidates with server-side. Used here to assert the polygon path
+ * yields a real loop (non-zero area) and the degenerate fallback yields a
+ * near-collinear spur (≈ zero area), without importing server code into the
+ * browser context.
+ */
+function enclosedAreaM2(coords: [number, number][]): number {
+	if (coords.length < 4) return 0;
+	const lat0 = coords[0][1];
+	const mPerDegLat = 111320;
+	const mPerDegLng = 111320 * Math.cos((lat0 * Math.PI) / 180);
+	let area = 0;
+	for (let i = 0; i < coords.length; i++) {
+		const [lng1, lat1] = coords[i];
+		const [lng2, lat2] = coords[(i + 1) % coords.length];
+		area += lng1 * mPerDegLng * (lat2 * mPerDegLat) - lng2 * mPerDegLng * (lat1 * mPerDegLat);
+	}
+	return Math.abs(area) / 2;
 }
 
 /**
@@ -335,6 +424,89 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		const last = result.coordinates[result.coordinates.length - 1];
 		expect(last[1]).toBeCloseTo(FIELD_START.lat, 4);
 		expect(last[0]).toBeCloseTo(FIELD_START.lng, 4);
+	});
+
+	test('polygon path: compact via-point loop renders as a real loop near target', async ({
+		page,
+	}) => {
+		// When OSRM is configured the server tries the sampled via-point polygon
+		// generator FIRST and returns its traced K-gon (loop_generate.ts). The
+		// builder must render that as a closed loop near the target with the same
+		// post-collapse anchor shape as the round_trip path — and it must be a
+		// REAL loop (non-trivial enclosed area), not an out-and-back.
+		await page.unroute('**/api/routes/generate');
+		await mockGeneratePolygonLoop(page);
+
+		const result = await generateLoopViaHook(page, {
+			targetDistanceM: 5000,
+			start: FIELD_START,
+		});
+
+		expect(result.ok).toBe(true);
+		expect(result.coordinates.length).toBeGreaterThan(1);
+
+		// Distance lands near target. Same ±1500 m band the circle-shaped TARGETS
+		// tests use: the builder collapses the returned loop to ≤4 anchors and
+		// re-routes them through the straight-line OSRM mock, so the rendered
+		// chord total under-runs the K-gon perimeter — a band wider than the
+		// production ±15% absorbs the mock's straight-line re-trace while still
+		// pinning the loop to the requested 5 km.
+		expect(result.totalDistanceM).toBeGreaterThan(5000 - 1500);
+		expect(result.totalDistanceM).toBeLessThan(5000 + 1500);
+
+		// Loop closure: first + last coordinate are the user's start.
+		const first = result.coordinates[0];
+		expect(first[1]).toBeCloseTo(FIELD_START.lat, 4);
+		expect(first[0]).toBeCloseTo(FIELD_START.lng, 4);
+		const last = result.coordinates[result.coordinates.length - 1];
+		expect(last[1]).toBeCloseTo(FIELD_START.lat, 4);
+		expect(last[0]).toBeCloseTo(FIELD_START.lng, 4);
+
+		// Post-collapse anchor shape matches the round_trip path (≤ 4).
+		expect(result.waypoints.length).toBeLessThanOrEqual(4);
+		expect(result.waypoints.length).toBeGreaterThanOrEqual(2);
+
+		// It is a genuine loop: the rendered polyline encloses real area, the
+		// defining difference from an out-and-back. A ~3.6 km re-traced triangle
+		// still encloses hundreds of thousands of m²; a spur encloses ~0. The
+		// floor sits well below the loop area and well above spur noise.
+		expect(enclosedAreaM2(result.coordinates)).toBeGreaterThan(300_000);
+	});
+
+	test('loop-poor: degenerate polygon snaps fall through to the round_trip loop', async ({
+		page,
+	}) => {
+		// Server-side, a loop-poor start makes the via-point polygon generator
+		// return null (every candidate is a zero-area spur or snapped too far),
+		// and the handler falls through to the round_trip out-and-back. The
+		// client sees a single 200 either way — what changes is the SHAPE. Mock
+		// the endpoint to emit the round_trip circle (the fall-through result) and
+		// assert the builder still renders a closed loop near target. The
+		// server-side null→round_trip decision itself is unit-pinned in
+		// handler.test.ts ("falls back to round_trip when the polygon path is
+		// loop-poor", degenerate spur + 250 m over-snap inputs).
+		await page.unroute('**/api/routes/generate');
+		await mockGenerateLoop(page);
+
+		const result = await generateLoopViaHook(page, {
+			targetDistanceM: 5000,
+			start: FIELD_START,
+		});
+
+		expect(result.ok).toBe(true);
+		// Same ±1500 m re-trace band as the polygon test above (and the TARGETS
+		// circle tests) — the collapse + straight-line re-route shrinks the
+		// rendered loop below the mocked perimeter.
+		expect(result.totalDistanceM).toBeGreaterThan(5000 - 1500);
+		expect(result.totalDistanceM).toBeLessThan(5000 + 1500);
+
+		const first = result.coordinates[0];
+		expect(first[1]).toBeCloseTo(FIELD_START.lat, 4);
+		expect(first[0]).toBeCloseTo(FIELD_START.lng, 4);
+		const last = result.coordinates[result.coordinates.length - 1];
+		expect(last[1]).toBeCloseTo(FIELD_START.lat, 4);
+		expect(last[0]).toBeCloseTo(FIELD_START.lng, 4);
+		expect(result.waypoints.length).toBeLessThanOrEqual(4);
 	});
 
 	test('loop-poor shortfall: offers the achievable distance and applies it on click', async ({
@@ -715,8 +887,8 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		// ship an empty route.
 		await page.unroute('**/api/routes/generate');
 		await page.route('**/api/routes/generate', (route) => route.fulfill({ status: 503, body: '{}' }));
-		await page.unroute('https://router.project-osrm.org/**');
-		await page.route('https://router.project-osrm.org/**', (route) =>
+		await page.unroute(OSRM_ROUTE);
+		await page.route(OSRM_ROUTE, (route) =>
 			route.fulfill({ status: 503, body: '{}' }),
 		);
 

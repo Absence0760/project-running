@@ -9,6 +9,7 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import { handleGenerate } from '$lib/routes/generate/handler';
 
 export const prerender = false;
@@ -45,6 +46,12 @@ export const POST: RequestHandler = async ({ request }) => {
 	const result = await handleGenerate(rawBody, {
 		graphhopperUrl: env.GRAPHHOPPER_URL,
 		graphhopperApiKey: env.GRAPHHOPPER_API_KEY,
+		// Self-hosted OSRM for the polygon-loop generator (tried first when set).
+		// A server-only OSRM_URL wins; else reuse PUBLIC_OSRM_URL (the same
+		// self-hosted engine the route builder already snaps against). The start
+		// coordinate is forwarded server-side, so even the PUBLIC_ value never
+		// leaks user coordinates to a third party.
+		osrmUrl: env.OSRM_URL || publicEnv.PUBLIC_OSRM_URL,
 	});
 	return json(result.status, result.body);
 };

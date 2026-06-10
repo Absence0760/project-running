@@ -19,6 +19,7 @@ import {
 	type LoopCandidate,
 } from './graphhopper';
 import { pickBestLoop } from './select';
+import { generatePolygonLoop } from './loop_generate';
 import { isValidTargetDistance } from '../route_loop';
 
 export interface GenerateRequest {
@@ -33,6 +34,11 @@ export interface GenerateConfig {
 	/// Shared secret forwarded to the engine as `X-Engine-Key` (see
 	/// RoundTripRequest.apiKey). Undefined in dev when the guard is permissive.
 	graphhopperApiKey?: string;
+	/// Self-hosted OSRM base URL for the sampled via-point polygon generator
+	/// (route_loop_generation.md). When set, the handler tries the polygon loop
+	/// FIRST and only falls back to round_trip when it returns loop-poor. Unset →
+	/// polygon path is skipped entirely (round_trip only).
+	osrmUrl?: string;
 }
 
 export interface GenerateDeps {
@@ -92,8 +98,26 @@ export async function handleGenerate(
 	if (!isValidTargetDistance(req.targetDistanceM)) {
 		return { status: 400, body: { error: 'invalid targetDistanceM' } };
 	}
-	if (!config.graphhopperUrl) {
+	if (!config.graphhopperUrl && !config.osrmUrl) {
 		return { status: 501, body: { error: 'route generation is not configured' } };
+	}
+
+	// Polygon-first: when OSRM is configured, try the sampled via-point loop
+	// (route_loop_generation.md). A real result wins; null means loop-poor (or
+	// OSRM unreachable) and we fall through to round_trip below.
+	if (config.osrmUrl) {
+		const fetcher: Fetcher = deps.fetcher ?? ((u, i) => fetch(u, i));
+		const polygon = await generatePolygonLoop(req.start, req.targetDistanceM, fetcher, {
+			osrmUrl: config.osrmUrl,
+		});
+		if (polygon) {
+			return { status: 200, body: polygon };
+		}
+		// OSRM produced no loop AND GraphHopper isn't configured for the fallback:
+		// this is a loop-poor location with no out-and-back engine to offer.
+		if (!config.graphhopperUrl) {
+			return { status: 502, body: { error: 'no usable route' } };
+		}
 	}
 
 	const seeds = Math.max(1, Math.min(MAX_SEEDS, Math.round(req.seeds ?? DEFAULT_SEEDS)));
