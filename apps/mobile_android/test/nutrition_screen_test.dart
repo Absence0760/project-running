@@ -68,6 +68,20 @@ void main() {
     }
   });
 
+  testWidgets('water card shows the litre readout + a remaining chip',
+      (tester) async {
+    final f = await _store('water_target_');
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      // Offline (no body weight) → flat 2 L goal, nothing drunk yet.
+      expect(find.text('0 / 2 L'), findsOneWidget);
+      expect(find.text('2000 ml left'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('water tracker increments by a 250 ml unit', (tester) async {
     final f = await _store('water_');
     try {

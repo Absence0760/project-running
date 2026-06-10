@@ -7002,6 +7002,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionWeeklyTrend => 'Last 7 days';
 
   @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal left';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal over';
+  }
+
+  @override
+  String get nutritionOnTarget => 'On target';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n over target';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Target reached';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Goal reached';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml left';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'On goal';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n under goal/day';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n over goal/day';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Daily goal';
+
+  @override
   String get nutritionEmptyTitle => 'No food logged today';
 
   @override

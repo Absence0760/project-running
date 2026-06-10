@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../food_search.dart' show FoodMacros;
 import '../l10n/gen/app_localizations.dart';
+import '../nutrition_budget.dart';
 import '../nutrition_targets.dart' show NutritionTargets;
 import '../nutrition_totals.dart' show MacroTotals, ringFraction;
 
@@ -25,11 +27,22 @@ class NutritionRingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final budget = computeDayBudget(
+      FoodMacros(
+        calories: consumed.calories,
+        proteinG: consumed.proteinG,
+        carbsG: consumed.carbsG,
+        fatG: consumed.fatG,
+      ),
+      targets,
+    );
     final rings = <_Ring>[
-      _Ring(l10n.nutritionCalories, consumed.calories, targets?.calories),
-      _Ring(l10n.nutritionProtein, consumed.proteinG, targets?.proteinG),
-      _Ring(l10n.nutritionCarbs, consumed.carbsG, targets?.carbsG),
-      _Ring(l10n.nutritionFat, consumed.fatG, targets?.fatG),
+      _Ring(l10n.nutritionCalories, consumed.calories, targets?.calories,
+          budget?.calories),
+      _Ring(l10n.nutritionProtein, consumed.proteinG, targets?.proteinG,
+          budget?.protein),
+      _Ring(l10n.nutritionCarbs, consumed.carbsG, targets?.carbsG, budget?.carbs),
+      _Ring(l10n.nutritionFat, consumed.fatG, targets?.fatG, budget?.fat),
     ];
     return Card(
       margin: EdgeInsets.zero,
@@ -70,6 +83,10 @@ class NutritionRingsCard extends StatelessWidget {
 
   Widget _ringWidget(ThemeData theme, _Ring r) {
     final frac = ringFraction(r.consumed, r.target);
+    // Ceiling rings (calories/fat) over target recolour to danger so a Home
+    // glance shows the overshoot the clamped arc would otherwise hide.
+    final over = r.budget?.exceeded ?? false;
+    final ringColor = over ? theme.colorScheme.error : theme.colorScheme.primary;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -86,10 +103,15 @@ class NutritionRingsCard extends StatelessWidget {
                   value: frac ?? 0,
                   strokeWidth: 5,
                   backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  color: theme.colorScheme.primary,
+                  color: ringColor,
                 ),
               ),
-              Text('${r.consumed}', style: theme.textTheme.labelSmall),
+              if (over)
+                Text('+${r.budget!.over}',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.error))
+              else
+                Text('${r.consumed}', style: theme.textTheme.labelSmall),
             ],
           ),
         ),
@@ -108,5 +130,6 @@ class _Ring {
   final String label;
   final int consumed;
   final int? target;
-  const _Ring(this.label, this.consumed, this.target);
+  final MacroBudget? budget;
+  const _Ring(this.label, this.consumed, this.target, this.budget);
 }

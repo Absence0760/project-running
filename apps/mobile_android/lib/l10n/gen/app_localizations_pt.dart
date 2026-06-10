@@ -7070,6 +7070,56 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
 
   @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal restantes';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal acima';
+  }
+
+  @override
+  String get nutritionOnTarget => 'Na meta';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n acima da meta';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml restantes';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'Na meta';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n abaixo da meta/dia';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n acima da meta/dia';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Meta diária';
+
+  @override
   String get nutritionEmptyTitle => 'Nada registrado hoje';
 
   @override
@@ -14194,6 +14244,56 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
+
+  @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal restantes';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal acima';
+  }
+
+  @override
+  String get nutritionOnTarget => 'Na meta';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n acima da meta';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml restantes';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'Na meta';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n abaixo da meta/dia';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n acima da meta/dia';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Meta diária';
 
   @override
   String get nutritionEmptyTitle => 'Nada registrado hoje';

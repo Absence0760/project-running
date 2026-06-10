@@ -11709,6 +11709,78 @@ abstract class AppLocalizations {
   /// **'Last 7 days'**
   String get nutritionWeeklyTrend;
 
+  /// Calorie budget chip: kcal still to eat
+  ///
+  /// In en, this message translates to:
+  /// **'{n} kcal left'**
+  String nutritionCaloriesLeft(int n);
+
+  /// Calorie budget chip: kcal over the ceiling
+  ///
+  /// In en, this message translates to:
+  /// **'{n} kcal over'**
+  String nutritionCaloriesOver(int n);
+
+  /// No description provided for @nutritionOnTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'On target'**
+  String get nutritionOnTarget;
+
+  /// Macro ring badge: amount over a ceiling macro
+  ///
+  /// In en, this message translates to:
+  /// **'{n} over target'**
+  String nutritionMacroOver(int n);
+
+  /// No description provided for @nutritionMacroReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Target reached'**
+  String get nutritionMacroReached;
+
+  /// Water card readout: consumed / target litres
+  ///
+  /// In en, this message translates to:
+  /// **'{consumed} / {target} L'**
+  String nutritionWaterAmount(String consumed, String target);
+
+  /// No description provided for @nutritionWaterGoalReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Goal reached'**
+  String get nutritionWaterGoalReached;
+
+  /// Water budget chip: ml still to drink
+  ///
+  /// In en, this message translates to:
+  /// **'{n} ml left'**
+  String nutritionWaterRemaining(int n);
+
+  /// No description provided for @nutritionWeekOnGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'On goal'**
+  String get nutritionWeekOnGoal;
+
+  /// Weekly trend chip: avg kcal under the daily goal
+  ///
+  /// In en, this message translates to:
+  /// **'{n} under goal/day'**
+  String nutritionWeekUnderGoal(int n);
+
+  /// Weekly trend chip: avg kcal over the daily goal
+  ///
+  /// In en, this message translates to:
+  /// **'{n} over goal/day'**
+  String nutritionWeekOverGoal(int n);
+
+  /// No description provided for @nutritionGoalLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily goal'**
+  String get nutritionGoalLine;
+
   /// No description provided for @nutritionEmptyTitle.
   ///
   /// In en, this message translates to:
