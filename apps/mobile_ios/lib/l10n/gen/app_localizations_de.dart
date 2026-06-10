@@ -611,19 +611,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get safetyUnknownRunner => 'Ein Threkir-Läufer';
 
   @override
-  String get activitySedentary => 'Kaum aktiv';
+  String get activitySedentary => 'Überwiegend sitzend (Bürojob)';
 
   @override
-  String get activityLight => 'Leicht aktiv';
+  String get activityLight => 'Leicht aktiv (wenig Alltagsbewegung)';
 
   @override
-  String get activityModerate => 'Mäßig aktiv';
+  String get activityModerate => 'Mäßig aktiv (oft auf den Beinen)';
 
   @override
-  String get activityVeryActive => 'Sehr aktiv';
+  String get activityVeryActive => 'Sehr aktiver Tag (körperliche Arbeit)';
 
   @override
-  String get activityExtraActive => 'Extrem aktiv';
+  String get activityExtraActive => 'Extrem aktiv (schwere körperliche Arbeit)';
 
   @override
   String get goalLose => 'Abnehmen';
@@ -6938,6 +6938,63 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gymPrE1rm => 'Beste gesch. 1RM';
 
   @override
+  String get gymRecordsLink => 'Rekorde';
+
+  @override
+  String get gymRecordsTitle => 'Persönliche Rekorde';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'Deine Bestleistung für jede gewichtete Übung.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'Noch keine gewichteten Übungen erfasst. Trage ein Gewicht zu einem Satz ein, um deine Bestleistungen zu verfolgen.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Zuletzt $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Einheiten',
+      one: '1 Einheit',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Zurück zu Rekorden';
+
+  @override
+  String get gymExerciseEmpty => 'Noch kein Verlauf für diese Übung.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '+$delta seit der ersten Einheit';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '−$delta seit der ersten Einheit';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'keine Veränderung seit der ersten Einheit';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Letztes Mal $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volumen';
+
+  @override
   String get gymDeleteConfirmTitle => 'Training löschen?';
 
   @override
@@ -7020,6 +7077,77 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get nutritionWeeklyTrend => 'Letzte 7 Tage';
+
+  @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal übrig';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal über dem Ziel';
+  }
+
+  @override
+  String get nutritionOnTarget => 'Ziel erreicht';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n über dem Ziel';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Ziel erreicht';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Ziel erreicht';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml übrig';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'Im Ziel';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n unter Ziel/Tag';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n über Ziel/Tag';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Tagesziel';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Ziel $base + $exercise kcal heute verbrannt';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Aktuelle Gym-Einheiten fließen in deine Ermüdung ein.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'Gym-Belastung ist von deiner Lauf-Bereitschaft ausgenommen.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Gym-Belastung von der Lauf-Bereitschaft ausschließen';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Standardmäßig erhöhen Gym-Einheiten deine Ermüdung und senken deine Bereitschaft, wie ein Lauf. Aktiviere dies, um Fitness, Ermüdung und Form nur auf Läufen basieren zu lassen.';
 
   @override
   String get nutritionEmptyTitle => 'Heute noch nichts erfasst';

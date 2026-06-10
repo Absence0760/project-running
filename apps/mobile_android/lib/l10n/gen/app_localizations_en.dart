@@ -607,19 +607,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyUnknownRunner => 'A Threkir runner';
 
   @override
-  String get activitySedentary => 'Sedentary';
+  String get activitySedentary => 'Mostly sitting (desk job)';
 
   @override
-  String get activityLight => 'Lightly active';
+  String get activityLight => 'Lightly active (light daily movement)';
 
   @override
-  String get activityModerate => 'Moderately active';
+  String get activityModerate => 'Moderately active (on your feet often)';
 
   @override
-  String get activityVeryActive => 'Very active';
+  String get activityVeryActive => 'Very active day (physical job)';
 
   @override
-  String get activityExtraActive => 'Extra active';
+  String get activityExtraActive => 'Extremely active (hard physical labour)';
 
   @override
   String get goalLose => 'Lose weight';
@@ -6862,6 +6862,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymPrE1rm => 'Best est. 1RM';
 
   @override
+  String get gymRecordsLink => 'Records';
+
+  @override
+  String get gymRecordsTitle => 'Personal records';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'Your best lift for every weighted exercise.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'No weighted lifts logged yet. Add a weight to a set to start tracking your bests.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Last $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessions',
+      one: '1 session',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Back to records';
+
+  @override
+  String get gymExerciseEmpty => 'No history for this exercise yet.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return 'up $delta since first session';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return 'down $delta since first session';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'no change since first session';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Last time $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volume';
+
+  @override
   String get gymDeleteConfirmTitle => 'Delete workout?';
 
   @override
@@ -6943,6 +7000,77 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nutritionWeeklyTrend => 'Last 7 days';
+
+  @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal left';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal over';
+  }
+
+  @override
+  String get nutritionOnTarget => 'On target';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n over target';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Target reached';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Goal reached';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml left';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'On goal';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n under goal/day';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n over goal/day';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Daily goal';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Goal $base + $exercise kcal burned today';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Recent gym sessions are factored into your fatigue.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'Gym load is excluded from your run readiness.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Exclude gym load from run readiness';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.';
 
   @override
   String get nutritionEmptyTitle => 'No food logged today';

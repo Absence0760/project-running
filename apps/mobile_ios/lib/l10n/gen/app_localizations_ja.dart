@@ -594,19 +594,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get safetyUnknownRunner => 'Threkir のランナー';
 
   @override
-  String get activitySedentary => 'ほとんど運動しない';
+  String get activitySedentary => 'ほとんど座っている（デスクワーク）';
 
   @override
-  String get activityLight => '軽い運動';
+  String get activityLight => '軽い活動（日常の動きが少ない）';
 
   @override
-  String get activityModerate => '中程度の運動';
+  String get activityModerate => '中程度の活動（よく立っている）';
 
   @override
-  String get activityVeryActive => '活発';
+  String get activityVeryActive => 'とても活動的な一日（肉体労働）';
 
   @override
-  String get activityExtraActive => '非常に活発';
+  String get activityExtraActive => '非常に活動的（激しい肉体労働）';
 
   @override
   String get goalLose => '減量';
@@ -6551,6 +6551,60 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymPrE1rm => '推定1RM最高';
 
   @override
+  String get gymRecordsLink => '記録';
+
+  @override
+  String get gymRecordsTitle => '自己ベスト';
+
+  @override
+  String get gymRecordsSubtitle => '重量種目ごとのあなたのベスト記録。';
+
+  @override
+  String get gymRecordsEmpty => '重量種目の記録はまだありません。セットに重量を入力すると自己ベストの記録が始まります。';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return '最終 $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countセッション',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => '記録に戻る';
+
+  @override
+  String get gymExerciseEmpty => 'この種目の履歴はまだありません。';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '初回から+$delta';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '初回から−$delta';
+  }
+
+  @override
+  String get gymSinceFirstFlat => '初回から変化なし';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return '前回 $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'ボリューム';
+
+  @override
   String get gymDeleteConfirmTitle => 'ワークアウトを削除しますか？';
 
   @override
@@ -6631,6 +6685,74 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get nutritionWeeklyTrend => '直近7日間';
+
+  @override
+  String nutritionCaloriesLeft(int n) {
+    return '残り $n kcal';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal 超過';
+  }
+
+  @override
+  String get nutritionOnTarget => '目標達成';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n 超過';
+  }
+
+  @override
+  String get nutritionMacroReached => '目標達成';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => '目標達成';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '残り $n ml';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => '目標どおり';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '目標より1日 $n 少ない';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '目標より1日 $n 多い';
+  }
+
+  @override
+  String get nutritionGoalLine => '1日の目標';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return '目標 $base + 本日消費 $exercise kcal';
+  }
+
+  @override
+  String get dashGymReadinessIncluded => '最近のジムのセッションは疲労に反映されています。';
+
+  @override
+  String get dashGymReadinessExcluded => 'ジムの負荷はランの準備度から除外されています。';
+
+  @override
+  String get prefsExcludeGymFromReadiness => 'ジムの負荷をランの準備度から除外する';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'デフォルトでは、ジムのセッションはランと同様に疲労を増やし準備度を下げます。フィットネス・疲労・フォームをランのみに基づかせるにはこれをオンにしてください。';
 
   @override
   String get nutritionEmptyTitle => '今日はまだ何も記録していません';

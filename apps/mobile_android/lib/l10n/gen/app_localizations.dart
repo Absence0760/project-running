@@ -1088,31 +1088,31 @@ abstract class AppLocalizations {
   /// Nutrition activity level: little exercise
   ///
   /// In en, this message translates to:
-  /// **'Sedentary'**
+  /// **'Mostly sitting (desk job)'**
   String get activitySedentary;
 
   /// Nutrition activity level: 1-3 days/week
   ///
   /// In en, this message translates to:
-  /// **'Lightly active'**
+  /// **'Lightly active (light daily movement)'**
   String get activityLight;
 
   /// Nutrition activity level: 3-5 days/week
   ///
   /// In en, this message translates to:
-  /// **'Moderately active'**
+  /// **'Moderately active (on your feet often)'**
   String get activityModerate;
 
   /// Nutrition activity level: 6-7 days/week
   ///
   /// In en, this message translates to:
-  /// **'Very active'**
+  /// **'Very active day (physical job)'**
   String get activityVeryActive;
 
   /// Nutrition activity level: training twice a day
   ///
   /// In en, this message translates to:
-  /// **'Extra active'**
+  /// **'Extremely active (hard physical labour)'**
   String get activityExtraActive;
 
   /// Nutrition weight goal: calorie deficit
@@ -11469,6 +11469,84 @@ abstract class AppLocalizations {
   /// **'Best est. 1RM'**
   String get gymPrE1rm;
 
+  /// No description provided for @gymRecordsLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Records'**
+  String get gymRecordsLink;
+
+  /// No description provided for @gymRecordsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal records'**
+  String get gymRecordsTitle;
+
+  /// No description provided for @gymRecordsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your best lift for every weighted exercise.'**
+  String get gymRecordsSubtitle;
+
+  /// No description provided for @gymRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No weighted lifts logged yet. Add a weight to a set to start tracking your bests.'**
+  String get gymRecordsEmpty;
+
+  /// Records card: when an exercise was last performed
+  ///
+  /// In en, this message translates to:
+  /// **'Last {date}'**
+  String gymRecordsLastDone(String date);
+
+  /// Records card: distinct session count for an exercise
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 session} other{{count} sessions}}'**
+  String gymRecordsSessions(int count);
+
+  /// No description provided for @gymExerciseBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to records'**
+  String get gymExerciseBack;
+
+  /// No description provided for @gymExerciseEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No history for this exercise yet.'**
+  String get gymExerciseEmpty;
+
+  /// Exercise progression: est-1RM gain since first session
+  ///
+  /// In en, this message translates to:
+  /// **'up {delta} since first session'**
+  String gymSinceFirstUp(String delta);
+
+  /// Exercise progression: est-1RM loss since first session
+  ///
+  /// In en, this message translates to:
+  /// **'down {delta} since first session'**
+  String gymSinceFirstDown(String delta);
+
+  /// No description provided for @gymSinceFirstFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'no change since first session'**
+  String get gymSinceFirstFlat;
+
+  /// Workout detail: vs-last-time hint date for an exercise
+  ///
+  /// In en, this message translates to:
+  /// **'Last time {date}'**
+  String gymDetailLastTime(String date);
+
+  /// No description provided for @gymVolumeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Volume'**
+  String get gymVolumeLabel;
+
   /// No description provided for @gymDeleteConfirmTitle.
   ///
   /// In en, this message translates to:
@@ -11630,6 +11708,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last 7 days'**
   String get nutritionWeeklyTrend;
+
+  /// Calorie budget chip: kcal still to eat
+  ///
+  /// In en, this message translates to:
+  /// **'{n} kcal left'**
+  String nutritionCaloriesLeft(int n);
+
+  /// Calorie budget chip: kcal over the ceiling
+  ///
+  /// In en, this message translates to:
+  /// **'{n} kcal over'**
+  String nutritionCaloriesOver(int n);
+
+  /// No description provided for @nutritionOnTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'On target'**
+  String get nutritionOnTarget;
+
+  /// Macro ring badge: amount over a ceiling macro
+  ///
+  /// In en, this message translates to:
+  /// **'{n} over target'**
+  String nutritionMacroOver(int n);
+
+  /// No description provided for @nutritionMacroReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Target reached'**
+  String get nutritionMacroReached;
+
+  /// Water card readout: consumed / target litres
+  ///
+  /// In en, this message translates to:
+  /// **'{consumed} / {target} L'**
+  String nutritionWaterAmount(String consumed, String target);
+
+  /// No description provided for @nutritionWaterGoalReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Goal reached'**
+  String get nutritionWaterGoalReached;
+
+  /// Water budget chip: ml still to drink
+  ///
+  /// In en, this message translates to:
+  /// **'{n} ml left'**
+  String nutritionWaterRemaining(int n);
+
+  /// No description provided for @nutritionWeekOnGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'On goal'**
+  String get nutritionWeekOnGoal;
+
+  /// Weekly trend chip: avg kcal under the daily goal
+  ///
+  /// In en, this message translates to:
+  /// **'{n} under goal/day'**
+  String nutritionWeekUnderGoal(int n);
+
+  /// Weekly trend chip: avg kcal over the daily goal
+  ///
+  /// In en, this message translates to:
+  /// **'{n} over goal/day'**
+  String nutritionWeekOverGoal(int n);
+
+  /// No description provided for @nutritionGoalLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily goal'**
+  String get nutritionGoalLine;
+
+  /// Calorie goal breakdown: base goal + exercise kcal added today
+  ///
+  /// In en, this message translates to:
+  /// **'Goal {base} + {exercise} kcal burned today'**
+  String nutritionGoalBreakdown(int base, int exercise);
+
+  /// No description provided for @dashGymReadinessIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent gym sessions are factored into your fatigue.'**
+  String get dashGymReadinessIncluded;
+
+  /// No description provided for @dashGymReadinessExcluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Gym load is excluded from your run readiness.'**
+  String get dashGymReadinessExcluded;
+
+  /// No description provided for @prefsExcludeGymFromReadiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude gym load from run readiness'**
+  String get prefsExcludeGymFromReadiness;
+
+  /// No description provided for @prefsExcludeGymFromReadinessHint.
+  ///
+  /// In en, this message translates to:
+  /// **'By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.'**
+  String get prefsExcludeGymFromReadinessHint;
 
   /// No description provided for @nutritionEmptyTitle.
   ///

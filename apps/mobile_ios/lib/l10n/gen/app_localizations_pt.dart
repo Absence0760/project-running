@@ -610,19 +610,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetyUnknownRunner => 'Um corredor do Threkir';
 
   @override
-  String get activitySedentary => 'Sedentário';
+  String get activitySedentary =>
+      'Maior parte sentado (trabalho de escritório)';
 
   @override
-  String get activityLight => 'Levemente ativo';
+  String get activityLight => 'Levemente ativo (pouca movimentação diária)';
 
   @override
-  String get activityModerate => 'Moderadamente ativo';
+  String get activityModerate => 'Moderadamente ativo (muito tempo em pé)';
 
   @override
-  String get activityVeryActive => 'Muito ativo';
+  String get activityVeryActive => 'Dia muito ativo (trabalho físico)';
 
   @override
-  String get activityExtraActive => 'Extremamente ativo';
+  String get activityExtraActive =>
+      'Extremamente ativo (trabalho físico pesado)';
 
   @override
   String get goalLose => 'Perder peso';
@@ -6929,6 +6931,63 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymPrE1rm => 'Melhor 1RM est.';
 
   @override
+  String get gymRecordsLink => 'Recordes';
+
+  @override
+  String get gymRecordsTitle => 'Recordes pessoais';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'A tua melhor marca em cada exercício com peso.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'Ainda não há exercícios com peso registados. Adiciona um peso a uma série para começar a acompanhar os teus recordes.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Último $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessões',
+      one: '1 sessão',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Voltar aos recordes';
+
+  @override
+  String get gymExerciseEmpty => 'Ainda não há histórico deste exercício.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '+$delta desde a primeira sessão';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '−$delta desde a primeira sessão';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'sem alteração desde a primeira sessão';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Última vez $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volume';
+
+  @override
   String get gymDeleteConfirmTitle => 'Excluir treino?';
 
   @override
@@ -7011,6 +7070,77 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
+
+  @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal restantes';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal acima';
+  }
+
+  @override
+  String get nutritionOnTarget => 'Na meta';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n acima da meta';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml restantes';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'Na meta';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n abaixo da meta/dia';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n acima da meta/dia';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Meta diária';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas hoje';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'As tuas sessões recentes de ginásio entram na tua fadiga.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'A carga do ginásio fica de fora do teu preparo para correr.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Excluir a carga do ginásio do preparo para correr';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Por padrão, as sessões de ginásio aumentam a tua fadiga e reduzem o teu preparo, como uma corrida. Ativa isto para que o teu condicionamento, fadiga e forma se baseiem apenas nas corridas.';
 
   @override
   String get nutritionEmptyTitle => 'Nada registrado hoje';
@@ -7679,19 +7809,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get safetyUnknownRunner => 'Um corredor do Threkir';
 
   @override
-  String get activitySedentary => 'Sedentário';
+  String get activitySedentary =>
+      'Maior parte sentado (trabalho de escritório)';
 
   @override
-  String get activityLight => 'Levemente ativo';
+  String get activityLight => 'Levemente ativo (pouca movimentação diária)';
 
   @override
-  String get activityModerate => 'Moderadamente ativo';
+  String get activityModerate => 'Moderadamente ativo (muito tempo em pé)';
 
   @override
-  String get activityVeryActive => 'Muito ativo';
+  String get activityVeryActive => 'Dia muito ativo (trabalho físico)';
 
   @override
-  String get activityExtraActive => 'Extremamente ativo';
+  String get activityExtraActive =>
+      'Extremamente ativo (trabalho físico pesado)';
 
   @override
   String get goalLose => 'Perder peso';
@@ -13998,6 +14130,63 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get gymPrE1rm => 'Melhor 1RM est.';
 
   @override
+  String get gymRecordsLink => 'Recordes';
+
+  @override
+  String get gymRecordsTitle => 'Recordes pessoais';
+
+  @override
+  String get gymRecordsSubtitle =>
+      'Sua melhor marca em cada exercício com peso.';
+
+  @override
+  String get gymRecordsEmpty =>
+      'Nenhum exercício com peso registrado ainda. Adicione um peso a uma série para começar a acompanhar seus recordes.';
+
+  @override
+  String gymRecordsLastDone(String date) {
+    return 'Último $date';
+  }
+
+  @override
+  String gymRecordsSessions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessões',
+      one: '1 sessão',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymExerciseBack => 'Voltar aos recordes';
+
+  @override
+  String get gymExerciseEmpty => 'Ainda não há histórico deste exercício.';
+
+  @override
+  String gymSinceFirstUp(String delta) {
+    return '+$delta desde a primeira sessão';
+  }
+
+  @override
+  String gymSinceFirstDown(String delta) {
+    return '−$delta desde a primeira sessão';
+  }
+
+  @override
+  String get gymSinceFirstFlat => 'sem mudança desde a primeira sessão';
+
+  @override
+  String gymDetailLastTime(String date) {
+    return 'Última vez $date';
+  }
+
+  @override
+  String get gymVolumeLabel => 'Volume';
+
+  @override
   String get gymDeleteConfirmTitle => 'Excluir treino?';
 
   @override
@@ -14080,6 +14269,77 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
+
+  @override
+  String nutritionCaloriesLeft(int n) {
+    return '$n kcal restantes';
+  }
+
+  @override
+  String nutritionCaloriesOver(int n) {
+    return '$n kcal acima';
+  }
+
+  @override
+  String get nutritionOnTarget => 'Na meta';
+
+  @override
+  String nutritionMacroOver(int n) {
+    return '$n acima da meta';
+  }
+
+  @override
+  String get nutritionMacroReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterAmount(String consumed, String target) {
+    return '$consumed / $target L';
+  }
+
+  @override
+  String get nutritionWaterGoalReached => 'Meta atingida';
+
+  @override
+  String nutritionWaterRemaining(int n) {
+    return '$n ml restantes';
+  }
+
+  @override
+  String get nutritionWeekOnGoal => 'Na meta';
+
+  @override
+  String nutritionWeekUnderGoal(int n) {
+    return '$n abaixo da meta/dia';
+  }
+
+  @override
+  String nutritionWeekOverGoal(int n) {
+    return '$n acima da meta/dia';
+  }
+
+  @override
+  String get nutritionGoalLine => 'Meta diária';
+
+  @override
+  String nutritionGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas hoje';
+  }
+
+  @override
+  String get dashGymReadinessIncluded =>
+      'Suas sessões recentes de musculação entram na sua fadiga.';
+
+  @override
+  String get dashGymReadinessExcluded =>
+      'A carga da musculação fica de fora do seu preparo para correr.';
+
+  @override
+  String get prefsExcludeGymFromReadiness =>
+      'Excluir a carga da musculação do preparo para correr';
+
+  @override
+  String get prefsExcludeGymFromReadinessHint =>
+      'Por padrão, as sessões de musculação aumentam sua fadiga e reduzem seu preparo, como uma corrida. Ative isto para que seu condicionamento, fadiga e forma se baseiem apenas nas corridas.';
 
   @override
   String get nutritionEmptyTitle => 'Nada registrado hoje';
