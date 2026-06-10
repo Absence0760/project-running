@@ -71,6 +71,35 @@ void main() {
       expect(s.contains(8), isFalse);
     });
 
+    test('down-sampled out-and-back collapses into broad contiguous spans', () {
+      // 600-point out-and-back (> maxScannedPoints, so it down-samples):
+      // out 0..2990 m, then retrace back to 0. The retraced half must
+      // surface as a few wide spans, not a shower of width-2 stubs from
+      // the old endpoint-only index mapping.
+      final out = [for (var i = 0; i < 300; i++) _w(i * 10.0)];
+      final back = [for (var i = 299; i >= 0; i--) _w(i * 10.0)];
+      final path = [...out, ...back];
+      final spans = detectOverlapSpans(path, toleranceM: 30);
+
+      expect(spans, isNotEmpty);
+      // Few spans, not hundreds of stubs.
+      expect(spans.length, lessThan(6),
+          reason: 'retrace should collapse into a handful of spans, '
+              'got ${spans.length}');
+      // At least one span is genuinely wide (spans many original points),
+      // proving original-frame ranges were filled, not just endpoints.
+      final widest = spans
+          .map((s) => s.endIndex - s.startIndex)
+          .reduce((a, b) => a > b ? a : b);
+      expect(widest, greaterThan(100),
+          reason: 'widest span was only $widest points');
+      // Every reported index is in range.
+      for (final s in spans) {
+        expect(s.startIndex, inInclusiveRange(0, path.length - 1));
+        expect(s.endIndex, inInclusiveRange(0, path.length - 1));
+      }
+    });
+
     test('long polylines are down-sampled to stay O(n²)-bounded', () {
       // 400 points along a straight line: no overlap. The call must
       // complete quickly (cap is maxScannedPoints=200).

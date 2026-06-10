@@ -46,12 +46,20 @@ List<OverlapSpan> detectOverlapSpans(
 }) {
   if (polyline.length < 4) return const [];
   // Down-sample for the segment-pair scan but report indices in the
-  // original frame.
-  final scanned = polyline.length <= maxScannedPoints
-      ? polyline
-      : _downsample(polyline, maxScannedPoints);
-  final isSampled = !identical(scanned, polyline);
-  final stride = isSampled ? polyline.length / scanned.length : 1.0;
+  // original frame. `origIndex[k]` is the original-polyline index of
+  // `scanned[k]` — the exact index the down-sample picked, so the mapping
+  // back can't drift from the sampling formula.
+  final List<int> origIndex;
+  final List<Waypoint> scanned;
+  if (polyline.length <= maxScannedPoints) {
+    scanned = polyline;
+    origIndex = const [];
+  } else {
+    origIndex = _downsampleIndices(polyline.length, maxScannedPoints);
+    scanned = [for (final i in origIndex) polyline[i]];
+  }
+  final isSampled = origIndex.isNotEmpty;
+  int orig(int k) => isSampled ? origIndex[k] : k;
 
   // Precompute cumulative path distance so we can skip segment pairs
   // that sit too close along the route — a dense polyline (e.g. OSRM
@@ -86,14 +94,14 @@ List<OverlapSpan> detectOverlapSpans(
       final b1 = scanned[j];
       final b2 = scanned[j + 1];
       if (_segmentsOverlap(a1, a2, b1, b2, toleranceM)) {
-        // Both segments retrace each other — mark both in original
-        // index space.
-        final iOrig = (i * stride).round();
-        final jOrig = (j * stride).round();
-        hits.add(iOrig);
-        hits.add(iOrig + 1);
-        hits.add(jOrig);
-        hits.add(jOrig + 1);
+        // Both segments retrace each other. Mark the FULL original-index
+        // range each scanned segment spans, not just its two endpoints:
+        // when down-sampled, a scanned segment (k, k+1) covers `stride`
+        // original points, so contiguous retraced segments collapse into
+        // one broad span instead of a series of disjoint stubs. For the
+        // non-sampled path orig(k+1) == orig(k)+1, so this is unchanged.
+        _addRange(hits, orig(i), orig(i + 1));
+        _addRange(hits, orig(j), orig(j + 1));
       }
     }
   }
@@ -132,12 +140,18 @@ bool _segmentsOverlap(
       toleranceM;
 }
 
-List<Waypoint> _downsample(List<Waypoint> coordinates, int maxPoints) {
-  if (coordinates.length <= maxPoints) return coordinates;
-  final step = (coordinates.length - 1) / (maxPoints - 1);
-  return [
-    for (var i = 0; i < maxPoints; i++) coordinates[(i * step).round()],
-  ];
+/// Original-polyline indices picked by an even down-sample to [maxPoints].
+List<int> _downsampleIndices(int length, int maxPoints) {
+  final step = (length - 1) / (maxPoints - 1);
+  return [for (var i = 0; i < maxPoints; i++) (i * step).round()];
+}
+
+void _addRange(Set<int> hits, int a, int b) {
+  final lo = a < b ? a : b;
+  final hi = a < b ? b : a;
+  for (var x = lo; x <= hi; x++) {
+    hits.add(x);
+  }
 }
 
 List<OverlapSpan> _collapseToSpans(List<int> sortedHits) {
