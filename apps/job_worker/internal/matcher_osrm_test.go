@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -43,11 +44,43 @@ func TestOSRMMatcher_SkipsLessThanTwoPoints(t *testing.T) {
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)
-	if out, err := m.Match(nil); err != nil || out != nil {
+	if out, err := m.Match(context.Background(), nil); err != nil || out != nil {
 		t.Errorf("nil input: out=%v err=%v", out, err)
 	}
-	if out, err := m.Match([]TrackPoint{{Lat: 1, Lng: 2}}); err != nil || out != nil {
+	if out, err := m.Match(context.Background(), []TrackPoint{{Lat: 1, Lng: 2}}); err != nil || out != nil {
 		t.Errorf("1 point: out=%v err=%v", out, err)
+	}
+}
+
+func TestOSRMMatcher_HonoursContextCancellation(t *testing.T) {
+	// A cancelled per-job context (job deadline hit / graceful shutdown)
+	// must abort the OSRM call rather than run to the client timeout. The
+	// handler signals once it has the request, then blocks; the test
+	// cancels only after that so the request genuinely reaches the server
+	// (cancelling earlier would abort before dial and never exercise the
+	// in-flight path).
+	gotRequest := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(gotRequest)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	m := NewOSRMMatcher(srv.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-gotRequest
+		cancel()
+	}()
+
+	_, err := m.Match(ctx, []TrackPoint{
+		{Lat: 51.5, Lng: -0.1}, {Lat: 51.51, Lng: -0.11},
+	})
+	if err == nil {
+		t.Fatal("expected a cancellation error, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error should wrap context.Canceled; got %v", err)
 	}
 }
 
@@ -74,7 +107,7 @@ func TestOSRMMatcher_SuccessfulMatch(t *testing.T) {
 	defer srv.Close()
 
 	m := NewOSRMMatcher(srv.URL)
-	out, err := m.Match([]TrackPoint{
+	out, err := m.Match(context.Background(), []TrackPoint{
 		{Lat: 51.5, Lng: -0.1},
 		{Lat: 51.51, Lng: -0.11},
 	})
@@ -103,7 +136,7 @@ func TestOSRMMatcher_NoMatchReturnsEmpty(t *testing.T) {
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)
-	out, err := m.Match([]TrackPoint{
+	out, err := m.Match(context.Background(), []TrackPoint{
 		{Lat: 51.5, Lng: -0.1},
 		{Lat: 51.51, Lng: -0.11},
 	})
@@ -122,7 +155,7 @@ func TestOSRMMatcher_HTTPErrorSurfaced(t *testing.T) {
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)
-	_, err := m.Match([]TrackPoint{
+	_, err := m.Match(context.Background(), []TrackPoint{
 		{Lat: 51.5, Lng: -0.1},
 		{Lat: 51.51, Lng: -0.11},
 	})
@@ -165,7 +198,7 @@ func TestOSRMMatcher_ChunksLongTracks(t *testing.T) {
 		in[i] = TrackPoint{Lat: 51.5 + float64(i)*0.0001, Lng: -0.1 + float64(i)*0.0001}
 	}
 	m := NewOSRMMatcher(srv.URL)
-	out, err := m.Match(in)
+	out, err := m.Match(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +241,7 @@ func TestOSRMMatcher_TailChunkOfOnePassedThrough(t *testing.T) {
 		in[i] = TrackPoint{Lat: 51.5, Lng: -0.1}
 	}
 	m := NewOSRMMatcher(srv.URL)
-	out, err := m.Match(in)
+	out, err := m.Match(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +262,7 @@ func TestOSRMMatcher_StitchedTooShortReturnsEmpty(t *testing.T) {
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)
-	out, err := m.Match([]TrackPoint{
+	out, err := m.Match(context.Background(), []TrackPoint{
 		{Lat: 51.5, Lng: -0.1},
 		{Lat: 51.51, Lng: -0.11},
 	})
@@ -247,7 +280,7 @@ func TestOSRMMatcher_MalformedJSONIsError(t *testing.T) {
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)
-	_, err := m.Match([]TrackPoint{
+	_, err := m.Match(context.Background(), []TrackPoint{
 		{Lat: 51.5, Lng: -0.1}, {Lat: 51.51, Lng: -0.11},
 	})
 	if err == nil {

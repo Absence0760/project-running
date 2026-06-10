@@ -338,7 +338,7 @@ func (w *Worker) handleMapMatch(ctx context.Context, job *Job) error {
 		return fmt.Errorf("download track: %w", err)
 	}
 
-	matched, err := w.Matcher.Match(raw)
+	matched, err := w.Matcher.Match(ctx, raw)
 	if err != nil {
 		return fmt.Errorf("match: %w", err)
 	}

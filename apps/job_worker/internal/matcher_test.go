@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"testing"
 )
 
@@ -9,7 +10,7 @@ func TestPassthroughMatcher_PreservesTrack(t *testing.T) {
 	in := []TrackPoint{
 		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001}, {Lat: 1.002, Lng: 2.002},
 	}
-	out, err := m.Match(in)
+	out, err := m.Match(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +31,7 @@ func TestPassthroughMatcher_PreservesTrack(t *testing.T) {
 }
 
 func TestPassthroughMatcher_EmptyTrack(t *testing.T) {
-	out, err := PassthroughMatcher{}.Match(nil)
+	out, err := PassthroughMatcher{}.Match(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

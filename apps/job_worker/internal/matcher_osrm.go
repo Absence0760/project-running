@@ -81,7 +81,7 @@ func (m *OSRMMatcher) Version() string {
 // the snapped tracepoints back together. Empty input → empty output;
 // failed match (engine returned no usable tracepoints) → empty output
 // so handleMapMatch writes `skipped`.
-func (m *OSRMMatcher) Match(points []TrackPoint) ([]TrackPoint, error) {
+func (m *OSRMMatcher) Match(ctx context.Context, points []TrackPoint) ([]TrackPoint, error) {
 	if len(points) < 2 {
 		return nil, nil
 	}
@@ -104,7 +104,7 @@ func (m *OSRMMatcher) Match(points []TrackPoint) ([]TrackPoint, error) {
 			out = append(out, chunk...)
 			continue
 		}
-		matched, err := m.matchChunk(chunk)
+		matched, err := m.matchChunk(ctx, chunk)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +118,7 @@ func (m *OSRMMatcher) Match(points []TrackPoint) ([]TrackPoint, error) {
 	return out, nil
 }
 
-func (m *OSRMMatcher) matchChunk(chunk []TrackPoint) ([]TrackPoint, error) {
+func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]TrackPoint, error) {
 	// OSRM's URL format: /match/v1/{profile}/{lng,lat;lng,lat;...}
 	// Coordinates are lng-first, semicolon-separated. Building the
 	// path manually avoids URL-encoding overhead on a hot path.
@@ -138,7 +138,7 @@ func (m *OSRMMatcher) matchChunk(chunk []TrackPoint) ([]TrackPoint, error) {
 	// considers noise — leaves the resulting line cleaner.
 	sb.WriteString("?geometries=geojson&overview=full&tidy=true")
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, sb.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sb.String(), nil)
 	if err != nil {
 		return nil, err
 	}

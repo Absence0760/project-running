@@ -1,5 +1,7 @@
 package internal
 
+import "context"
+
 // Matcher decouples the worker loop from the engine choice. The
 // roadmap calls for evaluating Valhalla Meili / OSRM / GraphHopper
 // before committing — none of those are wired in yet, so this package
@@ -23,7 +25,12 @@ type Matcher interface {
 	// Implementations must not mutate the input slice. Returning a
 	// nil / empty slice with a nil error is interpreted as "no
 	// matchable points" and writes status='skipped' on the row.
-	Match(points []TrackPoint) ([]TrackPoint, error)
+	//
+	// ctx is the per-job context: implementations that make network
+	// calls must honour it so a job-deadline / graceful-shutdown
+	// cancellation aborts in-flight and pending work rather than
+	// running past the deadline.
+	Match(ctx context.Context, points []TrackPoint) ([]TrackPoint, error)
 }
 
 // PassthroughMatcher copies the input track without transformation.
@@ -36,7 +43,7 @@ type PassthroughMatcher struct{}
 func (PassthroughMatcher) Algorithm() string { return "passthrough" }
 func (PassthroughMatcher) Version() string   { return "v1" }
 
-func (PassthroughMatcher) Match(points []TrackPoint) ([]TrackPoint, error) {
+func (PassthroughMatcher) Match(_ context.Context, points []TrackPoint) ([]TrackPoint, error) {
 	if len(points) == 0 {
 		return nil, nil
 	}
