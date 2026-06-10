@@ -603,6 +603,7 @@ export const messages = {
 	"routeDetail.commentPlaceholder": "Comentário (opcional)",
 	"routeDetail.submit": "Enviar",
 	"routeDetail.noReviews": "Ainda não há avaliações",
+	"routeDetail.reviewsLoadFailed": "Não foi possível carregar as avaliações. Tente atualizar.",
 	"routeDetail.noWaypointData": "Nenhum dado de waypoint disponível",
 	"routeNew.routeBuilder": "Criador de rotas",
 	"routeNew.myRoutes": "Minhas rotas",

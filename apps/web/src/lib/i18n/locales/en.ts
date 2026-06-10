@@ -612,6 +612,7 @@ export const en = {
 	"routeDetail.commentPlaceholder": "Comment (optional)",
 	"routeDetail.submit": "Submit",
 	"routeDetail.noReviews": "No reviews yet",
+	"routeDetail.reviewsLoadFailed": "Couldn't load reviews. Try refreshing.",
 	"routeDetail.noWaypointData": "No waypoint data available",
 	"routeNew.routeBuilder": "Route Builder",
 	"routeNew.myRoutes": "My routes",

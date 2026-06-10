@@ -600,6 +600,7 @@ export const messages = {
 	"routeDetail.commentPlaceholder": "コメント (任意)",
 	"routeDetail.submit": "送信",
 	"routeDetail.noReviews": "まだレビューはありません",
+	"routeDetail.reviewsLoadFailed": "レビューを読み込めませんでした。更新してみてください。",
 	"routeDetail.noWaypointData": "ウェイポイントのデータがありません",
 	"routeNew.routeBuilder": "ルートビルダー",
 	"routeNew.myRoutes": "マイルート",

@@ -604,6 +604,7 @@ export const messages = {
 	"routeDetail.commentPlaceholder": "Commentaire (facultatif)",
 	"routeDetail.submit": "Envoyer",
 	"routeDetail.noReviews": "Pas encore d'avis",
+	"routeDetail.reviewsLoadFailed": "Impossible de charger les avis. Essayez d'actualiser.",
 	"routeDetail.noWaypointData": "Aucune donnée de point de passage disponible",
 	"routeNew.routeBuilder": "Créateur d'itinéraire",
 	"routeNew.myRoutes": "Mes itinéraires",

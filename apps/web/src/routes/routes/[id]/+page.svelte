@@ -36,6 +36,7 @@
 	let displayWaypoints = $state<{ lat: number; lng: number; ele?: number }[]>([]);
 	let loading = $state(true);
 	let reviews = $state<any[]>([]);
+	let reviewsError = $state(false);
 	let showReviewForm = $state(false);
 	let reviewRating = $state(4);
 	let reviewComment = $state('');
@@ -64,7 +65,10 @@
 			displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
 			try {
 				reviews = await getRouteReviews(route.id);
-			} catch (_) {}
+				reviewsError = false;
+			} catch (_) {
+				reviewsError = true;
+			}
 		}
 	});
 
@@ -77,6 +81,7 @@
 				comment: reviewComment.trim() || null,
 			});
 			reviews = await getRouteReviews(route.id);
+			reviewsError = false;
 			showReviewForm = false;
 			reviewComment = '';
 		} catch (e) {
@@ -575,7 +580,9 @@
 					</div>
 				{/if}
 
-				{#if reviews.length === 0}
+				{#if reviewsError}
+					<p class="no-reviews reviews-error" role="status">{m('routeDetail.reviewsLoadFailed')}</p>
+				{:else if reviews.length === 0}
 					<p class="no-reviews">{m('routeDetail.noReviews')}</p>
 				{:else}
 					{#each reviews as review}
