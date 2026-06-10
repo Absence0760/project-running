@@ -462,15 +462,48 @@ test('events page also broadcasts race-state-changed alongside DB writes', () =>
 //        sat UNDER the shortcuts hint (.shortcuts-hint, z-index 10),
 //        both pinned bottom-left.
 
-test('RouteBuilder.svelte: exposes a flyTo export for sidebar recentring', () => {
+test('RouteBuilder.svelte: exposes a flyTo export that recentres the map', () => {
 	const src = read('src/lib/components/RouteBuilder.svelte');
 	assert.match(
 		src,
-		/export function flyTo\(\s*lngLat[^)]*\)\s*\{[\s\S]*?map\.flyTo\(/,
-		'RouteBuilder must export flyTo() that calls map.flyTo — the page ' +
+		/export function flyTo\(\s*lngLat[^)]*\)\s*\{[\s\S]*?recentreMap\(/,
+		'RouteBuilder must export flyTo() that recentres the map — the page ' +
 			'uses it to recentre on a located / typed Generate start/end so ' +
 			'the click has visible feedback.',
 	);
+});
+
+test('RouteBuilder.svelte: recentre jumps instead of animating until the map is loaded', () => {
+	// An animated flyTo silently no-ops until the map's style has loaded (the
+	// render loop that advances the easing only starts then). A recentre fired
+	// in that window — MapTiler slow to return the style, or no style at all in
+	// e2e — was dropped and the map sat frozen at its initial centre, which is
+	// exactly what failed three tests-e2e/routes/builder.spec.ts cases on shard
+	// 9/14 (runs 27278730321 on main, 27279121404 on the PR; Received 31.6 =
+	// the untouched [0,20] world-view centre, both retries). recentreMap() must
+	// gate on map.loaded(): jumpTo (instant, load-independent) before load, the
+	// bounded flyTo after. Reverting to a bare animated flyTo brings the flake
+	// back. The three recentre sites (search pick, locate button, flyTo export)
+	// must route through recentreMap so none of them can re-introduce a raw
+	// pre-load flyTo.
+	const src = read('src/lib/components/RouteBuilder.svelte');
+	const fn = src.match(/function recentreMap\([^)]*\)\s*\{[\s\S]*?\n\t\}/);
+	assert.ok(fn, 'recentreMap() must exist');
+	assert.match(fn![0], /map\.loaded\(\)/, 'recentreMap must gate on map.loaded()');
+	assert.match(
+		fn![0],
+		/map\.flyTo\(\{[^}]*duration:\s*RECENTRE_FLY_MS/,
+		'recentreMap must animate with a bounded duration once loaded',
+	);
+	assert.match(
+		fn![0],
+		/map\.jumpTo\(/,
+		'recentreMap must jumpTo before load so the recentre is never dropped',
+	);
+	// No recentre call site may animate directly: the only map.flyTo in the
+	// file lives inside recentreMap (guarded by map.loaded()).
+	const flyToCount = (src.match(/map\.flyTo\(/g) ?? []).length;
+	assert.equal(flyToCount, 1, 'the only map.flyTo must be the load-gated one inside recentreMap');
 });
 
 test('RouteBuilder.svelte: shortcuts hint is pinned bottom-RIGHT, not bottom-left', () => {

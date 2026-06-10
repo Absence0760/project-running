@@ -39,6 +39,14 @@
 	} from '$lib/routes/routing_quality';
 	import type { TrackPoint } from '$lib/types';
 
+	// Bound the recentre pan to a fixed, snappy duration. maplibre's default
+	// flyTo scales the duration by travel distance, so recentring from the
+	// world-view fallback ([0,20] z2, used when geolocation is denied) to a city
+	// zoom would otherwise fly a cinematic multi-second arc across the globe. A
+	// flat 800ms pan is clearly visible feedback for a "use my location" /
+	// typed-coordinate / search recentre.
+	const RECENTRE_FLY_MS = 800;
+
 	let {
 		mode = 'road',
 		onupdate = (_data: {
@@ -215,7 +223,7 @@
 	}
 
 	function selectSearchResult(result: { name: string; lng: number; lat: number }) {
-		map.flyTo({ center: [result.lng, result.lat], zoom: 15 });
+		recentreMap([result.lng, result.lat], 15);
 		searchQuery = '';
 		searchResults = [];
 		showResults = false;
@@ -1666,6 +1674,27 @@
 	export function getMapCenter() { return map ? map.getCenter() : null; }
 
 	/**
+	 * Recentre the map on a point. When the style has finished loading we
+	 * animate a short pan; before then we snap with jumpTo.
+	 *
+	 * Why the load gate: an animated flyTo silently no-ops until the map is
+	 * loaded, because the render loop that advances the easing only starts once
+	 * the style is in. A recentre fired in that window (the style is slow to
+	 * return from MapTiler, or absent in e2e) would be dropped and the map would
+	 * sit frozen at its initial centre — exactly what intermittently failed the
+	 * route-builder recentre e2e tests. jumpTo sets the camera immediately and
+	 * works regardless of load state, so the recentre is never lost.
+	 */
+	function recentreMap(center: [number, number], zoom: number) {
+		if (!map) return;
+		if (map.loaded()) {
+			map.flyTo({ center, zoom, duration: RECENTRE_FLY_MS });
+		} else {
+			map.jumpTo({ center, zoom });
+		}
+	}
+
+	/**
 	 * Pan + zoom the map to a point. Used by the sidebar's "use my
 	 * location" / typed-coordinate / pick affordances so setting a
 	 * Generate start/end gives visual confirmation — pre-fix those only
@@ -1673,8 +1702,7 @@
 	 * off-screen, so on the default world view the click looked dead.
 	 */
 	export function flyTo(lngLat: { lng: number; lat: number }, zoom = 15) {
-		if (!map) return;
-		map.flyTo({ center: [lngLat.lng, lngLat.lat], zoom });
+		recentreMap([lngLat.lng, lngLat.lat], zoom);
 	}
 
 	/**
@@ -1794,7 +1822,7 @@
 		// the user staring at a non-responsive button. Surface each
 		// failure mode as a toast so the user knows the click landed.
 		navigator.geolocation.getCurrentPosition(
-			(pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }),
+			(pos) => recentreMap([pos.coords.longitude, pos.coords.latitude], 17),
 			(err) => {
 				// Compare against the numeric `code` literals from the
 				// GeolocationPositionError spec — not `err.PERMISSION_DENIED`
