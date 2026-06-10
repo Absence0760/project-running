@@ -38,6 +38,10 @@ func (g *Graph) NumEdges() int { return len(g.edgeTo) }
 // coordOf returns the [lng, lat] of a node index.
 func (g *Graph) coordOf(i int32) Coord { return Coord{Lng: g.lng[i], Lat: g.lat[i]} }
 
+// LatLng returns the latitude and longitude of a node index. Exposed for the
+// /nearest debug endpoint.
+func (g *Graph) LatLng(i int32) (lat, lng float64) { return g.lat[i], g.lng[i] }
+
 // edgeKey is the canonical undirected key for the segment between two node
 // indices: the unordered pair packed into a uint64 (smaller index in the high
 // 32 bits). The disjoint-path search penalises segments by this key so both
