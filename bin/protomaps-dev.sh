@@ -381,10 +381,10 @@ cmd_logs() {
 }
 
 cmd_env() {
-	step "Add these to your apps' .env.local files"
+	step "Add these to your apps' env files"
 	cat <<EOF
 
-  ${C_BOLD}apps/web/.env.local${C_RESET}
+  ${C_BOLD}apps/web/.env.development${C_RESET}  ${C_DIM}(committed; outranks .env.local on Vite — decisions § 137)${C_RESET}
     PUBLIC_TILE_STYLE_URL=http://localhost:${PROTOMAPS_PORT}/styles/basic/style.json
 
   ${C_BOLD}apps/mobile_android/.env.local + apps/mobile_ios/.env.local${C_RESET}

@@ -11,7 +11,8 @@ The production migration is a separate decision (see [decisions.md § 68](../arc
 npm run dev:tiles:fetch    # grabs a ~1MB US-states sample
 npm run dev:tiles:up       # boots tileserver-gl in Docker
 
-# Copy the printed env vars into each app's .env.local, then run:
+# Paste the printed env vars into each app's env file (web → the committed
+# apps/web/.env.development; mobile/Wear per the script's notes), then run:
 #   apps/web:        npm run dev --workspace=apps/web
 #   apps/mobile_*:   flutter run -d <device>
 #   apps/watch_wear: ./gradlew installDebug -PPUBLIC_TILE_URL_TEMPLATE=...
@@ -51,7 +52,7 @@ The script downloads everything else on first run.
 | npm script | Direct invocation | What it does |
 |---|---|---|
 | `npm run dev:tiles:fetch` | `bin/protomaps-dev.sh fetch` | Downloads a 1MB US-states sample PMTiles into `$PROTOMAPS_HOME` — enough to smoke-test the wire end-to-end, not enough to render real run locations. |
-| `npm run dev:tiles:up` | `bin/protomaps-dev.sh start` | Generates config + style files, boots the container with `--restart unless-stopped`, waits for readiness, prints the env-var snippets to paste into each app's `.env.local`. Fails loudly if the PMTiles file isn't found or lives outside `PROTOMAPS_HOME`. On wait-timeout, auto-tails the last 30 lines of container output. |
+| `npm run dev:tiles:up` | `bin/protomaps-dev.sh start` | Generates config + style files, boots the container with `--restart unless-stopped`, waits for readiness, prints the env-var snippets to paste into each app's env file (web → committed `apps/web/.env.development`). Fails loudly if the PMTiles file isn't found or lives outside `PROTOMAPS_HOME`. On wait-timeout, auto-tails the last 30 lines of container output. |
 | `npm run dev:tiles:restart` | `bin/protomaps-dev.sh restart` | Stop + start. Use when swapping a PMTiles file or after editing the config. |
 | `npm run dev:tiles:down` | `bin/protomaps-dev.sh stop` | Kills + removes the container. PMTiles file stays cached for next time. |
 | `npm run dev:tiles:status` | `bin/protomaps-dev.sh status` | Reports whether the container is running and where. |
@@ -94,7 +95,7 @@ Re-run `bin/protomaps-dev.sh start` after dropping a new file in; the container 
 
 ## Env overrides — per app
 
-Once `bin/protomaps-dev.sh start` succeeds, paste the printed snippets into each app's `.env.local`. The override pattern is uniform: when the var is set, the app routes tile requests through the local server; when it's empty or absent, the app falls back to MapTiler.
+Once `bin/protomaps-dev.sh start` succeeds, paste the printed snippets into each app's env file. The override pattern is uniform: when the var is set, the app routes tile requests through the local server; when it's empty or absent, the app falls back to MapTiler. **Web note:** `PUBLIC_TILE_STYLE_URL` lives in the committed `apps/web/.env.development` (already populated with `http://localhost:8080/...`), not `.env.local` — on Vite the mode file outranks `.env.local`, so a value in `.env.local` would be silently ignored (see [decisions § 137](../architecture/decisions.md#137-one-env-file-convention-across-every-app-envexample--envdevelopment--envlocal)). CI e2e forces it back to empty via the Playwright `webServer.env`. To point web at a different tileserver per-machine, use your shell env or `apps/web/.env.development.local`.
 
 | App | Env var | Format |
 |---|---|---|

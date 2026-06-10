@@ -23,11 +23,11 @@ One convention repo-wide so a fresh clone runs locally without a copy step ([dec
 |---|---|---|---|
 | `.env.example` | committed | placeholder template (real values blank) | nothing — reference only |
 | `.env.development` | committed | **non-secret** ready-to-run local defaults (loopback URLs + the public Supabase demo keys) | the app's loader (below) |
-| `.env.local` | **gitignored** | your real keys / per-machine overrides — **wins** over `.env.development` | the app's loader |
+| `.env.local` | **gitignored** | your real keys / per-machine overrides — precedence is **toolchain-specific** (wins for Gradle/Go; **loses to `.env.development` on Vite/web**, see § 137) | the app's loader |
 
 Per-toolchain loader (only Vite has a real "mode", so the mechanics differ):
 
-- **web (Vite):** auto-loads `.env.development` for `vite dev`, `.env.local` at higher priority.
+- **web (Vite):** auto-loads `.env.development` for `vite dev`. Priority highest-first (Vite 8): shell env > `.env.development.local` > **`.env.development`** > `.env.local` > `.env` — the mode file outranks `.env.local`, so per-machine web overrides go in the shell or `.env.development.local`, not `.env.local`.
 - **backend (Supabase functions):** `supabase functions serve --env-file .env.development` (or `.env.local`); nothing auto-loads.
 - **mobile (flutter_dotenv):** loads the `.env.development` bundled asset; the per-machine override is **`--dart-define`**, not `.env.local`, because dotenv reads from the asset bundle. Release builds read neither (kDebugMode gate).
 - **Wear (Gradle):** reads `.env.development` then overlays `.env.local`; release reads neither.

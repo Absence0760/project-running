@@ -71,7 +71,12 @@ export default defineConfig({
 			timeout: 120_000,
 			stdout: 'ignore',
 			stderr: 'pipe',
-			env: { PUBLIC_LIVE_HUB_URL: `http://127.0.0.1:${HUB_PORT}` }
+			// Empty PUBLIC_TILE_STYLE_URL + PUBLIC_OSRM_URL force the committed
+			// `.env.development` localhost dev services (tileserver :8080, OSRM
+			// :5000) off so this e2e dev server falls through to MapTiler/OSM +
+			// the public OSRM demo instead of chasing services the runner
+			// doesn't boot (same guard as the main config). § 137.
+			env: { PUBLIC_LIVE_HUB_URL: `http://127.0.0.1:${HUB_PORT}`, PUBLIC_TILE_STYLE_URL: '', PUBLIC_OSRM_URL: '' }
 		}
 	],
 

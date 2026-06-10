@@ -2938,12 +2938,12 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 - **`.env.example`** — committed placeholder template. Documents every variable; real values blank.
 - **`.env.development`** — committed, **non-secret** ready-to-run local defaults (loopback URLs + the *public* Supabase local-demo keys, which are identical on every machine). This is the file each toolchain actually loads.
-- **`.env.local`** — gitignored per-machine override. Holds your real keys and **wins** over `.env.development`; the shell / deploy env wins over both.
+- **`.env.local`** — gitignored per-machine override for your real keys. **Precedence is toolchain-specific** (see mechanics below): `.env.local` wins for Gradle and Go, but **not for Vite/web**, where a mode file (`.env.development`) outranks it — so on web a key left *present-but-empty* in `.env.development` overrides (nullifies) the same key in `.env.local`, and any secret meant to come from `.env.local` must be **absent** (not blank) from `.env.development`. The shell / deploy env wins everywhere.
 
 Before this, the three were inconsistent: web committed `.env.development` (Vite auto-loads it in dev), mobile + Wear committed `.env.local` (the opposite of the Vite idiom), and backend committed only `.env.example`. The trigger was a committed web `.env.development` shipping a localhost tileserver URL — Vite loads that file in CI too, which hid the map style switcher and reded the e2e suite (see the tile-override fix). Standardizing removed the "which file does this app use?" tax.
 
 **Per-toolchain mechanics differ because only Vite has a "mode":**
-- **Vite (web)** auto-loads `.env.development` for `vite dev`, with `.env.local` at higher priority — native three-file layering.
+- **Vite (web)** auto-loads `.env.development` for `vite dev`. Priority, highest first (verified empirically on Vite 8): **shell env > `.env.development.local` > `.env.development` > `.env.local` > `.env`**. The mode file outranking `.env.local` is the opposite of the common assumption — a per-machine web override therefore goes in your shell or the gitignored `.env.development.local`, **not** `.env.local`.
 - **Supabase functions (backend)** load no file automatically; you pass `--env-file .env.development` (or `.env.local`).
 - **flutter_dotenv (mobile)** loads a *named* asset from the bundle. It loads `.env.development`; the per-machine override is **`--dart-define`** (merged on top, winning), **not** a `.env.local` file — a gitignored file can't be a guaranteed-present build asset. Release builds read neither (the `kDebugMode` gate), so no local value ships in an APK.
 - **Gradle (Wear)** reads `.env.development` then overlays `.env.local` at configure time; the release build type reads neither.
@@ -2952,6 +2952,8 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 **Safety:** the committed `.env.development` files carry only the public Supabase demo JWTs; both the `gitleaks` allowlist and the `env-isolation` workflow scan them (by path) to fail the build if a *real* key ever slips in.
 
 **Trade-off.** `.env.development` and `.env.example` are near-duplicates for an app whose only local values are blanks (backend) — accepted for uniformity. Mobile's override being `--dart-define` rather than `.env.local` is a documented exception forced by the asset-bundle loader, not a drift.
+
+**Amendment (2026-06-09).** The web Protomaps tile override moved from `.env.local` *into* the committed `apps/web/.env.development` (`PUBLIC_TILE_STYLE_URL=http://localhost:8080/styles/basic/style.json`), and `apps/web/.env.local` was deleted. Reason: per the Vite precedence above, `.env.development` outranks `.env.local`, so the old `.env.local` placement never took effect — the committed *present-but-empty* `PUBLIC_TILE_STYLE_URL=` silently won, leaving the route builder's map blank (it lacks the OSM fallback that `RunMap` falls back to, so only `/routes/new` looked broken). This reverses the original trigger above, so CI is kept green a different way: e2e forces the var back to empty via the Playwright `webServer.env` in `tests-e2e/playwright.config.ts` + `playwright.livehub.config.ts` (process.env outranks every `.env` file), so the suite still falls through to MapTiler / the OSM raster instead of chasing a tileserver the runner doesn't boot. The gitignore still covers `.env.*`, so a future `apps/web/.env.local` holding real secrets can't be committed — but note those secret keys must be **absent** from `.env.development`, not blank, or the blank wins.
 
 ---
 

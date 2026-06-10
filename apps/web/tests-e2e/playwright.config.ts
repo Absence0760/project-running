@@ -65,6 +65,13 @@ export default defineConfig({
 		url: 'http://localhost:7777',
 		reuseExistingServer: !process.env.CI,
 		timeout: 60_000,
+		// Force the localhost dev services empty for e2e. `.env.development`
+		// ships a localhost:8080 tileserver + localhost:5000 OSRM the runner
+		// doesn't boot; process.env wins over the .env files, so this makes the
+		// suite fall through (tiles → MapTiler/OSM raster; routing → the public
+		// OSRM demo) deterministically, local and CI alike, instead of chasing
+		// services that aren't there. See decisions.md § 137.
+		env: { PUBLIC_TILE_STYLE_URL: '', PUBLIC_OSRM_URL: '' },
 		// Vite logs are noisy; only surface them on failure.
 		stdout: 'ignore',
 		stderr: 'pipe'
