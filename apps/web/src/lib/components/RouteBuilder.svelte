@@ -405,6 +405,25 @@
 				wasHidden,
 			);
 		}
+		renumberMarkers();
+	}
+
+	// Rewrite each visible marker's number label to match its current
+	// array index. createWaypointMarker bakes the 1-based number in at
+	// creation, so a splice (mid-route insert, or deleting a non-last
+	// waypoint) shifts every later marker's index and leaves it showing a
+	// stale number — a duplicate appears and the top number goes missing.
+	// updateMarkerStyles is the funnel every waypoint mutation passes
+	// through, so renumbering here keeps the labels correct for all of
+	// insert / remove / drag / undo. Hidden scaffolding pins (generateLoop
+	// iterations) carry no label span and are skipped.
+	function renumberMarkers() {
+		for (let i = 0; i < markers.length; i++) {
+			const label = markers[i]
+				.getElement()
+				.querySelector('.waypoint-marker-label');
+			if (label) label.textContent = String(i + 1);
+		}
 	}
 
 	function clearImplicatedMarkers() {

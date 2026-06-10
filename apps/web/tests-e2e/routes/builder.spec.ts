@@ -1045,6 +1045,86 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		expect(after[0].lng).toBe(before[0].lng);
 	});
 
+	test('numbered pin labels stay 1..N after a mid-route insert', async ({ page }) => {
+		// Each marker bakes its 1-based number in at creation. A mid-route
+		// insert splices a marker into the array, shifting every later
+		// marker's index — but nothing renumbered them, so the later pins
+		// kept stale numbers (a duplicate appears, the top number goes
+		// missing). The numbers exist specifically so users can count pins
+		// and tell which to drag, so a wrong number is a real defect.
+		await page.route('**/v1/foot/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: 0.02, dLng: 0.02 },
+			{ dLat: 0.04, dLng: 0 },
+		]);
+		const points = page.locator('.builder-stat-value').nth(2);
+		await expect(points).toHaveText('3', { timeout: 5_000 });
+
+		// Insert between pin #1 and #2 via the public API.
+		await page.evaluate(() => {
+			const b = (
+				window as unknown as {
+					__routeBuilder: {
+						insertWaypoint: (p: { lat: number; lng: number }, i: number) => void;
+						getMapCenter: () => { lat: number; lng: number };
+					};
+				}
+			).__routeBuilder;
+			const c = b.getMapCenter();
+			b.insertWaypoint({ lng: c.lng + 0.01, lat: c.lat + 0.01 }, 1);
+		});
+		await expect(points).toHaveText('4');
+
+		// Every pin must carry a distinct sequential number 1..4.
+		const labels = (await page.locator('.waypoint-marker-label').allTextContents())
+			.map(Number)
+			.sort((a, b) => a - b);
+		expect(labels).toEqual([1, 2, 3, 4]);
+	});
+
+	test('numbered pin labels stay 1..N after deleting a middle waypoint', async ({
+		page,
+	}) => {
+		// Mirror of the insert case for removeWaypoint (right-click delete):
+		// removing a middle pin shifts every later index down, which must
+		// renumber the remaining pins.
+		await page.route('**/v1/foot/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: 0.02, dLng: 0.02 },
+			{ dLat: 0.04, dLng: 0 },
+			{ dLat: 0.06, dLng: 0.02 },
+		]);
+		const points = page.locator('.builder-stat-value').nth(2);
+		await expect(points).toHaveText('4', { timeout: 5_000 });
+
+		// Delete the second pin (index 1).
+		await page.evaluate(() => {
+			(
+				window as unknown as {
+					__routeBuilder: { removeWaypoint: (i: number) => void };
+				}
+			).__routeBuilder.removeWaypoint(1);
+		});
+		await expect(points).toHaveText('3');
+
+		const labels = (await page.locator('.waypoint-marker-label').allTextContents())
+			.map(Number)
+			.sort((a, b) => a - b);
+		expect(labels).toEqual([1, 2, 3]);
+	});
+
 	// --- Adversarial: failure + boundary paths ---
 
 	test('partial OSRM failure keeps the route — warning banner + Save stays enabled', async ({

@@ -576,3 +576,27 @@ test('RouteBuilder.svelte: findInsertIndex delegates to nearestInsertIndex', () 
 		'findInsertIndex must NOT reintroduce the distance-to-midpoint heuristic.',
 	);
 });
+
+// 6. Numbered pin labels must be renumbered after a waypoint splice.
+//    createWaypointMarker bakes the 1-based number in at creation, so a
+//    mid-route insert / middle delete shifts later indices and leaves
+//    stale numbers (a duplicate appears, the top number goes missing).
+//    updateMarkerStyles is the mutation funnel, so it must renumber.
+test('RouteBuilder.svelte: updateMarkerStyles renumbers pin labels after a splice', () => {
+	const src = read('src/lib/components/RouteBuilder.svelte');
+	const fn = src.match(/function updateMarkerStyles\([^)]*\)[^{]*\{[\s\S]*?\n\t\}/);
+	assert.ok(fn, 'updateMarkerStyles must exist');
+	assert.match(
+		fn![0],
+		/renumberMarkers\(\)/,
+		'updateMarkerStyles must call renumberMarkers() so insert / remove ' +
+			'keep the 1..N pin numbers correct.',
+	);
+	const rn = src.match(/function renumberMarkers\([^)]*\)[^{]*\{[\s\S]*?\n\t\}/);
+	assert.ok(rn, 'renumberMarkers helper must exist');
+	assert.match(
+		rn![0],
+		/waypoint-marker-label[\s\S]*textContent\s*=\s*String\(i \+ 1\)/,
+		'renumberMarkers must rewrite each label span to its current index+1.',
+	);
+});
