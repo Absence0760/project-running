@@ -1,0 +1,69 @@
+# Fly.io app config for the graph_cycle map sidecar — the v3 graph-cycle loop
+# generator for "Generate a route by distance".
+# See apps/job_worker/deployment.md and docs/features/graph_cycle_loop_generation.md.
+#
+# NETWORKING — same rationale as the GraphHopper app, NOT the OSRM app:
+#
+#   OSRM is reached by the Go *worker* (also on Fly), so it stays 6PN-internal.
+#   This sidecar is reached by the generate-route *Lambda*, which runs on AWS —
+#   no 6PN path from AWS into Fly — so it MUST expose a public https service.
+#   The Go server enforces the X-Engine-Key guard in-process (no Caddy needed),
+#   so a stranger who learns the hostname can't hammer the /cycle search or
+#   bypass the CloudFront WAF rate-limit. The Lambda's GRAPH_CYCLE_URL points at
+#   https://graph-cycle.fly.dev (or a custom domain); /health stays open.
+
+app = "graph-cycle"
+primary_region = "lhr"
+
+[build]
+dockerfile = "Dockerfile"
+
+[[mounts]]
+# Holds region.osm.pbf (operator-uploaded — the SAME extract OSRM/GraphHopper
+# use). The graph is rebuilt in memory from this on every boot (no persisted
+# graph-cache), so the volume is just the PBF.
+source = "graph_cycle_data"
+destination = "/data"
+
+[http_service]
+# Public https. Fly terminates TLS at the edge and forwards to 8989 (the Go
+# server's bind port; see main.go PORT default + the Dockerfile EXPOSE).
+internal_port = 8989
+force_https = true
+auto_start_machines = true
+auto_stop_machines = false
+min_machines_running = 1
+
+[[http_service.checks]]
+# The PBF parse + in-memory graph build runs on every boot; grace_period covers
+# it (seconds for a metro extract, a couple of minutes for a country). /health
+# returns 200 only once the graph is built and serving.
+interval = "30s"
+timeout = "5s"
+grace_period = "5m"
+method = "GET"
+path = "/health"
+
+[[vm]]
+# The node-level foot graph + sparse-Dijkstra scratch sit in memory. A metro /
+# single-country foot graph fits in a few GB; bump memory (and the machine) for
+# a continent extract. CPU-bound during /cycle, so 2 shared CPUs is the floor.
+size = "shared-cpu-2x"
+memory = "4gb"
+cpus = 2
+
+# Volume creation (one-time, before first deploy):
+#   flyctl volumes create graph_cycle_data --app graph-cycle --region lhr --size 10
+#
+# Seed the PBF (one-time, the SAME region the OSRM graph uses):
+#   flyctl ssh sftp shell --app graph-cycle
+#   put data/region.osm.pbf /data/region.osm.pbf
+#   exit
+#   flyctl machine restart <id> --app graph-cycle   # boot parses it
+#
+# Shared-secret guard (one-time, before first deploy): set the SAME value that's
+# in the sops secrets file under GRAPH_CYCLE_API_KEY (the Lambda reads it there
+# and sends it as X-Engine-Key):
+#   flyctl secrets set GRAPH_CYCLE_API_KEY=<value> --app graph-cycle
+# Without it the guard 403s every /cycle, the Lambda falls back to round_trip,
+# and the engine-unreachable signal surfaces.

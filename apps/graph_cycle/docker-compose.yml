@@ -1,0 +1,33 @@
+# Local-only graph_cycle map sidecar for running development.
+#
+# Builds the SAME Dockerfile the Fly app ships, so local matches prod. The PBF
+# lives on the mounted ./data dir (make seed copies it from ../job_worker/osrm),
+# and the foot graph is built in memory on boot.
+#
+# Workflow (mirrors osrm/ and graphhopper/):
+#   1.  cd apps/graph_cycle
+#   2.  make seed          # copies region.osm.pbf from ../job_worker/osrm/data
+#   3.  docker compose up   # builds the image, parses the PBF on boot
+#   4.  make smoke          # POST /cycle through the guard
+
+services:
+  graph_cycle:
+    build:
+      context: .
+    container_name: graph_cycle
+    restart: unless-stopped
+    environment:
+      # Shared-secret guard key (the Go server checks X-Engine-Key against it).
+      # Committed NON-SECRET dev value — it gates only public-map routing. The
+      # web side sends the SAME value via GRAPH_CYCLE_API_KEY in
+      # apps/web/.env.development. Prod uses a real Fly secret + sops.
+      GRAPH_CYCLE_API_KEY: dev-graph-cycle-key
+      GRAPH_CYCLE_PBF: /data/region.osm.pbf
+    ports:
+      # Localhost only — never publish it. The web dev server reaches it via
+      # GRAPH_CYCLE_URL=http://127.0.0.1:8989 set in apps/web/.env.local.
+      - "127.0.0.1:8989:8989"
+    volumes:
+      # The PBF lives here (make seed puts it there) — same volume model as the
+      # Fly app. The in-memory graph is rebuilt from it on each boot.
+      - ./data:/data

@@ -1,0 +1,4 @@
+# The OSM PBF extract is large and region-specific — never commit it.
+# `make seed` populates this directory (copying from ../job_worker/osrm or
+# downloading); the contents are reproducible from the region URL.
+*.osm.pbf
