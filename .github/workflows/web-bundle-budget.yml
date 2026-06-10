@@ -13,16 +13,36 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # Hard ceilings (kilobytes, transferred = gzipped) for the public web bundle.
-  # When a PR pushes either over the limit, the job fails so a reviewer
-  # has to acknowledge the increase before merging. Numbers chosen with
-  # headroom over the 2026-05 baseline (~972 KB total, ~263 KB largest):
-  # 55% headroom on total → catches a major regression but allows
-  # ordinary feature growth; 33% headroom on largest → keeps the main
-  # entry bundle from quietly drifting toward code-split territory.
-  # Bump deliberately when the right answer is "ship the feature", not
-  # casually because the job failed.
-  MAX_TOTAL_KB: 1500
+  # Hard ceilings (kilobytes, transferred = gzipped) for the public web
+  # bundle, summed across every JS+CSS file emitted into build/. When a
+  # PR pushes either over the limit, the job fails so a reviewer has to
+  # acknowledge the increase before merging.
+  #
+  # 2026-06-10 — total raised 1500 → 1900. The app crossed 1500 through
+  # ordinary cumulative growth since the 2026-05 ~972 KB baseline (gym,
+  # nutrition, clubs, coaching, social, route-builder all shipped), NOT
+  # a regression: verified no duplication (maplibre-gl and the RevenueCat
+  # web SDK each land in exactly one JS chunk), and the two largest single
+  # libs are both feature-essential — maplibre-gl ~263 KB (the map) and
+  # @revenuecat/purchases-js ~178 KB (web Pro checkout, /settings/upgrade).
+  # Measured total at the bump: 1689 KB across 66 route surfaces. 1900 =
+  # ~12% headroom — deliberately tighter than the original 55% now that
+  # the surface is broad, so the gate still catches a major single-PR
+  # regression (e.g. a second map-scale lib, or a duplicated dep) while
+  # allowing ordinary 20-80 KB feature additions.
+  #
+  # IMPORTANT: this metric sums ALL chunks, including lazy ones, so
+  # code-splitting a dep does NOT lower it — only removing weight does.
+  # The durable way to claw back headroom is to externalise the RevenueCat
+  # SDK behind its hosted-checkout redirect (~178 KB), tracked in
+  # docs/product/followups.md — not done here to keep this CI fix's blast
+  # radius proportional (it would rewrite the billing flow).
+  #
+  # 33% headroom on largest (≥350) → keeps the main entry bundle from
+  # quietly drifting toward code-split territory. Bump deliberately when
+  # the right answer is "ship the feature", not casually because the job
+  # failed.
+  MAX_TOTAL_KB: 1900
   MAX_LARGEST_CHUNK_KB: 350
 
 jobs:
