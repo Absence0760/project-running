@@ -52,16 +52,17 @@ void main() {
     testWidgets('activity level + goal show defaults and open a picker',
         (tester) async {
       await _pump(tester, await _prefs());
-      // Defaults: moderate activity, maintain goal.
-      expect(find.text('Moderately active'), findsOneWidget);
+      // Defaults: moderate activity, maintain goal. Activity labels describe
+      // the non-exercise baseline (logged workouts are added on top).
+      expect(find.text('Moderately active (on your feet often)'), findsOneWidget);
       expect(find.text('Maintain weight'), findsOneWidget);
 
       await tester.tap(find.text('Activity level'));
       await tester.pumpAndSettle();
       // The picker lists all five activity levels.
-      expect(find.text('Sedentary'), findsOneWidget);
-      expect(find.text('Lightly active'), findsOneWidget);
-      expect(find.text('Extra active'), findsOneWidget);
+      expect(find.text('Mostly sitting (desk job)'), findsOneWidget);
+      expect(find.text('Lightly active (light daily movement)'), findsOneWidget);
+      expect(find.text('Extremely active (hard physical labour)'), findsOneWidget);
     });
   });
 }
