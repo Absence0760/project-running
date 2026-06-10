@@ -497,7 +497,7 @@ func isTransient(err error) bool {
 		return true
 	}
 	msg := strings.ToLower(err.Error())
-	for _, marker := range []string{"timeout", "connection refused", "connection reset", "no such host", "i/o timeout"} {
+	for _, marker := range []string{"timeout", "connection refused", "connection reset", "no such host", "i/o timeout", "unexpected eof"} {
 		if strings.Contains(msg, marker) {
 			return true
 		}

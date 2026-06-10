@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -116,7 +117,15 @@ func (c *StravaClient) FetchActivity(ctx context.Context, accessToken string, ac
 		return StravaActivityResult{Status: StravaFetchTransient}, nil
 	}
 	defer resp.Body.Close()
-	raw, _ := readAllResponse(resp)
+	raw, readErr := readAllResponse(resp)
+	if readErr != nil {
+		// Body-read failure after a connection that dialled fine —
+		// the same transient class as the dial failure above. Without
+		// this the truncated bytes fall through to json.Unmarshal,
+		// which fails as a permanent decode error and drops the
+		// activity. audit/strava H5.
+		return StravaActivityResult{Status: StravaFetchTransient}, nil
+	}
 	if resp.StatusCode == 429 || resp.StatusCode == 503 {
 		return StravaActivityResult{Status: StravaFetchRateLimited}, nil
 	}
@@ -190,17 +199,12 @@ type StravaStream struct {
 	Data []json.RawMessage `json:"data"`
 }
 
+// readAllResponse reads the full response body. A mid-stream read
+// failure (connection reset / truncated body during transfer) is
+// returned, not swallowed: the request reached the server and got a
+// 2xx, so a body-read failure is transient and the caller must defer +
+// retry rather than mis-classify the truncated bytes as a permanent
+// decode error and drop the user's activity.
 func readAllResponse(resp *http.Response) ([]byte, error) {
-	buf := make([]byte, 0, 1024)
-	chunk := make([]byte, 1024)
-	for {
-		n, err := resp.Body.Read(chunk)
-		if n > 0 {
-			buf = append(buf, chunk[:n]...)
-		}
-		if err != nil {
-			break
-		}
-	}
-	return buf, nil
+	return io.ReadAll(resp.Body)
 }

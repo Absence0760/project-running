@@ -3,12 +3,36 @@ package internal
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+// truncatedBodyServer returns a 200 promising a long body via
+// Content-Length, sends only a few bytes, then slams the connection —
+// the client's body read fails with an unexpected EOF, simulating a
+// mid-transfer network drop on an otherwise-successful request.
+func truncatedBodyServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("ResponseWriter is not a Hijacker")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		defer func(c net.Conn) { _ = c.Close() }(conn)
+		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 4096\r\nContent-Type: application/json\r\n\r\n"))
+		_, _ = conn.Write([]byte(`{"id":123,`)) // truncated JSON, far short of 4096
+	}))
+}
 
 func TestStravaRefresh_ReturnsParsedResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +106,43 @@ func TestStravaRefresh_RejectsIncompleteResponse(t *testing.T) {
 	_, err := c.Refresh(context.Background(), "rt")
 	if err == nil {
 		t.Fatal("incomplete response must be rejected")
+	}
+}
+
+func TestStravaFetchActivity_TruncatedBodyIsTransient(t *testing.T) {
+	// A connection that drops mid-body after a 200 must surface as
+	// transient (defer + retry), not fall through to a permanent
+	// decode error that drops the activity.
+	srv := truncatedBodyServer(t)
+	defer srv.Close()
+
+	c := &StravaClient{BaseURL: srv.URL}
+	res, err := c.FetchActivity(context.Background(), "at", 123)
+	if err != nil {
+		t.Fatalf("body-read failure should not surface as a Go error here; got %v", err)
+	}
+	if res.Status != StravaFetchTransient {
+		t.Fatalf("status=%v, want StravaFetchTransient", res.Status)
+	}
+}
+
+func TestStravaFetchStreams_TruncatedBodyIsTransient(t *testing.T) {
+	srv := truncatedBodyServer(t)
+	defer srv.Close()
+
+	c := &StravaClient{BaseURL: srv.URL}
+	_, err := c.FetchStreams(context.Background(), "at", 123)
+	if err == nil {
+		t.Fatal("want an error from a truncated streams body")
+	}
+	if !isTransient(err) {
+		t.Fatalf("a body-read failure must be classified transient; got %v", err)
+	}
+}
+
+func TestIsTransient_UnexpectedEOF(t *testing.T) {
+	if !isTransient(io.ErrUnexpectedEOF) {
+		t.Fatal("io.ErrUnexpectedEOF (truncated body) must be transient")
 	}
 }
 
