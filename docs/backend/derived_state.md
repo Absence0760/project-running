@@ -42,12 +42,23 @@ retention cron referenced in a comment that was never created.
 
 ## `routes.run_count`
 
-- **What it caches:** how many runs are matched to a route.
-- **Authoritative recompute:** `count(*) from runs where route_id = <route>`.
+- **What it caches:** how many *public* runs are matched to a route. Private
+  runs are deliberately excluded so a public viewer can't infer that private
+  activity occurred against a route (`20260716_001`).
+- **Authoritative recompute:** `count(*) from runs where route_id = <route> and
+  is_public = true and is_route_visible_to(route_id, user_id)`.
 - **Maintained by:** `routes_run_count_trigger()` (AFTER INSERT/DELETE/UPDATE OF
-  route_id on `runs`), fixed by `20260427_001`.
+  route_id on `runs`), gated on `is_public = true` + route visibility
+  (`20260628_001` + `20260716_001`).
+- **Known drift (accepted):** the trigger fires on `route_id` change, not on an
+  `is_public` flip, so a run toggled public↔private after creation does not
+  re-count until its `route_id` is next touched (`20260716_001`). The function
+  carries the flip delta logic defensively, but the watch-list intentionally
+  omits `is_public`.
 - **Manual rebuild:** `update routes r set run_count = (select count(*) from runs
-  where route_id = r.id);`
+  where route_id = r.id and is_public = true);` (a bare `count(*)` would
+  overcount by including private runs and leave the cache permanently above
+  what the trigger maintains).
 
 ## `gym_workouts.set_count` / `gym_workouts.volume_kg`
 
