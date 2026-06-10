@@ -1723,7 +1723,10 @@
 		navigator.geolocation.getCurrentPosition(
 			(pos) => initMap([pos.coords.longitude, pos.coords.latitude], 16),
 			() => initMap(defaultCenter, defaultZoom),
-			{ timeout: 3000 }
+			// Keep the timeout short so a cold start doesn't delay the map render,
+			// but accept a cached fix (maximumAge) so a recent position centres on
+			// the user instantly instead of falling back to defaultCenter.
+			{ timeout: 3000, maximumAge: 600000 }
 		);
 
 		// Keyboard shortcuts
@@ -1777,7 +1780,12 @@
 								: t('routeBuilder.locationFailed');
 				showToast(msg, 'error');
 			},
-			{ timeout: 5000 },
+			// Accept a cached fix up to 60s old (maximumAge) so a repeat click
+			// returns instantly instead of forcing a fresh network fix, and give
+			// a cold desktop/Brave fix a realistic 15s. The old `{ timeout: 5000 }`
+			// with the default maximumAge:0 forced a fresh IP/Wi-Fi lookup every
+			// click and routinely timed out before it could resolve.
+			{ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
 		);
 	}
 

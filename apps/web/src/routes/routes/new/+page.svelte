@@ -295,8 +295,22 @@
 				if (target === 'start') { startPoint = point; startLabel = label; }
 				else { endPoint = point; endLabel = label; }
 			},
-			() => {},
-			{ timeout: 5000 }
+			(err) => {
+				// Don't fail silently — the old empty callback left the button
+				// looking dead on denial/timeout. Surface each error code.
+				const msg =
+					err.code === 1
+						? m('routeBuilder.locationPermissionDenied')
+						: err.code === 2
+							? m('routeBuilder.locationUnavailable')
+							: err.code === 3
+								? m('routeBuilder.locationTimedOut')
+								: m('routeBuilder.locationFailed');
+				showToast(msg, 'error');
+			},
+			// Same as the map's locate button: a cached fix + a realistic timeout
+			// so desktop/Brave IP geolocation doesn't time out at 5s.
+			{ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
 		);
 	}
 
