@@ -2972,6 +2972,17 @@ export type Database = {
           session_count: number
         }[]
       }
+      gym_exercise_set_history: {
+        Args: { p_name: string }
+        Returns: {
+          exercise_name: string
+          reps: number
+          rpe: number
+          started_at: string
+          weight_kg: number
+          workout_id: string
+        }[]
+      }
       heatmap_points_in_bbox: {
         Args: {
           p_max_lat: number

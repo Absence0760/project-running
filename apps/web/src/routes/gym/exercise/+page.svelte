@@ -2,7 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchGymSetHistory } from '$lib/core/data';
+	import { fetchExerciseSetHistory } from '$lib/core/data';
 	import { exerciseProgress, type ExerciseProgress, type ExerciseSession } from '$lib/gym/exercise_history';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
@@ -15,7 +15,7 @@
 
 	async function load() {
 		loading = true;
-		progress = name ? exerciseProgress(await fetchGymSetHistory(), name) : null;
+		progress = name ? exerciseProgress(await fetchExerciseSetHistory(name), name) : null;
 		loading = false;
 	}
 

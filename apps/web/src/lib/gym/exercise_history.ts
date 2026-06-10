@@ -22,7 +22,14 @@ import {
 	normaliseExerciseName,
 	type GymSetLike,
 } from './gym_prs';
-import type { DatedGymSet } from './exercise_records';
+
+/// A logged set carrying the PR metrics (via GymSetLike) plus the workout it
+/// belongs to and when that workout happened. Matches the shape of
+/// `GymSetWithDate` from core/data.ts.
+export interface DatedGymSet extends GymSetLike {
+	workout_id: string;
+	started_at: string;
+}
 
 export interface ExerciseSession {
 	workoutId: string;

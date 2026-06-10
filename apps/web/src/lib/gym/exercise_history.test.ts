@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exerciseProgress, previousExerciseSession } from './exercise_history';
-import type { DatedGymSet } from './exercise_records';
+import { exerciseProgress, previousExerciseSession, type DatedGymSet } from './exercise_history';
 
 function s(over: Partial<DatedGymSet>): DatedGymSet {
 	return {

@@ -5551,6 +5551,36 @@ export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
 	}));
 }
 
+/// Every logged set of ONE exercise (normalised-name matched server-side),
+/// joined to its workout start time — for the single-exercise progression view
+/// (/gym/exercise). Bounds the read to that exercise instead of pulling the
+/// whole history and filtering in JS. The RPC normalises the name the same way
+/// gym_prs.ts#normaliseExerciseName does, so it picks up sessions logged under
+/// a different capitalisation. perf-hunt follow-up 2026-06-10.
+export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithDate[]> {
+	if (!auth.user?.id || !name.trim()) return [];
+	const { data, error } = await supabase.rpc('gym_exercise_set_history', { p_name: name });
+	if (error) {
+		console.error('fetchExerciseSetHistory failed', error);
+		return [];
+	}
+	return ((data ?? []) as Array<{
+		workout_id: string;
+		started_at: string;
+		exercise_name: string;
+		reps: number | null;
+		weight_kg: number | string | null;
+		rpe: number | string | null;
+	}>).map((r) => ({
+		workout_id: r.workout_id,
+		started_at: r.started_at,
+		exercise_name: r.exercise_name,
+		reps: r.reps,
+		weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
+		rpe: r.rpe == null ? null : Number(r.rpe),
+	}));
+}
+
 async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<void> {
 	const { error: delErr } = await supabase
 		.from(TABLES.gym_sets)
