@@ -2108,6 +2108,8 @@ export const messages = {
 	"routeHeatmap.routeDiscovery": "Descobrir rotas",
 	"routeHeatmap.clubFallbackName": "Clube",
 	"routeHeatmap.routeFallbackName": "Rota",
+	"routeHeatmap.locateDenied": "Acesso à localização negado.",
+	"routeHeatmap.locateFailed": "Não foi possível determinar sua localização.",
 	"runEditor.distanceLabel": "Distância ({unit})",
 	"runEditor.distanceDurationRequired": "Distância e duração são obrigatórias.",
 	"runEditor.runAdded": "Corrida adicionada.",

@@ -2105,6 +2105,8 @@ export const messages = {
 	"routeHeatmap.routeDiscovery": "ルート探索",
 	"routeHeatmap.clubFallbackName": "クラブ",
 	"routeHeatmap.routeFallbackName": "ルート",
+	"routeHeatmap.locateDenied": "位置情報へのアクセスが拒否されました。",
+	"routeHeatmap.locateFailed": "現在地を取得できませんでした。",
 	"runEditor.distanceLabel": "距離 ({unit})",
 	"runEditor.distanceDurationRequired": "距離と時間の両方を入力してください。",
 	"runEditor.runAdded": "ランを追加しました。",

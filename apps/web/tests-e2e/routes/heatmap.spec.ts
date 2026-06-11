@@ -213,3 +213,62 @@ test.describe('/routes/heatmap — auto-locate on load', () => {
 		});
 	});
 });
+
+test.describe('/routes/heatmap — geolocation failure fallback', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	// Force the GeolocateControl's getCurrentPosition to fail with
+	// POSITION_UNAVAILABLE (code 2) — the real-world Brave/VPN case where
+	// the browser has a geolocation API but no backend that can resolve a
+	// fix. Deterministic, and independent of Playwright's permission state.
+	test.beforeEach(async ({ context }) => {
+		await context.addInitScript(() => {
+			const geo = navigator.geolocation;
+			if (geo) {
+				geo.getCurrentPosition = (
+					_success: PositionCallback,
+					error?: PositionErrorCallback | null,
+				) => {
+					error?.({
+						code: 2,
+						message: 'forced unavailable (test)',
+						PERMISSION_DENIED: 1,
+						POSITION_UNAVAILABLE: 2,
+						TIMEOUT: 3,
+					} as GeolocationPositionError);
+				};
+			}
+		});
+	});
+
+	test('failed locate shows a toast and frames the map on the route data', async ({
+		page,
+	}) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({
+			timeout: 15_000,
+		});
+
+		// 1) The failure is surfaced, not swallowed. (code 2 → locateFailed)
+		await expect(page.getByText("Couldn't find your location.")).toBeVisible({
+			timeout: 15_000,
+		});
+
+		// 2) Instead of stranding the user at the [0, 30] world view, the map
+		//    fits to the loaded route pins — the seed routes are all in
+		//    Virginia, so the centre lands inside the state's bounding box.
+		await page.waitForFunction(
+			() => {
+				const m = (
+					window as unknown as {
+						__heatmapMap?: { getCenter: () => { lng: number; lat: number } };
+					}
+				).__heatmapMap;
+				if (!m) return false;
+				const c = m.getCenter();
+				return c.lng > -84 && c.lng < -75 && c.lat > 36 && c.lat < 40;
+			},
+			{ timeout: 15_000 },
+		);
+	});
+});

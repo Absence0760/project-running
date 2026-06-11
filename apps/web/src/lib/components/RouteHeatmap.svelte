@@ -22,6 +22,7 @@
 		type DistanceBandKey,
 	} from '$lib/routes/distance_bands';
 	import { m } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { escapeHtml, safeHref } from '$lib/util/html_escape';
 
 	let mapEl: HTMLDivElement;
@@ -32,6 +33,16 @@
 	let lastUpdated = $state<Date | null>(null);
 	let mapLoaded = false;
 	let cachedFeatures: GeoJSON.Feature[] = [];
+	// The map is framed exactly once on first paint — either by a
+	// successful geolocation fix OR (when geolocation is denied /
+	// unavailable / absent) by fitting to the loaded route data. Guards
+	// the fallback so panning away later never re-snaps the view.
+	let didInitialFit = false;
+	// Set true once geolocation has settled in a way that means it will
+	// NOT frame the map (error or no API). Gates the fit-to-data fallback
+	// so a still-pending fix doesn't cause a world-view → data → real-
+	// location flash when geolocation is going to succeed.
+	let wantDataFit = false;
 
 	// --- Search ---
 	// Uses `$lib/routes/geocoding.searchPlaces`, which transparently picks
@@ -232,12 +243,36 @@
 		// dot + accuracy circle, so the dot shows on first paint
 		// instead of only after the button is pressed.
 		geolocate = new maplibregl.GeolocateControl({
-			positionOptions: { enableHighAccuracy: true, timeout: 5000 },
+			// enableHighAccuracy:false + a 15s timeout + a 60s maximumAge
+			// mirrors the proven RouteBuilder config. The old
+			// {enableHighAccuracy:true, timeout:5000} (with the implicit
+			// maximumAge:0) forced a fresh high-accuracy Wi-Fi/IP fix on
+			// every trigger and routinely timed out on desktop / Brave /
+			// behind a VPN before it could resolve — a coarse, cacheable
+			// fix is all a recentre needs.
+			positionOptions: { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
 			trackUserLocation: false,
 			showAccuracyCircle: true,
 			showUserLocation: true,
 		});
 		map.addControl(geolocate, 'top-right');
+		// A successful fix frames the map on the user — mark the view as
+		// framed so the fit-to-data fallback never yanks it to the dataset.
+		geolocate.on('geolocate', () => {
+			didInitialFit = true;
+		});
+		// Denied / unavailable / timed out. The control otherwise fails
+		// silently (the bug that made "locate me" feel broken): surface it
+		// as a toast, then fall back to framing the loaded route data
+		// instead of stranding the user at the world view.
+		geolocate.on('error', (err: GeolocationPositionError) => {
+			showToast(
+				err?.code === 1 ? m('routeHeatmap.locateDenied') : m('routeHeatmap.locateFailed'),
+				'error',
+			);
+			wantDataFit = true;
+			fitToRoutePins();
+		});
 
 		map.on('load', () => {
 			if (!map) return;
@@ -252,6 +287,12 @@
 			// trigger is skipped where geolocation is absent.
 			if (typeof navigator !== 'undefined' && navigator.geolocation) {
 				geolocate?.trigger();
+			} else {
+				// No geolocation API at all (e.g. http:// served over a LAN
+				// IP, where the browser gates it off): frame the loaded
+				// route data instead of leaving the world view.
+				wantDataFit = true;
+				fitToRoutePins();
 			}
 			map.addSource(HEATMAP_SOURCE, {
 				type: 'geojson',
@@ -819,6 +860,18 @@
 	/// each, so the wire size is negligible compared to the heatmap
 	/// densification. Each layer updates independently; a failure
 	/// in one doesn't cancel the other.
+	// Frame the map on the loaded route pins. Runs at most once, and only
+	// when geolocation has bowed out (wantDataFit) — so a working fix still
+	// wins, but a denied / unavailable / absent one lands the user on the
+	// route data (e.g. the Virginia routes) instead of the world view.
+	function fitToRoutePins() {
+		if (!map || didInitialFit || !wantDataFit || routePins.length === 0) return;
+		const bounds = new maplibregl.LngLatBounds();
+		for (const r of routePins) bounds.extend([r.lng, r.lat]);
+		map.fitBounds(bounds, { padding: 64, maxZoom: 12, duration: 600 });
+		didInitialFit = true;
+	}
+
 	async function refreshPins() {
 		if (!map || !mapLoaded) return;
 		// The discovery pins are the always-relevant fetch, so the status
@@ -841,6 +894,9 @@
 			clubPinsCount = clubs.length;
 			routePinsCount = routes.length;
 			routePins = routes;
+			// If geolocation has already bowed out, frame the view on this
+			// freshly-loaded data (no-op once the view has been framed).
+			fitToRoutePins();
 			const clubSrc = map.getSource(CLUB_PINS_SOURCE) as
 				| maplibregl.GeoJSONSource
 				| undefined;

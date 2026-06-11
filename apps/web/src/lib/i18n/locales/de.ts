@@ -2109,6 +2109,8 @@ export const messages = {
 	"routeHeatmap.routeDiscovery": "Streckensuche",
 	"routeHeatmap.clubFallbackName": "Club",
 	"routeHeatmap.routeFallbackName": "Strecke",
+	"routeHeatmap.locateDenied": "Standortzugriff verweigert.",
+	"routeHeatmap.locateFailed": "Dein Standort konnte nicht ermittelt werden.",
 	"runEditor.distanceLabel": "Distanz ({unit})",
 	"runEditor.distanceDurationRequired": "Distanz und Dauer sind beide erforderlich.",
 	"runEditor.runAdded": "Lauf hinzugefügt.",

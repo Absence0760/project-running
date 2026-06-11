@@ -2117,6 +2117,8 @@ export const en = {
 	"routeHeatmap.routeDiscovery": "Route discovery",
 	"routeHeatmap.clubFallbackName": "Club",
 	"routeHeatmap.routeFallbackName": "Route",
+	"routeHeatmap.locateDenied": "Location access denied.",
+	"routeHeatmap.locateFailed": "Couldn't find your location.",
 	"runEditor.distanceLabel": "Distance ({unit})",
 	"runEditor.distanceDurationRequired": "Distance and duration are both required.",
 	"runEditor.runAdded": "Run added.",

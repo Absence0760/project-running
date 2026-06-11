@@ -2109,6 +2109,8 @@ export const messages = {
 	"routeHeatmap.routeDiscovery": "Découverte d'itinéraires",
 	"routeHeatmap.clubFallbackName": "Club",
 	"routeHeatmap.routeFallbackName": "Itinéraire",
+	"routeHeatmap.locateDenied": "Accès à la localisation refusé.",
+	"routeHeatmap.locateFailed": "Impossible de déterminer votre position.",
 	"runEditor.distanceLabel": "Distance ({unit})",
 	"runEditor.distanceDurationRequired": "La distance et la durée sont toutes deux obligatoires.",
 	"runEditor.runAdded": "Course ajoutée.",
