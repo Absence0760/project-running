@@ -276,6 +276,30 @@ void main() {
           reason: 'and the bbox brackets NYC latitude.');
     });
 
+    testWidgets(
+        'with no location fix, widens from London + frames on the route data',
+        (tester) async {
+      final api = _FakeApiClient()
+        // A Virginia route — far from the London default centre. The
+        // discovery fetch returns it regardless of bbox (fake), so the
+        // only way the bbox can bracket VA is if the map widened off
+        // London when the locate gave up.
+        ..nextPins = [_pin(id: 'va', lat: 37.5407, lng: -77.436)];
+      await _pump(
+        tester,
+        api,
+        // No fix available (the Brave/VPN/desktop case).
+        backgroundLocateFn: () async => null,
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(api.lastMinLng, isNotNull);
+      expect(api.lastMinLng! <= -77.436 && api.lastMaxLng! >= -77.436, isTrue,
+          reason: 'a failed locate must widen off London so the discovery '
+              'bbox brackets the Virginia routes — not strand the user on '
+              'the London default whose tight bbox returns nothing.');
+    });
+
     testWidgets('fetches discovery on mount with a valid bbox; heat is off',
         (tester) async {
       final api = _FakeApiClient();

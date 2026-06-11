@@ -116,6 +116,20 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   /// camera out from under them.
   bool _userMovedMap = false;
 
+  /// The map is framed exactly once on open — by a location fix if one
+  /// arrives, else by fitting to the loaded route pins. Guards the
+  /// fallback so it never re-snaps after the user takes the camera.
+  bool _didInitialFit = false;
+
+  /// Set once the on-open auto-locate has bowed out (no permission, no
+  /// fix, or timeout). Gates the fit-to-pins fallback so a still-pending
+  /// fix doesn't cause a default-view → data → real-location flash.
+  bool _wantDataFit = false;
+
+  /// True once the no-fix fallback (widen → refetch → fit) has been kicked,
+  /// so the multiple give-up paths don't widen the camera more than once.
+  bool _dataFallbackStarted = false;
+
   /// Pixel radius for merging pins into a cluster at the current zoom.
   static const double _clusterRadiusPx = 50.0;
 
@@ -206,6 +220,9 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
         _pins = pins;
         _clubs = clubs;
       });
+      // If geolocation has already bowed out, frame the view on this
+      // freshly-loaded data (no-op once the view has been framed).
+      _fitToPins();
     } catch (e) {
       // L4 — discovery is not load-bearing. The real ApiClient already
       // swallows + returns empty; belt-and-braces here for tests.
@@ -483,6 +500,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       if (!mounted) return;
       final ll = LatLng(pos.latitude, pos.longitude);
       _mapController.move(ll, 14);
+      _didInitialFit = true;
       setState(() => _userLatLng = ll);
       _scheduleRefresh();
     } catch (e) {
@@ -499,19 +517,27 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     if (widget.backgroundLocateFn != null) {
       try {
         final pos = await widget.backgroundLocateFn!();
-        if (pos == null || !mounted) return;
+        if (pos == null || !mounted) {
+          _giveUpOnLocate();
+          return;
+        }
         setState(() => _userLatLng = LatLng(pos.latitude, pos.longitude));
         _maybeAutoCenter();
       } catch (_) {
-        // Silent — the FAB is the user-initiated retry.
+        // The FAB is the user-initiated retry; fall back to the data view.
+        _giveUpOnLocate();
       }
       return;
     }
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _giveUpOnLocate();
+      return;
+    }
     try {
       final perm = await Geolocator.checkPermission();
       if (perm != LocationPermission.always &&
           perm != LocationPermission.whileInUse) {
+        _giveUpOnLocate();
         return;
       }
       // Fast path: a cached fix centres the map instantly so it doesn't
@@ -527,8 +553,60 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       setState(() => _userLatLng = LatLng(pos.latitude, pos.longitude));
       _maybeAutoCenter();
     } catch (_) {
-      // Silent — the FAB is the user-initiated retry.
+      // The FAB is the user-initiated retry; fall back to the data view.
+      _giveUpOnLocate();
     }
+  }
+
+  /// The on-open auto-locate won't frame the map (denied / unavailable /
+  /// timed out / no API). Permit the fallback and kick it off.
+  void _giveUpOnLocate() {
+    _wantDataFit = true;
+    _startDataFallback();
+  }
+
+  /// No location fix: widen from the London default to a broad view so the
+  /// discovery fetch returns routes anywhere (the tight default bbox would
+  /// otherwise return nothing when the user isn't near London), then frame
+  /// on what comes back — `_refresh`'s tail calls [_fitToPins]. One-shot,
+  /// and deferred until the map is ready + before the user takes the camera.
+  void _startDataFallback() {
+    if (!mounted ||
+        !_mapReady ||
+        _didInitialFit ||
+        _userMovedMap ||
+        !_wantDataFit ||
+        _dataFallbackStarted) {
+      return;
+    }
+    _dataFallbackStarted = true;
+    _mapController.move(const LatLng(30, 0), 2);
+    _refresh();
+  }
+
+  /// Frame the map on the loaded route pins (after the widen-and-refetch).
+  /// Runs at most once, and only when the auto-locate has bowed out and the
+  /// user hasn't taken the camera — so a real fix still wins, but a failed
+  /// one lands on the route data instead of the neutral London default.
+  void _fitToPins() {
+    if (!mounted ||
+        !_mapReady ||
+        _didInitialFit ||
+        !_wantDataFit ||
+        _userMovedMap ||
+        _pins.isEmpty) {
+      return;
+    }
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(
+          [for (final p in _pins) LatLng(p.lat, p.lng)],
+        ),
+        padding: const EdgeInsets.all(48),
+        maxZoom: 12,
+      ),
+    );
+    _didInitialFit = true;
   }
 
   /// Centre the map on the known user location (zoom 14, matching the
@@ -537,6 +615,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   bool _maybeAutoCenter() {
     if (!_mapReady || _userMovedMap || _userLatLng == null) return false;
     _mapController.move(_userLatLng!, 14);
+    _didInitialFit = true;
     _refresh();
     return true;
   }
@@ -640,9 +719,15 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               initialZoom: widget.initialZoom ?? 11,
               onMapReady: () {
                 _mapReady = true;
-                // If a fix already arrived, open centred on it; otherwise
-                // load the default view until one does.
-                if (!_maybeAutoCenter()) _refresh();
+                // If a fix already arrived, open centred on it. If the
+                // locate already gave up, widen to the data view. Otherwise
+                // load the default view while a fix is still pending.
+                if (_maybeAutoCenter()) return;
+                if (_wantDataFit) {
+                  _startDataFallback();
+                  return;
+                }
+                _refresh();
               },
               onPositionChanged: (pos, hasGesture) {
                 if (hasGesture) {
