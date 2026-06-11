@@ -1,5 +1,7 @@
 # Multi-modal layout & IA (Phase 4 — run + gym + nutrition)
 
+> **Goal / north star.** The product is a **personal multi-modal training app whose differentiator is cross-modal intelligence** — a Coach that reasons across one athlete's runs, lifts, and nutrition. That, not a co-located stack of cards, is the wedge no incumbent owns ([the thesis](#the-thesis-cross-modality-intelligence-is-the-product-not-the-card-layout)). Every IA decision in this doc exists to make that intelligence *reachable and trusted* — the Train hub gives each modality a home so its data flows into the one load/recovery curve and the Coach's context; the pinned `Ask your coach` entry keeps the intelligence one tap from the default surface; the self-hiding rule protects the pure runner so depth never becomes clutter. Adjacent surfaces (the [community / paid-events layer](club_events.md)) are **additive retention features in service of this goal, not a second product.** When a layout choice trades against making the cross-modal intelligence the centre of the app, the intelligence wins.
+
 Design spec for the navigation, Home, and History surfaces once the app
 spans running + gym + nutrition. The data foundation (migration
 `20261204_001`, `gym_workouts` / `gym_sets` / `food_log` / `activities`
@@ -185,6 +187,14 @@ reliable. The same shape generalises to the other Tier-2 ideas
 Layer 2, none of them needs a foreign key between activity rows.
 
 ## Bottom nav — `Home · History · Log · Social · Settings`
+
+> **A proposed successor to this nav is specced below** — see
+> [§ Proposed redesign: the Train hub + Routes relocation](#proposed-redesign-pending-sign-off--the-train-hub--routes-relocation).
+> It keeps the `Log` action and the self-hiding contract but replaces the
+> `History` tab with a **Train** modality hub, relocates Routes out of
+> Social onto the Run surface, and folds Settings into a `You` tab. The
+> section below describes the **shipped** nav; the proposal is not yet
+> built.
 
 The `Run` tab disappears as a top-level destination. The centre slot
 becomes an **action button**, not a tab.
@@ -771,3 +781,100 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 
 **Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete + a per-exercise **"vs last time"** hint — the previous weighted session's top set with a +/- delta on the heaviest set, via `gym/exercise_history.ts#previousExerciseSession`, linking to that exercise's progression; the progressive-overload cue the all-time PR chips can't give), `routes/gym/records/+page.svelte` (per-exercise current bests — est. 1RM / heaviest / top volume + last-performed + session count — via the **`gym_exercise_records` RPC** (`fetchExerciseRecords`, migration `20261224_001`): all-time bests can't be served by a windowed client read, so the aggregation moved server-side, mirroring how run PRs live in SQL; the SQL metrics are pinned to the `gym_prs.ts` semantics by pgtap. Linked from the `/gym` header once a weighted set exists. Mobile keeps its own client-side records screen — `gym_records_screen.dart` over `exercise_records.dart` — so the two now compute the same bests via different paths, no longer a byte-identical pair), `routes/gym/exercise/+page.svelte` (per-exercise progression over time — read by `?name=` — headline est.-1RM delta vs the first session + a most-recent-first session list with top set / e1RM / volume / a strength-relative bar / a PR badge on new-e1RM sessions, each row linking back to its workout; via `gym/exercise_history.ts`, also a pure **web-only** roll-up over the `gym_prs` primitives; reached from each `/gym/records` card), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the always-present **Gym** sidebar item in `+layout.svelte` (ungated, §63 amendment). E2e: `tests-e2e/gym/gym.spec.ts` + `tests-e2e/gym/records.spec.ts` + `tests-e2e/gym/exercise_history.spec.ts` + `tests-e2e/gym/vs_last_time.spec.ts`. The `weight_unit` (`'kg' \| 'lbs'`) user-pref is **wired on both platforms** (settings.md, F19): storage stays canonical kg (`gym_sets.weight_kg`); display + entry convert via the pure `format/weight.ts` (`formatWeightKg`/`parseWeightToKg`) ↔ mobile `WeightFormat`, driven by the `weightUnit` signal / `activeWeightUnit` and the Settings → Preferences kg/lbs toggle on each side.
 | DSAR | `gym_workouts` / `gym_sets` (nested) / `food_log` + `body_metrics` (migration `20261216_001`) all in the export path (**shipped** — see the Body-metrics § above); deletion FK-cascades from `auth.users` |
+
+## Proposed redesign (pending sign-off) — the Train hub + Routes relocation
+
+> **Status: PROPOSED, not built.** Decided inputs (owner, this round): mobile nav adopts a **Train modality hub**, and **Routes co-locates under the Run modality** on both platforms. Still needs: owner sign-off to build, plus the nav-contract test rewrites. This section supersedes the routes-half of [decisions.md § 61](../architecture/decisions.md#61-social-hub-ia-rename-clubs--social-host-feedpeopleclubs-as-tabs-under-social) and corrects the "Routes was folded into Social" parenthetical in [§ 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) (that was only ever true on mobile; web shipped Routes as a top-level sidebar item). The ready-to-paste ADR is in [Appendix](#appendix--proposed-adr-routes-is-a-run-modality-surface-mobile-nav-is-a-train-hub).
+
+### The problem this fixes
+
+The multi-modal expansion left the nav incoherent on **where a modality's *planning tools* live**:
+
+- **Routes is mis-placed on both platforms.** On web it's a **top-level sidebar peer** of Gym/Nutrition (`+layout.svelte` nav item `/routes`), which over-weights a *run-planning tool* as if it were a fourth modality. On mobile it's **buried under Social**, conceptually wrong (a course-planning tool under the people/feed layer) and inconsistent with web. Meanwhile Gym's routines and Nutrition's targets correctly live *inside* their modality surfaces — Routes is the odd one out.
+- **Mobile modalities have no persistent front-door.** You can *capture* via `Log` and *review* via History's `View all`, but there's no "go to my running / my gym / my nutrition" home to plan or browse. `Settings` also eats a scarce top-five slot despite being low-frequency.
+
+The fix unifies the rule: **each modality owns its planning assets** — runs own routes + training plans, gym owns routines, nutrition owns targets/recipes — and they all hang off that modality's surface, never as a top-level peer and never under Social.
+
+### Mobile — the Train hub
+
+Bottom nav becomes `Home · Train · [+] Log · Social · You` (still five slots, still a raised centre `Log` action):
+
+```
+┌───────────────────────────────────────────────┐
+│  Train                                          │
+│  ┌──────┬──────┬──────┬───────────┐             │
+│  │ All  │ Runs │ Gym  │ Nutrition │             │
+│  └──────┴──────┴──────┴───────────┘             │
+│   Runs ▸  • Run list                            │
+│           • Routes        ← relocated here       │
+│           • Training plans                       │
+│                                                 │
+├───────────────────────────────────────────────┤
+│   ⌂        🏃        ╔═══╗        ◎        ◐     │
+│  Home    Train      ║ + ║      Social    You    │
+│                     ╚═══╝                        │
+└───────────────────────────────────────────────┘
+```
+
+- **`Train`** is the modality hub. A top sub-tab strip `All · Runs · Gym · Nutrition`:
+  - **All** = the unified cross-modal timeline that is the *current* `History` tab — the `History` bottom-nav slot is absorbed here, not deleted. Same offline-first local-store assembly (`lib/local_activities.dart` over the three `Local*Store`s), same `activity_timeline_list.dart` rows, same per-row tap-to-detail. The `History`-tab kind chips become the hub's sub-tabs.
+  - **Runs** = the run-management surface (today's `RunsScreen` reached via History `View all`) **plus Routes plus Training plans** as sections/sub-routes within it.
+  - **Gym** = `GymScreen` (list + records) + Routines when the gym-programming P1 lands ([gym_programming.md](gym_programming.md)).
+  - **Nutrition** = `NutritionScreen` (day/week) + targets.
+- **`Log` (+)** is unchanged — the capture sheet (Log run / lift / food → keep-alive capture page), long-press = repeat last. Capture stays separate from the Train *review/plan* surfaces (the verb-vs-modality split §63 established).
+- **`Social`** is unchanged (Feed / People / Clubs). **Routes leaves Social** — the mobile Social screen drops any routes entry.
+- **`You`** = profile + Settings + subscription + (future) payout account. `Settings` vacates its own slot; the `keepRunPrimary` toggle and all prefs live under `You → Settings`.
+- **`Coach` is made the face of Home, not a buried card.** The thesis of this doc is that *cross-modal intelligence is the product* — so the nav must not hide it. Rather than spend a scarce sixth slot (and rather than the demoted "scrollable card" the first draft proposed), **Home gains a persistent, pinned `Ask your coach…` entry at the top** (always visible above the card stack, one tap to the Coach) so the intelligence layer is the first thing on the default landing surface. Web keeps its dedicated `/coach` sidebar item (it has room). Coach stays cross-modal advisory, not a modality, so it is not a Train sub-tab. *Considered and rejected:* a dedicated `Coach` bottom-nav slot displacing `Social` — Social now also hosts paid club classes ([club_events.md](club_events.md)), so it earns its slot; the pinned-Home-entry reconciles the thesis without that trade. This is the one reversible call in the redesign — revisit if Coach engagement warrants a full slot.
+- **Home** is unchanged — the prioritised, self-hiding card stack ("what's my day").
+
+The **self-hiding contract holds**: a pure runner opening `Train` sees the Runs sub-tab content and an `All` timeline of only runs; the Gym/Nutrition sub-tabs render their empty-onboarding state but are never forced on them (mirroring today's data-gated cards). The Train hub being always-present is the analogue of today's always-present `Log` sheet — it's the entry point, so it can't itself be data-gated (the §63-amendment chicken-and-egg rule).
+
+Keep-alive note: the in-shell `PageView` capture pages (Run/Gym/Nutrition recorders) stay exactly as the §63 2026-06-08 amendment built them — the Train hub is a *review/plan* destination, distinct from the keep-alive *capture* pages the `Log` action lands on. A live recording is unaffected by navigating to `Train`.
+
+### Web — Routes nests under the Run surface; siblings stay
+
+Web is not slot-constrained, so it keeps the §63 contract of **explicit `Run` / `Gym` / `Nutrition` sidebar siblings** — no Train hub on web. The only structural change:
+
+- **Drop the top-level `/routes` sidebar item.** Routes nests into the run surface: `/runs` gains a sub-tab strip `Runs · Routes · Plans` (the run-modality analogue of `/gym`'s sections). The `/routes` URL is **kept and un-broken** (bookmarks, club deep-links, shares still resolve) — it simply renders inside the run surface's Routes tab instead of as a standalone destination.
+- Optionally group the sidebar visually (`Home` · a *Train* group of `History / Runs / Gym / Nutrition` · `Coach` · `Social` · `Settings` footer), but the items stay flat siblings — a label-only grouping, not a collapse.
+- Settings stays a web footer item; the future **payout account** surface ([club_events.md](club_events.md)) is user-level under `/settings/payouts`, unaffected.
+
+### Routes relocation — the specifics
+
+Routes becomes a **run-modality surface**, full move (not a library-vs-discovery split):
+
+- The whole `/routes` surface — **my route library, the route builder, and browse-public** — lives under the Run surface (web: `/runs` Routes tab; mobile: `Train → Runs → Routes`). Browsing public running courses is a run-planning act, not a people act, so it travels with the modality.
+- **Club-owned routes are unchanged.** The `/clubs/[slug]` Routes tab (`routes.club_id`, see [clubs.md § Club-owned routes](clubs.md#club-owned-routes)) stays on the club page — that's route *ownership within a club*, a separate surface from the personal library.
+- No schema change — this is pure IA/nav. `routes`, `saved_routes`, and the route builder are untouched.
+
+### Rollout & tests
+
+Web-first per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive):
+
+1. **Web (smaller):** remove the `/routes` nav item in `+layout.svelte`; add the `Runs · Routes · Plans` sub-tabs to `/runs`; keep `/routes` resolving. Update `tests-e2e/cross-cutting/surfaces.spec.ts` (the sidebar-contract test) + add a Routes-under-Runs nav test.
+2. **Mobile (larger — the real lift):** reshape `home_screen.dart` bottom nav to `Home · Train · + · Social · You`; build the `Train` hub screen with the `All · Runs · Gym · Nutrition` sub-tab strip (All = the existing timeline widgets; Runs = `RunsScreen` + a Routes section); move Settings under a new `You` screen; drop routes from the Social screen. Byte-identical iOS twin per [§ 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — run `mobile-twin-mirror` after every Dart edit. Pin with Flutter widget tests for the hub sub-tab switch + the relocated Routes entry.
+3. **i18n:** new nav labels (`nav.train`, `nav.you`, the Train sub-tab labels) into all six web gen-l10n catalogues + all mobile ARBs.
+4. **Docs:** flip the relevant rows here + in [parity.md](../product/parity.md); land the ADR (Appendix); update [clubs.md](clubs.md) (Social no longer hosts routes on mobile) and the per-app CLAUDE.md nav notes.
+
+### Build order across the open proposals (avoid nav thrash)
+
+This redesign, the routes relocation, the gym/nutrition modules, and [club_events.md](club_events.md) all touch overlapping surfaces — the mobile nav (`home_screen.dart`) was *just* rewritten (G5, §63 amendments) and this redesign rewrites it again, so the proposals must be sequenced, not landed ad hoc:
+
+1. **Typed events (club_events.md slice E)** — cheap, additive, no nav change; unblocks the "fitness, not just running" positioning and is its own gate probe. Build first.
+2. **Routes relocation (web)** — small; the prerequisite that makes the Train hub coherent.
+3. **Train-hub nav redesign (this doc)** — batch the mobile nav rewrite *with* routes relocation so `home_screen.dart` is reshaped **once**, not twice. The Coach-on-Home decision lands here.
+4. **Paid events (club_events.md P1)** — gated on slice E's signal + the compliance/legal sign-off.
+
+Gym P1 and nutrition sequencing keep their own gates (gym repeat-rate, nutrition food-DB trust) and are orthogonal to the nav order above.
+
+### Open questions
+
+1. **"Train" naming** — accurate for run + gym, weak for nutrition (you don't "train" food). Alternatives: `Activity`, `Log` (taken), `Me`/`You` (taken). `Train` is the working title; product picks the final label before build.
+2. **Does `All`/History also keep a Home presence?** — Home is the dashboard; the full timeline moves to `Train → All`. Decide whether Home keeps a short "recent activity" strip or sends users to the hub for history.
+3. **Coach prominence** — *resolved* (above): a pinned `Ask your coach…` entry at the top of Home, not a dedicated slot. Revisit only if engagement data argues for a full slot.
+
+### Appendix — proposed ADR (Routes is a run-modality surface; mobile nav is a Train hub)
+
+Ready to lift into [decisions.md](../architecture/decisions.md) at the next free number when approved (the gym + paid-events specs also hold unlanded numbers — assign sequentially at landing):
+
+> **§N. Routes is a run-modality surface, not a top-level peer or a Social tab; mobile nav reorganises around a `Train` modality hub.** As the app went multi-modal, each modality's planning assets settled inside its own surface — gym owns routines, nutrition owns targets — except Routes, which shipped as a top-level web sidebar peer of Gym/Nutrition *and* (on mobile) under Social. Both mis-frame a run-planning tool. Decision: Routes co-locates under the Run modality on both platforms (my library + builder + browse), full move, no split; club-owned routes stay on the club page (unchanged); the `/routes` URL is preserved so no link breaks. Mobile additionally adopts a `Home · Train · [+]Log · Social · You` bottom nav: `Train` is a modality hub (`All · Runs · Gym · Nutrition` sub-tabs) that absorbs the former `History` tab as its `All` timeline and gives each modality a persistent review/plan front-door; `Settings` folds into `You`; `Log` and the keep-alive capture pages are unchanged. Web keeps explicit Run/Gym/Nutrition sidebar siblings (§63) but drops the standalone Routes item, nesting it under `/runs`. This supersedes the routes-half of §61 and corrects §63's "Routes was folded into Social" note (mobile-only). Pure-runner self-hiding is preserved; the hub is always-present as the entry point (the §63-amendment chicken-and-egg rule), with empty modality sub-tabs rather than forced cards.

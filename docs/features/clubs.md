@@ -4,6 +4,8 @@ The social layer. A club is a group with an owner, members, events, and a feed o
 
 The top-level "Social" sidebar item hosts the club browse UI as one of three tabs — see `decisions.md § 61`. The `/clubs` top-level URL is a thin redirect to `/social?tab=clubs`; club sub-routes (`/clubs/[slug]`, `/clubs/new`, `/clubs/[slug]/events/*`, `/clubs/join/[token]`) are unchanged.
 
+> **Events are running-specific today.** The editor + detail page assume a *run* (route, distance, pace, race mode, results leaderboard, certificates). A proposed generalisation — typed events (`run`/`ride`/`class`/`social`) with self-hiding athletic fields, so a club can host a yoga or pilates class, plus optional paid registration (Stripe Connect, payouts to the host not the club) — is specced (not built) in [club_events.md](club_events.md).
+
 ## Surfaces (web)
 
 | Route | Purpose |
