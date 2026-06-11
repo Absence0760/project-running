@@ -50,6 +50,7 @@
 				{ href: '/settings/integrations', label: m('settingsLayout.tabIntegrations'), icon: 'link' },
 				{ href: '/settings/devices', label: m('settingsLayout.tabDevices'), icon: 'devices' },
 				{ href: '/settings/gear', label: m('settingsLayout.tabGear'), icon: 'directions_run' },
+				{ href: '/settings/payouts', label: m('settingsLayout.tabPayouts'), icon: 'payments' },
 			],
 		},
 		{

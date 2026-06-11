@@ -25,6 +25,8 @@ import type {
 	ClubPostWithAuthor,
 	RecurrenceFreq,
 	EventCategory,
+	EventPricing,
+	EventOrder,
 	Weekday,
 	TrainingPlan,
 	PlanWeek,
@@ -2055,6 +2057,147 @@ export async function fetchEventMeetPoint(
 	const row = data[0];
 	if (typeof row.meet_lat !== 'number' || typeof row.meet_lng !== 'number') return null;
 	return { lat: row.meet_lat, lng: row.meet_lng };
+}
+
+// ─────────────────────── Paid registration (club_events.md slice P1) ───────────────────────
+
+/// Boolean-only view of the signed-in host's Stripe payout capability.
+/// The raw `stripe_connect_account_id` is column-revoked from clients
+/// (migration 20261229_001) — this reads the surfacing columns + the
+/// `host_can_take_payment` RPC for the capability flags. Returns null
+/// when the host has never started onboarding.
+export interface PayoutAccountStatus {
+	charges_enabled: boolean;
+	payouts_enabled: boolean;
+	details_submitted: boolean;
+	country: string | null;
+	default_currency: string | null;
+}
+
+export async function fetchPayoutAccount(): Promise<PayoutAccountStatus | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	// The own-row SELECT policy lets a host read their own account row;
+	// `stripe_connect_account_id` is revoked at the column level, so we
+	// never project it. The capability booleans live on the row directly.
+	const { data, error } = await supabase
+		.from('instructor_payout_accounts')
+		.select('charges_enabled, payouts_enabled, details_submitted, country, default_currency')
+		.eq('user_id', userId)
+		.maybeSingle();
+	if (error || !data) return null;
+	return {
+		charges_enabled: Boolean(data.charges_enabled),
+		payouts_enabled: Boolean(data.payouts_enabled),
+		details_submitted: Boolean(data.details_submitted),
+		country: (data.country as string | null) ?? null,
+		default_currency: (data.default_currency as string | null) ?? null
+	};
+}
+
+/// Start (or resume) Stripe Connect onboarding for the signed-in host.
+/// Invokes the events-connect-onboard Edge Function, which creates/reuses
+/// an Express account and returns a hosted Account Link URL. The caller
+/// redirects the browser there.
+export async function startConnectOnboarding(): Promise<{ url: string }> {
+	const { data, error } = await supabase.functions.invoke('events-connect-onboard', {
+		body: {}
+	});
+	if (error) throw error;
+	const url = (data as { url?: string } | null)?.url;
+	if (!url) throw new Error('No onboarding URL returned');
+	return { url };
+}
+
+/// Effective pricing for an event instance. Per-instance override wins
+/// over the series default (instance_start IS NULL). Readable with the
+/// event per RLS.
+export async function fetchEventPricing(
+	eventId: string,
+	instanceStart?: string | null
+): Promise<EventPricing | null> {
+	const { data, error } = await supabase
+		.from('event_pricing')
+		.select('*')
+		.eq('event_id', eventId);
+	if (error || !data || data.length === 0) return null;
+	const rows = data as EventPricing[];
+	if (instanceStart) {
+		const override = rows.find((r) => r.instance_start === instanceStart);
+		if (override) return override;
+	}
+	return rows.find((r) => r.instance_start == null) ?? null;
+}
+
+/// Persist series-level (or per-instance) pricing for an event. Kept
+/// separate from createEvent so the price write goes through its own
+/// charges_enabled-gated RLS surface — folding it into the events insert
+/// would couple two RLS surfaces (club_events.md, the race/results
+/// precedent). The DB trigger rejects the write if the host lacks a
+/// charges-enabled payout account, so a stale UI can't slip a price past.
+export async function setEventPricing(
+	eventId: string,
+	input: {
+		price_cents: number;
+		currency: string;
+		refund_policy: EventPricing['refund_policy'];
+		sales_close_offset_minutes: number;
+		platform_fee_bps?: number;
+		instance_start?: string | null;
+	}
+): Promise<void> {
+	const { error } = await supabase.from('event_pricing').upsert(
+		{
+			event_id: eventId,
+			instance_start: input.instance_start ?? null,
+			price_cents: input.price_cents,
+			currency: input.currency,
+			modality: 'in_person',
+			refund_policy: input.refund_policy,
+			sales_close_offset_minutes: input.sales_close_offset_minutes,
+			platform_fee_bps: input.platform_fee_bps ?? 0
+		},
+		{ onConflict: input.instance_start ? 'event_id,instance_start' : 'event_id' }
+	);
+	if (error) throw error;
+}
+
+/// Begin a Stripe Checkout for a paid registration. The events-checkout
+/// Edge Function validates the sales window + capacity, holds a soft
+/// reservation (a pending order), and returns a hosted destination-charge
+/// Checkout URL. The caller redirects the browser there.
+export async function startEventCheckout(
+	eventId: string,
+	instanceStart: string
+): Promise<{ url: string }> {
+	const { data, error } = await supabase.functions.invoke('events-checkout', {
+		body: { event_id: eventId, instance_start: instanceStart }
+	});
+	if (error) throw error;
+	const url = (data as { url?: string } | null)?.url;
+	if (!url) throw new Error('No checkout URL returned');
+	return { url };
+}
+
+/// The signed-in buyer's most recent order for an event instance, used
+/// by the post-checkout success poll (?paid=1). Buyer-reads-own RLS scopes
+/// this to the caller's own orders.
+export async function fetchMyOrder(
+	eventId: string,
+	instanceStart: string
+): Promise<EventOrder | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	const { data, error } = await supabase
+		.from('event_orders')
+		.select('*')
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.eq('buyer_user_id', userId)
+		.order('created_at', { ascending: false })
+		.limit(1);
+	if (error || !data || data.length === 0) return null;
+	return data[0] as EventOrder;
 }
 
 /// Cancel a single occurrence of a recurring event (the rest of the series

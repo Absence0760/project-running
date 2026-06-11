@@ -39,6 +39,9 @@
 		fetchEventPhotos,
 		addRunPhoto,
 		fetchEventMeetPoint,
+		fetchEventPricing,
+		startEventCheckout,
+		fetchMyOrder,
 		type EventResultWithUser,
 		type RecentRunOption,
 		type RaceSessionRow,
@@ -51,6 +54,8 @@
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
+	import { formatPrice } from '$lib/format/format_price';
+	import { registrationOpen } from '$lib/social/paid_registration';
 	import { env } from '$env/dynamic/public';
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl, geoUri } from '$lib/routes/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
@@ -64,7 +69,8 @@
 		EventAttendee,
 		ClubPostWithAuthor,
 		Route,
-		RsvpStatus
+		RsvpStatus,
+		EventPricing
 	} from '$lib/types';
 
 	let slug = $derived($page.params.slug as string);
@@ -120,6 +126,18 @@
 	let exceptions = $state<EventException[]>([]);
 	let showCancelInstance = $state(false);
 	let cancelReason = $state('');
+
+	// Paid registration (club_events.md slice P1). `pricing` is the
+	// effective price for the active instance (per-instance override wins
+	// over the series default; null = free event, original RSVP flow).
+	let pricing = $state<EventPricing | null>(null);
+	let registering = $state(false);
+	// Post-checkout reconciliation: the webhook may lag the redirect, so
+	// when ?paid=1 returns we poll for the buyer's paid order rather than
+	// trusting the URL. 'idle' before the poll, 'processing' while polling,
+	// 'confirmed' once the order/attendee row materialises, 'slow' if the
+	// poll budget elapses (degrade to "refresh shortly", never a false fail).
+	let paymentState = $state<'idle' | 'processing' | 'confirmed' | 'slow'>('idle');
 
 	/** The instance the user is currently RSVPing to. For one-off events this
 	 * stays equal to `event.starts_at`; for recurring events, the user can
@@ -210,6 +228,33 @@
 		return (me?.status as RsvpStatus | undefined) ?? null;
 	});
 
+	// A paid registration is the order-backed `going` row (not maybe/declined).
+	let viewerHasPaidSlot = $derived(
+		pricing != null &&
+			(viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted')
+	);
+
+	let priceFormatted = $derived(
+		pricing
+			? formatPrice(pricing.price_cents / 100, {
+					currency: pricing.currency.toUpperCase()
+				})
+			: ''
+	);
+
+	// Registration state for a priced event (free events keep the RSVP tri).
+	let regState = $derived.by(() => {
+		if (!pricing || !event || !activeInstance) return null;
+		return registrationOpen(
+			new Date(nowTick),
+			activeInstance,
+			pricing.sales_close_offset_minutes,
+			event.capacity ?? null,
+			rsvpCounts.going + rsvpCounts.waitlisted,
+			viewerHasPaidSlot
+		);
+	});
+
 	async function load() {
 		loading = true;
 		const prevInstance = activeInstance;
@@ -250,6 +295,7 @@
 		results = res[3];
 		raceSession = res[4];
 		eventPhotos = res[5];
+		pricing = await fetchEventPricing(event.id, activeInstance);
 		// Bib-result claims (persona #43): the viewer's own claim state for
 		// the pending-row affordance, and the organiser's adjudication queue.
 		myClaims = myUserId
@@ -672,6 +718,10 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		await load();
+		// Returned from Stripe Checkout: reconcile the order (?paid=1).
+		if ($page.url.searchParams.get('paid') === '1') {
+			void pollForPaidOrder();
+		}
 		// Guard each side-effect: if subscribeRealtime throws (the
 		// `.on('postgres_changes', ...) after subscribe()` bug that
 		// bites when Supabase's RealtimeClient returns a cached
@@ -887,6 +937,45 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	async function register() {
+		if (!event || !activeInstance || registering) return;
+		if (!auth.user) {
+			goto(`/login?next=${encodeURIComponent($page.url.pathname)}`);
+			return;
+		}
+		registering = true;
+		try {
+			const { url } = await startEventCheckout(event.id, activeInstance);
+			window.location.href = url;
+		} catch (e: unknown) {
+			showToast(e instanceof Error ? e.message : m('clubEvent.registerFailed'), 'error');
+			registering = false;
+		}
+	}
+
+	/// Reconcile a ?paid=1 redirect. The stripe-events webhook flips the
+	/// order to paid + writes the attendee row asynchronously, so poll the
+	/// buyer's own order for up to ~5s (the <5s pattern from /settings/upgrade
+	/// + paywall.md) before degrading to "processing, refresh shortly". Never
+	/// a false-failure toast — the money may already be taken.
+	async function pollForPaidOrder() {
+		if (!event || !activeInstance) return;
+		paymentState = 'processing';
+		for (let i = 0; i < 10; i++) {
+			const order = await fetchMyOrder(event.id, activeInstance);
+			if (order?.status === 'paid') {
+				paymentState = 'confirmed';
+				showToast(m('clubEvent.paymentConfirmed'), 'success');
+				await load();
+				return;
+			}
+			await new Promise((r) => setTimeout(r, 500));
+		}
+		paymentState = 'slow';
+		// Refresh once more so a late webhook is reflected without a manual reload.
+		await load();
 	}
 
 	function handleDeleteEvent() {
@@ -1147,6 +1236,56 @@
 							{m('clubEvent.reinstateOccurrence')}
 						</button>
 					{/if}
+				{:else if !isPast && pricing}
+					<div class="register-box" data-testid="register-box">
+						<div class="register-price">
+							<span class="register-price-label">{m('clubEvent.priceLabel')}</span>
+							<span class="register-price-amount">{priceFormatted}</span>
+						</div>
+						{#if paymentState === 'processing'}
+							<p class="register-status processing" role="status">
+								<span class="material-symbols" aria-hidden="true">hourglass_top</span>
+								{m('clubEvent.paymentProcessing')}
+							</p>
+						{:else if paymentState === 'slow'}
+							<p class="register-status processing" role="status">
+								<span class="material-symbols" aria-hidden="true">schedule</span>
+								{m('clubEvent.paymentProcessingSlow')}
+							</p>
+						{/if}
+						{#if !auth.user}
+							<a class="btn btn-primary register-cta" href={`/login?next=${encodeURIComponent($page.url.pathname)}`}>
+								{m('clubEvent.registerSignInFirst')}
+							</a>
+						{:else if regState === 'already_registered'}
+							<div class="register-status registered" role="status">
+								<span class="material-symbols" aria-hidden="true">check_circle</span>
+								{m('clubEvent.registered')}
+							</div>
+						{:else if regState === 'sold_out'}
+							<div class="register-status closed" role="status">
+								<span class="material-symbols" aria-hidden="true">block</span>
+								{m('clubEvent.registerSoldOut')}
+							</div>
+						{:else if regState === 'sales_closed'}
+							<div class="register-status closed" role="status">
+								<span class="material-symbols" aria-hidden="true">lock_clock</span>
+								{m('clubEvent.registerSalesClosed')}
+							</div>
+						{:else}
+							<button
+								type="button"
+								class="btn btn-primary register-cta"
+								onclick={register}
+								disabled={registering}
+								data-testid="register-cta"
+							>
+								{registering
+									? m('clubEvent.registering')
+									: m('clubEvent.registerForPrice', { price: priceFormatted })}
+							</button>
+						{/if}
+					</div>
 				{:else if !isPast && auth.user}
 					<div
 						class="rsvp-tri"
@@ -1985,6 +2124,58 @@
 		align-self: start;
 	}
 
+	.register-box {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: var(--space-md);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+	}
+	.register-price {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+	.register-price-label {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.register-price-amount {
+		font-size: 1.4rem;
+		font-weight: 800;
+		color: var(--color-primary);
+		font-variant-numeric: tabular-nums;
+	}
+	.register-cta {
+		width: 100%;
+		justify-content: center;
+	}
+	.register-status {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		font-size: 0.9rem;
+		font-weight: 600;
+		margin: 0;
+	}
+	.register-status .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.15rem;
+	}
+	.register-status.registered {
+		color: var(--color-success-strong);
+	}
+	.register-status.closed {
+		color: var(--color-text-tertiary);
+	}
+	.register-status.processing {
+		color: var(--color-text-secondary);
+	}
 	.rsvp-tri {
 		display: grid;
 		grid-template-columns: 1fr;

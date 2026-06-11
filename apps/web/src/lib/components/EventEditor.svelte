@@ -1,12 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatISO } from '$lib/training/training';
-	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/core/data';
+	import {
+		fetchRoutes,
+		fetchClubRoutes,
+		createEvent,
+		fetchPayoutAccount,
+		setEventPricing
+	} from '$lib/core/data';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
-	import type { Route, RecurrenceFreq, Weekday, EventCategory } from '$lib/types';
+	import type { Route, RecurrenceFreq, Weekday, EventCategory, RefundPolicy } from '$lib/types';
 
 	// Conversion factor for the unit label / pace target. The form
 	// keeps its working value in the user's preferred unit (km or mi)
@@ -49,6 +55,19 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	// Paid registration (club_events.md slice P1). The toggle is disabled
+	// until the host has a charges-enabled Stripe payout account — the DB
+	// trigger rejects a price write otherwise, so the gate must be visible
+	// here too. Orthogonal to category (applies to all four). P1 ships
+	// series-level pricing; the per-instance override is schema-supported
+	// but not surfaced here.
+	let chargesEnabled = $state(false);
+	let charge = $state(false);
+	let priceMajor = $state<number | null>(null);
+	let currency = $state('usd');
+	let refundPolicy = $state<RefundPolicy>('full_until_24h');
+	let salesCloseOffset = $state<number | null>(0);
+
 	let recurrence = $state<'none' | RecurrenceFreq>('none');
 	let byday = $state<Weekday[]>([]);
 	let until = $state<string>('');
@@ -88,6 +107,9 @@
 	}
 
 	onMount(async () => {
+		const acct = await fetchPayoutAccount();
+		chargesEnabled = acct?.charges_enabled ?? false;
+		if (acct?.default_currency) currency = acct.default_currency;
 		const [mine, clubs] = await Promise.all([fetchRoutes(), fetchClubRoutes(clubId)]);
 		// fetchRoutes() already includes the user's bookmarked routes (via
 		// saved_routes union). Drop anything that's also in this club's
@@ -145,6 +167,27 @@
 				recurrence_count:
 					recurrenceFreq && count && count > 0 ? Math.floor(count) : null
 			});
+			// Pricing is a separate, charges_enabled-gated write (its own RLS
+			// surface + trigger). Only attempt it when the host turned charging
+			// on AND can actually take payment AND entered a positive price.
+			if (charge && chargesEnabled && priceMajor != null && priceMajor > 0) {
+				try {
+					await setEventPricing(event.id, {
+						price_cents: Math.round(priceMajor * 100),
+						currency,
+						refund_policy: refundPolicy,
+						sales_close_offset_minutes: Math.max(0, Math.floor(salesCloseOffset ?? 0))
+					});
+				} catch (pe: unknown) {
+					// The event exists; surface the pricing failure without
+					// losing it. The host can re-price from the editor.
+					error = m('eventEditor.pricingFailed', {
+						error: pe instanceof Error ? pe.message : String(pe)
+					});
+					busy = false;
+					return;
+				}
+			}
 			oncreated?.(event);
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : m('eventEditor.createFailed');
@@ -328,6 +371,54 @@
 		</label>
 	</div>
 
+	<fieldset class="charge-field">
+		<label class="charge-toggle">
+			<input
+				type="checkbox"
+				bind:checked={charge}
+				disabled={!chargesEnabled}
+				data-testid="charge-toggle"
+			/>
+			<span>{m('eventEditor.chargeToggle')}</span>
+		</label>
+		{#if !chargesEnabled}
+			<p class="charge-explainer" data-testid="charge-needs-payout">
+				{m('eventEditor.chargeNeedsPayout')}
+				<a href="/settings/payouts">{m('eventEditor.chargeSetupLink')}</a>
+			</p>
+		{:else if charge}
+			<p class="charge-explainer">{m('eventEditor.inPersonOnlyNote')}</p>
+			<div class="row">
+				<label>
+					<span>{m('eventEditor.price')}</span>
+					<input
+						type="number"
+						step="0.01"
+						min="0.5"
+						bind:value={priceMajor}
+						placeholder={m('eventEditor.pricePlaceholder')}
+					/>
+				</label>
+				<label>
+					<span>{m('eventEditor.currency')}</span>
+					<input type="text" bind:value={currency} maxlength="3" />
+				</label>
+				<label>
+					<span>{m('eventEditor.salesClose')}</span>
+					<input type="number" min="0" max="10080" bind:value={salesCloseOffset} />
+				</label>
+			</div>
+			<label>
+				<span>{m('eventEditor.refundPolicy')}</span>
+				<select bind:value={refundPolicy}>
+					<option value="full_until_start">{m('eventEditor.refundFullUntilStart')}</option>
+					<option value="full_until_24h">{m('eventEditor.refundFullUntil24h')}</option>
+					<option value="no_refund">{m('eventEditor.refundNone')}</option>
+				</select>
+			</label>
+		{/if}
+	</fieldset>
+
 	{#if error}
 		<p class="error">{error}</p>
 	{/if}
@@ -501,6 +592,22 @@
 	}
 	.pace-sep {
 		font-weight: 700;
+	}
+	.charge-toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.charge-explainer {
+		margin: 0.4rem 0 0;
+		font-size: 0.82rem;
+		font-weight: 400;
+		color: var(--color-text-secondary);
+		line-height: 1.45;
+	}
+	.charge-explainer a {
+		color: var(--color-primary);
+		font-weight: 600;
 	}
 	.actions {
 		display: flex;
