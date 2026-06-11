@@ -467,10 +467,14 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   sender is another sibling. Still genuinely blocked on operator-supplied
   Firebase/APNs credentials + mobile client-side token registration (no
   `firebase_messaging` wiring exists).
-- [ ] **Paid event registration (~2-3 wk)** — event creation has no paid-entry /
-  ticketing path (event-organizer Critical). Needs a Stripe-backed registration
-  flow (capacity cap + waitlist already partially modelled), refunds, and payout
-  config — couples to the premium-billing work below. Product + payments decision.
+- [x] **Paid event registration** — superseded by [club_events.md](../features/club_events.md)
+  (Slice E typed events + Slice P Stripe Connect marketplace). Slice P1 (in-person,
+  host payouts, web checkout, manual refunds) has shipped on web: migration
+  `20261229_001` + the three Edge Functions + `/settings/payouts` + the EventEditor
+  Charge toggle + the event-detail Register flow. Refunds (automated), buyer
+  self-cancel, waitlist notify-to-pay, and mobile register are P2–P3. The original
+  sizing here undercounted: E is a prerequisite and the Connect foundation is larger
+  than a registration form.
 - [ ] **Strava community segment import (~2-3 wk)** — strava-migration wants their
   Strava KOM/QOM segments imported. Strava's segment API requires per-segment
   OAuth scopes we don't request, and segment-leaderboard data has Strava ToS

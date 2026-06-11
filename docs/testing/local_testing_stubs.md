@@ -123,6 +123,54 @@ psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -c \
 
 You should see `subscription_tier = 'pro'`. The `/settings/upgrade` page now shows the "Active" badge.
 
+## Stripe Connect (paid events — club_events.md slice P1)
+
+This is a **separate** Stripe surface from the Pro purchase above: paid event registration uses **Stripe Connect destination charges** so a host (instructor) is the merchant of record and the platform takes an application fee. Three Edge Functions implement it — `events-connect-onboard` (host Express onboarding), `events-checkout` (destination-charge Checkout Session + soft reservation), `stripe-events-webhook` (the one idempotent order webhook). **TEST MODE ONLY** — use `sk_test_` / `ca_` / `whsec_` keys; never a live key.
+
+> **This webhook + secret are SEPARATE from the RevenueCat one.** `stripe-events-webhook` has its own endpoint and its own `STRIPE_EVENTS_WEBHOOK_SECRET`. Do **not** reuse `pnpm dev:payments`' forwarder — that targets `revenuecat-webhook` and signs with the RevenueCat HMAC scheme; a Stripe event forwarded there returns `401 missing_signature`.
+
+### 1. Keys in `.env.local`
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...                 # Stripe dashboard → API keys (test mode)
+STRIPE_CONNECT_CLIENT_ID=ca_...               # Stripe dashboard → Connect → Settings
+STRIPE_EVENTS_WEBHOOK_SECRET=whsec_...        # from `stripe listen` (step 3) or the dashboard endpoint
+STRIPE_EVENTS_ALLOWED_REDIRECTS=http://localhost:7777
+```
+
+Without these the functions fail closed: `events-connect-onboard` / `events-checkout` return `503 stripe_not_configured`; `stripe-events-webhook` returns `503 webhook_not_configured`. That is the correct default in CI and for any contributor without operator keys.
+
+### 2. Serve the functions with the keys loaded
+
+`supabase start`'s auto edge-runtime ignores `.env.local`, so re-serve explicitly:
+
+```bash
+cd apps/backend
+supabase functions serve --env-file .env.local
+```
+
+### 3. Forward Stripe events to the local webhook
+
+Point the Stripe CLI at **this** endpoint (not the RevenueCat one). It prints a `whsec_...` — paste it into `STRIPE_EVENTS_WEBHOOK_SECRET` and restart `functions serve`:
+
+```bash
+stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-events-webhook
+```
+
+Then trigger the three handled event types:
+
+```bash
+stripe trigger checkout.session.completed   # CAS pending->paid + seat the 'going' attendee
+stripe trigger checkout.session.expired     # CAS pending->canceled + release the soft reservation
+stripe trigger account.updated              # mirror charges_enabled / payouts_enabled / details_submitted
+```
+
+`stripe trigger`'s canned fixtures won't carry our `metadata` (`event_id` / `instance_start` / `buyer_user_id` / `order_id`) or a real `order_id`, so the completed/expired handlers log "missing metadata" / "unknown order" and 200-skip — that confirms signature verification + dedupe + dispatch work. The full seat-an-attendee path needs a real `events-checkout` call first (which sets the metadata) and then the matching `checkout.session.completed` for that session.
+
+### 4. What is UNVERIFIED locally without operator keys
+
+The pure helpers (signature verify, idempotency CAS, fee math, capacity decision, sales window) are covered by `deno test` and run in CI. The **live end-to-end** — real Connect Express onboarding, a real destination-charge Checkout round-trip with `4242 4242 4242 4242`, and a real signed `account.updated` flipping `charges_enabled` — needs operator-supplied `sk_test_` / `ca_` / `whsec_` keys and is **not** exercisable in CI. Run it manually with the steps above before relying on the charge path.
+
 ## Bypass paywall entirely (dev only)
 
 For testing Pro-gated features without going through the full Stripe path:
