@@ -3,9 +3,10 @@
 	import { formatISO } from '$lib/training/training';
 	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/core/data';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
+	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
-	import type { Route, RecurrenceFreq, Weekday } from '$lib/types';
+	import type { Route, RecurrenceFreq, Weekday, EventCategory } from '$lib/types';
 
 	// Conversion factor for the unit label / pace target. The form
 	// keeps its working value in the user's preferred unit (km or mi)
@@ -26,6 +27,8 @@
 	let myRoutes = $state<Route[]>([]);
 	let clubRoutes = $state<Route[]>([]);
 
+	let category = $state<EventCategory>('run');
+	let discipline = $state('');
 	let title = $state('');
 	let description = $state('');
 	let date = $state(defaultDate());
@@ -53,6 +56,29 @@
 
 	function toggleByday(code: Weekday) {
 		byday = byday.includes(code) ? byday.filter((c) => c !== code) : [...byday, code];
+	}
+
+	const CATEGORY_LABELS: Record<EventCategory, () => string> = {
+		run: () => m('eventEditor.catRun'),
+		cycle: () => m('eventEditor.catCycle'),
+		class: () => m('eventEditor.catClass'),
+		social: () => m('eventEditor.catSocial')
+	};
+
+	// Hiding a field via {#if} leaves its bound state intact, so a user who
+	// types a distance and then switches to a class would silently submit it.
+	// Clear the now-irrelevant fields the moment the category leaves the set
+	// that owns them, so what's on screen is what gets written.
+	function pickCategory(next: EventCategory) {
+		if (category === next) return;
+		category = next;
+		if (!isAthleticCategory(next)) {
+			routeId = '';
+			distanceInUnit = null;
+			paceMin = null;
+			paceSec = null;
+		}
+		if (next !== 'class') discipline = '';
 	}
 
 	function defaultDate(): string {
@@ -97,17 +123,20 @@
 					? Math.round(paceSecPerUnit * (1000 / metresPerUnit))
 					: null;
 			const recurrenceFreq = recurrence === 'none' ? null : recurrence;
+			const athletic = isAthleticCategory(category);
 			const event = await createEvent({
 				club_id: clubId,
 				title: title.trim(),
+				category,
+				discipline: category === 'class' ? discipline.trim() || null : null,
 				description: description.trim() || undefined,
 				starts_at: startsAt,
 				duration_min: durationMin ?? undefined,
 				meet_label: meetLabel.trim() || undefined,
-				route_id: routeId || null,
+				route_id: athletic ? routeId || null : null,
 				distance_m:
-					distanceInUnit != null ? distanceInUnit * metresPerUnit : undefined,
-				pace_target_sec: paceSecPerKm ?? undefined,
+					athletic && distanceInUnit != null ? distanceInUnit * metresPerUnit : undefined,
+				pace_target_sec: athletic ? (paceSecPerKm ?? undefined) : undefined,
 				capacity: capacity ?? undefined,
 				recurrence_freq: recurrenceFreq,
 				recurrence_byday:
@@ -127,6 +156,37 @@
 
 <form onsubmit={submit} class="event-editor">
 	<p class="sub">{m('eventEditor.sub', { clubName })}</p>
+
+	<div class="cat-field">
+		<span class="cat-legend">{m('eventEditor.category')}</span>
+		<div class="cat-row" role="radiogroup" aria-label={m('eventEditor.category')}>
+			{#each EVENT_CATEGORIES as cat}
+				<button
+					type="button"
+					class="cat-chip"
+					class:active={category === cat}
+					role="radio"
+					aria-checked={category === cat}
+					onclick={() => pickCategory(cat)}
+				>
+					{CATEGORY_LABELS[cat]()}
+				</button>
+			{/each}
+		</div>
+		<span class="hint">{m('eventEditor.categoryHint')}</span>
+	</div>
+
+	{#if category === 'class'}
+		<label>
+			<span>{m('eventEditor.discipline')}</span>
+			<input
+				type="text"
+				bind:value={discipline}
+				maxlength="60"
+				placeholder={m('eventEditor.disciplinePlaceholder')}
+			/>
+		</label>
+	{/if}
 
 	<label>
 		<span>{m('eventEditor.title')}</span>
@@ -163,26 +223,28 @@
 		<input type="text" bind:value={meetLabel} placeholder={m('eventEditor.meetingPointPlaceholder')} maxlength="120" />
 	</label>
 
-	<label>
-		<span>{m('eventEditor.route')} <span class="optional">{m('eventEditor.optional')}</span></span>
-		<select bind:value={routeId}>
-			<option value="">{m('eventEditor.noRoute')}</option>
-			{#if clubRoutes.length > 0}
-				<optgroup label={m('eventEditor.clubRoutes', { clubName })}>
-					{#each clubRoutes as r}
-						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
-					{/each}
-				</optgroup>
-			{/if}
-			{#if myRoutes.length > 0}
-				<optgroup label={m('eventEditor.myRoutes')}>
-					{#each myRoutes as r}
-						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
-					{/each}
-				</optgroup>
-			{/if}
-		</select>
-	</label>
+	{#if isAthleticCategory(category)}
+		<label>
+			<span>{m('eventEditor.route')} <span class="optional">{m('eventEditor.optional')}</span></span>
+			<select bind:value={routeId}>
+				<option value="">{m('eventEditor.noRoute')}</option>
+				{#if clubRoutes.length > 0}
+					<optgroup label={m('eventEditor.clubRoutes', { clubName })}>
+						{#each clubRoutes as r}
+							<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
+						{/each}
+					</optgroup>
+				{/if}
+				{#if myRoutes.length > 0}
+					<optgroup label={m('eventEditor.myRoutes')}>
+						{#each myRoutes as r}
+							<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
+						{/each}
+					</optgroup>
+				{/if}
+			</select>
+		</label>
+	{/if}
 
 	<fieldset>
 		<legend>{m('eventEditor.repeats')}</legend>
@@ -240,24 +302,26 @@
 	</fieldset>
 
 	<div class="row">
-		<label>
-			<span>{m('eventEditor.distance')} <span class="optional">{distanceUnitLabel}</span></span>
-			<input
-				type="number"
-				step="0.1"
-				min="0"
-				bind:value={distanceInUnit}
-				placeholder={m('eventEditor.distancePlaceholder')}
-			/>
-		</label>
-		<label>
-			<span>{m('eventEditor.targetPace')} <span class="optional">{paceUnitLabel}</span></span>
-			<div class="pace">
-				<input type="number" min="0" max="59" bind:value={paceMin} placeholder={m('eventEditor.paceMin')} />
-				<span class="pace-sep">:</span>
-				<input type="number" min="0" max="59" bind:value={paceSec} placeholder={m('eventEditor.paceSec')} />
-			</div>
-		</label>
+		{#if isAthleticCategory(category)}
+			<label>
+				<span>{m('eventEditor.distance')} <span class="optional">{distanceUnitLabel}</span></span>
+				<input
+					type="number"
+					step="0.1"
+					min="0"
+					bind:value={distanceInUnit}
+					placeholder={m('eventEditor.distancePlaceholder')}
+				/>
+			</label>
+			<label>
+				<span>{m('eventEditor.targetPace')} <span class="optional">{paceUnitLabel}</span></span>
+				<div class="pace">
+					<input type="number" min="0" max="59" bind:value={paceMin} placeholder={m('eventEditor.paceMin')} />
+					<span class="pace-sep">:</span>
+					<input type="number" min="0" max="59" bind:value={paceSec} placeholder={m('eventEditor.paceSec')} />
+				</div>
+			</label>
+		{/if}
 		<label>
 			<span>{m('eventEditor.capacity')} <span class="optional">{m('eventEditor.optional')}</span></span>
 			<input type="number" min="1" bind:value={capacity} placeholder={m('eventEditor.capacityPlaceholder')} />
@@ -340,6 +404,40 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: var(--space-sm);
+	}
+	.cat-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.cat-legend {
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+	.cat-row {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+	.cat-chip {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
+		padding: 0.45rem 0.9rem;
+		border-radius: var(--radius-md);
+		font-weight: 600;
+		font-size: 0.88rem;
+		cursor: pointer;
+	}
+	.cat-chip.active {
+		background: var(--color-primary);
+		color: var(--color-bg);
+		border-color: var(--color-primary);
+	}
+	.cat-field .hint {
+		color: var(--color-text-secondary);
+		font-size: 0.82rem;
+		font-weight: 400;
 	}
 	fieldset {
 		border: 1px solid var(--color-border);

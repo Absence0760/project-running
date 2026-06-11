@@ -264,6 +264,9 @@ export async function insertEvent(opts: {
 	recurrence_until?: string | null;
 	capacity?: number | null;
 	distance_m?: number | null;
+	pace_target_sec?: number | null;
+	category?: 'run' | 'cycle' | 'class' | 'social';
+	discipline?: string | null;
 }): Promise<string> {
 	const { data, error } = await getAdminClient()
 		.from('events')
@@ -271,6 +274,8 @@ export async function insertEvent(opts: {
 			club_id: opts.club_id,
 			author_id: opts.author_id,
 			title: opts.title,
+			category: opts.category ?? 'run',
+			discipline: opts.discipline ?? null,
 			starts_at:
 				opts.starts_at ??
 				new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
@@ -280,7 +285,8 @@ export async function insertEvent(opts: {
 			recurrence_byday: opts.recurrence_byday ?? null,
 			recurrence_until: opts.recurrence_until ?? null,
 			capacity: opts.capacity ?? null,
-			distance_m: opts.distance_m ?? null
+			distance_m: opts.distance_m ?? null,
+			pace_target_sec: opts.pace_target_sec ?? null
 		})
 		.select('id')
 		.single();

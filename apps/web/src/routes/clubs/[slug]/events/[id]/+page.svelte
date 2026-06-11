@@ -49,6 +49,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
+	import { isAthleticCategory } from '$lib/social/event_category';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { env } from '$env/dynamic/public';
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl, geoUri } from '$lib/routes/static_map';
@@ -180,6 +181,10 @@
 		isAdmin || club?.viewer_role === 'race_director'
 	);
 	let isMember = $derived(club?.viewer_role != null);
+	// run / cycle carry route, distance, pace, race mode and a results
+	// leaderboard; class / social are attendance-only. Default athletic until
+	// the event loads so a momentary null never flashes a class layout for a run.
+	let isAthletic = $derived(event ? isAthleticCategory(event.category) : true);
 	let isPast = $derived(
 		!!event &&
 			(event.recurrence_freq
@@ -1036,6 +1041,12 @@
 					{/if}
 				</span>
 				<h1>{event.title}</h1>
+				{#if !isAthletic && event.discipline}
+					<p class="discipline-chip">
+						<span class="discipline-eyebrow">{m('clubEvent.disciplineLabel')}</span>
+						<span class="discipline-value">{event.discipline}</span>
+					</p>
+				{/if}
 				<p class="hero-tagline">
 					<span class="material-symbols" aria-hidden="true">calendar_today</span>
 					<span>{fmtDate(activeInstance ?? event.starts_at)}</span>
@@ -1056,13 +1067,13 @@
 				{/if}
 
 				<div class="metrics">
-					{#if event.distance_m != null}
+					{#if isAthletic && event.distance_m != null}
 						<div class="metric">
 							<span class="label">{m('clubEvent.distanceLabel')}</span>
 							<span class="value">{formatDistance(event.distance_m)}</span>
 						</div>
 					{/if}
-					{#if event.pace_target_sec}
+					{#if isAthletic && event.pace_target_sec}
 						<div class="metric">
 							<span class="label">{m('clubEvent.targetPaceLabel')}</span>
 							<span class="value">{fmtPace(event.pace_target_sec)}</span>
@@ -1079,7 +1090,7 @@
 					</div>
 				</div>
 
-				{#if route}
+				{#if isAthletic && route}
 					<a class="route-chip" href="/routes/{route.id}">
 						<span class="material-symbols" aria-hidden="true">route</span>
 						{route.name}
@@ -1302,6 +1313,7 @@
 			</section>
 		{/if}
 
+		{#if isAthletic}
 		{#if isRaceDirector}
 			<section class="card race-panel">
 				<div class="results-head">
@@ -1531,6 +1543,11 @@
 				</div>
 			{/if}
 		</section>
+		{:else}
+		<section class="card">
+			<p class="muted">{m('clubEvent.attendanceOnly')}</p>
+		</section>
+		{/if}
 
 		<section class="card">
 			<div class="results-head">
@@ -1764,6 +1781,24 @@
 		font-weight: 700;
 		margin: 0;
 		line-height: 1.15;
+	}
+	.discipline-chip {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin: var(--space-xs) 0 0 0;
+	}
+	.discipline-eyebrow {
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+	}
+	.discipline-value {
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 	.hero-tagline {
 		display: inline-flex;

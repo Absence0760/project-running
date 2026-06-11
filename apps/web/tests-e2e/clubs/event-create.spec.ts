@@ -55,6 +55,13 @@ test.describe('/clubs/[slug] — admin event create', () => {
 		const modal = page.locator('.modal', { hasText: 'New event' });
 		await expect(modal).toBeVisible({ timeout: 5_000 });
 
+		// The typed-events segmented picker (slice E) is the first control and
+		// defaults to "Group run" — an athletic category, so the distance input
+		// (the only step="0.1" input) stays visible. The title placeholder the
+		// rest of this test relies on is unchanged by the new control.
+		await expect(modal.getByRole('radio', { name: 'Group run' })).toBeChecked();
+		await expect(modal.locator('input[step="0.1"]')).toBeVisible();
+
 		// EventEditor exposes title / description / date / time /
 		// duration / meet point / route / capacity / pace. Title +
 		// date + time are required; defaults handle the rest.
