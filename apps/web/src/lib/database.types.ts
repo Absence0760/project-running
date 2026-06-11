@@ -594,11 +594,15 @@ export type Database = {
         Row: {
           author_id: string
           capacity: number | null
+          category: string
           club_id: string
           created_at: string | null
           description: string | null
+          discipline: string | null
           distance_m: number | null
           duration_min: number | null
+          gym_template: Json | null
+          host_user_id: string | null
           id: string
           meet_label: string | null
           meet_lat: number | null
@@ -616,11 +620,15 @@ export type Database = {
         Insert: {
           author_id: string
           capacity?: number | null
+          category?: string
           club_id: string
           created_at?: string | null
           description?: string | null
+          discipline?: string | null
           distance_m?: number | null
           duration_min?: number | null
+          gym_template?: Json | null
+          host_user_id?: string | null
           id?: string
           meet_label?: string | null
           meet_lat?: number | null
@@ -638,11 +646,15 @@ export type Database = {
         Update: {
           author_id?: string
           capacity?: number | null
+          category?: string
           club_id?: string
           created_at?: string | null
           description?: string | null
+          discipline?: string | null
           distance_m?: number | null
           duration_min?: number | null
+          gym_template?: Json | null
+          host_user_id?: string | null
           id?: string
           meet_label?: string | null
           meet_lat?: number | null
@@ -2888,6 +2900,7 @@ export type Database = {
       }
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
+      event_is_athletic: { Args: { target_event: string }; Returns: boolean }
       find_failed_jobs: {
         Args: { p_failed_within?: string }
         Returns: {

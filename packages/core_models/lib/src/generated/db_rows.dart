@@ -599,6 +599,10 @@ class EventRow {
   static const String colRecurrenceUntil = 'recurrence_until';
   static const String colRecurrenceCount = 'recurrence_count';
   static const String colAuthorId = 'author_id';
+  static const String colCategory = 'category';
+  static const String colDiscipline = 'discipline';
+  static const String colHostUserId = 'host_user_id';
+  static const String colGymTemplate = 'gym_template';
 
   final String id;
   final String clubId;
@@ -620,6 +624,10 @@ class EventRow {
   final DateTime? recurrenceUntil;
   final int? recurrenceCount;
   final String authorId;
+  final String category;
+  final String? discipline;
+  final String? hostUserId;
+  final dynamic gymTemplate;
 
   const EventRow({
     required this.id,
@@ -642,6 +650,10 @@ class EventRow {
     this.recurrenceUntil,
     this.recurrenceCount,
     required this.authorId,
+    required this.category,
+    this.discipline,
+    this.hostUserId,
+    this.gymTemplate,
   });
 
   factory EventRow.fromJson(Map<String, dynamic> json) => EventRow(
@@ -665,6 +677,10 @@ class EventRow {
     recurrenceUntil: json['recurrence_until'] == null ? null : DateTime.parse(json['recurrence_until'] as String),
     recurrenceCount: (json['recurrence_count'] as num?)?.toInt(),
     authorId: json['author_id'] as String,
+    category: json['category'] as String,
+    discipline: json['discipline'] as String?,
+    hostUserId: json['host_user_id'] as String?,
+    gymTemplate: json['gym_template'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -688,6 +704,10 @@ class EventRow {
     colRecurrenceUntil: recurrenceUntil?.toIso8601String(),
     colRecurrenceCount: recurrenceCount,
     colAuthorId: authorId,
+    colCategory: category,
+    colDiscipline: discipline,
+    colHostUserId: hostUserId,
+    colGymTemplate: gymTemplate,
   };
 }
 

@@ -135,6 +135,12 @@ export type MembershipStatus = 'active' | 'pending';
 export type JoinPolicy = 'open' | 'request' | 'invite';
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+// Names track ActivityType ('cycle', not 'ride') so the app keeps one type
+// vocabulary. `run`/`cycle` are distance-based athletic events (route, pace,
+// race mode, results); `class` is an instructor-led session (yoga/pilates —
+// no route/results); `social` is a meetup. Enforced by the events_category_check
+// CHECK constraint (migration 20261227_001) — keep this union in lockstep.
+export type EventCategory = 'run' | 'cycle' | 'class' | 'social';
 export type NotificationKind =
 	| 'kudos'
 	| 'comment'
@@ -173,9 +179,10 @@ export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
 	role: ClubRole;
 	status: MembershipStatus;
 };
-export type Event = Omit<EventRow, 'recurrence_freq' | 'recurrence_byday'> & {
+export type Event = Omit<EventRow, 'recurrence_freq' | 'recurrence_byday' | 'category'> & {
 	recurrence_freq: RecurrenceFreq | null;
 	recurrence_byday: Weekday[] | null;
+	category: EventCategory;
 };
 export type EventAttendee = Omit<EventAttendeeRow, 'status'> & { status: RsvpStatus };
 export type ClubPost = Omit<ClubPostRow, never>;
