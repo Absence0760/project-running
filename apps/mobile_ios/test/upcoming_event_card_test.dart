@@ -17,6 +17,7 @@ EventView _event({
     title: title,
     startsAt: when,
     authorId: 'user1',
+    category: 'run',
     meetLabel: meetLabel,
   );
   return EventView(
