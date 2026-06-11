@@ -1,0 +1,19 @@
+-- Grant cross-user SELECT on the typed-event display columns.
+--
+-- The `events` table is column-locked (20260818_001): SELECT is revoked
+-- wholesale and re-granted per safe column, and any column added afterwards
+-- is deny-by-default for anon + authenticated. `20261227_001` added
+-- `category` / `discipline` / `host_user_id` / `gym_template` without a grant,
+-- so every authenticated read of those columns raised 42501 — which made the
+-- event-detail read fall back to "event not found" once EVENT_SELECT_COLS
+-- started enumerating `category` + `discipline`.
+--
+-- `category` and `discipline` drive the public, cross-user UI (category gating
+-- + the class discipline label), so both are granted to anon + authenticated
+-- here, matching the amendment instruction in 20260818_001.
+--
+-- `host_user_id` (payout recipient, reserved for the paid-events slice) and
+-- `gym_template` (reserved class->gym seam) stay revoked — they are write- /
+-- server-side only and have no client read site, mirroring the meet_lat /
+-- meet_lng lockdown.
+grant select (category, discipline) on events to authenticated, anon;
