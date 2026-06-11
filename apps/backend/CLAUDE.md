@@ -35,7 +35,10 @@ apps/backend/
         ├── refresh-tokens/index.ts
         ├── revenuecat-webhook/index.ts
         ├── strava-import/index.ts
-        └── strava-webhook/index.ts
+        ├── strava-webhook/index.ts
+        ├── events-connect-onboard/{index,lib}.ts   # Stripe Connect host onboarding
+        ├── events-checkout/{index,lib}.ts           # destination-charge Checkout
+        └── stripe-events-webhook/{index,lib}.ts     # the one idempotent order webhook
 ```
 
 ## Local stack
@@ -187,9 +190,9 @@ When in doubt, `grep "create table $TABLE" apps/backend/supabase/migrations/*.sq
 
 ## Edge Functions
 
-Eight functions live under `supabase/functions/`. All are wired up. Test coverage breakdown:
+Eleven functions live under `supabase/functions/`. All are wired up. Test coverage breakdown:
 
-- **Pure helpers** — `_shared/webhook_security.ts`, `_shared/body_limit.ts`, and `revenuecat-webhook/lib.ts` are covered by 45 deno tests across three `*.test.ts` files. Gated in CI by the `edge-functions` job.
+- **Pure helpers** — `_shared/webhook_security.ts`, `_shared/body_limit.ts`, `revenuecat-webhook/lib.ts`, and the three paid-events libs (`events-connect-onboard/lib.ts`, `events-checkout/lib.ts`, `stripe-events-webhook/lib.ts` — 40 tests) are covered by deno tests across the `*.test.ts` files. The `edge-functions` CI job runs `deno test --no-check supabase/functions/` which recurses and picks up every `*.test.ts`, so the new files are gated automatically.
 - **HTTP-level handler envelopes** — `_shared/handler_envelope.test.ts` covers the auth-rejection branches of the three webhook / cron handlers that bypass the platform `verify_jwt` gate (refresh-tokens / strava-webhook / revenuecat-webhook). 9 tests, gated on `SUPABASE_TEST_URL`. The same `edge-functions` CI job stops the auto-started edge runtime (which ignores `.env.local`) and re-launches `supabase functions serve --env-file` so the rejection branches are reachable instead of 503'ing.
 - **Happy-path with valid HMAC / freshness / dedupe** — not covered. Needs real secret values in the test config; deferred.
 
@@ -203,8 +206,13 @@ Eight functions live under `supabase/functions/`. All are wired up. Test coverag
 | `revenuecat-webhook` | **Working** — replay-protected (7-day freshness window via `validateFreshness` default + `event.id` dedupe via `webhook_events`, migration `20260623_001`). RevenueCat retries an undelivered event for up to 3 days, so the 7-day window comfortably brackets every legitimate retry; both webhooks share the same default to keep the security model uniform. | POST from RevenueCat (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION) | HMAC-SHA256 of raw body in `x-revenuecat-hmac` (timing-safe compare against `REVENUECAT_WEBHOOK_SECRET`). `verify_jwt = false` in `config.toml`. | `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `delete-account` | **Working** — recursive Storage prefix walk drains `{user_id}/exports/` blobs alongside top-level tracks. Records per-table deleted-row counts (jobs / rate_limits / reports / segments + the two Storage buckets) into `deletion_audit_log.notes` as compact JSON on the `ok` path — `result='ok'` disambiguates notes-as-counts from notes-as-error, so no schema change. | Client POST (user action) | User JWT + service role for admin delete | `SUPABASE_SERVICE_ROLE_KEY` |
 | `clip-public-track` | **Working** — server-side privacy-zone clipping for non-owner viewers. Downloads the gzipped track via service-role, runs `clip_track_for_user`, returns clipped points. Replaces the dropped public-runs Storage policy (decisions §33, audit/storage High). | Anon or user JWT POST with `{ run_id }` | Anon JWT accepted (RLS gates the row read); per-IP rate limit for anon, per-user for authenticated | — |
+| `events-connect-onboard` | **Working** (pure libs tested; **live Connect onboarding UNVERIFIED — needs operator sk_test_ keys**). Creates/reuses a Stripe Express account for the host, persists its id in `instructor_payout_accounts`, returns a hosted Account Link URL. `charges_enabled` flips later via `stripe-events-webhook` `account.updated` — never written here. SAQ A (Stripe-hosted onboarding). club_events.md slice P1. | Client POST (host) | User JWT → `auth.getUser()`; service role for the own-row write; `checkRateLimit` fail-closed | `STRIPE_SECRET_KEY`, `STRIPE_EVENTS_ALLOWED_REDIRECTS`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `events-checkout` | **Working** (pure libs tested; **live Checkout round-trip UNVERIFIED — needs operator sk_test_ keys**). Validates visibility + `event_pricing` (modality `in_person` only; `virtual` → 400) + not-cancelled + sales window + host `charges_enabled` + capacity precheck (going + non-expired pending), then opens a **destination-charge** Checkout Session (`application_fee_amount` + `transfer_data.destination` = host account) with a stable idempotency key, and inserts a `pending` `event_orders` row holding a 15-min soft reservation. Returns `{ checkout_url, order_id }`. SAQ A (no card form). | Client POST (buyer) `{ event_id, instance_start }` | User JWT → `auth.getUser()`; service role for the ledger write; `checkRateLimit` fail-closed | `STRIPE_SECRET_KEY`, `STRIPE_EVENTS_ALLOWED_REDIRECTS`, `SUPABASE_SERVICE_ROLE_KEY` |
+| `stripe-events-webhook` | **Working** (pure libs tested incl. signature/idempotency/CAS; **live signed delivery UNVERIFIED — needs operator whsec_ keys**). The SOLE, idempotent, service-role-only writer of `event_orders.status`. HMAC-verified on the **raw** body (Stripe-Signature `t=…,v1=…` over `${t}.${body}`, 5-min freshness/replay gate). Insert-first dedupe into `webhook_events` (provider `'stripe'`, `event.id`) → 23505 = 200 skip. Handles exactly three types: `checkout.session.completed` (CAS pending→paid + confirm-time capacity recheck + seat the `going` attendee with `order_id`; oversold → leave paid + log + flag for MANUAL refund), `checkout.session.expired` (CAS pending→canceled, release slot), `account.updated` (mirror `charges_enabled`/`payouts_enabled`/`details_submitted`). Unknown types → 200 ignored. **Manual refunds via Stripe dashboard in P1.** | POST from Stripe | HMAC-SHA256 over raw body in `Stripe-Signature` vs `STRIPE_EVENTS_WEBHOOK_SECRET`. `verify_jwt = false` in `config.toml`. | `STRIPE_EVENTS_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
 
-All seven are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers (other than `_shared/rate_limit.ts` for the throttle).
+The original eight are short — 25 to 115 lines each. Read the file, not an abstraction; they don't share helpers (other than `_shared/rate_limit.ts` for the throttle). The three paid-events functions follow the `revenuecat-webhook` precedent precisely: a pure `lib.ts` (param builders / decisions / signature verifier, dependency-free) + a thin `index.ts` that holds all Stripe SDK calls (`https://esm.sh/stripe@17.5.0?target=deno`, constructed with `Stripe.createFetchHttpClient()`). `events-checkout/lib.ts` owns the ONE `capacityDecision` helper; `stripe-events-webhook/lib.ts` re-exports it so the create-time precheck and the confirm-time recheck use identical capacity math (divergence would oversell).
+
+**`webhook_events` provider partitions:** `revenuecat`, `strava`, and now `stripe` (the `stripe-events-webhook` dedupe key — insert-first on `(provider='stripe', event_id)` where `event_id` is the Stripe event id). The provider-agnostic 30-day prune (`cleanup-stale-webhook-events`, migration `20260623_001`) already bounds the new partition — no per-provider cleanup needed.
 
 ### Rate limiting
 
@@ -323,6 +331,10 @@ Variables currently used:
 - `CRON_SECRET` — shared bearer token the pg_cron schedule passes to `refresh-tokens` so an unauthenticated caller can't trigger Strava token-refresh churn on every integration in the table. Required: function fails closed without it.
 - `PARKRUN_USER_AGENT` — identifies us to parkrun's server. Be polite.
 - `REVENUECAT_WEBHOOK_SECRET` — HMAC secret the `revenuecat-webhook` verifies the request body against. Required: function fails closed without it.
+- `STRIPE_SECRET_KEY` — Stripe platform secret key (sk_test_ in P1 — **TEST MODE ONLY, never a live key**). Used by `events-connect-onboard` (account + Account Link create) and `events-checkout` (destination-charge Checkout Session). Required: both fail closed (503 `stripe_not_configured`) without it. Server-only; never client-readable.
+- `STRIPE_CONNECT_CLIENT_ID` — Stripe Connect application id (ca_…). Configured on the platform account for Express + Account Links; held as an env var for any future Standard-OAuth path (open question #4). Not passed per-call in P1.
+- `STRIPE_EVENTS_WEBHOOK_SECRET` — Stripe webhook signing secret (whsec_…) the `stripe-events-webhook` verifies the Stripe-Signature HMAC against. SEPARATE from `REVENUECAT_WEBHOOK_SECRET` and a separate endpoint. Required: function fails closed (503 `webhook_not_configured`) without it.
+- `STRIPE_EVENTS_ALLOWED_REDIRECTS` — comma-separated allow-list of origins accepted for Account Link return/refresh + Checkout success/cancel URLs (the strava-import open-redirect defence). Required: `events-connect-onboard` + `events-checkout` 503 when empty.
 - `REVENUECAT_SECRET_API_KEY` — RevenueCat REST secret key `delete-account` uses to DELETE the subscriber on erasure. Optional — unset → `revenuecat_delete: 'skipped'`.
 - `FCM_SERVER_KEY` — Firebase Cloud Messaging server key `delete-account` uses to batch-invalidate Android push tokens. Optional — unset → `fcm_remove: 'skipped'`.
 - `DELETION_AUDIT_KEY` — HMAC key for the `deletion_audit_log` pseudonymous user-id hash. Optional but recommended; unset → legacy salted SHA-256.

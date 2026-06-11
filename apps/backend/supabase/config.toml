@@ -49,20 +49,26 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # function on a Supabase-issued JWT (anon or user). The three handlers
 # below authenticate themselves another way — Strava signs nothing, so
 # strava-webhook gates on a URL-embedded shared secret + timing-safe
-# HMAC; revenuecat-webhook validates an HMAC over the raw body; and
-# refresh-tokens is invoked by pg_cron with a shared bearer token.
+# HMAC; revenuecat-webhook validates an HMAC over the raw body;
+# stripe-events-webhook verifies the Stripe-Signature HMAC over the raw
+# body against STRIPE_EVENTS_WEBHOOK_SECRET; and refresh-tokens is
+# invoked by pg_cron with a shared bearer token.
 # Without these blocks the platform 401s the requests before our code
 # runs, so the secrets we *do* check would never get the chance.
 #
 # The other functions (strava-import, parkrun-import, export-data,
-# delete-account, clip-public-track) all need a Supabase JWT (anon for
-# clip-public-track, user-scoped for the rest) and are correct on the
-# default verify_jwt = true.
+# delete-account, clip-public-track, events-connect-onboard,
+# events-checkout) all need a Supabase JWT (anon for clip-public-track,
+# user-scoped for the rest) and are correct on the default
+# verify_jwt = true.
 
 [functions.strava-webhook]
 verify_jwt = false
 
 [functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.stripe-events-webhook]
 verify_jwt = false
 
 [functions.refresh-tokens]
