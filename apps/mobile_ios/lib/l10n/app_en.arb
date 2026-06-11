@@ -4142,6 +4142,10 @@
   "@eventTargetPace": {
     "description": "Stat label for the event target pace"
   },
+  "eventClassSessionEyebrow": "CLASS",
+  "@eventClassSessionEyebrow": {
+    "description": "Eyebrow label above the discipline name on a class (e.g. yoga) event"
+  },
   "eventResultSubmitted": "Result submitted.",
   "@eventResultSubmitted": {
     "description": "Banner shown after submitting an event result"

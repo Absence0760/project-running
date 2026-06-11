@@ -3375,6 +3375,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get eventTargetPace => 'Ritmo alvo';
 
   @override
+  String get eventClassSessionEyebrow => 'AULA';
+
+  @override
   String get eventResultSubmitted => 'Resultado enviado.';
 
   @override
@@ -10619,6 +10622,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get eventTargetPace => 'Ritmo alvo';
+
+  @override
+  String get eventClassSessionEyebrow => 'AULA';
 
   @override
   String get eventResultSubmitted => 'Resultado enviado.';

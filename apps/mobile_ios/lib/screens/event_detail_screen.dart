@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../event_category.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -388,6 +389,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final desc = describeRecurrence(e.freq, e.byday);
     final active = _activeInstance!;
     final isMember = _club?.isMember == true;
+    // Slice E: class / social events are attendance-only — no course, no race,
+    // no leaderboard. isAthleticEventCategory is the single source of truth.
+    final athletic = isAthleticEventCategory(e.row.category);
 
     return Scaffold(
       appBar: AppBar(title: Text(e.row.title)),
@@ -445,6 +449,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ],
           if (_meetPoint != null) ..._buildMeetPoint(theme, e),
+          if (!athletic &&
+              e.row.category == 'class' &&
+              (e.row.discipline?.trim().isNotEmpty ?? false)) ...[
+            const SizedBox(height: 12),
+            EventDisciplineLabel(discipline: e.row.discipline!.trim()),
+          ],
           if (e.row.description != null && e.row.description!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(e.row.description!, style: theme.textTheme.bodyMedium),
@@ -476,7 +486,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             const SizedBox(height: 16),
           ],
           _buildRsvpRow(theme, e),
-          if (e.row.distanceM != null || e.row.paceTargetSec != null) ...[
+          if (athletic &&
+              (e.row.distanceM != null || e.row.paceTargetSec != null)) ...[
             const SizedBox(height: 16),
             Row(
               children: [
@@ -491,7 +502,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ],
             ),
           ],
-          if (_club?.isRaceDirector == true) ...[
+          if (athletic && _club?.isRaceDirector == true) ...[
             const SizedBox(height: 24),
             _buildRaceControl(theme, active),
           ],
@@ -564,14 +575,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
               ],
             ),
-          const SizedBox(height: 24),
-          EventResultsSection(
-            results: _results,
-            myUserId: widget.social.currentUserId,
-            submitting: _submittingResult,
-            onSubmit: _submitMyTime,
-            onRemove: _removeMyResult,
-          ),
+          if (athletic) ...[
+            const SizedBox(height: 24),
+            EventResultsSection(
+              results: _results,
+              myUserId: widget.social.currentUserId,
+              submitting: _submittingResult,
+              onSubmit: _submitMyTime,
+              onRemove: _removeMyResult,
+            ),
+          ],
           if (isMember) ...[
             const SizedBox(height: 24),
             _AdminUpdateComposer(
@@ -872,6 +885,58 @@ class _SubmitResultChoice {
     required this.distanceM,
     required this.finisherStatus,
   });
+}
+
+/// Prominent free-text discipline label for a non-athletic class (yoga,
+/// pilates, …). Shown in place of the athletic course / race surface so a
+/// class reads as an instructor-led session, not a timed effort.
+@visibleForTesting
+class EventDisciplineLabel extends StatelessWidget {
+  final String discipline;
+  const EventDisciplineLabel({super.key, required this.discipline});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.self_improvement,
+              size: 22, color: theme.colorScheme.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.eventClassSessionEyebrow,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  discipline,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 @visibleForTesting

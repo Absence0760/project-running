@@ -912,6 +912,7 @@
   "eventCouldNotOpenMaps": "Karten konnten nicht geöffnet werden.",
   "eventPickOccurrence": "TERMIN WÄHLEN",
   "eventTargetPace": "Zieltempo",
+  "eventClassSessionEyebrow": "KURS",
   "eventResultSubmitted": "Ergebnis eingereicht.",
   "eventSubmitFailed": "Senden fehlgeschlagen: {error}",
   "eventRaceControlFailed": "Rennsteuerung fehlgeschlagen: {error}",

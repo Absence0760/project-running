@@ -3154,6 +3154,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventTargetPace => '目標ペース';
 
   @override
+  String get eventClassSessionEyebrow => 'クラス';
+
+  @override
   String get eventResultSubmitted => '結果を送信しました。';
 
   @override

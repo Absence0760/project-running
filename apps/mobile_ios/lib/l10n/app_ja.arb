@@ -912,6 +912,7 @@
   "eventCouldNotOpenMaps": "地図を開けませんでした。",
   "eventPickOccurrence": "開催回を選択",
   "eventTargetPace": "目標ペース",
+  "eventClassSessionEyebrow": "クラス",
   "eventResultSubmitted": "結果を送信しました。",
   "eventSubmitFailed": "送信できませんでした: {error}",
   "eventRaceControlFailed": "レース管理に失敗しました: {error}",

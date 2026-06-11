@@ -912,6 +912,7 @@
   "eventCouldNotOpenMaps": "Impossible d'ouvrir la carte.",
   "eventPickOccurrence": "CHOISIR UNE OCCURRENCE",
   "eventTargetPace": "Allure cible",
+  "eventClassSessionEyebrow": "COURS",
   "eventResultSubmitted": "Résultat soumis.",
   "eventSubmitFailed": "Échec de l'envoi : {error}",
   "eventRaceControlFailed": "Échec du contrôle de course : {error}",

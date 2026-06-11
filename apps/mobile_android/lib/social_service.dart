@@ -30,7 +30,8 @@ const String _eventSelectCols =
     'id, club_id, title, description, starts_at, duration_min, '
     'meet_label, route_id, distance_m, pace_target_sec, capacity, '
     'author_id, created_at, updated_at, recurrence_freq, '
-    'recurrence_byday, recurrence_until, recurrence_count';
+    'recurrence_byday, recurrence_until, recurrence_count, '
+    'category, discipline, host_user_id';
 
 /// Parse the `events.recurrence_byday` jsonb array (a list of weekday
 /// short-codes like `['MO','WE']`) into a list of `Weekday`s. Returns

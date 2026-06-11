@@ -912,6 +912,7 @@
   "eventCouldNotOpenMaps": "No se pudieron abrir los mapas.",
   "eventPickOccurrence": "ELIGE UNA FECHA",
   "eventTargetPace": "Ritmo objetivo",
+  "eventClassSessionEyebrow": "CLASE",
   "eventResultSubmitted": "Resultado enviado.",
   "eventSubmitFailed": "No se pudo enviar: {error}",
   "eventRaceControlFailed": "Falló el control de carrera: {error}",

@@ -3372,6 +3372,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get eventTargetPace => 'Ritmo objetivo';
 
   @override
+  String get eventClassSessionEyebrow => 'CLASE';
+
+  @override
   String get eventResultSubmitted => 'Resultado enviado.';
 
   @override

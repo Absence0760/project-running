@@ -3383,6 +3383,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventTargetPace => 'Zieltempo';
 
   @override
+  String get eventClassSessionEyebrow => 'KURS';
+
+  @override
   String get eventResultSubmitted => 'Ergebnis eingereicht.';
 
   @override

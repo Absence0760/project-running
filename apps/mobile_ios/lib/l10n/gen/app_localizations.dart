@@ -5579,6 +5579,12 @@ abstract class AppLocalizations {
   /// **'Target pace'**
   String get eventTargetPace;
 
+  /// Eyebrow label above the discipline name on a class (e.g. yoga) event
+  ///
+  /// In en, this message translates to:
+  /// **'CLASS'**
+  String get eventClassSessionEyebrow;
+
   /// Banner shown after submitting an event result
   ///
   /// In en, this message translates to:

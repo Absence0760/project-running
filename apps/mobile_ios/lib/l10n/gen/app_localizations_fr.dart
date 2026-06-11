@@ -3385,6 +3385,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get eventTargetPace => 'Allure cible';
 
   @override
+  String get eventClassSessionEyebrow => 'COURS';
+
+  @override
   String get eventResultSubmitted => 'Résultat soumis.';
 
   @override
