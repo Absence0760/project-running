@@ -2975,6 +2975,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 139. Routes is a run-modality surface; mobile nav is a Fitness hub
+
+**Decided (2026-06-11, shipped):** as the app went multi-modal, each modality's planning assets settled inside its own surface — gym owns routines, nutrition owns targets — except Routes, which had shipped as a top-level web sidebar peer of Gym/Nutrition *and* (on mobile) under Social. Both mis-frame a run-planning tool. Routes now co-locates under the run surface on both platforms: web drops the standalone `/routes` sidebar item and nests Routes under `/runs` via a shared `RunSurfaceTabs` strip (the `/routes` URL is preserved so bookmarks / club deep links / shares don't break); mobile moves Routes out of Social into Fitness→Runs. Mobile additionally adopts a `Home · Fitness · [+]Log · Social · You` bottom nav: **Fitness** is a modality hub (`fitness_hub_screen.dart`, sub-tabs All/Runs/Gym/Nutrition) that absorbs the former standalone History tab as its All timeline and gives each modality a persistent review/plan front-door; Settings folds into a `You` tab; Coach keeps no nav slot and is pinned on Home; the `[+]Log` keep-alive capture pages + foreground-service recording are unchanged.
+
+**Why "Fitness", not "Train".** The working title in `multi_modal.md` was "Train", but the hub holds nutrition too, which you don't "train" — "Fitness" is the only label that honestly covers run + gym + nutrition.
+
+**Trade-off.** This re-churns mobile nav that had just shipped (G5) — accepted because leaving Routes mis-placed + the modalities without a front-door was the larger cost, and batching the routes relocation with the nav rewrite meant `home_screen.dart` was reshaped once. Training-Plans nesting under the run surface was deferred (the web strip ships as `Runs · Routes` only). Supersedes the routes-half of [§ 61](#61-social-hub-ia-rename-clubs--social-host-feedpeopleclubs-as-tabs-under-social) and corrects [§ 63](#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)'s "Routes was folded into Social" note (that was mobile-only; web had it as a top-level item).
+
+**Don't re-litigate** by re-adding a top-level Routes sidebar item, a standalone mobile History destination, or a Settings nav slot — Routes lives under the run surface, History is Fitness→All, Settings is in You. Full design + rollout in [multi_modal.md § redesign](../features/multi_modal.md#proposed-redesign-pending-sign-off--the-train-hub--routes-relocation).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -188,13 +188,13 @@ Layer 2, none of them needs a foreign key between activity rows.
 
 ## Bottom nav — `Home · History · Log · Social · Settings`
 
-> **A proposed successor to this nav is specced below** — see
-> [§ Proposed redesign: the Train hub + Routes relocation](#proposed-redesign-pending-sign-off--the-train-hub--routes-relocation).
-> It keeps the `Log` action and the self-hiding contract but replaces the
-> `History` tab with a **Train** modality hub, relocates Routes out of
-> Social onto the Run surface, and folds Settings into a `You` tab. The
-> section below describes the **shipped** nav; the proposal is not yet
-> built.
+> **SUPERSEDED (shipped 2026-06-11).** This `Home · History · Log · Social ·
+> Settings` nav was replaced by the **Fitness-hub redesign** specced below
+> ([§ redesign](#proposed-redesign-pending-sign-off--the-train-hub--routes-relocation)):
+> bottom nav is now `Home · Fitness · [+]Log · Social · You`, the `History`
+> tab is absorbed into Fitness→All, Settings folds into `You`, and Routes
+> moved out of Social onto the run surface. The section just below documents
+> the *historical* nav; read the redesign section for what ships today.
 
 The `Run` tab disappears as a top-level destination. The centre slot
 becomes an **action button**, not a tab.
@@ -784,7 +784,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 
 ## Proposed redesign (pending sign-off) — the Train hub + Routes relocation
 
-> **Status: PROPOSED, not built.** Decided inputs (owner, this round): mobile nav adopts a **Train modality hub**, and **Routes co-locates under the Run modality** on both platforms. Still needs: owner sign-off to build, plus the nav-contract test rewrites. This section supersedes the routes-half of [decisions.md § 61](../architecture/decisions.md#61-social-hub-ia-rename-clubs--social-host-feedpeopleclubs-as-tabs-under-social) and corrects the "Routes was folded into Social" parenthetical in [§ 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) (that was only ever true on mobile; web shipped Routes as a top-level sidebar item). The ready-to-paste ADR is in [Appendix](#appendix--proposed-adr-routes-is-a-run-modality-surface-mobile-nav-is-a-train-hub).
+> **Status: SHIPPED 2026-06-11** — landed as the **Fitness** hub (the working title throughout this section is "Train"; the owner picked **Fitness** because it covers run + gym + nutrition, where "Train" doesn't). Web routes-relocation (drop the `/routes` sidebar item, nest under `/runs` via `RunSurfaceTabs`, `/routes` URL preserved) + the mobile Fitness hub (`Home · Fitness · [+]Log · Social · You`; `fitness_hub_screen.dart` with All/Runs/Gym/Nutrition; History absorbed into All; Settings → `you_screen.dart`; Coach pinned on Home; Routes out of Social into Fitness→Runs) both shipped, iOS twin byte-identical, code-reviewer-clean (keep-alive recording path verified intact). This section supersedes the routes-half of [decisions.md § 61](../architecture/decisions.md#61-social-hub-ia-rename-clubs--social-host-feedpeopleclubs-as-tabs-under-social) and corrects the "Routes was folded into Social" parenthetical in [§ 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db); the landed ADR is [decisions.md § 139](../architecture/decisions.md#139-routes-is-a-run-modality-surface-mobile-nav-is-a-fitness-hub). **Not built this round:** nesting Training Plans under the run surface (web strip ships as `Runs · Routes` only).
 
 ### The problem this fixes
 
@@ -869,7 +869,7 @@ Gym P1 and nutrition sequencing keep their own gates (gym repeat-rate, nutrition
 
 ### Open questions
 
-1. **"Train" naming** — accurate for run + gym, weak for nutrition (you don't "train" food). Alternatives: `Activity`, `Log` (taken), `Me`/`You` (taken). `Train` is the working title; product picks the final label before build.
+1. **Hub naming** — *resolved*: shipped as **Fitness** (covers run + gym + nutrition; "Train" was the working title but doesn't cover food).
 2. **Does `All`/History also keep a Home presence?** — Home is the dashboard; the full timeline moves to `Train → All`. Decide whether Home keeps a short "recent activity" strip or sends users to the hub for history.
 3. **Coach prominence** — *resolved* (above): a pinned `Ask your coach…` entry at the top of Home, not a dedicated slot. Revisit only if engagement data argues for a full slot.
 
