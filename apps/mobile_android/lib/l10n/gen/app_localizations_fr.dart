@@ -474,6 +474,37 @@ class AppLocalizationsFr extends AppLocalizations {
   String get logA11yLabel => 'Enregistrer une activité';
 
   @override
+  String get navFitness => 'Fitness';
+
+  @override
+  String get navYou => 'Vous';
+
+  @override
+  String get fitnessTabAll => 'Tout';
+
+  @override
+  String get fitnessTabRuns => 'Courses';
+
+  @override
+  String get fitnessTabGym => 'Muscu';
+
+  @override
+  String get fitnessTabNutrition => 'Nutrition';
+
+  @override
+  String get fitnessRunsRoutes => 'Itinéraires';
+
+  @override
+  String get homeAskCoach => 'Demander au coach';
+
+  @override
+  String get homeAskCoachSubtitle =>
+      'Des conseils sur vos courses, votre muscu et votre nutrition';
+
+  @override
+  String get youProfileTitle => 'Votre profil';
+
+  @override
   String get logSheetTitle => 'Ajouter';
 
   @override

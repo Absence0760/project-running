@@ -463,6 +463,36 @@ class AppLocalizationsJa extends AppLocalizations {
   String get logA11yLabel => 'アクティビティを記録';
 
   @override
+  String get navFitness => 'フィットネス';
+
+  @override
+  String get navYou => 'あなた';
+
+  @override
+  String get fitnessTabAll => 'すべて';
+
+  @override
+  String get fitnessTabRuns => 'ラン';
+
+  @override
+  String get fitnessTabGym => 'ジム';
+
+  @override
+  String get fitnessTabNutrition => '栄養';
+
+  @override
+  String get fitnessRunsRoutes => 'ルート';
+
+  @override
+  String get homeAskCoach => 'コーチに相談';
+
+  @override
+  String get homeAskCoachSubtitle => 'ラン・筋トレ・栄養のアドバイス';
+
+  @override
+  String get youProfileTitle => 'あなたのプロフィール';
+
+  @override
   String get logSheetTitle => '記録';
 
   @override

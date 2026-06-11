@@ -118,23 +118,28 @@ void main() {
       expect(find.byType(FloatingActionButton), findsOneWidget);
     });
 
-    testWidgets('shows the four nav labels; Run is no longer a nav label',
+    testWidgets(
+        'shows Home/Fitness/Social/You nav labels; Run/History/Settings are not nav labels',
         (tester) async {
       final s = await _makeStores();
       await _pump(tester, s);
       final bar = find.byType(BottomAppBar);
-      for (final label in ['Home', 'History', 'Social', 'Settings']) {
+      for (final label in ['Home', 'Fitness', 'Social', 'You']) {
         expect(
           find.descendant(of: bar, matching: find.text(label)),
           findsOneWidget,
           reason: 'expected "$label" nav label inside BottomAppBar',
         );
       }
-      expect(
-        find.descendant(of: bar, matching: find.text('Run')),
-        findsNothing,
-        reason: 'Run is captured via the Log button, not a bottom-nav tab',
-      );
+      // History is absorbed into Fitness → All; Settings folds into You;
+      // Run is captured via the Log button — none are bottom-nav labels.
+      for (final gone in ['Run', 'History', 'Settings']) {
+        expect(
+          find.descendant(of: bar, matching: find.text(gone)),
+          findsNothing,
+          reason: '"$gone" is no longer a bottom-nav destination',
+        );
+      }
     });
 
     testWidgets('initial page is Home (welcome empty state)', (tester) async {

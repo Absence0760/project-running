@@ -839,6 +839,66 @@ abstract class AppLocalizations {
   /// **'Log an activity'**
   String get logA11yLabel;
 
+  /// Bottom-nav label for the Fitness modality hub (All/Runs/Gym/Nutrition)
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness'**
+  String get navFitness;
+
+  /// Bottom-nav label for the You tab (profile + settings)
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get navYou;
+
+  /// Fitness hub sub-tab showing the unified cross-modal activity timeline
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get fitnessTabAll;
+
+  /// Fitness hub sub-tab for the run list and routes
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get fitnessTabRuns;
+
+  /// Fitness hub sub-tab for gym workouts
+  ///
+  /// In en, this message translates to:
+  /// **'Gym'**
+  String get fitnessTabGym;
+
+  /// Fitness hub sub-tab for nutrition
+  ///
+  /// In en, this message translates to:
+  /// **'Nutrition'**
+  String get fitnessTabNutrition;
+
+  /// Label for the Routes entry on the Fitness hub's Runs sub-tab
+  ///
+  /// In en, this message translates to:
+  /// **'Routes'**
+  String get fitnessRunsRoutes;
+
+  /// Title of the pinned coach entry at the top of the Home dashboard
+  ///
+  /// In en, this message translates to:
+  /// **'Ask your coach'**
+  String get homeAskCoach;
+
+  /// Subtitle of the pinned coach entry at the top of the Home dashboard
+  ///
+  /// In en, this message translates to:
+  /// **'Advice across your runs, lifts, and nutrition'**
+  String get homeAskCoachSubtitle;
+
+  /// Title of the profile entry at the top of the You tab
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile'**
+  String get youProfileTitle;
+
   /// Title of the Log capture bottom sheet
   ///
   /// In en, this message translates to:

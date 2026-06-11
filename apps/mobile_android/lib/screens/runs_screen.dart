@@ -57,6 +57,18 @@ class RunsScreen extends StatefulWidget {
   /// NutritionScreen. Null on the run-only + run-list-only mounts.
   final LocalFoodStore? foodStore;
 
+  /// When false the in-screen All/Runs/Lifts/Meals chip row is suppressed
+  /// and the timeline stays pinned to All. The Fitness hub's All sub-tab
+  /// passes false because the hub's own TabBar already owns that axis —
+  /// without it the hub would show a duplicate chip strip on top of its
+  /// tab strip. Default true preserves the standalone History behaviour.
+  final bool showKindChips;
+
+  /// When set, the run-list AppBar surfaces a Routes action. The Fitness
+  /// hub's Runs sub-tab supplies this so Routes is co-located with the run
+  /// surface (relocated out of Social). Null elsewhere — no Routes affordance.
+  final VoidCallback? onOpenRoutes;
+
   const RunsScreen({
     super.key,
     this.apiClient,
@@ -66,6 +78,8 @@ class RunsScreen extends StatefulWidget {
     this.settingsSync,
     this.gymStore,
     this.foodStore,
+    this.showKindChips = true,
+    this.onOpenRoutes,
   });
 
   @override
@@ -185,17 +199,24 @@ class _RunsScreenState extends State<RunsScreen> {
   bool _hasMeal = false;
   _HistoryKind _kind = _HistoryKind.all;
 
-  /// Chips only appear once a SECOND modality has data AND the gym store is
-  /// wired in (multi-modal home shell) — a pure runner, or a run-only / pushed
-  /// run-list mount that passes no gym store, sees no chips (anti-clutter).
-  bool get _showChips => widget.gymStore != null && (_hasLift || _hasMeal);
+  /// True once a SECOND modality has data AND the gym store is wired in
+  /// (multi-modal home shell). Drives timeline mode — a pure runner, or a
+  /// run-only / pushed run-list mount that passes no gym store, stays on the
+  /// inline run list (anti-clutter).
+  bool get _hasModalityData =>
+      widget.gymStore != null && (_hasLift || _hasMeal);
 
-  /// Whenever the chips are shown, EVERY tab — including Runs — renders the
-  /// unified timeline (matching web: the Runs tab is timeline rows + a
+  /// The in-screen chip row is only shown when this surface owns the kind
+  /// axis. The Fitness hub's All sub-tab passes `showKindChips: false` so the
+  /// hub's TabBar is the single kind selector (no duplicate strip).
+  bool get _showChips => widget.showKindChips && _hasModalityData;
+
+  /// Whenever a second modality has data, EVERY tab — including Runs — renders
+  /// the unified timeline (matching web: the Runs tab is timeline rows + a
   /// "View all" link to the full run list, not the inline run toolbar). The
-  /// inline run list still backs the no-chips path (offline / pure runner /
+  /// inline run list still backs the no-data path (offline / pure runner /
   /// the pushed run-list-only mount), which stays fully offline-first.
-  bool get _timelineMode => _showChips;
+  bool get _timelineMode => _hasModalityData;
 
   /// Snapshot of `runStore.runs` IDs from the previous listener tick.
   /// Used by `_onStoreChanged` to detect freshly-added runs so we can
@@ -1020,6 +1041,12 @@ class _RunsScreenState extends State<RunsScreen> {
               ],
             ),
       actions: [
+        if (widget.onOpenRoutes != null)
+          IconButton(
+            icon: const Icon(Icons.route),
+            tooltip: l10n.fitnessRunsRoutes,
+            onPressed: widget.onOpenRoutes,
+          ),
         if (!_timelineMode)
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
@@ -1158,7 +1185,7 @@ class _RunsScreenState extends State<RunsScreen> {
     // A user with no runs but who has logged lifts / meals should still see
     // their timeline — only fall back to the "no runs" empty state when there
     // is genuinely nothing across any modality (mirrors web's gym-only fix).
-    if (totalCount == 0 && !_showChips) {
+    if (totalCount == 0 && !_hasModalityData) {
       return _EmptyRuns(theme: theme, l10n: l10n);
     }
 

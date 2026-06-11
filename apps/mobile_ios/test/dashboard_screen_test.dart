@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,12 @@ import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/dashboard_screen.dart';
 import '../lib/training_service.dart';
+
+/// Signed-in fake so the gated coach entry renders.
+class _FakeApi extends ApiClient {
+  @override
+  String? get userId => 'u1';
+}
 
 /// Test seam: a TrainingService that returns a canned overview from
 /// `fetchActiveOverview` without touching Supabase. Subclassing the
@@ -484,6 +491,63 @@ void main() {
         } finally {
           dir.deleteSync(recursive: true);
         }
+      });
+    });
+
+    testWidgets('pins "Ask your coach" at the top when api + training present',
+        (tester) async {
+      await tester.runAsync(() async {
+        final s = await _makeStores();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: DashboardScreen(
+              apiClient: _FakeApi(),
+              training: _FakeTraining(null),
+              runStore: s.runStore,
+              routeStore: s.routeStore,
+              gymStore: LocalGymStore(),
+              foodStore: LocalFoodStore(),
+              preferences: s.prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        // The pinned entry renders at the top and is a real button (it opens
+        // CoachScreen on tap; the coach surface itself needs a live Supabase
+        // instance, which the per-screen coach test covers).
+        expect(find.text('Ask your coach'), findsOneWidget);
+        expect(
+          find.ancestor(
+            of: find.text('Ask your coach'),
+            matching: find.byType(InkWell),
+          ),
+          findsOneWidget,
+        );
+      });
+    });
+
+    testWidgets('no coach entry when training service is absent',
+        (tester) async {
+      await tester.runAsync(() async {
+        final s = await _makeStores();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: DashboardScreen(
+              apiClient: _FakeApi(),
+              runStore: s.runStore,
+              routeStore: s.routeStore,
+              gymStore: LocalGymStore(),
+              foodStore: LocalFoodStore(),
+              preferences: s.prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.text('Ask your coach'), findsNothing);
       });
     });
   });

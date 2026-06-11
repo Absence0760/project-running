@@ -473,6 +473,37 @@ class AppLocalizationsPt extends AppLocalizations {
   String get logA11yLabel => 'Registrar uma atividade';
 
   @override
+  String get navFitness => 'Fitness';
+
+  @override
+  String get navYou => 'Você';
+
+  @override
+  String get fitnessTabAll => 'Tudo';
+
+  @override
+  String get fitnessTabRuns => 'Corridas';
+
+  @override
+  String get fitnessTabGym => 'Academia';
+
+  @override
+  String get fitnessTabNutrition => 'Nutrição';
+
+  @override
+  String get fitnessRunsRoutes => 'Rotas';
+
+  @override
+  String get homeAskCoach => 'Pergunte ao seu treinador';
+
+  @override
+  String get homeAskCoachSubtitle =>
+      'Dicas sobre suas corridas, academia e nutrição';
+
+  @override
+  String get youProfileTitle => 'Seu perfil';
+
+  @override
   String get logSheetTitle => 'Registrar';
 
   @override
@@ -7720,6 +7751,37 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get logA11yLabel => 'Registrar uma atividade';
+
+  @override
+  String get navFitness => 'Fitness';
+
+  @override
+  String get navYou => 'Você';
+
+  @override
+  String get fitnessTabAll => 'Tudo';
+
+  @override
+  String get fitnessTabRuns => 'Corridas';
+
+  @override
+  String get fitnessTabGym => 'Academia';
+
+  @override
+  String get fitnessTabNutrition => 'Nutrição';
+
+  @override
+  String get fitnessRunsRoutes => 'Rotas';
+
+  @override
+  String get homeAskCoach => 'Pergunte ao seu treinador';
+
+  @override
+  String get homeAskCoachSubtitle =>
+      'Dicas sobre suas corridas, academia e nutrição';
+
+  @override
+  String get youProfileTitle => 'Seu perfil';
 
   @override
   String get logSheetTitle => 'Registrar';

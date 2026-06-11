@@ -260,6 +260,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// The pinned "Ask your coach" entry shown at the top of Home. Null when
+  /// signed out or no training service (same guard as the toolbar action), so
+  /// it never renders a dead tap.
+  Widget? _coachEntry() {
+    final api = widget.apiClient;
+    final training = widget.training;
+    if (api == null || training == null) return null;
+    return _CoachEntryCard(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => CoachScreen(api: api, training: training),
+        ),
+      ),
+    );
+  }
+
   void _openTodayWorkout() {
     final svc = widget.training;
     final p = _planOverview;
@@ -586,6 +603,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? Column(
               children: [
                 if (actionToolbar != null) actionToolbar,
+                if (_coachEntry() case final coach?)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: coach,
+                  ),
                 Expanded(
                   child: _WelcomeEmpty(
                     theme: theme,
@@ -599,6 +621,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
                 if (actionToolbar != null) actionToolbar,
+                // Pinned coach entry — the resolved Coach-prominence
+                // decision puts the AI coach one persistent tap from Home
+                // (it has no bottom-nav slot). Gated on the same api +
+                // training guard as the toolbar action.
+                if (_coachEntry() case final coach?) ...[
+                  coach,
+                  _kSectionGap,
+                ],
                 // Active-plan hero: surface the day's structured
                 // workout above goals so a plan-runner sees what's
                 // next before scrolling. Hidden when no active plan
@@ -854,6 +884,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     }
     return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Pinned "Ask your coach" entry at the top of Home — a full-width tappable
+/// banner that opens the AI coach in one tap (the coach has no bottom-nav
+/// slot under the Fitness-hub redesign).
+class _CoachEntryCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CoachEntryCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      color: theme.colorScheme.primaryContainer,
+      child: Semantics(
+        button: true,
+        label: l10n.homeAskCoach,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(Icons.psychology_outlined,
+                    color: theme.colorScheme.onPrimaryContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.homeAskCoach,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.homeAskCoachSubtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer
+                              .withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right,
+                    color: theme.colorScheme.onPrimaryContainer),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

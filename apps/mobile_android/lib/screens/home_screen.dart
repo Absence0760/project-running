@@ -20,12 +20,12 @@ import '../widgets/billing_issue_banner.dart';
 import '../widgets/log_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
+import 'fitness_hub_screen.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
-import 'runs_screen.dart';
 import 'run_screen.dart';
-import 'settings_screen.dart';
 import 'social_screen.dart';
+import 'you_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -75,24 +75,27 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   // PageView page indices. The bottom nav exposes four destinations
-  // (Home / History / Social / Settings) plus a centre Log action; the
-  // Run page has no nav destination but stays a keep-alive PageView page so
-  // an in-progress recording survives navigating away (multi_modal.md §
-  // Bottom nav: "the Run tab disappears as a top-level destination").
+  // (Home / Fitness / Social / You) plus a centre Log action; the Run page
+  // has no nav destination but stays a keep-alive PageView page so an
+  // in-progress recording survives navigating away (multi_modal.md §
+  // Bottom nav). Fitness is the modality hub (All/Runs/Gym/Nutrition); the
+  // former standalone History tab is absorbed into its All sub-tab, and
+  // Settings folds into You.
   static const _pageHome = 0;
-  static const _pageHistory = 1;
+  static const _pageFitness = 1;
   // Run / Gym / Nutrition have no bottom-nav destination — they're the
   // dwell-in capture surfaces reached via the centre Log action, each a
   // keep-alive page so an in-progress session (a live recording, a
   // half-built workout, the day's food log) survives swiping to Home and
   // back. Run can't be anything else (a foreground-service GPS session
   // can't collapse into a modal); Gym + Nutrition match it so all three
-  // Log actions behave the same way.
+  // Log actions behave the same way. These are DISTINCT from the Fitness
+  // hub's review surfaces (which mount separate Gym/Nutrition instances).
   static const _pageRun = 2;
   static const _pageGym = 3;
   static const _pageFood = 4;
   static const _pageSocial = 5;
-  static const _pageSettings = 6;
+  static const _pageYou = 6;
   static const _initialIndex = _pageHome;
 
   /// Current page index. A `ValueNotifier` instead of a `setState` int so
@@ -169,15 +172,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _LazyKeepAliveTab(
-        builder: () => RunsScreen(
-          key: const PageStorageKey('runs'),
+        builder: () => FitnessHubScreen(
+          key: const PageStorageKey('fitness'),
           apiClient: widget.apiClient,
+          social: widget.social,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
-          preferences: widget.preferences,
-          settingsSync: widget.settingsSync,
           gymStore: widget.gymStore,
           foodStore: widget.foodStore,
+          preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
+          onStartRun: _startRunWithRoute,
         ),
       ),
       _LazyKeepAliveTab(
@@ -226,13 +231,11 @@ class _HomeScreenState extends State<HomeScreen> {
           social: widget.social,
           training: widget.training,
           routeStore: widget.routeStore,
-          preferences: widget.preferences,
-          onStartRun: _startRunWithRoute,
         ),
       ),
       _LazyKeepAliveTab(
-        builder: () => SettingsScreen(
-          key: const PageStorageKey('settings'),
+        builder: () => YouScreen(
+          key: const PageStorageKey('you'),
           apiClient: widget.apiClient,
           preferences: widget.preferences,
           runStore: widget.runStore,
@@ -396,10 +399,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () => _goToPage(_pageHome),
                 ),
                 _BottomNavItem(
-                  icon: Icons.history,
-                  label: l10n.navHistory,
-                  selected: index == _pageHistory,
-                  onTap: () => _goToPage(_pageHistory),
+                  icon: Icons.fitness_center,
+                  label: l10n.navFitness,
+                  selected: index == _pageFitness,
+                  onTap: () => _goToPage(_pageFitness),
                 ),
                 // Gap under the docked Log FAB.
                 const SizedBox(width: 56),
@@ -410,10 +413,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () => _goToPage(_pageSocial),
                 ),
                 _BottomNavItem(
-                  icon: Icons.settings,
-                  label: l10n.navSettings,
-                  selected: index == _pageSettings,
-                  onTap: () => _goToPage(_pageSettings),
+                  icon: Icons.person,
+                  label: l10n.navYou,
+                  selected: index == _pageYou,
+                  onTap: () => _goToPage(_pageYou),
                 ),
               ],
             ),

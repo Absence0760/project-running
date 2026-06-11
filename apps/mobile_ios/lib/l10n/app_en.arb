@@ -274,6 +274,46 @@
   "@logA11yLabel": {
     "description": "Screen-reader label for the centre Log action button"
   },
+  "navFitness": "Fitness",
+  "@navFitness": {
+    "description": "Bottom-nav label for the Fitness modality hub (All/Runs/Gym/Nutrition)"
+  },
+  "navYou": "You",
+  "@navYou": {
+    "description": "Bottom-nav label for the You tab (profile + settings)"
+  },
+  "fitnessTabAll": "All",
+  "@fitnessTabAll": {
+    "description": "Fitness hub sub-tab showing the unified cross-modal activity timeline"
+  },
+  "fitnessTabRuns": "Runs",
+  "@fitnessTabRuns": {
+    "description": "Fitness hub sub-tab for the run list and routes"
+  },
+  "fitnessTabGym": "Gym",
+  "@fitnessTabGym": {
+    "description": "Fitness hub sub-tab for gym workouts"
+  },
+  "fitnessTabNutrition": "Nutrition",
+  "@fitnessTabNutrition": {
+    "description": "Fitness hub sub-tab for nutrition"
+  },
+  "fitnessRunsRoutes": "Routes",
+  "@fitnessRunsRoutes": {
+    "description": "Label for the Routes entry on the Fitness hub's Runs sub-tab"
+  },
+  "homeAskCoach": "Ask your coach",
+  "@homeAskCoach": {
+    "description": "Title of the pinned coach entry at the top of the Home dashboard"
+  },
+  "homeAskCoachSubtitle": "Advice across your runs, lifts, and nutrition",
+  "@homeAskCoachSubtitle": {
+    "description": "Subtitle of the pinned coach entry at the top of the Home dashboard"
+  },
+  "youProfileTitle": "Your profile",
+  "@youProfileTitle": {
+    "description": "Title of the profile entry at the top of the You tab"
+  },
   "logSheetTitle": "Log",
   "@logSheetTitle": {
     "description": "Title of the Log capture bottom sheet"
