@@ -7,6 +7,7 @@
 	import { periodStart } from '$lib/training/goals';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
+	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { goto } from '$app/navigation';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -502,6 +503,7 @@
 </svelte:head>
 
 <div class="page">
+	<RunSurfaceTabs active="runs" />
 	<!--
 		audit/accessibility (May 2026) High — WCAG 1.3.1 + 2.4.6.
 		Run-list page needs an h1; visually-hidden because the

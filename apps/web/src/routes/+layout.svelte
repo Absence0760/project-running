@@ -120,7 +120,6 @@
 		{ href: '/runs', labelKey: 'nav.runs', icon: 'directions_run', accent: '#6FA8DC' },
 		{ href: '/gym', labelKey: 'nav.gym', icon: 'fitness_center', accent: '#8FBF9F' },
 		{ href: '/nutrition', labelKey: 'nav.nutrition', icon: 'nutrition', accent: '#E8C07D' },
-		{ href: '/routes', labelKey: 'nav.routes', icon: 'route', accent: '#B9A7E8' },
 		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
 	];

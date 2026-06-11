@@ -187,21 +187,23 @@ test.describe('navigation — sidebar links wire up', () => {
 	test('clicking sidebar nav links lands on the right URL', async ({
 		page
 	}) => {
-		// Sidebar shape: Dashboard · History · Routes · Coach · Social.
-		// Plans moved off the sidebar to be reached from the dashboard
-		// today-card. Feed + People + Clubs collapsed under /social.
-		// Guided runs surfaces from /coach. Settings is in the profile
-		// popover.
+		// Sidebar shape: Dashboard · History · Runs · Gym · Nutrition ·
+		// Coach · Social. Routes relocated off the sidebar to a sub-tab
+		// under the run surface (/runs ↔ /routes). Plans moved off the
+		// sidebar to be reached from the dashboard today-card. Feed +
+		// People + Clubs collapsed under /social. Guided runs surfaces
+		// from /coach. Settings is in the profile popover.
 		await page.goto('/dashboard');
 		const sidebar = page.locator('.sidebar');
 		await sidebar.getByRole('link', { name: /History/ }).click();
 		await expect(page).toHaveURL(/\/history(\?.*)?$/, { timeout: 10_000 });
-		await sidebar.getByRole('link', { name: /Routes/ }).click();
-		await expect(page).toHaveURL(/\/routes(\?.*)?$/, { timeout: 10_000 });
 		await sidebar.getByRole('link', { name: /Coach/ }).click();
 		await expect(page).toHaveURL(/\/coach(\?.*)?$/, { timeout: 10_000 });
 		await sidebar.getByRole('link', { name: /Social/ }).click();
 		await expect(page).toHaveURL(/\/social(\?.*)?$/, { timeout: 10_000 });
+		// Routes no longer has a standalone sidebar item — it lives under
+		// the run surface now.
+		await expect(sidebar.getByRole('link', { name: /^Routes$/ })).toHaveCount(0);
 		// Settings is in the profile popover, not in the main nav.
 		await expect(sidebar.getByRole('link', { name: /^Settings$/ })).toHaveCount(0);
 		// Feed + Guided runs + the old top-level Clubs link moved off
@@ -209,5 +211,47 @@ test.describe('navigation — sidebar links wire up', () => {
 		await expect(sidebar.getByRole('link', { name: /^Feed$/ })).toHaveCount(0);
 		await expect(sidebar.getByRole('link', { name: /^Guided runs$/ })).toHaveCount(0);
 		await expect(sidebar.getByRole('link', { name: /^Clubs$/ })).toHaveCount(0);
+	});
+});
+
+test.describe('navigation — Routes nested under the run surface', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('Routes is reachable from /runs via the run-surface sub-tab', async ({
+		page
+	}) => {
+		await page.goto('/runs');
+		await page
+			.getByRole('navigation', { name: /Run surface sections/ })
+			.getByRole('link', { name: /^Routes$/ })
+			.click();
+		await expect(page).toHaveURL(/\/routes(\?.*)?$/, { timeout: 10_000 });
+		// The inner My-routes tab confirms the routes library mounted.
+		await expect(
+			page.getByRole('tab', { name: /My routes/ })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('/routes URL still resolves directly (bookmark / deep-link guard)', async ({
+		page
+	}) => {
+		await page.goto('/routes');
+		await expect(
+			page.getByRole('tab', { name: /My routes/ })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('Runs is reachable from /routes via the run-surface sub-tab', async ({
+		page
+	}) => {
+		await page.goto('/routes');
+		await page
+			.getByRole('navigation', { name: /Run surface sections/ })
+			.getByRole('link', { name: /^Runs$/ })
+			.click();
+		await expect(page).toHaveURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
+		await expect(
+			page.locator('select[aria-label="Source"]')
+		).toBeVisible({ timeout: 10_000 });
 	});
 });

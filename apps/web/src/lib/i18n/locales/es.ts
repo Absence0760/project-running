@@ -4,9 +4,11 @@ export const messages = {
 	'nav.dashboard': 'Panel',
 	'nav.history': 'Historial',
 	'nav.runs': 'Carreras',
-	'nav.routes': 'Rutas',
 	'nav.coach': 'Entrenador',
 	'nav.social': 'Social',
+	'runSurface.label': 'Secciones del área de carrera',
+	'runSurface.tabRuns': 'Carreras',
+	'runSurface.tabRoutes': 'Rutas',
 	'shell.offline':
 		'Estás sin conexión. Las nuevas carreras se guardan localmente y se sincronizan cuando vuelvas a estar en línea.',
 	'shell.skipToMain': 'Saltar al contenido principal',

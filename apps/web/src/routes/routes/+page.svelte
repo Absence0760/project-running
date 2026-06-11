@@ -10,6 +10,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
+	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import RouteHeatmap from '$lib/components/RouteHeatmap.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
@@ -275,6 +276,7 @@
 {/if}
 
 <div class="page">
+	<RunSurfaceTabs active="routes" />
 	<header class="page-header">
 		<!-- tabindex=-1: keydown bubbles here from the focused tab; the
 		     tablist itself is never tab-stopped (the tabs carry the roving

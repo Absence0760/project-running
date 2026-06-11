@@ -4,9 +4,11 @@ export const messages = {
 	'nav.dashboard': 'Painel',
 	'nav.history': 'Histórico',
 	'nav.runs': 'Corridas',
-	'nav.routes': 'Rotas',
 	'nav.coach': 'Treinador',
 	'nav.social': 'Social',
+	'runSurface.label': 'Seções da área de corrida',
+	'runSurface.tabRuns': 'Corridas',
+	'runSurface.tabRoutes': 'Rotas',
 	'shell.offline':
 		'Você está offline. As novas corridas são salvas localmente e sincronizadas quando você voltar a ficar online.',
 	'shell.skipToMain': 'Pular para o conteúdo principal',

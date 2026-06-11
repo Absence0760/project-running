@@ -13,9 +13,12 @@ export const en = {
 	'nav.dashboard': 'Dashboard',
 	'nav.history': 'History',
 	'nav.runs': 'Runs',
-	'nav.routes': 'Routes',
 	'nav.coach': 'Coach',
 	'nav.social': 'Social',
+	// Run-surface sub-tab strip (Runs · Routes) — RunSurfaceTabs.svelte
+	'runSurface.label': 'Run surface sections',
+	'runSurface.tabRuns': 'Runs',
+	'runSurface.tabRoutes': 'Routes',
 	'shell.offline': "You're offline. New runs save locally and sync when you're back online.",
 	'shell.skipToMain': 'Skip to main content',
 	'shell.loading': 'Loading…',

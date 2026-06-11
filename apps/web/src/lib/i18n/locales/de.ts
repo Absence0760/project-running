@@ -4,9 +4,11 @@ export const messages = {
 	'nav.dashboard': 'Übersicht',
 	'nav.history': 'Verlauf',
 	'nav.runs': 'Läufe',
-	'nav.routes': 'Routen',
 	'nav.coach': 'Coach',
 	'nav.social': 'Community',
+	'runSurface.label': 'Laufbereich-Abschnitte',
+	'runSurface.tabRuns': 'Läufe',
+	'runSurface.tabRoutes': 'Routen',
 	'shell.offline':
 		'Du bist offline. Neue Läufe werden lokal gespeichert und synchronisiert, sobald du wieder online bist.',
 	'shell.skipToMain': 'Zum Hauptinhalt springen',

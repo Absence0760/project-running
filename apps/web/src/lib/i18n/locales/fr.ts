@@ -4,9 +4,11 @@ export const messages = {
 	'nav.dashboard': 'Tableau de bord',
 	'nav.history': 'Historique',
 	'nav.runs': 'Courses',
-	'nav.routes': 'Itinéraires',
 	'nav.coach': 'Coach',
 	'nav.social': 'Social',
+	'runSurface.label': 'Sections de la zone de course',
+	'runSurface.tabRuns': 'Courses',
+	'runSurface.tabRoutes': 'Itinéraires',
 	'shell.offline':
 		'Vous êtes hors ligne. Les nouvelles courses sont enregistrées localement et synchronisées dès votre retour en ligne.',
 	'shell.skipToMain': 'Aller au contenu principal',
