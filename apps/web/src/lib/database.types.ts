@@ -401,6 +401,7 @@ export type Database = {
           event_id: string
           instance_start: string
           joined_at: string | null
+          order_id: string | null
           status: string
           user_id: string
         }
@@ -408,6 +409,7 @@ export type Database = {
           event_id: string
           instance_start: string
           joined_at?: string | null
+          order_id?: string | null
           status?: string
           user_id: string
         }
@@ -415,6 +417,7 @@ export type Database = {
           event_id?: string
           instance_start?: string
           joined_at?: string | null
+          order_id?: string | null
           status?: string
           user_id?: string
         }
@@ -424,6 +427,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendees_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "event_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -453,6 +463,115 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "event_exceptions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_orders: {
+        Row: {
+          amount_cents: number
+          buyer_user_id: string
+          created_at: string
+          currency: string
+          event_id: string
+          host_user_id: string
+          id: string
+          instance_start: string
+          paid_at: string | null
+          platform_fee_cents: number
+          refunded_at: string | null
+          reserved_until: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          buyer_user_id: string
+          created_at?: string
+          currency?: string
+          event_id: string
+          host_user_id: string
+          id?: string
+          instance_start: string
+          paid_at?: string | null
+          platform_fee_cents?: number
+          refunded_at?: string | null
+          reserved_until?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          buyer_user_id?: string
+          created_at?: string
+          currency?: string
+          event_id?: string
+          host_user_id?: string
+          id?: string
+          instance_start?: string
+          paid_at?: string | null
+          platform_fee_cents?: number
+          refunded_at?: string | null
+          reserved_until?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_orders_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_pricing: {
+        Row: {
+          created_at: string
+          currency: string
+          event_id: string
+          instance_start: string | null
+          modality: string
+          platform_fee_bps: number
+          price_cents: number
+          refund_policy: string
+          sales_close_offset_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          event_id: string
+          instance_start?: string | null
+          modality?: string
+          platform_fee_bps?: number
+          price_cents: number
+          refund_policy?: string
+          sales_close_offset_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          event_id?: string
+          instance_start?: string | null
+          modality?: string
+          platform_fee_bps?: number
+          price_cents?: number
+          refund_policy?: string
+          sales_close_offset_minutes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_pricing_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
@@ -914,6 +1033,45 @@ export type Database = {
           title?: string | null
           user_id?: string
           volume_kg?: number
+        }
+        Relationships: []
+      }
+      instructor_payout_accounts: {
+        Row: {
+          charges_enabled: boolean
+          country: string | null
+          created_at: string
+          default_currency: string | null
+          details_submitted: boolean
+          onboarded_at: string | null
+          payouts_enabled: boolean
+          stripe_connect_account_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          charges_enabled?: boolean
+          country?: string | null
+          created_at?: string
+          default_currency?: string | null
+          details_submitted?: boolean
+          onboarded_at?: string | null
+          payouts_enabled?: boolean
+          stripe_connect_account_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          charges_enabled?: boolean
+          country?: string | null
+          created_at?: string
+          default_currency?: string | null
+          details_submitted?: boolean
+          onboarded_at?: string | null
+          payouts_enabled?: boolean
+          stripe_connect_account_id?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3016,11 +3174,13 @@ export type Database = {
           lng: number
         }[]
       }
+      host_can_take_payment: { Args: { p_user_id: string }; Returns: boolean }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_blocked_either_way: {
         Args: { a: string; b: string }
         Returns: boolean
       }
+      is_event_visible: { Args: { p_event_id: string }; Returns: boolean }
       is_pro: { Args: never; Returns: boolean }
       is_public_club_by_id: { Args: { p_club_id: string }; Returns: boolean }
       is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }

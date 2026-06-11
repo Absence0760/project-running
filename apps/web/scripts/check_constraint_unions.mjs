@@ -36,6 +36,9 @@ const PAIRS = [
 	{ tableColumn: 'club_members.role', tsUnion: 'ClubRole' },
 	{ tableColumn: 'notifications.kind', tsUnion: 'NotificationKind' },
 	{ tableColumn: 'events.category', tsUnion: 'EventCategory' },
+	{ tableColumn: 'event_orders.status', tsUnion: 'OrderStatus' },
+	{ tableColumn: 'event_pricing.refund_policy', tsUnion: 'RefundPolicy' },
+	{ tableColumn: 'event_pricing.modality', tsUnion: 'EventModality' },
 ];
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or

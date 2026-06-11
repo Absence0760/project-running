@@ -12,6 +12,9 @@ type ClubMemberRow = Database['public']['Tables']['club_members']['Row'];
 type EventRow = Database['public']['Tables']['events']['Row'];
 type EventAttendeeRow = Database['public']['Tables']['event_attendees']['Row'];
 type ClubPostRow = Database['public']['Tables']['club_posts']['Row'];
+type EventPricingRow = Database['public']['Tables']['event_pricing']['Row'];
+type EventOrderRow = Database['public']['Tables']['event_orders']['Row'];
+type InstructorPayoutAccountRow = Database['public']['Tables']['instructor_payout_accounts']['Row'];
 type TrainingPlanRow = Database['public']['Tables']['training_plans']['Row'];
 type PlanWeekRow = Database['public']['Tables']['plan_weeks']['Row'];
 type PlanWorkoutRow = Database['public']['Tables']['plan_workouts']['Row'];
@@ -141,6 +144,23 @@ export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 // no route/results); `social` is a meetup. Enforced by the events_category_check
 // CHECK constraint (migration 20261227_001) — keep this union in lockstep.
 export type EventCategory = 'run' | 'cycle' | 'class' | 'social';
+// Paid registration (club_events.md slice P1). Each is enforced by a CHECK
+// constraint (migration 20261229_001) — keep these unions in lockstep
+// (check_constraint_unions.mjs PAIRS).
+// event_orders.status — the order ledger lifecycle, written only by the
+// stripe-events webhook (service role).
+export type OrderStatus =
+	| 'pending'
+	| 'paid'
+	| 'refunded'
+	| 'partially_refunded'
+	| 'failed'
+	| 'canceled';
+// event_pricing.refund_policy — buyer self-cancel terms (honoured in P2).
+export type RefundPolicy = 'full_until_start' | 'full_until_24h' | 'no_refund';
+// event_pricing.modality — in_person only in P1; 'virtual' is a digital good
+// that re-opens the app-store IAP rule (reserved for P4).
+export type EventModality = 'in_person';
 export type NotificationKind =
 	| 'kudos'
 	| 'comment'
@@ -186,6 +206,13 @@ export type Event = Omit<EventRow, 'recurrence_freq' | 'recurrence_byday' | 'cat
 };
 export type EventAttendee = Omit<EventAttendeeRow, 'status'> & { status: RsvpStatus };
 export type ClubPost = Omit<ClubPostRow, never>;
+
+export type EventPricing = Omit<EventPricingRow, 'modality' | 'refund_policy'> & {
+	modality: EventModality;
+	refund_policy: RefundPolicy;
+};
+export type EventOrder = Omit<EventOrderRow, 'status'> & { status: OrderStatus };
+export type InstructorPayoutAccount = InstructorPayoutAccountRow;
 
 /** Shape returned by club list/detail queries — member count + current-user membership. */
 export type ClubWithMeta = Club & {

@@ -437,12 +437,14 @@ class EventAttendeeRow {
   static const String colStatus = 'status';
   static const String colJoinedAt = 'joined_at';
   static const String colInstanceStart = 'instance_start';
+  static const String colOrderId = 'order_id';
 
   final String eventId;
   final String userId;
   final String status;
   final DateTime? joinedAt;
   final DateTime instanceStart;
+  final String? orderId;
 
   const EventAttendeeRow({
     required this.eventId,
@@ -450,6 +452,7 @@ class EventAttendeeRow {
     required this.status,
     this.joinedAt,
     required this.instanceStart,
+    this.orderId,
   });
 
   factory EventAttendeeRow.fromJson(Map<String, dynamic> json) => EventAttendeeRow(
@@ -458,6 +461,7 @@ class EventAttendeeRow {
     status: json['status'] as String,
     joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
     instanceStart: DateTime.parse(json['instance_start'] as String),
+    orderId: json['order_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -466,6 +470,164 @@ class EventAttendeeRow {
     colStatus: status,
     colJoinedAt: joinedAt?.toIso8601String(),
     colInstanceStart: instanceStart.toIso8601String(),
+    colOrderId: orderId,
+  };
+}
+
+/// Row shape for the `event_orders` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class EventOrderRow {
+  static const String table = 'event_orders';
+  static const String colId = 'id';
+  static const String colEventId = 'event_id';
+  static const String colInstanceStart = 'instance_start';
+  static const String colBuyerUserId = 'buyer_user_id';
+  static const String colHostUserId = 'host_user_id';
+  static const String colStripeCheckoutSessionId = 'stripe_checkout_session_id';
+  static const String colStripePaymentIntentId = 'stripe_payment_intent_id';
+  static const String colAmountCents = 'amount_cents';
+  static const String colCurrency = 'currency';
+  static const String colPlatformFeeCents = 'platform_fee_cents';
+  static const String colStatus = 'status';
+  static const String colCreatedAt = 'created_at';
+  static const String colPaidAt = 'paid_at';
+  static const String colRefundedAt = 'refunded_at';
+  static const String colReservedUntil = 'reserved_until';
+
+  final String id;
+  final String eventId;
+  final DateTime instanceStart;
+  final String buyerUserId;
+  final String hostUserId;
+  final String? stripeCheckoutSessionId;
+  final String? stripePaymentIntentId;
+  final int amountCents;
+  final String currency;
+  final int platformFeeCents;
+  final String status;
+  final DateTime createdAt;
+  final DateTime? paidAt;
+  final DateTime? refundedAt;
+  final DateTime? reservedUntil;
+
+  const EventOrderRow({
+    required this.id,
+    required this.eventId,
+    required this.instanceStart,
+    required this.buyerUserId,
+    required this.hostUserId,
+    this.stripeCheckoutSessionId,
+    this.stripePaymentIntentId,
+    required this.amountCents,
+    required this.currency,
+    required this.platformFeeCents,
+    required this.status,
+    required this.createdAt,
+    this.paidAt,
+    this.refundedAt,
+    this.reservedUntil,
+  });
+
+  factory EventOrderRow.fromJson(Map<String, dynamic> json) => EventOrderRow(
+    id: json['id'] as String,
+    eventId: json['event_id'] as String,
+    instanceStart: DateTime.parse(json['instance_start'] as String),
+    buyerUserId: json['buyer_user_id'] as String,
+    hostUserId: json['host_user_id'] as String,
+    stripeCheckoutSessionId: json['stripe_checkout_session_id'] as String?,
+    stripePaymentIntentId: json['stripe_payment_intent_id'] as String?,
+    amountCents: (json['amount_cents'] as num).toInt(),
+    currency: json['currency'] as String,
+    platformFeeCents: (json['platform_fee_cents'] as num).toInt(),
+    status: json['status'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
+    refundedAt: json['refunded_at'] == null ? null : DateTime.parse(json['refunded_at'] as String),
+    reservedUntil: json['reserved_until'] == null ? null : DateTime.parse(json['reserved_until'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colEventId: eventId,
+    colInstanceStart: instanceStart.toIso8601String(),
+    colBuyerUserId: buyerUserId,
+    colHostUserId: hostUserId,
+    colStripeCheckoutSessionId: stripeCheckoutSessionId,
+    colStripePaymentIntentId: stripePaymentIntentId,
+    colAmountCents: amountCents,
+    colCurrency: currency,
+    colPlatformFeeCents: platformFeeCents,
+    colStatus: status,
+    colCreatedAt: createdAt.toIso8601String(),
+    colPaidAt: paidAt?.toIso8601String(),
+    colRefundedAt: refundedAt?.toIso8601String(),
+    colReservedUntil: reservedUntil?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `event_pricing` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class EventPricingRow {
+  static const String table = 'event_pricing';
+  static const String colEventId = 'event_id';
+  static const String colInstanceStart = 'instance_start';
+  static const String colPriceCents = 'price_cents';
+  static const String colCurrency = 'currency';
+  static const String colModality = 'modality';
+  static const String colPlatformFeeBps = 'platform_fee_bps';
+  static const String colRefundPolicy = 'refund_policy';
+  static const String colSalesCloseOffsetMinutes = 'sales_close_offset_minutes';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String eventId;
+  final DateTime? instanceStart;
+  final int priceCents;
+  final String currency;
+  final String modality;
+  final int platformFeeBps;
+  final String refundPolicy;
+  final int salesCloseOffsetMinutes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const EventPricingRow({
+    required this.eventId,
+    this.instanceStart,
+    required this.priceCents,
+    required this.currency,
+    required this.modality,
+    required this.platformFeeBps,
+    required this.refundPolicy,
+    required this.salesCloseOffsetMinutes,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory EventPricingRow.fromJson(Map<String, dynamic> json) => EventPricingRow(
+    eventId: json['event_id'] as String,
+    instanceStart: json['instance_start'] == null ? null : DateTime.parse(json['instance_start'] as String),
+    priceCents: (json['price_cents'] as num).toInt(),
+    currency: json['currency'] as String,
+    modality: json['modality'] as String,
+    platformFeeBps: (json['platform_fee_bps'] as num).toInt(),
+    refundPolicy: json['refund_policy'] as String,
+    salesCloseOffsetMinutes: (json['sales_close_offset_minutes'] as num).toInt(),
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colEventId: eventId,
+    colInstanceStart: instanceStart?.toIso8601String(),
+    colPriceCents: priceCents,
+    colCurrency: currency,
+    colModality: modality,
+    colPlatformFeeBps: platformFeeBps,
+    colRefundPolicy: refundPolicy,
+    colSalesCloseOffsetMinutes: salesCloseOffsetMinutes,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
 
@@ -1073,6 +1235,72 @@ class GymWorkoutRow {
     colCreatedAt: createdAt.toIso8601String(),
     colSetCount: setCount,
     colVolumeKg: volumeKg,
+  };
+}
+
+/// Row shape for the `instructor_payout_accounts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class InstructorPayoutAccountRow {
+  static const String table = 'instructor_payout_accounts';
+  static const String colUserId = 'user_id';
+  static const String colStripeConnectAccountId = 'stripe_connect_account_id';
+  static const String colChargesEnabled = 'charges_enabled';
+  static const String colPayoutsEnabled = 'payouts_enabled';
+  static const String colDetailsSubmitted = 'details_submitted';
+  static const String colCountry = 'country';
+  static const String colDefaultCurrency = 'default_currency';
+  static const String colOnboardedAt = 'onboarded_at';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String userId;
+  final String stripeConnectAccountId;
+  final bool chargesEnabled;
+  final bool payoutsEnabled;
+  final bool detailsSubmitted;
+  final String? country;
+  final String? defaultCurrency;
+  final DateTime? onboardedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const InstructorPayoutAccountRow({
+    required this.userId,
+    required this.stripeConnectAccountId,
+    required this.chargesEnabled,
+    required this.payoutsEnabled,
+    required this.detailsSubmitted,
+    this.country,
+    this.defaultCurrency,
+    this.onboardedAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory InstructorPayoutAccountRow.fromJson(Map<String, dynamic> json) => InstructorPayoutAccountRow(
+    userId: json['user_id'] as String,
+    stripeConnectAccountId: json['stripe_connect_account_id'] as String,
+    chargesEnabled: (json['charges_enabled'] as bool?) ?? false,
+    payoutsEnabled: (json['payouts_enabled'] as bool?) ?? false,
+    detailsSubmitted: (json['details_submitted'] as bool?) ?? false,
+    country: json['country'] as String?,
+    defaultCurrency: json['default_currency'] as String?,
+    onboardedAt: json['onboarded_at'] == null ? null : DateTime.parse(json['onboarded_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colUserId: userId,
+    colStripeConnectAccountId: stripeConnectAccountId,
+    colChargesEnabled: chargesEnabled,
+    colPayoutsEnabled: payoutsEnabled,
+    colDetailsSubmitted: detailsSubmitted,
+    colCountry: country,
+    colDefaultCurrency: defaultCurrency,
+    colOnboardedAt: onboardedAt?.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
 
