@@ -15,6 +15,11 @@
 	} from '$lib/core/data';
 	import { shiftIsoDate, recoveryWorkoutPatch, recoveryWeekVolume } from '$lib/training/plan_bulk_ops';
 	import { replanRemaining, type ReplanChange, type ReplanWeek } from '$lib/training/plan_replan';
+	import {
+		adaptiveReplanRemaining,
+		type AdaptiveReason,
+		type AdaptiveConfidence
+	} from '$lib/training/plan_adaptive_replan';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
@@ -236,6 +241,9 @@
 
 	// ─── Re-plan around missed sessions (owner-only) ───
 	let replanPreview = $state<ReplanChange[] | null>(null);
+	// Set only when the CURRENT preview came from the adaptive (trend-based)
+	// path, so its header can explain the multi-week reason + confidence.
+	let adaptiveInfo = $state<{ reason: AdaptiveReason; confidence: AdaptiveConfidence } | null>(null);
 
 	/// Assemble the pure engine's input from the loaded plan + the runs
 	/// window. Per-week planned volume, actual mileage (runs dated in the
@@ -283,9 +291,46 @@
 		if (onTrack || changes.length === 0) {
 			showToast(m('planDetail.replanOnTrack'));
 			replanPreview = null;
+			adaptiveInfo = null;
 			return;
 		}
+		adaptiveInfo = null;
 		replanPreview = changes;
+	}
+
+	/// Adaptive (trend-based) re-plan: only proposes when the last few
+	/// completed weeks show a sustained drift, suppressing single-week noise.
+	function proposeAdaptiveReplan(): void {
+		if (!plan || !isOwner || bulkBusy) return;
+		const r = adaptiveReplanRemaining({ weeks: buildReplanInput(), today });
+		if (r.reason === 'on_track') {
+			showToast(m('planDetail.adaptiveOnTrack'));
+			replanPreview = null;
+			adaptiveInfo = null;
+			return;
+		}
+		if (r.changes.length === 0) {
+			// A real multi-week trend, but the conservative rules prescribe no
+			// safe change (e.g. under-running easy volume is never crammed).
+			showToast(m('planDetail.adaptiveNoSafeChange'));
+			replanPreview = null;
+			adaptiveInfo = null;
+			return;
+		}
+		adaptiveInfo = { reason: r.reason, confidence: r.confidence };
+		replanPreview = r.changes;
+	}
+
+	function adaptiveBadgeText(info: { reason: AdaptiveReason; confidence: AdaptiveConfidence }): string {
+		const reason =
+			info.reason === 'trend_underfitness'
+				? m('planDetail.adaptiveReasonUnder')
+				: m('planDetail.adaptiveReasonOver');
+		const confidence =
+			info.confidence === 'high'
+				? m('planDetail.adaptiveConfidenceHigh')
+				: m('planDetail.adaptiveConfidenceMedium');
+		return m('planDetail.adaptiveBadge', { reason, confidence });
 	}
 
 	async function applyReplan(): Promise<void> {
@@ -299,6 +344,7 @@
 			);
 			showToast(m('planDetail.replanApplied', { n: replanPreview.length }));
 			replanPreview = null;
+			adaptiveInfo = null;
 			await load();
 		} catch (e) {
 			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
@@ -933,20 +979,35 @@
 						{m('planDetail.shiftApply')}
 					</button>
 				</div>
-				<button
-					type="button"
-					class="btn btn-outline btn-sm replan-btn"
-					onclick={proposeReplan}
-					disabled={bulkBusy}
-				>
-					<span class="material-symbols">auto_fix_high</span>
-					{m('planDetail.replan')}
-				</button>
+				<div class="replan-buttons">
+					<button
+						type="button"
+						class="btn btn-outline btn-sm replan-btn"
+						onclick={proposeReplan}
+						disabled={bulkBusy}
+					>
+						<span class="material-symbols">auto_fix_high</span>
+						{m('planDetail.replan')}
+					</button>
+					<button
+						type="button"
+						class="btn btn-outline btn-sm replan-btn"
+						onclick={proposeAdaptiveReplan}
+						disabled={bulkBusy}
+						title={m('planDetail.adaptiveReplanHint')}
+					>
+						<span class="material-symbols">trending_up</span>
+						{m('planDetail.adaptiveReplan')}
+					</button>
+				</div>
 			</section>
 
 			{#if replanPreview}
 				<section class="replan-preview" aria-label={m('planDetail.replanPreviewAria')}>
 					<h3>{m('planDetail.replanPreviewTitle')}</h3>
+					{#if adaptiveInfo}
+						<p class="replan-adaptive-badge">{adaptiveBadgeText(adaptiveInfo)}</p>
+					{/if}
 					<ul>
 						{#each replanPreview as c (c.workoutId)}
 							<li>
@@ -956,7 +1017,7 @@
 						{/each}
 					</ul>
 					<div class="replan-actions">
-						<button type="button" class="btn btn-secondary btn-sm" onclick={() => (replanPreview = null)} disabled={bulkBusy}>
+						<button type="button" class="btn btn-secondary btn-sm" onclick={() => { replanPreview = null; adaptiveInfo = null; }} disabled={bulkBusy}>
 							{m('planDetail.replanCancel')}
 						</button>
 						<button type="button" class="btn btn-primary btn-sm" onclick={applyReplan} disabled={bulkBusy}>
@@ -1489,6 +1550,11 @@
 		vertical-align: -2px;
 		margin-inline-end: 0.2rem;
 	}
+	.replan-buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
+	}
 	.replan-preview {
 		margin: 0 0 var(--space-md);
 		padding: var(--space-md) var(--space-lg);
@@ -1499,6 +1565,12 @@
 	.replan-preview h3 {
 		margin: 0 0 var(--space-sm);
 		font-size: 0.95rem;
+	}
+	.replan-adaptive-badge {
+		margin: 0 0 var(--space-sm);
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--color-primary);
 	}
 	.replan-preview ul {
 		list-style: none;
