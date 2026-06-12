@@ -6371,6 +6371,66 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get planNewTemplatePickerCancel;
 
+  /// Plan-new built-in starter-plan picker
+  ///
+  /// In en, this message translates to:
+  /// **'Start from a built-in plan'**
+  String get planNewStarterTitle;
+
+  /// Plan-new built-in starter-plan picker
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a proven training plan and we\'ll schedule it from your start date — you can tweak it after.'**
+  String get planNewStarterSubtitle;
+
+  /// Plan-new built-in starter-plan picker
+  ///
+  /// In en, this message translates to:
+  /// **'Browse starter plans'**
+  String get planNewStarterButton;
+
+  /// Plan-new built-in starter-plan picker
+  ///
+  /// In en, this message translates to:
+  /// **'Creating…'**
+  String get planNewStarterCreating;
+
+  /// Plan-new built-in starter-plan picker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a starter plan'**
+  String get planNewStarterPickerTitle;
+
+  /// Plan-new built-in starter-plan picker
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planNewStarterPickerCancel;
+
+  /// Toast when creating from a starter plan fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create that plan: {error}'**
+  String planNewStarterCreateFailed(String error);
+
+  /// Built-in starter plan name
+  ///
+  /// In en, this message translates to:
+  /// **'Couch to 5K (beginner walk-run)'**
+  String get planNewStarterC25k;
+
+  /// Built-in starter plan name
+  ///
+  /// In en, this message translates to:
+  /// **'Half Marathon — 12 weeks'**
+  String get planNewStarterHalf12;
+
+  /// Built-in starter plan name
+  ///
+  /// In en, this message translates to:
+  /// **'Marathon — 16 weeks'**
+  String get planNewStarterMarathon16;
+
   /// Plan-detail load timeout error
   ///
   /// In en, this message translates to:

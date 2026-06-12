@@ -4745,6 +4745,47 @@
   "@planNewTemplatePickerCancel": {
     "description": "Plan-new club-template picker"
   },
+  "planNewStarterTitle": "Start from a built-in plan",
+  "@planNewStarterTitle": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterSubtitle": "Pick a proven training plan and we'll schedule it from your start date — you can tweak it after.",
+  "@planNewStarterSubtitle": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterButton": "Browse starter plans",
+  "@planNewStarterButton": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterCreating": "Creating…",
+  "@planNewStarterCreating": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterPickerTitle": "Choose a starter plan",
+  "@planNewStarterPickerTitle": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterPickerCancel": "Cancel",
+  "@planNewStarterPickerCancel": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterCreateFailed": "Couldn't create that plan: {error}",
+  "@planNewStarterCreateFailed": {
+    "description": "Toast when creating from a starter plan fails",
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "planNewStarterC25k": "Couch to 5K (beginner walk-run)",
+  "@planNewStarterC25k": {
+    "description": "Built-in starter plan name"
+  },
+  "planNewStarterHalf12": "Half Marathon — 12 weeks",
+  "@planNewStarterHalf12": {
+    "description": "Built-in starter plan name"
+  },
+  "planNewStarterMarathon16": "Marathon — 16 weeks",
+  "@planNewStarterMarathon16": {
+    "description": "Built-in starter plan name"
+  },
   "planDetailTimeoutError": "Connection timed out. Check your network and try again.",
   "@planDetailTimeoutError": {
     "description": "Plan-detail load timeout error"

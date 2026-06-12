@@ -3799,6 +3799,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planNewTemplatePickerCancel => 'Cancel';
 
   @override
+  String get planNewStarterTitle => 'Start from a built-in plan';
+
+  @override
+  String get planNewStarterSubtitle =>
+      'Pick a proven training plan and we\'ll schedule it from your start date — you can tweak it after.';
+
+  @override
+  String get planNewStarterButton => 'Browse starter plans';
+
+  @override
+  String get planNewStarterCreating => 'Creating…';
+
+  @override
+  String get planNewStarterPickerTitle => 'Choose a starter plan';
+
+  @override
+  String get planNewStarterPickerCancel => 'Cancel';
+
+  @override
+  String planNewStarterCreateFailed(String error) {
+    return 'Couldn\'t create that plan: $error';
+  }
+
+  @override
+  String get planNewStarterC25k => 'Couch to 5K (beginner walk-run)';
+
+  @override
+  String get planNewStarterHalf12 => 'Half Marathon — 12 weeks';
+
+  @override
+  String get planNewStarterMarathon16 => 'Marathon — 16 weeks';
+
+  @override
   String get planDetailTimeoutError =>
       'Connection timed out. Check your network and try again.';
 

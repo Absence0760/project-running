@@ -6,6 +6,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../social_service.dart' show ClubView, SocialService;
+import '../starter_plans.dart';
 import '../training.dart';
 import '../training_labels.dart';
 import '../training_service.dart';
@@ -79,6 +80,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   late final SocialService _social = widget.social ?? SocialService();
   List<_TemplateOption> _templates = const [];
   bool _cloning = false;
+  bool _creatingStarter = false;
 
   static DateTime _nextSunday() {
     var d = DateTime.now().add(const Duration(days: 7));
@@ -153,6 +155,60 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       if (mounted) {
         setState(() => _cloning = false);
         showTopBanner(context, l10n.planNewTemplateCloneFailed(e.toString()));
+      }
+    }
+  }
+
+  String _starterName(AppLocalizations l10n, String id) {
+    switch (id) {
+      case 'c25k':
+        return l10n.planNewStarterC25k;
+      case 'half_12wk':
+        return l10n.planNewStarterHalf12;
+      case 'marathon_16wk':
+        return l10n.planNewStarterMarathon16;
+      default:
+        return id;
+    }
+  }
+
+  Future<void> _pickStarter() async {
+    if (_creatingStarter) return;
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<StarterPlan>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _StarterPicker(
+        plans: starterPlans,
+        nameFor: (id) => _starterName(l10n, id),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final generated = instantiateStarter(picked.id, _startDate, age: _viewerAge);
+    if (generated == null) return;
+    setState(() => _creatingStarter = true);
+    try {
+      final plan = await widget.training
+          .createPlan(
+            name: _starterName(l10n, picked.id),
+            goalEvent: picked.goalEvent,
+            goalDistanceM: generated.goalDistanceM,
+            startDate: _startDate,
+            daysPerWeek: picked.daysPerWeek,
+            generated: generated,
+          )
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              PlanDetailScreen(training: widget.training, planId: plan.id),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _creatingStarter = false);
+        showTopBanner(context, l10n.planNewStarterCreateFailed(e.toString()));
       }
     }
   }
@@ -254,6 +310,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, 32 + bottomInset),
         children: [
+          _starterCard(theme, l10n),
+          const SizedBox(height: 20),
           if (_templates.isNotEmpty) ...[
             _templateCard(theme, l10n),
             const SizedBox(height: 20),
@@ -433,6 +491,53 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _starterCard(ThemeData theme, AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.fitness_center,
+                  size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(l10n.planNewStarterTitle,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(l10n.planNewStarterSubtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              )),
+          const SizedBox(height: 10),
+          FilledButton.tonalIcon(
+            onPressed: _creatingStarter ? null : _pickStarter,
+            icon: _creatingStarter
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add, size: 18),
+            label: Text(_creatingStarter
+                ? l10n.planNewStarterCreating
+                : l10n.planNewStarterButton),
           ),
         ],
       ),
@@ -632,6 +737,60 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         final n = int.tryParse(s);
         if (n != null && n >= min && n <= max) onChanged(n);
       },
+    );
+  }
+}
+
+/// Modal that lists the built-in starter plans and pops the chosen
+/// [StarterPlan] (or `null` on cancel). Pure presentation — the parent
+/// instantiates + creates so cancel doesn't leave a half-state.
+class _StarterPicker extends StatelessWidget {
+  final List<StarterPlan> plans;
+  final String Function(String id) nameFor;
+  const _StarterPicker({required this.plans, required this.nameFor});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(l10n.planNewStarterPickerTitle,
+                style: theme.textTheme.titleLarge),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: plans.length,
+                itemBuilder: (_, i) {
+                  final p = plans[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_note),
+                    title: Text(nameFor(p.id)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(context, p),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(l10n.planNewStarterPickerCancel),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
