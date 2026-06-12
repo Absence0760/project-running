@@ -518,6 +518,17 @@ The Stripe Connect marketplace ledger (migration `20261229_001`; design in [club
 
 **Narrow unions** (TS ↔ CHECK lockstep, in `check_constraint_unions.mjs` `PAIRS`): `OrderStatus`, `RefundPolicy`, `EventModality` (see `apps/web/src/lib/types.ts`). pgtap coverage: `supabase/tests/paid_events_test.sql` (pricing rejected without/with non-charges-enabled host, buyer reads only own order, organiser reads all, user-JWT cannot insert or flip order status, service role can).
 
+#### Session plans — `session_plans` / `session_plan_blocks` / `session_plan_items` (session_planner.md P1)
+
+Reusable yoga/pilates/class movement sequences (a sibling of the gym routine engine — see [decisions.md § 140](../architecture/decisions.md)). Migration `20270103_001`.
+
+- **`session_plans`** — `id` PK, `author_id` (FK → `auth.users`, the creator), `club_id` (nullable FK → `clubs`, cascade; set when a club owns the plan, mirroring `routes.club_id`), `title`, `discipline` (free text), `equipment` (nullable), `est_duration_min` (nullable cached estimate, recomputed client-side on save), `is_public` (default false), `created_at`, `updated_at`. RLS: author owns own (`auth.uid() = author_id`, all ops); `is_public = true` world-readable; club-owned readable by `private.is_club_member(club_id)` + writable by `private.is_club_admin(club_id)` — the club-owned-routes pattern (`20260520_001`).
+- **`session_plan_blocks`** — `id` PK, `plan_id` (FK, cascade), `position` (int), `name` (nullable — a flat plan has no blocks). RLS inherits the parent plan's visibility (a single FOR ALL policy keyed on the parent's author/public/member predicate, with WITH CHECK gating writes to author-or-club-admin).
+- **`session_plan_items`** — `id` PK, `plan_id` (FK, cascade), `block_id` (nullable FK → blocks, cascade), `position`, `movement_name`, `kind` (CHECK `in ('hold','reps','flow')` — narrow union `SessionItemKind`, in `check_constraint_unions.mjs`), `duration_s` (nullable, for hold/flow), `reps` (nullable, for reps), `per_side` (default false — split into L/R at expand time by `expandSessionSteps`), `tempo` (nullable), `cue` (nullable). RLS inherits the parent.
+- **`events.session_plan_id`** — nullable FK → `session_plans` (`on delete set null`). A `class` event optionally attaches a full sequence (the rich successor to the `gym_template` jsonb hint). Set **only by an event organiser** — the `enforce_event_session_plan_organiser` BEFORE trigger raises `42501` for a non-organiser (defence-in-depth behind the events UPDATE RLS), with a trusted-caller bypass for the service role + direct SQL. The column carries an explicit `grant select (session_plan_id) ... to authenticated, anon` because `events` is under a column-level SELECT lockdown.
+
+**Narrow union**: `SessionItemKind = 'hold' | 'reps' | 'flow'`. pgtap coverage: `supabase/tests/session_plans_rls_test.sql` (author own read/write, public world-read, club member-read / admin-write, the kind CHECK, organiser-only `events.session_plan_id`).
+
 ### Training & coaching
 
 #### `training_plans` / `plan_weeks` / `plan_workouts`

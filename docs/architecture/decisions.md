@@ -2989,6 +2989,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 140. Yoga/pilates session content uses a dedicated `session_plans` engine (mirroring gym routines), not the gym-routine schema
+
+**Decided (2026-06-11, P1 shipped):** the yoga/pilates domain is time-or-reps × per-side × sequence-critical × breath-cue — not sets × reps × load — so it gets a sibling relational family (`session_plans` / `session_plan_blocks` / `session_plan_items`, migration `20270103_001`) that mirrors the gym-routine engine's *shape* (plan→blocks→items, an expand-once parity-paired pure helper, self-hiding) while diverging on the axes. The `kind` column is a narrow union + CHECK (`SessionItemKind = hold|reps|flow`) registered in `check_constraint_unions.mjs`. A `class` event optionally attaches a `session_plan_id` (the rich successor to the lightweight `events.gym_template` jsonb seam, which stays as the zero-effort path); only an event organiser may set it (a BEFORE trigger backs the events UPDATE RLS), and the column carries an explicit SELECT grant because `events` is under a column-level lockdown (20260818_001). RLS mirrors club-owned routes: author owns, `is_public` is world-readable, club-owned plans are member-read / admin-write.
+
+**Why a new engine, not gym routines.** Reusing gym routines would force load/RPE semantics onto poses and lose hold-time + per-side + flow ordering. The expand helper (`expandSessionSteps`, web `social/session_steps.ts` ↔ mobile `session_steps.dart`) flattens blocks→items in position order and splits a per-side item into consecutive Left/Right steps, carrying cumulative time (a reps step with no duration contributes 0).
+
+**Trade-off.** P1 builds the session schema before execution proves out — accepted because it is additive, web-first, independently useful (build + read a sequence even with no runner), and gate-free on the legal axis (no payments, no sub-processor). P1 is the validation probe; P2–P4 (follow-along runner, TTS, `workoutDraftFromSession` logging a `gym_workout`, `LocalSessionStore`) are gated behind it and remain deferred.
+
+**Don't re-litigate** by re-modelling session content onto `gym_workouts` rows or building the runner/logging before P1 shows instructors/self-practitioners actually author sessions. Full design in [session_planner.md](../features/session_planner.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
