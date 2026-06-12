@@ -1,7 +1,9 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../exercise_history.dart';
+import '../gym_progression.dart';
 import '../gym_prs.dart';
 import '../gym_routine.dart' as routine_helper;
 import '../l10n/date_format.dart';
@@ -18,6 +20,24 @@ import 'gym_screen.dart' show gymExerciseSuggestions, gymSetHistory;
 
 typedef _SetRef = ({int index, Map<String, dynamic> set});
 typedef _Block = ({String name, List<_SetRef> sets});
+
+/// One P4 "next target" hint shown on the workout review. Weights canonical kg.
+/// Built from nextPrescription against this session's logged sets; the screen
+/// only renders it.
+class _NextTargetHint {
+  final String exerciseName;
+  final double? suggestedWeightKg;
+  final double? currentTopKg;
+  final num? currentTopReps;
+  final ProgressionReason reason;
+  const _NextTargetHint({
+    required this.exerciseName,
+    required this.suggestedWeightKg,
+    required this.currentTopKg,
+    required this.currentTopReps,
+    required this.reason,
+  });
+}
 
 /// Detail view for a single gym workout — mirrors web `/gym/[id]`. Exercise
 /// blocks with per-exercise PR chips, each set's reps × weight + RPE, notes,
@@ -50,11 +70,15 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   final LocalRoutineStore _routineStore = LocalRoutineStore();
   bool _routineStoreReady = false;
 
+  // P4: per-exercise "next target" hints from nextPrescription. Only populated
+  // for a from-routine session whose routine carries a progression scheme.
+  List<_NextTargetHint> _nextTargets = const [];
+
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChange);
-    _ensureLoaded();
+    _ensureLoaded().then((_) => _loadNextTargets());
     _initRoutines();
   }
 
@@ -100,6 +124,97 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await widget.store.syncWithServer(api);
+  }
+
+  static ProgressionScheme _schemeFromString(String s) {
+    switch (s) {
+      case 'linear':
+        return ProgressionScheme.linear;
+      case 'double_progression':
+        return ProgressionScheme.doubleProgression;
+      case 'five_by_five':
+        return ProgressionScheme.fiveByFive;
+      case 'percent_cycle':
+        return ProgressionScheme.percentCycle;
+      case 'rpe_autoreg':
+        return ProgressionScheme.rpeAutoreg;
+    }
+    return ProgressionScheme.none;
+  }
+
+  // P4: when this session ran a routine that carries a progression scheme,
+  // suggest the next target for each scheme-tracked exercise from THIS session's
+  // logged sets. Pure suggestion — never auto-applied. Self-hides for ad-hoc
+  // workouts (no routine_id) and 'none'-scheme exercises. Best-effort: a read /
+  // fetch failure leaves the chip hidden.
+  Future<void> _loadNextTargets() async {
+    final w = widget.store.byId(widget.workoutId);
+    if (w == null) return;
+    final meta = w.row['metadata'];
+    final routineId =
+        meta is Map ? meta[MetadataKeys.routineId] as String? : null;
+    if (routineId == null || routineId.isEmpty) return;
+
+    List<({GymRoutineExerciseRow exercise, List<GymRoutineSetRow> sets})>? exes;
+    try {
+      final api = widget.api;
+      if (api != null) {
+        final detail = await api.fetchGymRoutineDetail(routineId);
+        exes = detail?.exercises.toList();
+      }
+    } catch (e) {
+      debugPrint('gym_detail_screen: next-target routine fetch failed: $e');
+    }
+    if (exes == null) return;
+
+    final setsByKey = <String, List<ProgressionSetLike>>{};
+    for (final s in w.sets) {
+      final key = normaliseExerciseName((s['exercise_name'] as String?) ?? '');
+      if (key.isEmpty) continue;
+      (setsByKey[key] ??= []).add(ProgressionSetLike(
+        reps: s['reps'] as num?,
+        weightKg: s['weight_kg'] as num?,
+        rpe: s['rpe'] as num?,
+      ));
+    }
+
+    final out = <_NextTargetHint>[];
+    for (final e in exes) {
+      if (e.exercise.progression == 'none') continue;
+      final key = normaliseExerciseName(e.exercise.exerciseName);
+      final lastSets = setsByKey[key];
+      if (lastSets == null || lastSets.isEmpty) continue;
+      final firstSet = e.sets.isNotEmpty ? e.sets.first : null;
+      final params = e.exercise.progressionParams is Map
+          ? Map<String, Object?>.from(e.exercise.progressionParams as Map)
+          : <String, Object?>{};
+      final sug = nextPrescription(ProgressionInput(
+        scheme: _schemeFromString(e.exercise.progression),
+        lastSets: lastSets,
+        targetRepsMin: firstSet?.targetRepsMin,
+        targetRepsMax: firstSet?.targetRepsMax,
+        params: params,
+      ));
+      if (sug.reason == ProgressionReason.none) continue;
+
+      double? topKg;
+      num? topReps;
+      for (final s in lastSets) {
+        final wt = s.weightKg;
+        if (wt != null && wt > 0 && (topKg == null || wt > topKg)) {
+          topKg = wt.toDouble();
+          topReps = s.reps;
+        }
+      }
+      out.add(_NextTargetHint(
+        exerciseName: e.exercise.exerciseName,
+        suggestedWeightKg: sug.suggestedWeightKg,
+        currentTopKg: topKg,
+        currentTopReps: topReps,
+        reason: sug.reason,
+      ));
+    }
+    if (mounted) setState(() => _nextTargets = out);
   }
 
   Future<void> _edit(StoredGymWorkout w) async {
@@ -403,6 +518,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         const SizedBox(height: 16),
         for (final block in blocks)
           _exerciseBlock(block, prByExercise, prevByExercise, theme, l10n),
+        if (_nextTargets.isNotEmpty) _nextTargetsSection(theme, l10n),
         if (notes != null && notes.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
@@ -418,6 +534,110 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         ],
       ],
     );
+  }
+
+  Widget _nextTargetsSection(ThemeData theme, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.gymRoutineNextTarget.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.outline,
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [for (final h in _nextTargets) _nextChip(h, theme, l10n)],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Neutral / positive treatment — never the red/amber adherence colours.
+  Widget _nextChip(_NextTargetHint h, ThemeData theme, AppLocalizations l10n) {
+    final delta = _hintDelta(h, l10n);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            h.reason == ProgressionReason.deload
+                ? Icons.trending_down
+                : Icons.trending_up,
+            size: 14,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            h.exerciseName,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (delta != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              delta,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(width: 6),
+          Text(
+            _hintReason(h.reason, l10n),
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onPrimaryContainer),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _hintReason(ProgressionReason r, AppLocalizations l10n) {
+    switch (r) {
+      case ProgressionReason.increaseWeight:
+        return l10n.gymRoutineNextTargetIncreaseWeight;
+      case ProgressionReason.increaseReps:
+        return l10n.gymRoutineNextTargetIncreaseReps;
+      case ProgressionReason.deload:
+        return l10n.gymRoutineNextTargetDeload;
+      case ProgressionReason.hold:
+      case ProgressionReason.none:
+        return l10n.gymRoutineNextTargetHold;
+    }
+  }
+
+  String? _hintDelta(_NextTargetHint h, AppLocalizations l10n) {
+    if ((h.reason == ProgressionReason.increaseWeight ||
+            h.reason == ProgressionReason.deload) &&
+        h.suggestedWeightKg != null &&
+        h.currentTopKg != null &&
+        h.suggestedWeightKg != h.currentTopKg) {
+      final d = h.suggestedWeightKg! - h.currentTopKg!;
+      final mag = WeightFormat.format(d.abs(), activeWeightUnit);
+      return '${d > 0 ? '+' : '−'}$mag';
+    }
+    if (h.reason == ProgressionReason.increaseReps && h.currentTopReps != null) {
+      final from = h.currentTopReps!.toInt();
+      return l10n.gymRoutineNextTargetRepClimb(from, from + 1);
+    }
+    return null;
   }
 
   Widget _exerciseBlock(
