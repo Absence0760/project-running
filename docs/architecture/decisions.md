@@ -3063,6 +3063,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 146. The three reusable-plan engines share one create front door (`/plans/new` hub), but NOT one form or one club-create path
+
+**Decided (2026-06-12, commit `2b45a10f`).** The product grew three independent "reusable plan" engines — training plans (`/plans/new`, weeks × runs × paces), session plans (yoga/pilates, `session_plans`, timed pose sequences), and gym routines (`gym_routines`, sets × reps × load) — each with its own create surface. Session-plan create was the worst: it lived only on `/sessions`, which had **no nav entry point at all** (URL-only). We consolidate the **entry point**, not the data model: `/plans/new` becomes a hub with a Training / Session / Gym-routine chooser that swaps in the matching editor (`PlanEditor` / `SessionPlanEditor` / `RoutineEditor`). `?type=` selects the initial branch and `?club=<id>` targets a club; the club Templates tab's "New …" links deep-link in.
+
+**Why a chooser, not a merged form.** The three forms share almost no fields (a multi-week pace schedule vs. a single timed pose sequence vs. a sets×reps×load routine), so a single unified form would be worse, not better. The chooser gives one discoverable front door while keeping three correct editors underneath.
+
+**The club-create asymmetry is deliberate.** Only the **session** branch creates a club-owned artifact in one step (`createSessionPlan(club_id)` — the client insert whose RLS with-check validates only `author_id`, the accepted mild-spam vector noted in §145). Training and gym club templates stay **build-then-publish** (`setPlanIsTemplate` / the admin-gated `publish_gym_routine_as_template` RPC) — `createTrainingPlan`/`createGymRoutine` have no one-step club create, and the generators are heavier. So `?club=` is honoured one-step for session, informational for the other two.
+
+**Don't re-litigate** by trying to merge the three editors into one form, or by adding a one-step `club_id` create to training/gym without an admin-gated server path (would widen the §145 spam vector to two more engines). The standalone `/sessions` modal + `/gym/routines/new` routes stay as deep-link entry points. Pinned by `tests-e2e/plans/create-hub.spec.ts` + `tests-e2e/sessions/club-template-create.spec.ts`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
