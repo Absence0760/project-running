@@ -82,6 +82,7 @@ apps/backend/supabase/.temp/
 .claude/*.lock
 .claude/settings.local.json
 .claude/session-tasks.md
+.claude/workflows/
 
 # Local dev-services scratch: backgrounded job-worker binary + pid + log
 # (written by bin/dev-full.sh — npm run dev:full).
