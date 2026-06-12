@@ -4086,6 +4086,29 @@ class AppLocalizationsFr extends AppLocalizations {
   String get workoutUnlink => 'Dissocier';
 
   @override
+  String get workoutRelink => 'Réassocier';
+
+  @override
+  String get workoutRelinkTitle => 'Associer une autre course';
+
+  @override
+  String get workoutRelinkHint =>
+      'Choisissez une course proche de la date de cette séance pour la compter comme cette séance. Les courses déjà associées à une autre séance ne sont pas affichées.';
+
+  @override
+  String get workoutRelinkLoading => 'Recherche de vos courses…';
+
+  @override
+  String get workoutRelinkError =>
+      'Impossible de charger vos courses. Réessayez.';
+
+  @override
+  String get workoutRelinkEmpty => 'Aucune course éligible près de cette date.';
+
+  @override
+  String get workoutRelinkCurrent => 'Actuelle';
+
+  @override
   String get workoutStart => 'Démarrer la séance';
 
   @override
