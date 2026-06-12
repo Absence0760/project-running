@@ -11,6 +11,8 @@
  * lockstep (same parse tolerance, same build rules, same draft shape).
  */
 
+import type { SessionStep } from './session_steps';
+
 export interface EventGymTemplate {
 	discipline: string | null;
 	duration_min: number | null;
@@ -78,5 +80,36 @@ export function workoutDraftFromTemplate(
 	return {
 		title,
 		duration_s: min === null ? null : min * 60
+	};
+}
+
+/** One logged set per expanded session step (the class -> gym log seam, M5). */
+export interface SessionDraftItem {
+	exercise_name: string;
+	duration_s: number | null;
+	reps: number | null;
+}
+
+/**
+ * Produce the gym-log prefill from an expanded session plan (M5 follow-along
+ * log). The title prefers the class discipline, falling back to the plan title;
+ * the duration is the plan's total estimate. Each expanded step becomes one set
+ * (a per-side step stays two rows) — the side word is never baked into the
+ * exercise name, callers localize it.
+ */
+export function workoutDraftFromSession(
+	expanded: { steps: SessionStep[]; totalS: number },
+	planTitle: string | null | undefined,
+	discipline: string | null | undefined
+): GymWorkoutDraft & { sets: SessionDraftItem[] } {
+	const title = asString(discipline ?? null) ?? asString(planTitle ?? null);
+	return {
+		title,
+		duration_s: expanded.totalS > 0 ? expanded.totalS : null,
+		sets: expanded.steps.map((step) => ({
+			exercise_name: step.movementName,
+			duration_s: step.durationS,
+			reps: step.reps
+		}))
 	};
 }

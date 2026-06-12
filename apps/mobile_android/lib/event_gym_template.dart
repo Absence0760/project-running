@@ -10,6 +10,8 @@
 /// (same parse tolerance, same build rules, same draft shape).
 library;
 
+import 'session_steps.dart';
+
 class EventGymTemplate {
   const EventGymTemplate({required this.discipline, required this.durationMin});
 
@@ -71,5 +73,57 @@ GymWorkoutDraft workoutDraftFromTemplate(
   return GymWorkoutDraft(
     title: title,
     durationS: min == null ? null : min * 60,
+  );
+}
+
+/// One logged set per expanded session step (the class -> gym log seam, M5).
+class SessionDraftItem {
+  const SessionDraftItem({
+    required this.exerciseName,
+    required this.durationS,
+    required this.reps,
+  });
+
+  final String exerciseName;
+  final int? durationS;
+  final int? reps;
+}
+
+/// The gym-log prefill from an expanded session plan (M5 follow-along log):
+/// the draft head plus one set per expanded step.
+class SessionWorkoutDraft {
+  const SessionWorkoutDraft({
+    required this.title,
+    required this.durationS,
+    required this.sets,
+  });
+
+  final String? title;
+  final int? durationS;
+  final List<SessionDraftItem> sets;
+}
+
+/// Produce the gym-log prefill from an expanded session plan (M5 follow-along
+/// log). The title prefers the class discipline, falling back to the plan
+/// title; the duration is the plan's total estimate. Each expanded step becomes
+/// one set (a per-side step stays two rows) — the side word is never baked into
+/// the exercise name, callers localize it.
+SessionWorkoutDraft workoutDraftFromSession(
+  ExpandedSession expanded,
+  String? planTitle,
+  String? discipline,
+) {
+  final title = _asString(discipline) ?? _asString(planTitle);
+  return SessionWorkoutDraft(
+    title: title,
+    durationS: expanded.totalS > 0 ? expanded.totalS : null,
+    sets: [
+      for (final step in expanded.steps)
+        SessionDraftItem(
+          exerciseName: step.movementName,
+          durationS: step.durationS,
+          reps: step.reps,
+        ),
+    ],
   );
 }

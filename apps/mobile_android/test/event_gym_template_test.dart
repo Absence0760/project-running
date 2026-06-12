@@ -1,5 +1,28 @@
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/event_gym_template.dart';
+import '../lib/session_steps.dart';
+
+SessionStep _step({
+  String itemId = 'i',
+  String movementName = 'Move',
+  SessionItemKind kind = SessionItemKind.hold,
+  int? durationS = 30,
+  int? reps,
+  SessionSide? side,
+  int cumulativeS = 30,
+}) {
+  return SessionStep(
+    itemId: itemId,
+    movementName: movementName,
+    kind: kind,
+    durationS: durationS,
+    reps: reps,
+    tempo: null,
+    cue: null,
+    side: side,
+    cumulativeS: cumulativeS,
+  );
+}
 
 void main() {
   group('parseGymTemplate', () {
@@ -94,6 +117,104 @@ void main() {
       expect(d.durationS, isNull);
       final d2 = workoutDraftFromTemplate(null, '  ');
       expect(d2.title, isNull);
+    });
+  });
+
+  group('workoutDraftFromSession', () {
+    test('title from discipline when present', () {
+      final d = workoutDraftFromSession(
+        const ExpandedSession(steps: [], totalS: 0),
+        'Morning Flow',
+        'Vinyasa yoga',
+      );
+      expect(d.title, 'Vinyasa yoga');
+    });
+
+    test('title from planTitle when discipline null', () {
+      final d = workoutDraftFromSession(
+        const ExpandedSession(steps: [], totalS: 0),
+        'Morning Flow',
+        null,
+      );
+      expect(d.title, 'Morning Flow');
+    });
+
+    test('duration_s = totalS when > 0', () {
+      final d = workoutDraftFromSession(
+        const ExpandedSession(steps: [], totalS: 600),
+        'Flow',
+        'Yoga',
+      );
+      expect(d.durationS, 600);
+    });
+
+    test('duration_s null when totalS 0', () {
+      final d = workoutDraftFromSession(
+        const ExpandedSession(steps: [], totalS: 0),
+        'Flow',
+        'Yoga',
+      );
+      expect(d.durationS, isNull);
+    });
+
+    test('one set per step', () {
+      final expanded = ExpandedSession(
+        steps: [
+          _step(itemId: 'a', movementName: 'Plank', durationS: 30),
+          _step(itemId: 'b', movementName: 'Bridge', durationS: 45),
+        ],
+        totalS: 75,
+      );
+      final d = workoutDraftFromSession(expanded, 'Flow', 'Yoga');
+      expect(d.sets.length, 2);
+      expect(d.sets[0].exerciseName, 'Plank');
+      expect(d.sets[0].durationS, 30);
+      expect(d.sets[0].reps, isNull);
+      expect(d.sets[1].exerciseName, 'Bridge');
+      expect(d.sets[1].durationS, 45);
+    });
+
+    test('per-side step -> two sets', () {
+      final expanded = ExpandedSession(
+        steps: [
+          _step(
+              itemId: 'a',
+              movementName: 'Lunge',
+              durationS: 30,
+              side: SessionSide.left),
+          _step(
+              itemId: 'a',
+              movementName: 'Lunge',
+              durationS: 30,
+              side: SessionSide.right),
+        ],
+        totalS: 60,
+      );
+      final d = workoutDraftFromSession(expanded, 'Flow', 'Yoga');
+      expect(d.sets.length, 2);
+      expect(d.sets[0].exerciseName, 'Lunge');
+      expect(d.sets[1].exerciseName, 'Lunge');
+      expect(d.sets[0].durationS, 30);
+      expect(d.sets[1].durationS, 30);
+    });
+
+    test('reps step carries reps, null duration', () {
+      final expanded = ExpandedSession(
+        steps: [
+          _step(
+            movementName: 'Push-up',
+            kind: SessionItemKind.reps,
+            durationS: null,
+            reps: 12,
+          ),
+        ],
+        totalS: 0,
+      );
+      final d = workoutDraftFromSession(expanded, 'Flow', 'Yoga');
+      expect(d.sets.length, 1);
+      expect(d.sets[0].exerciseName, 'Push-up');
+      expect(d.sets[0].durationS, isNull);
+      expect(d.sets[0].reps, 12);
     });
   });
 }
