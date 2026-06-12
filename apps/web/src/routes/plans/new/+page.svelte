@@ -212,13 +212,7 @@
 		{backLabel}
 	</a>
 
-	<header class="page-header">
-		<p class="kicker">{m('plansNew.kicker')}</p>
-		<h1>{m(headingKey)}</h1>
-		<p class="tagline">
-			{m(taglineKey)}
-		</p>
-	</header>
+	<p class="kicker">{m('plansNew.kicker')}</p>
 
 	<div class="kind-chooser" role="group" aria-label={m('plansNew.chooserLabel')}>
 		<button
@@ -252,6 +246,13 @@
 			{m('plansNew.kindGym')}
 		</button>
 	</div>
+
+	<header class="page-header">
+		<h1>{m(headingKey)}</h1>
+		<p class="tagline">
+			{m(taglineKey)}
+		</p>
+	</header>
 
 	{#if kind === 'training'}
 	<section class="starter-picker">
@@ -372,7 +373,7 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--color-text-secondary);
-		margin: 0 0 var(--space-2xs);
+		margin: 0 0 var(--space-sm);
 	}
 	h1 {
 		font-size: 1.75rem;
@@ -404,12 +405,18 @@
 		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		font-weight: 600;
+		/* Equal width per tab so the active highlight never shifts the row. */
+		min-width: 8.5rem;
+		text-align: center;
+		white-space: nowrap;
 		padding: 0.5rem 1rem;
 		border-radius: var(--radius-md);
 		cursor: pointer;
+		transition: background 0.12s ease, color 0.12s ease;
 	}
-	.kind-tab:hover {
+	.kind-tab:hover:not(.active) {
 		color: var(--color-text);
+		background: color-mix(in srgb, var(--color-text) 6%, transparent);
 	}
 	.kind-tab.active {
 		background: var(--color-primary);

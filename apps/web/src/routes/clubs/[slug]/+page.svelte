@@ -1241,76 +1241,69 @@
 				</div>
 			{/if}
 		{:else if tab === 'templates'}
-			{#if clubTemplates.length > 0}
-				<p class="section-hint">
-					{tr('clubHome.templatesHint')}
-				</p>
-				<ul class="template-list">
-					{#each clubTemplates as t (t.id)}
-						<li class="template-row">
-							<a href="/plans/{t.id}" class="template-link">
-								<strong>{t.name}</strong>
-								<span class="template-meta">
-									{t.goal_event} · {formatDistance(Number(t.goal_distance_m))}
-									· {tr('clubHome.daysPerWeek', { n: t.days_per_week })}
-								</span>
-							</a>
-							<div class="template-actions">
-								{#if isMember}
-									<a href="/plans/new?from={t.id}" class="btn btn-primary btn-sm">
-										<span class="material-symbols" aria-hidden="true">content_copy</span>
-										{tr('clubHome.adopt')}
-									</a>
-								{/if}
-								{#if isAdmin}
-									<button
-										class="btn btn-outline btn-sm"
-										type="button"
-										onclick={() => unmakeTemplate(t.id)}
-										title={tr('clubHome.unpublishTitle')}
-									>
-										{tr('clubHome.unpublish')}
-									</button>
-								{/if}
-							</div>
-						</li>
-					{/each}
-				</ul>
-			{:else}
-				<div class="empty-card">
-					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-					<h3>{tr('clubHome.emptyTemplatesTitle')}</h3>
-					<p class="empty-text">
-						{#if isAdmin}
-							{tr('clubHome.emptyTemplatesAdmin')}
-						{:else}
-							{tr('clubHome.emptyTemplatesNonAdmin')}
-						{/if}
-					</p>
+			<!-- Training plan templates -->
+			<section class="template-group">
+				<div class="template-group-head">
+					<h3>{tr('clubHome.trainingTemplatesTitle')}</h3>
 					{#if isAdmin}
-						<div class="empty-actions">
-							<a href="/plans/new" class="btn btn-primary">
-								<span class="material-symbols" aria-hidden="true">add</span>
-								{tr('clubHome.createAPlan')}
-							</a>
-						</div>
+						<a class="btn btn-primary btn-sm" href="/plans/new?type=training">
+							<span class="material-symbols" aria-hidden="true">add</span>
+							{tr('clubHome.newTrainingTemplate')}
+						</a>
 					{/if}
 				</div>
-			{/if}
-
-			{#if sessionTemplates.length > 0 || isAdmin}
-				<h3 class="session-templates-head">{tr('clubHome.sessionTemplatesTitle')}</h3>
-				<p class="section-hint">{tr('clubHome.sessionTemplatesHint')}</p>
-				{#if isAdmin}
-					<a
-						class="btn btn-primary btn-sm new-session-template-btn"
-						href="/plans/new?type=session&club={club.id}"
-						data-testid="new-session-template"
-					>
-						<span class="material-symbols" aria-hidden="true">add</span>
-						{tr('clubHome.newSessionTemplate')}
-					</a>
+				<p class="section-hint">{tr('clubHome.templatesHint')}</p>
+				{#if clubTemplates.length > 0}
+					<ul class="template-list">
+						{#each clubTemplates as t (t.id)}
+							<li class="template-row">
+								<a href="/plans/{t.id}" class="template-link">
+									<strong>{t.name}</strong>
+									<span class="template-meta">
+										{t.goal_event} · {formatDistance(Number(t.goal_distance_m))}
+										· {tr('clubHome.daysPerWeek', { n: t.days_per_week })}
+									</span>
+								</a>
+								<div class="template-actions">
+									{#if isMember}
+										<a href="/plans/new?from={t.id}" class="btn btn-primary btn-sm">
+											<span class="material-symbols" aria-hidden="true">content_copy</span>
+											{tr('clubHome.adopt')}
+										</a>
+									{/if}
+									{#if isAdmin}
+										<button
+											class="btn btn-outline btn-sm"
+											type="button"
+											onclick={() => unmakeTemplate(t.id)}
+											title={tr('clubHome.unpublishTitle')}
+										>
+											{tr('clubHome.unpublish')}
+										</button>
+									{/if}
+								</div>
+							</li>
+						{/each}
+					</ul>
 				{/if}
+			</section>
+
+			<!-- Session templates -->
+			<section class="template-group">
+				<div class="template-group-head">
+					<h3>{tr('clubHome.sessionTemplatesTitle')}</h3>
+					{#if isAdmin}
+						<a
+							class="btn btn-primary btn-sm"
+							href="/plans/new?type=session&club={club.id}"
+							data-testid="new-session-template"
+						>
+							<span class="material-symbols" aria-hidden="true">add</span>
+							{tr('clubHome.newSessionTemplate')}
+						</a>
+					{/if}
+				</div>
+				<p class="section-hint">{tr('clubHome.sessionTemplatesHint')}</p>
 				{#if sessionTemplates.length > 0}
 					<ul class="template-list">
 						{#each sessionTemplates as s (s.id)}
@@ -1339,41 +1332,50 @@
 							</li>
 						{/each}
 					</ul>
-				{:else if isAdmin}
-					<p class="section-hint">{tr('clubHome.emptySessionTemplates')}</p>
 				{/if}
-			{/if}
+			</section>
 
-			{#if gymRoutineTemplates.length > 0}
-				<h3 class="session-templates-head">{tr('clubHome.gymRoutineTemplatesTitle')}</h3>
+			<!-- Gym routine templates -->
+			<section class="template-group">
+				<div class="template-group-head">
+					<h3>{tr('clubHome.gymRoutineTemplatesTitle')}</h3>
+					{#if isAdmin}
+						<a class="btn btn-primary btn-sm" href="/plans/new?type=gym">
+							<span class="material-symbols" aria-hidden="true">add</span>
+							{tr('clubHome.newGymTemplate')}
+						</a>
+					{/if}
+				</div>
 				<p class="section-hint">{tr('clubHome.gymRoutineTemplatesHint')}</p>
-				<ul class="template-list">
-					{#each gymRoutineTemplates as g (g.id)}
-						<li class="template-row">
-							<a href="/gym/routines/{g.id}" class="template-link">
-								<strong>{g.title}</strong>
-								<span class="template-meta">
-									{tr('clubHome.routineExerciseCount', { n: g.exercise_count })}
-								</span>
-							</a>
-							<div class="template-actions">
-								{#if isMember}
-									<button
-										class="btn btn-primary btn-sm"
-										type="button"
-										disabled={adoptingRoutine === g.id}
-										onclick={() => adoptGymRoutineTemplate(g.id)}
-										data-testid="gym-routine-template-adopt"
-									>
-										<span class="material-symbols" aria-hidden="true">content_copy</span>
-										{tr('clubHome.adopt')}
-									</button>
-								{/if}
-							</div>
-						</li>
-					{/each}
-				</ul>
-			{/if}
+				{#if gymRoutineTemplates.length > 0}
+					<ul class="template-list">
+						{#each gymRoutineTemplates as g (g.id)}
+							<li class="template-row">
+								<a href="/gym/routines/{g.id}" class="template-link">
+									<strong>{g.title}</strong>
+									<span class="template-meta">
+										{tr('clubHome.routineExerciseCount', { n: g.exercise_count })}
+									</span>
+								</a>
+								<div class="template-actions">
+									{#if isMember}
+										<button
+											class="btn btn-primary btn-sm"
+											type="button"
+											disabled={adoptingRoutine === g.id}
+											onclick={() => adoptGymRoutineTemplate(g.id)}
+											data-testid="gym-routine-template-adopt"
+										>
+											<span class="material-symbols" aria-hidden="true">content_copy</span>
+											{tr('clubHome.adopt')}
+										</button>
+									{/if}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
 		{:else if tab === 'members'}
 			{#if members.length === 0}
 				<div class="empty-card">
@@ -2323,14 +2325,25 @@
 		margin: 0 0 var(--space-md) 0;
 	}
 
-	.session-templates-head {
-		margin: var(--space-xl) 0 var(--space-2xs) 0;
-		font-size: 1.05rem;
+	.template-group {
+		margin-bottom: var(--space-2xl);
+	}
+	.template-group-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+		margin-bottom: var(--space-2xs);
+	}
+	.template-group-head h3 {
+		margin: 0;
+		font-size: 1.1rem;
 		font-weight: 700;
 	}
-
-	.new-session-template-btn {
-		margin-bottom: var(--space-sm);
+	.template-group .section-hint {
+		margin-top: 0;
+		margin-bottom: var(--space-md);
 	}
 
 	.template-list {
