@@ -17,7 +17,9 @@ import { USER_A } from '../fixtures/users';
 
 const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
 
-async function plantTodayWorkout(): Promise<{ workoutId: string; prevDate: string }> {
+async function plantTodayWorkout(
+	excludeId?: string
+): Promise<{ workoutId: string; prevDate: string }> {
 	const admin = getAdminClient();
 	const { data: weeks } = await admin
 		.from('plan_weeks')
@@ -25,13 +27,17 @@ async function plantTodayWorkout(): Promise<{ workoutId: string; prevDate: strin
 		.eq('plan_id', SYDNEY_HALF_PLAN_ID);
 	const weekIds = (weeks ?? []).map((w) => (w as { id: string }).id);
 	const today = new Date().toISOString().slice(0, 10);
-	const { data: candidates } = await admin
+	// `excludeId` lets a caller plant a SECOND distinct workout on today —
+	// without it the just-moved row (now at `today`) would be re-picked.
+	let query = admin
 		.from('plan_workouts')
 		.select('id, scheduled_date, target_distance_m')
 		.in('week_id', weekIds)
 		.neq('kind', 'rest')
 		.not('target_distance_m', 'is', null)
-		.gte('scheduled_date', today)
+		.gte('scheduled_date', today);
+	if (excludeId) query = query.neq('id', excludeId);
+	const { data: candidates } = await query
 		.order('scheduled_date', { ascending: true })
 		.limit(1);
 	const row = candidates?.[0] as
@@ -111,12 +117,19 @@ test.describe('Workout re-link picker', () => {
 			const modal = page.locator('[data-testid="relink-modal"]');
 			await expect(modal).toBeVisible({ timeout: 10_000 });
 
-			// Both runs are eligible (in-window, neither linked elsewhere).
-			const runButtons = modal.locator('button.relink-run');
-			await expect(runButtons).toHaveCount(2, { timeout: 10_000 });
+			// runA shows as the current link; runB is offered as an eligible
+			// re-link target. (The seed user has its own in-window runs too, so
+			// assert on the specific runs by id rather than an exact count.)
+			await expect(modal.locator(`button.relink-run[data-run-id="${runA}"]`)).toHaveClass(
+				/current/,
+				{ timeout: 10_000 }
+			);
+			const runBButton = modal.locator(`button.relink-run[data-run-id="${runB}"]`);
+			await expect(runBButton).toBeVisible({ timeout: 10_000 });
+			await expect(runBButton).not.toHaveClass(/current/);
 
-			// Pick the run that is NOT the current one (runB).
-			await modal.locator('button.relink-run:not(.current)').click();
+			// Re-link to runB specifically.
+			await runBButton.click();
 
 			// The link flips to runB.
 			await expect
@@ -165,7 +178,25 @@ test.describe('Workout re-link picker', () => {
 		// Move TWO of the plan's workouts to today so we can link a run
 		// to one and verify it's hidden from the other's picker.
 		const { workoutId: workoutId1, prevDate: prev1 } = await plantTodayWorkout();
-		const { workoutId: workoutId2, prevDate: prev2 } = await plantTodayWorkout();
+		// workout2 only needs to OWN runFree (so runFree is excluded from
+		// workout1's picker) — it must NOT be moved to today as well, which would
+		// collide with workout1 on the (week_id, scheduled_date) one-per-day
+		// constraint. Pick a distinct workout and leave its date untouched.
+		const { data: weeks } = await admin
+			.from('plan_weeks')
+			.select('id')
+			.eq('plan_id', SYDNEY_HALF_PLAN_ID);
+		const weekIds = (weeks ?? []).map((w) => (w as { id: string }).id);
+		const { data: w2cands } = await admin
+			.from('plan_workouts')
+			.select('id')
+			.in('week_id', weekIds)
+			.neq('kind', 'rest')
+			.not('target_distance_m', 'is', null)
+			.neq('id', workoutId1)
+			.limit(1);
+		const workoutId2 = (w2cands?.[0] as { id: string } | undefined)?.id;
+		if (!workoutId2) throw new Error('no second workout to hold runFree');
 
 		const { data: w1Row } = await admin
 			.from('plan_workouts')
@@ -212,11 +243,13 @@ test.describe('Workout re-link picker', () => {
 			const modal = page.locator('[data-testid="relink-modal"]');
 			await expect(modal).toBeVisible({ timeout: 10_000 });
 
-			// workout1's picker shows only its current run (runForW1).
-			// runFree is linked to workout2 → excluded.
-			const runButtons = modal.locator('button.relink-run');
-			await expect(runButtons).toHaveCount(1, { timeout: 10_000 });
-			await expect(modal.locator('button.relink-run.current')).toHaveCount(1);
+			// workout1's picker shows its current run (runForW1) but must NOT
+			// offer runFree — it's linked to workout2 (the double-count guard).
+			// Seed runs may also appear, so assert on these two specifically.
+			await expect(
+				modal.locator(`button.relink-run[data-run-id="${runForW1}"]`)
+			).toHaveClass(/current/, { timeout: 10_000 });
+			await expect(modal.locator(`button.relink-run[data-run-id="${runFree}"]`)).toHaveCount(0);
 		} finally {
 			await admin
 				.from('plan_workouts')
@@ -224,14 +257,11 @@ test.describe('Workout re-link picker', () => {
 				.in('id', [workoutId1, workoutId2]);
 			if (runForW1) await deleteRun(runForW1).catch(() => {});
 			if (runFree) await deleteRun(runFree).catch(() => {});
+			// Only workout1 was moved; restore its date. workout2 kept its own.
 			await admin
 				.from('plan_workouts')
 				.update({ scheduled_date: prev1 })
 				.eq('id', workoutId1);
-			await admin
-				.from('plan_workouts')
-				.update({ scheduled_date: prev2 })
-				.eq('id', workoutId2);
 		}
 	});
 });

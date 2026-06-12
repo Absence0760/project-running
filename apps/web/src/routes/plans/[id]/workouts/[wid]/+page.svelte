@@ -421,6 +421,7 @@
 					<button
 						class="relink-run"
 						class:current={run.id === workout?.completed_run_id}
+						data-run-id={run.id}
 						disabled={relinkSaving}
 						onclick={() => pickRelink(run.id)}
 					>
