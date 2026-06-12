@@ -605,6 +605,8 @@ void main() {
       'lib/local_gear_store.dart',
       'lib/local_gym_store.dart',
       'lib/local_food_store.dart',
+      'lib/local_session_store.dart',
+      'lib/local_routine_store.dart',
       'lib/offline_sync_store.dart',
     ];
     for (final path in noBareWriteStores) {
