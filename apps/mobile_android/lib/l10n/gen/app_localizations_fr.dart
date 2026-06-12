@@ -7108,6 +7108,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Suivez chaussures + vélos et le kilométrage par article';
 
   @override
+  String get settingsTabCoachingSubtitle =>
+      'Encadrez des athlètes ou suivez votre propre coach';
+
+  @override
   String get settingsTabProSubtitle =>
       'S\'abonner, restaurer les achats, gérer la facturation';
 
@@ -7972,4 +7976,233 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get sessionRunSwitchSides => 'Changez de côté';
+
+  @override
+  String get coachingTitle => 'Coaching';
+
+  @override
+  String get coachingLede =>
+      'Encadrez des athlètes en partageant un lien d\'invitation, puis suivez leur entraînement. Ou suivez votre propre coach ici.';
+
+  @override
+  String get coachingCancel => 'Annuler';
+
+  @override
+  String get coachingMyAthletes => 'Mes athlètes';
+
+  @override
+  String get coachingMyAthletesSub => 'Coureurs ayant accepté votre invitation';
+
+  @override
+  String get coachingInviteAnAthlete => 'Inviter un athlète';
+
+  @override
+  String get coachingCreating => 'Création…';
+
+  @override
+  String get coachingPendingInvite => 'Invitation en attente';
+
+  @override
+  String coachingPendingInviteSub(String date) {
+    return 'Créée le $date · pas encore acceptée';
+  }
+
+  @override
+  String get coachingCopyLink => 'Copier le lien';
+
+  @override
+  String get coachingShareLink => 'Partager le lien';
+
+  @override
+  String get coachingRevoke => 'Révoquer';
+
+  @override
+  String get coachingNoAthletes =>
+      'Aucun athlète pour l\'instant. Invitez-en un pour commencer.';
+
+  @override
+  String get coachingRunner => 'Coureur';
+
+  @override
+  String coachingCoachingSince(String date) {
+    return 'Coaching depuis le $date';
+  }
+
+  @override
+  String get coachingReview => 'Examiner';
+
+  @override
+  String get coachingRemove => 'Retirer';
+
+  @override
+  String get coachingMyCoaches => 'Mes coachs';
+
+  @override
+  String get coachingMyCoachesSub =>
+      'Coachs qui peuvent voir votre entraînement';
+
+  @override
+  String get coachingNoCoaches =>
+      'Vous n\'avez pas encore accepté d\'invitation de coach.';
+
+  @override
+  String get coachingCoach => 'Coach';
+
+  @override
+  String coachingLinkedSince(String date) {
+    return 'Lié depuis le $date';
+  }
+
+  @override
+  String get coachingLeave => 'Quitter';
+
+  @override
+  String get coachingInviteLinkCopied => 'Lien d\'invitation copié';
+
+  @override
+  String get coachingThisAthlete => 'cet athlète';
+
+  @override
+  String get coachingThisCoach => 'ce coach';
+
+  @override
+  String get coachingRevokeTitle => 'Révoquer l\'invitation ?';
+
+  @override
+  String get coachingRevokeBody =>
+      'Le lien d\'invitation cessera de fonctionner. Vous pouvez toujours en créer un nouveau.';
+
+  @override
+  String get coachingRemoveAthleteTitle => 'Retirer l\'athlète ?';
+
+  @override
+  String coachingRemoveAthleteBody(String name) {
+    return 'Arrêter le coaching de $name ? Vous perdrez l\'accès à ses courses et plans.';
+  }
+
+  @override
+  String get coachingLeaveCoachTitle => 'Quitter le coach ?';
+
+  @override
+  String coachingLeaveCoachBody(String name) {
+    return 'Ne plus partager votre entraînement avec $name ?';
+  }
+
+  @override
+  String coachingLoadError(String error) {
+    return 'Impossible de charger le coaching : $error';
+  }
+
+  @override
+  String coachingCreateInviteError(String error) {
+    return 'Impossible de créer l\'invitation : $error';
+  }
+
+  @override
+  String coachingRevokeInviteError(String error) {
+    return 'Impossible de révoquer l\'invitation : $error';
+  }
+
+  @override
+  String coachingRemoveAthleteError(String error) {
+    return 'Impossible de retirer l\'athlète : $error';
+  }
+
+  @override
+  String coachingEndLinkError(String error) {
+    return 'Impossible de mettre fin au lien : $error';
+  }
+
+  @override
+  String get coachingAthleteAthleteFallback => 'Athlète';
+
+  @override
+  String get coachingAthleteRunnerFallback => 'Coureur';
+
+  @override
+  String coachingAthleteCoachingSince(String date) {
+    return 'Coaching depuis le $date';
+  }
+
+  @override
+  String get coachingAthletePlanCompliance => 'Suivi du plan';
+
+  @override
+  String get coachingAthleteNoActivePlan => 'Aucun plan d\'entraînement actif.';
+
+  @override
+  String get coachingAthleteAssignTitle => 'Attribuer un plan';
+
+  @override
+  String coachingAthleteAssignHint(String name) {
+    return 'Choisissez l\'un de vos plans à attribuer à $name.';
+  }
+
+  @override
+  String get coachingAthleteAssignSelectLabel => 'Plan';
+
+  @override
+  String get coachingAthleteAssignSelectPlaceholder => 'Choisir un plan…';
+
+  @override
+  String get coachingAthleteAssignStartLabel => 'Date de début';
+
+  @override
+  String get coachingAthleteAssigning => 'Attribution…';
+
+  @override
+  String get coachingAthleteAssignButton => 'Attribuer le plan';
+
+  @override
+  String get coachingAthleteAssignNoPlans =>
+      'Créez d\'abord un plan d\'entraînement, puis vous pourrez l\'attribuer à vos athlètes.';
+
+  @override
+  String get coachingAthleteAssignedByYou => 'Attribué par vous';
+
+  @override
+  String get coachingAthleteCannotAssignHasPlan =>
+      'Cet athlète a déjà un plan actif. Il devra le terminer ou y mettre fin avant que vous puissiez en attribuer un nouveau.';
+
+  @override
+  String get coachingAthleteComplete => 'terminé';
+
+  @override
+  String coachingAthleteDoneCount(int done, int total) {
+    return '$done sur $total faits';
+  }
+
+  @override
+  String coachingAthleteMissedCount(int n) {
+    return '$n manqués';
+  }
+
+  @override
+  String get coachingAthleteStatusDone => 'Fait';
+
+  @override
+  String get coachingAthleteStatusMissed => 'Manqué';
+
+  @override
+  String get coachingAthleteStatusUpcoming => 'À venir';
+
+  @override
+  String get coachingAthleteRecentRuns => 'Courses récentes';
+
+  @override
+  String get coachingAthleteNoRunsYet =>
+      'Aucune course enregistrée pour l\'instant.';
+
+  @override
+  String get coachingAthletePrivate => 'Privé';
+
+  @override
+  String coachingAthleteAssignSuccess(String name) {
+    return 'Plan attribué à $name';
+  }
+
+  @override
+  String coachingAthleteLoadError(String error) {
+    return 'Impossible de charger l\'athlète : $error';
+  }
 }

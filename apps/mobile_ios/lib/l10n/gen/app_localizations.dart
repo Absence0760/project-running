@@ -11733,6 +11733,12 @@ abstract class AppLocalizations {
   /// **'Track shoes + bikes and per-item mileage'**
   String get settingsTabGearSubtitle;
 
+  /// Settings landing: Coaching tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Coach athletes or follow your own coach'**
+  String get settingsTabCoachingSubtitle;
+
   /// Settings landing: Pro & support tile subtitle
   ///
   /// In en, this message translates to:
@@ -13196,6 +13202,384 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Switch sides'**
   String get sessionRunSwitchSides;
+
+  /// Title of the coach-athlete roster screen
+  ///
+  /// In en, this message translates to:
+  /// **'Coaching'**
+  String get coachingTitle;
+
+  /// Intro line on the coaching roster screen
+  ///
+  /// In en, this message translates to:
+  /// **'Coach athletes by sharing an invite link, then review their training. Or follow your own coach here.'**
+  String get coachingLede;
+
+  /// Cancel button in coaching confirmation dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get coachingCancel;
+
+  /// Heading for the list of athletes a coach manages
+  ///
+  /// In en, this message translates to:
+  /// **'My athletes'**
+  String get coachingMyAthletes;
+
+  /// Subheading under My athletes
+  ///
+  /// In en, this message translates to:
+  /// **'Runners who accepted your invite'**
+  String get coachingMyAthletesSub;
+
+  /// Button that mints + copies a coach invite link
+  ///
+  /// In en, this message translates to:
+  /// **'Invite an athlete'**
+  String get coachingInviteAnAthlete;
+
+  /// Label while a coach invite is being minted
+  ///
+  /// In en, this message translates to:
+  /// **'Creating…'**
+  String get coachingCreating;
+
+  /// Title of an unredeemed coach invite row
+  ///
+  /// In en, this message translates to:
+  /// **'Pending invite'**
+  String get coachingPendingInvite;
+
+  /// Subtitle of a pending invite row
+  ///
+  /// In en, this message translates to:
+  /// **'Created {date} · not yet accepted'**
+  String coachingPendingInviteSub(String date);
+
+  /// Copy the invite link to the clipboard
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get coachingCopyLink;
+
+  /// Share the invite link via the OS share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Share link'**
+  String get coachingShareLink;
+
+  /// Revoke (delete) a pending coach invite
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get coachingRevoke;
+
+  /// Empty state for the athletes list
+  ///
+  /// In en, this message translates to:
+  /// **'No athletes yet. Invite one to get started.'**
+  String get coachingNoAthletes;
+
+  /// Fallback name for an athlete with no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get coachingRunner;
+
+  /// When a coach-athlete link was accepted
+  ///
+  /// In en, this message translates to:
+  /// **'Coaching since {date}'**
+  String coachingCoachingSince(String date);
+
+  /// Open the athlete review screen
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get coachingReview;
+
+  /// Remove an athlete from the coach's roster
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get coachingRemove;
+
+  /// Heading for the list of coaches an athlete is linked to
+  ///
+  /// In en, this message translates to:
+  /// **'My coaches'**
+  String get coachingMyCoaches;
+
+  /// Subheading under My coaches
+  ///
+  /// In en, this message translates to:
+  /// **'Coaches who can see your training'**
+  String get coachingMyCoachesSub;
+
+  /// Empty state for the coaches list
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t accepted a coach invite yet.'**
+  String get coachingNoCoaches;
+
+  /// Fallback name for a coach with no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Coach'**
+  String get coachingCoach;
+
+  /// When the athlete linked to this coach
+  ///
+  /// In en, this message translates to:
+  /// **'Linked since {date}'**
+  String coachingLinkedSince(String date);
+
+  /// End the link with a coach
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get coachingLeave;
+
+  /// Confirmation banner after copying an invite link
+  ///
+  /// In en, this message translates to:
+  /// **'Invite link copied'**
+  String get coachingInviteLinkCopied;
+
+  /// Fallback name in the remove-athlete confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'this athlete'**
+  String get coachingThisAthlete;
+
+  /// Fallback name in the leave-coach confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'this coach'**
+  String get coachingThisCoach;
+
+  /// Title of the revoke-invite confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke invite?'**
+  String get coachingRevokeTitle;
+
+  /// Body of the revoke-invite confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'The invite link will stop working. You can always create a new one.'**
+  String get coachingRevokeBody;
+
+  /// Title of the remove-athlete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Remove athlete?'**
+  String get coachingRemoveAthleteTitle;
+
+  /// Body of the remove-athlete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Stop coaching {name}? You\'ll lose access to their runs and plans.'**
+  String coachingRemoveAthleteBody(String name);
+
+  /// Title of the leave-coach confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Leave coach?'**
+  String get coachingLeaveCoachTitle;
+
+  /// Body of the leave-coach confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Stop sharing your training with {name}?'**
+  String coachingLeaveCoachBody(String name);
+
+  /// Error banner when the roster fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load coaching: {error}'**
+  String coachingLoadError(String error);
+
+  /// Error banner when minting an invite fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create invite: {error}'**
+  String coachingCreateInviteError(String error);
+
+  /// Error banner when revoking an invite fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t revoke invite: {error}'**
+  String coachingRevokeInviteError(String error);
+
+  /// Error banner when removing an athlete fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t remove athlete: {error}'**
+  String coachingRemoveAthleteError(String error);
+
+  /// Error banner when leaving a coach fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t end the link: {error}'**
+  String coachingEndLinkError(String error);
+
+  /// App-bar fallback title for an athlete with no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Athlete'**
+  String get coachingAthleteAthleteFallback;
+
+  /// Header fallback name for an athlete with no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get coachingAthleteRunnerFallback;
+
+  /// When the coaching link started, shown in the athlete header
+  ///
+  /// In en, this message translates to:
+  /// **'Coaching since {date}'**
+  String coachingAthleteCoachingSince(String date);
+
+  /// Heading of the plan-compliance card on the athlete review screen
+  ///
+  /// In en, this message translates to:
+  /// **'Plan compliance'**
+  String get coachingAthletePlanCompliance;
+
+  /// Shown when the athlete has no active plan
+  ///
+  /// In en, this message translates to:
+  /// **'No active training plan.'**
+  String get coachingAthleteNoActivePlan;
+
+  /// Heading of the assign-a-plan control
+  ///
+  /// In en, this message translates to:
+  /// **'Assign a plan'**
+  String get coachingAthleteAssignTitle;
+
+  /// Hint above the assign-a-plan control
+  ///
+  /// In en, this message translates to:
+  /// **'Pick one of your plans to assign to {name}.'**
+  String coachingAthleteAssignHint(String name);
+
+  /// Label for the plan dropdown in the assign control
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get coachingAthleteAssignSelectLabel;
+
+  /// Placeholder for the plan dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a plan…'**
+  String get coachingAthleteAssignSelectPlaceholder;
+
+  /// Label for the start-date picker in the assign control
+  ///
+  /// In en, this message translates to:
+  /// **'Start date'**
+  String get coachingAthleteAssignStartLabel;
+
+  /// Label on the assign button while assignment is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Assigning…'**
+  String get coachingAthleteAssigning;
+
+  /// Button that assigns the selected plan to the athlete
+  ///
+  /// In en, this message translates to:
+  /// **'Assign plan'**
+  String get coachingAthleteAssignButton;
+
+  /// Shown when the coach has no plans to assign
+  ///
+  /// In en, this message translates to:
+  /// **'Create a training plan first, then you can assign it to your athletes.'**
+  String get coachingAthleteAssignNoPlans;
+
+  /// Badge when the active plan was assigned by the viewing coach
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned by you'**
+  String get coachingAthleteAssignedByYou;
+
+  /// Hint when the athlete has a plan not assigned by this coach
+  ///
+  /// In en, this message translates to:
+  /// **'This athlete already has an active plan. They\'ll need to finish or end it before you can assign a new one.'**
+  String get coachingAthleteCannotAssignHasPlan;
+
+  /// Word following the completion percentage, e.g. '40% complete'
+  ///
+  /// In en, this message translates to:
+  /// **'complete'**
+  String get coachingAthleteComplete;
+
+  /// Completed-vs-total workout count
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} done'**
+  String coachingAthleteDoneCount(int done, int total);
+
+  /// Count of missed workouts
+  ///
+  /// In en, this message translates to:
+  /// **'{n} missed'**
+  String coachingAthleteMissedCount(int n);
+
+  /// Workout status pill: completed
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get coachingAthleteStatusDone;
+
+  /// Workout status pill: missed
+  ///
+  /// In en, this message translates to:
+  /// **'Missed'**
+  String get coachingAthleteStatusMissed;
+
+  /// Workout status pill: upcoming
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get coachingAthleteStatusUpcoming;
+
+  /// Heading of the recent-runs card on the athlete review screen
+  ///
+  /// In en, this message translates to:
+  /// **'Recent runs'**
+  String get coachingAthleteRecentRuns;
+
+  /// Empty state for the recent-runs list
+  ///
+  /// In en, this message translates to:
+  /// **'No runs logged yet.'**
+  String get coachingAthleteNoRunsYet;
+
+  /// Badge marking a private run visible to the coach
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get coachingAthletePrivate;
+
+  /// Success banner after assigning a plan
+  ///
+  /// In en, this message translates to:
+  /// **'Plan assigned to {name}'**
+  String coachingAthleteAssignSuccess(String name);
+
+  /// Error banner when the athlete review screen fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load athlete: {error}'**
+  String coachingAthleteLoadError(String error);
 }
 
 class _AppLocalizationsDelegate

@@ -9,6 +9,7 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import '../widgets/top_banner.dart';
+import 'coaching_screen.dart';
 import 'devices_screen.dart';
 import 'gear_screen.dart';
 import 'settings_account_screen.dart';
@@ -126,6 +127,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: l10n.safetyTileSubtitle,
               onTap: () => _openAfterSignIn(
                   (_) => SettingsSafetyScreen(api: widget.apiClient)),
+            ),
+            _tab(
+              icon: Icons.groups_outlined,
+              label: l10n.coachingTitle,
+              subtitle: l10n.settingsTabCoachingSubtitle,
+              onTap: () => _openAfterSignIn((_) => CoachingScreen(
+                    api: widget.apiClient!,
+                    preferences: widget.preferences,
+                  )),
             ),
             _SectionHeader(l10n.settingsSectionAppsData),
             _tab(
