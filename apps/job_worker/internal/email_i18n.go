@@ -29,9 +29,18 @@ type emailShared struct {
 	footerWelcome         string // ditto for the welcome
 	footerTransactional   string // service-message footer for billing/account lifecycle mail
 	footerSafety          string // footer for safety-contact mail (opted-in alert)
+	footerDigest          string // footer for the opt-in weekly engagement digest
 	safetyDefaultOwner    string // fallback owner name when display_name is unset
 	managePrefsLabel      string // HTML footer link text
 	managePrefsTextPrefix string // plain-text footer prefix before the URL
+	// Weekly-digest stat labels. The handler builds one human stats line
+	// from these + the DigestSummary counts; "%d" takes the count. The
+	// distance label takes the already-formatted km string ("%s").
+	digestStatRuns     string // e.g. "%d runs"
+	digestStatDistance string // e.g. "%s total"
+	digestStatKudos    string // e.g. "%d kudos"
+	digestStatPBs      string // e.g. "%d new personal bests"
+	digestQuietWeek    string // shown when nothing happened in the window
 }
 
 var emailLocales = []string{"en", "de", "fr", "es", "ja", "pt-BR"}
@@ -104,54 +113,90 @@ var emailSharedByLocale = map[string]emailShared{
 		footerWelcome:         "You're receiving this because you just created a Threkir account.",
 		footerTransactional:   "This is a service message about your Threkir account.",
 		footerSafety:          "You're receiving this because you're listed as a safety contact for this runner on Threkir.",
+		footerDigest:          "You're receiving this weekly summary because you opted in. Unsubscribe any time:",
 		safetyDefaultOwner:    "A Threkir runner",
 		managePrefsLabel:      "Manage email preferences",
 		managePrefsTextPrefix: "Manage your email preferences:",
+		digestStatRuns:        "%d runs",
+		digestStatDistance:    "%s total",
+		digestStatKudos:       "%d kudos",
+		digestStatPBs:         "%d new personal bests",
+		digestQuietWeek:       "A quiet week — no runs logged. Lace up and we'll see you out there.",
 	},
 	"de": {
 		footerNotification:    "Du erhältst diese E-Mail aufgrund deiner Benachrichtigungseinstellungen.",
 		footerWelcome:         "Du erhältst diese E-Mail, weil du gerade ein Threkir-Konto erstellt hast.",
 		footerTransactional:   "Dies ist eine Service-Nachricht zu deinem Threkir-Konto.",
 		footerSafety:          "Du erhältst diese E-Mail, weil du bei Threkir als Sicherheitskontakt für diese Person eingetragen bist.",
+		footerDigest:          "Du erhältst diese wöchentliche Zusammenfassung, weil du sie abonniert hast. Jederzeit abbestellbar:",
 		safetyDefaultOwner:    "Ein Threkir-Läufer",
 		managePrefsLabel:      "E-Mail-Einstellungen verwalten",
 		managePrefsTextPrefix: "Verwalte deine E-Mail-Einstellungen:",
+		digestStatRuns:        "%d Läufe",
+		digestStatDistance:    "%s insgesamt",
+		digestStatKudos:       "%d Kudos",
+		digestStatPBs:         "%d neue Bestzeiten",
+		digestQuietWeek:       "Eine ruhige Woche — keine Läufe aufgezeichnet. Schnür die Schuhe, wir sehen uns draußen.",
 	},
 	"fr": {
 		footerNotification:    "Vous recevez cet e-mail en raison de vos paramètres de notification.",
 		footerWelcome:         "Vous recevez cet e-mail car vous venez de créer un compte Threkir.",
 		footerTransactional:   "Ceci est un message de service concernant votre compte Threkir.",
 		footerSafety:          "Vous recevez cet e-mail car vous êtes inscrit comme contact de sécurité de cette personne sur Threkir.",
+		footerDigest:          "Vous recevez ce résumé hebdomadaire car vous y êtes inscrit. Désinscription à tout moment :",
 		safetyDefaultOwner:    "Un coureur Threkir",
 		managePrefsLabel:      "Gérer les préférences e-mail",
 		managePrefsTextPrefix: "Gérez vos préférences e-mail :",
+		digestStatRuns:        "%d courses",
+		digestStatDistance:    "%s au total",
+		digestStatKudos:       "%d kudos",
+		digestStatPBs:         "%d nouveaux records personnels",
+		digestQuietWeek:       "Une semaine tranquille — aucune course enregistrée. Enfilez vos chaussures, on se retrouve dehors.",
 	},
 	"es": {
 		footerNotification:    "Recibes este correo por tus ajustes de notificaciones.",
 		footerWelcome:         "Recibes este correo porque acabas de crear una cuenta de Threkir.",
 		footerTransactional:   "Este es un mensaje de servicio sobre tu cuenta de Threkir.",
 		footerSafety:          "Recibes este correo porque figuras como contacto de seguridad de esta persona en Threkir.",
+		footerDigest:          "Recibes este resumen semanal porque te suscribiste. Puedes darte de baja cuando quieras:",
 		safetyDefaultOwner:    "Una persona de Threkir",
 		managePrefsLabel:      "Gestionar preferencias de correo",
 		managePrefsTextPrefix: "Gestiona tus preferencias de correo:",
+		digestStatRuns:        "%d carreras",
+		digestStatDistance:    "%s en total",
+		digestStatKudos:       "%d kudos",
+		digestStatPBs:         "%d nuevas marcas personales",
+		digestQuietWeek:       "Una semana tranquila: ninguna carrera registrada. Átate las zapatillas y nos vemos en la calle.",
 	},
 	"ja": {
 		footerNotification:    "通知設定に基づいてこのメールをお送りしています。",
 		footerWelcome:         "Threkir アカウントを作成されたため、このメールをお送りしています。",
 		footerTransactional:   "これは Threkir アカウントに関するサービス通知です。",
 		footerSafety:          "Threkir でこのランナーの緊急連絡先として登録されているため、このメールをお送りしています。",
+		footerDigest:          "週間サマリーの配信に登録されているため、このメールをお送りしています。配信はいつでも停止できます:",
 		safetyDefaultOwner:    "Threkir のランナー",
 		managePrefsLabel:      "メール設定を管理",
 		managePrefsTextPrefix: "メール設定の管理:",
+		digestStatRuns:        "%d 回のラン",
+		digestStatDistance:    "合計 %s",
+		digestStatKudos:       "%d 件の称賛",
+		digestStatPBs:         "%d 件の自己ベスト更新",
+		digestQuietWeek:       "静かな一週間でした。ランの記録はありません。シューズを履いて、また走りに出ましょう。",
 	},
 	"pt-BR": {
 		footerNotification:    "Você está recebendo este e-mail por causa das suas configurações de notificação.",
 		footerWelcome:         "Você está recebendo este e-mail porque acabou de criar uma conta no Threkir.",
 		footerTransactional:   "Esta é uma mensagem de serviço sobre a sua conta no Threkir.",
 		footerSafety:          "Você está recebendo este e-mail porque está cadastrado como contato de segurança desta pessoa no Threkir.",
+		footerDigest:          "Você está recebendo este resumo semanal porque se inscreveu. Cancele a inscrição quando quiser:",
 		safetyDefaultOwner:    "Um corredor do Threkir",
 		managePrefsLabel:      "Gerenciar preferências de e-mail",
 		managePrefsTextPrefix: "Gerencie suas preferências de e-mail:",
+		digestStatRuns:        "%d corridas",
+		digestStatDistance:    "%s no total",
+		digestStatKudos:       "%d kudos",
+		digestStatPBs:         "%d novos recordes pessoais",
+		digestQuietWeek:       "Uma semana tranquila — nenhuma corrida registrada. Calce o tênis e a gente se vê por aí.",
 	},
 }
 
@@ -175,6 +220,7 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"default":        {"You have a new notification", "You have a new notification on Threkir.", "New notification", "Open Threkir", []string{"You have a new notification on Threkir."}},
 		"safety_finish":  {"%s finished a run", "A run you're a safety contact for has finished.", "%s finished a run", "Open Threkir", []string{"Distance %s · time %s.", "You're a safety contact for this runner, so you're alerted when they finish — even on a private run. No action needed."}},
 		"safety_confirm": {"%s wants you as a safety contact", "Confirm to be alerted when they finish a run.", "%s wants you as a safety contact", "Confirm", []string{"%s added you as a safety contact on Threkir. Confirm and you'll get an email whenever they finish a run — even a private one — so you know they got back safely.", "If you don't recognise this, just ignore this email. Nothing is sent unless you confirm."}},
+		"weekly_digest":  {"Your week on Threkir", "Here's how your running week went.", "Your week in review", "Open Threkir", []string{"Here's a quick look at your week.", "Keep the streak going — log your next run and see how the week ahead shapes up."}},
 	},
 	"de": {
 		"event_reminder": {"Erinnerung: dein Event steht bevor", "Ein Event, für das du zugesagt hast, beginnt bald.", "Dein Event steht bevor", "Event ansehen", []string{"Ein Event, für das du zugesagt hast, beginnt bald.", "Öffne es für Treffpunkt, Uhrzeit und wer noch dabei ist."}},
@@ -193,6 +239,7 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"default":        {"Du hast eine neue Benachrichtigung", "Du hast eine neue Benachrichtigung auf Threkir.", "Neue Benachrichtigung", "Threkir öffnen", []string{"Du hast eine neue Benachrichtigung auf Threkir."}},
 		"safety_finish":  {"%s hat einen Lauf beendet", "Ein Lauf, für den du Sicherheitskontakt bist, wurde beendet.", "%s hat einen Lauf beendet", "Threkir öffnen", []string{"Distanz %s · Zeit %s.", "Du bist Sicherheitskontakt für diese Person und wirst daher benachrichtigt, wenn sie einen Lauf beendet — auch bei einem privaten Lauf. Es ist nichts weiter zu tun."}},
 		"safety_confirm": {"%s möchte dich als Sicherheitskontakt", "Bestätige, um benachrichtigt zu werden, wenn sie einen Lauf beendet.", "%s möchte dich als Sicherheitskontakt", "Bestätigen", []string{"%s hat dich bei Threkir als Sicherheitskontakt hinzugefügt. Wenn du bestätigst, erhältst du eine E-Mail, sobald diese Person einen Lauf beendet — auch einen privaten — damit du weißt, dass sie sicher zurück ist.", "Falls dir das nichts sagt, ignoriere diese E-Mail einfach. Ohne deine Bestätigung wird nichts gesendet."}},
+		"weekly_digest":  {"Deine Woche bei Threkir", "So lief deine Laufwoche.", "Deine Woche im Rückblick", "Threkir öffnen", []string{"Hier ein kurzer Blick auf deine Woche.", "Bleib dran — zeichne deinen nächsten Lauf auf und sieh, wie die kommende Woche wird."}},
 	},
 	"fr": {
 		"event_reminder": {"Rappel : votre événement approche", "Un événement auquel vous avez répondu présent commence bientôt.", "Votre événement approche", "Voir l'événement", []string{"Un événement auquel vous avez répondu présent commence bientôt.", "Ouvrez-le pour le point de rendez-vous, l'horaire et les autres participants."}},
@@ -211,6 +258,7 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"default":        {"Vous avez une nouvelle notification", "Vous avez une nouvelle notification sur Threkir.", "Nouvelle notification", "Ouvrir Threkir", []string{"Vous avez une nouvelle notification sur Threkir."}},
 		"safety_finish":  {"%s a terminé une course", "Une course pour laquelle vous êtes contact de sécurité est terminée.", "%s a terminé une course", "Ouvrir Threkir", []string{"Distance %s · temps %s.", "Vous êtes contact de sécurité de cette personne, vous êtes donc averti lorsqu'elle termine une course — même privée. Aucune action requise."}},
 		"safety_confirm": {"%s vous veut comme contact de sécurité", "Confirmez pour être averti lorsqu'elle termine une course.", "%s vous veut comme contact de sécurité", "Confirmer", []string{"%s vous a ajouté comme contact de sécurité sur Threkir. Confirmez et vous recevrez un e-mail chaque fois que cette personne termine une course — même privée — pour savoir qu'elle est bien rentrée.", "Si cela ne vous dit rien, ignorez simplement cet e-mail. Rien n'est envoyé sans votre confirmation."}},
+		"weekly_digest":  {"Votre semaine sur Threkir", "Voici comment s'est passée votre semaine de course.", "Votre semaine en revue", "Ouvrir Threkir", []string{"Voici un aperçu rapide de votre semaine.", "Gardez le rythme — enregistrez votre prochaine course et voyez comment s'annonce la semaine."}},
 	},
 	"es": {
 		"event_reminder": {"Recordatorio: tu evento se acerca", "Un evento al que confirmaste asistencia empieza pronto.", "Tu evento se acerca", "Ver evento", []string{"Tienes un evento que empieza pronto y al que confirmaste asistencia.", "Ábrelo para ver el punto de encuentro, la hora y quién más va."}},
@@ -229,6 +277,7 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"default":        {"Tienes una notificación nueva", "Tienes una notificación nueva en Threkir.", "Notificación nueva", "Abrir Threkir", []string{"Tienes una notificación nueva en Threkir."}},
 		"safety_finish":  {"%s terminó una carrera", "Ha terminado una carrera de la que eres contacto de seguridad.", "%s terminó una carrera", "Abrir Threkir", []string{"Distancia %s · tiempo %s.", "Eres contacto de seguridad de esta persona, así que recibes un aviso cuando termina una carrera, incluso si es privada. No tienes que hacer nada."}},
 		"safety_confirm": {"%s te quiere como contacto de seguridad", "Confirma para recibir un aviso cuando termine una carrera.", "%s te quiere como contacto de seguridad", "Confirmar", []string{"%s te añadió como contacto de seguridad en Threkir. Si confirmas, recibirás un correo cada vez que esta persona termine una carrera, incluso una privada, para que sepas que volvió a salvo.", "Si no reconoces esto, ignora este correo. No se envía nada a menos que confirmes."}},
+		"weekly_digest":  {"Tu semana en Threkir", "Así fue tu semana de carrera.", "Tu semana en resumen", "Abrir Threkir", []string{"Aquí tienes un vistazo rápido a tu semana.", "Mantén el ritmo: registra tu próxima carrera y mira cómo se presenta la semana."}},
 	},
 	"ja": {
 		"event_reminder": {"リマインダー：イベントがもうすぐ始まります", "参加予定のイベントがまもなく始まります。", "イベントがもうすぐ始まります", "イベントを見る", []string{"参加予定のイベントがまもなく始まります。", "集合場所・時間・参加者を確認しましょう。"}},
@@ -247,6 +296,7 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"default":        {"新しい通知があります", "Threkir に新しい通知があります。", "新しい通知", "Threkir を開く", []string{"Threkir に新しい通知があります。"}},
 		"safety_finish":  {"%s さんがランを終えました", "緊急連絡先になっているランが終了しました。", "%s さんがランを終えました", "Threkir を開く", []string{"距離 %s ・タイム %s。", "あなたはこのランナーの緊急連絡先のため、ランの終了時に通知されます（非公開のランでも）。対応は不要です。"}},
 		"safety_confirm": {"%s さんがあなたを緊急連絡先にしたいそうです", "確認すると、ランの終了時に通知を受け取れます。", "%s さんがあなたを緊急連絡先にしたいそうです", "確認する", []string{"%s さんが Threkir であなたを緊急連絡先に追加しました。確認すると、この方がランを終えるたびに（非公開のランでも）メールが届き、無事に戻ったことが分かります。", "心当たりがない場合は、このメールを無視してください。確認しない限り何も送信されません。"}},
+		"weekly_digest":  {"今週の Threkir", "今週のランの記録をまとめました。", "今週のふり返り", "Threkir を開く", []string{"今週の記録をかんたんにご紹介します。", "この調子で続けましょう。次のランを記録して、来週の調子を見てみましょう。"}},
 	},
 	"pt-BR": {
 		"event_reminder": {"Lembrete: seu evento está chegando", "Um evento que você confirmou presença começa em breve.", "Seu evento está chegando", "Ver evento", []string{"Você tem um evento que começa em breve e que você confirmou presença.", "Abra para ver o ponto de encontro, o horário e quem mais vai."}},
@@ -265,5 +315,6 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"default":        {"Você tem uma nova notificação", "Você tem uma nova notificação no Threkir.", "Nova notificação", "Abrir Threkir", []string{"Você tem uma nova notificação no Threkir."}},
 		"safety_finish":  {"%s concluiu uma corrida", "Uma corrida da qual você é contato de segurança foi concluída.", "%s concluiu uma corrida", "Abrir Threkir", []string{"Distância %s · tempo %s.", "Você é contato de segurança desta pessoa, então é avisado quando ela conclui uma corrida — mesmo uma privada. Nenhuma ação é necessária."}},
 		"safety_confirm": {"%s quer você como contato de segurança", "Confirme para ser avisado quando concluir uma corrida.", "%s quer você como contato de segurança", "Confirmar", []string{"%s adicionou você como contato de segurança no Threkir. Se confirmar, você receberá um e-mail sempre que essa pessoa concluir uma corrida — mesmo uma privada — para saber que ela voltou em segurança.", "Se você não reconhece isso, basta ignorar este e-mail. Nada é enviado a menos que você confirme."}},
+		"weekly_digest":  {"Sua semana no Threkir", "Veja como foi sua semana de corrida.", "Sua semana em resumo", "Abrir Threkir", []string{"Aqui está um resumo rápido da sua semana.", "Mantenha o ritmo — registre sua próxima corrida e veja como será a semana que vem."}},
 	},
 }

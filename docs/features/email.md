@@ -93,12 +93,32 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
 
 ## Planned / not built
 
-- [ ] **Weekly digest + lifecycle drip** (engagement) — mileage/PB/kudos digest
-  (weekly pg_cron → per-opted-in-user `lifecycle_email`), re-engagement,
-  onboarding drip, streak/goal nudges. **Prerequisites** (bulk/marketing mail,
-  unlike the transactional ones): a per-category **preference center** (separate
-  keys, not folded into `email_notifications`), **RFC 8058 one-click
-  unsubscribe**, and **bounce/complaint suppression**.
+- [~] **Weekly digest** (engagement) — **WORKER BACKEND BUILT, SEND STILL GATED
+  (2026-06-12, migration `20270108_001`).** Foundation: the `weekly_digest`
+  jobs.kind, the `email_suppressions` hard-block table (fail-closed RLS,
+  worker-only), the **opt-IN** `email_weekly_digest` pref (default `off`,
+  separate key — never folded into `email_notifications`), and a **stateless
+  keyed-HMAC RFC 8058 unsubscribe token** (non-guessable, no PII, no token
+  table). Worker backend now built **behind the gate**: the `weekly_digest`
+  handler (`handler_weekly_digest.go` — gates on the opt-in pref, hard-blocks
+  on `email_suppressions`, builds a bounded weekly mileage/PB/kudos summary,
+  renders localized HTML+text with a `List-Unsubscribe` header + footer token),
+  the per-recipient digest **builder** (`EnqueueAllWeeklyDigests` in
+  `digest_builder.go` — selects opted-in recipients, enqueues one job each),
+  and the unauth one-click **unsubscribe endpoint** (`internal/unsubscribe/` →
+  `/unsubscribe/weekly-digest`, verifies the HMAC, flips the pref off + inserts
+  a suppression row, fail-closed on a bad/missing token; keyed by
+  `WEEKLY_DIGEST_UNSUB_SECRET`). **NOT enabled:** the builder is
+  **UNSCHEDULED** — no `pg_cron` ships (no marketing send fires); a per-category
+  preference-center UI. Enabling an actual send (wiring the builder's
+  `pg_cron`) is **gated on CISO + counsel sign-off** (bulk/promotional mail
+  under CAN-SPAM + GDPR/ePrivacy, unlike the transactional kinds). Still
+  outstanding for an enabled send: **bounce/complaint suppression** ingest (the
+  `email_suppressions` table exists; the provider webhook that writes
+  `bounce`/`complaint` rows is not built).
+- [ ] **Lifecycle drip** (engagement) — re-engagement, onboarding drip,
+  streak/goal nudges. Reuse the `lifecycle_email` kind + the digest's opt-in /
+  suppression / unsubscribe rails. Not built. Same CISO/counsel gate.
 - [ ] **Account-deletion receipt** — feasible but needs a different mechanism:
   the worker can't look up the address post-deletion, `delete-account` drains
   the user's pending jobs, and the send-once log cascades away with the user.
@@ -148,14 +168,20 @@ None of this sends in prod until an operator:
 ## Where the code lives
 
 - Worker: `apps/job_worker/internal/` — `mailer.go` (transport + HTML/text
-  render), `email_i18n.go` (catalogue), `handler_notification_email.go`,
-  `handler_lifecycle_email.go`, `handler_safety_email.go`. Web push:
-  `handler_web_push.go`, `push_render.go` (pref gate + payload), and the
-  `internal/webpush/` RFC 8291/8292 sender.
+  render incl. `renderWeeklyDigest`), `email_i18n.go` (catalogue),
+  `handler_notification_email.go`, `handler_lifecycle_email.go`,
+  `handler_safety_email.go`. Web push: `handler_web_push.go`, `push_render.go`
+  (pref gate + payload), and the `internal/webpush/` RFC 8291/8292 sender.
+  Weekly digest (behind the gate): `handler_weekly_digest.go` (gate + render),
+  `digest_builder.go` (`EnqueueAllWeeklyDigests` — UNSCHEDULED),
+  `internal/digesttoken/` (the stateless RFC 8058 HMAC token), and
+  `internal/unsubscribe/` (the unauth `/unsubscribe/weekly-digest` endpoint).
 - Migrations: `20261130_001` (notification channel + reminders), `20261202_001`
   (welcome), `20261203_001` (subscription emails), `20261218_001` (safety
   contacts + the `safety_email` kind), `20261219_001` (web-push channel + the
-  `web_push` kind + `clear_push_subscription`).
+  `web_push` kind + `clear_push_subscription`), `20270108_001` (weekly-digest
+  foundation — `weekly_digest` kind + `email_suppressions` + the opt-in pref +
+  the stateless-HMAC unsubscribe design).
 - Web push client leg: `apps/web/src/lib/util/push.ts` (subscribe/unsubscribe) +
   `apps/web/static/sw.js` (service worker render). The subscription lives on
   `user_device_settings.prefs.push_subscription` — `docs/backend/settings.md`.

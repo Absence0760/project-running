@@ -96,6 +96,12 @@ type Backend interface {
 	MarkNotificationWebPushed(ctx context.Context, notificationID string) error
 	FetchPushSubscriptions(ctx context.Context, userID string) ([]PushSubscriptionRow, error)
 	ClearPushSubscription(ctx context.Context, userID, deviceID string) error
+	// Weekly-digest path — kind='weekly_digest' (migration 20270108_001),
+	// engagement mail BEHIND THE GATE. IsEmailSuppressed is the hard-block
+	// check the handler MUST run before any send; BuildWeeklyDigest assembles
+	// the bounded per-user weekly summary from existing data.
+	IsEmailSuppressed(ctx context.Context, email string) (bool, error)
+	BuildWeeklyDigest(ctx context.Context, userID string, since time.Time) (DigestSummary, error)
 }
 
 // WebPushSender is the transport for kind='web_push' jobs. Production wires
@@ -166,7 +172,15 @@ type Worker struct {
 	// unsubscribe URL in rendered email (APP_BASE_URL). Empty falls back
 	// to relative-looking links; production sets it.
 	AppBaseURL string
-	Config     Config
+	// DigestUnsubSecret is the operator secret keying the stateless RFC 8058
+	// unsubscribe HMAC for the weekly digest (WEEKLY_DIGEST_UNSUB_SECRET).
+	// Empty → no List-Unsubscribe header / footer link is rendered (the
+	// fail-safe: a missing secret yields no link, never a forgeable one).
+	// The digest handler still sends — only the one-click unsubscribe is
+	// degraded — but enabling the actual digest SEND is a separate
+	// CISO/counsel-gated step (no pg_cron schedule ships here).
+	DigestUnsubSecret string
+	Config            Config
 	Log        *slog.Logger
 	// OnPollTick fires after every claim attempt (whether or not a job
 	// was returned). Used by the /health server to distinguish "queue
@@ -297,6 +311,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleSafetyEmail(ctx, job)
 	case "web_push":
 		return w.handleWebPush(ctx, job)
+	case "weekly_digest":
+		return w.handleWeeklyDigest(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

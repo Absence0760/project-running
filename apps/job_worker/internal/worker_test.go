@@ -101,6 +101,12 @@ type fakeBackend struct {
 	markedWebPushed []string // notification ids stamped web_push_sent_at
 	clearedSubs     []string // "user_id|device_id" pruned this run
 
+	// weekly_digest inputs.
+	suppressed     map[string]bool          // keyed by email → on the hard-block list
+	suppressErr    error
+	digestByUser   map[string]DigestSummary // keyed by user_id → the weekly summary
+	buildDigestErr error
+
 	// Outputs
 	finished []finishCall
 	deferred []deferCall
@@ -395,6 +401,28 @@ func (f *fakeBackend) ClearPushSubscription(_ context.Context, userID, deviceID 
 	}
 	f.clearedSubs = append(f.clearedSubs, userID+"|"+deviceID)
 	return nil
+}
+
+func (f *fakeBackend) IsEmailSuppressed(_ context.Context, email string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.suppressErr != nil {
+		err := f.suppressErr
+		f.suppressErr = nil
+		return false, err
+	}
+	return f.suppressed[email], nil
+}
+
+func (f *fakeBackend) BuildWeeklyDigest(_ context.Context, userID string, _ time.Time) (DigestSummary, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.buildDigestErr != nil {
+		err := f.buildDigestErr
+		f.buildDigestErr = nil
+		return DigestSummary{}, err
+	}
+	return f.digestByUser[userID], nil
 }
 
 func (f *fakeBackend) DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error) {

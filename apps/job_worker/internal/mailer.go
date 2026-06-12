@@ -158,7 +158,10 @@ func renderTextBody(c emailContent) string {
 	b.WriteString("—\n")
 	b.WriteString(c.footer)
 	if c.prefsURL != "" {
-		b.WriteString(" " + c.prefsTextPrefix + " " + c.prefsURL)
+		if c.prefsTextPrefix != "" {
+			b.WriteString(" " + c.prefsTextPrefix)
+		}
+		b.WriteString(" " + c.prefsURL)
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -429,6 +432,76 @@ func renderSafetyEmail(p SafetyEmailPayload, baseURL, locale string) (Email, boo
 	default:
 		return Email{}, false
 	}
+}
+
+// ─────────────────── weekly-digest template (pure) ───────────────────
+
+// renderWeeklyDigest renders the opt-in weekly engagement digest. The copy
+// comes from the catalogue's "weekly_digest" key; the middle paragraph is a
+// stats line built from the DigestSummary + localized stat labels. A
+// List-Unsubscribe header + an unsubscribe footer link both carry the
+// RFC 8058 HMAC token (unsubURL) — the recipient opted in, so they can opt
+// out one-tap. A week with no runs swaps the stats line for the quiet-week
+// nudge so the email never reads as a broken template.
+//
+// unsubURL is the full, token-bearing unsubscribe URL (built by the handler
+// from APP_BASE_URL + the user id + the HMAC token); "" omits the
+// List-Unsubscribe header + footer link (a misconfigured secret), which is
+// the fail-safe — no header is better than a forgeable one.
+func renderWeeklyDigest(s DigestSummary, baseURL, locale, unsubURL string) Email {
+	base := strings.TrimRight(baseURL, "/")
+	loc := normalizeEmailLocale(locale)
+	cat := lookupEmailStrings(loc, "weekly_digest")
+	shared := lookupEmailShared(loc)
+
+	// Body: intro, then a stats line (or the quiet-week nudge), then the
+	// closing nudge. The catalogue body is [intro, nudge]; we splice the
+	// stats line between them.
+	body := make([]string, 0, 3)
+	body = append(body, cat.body[0])
+	if s.RunCount == 0 && s.KudosCount == 0 && s.NewPBs == 0 {
+		body = append(body, shared.digestQuietWeek)
+	} else {
+		body = append(body, digestStatsLine(s, shared))
+	}
+	if len(cat.body) > 1 {
+		body = append(body, cat.body[1])
+	}
+
+	return composeEmail(emailContent{
+		lang:            loc,
+		subject:         cat.subject,
+		preheader:       cat.preheader,
+		heading:         cat.heading,
+		body:            body,
+		ctaLabel:        cat.cta,
+		ctaURL:          base,
+		footer:          shared.footerDigest,
+		prefsURL:        unsubURL,
+		prefsLabel:      shared.managePrefsLabel,
+		prefsTextPrefix: "",
+		listUnsub:       unsubURL,
+	})
+}
+
+// digestStatsLine joins the non-trivial weekly stats into one human line,
+// e.g. "3 runs · 21.40 km total · 5 kudos · 1 new personal bests". Each
+// label is a localized format string from emailShared. Zero-valued stats
+// are dropped so a runner with runs-but-no-PBs doesn't see "0 new personal
+// bests".
+func digestStatsLine(s DigestSummary, shared emailShared) string {
+	parts := make([]string, 0, 4)
+	if s.RunCount > 0 {
+		parts = append(parts, fmt.Sprintf(shared.digestStatRuns, s.RunCount))
+		parts = append(parts, fmt.Sprintf(shared.digestStatDistance, formatDistanceKm(s.DistanceM)))
+	}
+	if s.KudosCount > 0 {
+		parts = append(parts, fmt.Sprintf(shared.digestStatKudos, s.KudosCount))
+	}
+	if s.NewPBs > 0 {
+		parts = append(parts, fmt.Sprintf(shared.digestStatPBs, s.NewPBs))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // formatDistanceKm renders metres as km with two decimals — locale-neutral
