@@ -3213,6 +3213,7 @@ export const messages = {
 	"session.run.complete": "Terminer",
 	"session.run.saved": "Séance enregistrée.",
 	"session.run.saveFailed": "Impossible d'enregistrer la séance.",
+	"session.run.retry": "Réessayer",
 	"session.run.discardTitle": "Abandonner la séance ?",
 	"session.run.discardBody": "Cela met fin à la séance sans l'enregistrer.",
 	"session.run.discardConfirm": "Abandonner",

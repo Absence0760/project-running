@@ -3213,6 +3213,7 @@ export const messages = {
 	"session.run.complete": "Completar",
 	"session.run.saved": "Sesión guardada.",
 	"session.run.saveFailed": "No se pudo guardar la sesión.",
+	"session.run.retry": "Reintentar",
 	"session.run.discardTitle": "¿Descartar la sesión?",
 	"session.run.discardBody": "Esto finaliza la sesión sin guardarla.",
 	"session.run.discardConfirm": "Descartar",

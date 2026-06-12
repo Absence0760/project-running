@@ -28,6 +28,9 @@
 	let showEdit = $state(false);
 	let confirmDelete = $state(false);
 	let running = $state(false);
+	let failedFinish = $state<{ results: SessionStepResult[]; adherence: SessionAdherence } | null>(
+		null
+	);
 
 	const planId = $derived($page.params.id ?? '');
 	const isOwner = $derived(!!plan && !!auth.user && plan.author_id === auth.user.id);
@@ -93,8 +96,10 @@
 	}
 
 	async function onSessionFinish(results: SessionStepResult[], adherence: SessionAdherence) {
-		running = false;
-		if (!plan) return;
+		if (!plan) {
+			running = false;
+			return;
+		}
 		const draft = workoutDraftFromSession(expanded, plan.title, plan.discipline);
 		try {
 			await createGymWorkout({
@@ -107,15 +112,34 @@
 				})),
 				metadata: {
 					session_plan_id: plan.id,
-					session_step_results: results,
+					// snake_case wire shape — must match the Dart writer
+					// (session_detail_screen._stepResultJson) + metadata.md.
+					session_step_results: results.map((r) => ({
+						item_id: r.itemId,
+						movement_name: r.movementName,
+						kind: r.kind,
+						...(r.side ? { side: r.side } : {}),
+						target_duration_s: r.targetDurationS,
+						actual_duration_s: r.actualDurationS,
+						status: r.status
+					})),
 					session_adherence: adherence.verdict
 				}
 			});
+			failedFinish = null;
 			showToast(t('session.run.saved'), 'success');
 		} catch (e) {
+			// Keep the finished session so the user can retry — never silently drop it.
 			console.error('session run save failed', e);
+			failedFinish = { results, adherence };
 			showToast(t('session.run.saveFailed'), 'error');
+		} finally {
+			running = false;
 		}
+	}
+
+	function retrySessionSave() {
+		if (failedFinish) void onSessionFinish(failedFinish.results, failedFinish.adherence);
 	}
 </script>
 
@@ -129,6 +153,14 @@
 	{:else if !plan}
 		<p data-testid="session-not-found">{t('session.notFound')}</p>
 	{:else}
+		{#if failedFinish}
+			<div class="save-failed" role="alert" data-testid="session-save-failed">
+				<span>{t('session.run.saveFailed')}</span>
+				<button class="btn btn-sm" onclick={retrySessionSave} data-testid="session-retry-save">
+					{t('session.run.retry')}
+				</button>
+			</div>
+		{/if}
 		<header class="detail-head">
 			<div>
 				<h1>{plan.title || t('session.untitled')}</h1>
@@ -203,6 +235,17 @@
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
+	}
+	.save-failed {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		justify-content: space-between;
+		margin-bottom: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--danger);
+		border-radius: var(--radius-md);
+		color: var(--danger);
 	}
 	.back {
 		display: inline-block;

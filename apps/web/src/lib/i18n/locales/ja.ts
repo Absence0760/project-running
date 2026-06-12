@@ -3209,6 +3209,7 @@ export const messages = {
 	"session.run.complete": "完了",
 	"session.run.saved": "セッションを保存しました。",
 	"session.run.saveFailed": "セッションを保存できませんでした。",
+	"session.run.retry": "再試行",
 	"session.run.discardTitle": "セッションを破棄しますか？",
 	"session.run.discardBody": "保存せずにセッションを終了します。",
 	"session.run.discardConfirm": "破棄",

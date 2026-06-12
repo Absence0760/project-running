@@ -193,7 +193,7 @@ Written by the session follow-along runner on finish, when the logged `gym_worko
 | Key | Shape | Writers | Readers | Required? | Notes |
 |---|---|---|---|---|---|
 | `session_plan_id` | `string` (uuid) — the linked `session_plans` row | session follow-along runner (finish, when a session was active) | session-workout detail (web + mobile) | Optional | Presence implies an explicit session-plan link. Owner-only. |
-| `session_step_results` | `array<{ step_index: int, kind: string, side?: 'left' \| 'right', target_duration_s: int, actual_duration_s: int?, status: 'completed' \| 'skipped' }>` | Same | Same (planned-vs-actual / completion view) | Optional; present alongside `session_plan_id` | One row per expanded timed step (per-side items split into L/R, matching `expandSessionSteps`). Owner-only — carries the runner's per-item completion detail. |
+| `session_step_results` | `array<{ item_id: string, movement_name: string, kind: string, side?: 'left' \| 'right', target_duration_s: int?, actual_duration_s: int?, status: 'completed' \| 'skipped' }>` | Same | Same (planned-vs-actual / completion view) | Optional; present alongside `session_plan_id` | One row per expanded step (per-side items split into L/R, matching `expandSessionSteps`). Both clients write snake_case (`item_id` / `movement_name`): the web writer in `sessions/[id]/+page.svelte` and the Dart `_stepResultJson` in `session_detail_screen.dart` must match. Owner-only — carries the runner's per-item completion detail. |
 | `session_adherence` | `string` — `completed` \| `partial` \| `abandoned` | Same | Same | Optional; present alongside `session_plan_id` | Same threshold semantics as `gym_adherence` / `workout_adherence`. Owner-only. |
 
 ---

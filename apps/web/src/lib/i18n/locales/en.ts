@@ -3222,6 +3222,7 @@ export const en = {
 	"session.run.complete": "Complete",
 	"session.run.saved": "Session saved.",
 	"session.run.saveFailed": "Couldn't save the session.",
+	"session.run.retry": "Retry",
 	"session.run.discardTitle": "Discard session?",
 	"session.run.discardBody": "This ends the session without saving it.",
 	"session.run.discardConfirm": "Discard",

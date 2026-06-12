@@ -3213,6 +3213,7 @@ export const messages = {
 	"session.run.complete": "Abschließen",
 	"session.run.saved": "Einheit gespeichert.",
 	"session.run.saveFailed": "Einheit konnte nicht gespeichert werden.",
+	"session.run.retry": "Erneut versuchen",
 	"session.run.discardTitle": "Einheit verwerfen?",
 	"session.run.discardBody": "Dadurch wird die Einheit beendet, ohne sie zu speichern.",
 	"session.run.discardConfirm": "Verwerfen",
