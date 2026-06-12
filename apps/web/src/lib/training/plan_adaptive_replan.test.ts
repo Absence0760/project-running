@@ -117,3 +117,51 @@ test('adaptiveReplanRemaining: in-progress + zero-planned weeks are excluded fro
 	assert.equal(r.reason, 'on_track');
 	assert.equal(r.trailingDirections.length, 1);
 });
+
+// ── P2: fitness direction gate (branch feat/gen-v2-p2-fitness, CISO-gated) ──
+
+function underTrendWeeks(): ReplanWeek[] {
+	const missed = wo('missed', '2026-06-15', 'long', 28_000, { isPast: true });
+	const future = wo('next', '2026-07-06', 'long', 22_000);
+	return [
+		week(0, 'under', 'build', [missed]),
+		week(1, 'under'),
+		week(2, 'under'),
+		{ weekIndex: 3, phase: 'build', plannedMetres: 42_000, actualMetres: 0, isComplete: false, workouts: [future] },
+	];
+}
+
+test('adaptiveReplanRemaining: an under-fitness trend is suppressed for a fatigued runner (tsb<0)', () => {
+	const r = adaptiveReplanRemaining({
+		weeks: underTrendWeeks(),
+		today: '2026-07-01',
+		fitness: { tsb: -18, atl: 90, ctl: 72 },
+	});
+	assert.equal(r.reason, 'on_track');
+	assert.equal(r.fitnessGated, true);
+	assert.equal(r.changes.length, 0);
+});
+
+test('adaptiveReplanRemaining: an under-fitness trend proceeds for a fresh runner (tsb>=0)', () => {
+	const r = adaptiveReplanRemaining({
+		weeks: underTrendWeeks(),
+		today: '2026-07-01',
+		fitness: { tsb: 6, atl: 60, ctl: 66 },
+	});
+	assert.equal(r.reason, 'trend_underfitness');
+	assert.equal(r.fitnessGated, false);
+	assert.equal(r.changes.some((c) => c.workoutId === 'next'), true);
+});
+
+test('adaptiveReplanRemaining: an over-training trend is not fitness-gated even when fatigued', () => {
+	const easy = wo('easy', '2026-07-07', 'easy', 8_000);
+	const weeks: ReplanWeek[] = [
+		week(0, 'over'),
+		week(1, 'ontrack'),
+		week(2, 'over'),
+		{ weekIndex: 3, phase: 'build', plannedMetres: 42_000, actualMetres: 0, isComplete: false, workouts: [easy] },
+	];
+	const r = adaptiveReplanRemaining({ weeks, today: '2026-07-01', fitness: { tsb: -22, atl: 100, ctl: 78 } });
+	assert.equal(r.reason, 'trend_overtraining');
+	assert.equal(r.fitnessGated, false);
+});
