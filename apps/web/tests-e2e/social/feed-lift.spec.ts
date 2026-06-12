@@ -10,6 +10,11 @@ import { USER_A, USER_B } from '../fixtures/users';
  * "lift card" — title + set count + total volume — distinct from a run
  * card. The Lift filter chip narrows to lifts only; only is_public
  * workouts appear (privacy boundary).
+ *
+ * Meals are NEVER feed-shareable (multi_modal.md § Social feed): the
+ * `food_log` table carries an `is_public` column at the schema level, but
+ * the feed deliberately reads no food path, so even a `food_log` row a
+ * followed user marked public must never surface in the feed.
  */
 
 test.describe('/social?tab=feed — lift cards', () => {
@@ -17,9 +22,11 @@ test.describe('/social?tab=feed — lift cards', () => {
 
 	let publicWorkoutId: string | null = null;
 	let privateWorkoutId: string | null = null;
+	let publicMealId: string | null = null;
 	const stamp = Date.now();
 	const publicTitle = `E2E Public lift ${stamp}`;
 	const privateTitle = `E2E Private lift ${stamp}`;
+	const publicMealName = `E2E Public meal ${stamp}`;
 
 	test.beforeEach(async () => {
 		const admin = getAdminClient();
@@ -60,6 +67,22 @@ test.describe('/social?tab=feed — lift cards', () => {
 			.single();
 		if (privErr) throw privErr;
 		privateWorkoutId = (priv as { id: string }).id;
+
+		// A public meal: food_log.is_public exists in the schema, so this
+		// row is genuinely public-readable. It must still never reach the
+		// feed — meals are not feed-shareable.
+		const { data: meal, error: mealErr } = await admin
+			.from('food_log')
+			.insert({
+				user_id: USER_A.id,
+				item_name: publicMealName,
+				logged_at: startedAt,
+				is_public: true
+			})
+			.select('id')
+			.single();
+		if (mealErr) throw mealErr;
+		publicMealId = (meal as { id: string }).id;
 	});
 
 	test.afterEach(async () => {
@@ -67,8 +90,10 @@ test.describe('/social?tab=feed — lift cards', () => {
 		for (const id of [publicWorkoutId, privateWorkoutId]) {
 			if (id) await admin.from('gym_workouts').delete().eq('id', id);
 		}
+		if (publicMealId) await admin.from('food_log').delete().eq('id', publicMealId);
 		publicWorkoutId = null;
 		privateWorkoutId = null;
+		publicMealId = null;
 	});
 
 	test('public lift surfaces as a lift card; private one does not', async ({ page }) => {
@@ -81,6 +106,8 @@ test.describe('/social?tab=feed — lift cards', () => {
 		await expect(card).toContainText('2');
 		// Privacy boundary: the private workout never appears.
 		await expect(page.getByText(privateTitle)).toHaveCount(0);
+		// Meals are never feed-shareable, even when food_log.is_public is true.
+		await expect(page.getByText(publicMealName)).toHaveCount(0);
 	});
 
 	test('Lift filter narrows to lifts and drops run cards', async ({ page }) => {
