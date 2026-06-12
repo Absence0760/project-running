@@ -3917,6 +3917,144 @@ export async function fetchFollowingFeed(opts?: {
 	}));
 }
 
+/// A public gym workout surfaced in the activity feed. Carries only the
+/// non-sensitive headline a "lift card" renders — title, set count, total
+/// working volume in canonical kg, started_at — plus the author. No notes,
+/// no RPE, no per-set detail leak into the feed; the share page is the place
+/// for full detail.
+export interface LiftFeedEntry {
+	kind: 'lift';
+	id: string;
+	user_id: string;
+	started_at: string;
+	title: string | null;
+	set_count: number;
+	volume_kg: number;
+	author: PublicProfile;
+}
+
+/// A run feed entry tagged with its kind so the feed can render a run card vs
+/// a lift card off a single discriminated union.
+export type RunFeedEntry = FeedEntry & { kind: 'run' };
+
+/// The cross-modal activity feed entry — a run or a public lift.
+export type ActivityFeedEntry = RunFeedEntry | LiftFeedEntry;
+
+/// Cross-modal following feed (multi_modal.md § Social feed): recent public
+/// runs AND public gym workouts from people the caller follows, merged into
+/// one reverse-chronological window.
+///
+/// Runs go through the redacted `public_runs` view (decisions §33) — they are
+/// deliberately invisible through the `activities` view to non-owners, so the
+/// feed reads them on the same path `fetchFollowingFeed` does. Lifts read
+/// `gym_workouts` directly: that table's "owner or public read" RLS already
+/// scopes a non-owner to public rows, and the feed projects only the
+/// headline columns (title / set_count / volume_kg) — never notes or per-set
+/// data. `set_count` + `volume_kg` are the trigger-maintained derived columns
+/// (migration 20261214_001), so a lift card is a flat per-branch read.
+///
+/// `activityType`: 'all' (default) merges both; 'lift' / 'gym' returns lifts
+/// only; any run activity_type ('run' / 'walk' / 'cycle' / 'hike') returns
+/// runs only.
+export async function fetchFollowingActivityFeed(opts?: {
+	limit?: number;
+	cursor?: { started_at: string; id: string } | null;
+	authorId?: string | null;
+	activityType?: string | null;
+}): Promise<ActivityFeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const activityType = opts?.activityType ?? 'all';
+	const wantsLifts = activityType === 'all' || activityType === 'lift' || activityType === 'gym';
+	const wantsRuns = activityType !== 'lift' && activityType !== 'gym';
+
+	const runsPromise: Promise<RunFeedEntry[]> = wantsRuns
+		? fetchFollowingFeed(opts).then((rows) =>
+				rows.map((r) => ({ ...r, kind: 'run' as const }))
+			)
+		: Promise.resolve([]);
+
+	const liftsPromise: Promise<LiftFeedEntry[]> = wantsLifts
+		? fetchFollowingLifts(opts)
+		: Promise.resolve([]);
+
+	const [runs, lifts] = await Promise.all([runsPromise, liftsPromise]);
+	return mergeFeedPages<ActivityFeedEntry>([runs, lifts], limit);
+}
+
+async function fetchFollowingLifts(opts?: {
+	limit?: number;
+	cursor?: { started_at: string; id: string } | null;
+	authorId?: string | null;
+}): Promise<LiftFeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) return [];
+
+	const { data: edges } = await supabase
+		.from('user_follows')
+		.select('followee_id')
+		.eq('follower_id', userId);
+	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
+	if (followeeIds.length === 0) return [];
+
+	const wantedAuthor = opts?.authorId ?? null;
+	const filteredAuthors = wantedAuthor
+		? followeeIds.filter((id) => id === wantedAuthor)
+		: followeeIds;
+	if (filteredAuthors.length === 0) return [];
+
+	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+	const queryChunk = async (ids: string[]) => {
+		let q = supabase
+			.from(TABLES.gym_workouts)
+			.select('id, user_id, started_at, title, set_count, volume_kg')
+			.eq('is_public', true)
+			.in('user_id', ids)
+			.gte('started_at', cutoff)
+			.order('started_at', { ascending: false })
+			.order('id', { ascending: false })
+			.limit(limit);
+		if (opts?.cursor) {
+			q = q.or(
+				`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
+			);
+		}
+		const { data } = await q;
+		return (data ?? []) as {
+			id: string;
+			user_id: string;
+			started_at: string;
+			title: string | null;
+			set_count: number | null;
+			volume_kg: number | null;
+		}[];
+	};
+
+	const pages = await Promise.all(chunk(filteredAuthors, FEED_FOLLOWEE_CHUNK).map(queryChunk));
+	const workouts = mergeFeedPages(pages, limit);
+	if (workouts.length === 0) return [];
+
+	const authorIds = Array.from(new Set(workouts.map((w) => w.user_id)));
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', authorIds);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+
+	return workouts.map((w) => ({
+		kind: 'lift' as const,
+		id: w.id,
+		user_id: w.user_id,
+		started_at: w.started_at,
+		title: w.title,
+		set_count: w.set_count ?? 0,
+		volume_kg: w.volume_kg ?? 0,
+		author: byId.get(w.user_id) ?? { id: w.user_id, display_name: null, avatar_url: null },
+	}));
+}
+
 /// Server-side privacy-zone clipping (decisions §33). Pass the run /
 /// route owner's `user_id` and a points array; receive the clipped
 /// middle. Zones never come down the wire — the RPC reads them
@@ -5868,6 +6006,18 @@ export async function updateGymWorkout(
 		.eq('id', id);
 	if (error) throw error;
 	if (sets !== undefined) await replaceGymSets(id, sets);
+}
+
+/// Flip a gym workout's visibility. Mirrors `setRoutePublic` — bidirectional
+/// (public ↔ private). RLS guards ownership; the caller should still gate the
+/// UI so non-owners never see the control. Stamps `last_modified_at` so the
+/// offline newer-wins reconciliation on mobile picks the change up.
+export async function setGymWorkoutPublic(id: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.gym_workouts)
+		.update({ is_public: isPublic, last_modified_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
 }
 
 /// Deletes the workout; gym_sets cascade via the FK (migration 20261204_001).

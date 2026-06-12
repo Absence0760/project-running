@@ -2648,6 +2648,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get feedActivityHike => 'ハイク';
 
   @override
+  String get feedActivityLift => '筋トレ';
+
+  @override
+  String get feedLiftSetsLabel => 'セット';
+
+  @override
+  String get feedLiftVolume => 'ボリューム';
+
+  @override
+  String get feedLiftUntitled => 'ワークアウト';
+
+  @override
   String get feedLoadMore => 'もっと見る';
 
   @override
@@ -6731,6 +6743,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymDelete => '削除';
+
+  @override
+  String get gymPublic => '公開';
+
+  @override
+  String get gymPrivate => '非公開';
+
+  @override
+  String get gymMakePublic => '公開にする';
+
+  @override
+  String get gymMakePrivate => '非公開にする';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return '公開設定を更新できませんでした: $error';
+  }
 
   @override
   String get gymNotes => 'メモ';

@@ -5,15 +5,17 @@
 	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import {
-		fetchFollowingFeed,
+		fetchFollowingActivityFeed,
 		fetchEngagementSummaries,
 		giveKudos,
 		rescindKudos,
 		FEED_WINDOW_DAYS,
-		type FeedEntry,
+		type ActivityFeedEntry,
+		type RunFeedEntry,
+		type LiftFeedEntry,
 	} from '$lib/core/data';
-	
-	import { formatDistance, formatPace } from '$lib/format/units.svelte';
+
+	import { formatDistance, formatPace, formatWeight } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
@@ -24,9 +26,10 @@
 		{ value: 'walk', labelKey: 'socialFeed.activityWalk', icon: 'directions_walk' },
 		{ value: 'cycle', labelKey: 'socialFeed.activityCycle', icon: 'directions_bike' },
 		{ value: 'hike', labelKey: 'socialFeed.activityHike', icon: 'terrain' },
+		{ value: 'lift', labelKey: 'socialFeed.activityLift', icon: 'fitness_center' },
 	];
 
-	let entries = $state<FeedEntry[]>([]);
+	let entries = $state<ActivityFeedEntry[]>([]);
 	let engagement = $state<
 		Map<string, { kudos_count: number; viewer_has_kudos: boolean; comment_count: number }>
 	>(new Map());
@@ -69,12 +72,18 @@
 		followingCount = count ?? 0;
 	}
 
+	// Engagement (kudos / comments) only exists for runs — run_kudos /
+	// run_comments key on a run id. Lift cards carry no engagement footer.
+	function runIds(es: ActivityFeedEntry[]): string[] {
+		return es.filter((e) => e.kind === 'run').map((e) => e.id);
+	}
+
 	async function load() {
 		loading = true;
 		try {
-			entries = await fetchFollowingFeed({ limit: 20, activityType: activityFilter });
+			entries = await fetchFollowingActivityFeed({ limit: 20, activityType: activityFilter });
 			exhausted = entries.length < 20;
-			engagement = await fetchEngagementSummaries(entries.map((e) => e.id));
+			engagement = await fetchEngagementSummaries(runIds(entries));
 		} catch (e) {
 			showToast(m('socialFeed.loadFeedError', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
@@ -88,14 +97,14 @@
 		loadingMore = true;
 		try {
 			const last = entries[entries.length - 1];
-			const more = await fetchFollowingFeed({
+			const more = await fetchFollowingActivityFeed({
 				limit: 20,
 				cursor: { started_at: last.started_at, id: last.id },
 				activityType: activityFilter,
 			});
 			entries = [...entries, ...more];
 			exhausted = more.length < 20;
-			const moreEng = await fetchEngagementSummaries(more.map((e) => e.id));
+			const moreEng = await fetchEngagementSummaries(runIds(more));
 			const merged = new Map(engagement);
 			for (const [k, v] of moreEng) merged.set(k, v);
 			engagement = merged;
@@ -148,9 +157,13 @@
 		return formatPace(duration_s, distance_m);
 	}
 
-	function runTitle(entry: FeedEntry): string {
+	function runTitle(entry: RunFeedEntry): string {
 		const t = (entry.metadata as Record<string, unknown> | null)?.title;
 		return typeof t === 'string' ? t.trim() : '';
+	}
+
+	function liftTitle(entry: LiftFeedEntry): string {
+		return entry.title?.trim() || m('socialFeed.liftUntitled');
 	}
 
 </script>
@@ -225,7 +238,6 @@
 	{:else}
 		<div class="feed">
 			{#each entries as entry (entry.id)}
-				{@const eng = engagement.get(entry.id) ?? { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 }}
 				<article class="entry">
 					<header class="entry-head">
 						<a href="/u/{entry.author.id}" class="author">
@@ -240,57 +252,81 @@
 						</a>
 						<span class="when">{formatRelativeTime(entry.started_at, undefined, currentLocale())}</span>
 					</header>
-					<a class="entry-body" href="/runs/{entry.id}">
-						{#if entry.has_track}
-							<div class="entry-map">
-								<!-- public_runs dropped track_url; the non-owner clip
-								     path fetches by runId via clip-public-track. -->
-								<RunTrackPreview
-									runId={entry.id}
-									trackUrl={null}
-									ownerUserId={entry.author.id}
-								/>
-							</div>
-						{/if}
-						<div class="entry-stats-wrap">
-							{#if runTitle(entry)}
-								<h3 class="entry-title">{runTitle(entry)}</h3>
-							{/if}
-							<div class="stats">
-								<div class="stat">
-									<span class="stat-num">{formatDistance(entry.distance_m)}</span>
-									<span class="stat-label">{m('socialFeed.statDistance')}</span>
-								</div>
-								<div class="stat">
-									<span class="stat-num">{formatDuration(entry.duration_s)}</span>
-									<span class="stat-label">{m('socialFeed.statTime')}</span>
-								</div>
-								<div class="stat">
-									<span class="stat-num">{pace(entry.distance_m, entry.duration_s)}</span>
-									<span class="stat-label">{m('socialFeed.statPace')}</span>
+					{#if entry.kind === 'lift'}
+						<a class="entry-body" href="/share/workout/{entry.id}" data-testid="lift-card">
+							<div class="entry-stats-wrap">
+								<h3 class="entry-title lift-title">
+									<span class="material-symbols lift-glyph" aria-hidden="true">fitness_center</span>
+									{liftTitle(entry)}
+								</h3>
+								<div class="stats stats-2">
+									<div class="stat">
+										<span class="stat-num">{entry.set_count}</span>
+										<span class="stat-label">{m('socialFeed.liftSetsLabel')}</span>
+									</div>
+									{#if entry.volume_kg > 0}
+										<div class="stat">
+											<span class="stat-num">{formatWeight(entry.volume_kg)}</span>
+											<span class="stat-label">{m('socialFeed.liftVolume')}</span>
+										</div>
+									{/if}
 								</div>
 							</div>
-						</div>
-					</a>
-					<footer class="entry-foot">
-						<button
-							class="kudos-pill"
-							class:given={eng.viewer_has_kudos}
-							type="button"
-							disabled={kudosBusy.has(entry.id)}
-							onclick={() => toggleKudos(entry.id)}
-							aria-label={eng.viewer_has_kudos ? m('socialFeed.rescindKudos') : m('socialFeed.giveKudos')}
-						>
-							<span class="material-symbols" aria-hidden="true">
-								{eng.viewer_has_kudos ? 'favorite' : 'favorite_border'}
-							</span>
-							<span>{eng.kudos_count}</span>
-						</button>
-						<a class="comment-pill" href="/runs/{entry.id}" aria-label={m('socialFeed.viewComments')}>
-							<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
-							<span>{eng.comment_count}</span>
 						</a>
-					</footer>
+					{:else}
+						{@const eng = engagement.get(entry.id) ?? { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 }}
+						<a class="entry-body" href="/runs/{entry.id}">
+							{#if entry.has_track}
+								<div class="entry-map">
+									<!-- public_runs dropped track_url; the non-owner clip
+									     path fetches by runId via clip-public-track. -->
+									<RunTrackPreview
+										runId={entry.id}
+										trackUrl={null}
+										ownerUserId={entry.author.id}
+									/>
+								</div>
+							{/if}
+							<div class="entry-stats-wrap">
+								{#if runTitle(entry)}
+									<h3 class="entry-title">{runTitle(entry)}</h3>
+								{/if}
+								<div class="stats">
+									<div class="stat">
+										<span class="stat-num">{formatDistance(entry.distance_m)}</span>
+										<span class="stat-label">{m('socialFeed.statDistance')}</span>
+									</div>
+									<div class="stat">
+										<span class="stat-num">{formatDuration(entry.duration_s)}</span>
+										<span class="stat-label">{m('socialFeed.statTime')}</span>
+									</div>
+									<div class="stat">
+										<span class="stat-num">{pace(entry.distance_m, entry.duration_s)}</span>
+										<span class="stat-label">{m('socialFeed.statPace')}</span>
+									</div>
+								</div>
+							</div>
+						</a>
+						<footer class="entry-foot">
+							<button
+								class="kudos-pill"
+								class:given={eng.viewer_has_kudos}
+								type="button"
+								disabled={kudosBusy.has(entry.id)}
+								onclick={() => toggleKudos(entry.id)}
+								aria-label={eng.viewer_has_kudos ? m('socialFeed.rescindKudos') : m('socialFeed.giveKudos')}
+							>
+								<span class="material-symbols" aria-hidden="true">
+									{eng.viewer_has_kudos ? 'favorite' : 'favorite_border'}
+								</span>
+								<span>{eng.kudos_count}</span>
+							</button>
+							<a class="comment-pill" href="/runs/{entry.id}" aria-label={m('socialFeed.viewComments')}>
+								<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
+								<span>{eng.comment_count}</span>
+							</a>
+						</footer>
+					{/if}
 				</article>
 			{/each}
 		</div>
@@ -419,6 +455,19 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 0.5rem;
+	}
+	.stats-2 {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.lift-title {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.lift-glyph {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.1rem;
+		color: var(--color-primary);
 	}
 	.stat {
 		display: flex;

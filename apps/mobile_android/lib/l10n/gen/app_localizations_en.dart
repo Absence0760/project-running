@@ -2802,6 +2802,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get feedActivityHike => 'Hike';
 
   @override
+  String get feedActivityLift => 'Lift';
+
+  @override
+  String get feedLiftSetsLabel => 'Sets';
+
+  @override
+  String get feedLiftVolume => 'Volume';
+
+  @override
+  String get feedLiftUntitled => 'Workout';
+
+  @override
   String get feedLoadMore => 'Load more';
 
   @override
@@ -7048,6 +7060,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gymDelete => 'Delete';
+
+  @override
+  String get gymPublic => 'Public';
+
+  @override
+  String get gymPrivate => 'Private';
+
+  @override
+  String get gymMakePublic => 'Make public';
+
+  @override
+  String get gymMakePrivate => 'Make private';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return 'Couldn\'t update visibility: $error';
+  }
 
   @override
   String get gymNotes => 'Notes';

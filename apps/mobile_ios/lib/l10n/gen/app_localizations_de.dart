@@ -2832,6 +2832,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get feedActivityHike => 'Wandern';
 
   @override
+  String get feedActivityLift => 'Kraft';
+
+  @override
+  String get feedLiftSetsLabel => 'Sätze';
+
+  @override
+  String get feedLiftVolume => 'Volumen';
+
+  @override
+  String get feedLiftUntitled => 'Training';
+
+  @override
   String get feedLoadMore => 'Mehr laden';
 
   @override
@@ -7123,6 +7135,23 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get gymDelete => 'Löschen';
+
+  @override
+  String get gymPublic => 'Öffentlich';
+
+  @override
+  String get gymPrivate => 'Privat';
+
+  @override
+  String get gymMakePublic => 'Öffentlich machen';
+
+  @override
+  String get gymMakePrivate => 'Privat machen';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return 'Sichtbarkeit konnte nicht aktualisiert werden: $error';
+  }
 
   @override
   String get gymNotes => 'Notizen';

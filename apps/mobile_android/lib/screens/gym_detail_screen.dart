@@ -202,6 +202,25 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     if (saved == true) await _maybeSync();
   }
 
+  /// Flip the workout's visibility (public ↔ private). Offline-first: the
+  /// local store write (pendingUpdate) is durable + drains on the next sync,
+  /// mirroring web's setGymWorkoutPublic + the route-detail toggle.
+  Future<void> _toggleVisibility(StoredGymWorkout w) async {
+    final next = !w.workout.isPublic;
+    try {
+      await widget.store.updateLocal(w.id, isPublic: next);
+      await _maybeSync();
+    } catch (e) {
+      debugPrint('gym_detail_screen: visibility toggle failed: $e');
+      if (mounted) {
+        showTopBanner(
+          context,
+          AppLocalizations.of(context).gymVisibilityFailed('$e'),
+        );
+      }
+    }
+  }
+
   Future<void> _delete(StoredGymWorkout w) async {
     final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
@@ -350,6 +369,12 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
             ? null
             : [
                 IconButton(
+                  tooltip:
+                      w.workout.isPublic ? l10n.gymMakePrivate : l10n.gymMakePublic,
+                  icon: Icon(w.workout.isPublic ? Icons.public : Icons.public_off),
+                  onPressed: () => _toggleVisibility(w),
+                ),
+                IconButton(
                   tooltip: l10n.gymRoutineRepeatLast,
                   icon: const Icon(Icons.replay),
                   onPressed: () => _repeatLast(w),
@@ -394,12 +419,18 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (started != null)
-          Text(
-            formatDateMed(started.toLocal(), tag),
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.outline),
-          ),
+        Row(
+          children: [
+            if (started != null)
+              Text(
+                formatDateMed(started.toLocal(), tag),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.outline),
+              ),
+            if (started != null) const SizedBox(width: 8),
+            _visibilityChip(w, theme, l10n),
+          ],
+        ),
         const SizedBox(height: 16),
         for (final block in blocks)
           _exerciseBlock(block, prByExercise, prevByExercise, theme, l10n),
@@ -569,6 +600,37 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   String _deltaText(double delta) {
     final mag = WeightFormat.format(delta.abs(), activeWeightUnit);
     return '${delta > 0 ? '+' : '−'}$mag';
+  }
+
+  Widget _visibilityChip(
+    StoredGymWorkout w,
+    ThemeData theme,
+    AppLocalizations l10n,
+  ) {
+    final isPublic = w.workout.isPublic;
+    final fg = isPublic ? theme.colorScheme.primary : theme.colorScheme.outline;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: fg.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(isPublic ? Icons.public : Icons.lock, size: 13, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            isPublic ? l10n.gymPublic : l10n.gymPrivate,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _prChip(PrKind kind, ThemeData theme, AppLocalizations l10n) =>

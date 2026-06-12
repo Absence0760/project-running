@@ -4739,6 +4739,30 @@ abstract class AppLocalizations {
   /// **'Hike'**
   String get feedActivityHike;
 
+  /// Feed activity filter chip — gym lifts
+  ///
+  /// In en, this message translates to:
+  /// **'Lift'**
+  String get feedActivityLift;
+
+  /// Stat label under the set count on a feed lift card
+  ///
+  /// In en, this message translates to:
+  /// **'Sets'**
+  String get feedLiftSetsLabel;
+
+  /// Stat label under the total volume on a feed lift card
+  ///
+  /// In en, this message translates to:
+  /// **'Volume'**
+  String get feedLiftVolume;
+
+  /// Fallback title for an untitled public gym workout in the feed
+  ///
+  /// In en, this message translates to:
+  /// **'Workout'**
+  String get feedLiftUntitled;
+
   /// Button to load the next page of feed entries
   ///
   /// In en, this message translates to:
@@ -11756,6 +11780,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete'**
   String get gymDelete;
+
+  /// Visibility chip on the gym workout detail when the workout is shared publicly.
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get gymPublic;
+
+  /// Visibility chip on the gym workout detail when the workout is private.
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get gymPrivate;
+
+  /// Action that flips a gym workout to public.
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get gymMakePublic;
+
+  /// Action that flips a gym workout back to private.
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get gymMakePrivate;
+
+  /// Banner when toggling a gym workout's visibility fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update visibility: {error}'**
+  String gymVisibilityFailed(Object error);
 
   /// No description provided for @gymNotes.
   ///
