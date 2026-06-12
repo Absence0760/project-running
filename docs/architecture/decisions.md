@@ -3029,6 +3029,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 143. A coach assigns a training plan by deep-cloning one of their own into an athlete-owned plan; clone-not-subscribe, gated on the active link
+
+**Decided (2026-06-12, migration `20270106_001`).** The coach-athlete link (§97) + consent-gated read (§98) let a coach *review* an athlete but not *give* them a plan. `assign_plan_to_athlete(source_plan, athlete, start_date)` closes that: a SECURITY DEFINER RPC that deep-clones one of the coach's own plans (or a club template they can read) into a new `training_plans` row **owned by the athlete** (`user_id = athlete_id`), date-shifted from `start_date`, mirroring the `clone_plan_template` precedent. A nullable `training_plans.assigned_by_coach_id` records provenance. Surfaced on `/coaching/athletes/[id]` when the athlete has no active plan.
+
+**Why athlete-owned, clone-not-subscribe.** The assigned plan flows through the unchanged "users own their plans" RLS, the client-side auto-match, and every plan surface exactly like a self-created plan — the athlete can edit, complete, or abandon it, and later edits to the coach's source do **not** propagate (same call as §35 templates). The coach keeps the read + `plan_workouts`-edit access from `20261116_001` to keep tuning it. Consent is the `status='active'` link (the athlete redeemed the invite); ending the link blocks future assignments but leaves already-assigned plans with the athlete (it is their data).
+
+**Trade-off.** The RPC **raises if the athlete already has an active plan** rather than silently abandoning the athlete's own plan — the coach coordinates with them first (the UI shows an explanatory note instead of the form). Web-only this slice (the whole `/coaching` roster is web-only per §24); the assigned plan reaches the athlete through the mobile plan surfaces that already exist, so no twin work. Notifications-on-assign and coach-authored-directly-in-athlete-account are deferred.
+
+**Don't re-litigate** by adding an FK from `gym_workouts`/`runs` to the source plan (the link is provenance only), by letting the coach's source-plan edits propagate to assigned instances, or by auto-superseding the athlete's existing active plan. Pinned by `assign_plan_to_athlete_test.sql` (consent gate, ownership, deep-clone, self-assign, unreadable-source, active-plan conflict, ended-link revocation) + `tests-e2e/coaching/assign-plan.spec.ts`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
