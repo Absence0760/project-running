@@ -5,6 +5,7 @@
 	import {
 		fetchSessionPlan,
 		deleteSessionPlan,
+		setSessionPlanPublic,
 		createGymWorkout,
 		type SessionPlanWithItems
 	} from '$lib/core/data';
@@ -28,6 +29,8 @@
 	let showEdit = $state(false);
 	let confirmDelete = $state(false);
 	let running = $state(false);
+	let visibilityBusy = $state(false);
+	let shareBusy = $state(false);
 	let failedFinish = $state<{ results: SessionStepResult[]; adherence: SessionAdherence } | null>(
 		null
 	);
@@ -141,6 +144,42 @@
 	function retrySessionSave() {
 		if (failedFinish) void onSessionFinish(failedFinish.results, failedFinish.adherence);
 	}
+
+	async function toggleVisibility() {
+		if (!plan || visibilityBusy) return;
+		const next = !plan.is_public;
+		visibilityBusy = true;
+		try {
+			await setSessionPlanPublic(plan.id, next);
+			plan = { ...plan, is_public: next };
+		} catch (e) {
+			console.error('toggle session visibility failed', e);
+			showToast(t('session.visibilityError'), 'error');
+		} finally {
+			visibilityBusy = false;
+		}
+	}
+
+	async function copyShareLink() {
+		if (!plan || shareBusy) return;
+		shareBusy = true;
+		const url = `${location.origin}/share/session/${plan.id}`;
+		try {
+			// A non-public plan's share link 404s for everyone else, so make it
+			// public first — mirrors the gym-workout share flow.
+			if (!plan.is_public) {
+				await setSessionPlanPublic(plan.id, true);
+				plan = { ...plan, is_public: true };
+			}
+			await navigator.clipboard.writeText(url);
+			showToast(t('session.shareLinkCopied'), 'success');
+		} catch (e) {
+			console.error('copy session share link failed', e);
+			showToast(t('session.shareLinkError'), 'error');
+		} finally {
+			shareBusy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>{plan?.title ?? t('session.title')}</title></svelte:head>
@@ -170,6 +209,9 @@
 					{#if expanded.totalS > 0}
 						· {t('session.estDuration', { minutes: Math.round(expanded.totalS / 60) })}
 					{/if}
+					<span class="visibility-chip" class:is-public={plan.is_public}>
+						{plan.is_public ? t('session.public') : t('session.private')}
+					</span>
 				</p>
 			</div>
 			<div class="head-actions">
@@ -184,6 +226,24 @@
 					</button>
 				{/if}
 				{#if isOwner}
+					<button
+						type="button"
+						class="btn btn-secondary"
+						onclick={toggleVisibility}
+						disabled={visibilityBusy}
+						data-testid="session-toggle-public"
+					>
+						{plan.is_public ? t('session.makePrivate') : t('session.makePublic')}
+					</button>
+					<button
+						type="button"
+						class="btn btn-secondary"
+						onclick={copyShareLink}
+						disabled={shareBusy}
+						data-testid="session-copy-share-link"
+					>
+						{t('session.copyShareLink')}
+					</button>
 					<button type="button" class="btn btn-secondary" onclick={() => (showEdit = true)}>
 						{t('session.save')}
 					</button>
@@ -266,6 +326,22 @@
 	}
 	.muted {
 		color: var(--text-muted);
+	}
+	.visibility-chip {
+		display: inline-flex;
+		align-items: center;
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-tertiary);
+		background: var(--color-bg-secondary);
+		padding: 0.1rem var(--space-sm);
+		border-radius: var(--radius-sm);
+	}
+	.visibility-chip.is-public {
+		color: var(--color-primary);
+		background: var(--color-primary-light);
 	}
 	.steps {
 		display: flex;

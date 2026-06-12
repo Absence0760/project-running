@@ -6607,6 +6607,16 @@ export async function deleteSessionPlan(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/** Flip a session plan's public visibility (owner-only via RLS). A public plan
+ *  is readable logged-out at /share/session/[id]. */
+export async function setSessionPlanPublic(id: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase
+		.from('session_plans')
+		.update({ is_public: isPublic, updated_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+}
+
 /** Attach (or detach with null) a session plan to a class event. Organiser-only
  *  at the DB layer (the events_session_plan_organiser trigger). */
 export async function setEventSessionPlan(
