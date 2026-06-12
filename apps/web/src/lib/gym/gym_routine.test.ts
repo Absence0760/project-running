@@ -305,6 +305,35 @@ test('expandRoutineSteps: a superset group followed by a standalone', () => {
 	assert.equal(out.totalSets, 5);
 });
 
+test('expandRoutineSteps: an uneven superset (A x3, B x2) skips B\'s missing 3rd round', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'A',
+				position: 0,
+				supersetGroup: 1,
+				supersetOrder: 0,
+				sets: [pset(0, 5, 10), pset(1, 5, 10), pset(2, 5, 10)],
+			},
+			{
+				exerciseName: 'B',
+				position: 1,
+				supersetGroup: 1,
+				supersetOrder: 1,
+				sets: [pset(0, 8, 20), pset(1, 8, 20)],
+			},
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.deepEqual(
+		out.steps.map((s) => `${s.exerciseName}${s.setIndex}`),
+		['A0', 'B0', 'A1', 'B1', 'A2'],
+	);
+	assert.equal(out.supersetGroups, 1);
+	assert.equal(out.totalSets, 5);
+});
+
 test('expandRoutineSteps: a duration-based set is preserved (targetDurationS set, weight null)', () => {
 	const routine: PlannedRoutine = {
 		title: 'P',

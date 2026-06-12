@@ -234,6 +234,29 @@ void main() {
     expect(out.totalSets, 5);
   });
 
+  test('expandRoutineSteps: an uneven superset (A x3, B x2) skips B\'s missing 3rd round',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(
+          exerciseName: 'A',
+          position: 0,
+          supersetGroup: 1,
+          supersetOrder: 0,
+          sets: [pset(0, 5, 10), pset(1, 5, 10), pset(2, 5, 10)]),
+      PlannedExercise(
+          exerciseName: 'B',
+          position: 1,
+          supersetGroup: 1,
+          supersetOrder: 1,
+          sets: [pset(0, 8, 20), pset(1, 8, 20)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps.map((s) => '${s.exerciseName}${s.setIndex}').toList(),
+        ['A0', 'B0', 'A1', 'B1', 'A2']);
+    expect(out.supersetGroups, 1);
+    expect(out.totalSets, 5);
+  });
+
   test('expandRoutineSteps: a duration-based set is preserved (targetDurationS set, weight null)',
       () {
     final routine = PlannedRoutine(title: 'P', exercises: [

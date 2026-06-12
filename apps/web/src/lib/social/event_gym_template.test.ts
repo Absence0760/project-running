@@ -124,6 +124,11 @@ test('workoutDraftFromSession: title from planTitle when discipline null', () =>
 	assert.equal(draft.title, 'Morning Flow');
 });
 
+test('workoutDraftFromSession: whitespace-only discipline falls back to planTitle', () => {
+	const draft = workoutDraftFromSession({ steps: [], totalS: 0 }, 'Morning Flow', '   ');
+	assert.equal(draft.title, 'Morning Flow');
+});
+
 test('workoutDraftFromSession: duration_s = totalS when > 0', () => {
 	const draft = workoutDraftFromSession({ steps: [], totalS: 600 }, 'Flow', 'Yoga');
 	assert.equal(draft.duration_s, 600);

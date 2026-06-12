@@ -139,6 +139,15 @@ void main() {
       expect(d.title, 'Morning Flow');
     });
 
+    test('whitespace-only discipline falls back to planTitle', () {
+      final d = workoutDraftFromSession(
+        const ExpandedSession(steps: [], totalS: 0),
+        'Morning Flow',
+        '   ',
+      );
+      expect(d.title, 'Morning Flow');
+    });
+
     test('duration_s = totalS when > 0', () {
       final d = workoutDraftFromSession(
         const ExpandedSession(steps: [], totalS: 600),
