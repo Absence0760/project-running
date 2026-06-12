@@ -7349,4 +7349,53 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get nutritionCancel => 'Cancelar';
+
+  @override
+  String get sessionTitle => 'Sesiones';
+
+  @override
+  String get sessionEmpty => 'Aún no hay planes de sesión.';
+
+  @override
+  String get sessionEmptyHint =>
+      'Crea en la web una secuencia reutilizable de yoga, pilates o clase.';
+
+  @override
+  String get sessionUntitled => 'Sesión sin título';
+
+  @override
+  String get sessionNotFound => 'Plan de sesión no encontrado.';
+
+  @override
+  String get sessionSteps => 'Secuencia';
+
+  @override
+  String sessionStepHold(Object name, Object seconds) {
+    return '$name · mantener ${seconds}s';
+  }
+
+  @override
+  String sessionStepReps(Object name, Object reps) {
+    return '$name · $reps reps.';
+  }
+
+  @override
+  String sessionStepFlow(Object name, Object seconds) {
+    return '$name · flujo ${seconds}s';
+  }
+
+  @override
+  String sessionSideLeft(Object name) {
+    return '$name (izquierda)';
+  }
+
+  @override
+  String sessionSideRight(Object name) {
+    return '$name (derecha)';
+  }
+
+  @override
+  String sessionEstDuration(Object minutes) {
+    return '~ $minutes min';
+  }
 }

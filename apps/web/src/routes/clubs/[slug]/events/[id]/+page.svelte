@@ -47,7 +47,12 @@
 		type RecentRunOption,
 		type RaceSessionRow,
 		type EventException,
-		type EventPhoto
+		type EventPhoto,
+		fetchSessionPlan,
+		fetchSessionPlans,
+		setEventSessionPlan,
+		type SessionPlan,
+		type SessionPlanWithItems
 	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -56,6 +61,7 @@
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
 	import { workoutDraftFromTemplate } from '$lib/social/event_gym_template';
+	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { formatPrice } from '$lib/format/format_price';
 	import { registrationOpen } from '$lib/social/paid_registration';
@@ -224,6 +230,69 @@
 		isEventOrganiser && event?.category === 'class'
 	);
 	let markingAttendance = $state<string | null>(null);
+
+	// Session planner (session_planner.md P1): a class event may carry a
+	// session_plan_id. Show the attached sequence read-only here; an organiser
+	// can attach/detach an existing plan. The DB trigger is the real gate.
+	let sessionPlan = $state<SessionPlanWithItems | null>(null);
+	let myPlans = $state<SessionPlan[]>([]);
+	let showAttach = $state(false);
+	let attachChoice = $state<string>('');
+	let isClass = $derived(!!event && event.category === 'class');
+	let sessionSteps = $derived.by(() => {
+		if (!sessionPlan) return [];
+		const input: SessionPlanInput = {
+			blocks: sessionPlan.blocks.map((b) => ({ id: b.id, position: b.position, name: b.name })),
+			items: sessionPlan.items.map((it) => ({
+				id: it.id,
+				block_id: it.block_id,
+				position: it.position,
+				movement_name: it.movement_name,
+				kind: it.kind,
+				duration_s: it.duration_s,
+				reps: it.reps,
+				per_side: it.per_side,
+				tempo: it.tempo,
+				cue: it.cue
+			}))
+		};
+		return expandSessionSteps(input).steps;
+	});
+
+	async function loadSessionPlan() {
+		const planId = event?.session_plan_id ?? null;
+		sessionPlan = planId ? await fetchSessionPlan(planId) : null;
+	}
+
+	async function openAttach() {
+		myPlans = await fetchSessionPlans();
+		attachChoice = event?.session_plan_id ?? '';
+		showAttach = true;
+	}
+
+	async function saveAttach() {
+		if (!event) return;
+		try {
+			await setEventSessionPlan(event.id, attachChoice || null);
+			event = { ...event, session_plan_id: attachChoice || null };
+			await loadSessionPlan();
+			showAttach = false;
+			showToast(m('session.attached'), 'success');
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : m('session.saveFailed'), 'error');
+		}
+	}
+
+	function sessionStepLabel(step: (typeof sessionSteps)[number]): string {
+		if (step.kind === 'reps') {
+			return m('session.stepReps', { name: step.movementName, reps: step.reps ?? 0 });
+		}
+		if (step.kind === 'flow') {
+			return m('session.stepFlow', { name: step.movementName, seconds: step.durationS ?? 0 });
+		}
+		return m('session.stepHold', { name: step.movementName, seconds: step.durationS ?? 0 });
+	}
+
 	let isPast = $derived(
 		!!event &&
 			(event.recurrence_freq
@@ -294,6 +363,7 @@
 		activeInstance = prevInstance ?? event.next_instance_start;
 		// Members-only meetup coordinates (null for non-members / no point set).
 		meetPoint = await fetchEventMeetPoint(event.id);
+		await loadSessionPlan();
 		await reloadInstance();
 		loading = false;
 	}
@@ -1738,6 +1808,34 @@
 		</section>
 		{/if}
 
+		{#if isClass && (sessionPlan || isEventOrganiser)}
+			<section class="card" data-testid="session-sequence">
+				<div class="results-head">
+					<h3>{m('session.sequence')}</h3>
+					{#if isEventOrganiser}
+						<button type="button" class="btn-link" onclick={openAttach}>
+							{m('session.attachToEvent')}
+						</button>
+					{/if}
+				</div>
+				{#if sessionPlan}
+					<a class="session-plan-name" href={`/sessions/${sessionPlan.id}`}>
+						{sessionPlan.title}
+					</a>
+					<ol class="session-steps">
+						{#each sessionSteps as step (step.itemId + (step.side ?? ''))}
+							<li>
+								<span>{sessionStepLabel(step)}</span>
+								{#if step.cue}<span class="muted session-cue">{step.cue}</span>{/if}
+							</li>
+						{/each}
+					</ol>
+				{:else}
+					<p class="muted">{m('session.attachNone')}</p>
+				{/if}
+			</section>
+		{/if}
+
 		<section class="card">
 			<div class="results-head">
 				<h3>{m('clubEvent.photosTitle', { n: eventPhotos.length })}</h3>
@@ -1958,9 +2056,72 @@
 		/>
 	</Modal>
 {/if}
+
+{#if event && isClass && isEventOrganiser}
+	<Modal open={showAttach} title={m('session.attachToEvent')} onclose={() => (showAttach = false)}>
+		<div class="attach-body">
+			<label class="attach-field">
+				<span>{m('session.sequence')}</span>
+				<select bind:value={attachChoice} data-testid="attach-plan-select">
+					<option value="">{m('session.attachNone')}</option>
+					{#each myPlans as plan (plan.id)}
+						<option value={plan.id}>{plan.title}</option>
+					{/each}
+				</select>
+			</label>
+			<div class="attach-actions">
+				<button type="button" class="btn btn-secondary" onclick={() => (showAttach = false)}>
+					{m('session.cancel')}
+				</button>
+				<button
+					type="button"
+					class="btn btn-primary"
+					data-testid="attach-plan-save"
+					onclick={saveAttach}
+				>
+					{m('session.attachSave')}
+				</button>
+			</div>
+		</div>
+	</Modal>
+{/if}
 {/if}
 
 <style>
+	.session-plan-name {
+		display: inline-block;
+		font-weight: 600;
+		margin-bottom: var(--space-xs);
+	}
+	.session-steps {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		padding-left: var(--space-lg);
+		margin: 0;
+	}
+	.session-steps li {
+		display: flex;
+		flex-direction: column;
+	}
+	.session-cue {
+		font-size: 0.85rem;
+	}
+	.attach-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+	.attach-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.attach-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-sm);
+	}
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
 	}

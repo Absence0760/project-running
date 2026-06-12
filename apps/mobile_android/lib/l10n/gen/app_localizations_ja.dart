@@ -6950,4 +6950,52 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get nutritionCancel => 'キャンセル';
+
+  @override
+  String get sessionTitle => 'セッション';
+
+  @override
+  String get sessionEmpty => 'セッションプランはまだありません。';
+
+  @override
+  String get sessionEmptyHint => '再利用できるヨガ・ピラティス・クラスのシーケンスをウェブで作成しましょう。';
+
+  @override
+  String get sessionUntitled => '無題のセッション';
+
+  @override
+  String get sessionNotFound => 'セッションプランが見つかりません。';
+
+  @override
+  String get sessionSteps => 'シーケンス';
+
+  @override
+  String sessionStepHold(Object name, Object seconds) {
+    return '$name・キープ $seconds秒';
+  }
+
+  @override
+  String sessionStepReps(Object name, Object reps) {
+    return '$name・$reps回';
+  }
+
+  @override
+  String sessionStepFlow(Object name, Object seconds) {
+    return '$name・フロー $seconds秒';
+  }
+
+  @override
+  String sessionSideLeft(Object name) {
+    return '$name（左）';
+  }
+
+  @override
+  String sessionSideRight(Object name) {
+    return '$name（右）';
+  }
+
+  @override
+  String sessionEstDuration(Object minutes) {
+    return '約 $minutes 分';
+  }
 }

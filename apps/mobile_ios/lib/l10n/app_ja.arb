@@ -2020,5 +2020,17 @@
   "nutritionItemName": "名称",
   "nutritionPortionGrams": "分量（g）",
   "nutritionAdd": "追加",
-  "nutritionCancel": "キャンセル"
+  "nutritionCancel": "キャンセル",
+  "sessionTitle": "セッション",
+  "sessionEmpty": "セッションプランはまだありません。",
+  "sessionEmptyHint": "再利用できるヨガ・ピラティス・クラスのシーケンスをウェブで作成しましょう。",
+  "sessionUntitled": "無題のセッション",
+  "sessionNotFound": "セッションプランが見つかりません。",
+  "sessionSteps": "シーケンス",
+  "sessionStepHold": "{name}・キープ {seconds}秒",
+  "sessionStepReps": "{name}・{reps}回",
+  "sessionStepFlow": "{name}・フロー {seconds}秒",
+  "sessionSideLeft": "{name}（左）",
+  "sessionSideRight": "{name}（右）",
+  "sessionEstDuration": "約 {minutes} 分"
 }

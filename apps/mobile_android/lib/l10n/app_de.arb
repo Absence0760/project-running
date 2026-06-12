@@ -2020,5 +2020,17 @@
   "nutritionItemName": "Bezeichnung",
   "nutritionPortionGrams": "Portion (g)",
   "nutritionAdd": "Hinzufügen",
-  "nutritionCancel": "Abbrechen"
+  "nutritionCancel": "Abbrechen",
+  "sessionTitle": "Sessions",
+  "sessionEmpty": "Noch keine Session-Pläne.",
+  "sessionEmptyHint": "Erstelle im Web eine wiederverwendbare Yoga-, Pilates- oder Kurs-Abfolge.",
+  "sessionUntitled": "Session ohne Titel",
+  "sessionNotFound": "Session-Plan nicht gefunden.",
+  "sessionSteps": "Abfolge",
+  "sessionStepHold": "{name} · halten {seconds}s",
+  "sessionStepReps": "{name} · {reps} Wdh.",
+  "sessionStepFlow": "{name} · Flow {seconds}s",
+  "sessionSideLeft": "{name} (links)",
+  "sessionSideRight": "{name} (rechts)",
+  "sessionEstDuration": "ca. {minutes} Min."
 }
