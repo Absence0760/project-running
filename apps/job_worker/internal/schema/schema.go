@@ -61,6 +61,7 @@ const (
 	TableReports            = "reports"
 	TableDirectMessages     = "direct_messages"
 	TableGymWorkouts        = "gym_workouts"
+	TableGymRoutines        = "gym_routines"
 	TableFoodLog            = "food_log"
 	TableBodyMetrics        = "body_metrics"
 	TableSafetyContacts     = "safety_contacts"
