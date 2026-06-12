@@ -5830,6 +5830,7 @@ export async function createGymWorkout(input: {
 	notes?: string | null;
 	is_public?: boolean;
 	sets?: GymSetInput[];
+	metadata?: Record<string, unknown> | null;
 }): Promise<GymWorkout> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
@@ -5843,6 +5844,7 @@ export async function createGymWorkout(input: {
 			duration_s: input.duration_s ?? null,
 			notes: input.notes ?? null,
 			is_public: input.is_public ?? false,
+			metadata: input.metadata ?? null,
 			last_modified_at: nowIso,
 		})
 		.select('*')
@@ -5907,6 +5909,8 @@ export interface GymRoutineSet {
 	target_reps_max: number | null;
 	target_weight_kg: number | null;
 	target_rpe: number | null;
+	rest_s: number | null;
+	target_duration_s: number | null;
 }
 
 export interface GymRoutineDetail {
@@ -5979,7 +5983,9 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	}
 	const { data: setRows, error: sErr } = await supabase
 		.from(TABLES.gym_routine_sets)
-		.select('routine_exercise_id, set_index, target_reps_min, target_reps_max, target_weight_kg, target_rpe')
+		.select(
+			'routine_exercise_id, set_index, target_reps_min, target_reps_max, target_weight_kg, target_rpe, rest_s, target_duration_s',
+		)
 		.in('routine_exercise_id', exercises.map((e) => e.id))
 		.order('set_index', { ascending: true });
 	if (sErr) console.error('fetchGymRoutineDetail sets failed', sErr);
@@ -5992,6 +5998,8 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 			target_reps_max: row.target_reps_max,
 			target_weight_kg: row.target_weight_kg,
 			target_rpe: row.target_rpe,
+			rest_s: row.rest_s,
+			target_duration_s: row.target_duration_s,
 		});
 		setsByExercise.set(row.routine_exercise_id, list);
 	}

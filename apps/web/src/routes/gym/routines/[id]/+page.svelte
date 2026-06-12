@@ -6,25 +6,16 @@
 	import {
 		fetchGymRoutineDetail,
 		deleteGymRoutine,
-		fetchGymExerciseNames,
 		type GymRoutineDetail,
-		type GymSetInput,
 	} from '$lib/core/data';
-	import { prefillFromRoutine, type PlannedRoutine } from '$lib/gym/gym_routine';
-	import { formatWeight, weightUnitLabel, parseWeight } from '$lib/format/units.svelte';
-	import Modal from '$lib/components/Modal.svelte';
-	import GymEditor from '$lib/components/GymEditor.svelte';
+	import { formatWeight, weightUnitLabel } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
-	import type { GymWorkoutWithSets } from '$lib/core/data';
 
 	let detail = $state<GymRoutineDetail | null>(null);
 	let loading = $state(true);
 	let confirmingDelete = $state(false);
-	let showStart = $state(false);
-	let suggestions = $state<string[]>([]);
-	let startSeed = $state<GymWorkoutWithSets | null>(null);
 
 	const routineId = $derived($page.params.id ?? '');
 
@@ -38,7 +29,7 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		if (!auth.user) return;
-		[, suggestions] = await Promise.all([load(), fetchGymExerciseNames()]);
+		await load();
 	});
 
 	async function doDelete() {
@@ -50,74 +41,6 @@
 			console.error('routine delete failed', e);
 			showToast(t('gym.routine.saveFailed'));
 		}
-	}
-
-	// "Start routine" (P1: prefill-only — no execution loop). Expand the saved
-	// plan into editable GymEditor blocks via prefillFromRoutine, then seed a
-	// fresh GymEditor (logging a new session) with those targets as actuals.
-	function startRoutine() {
-		if (!detail) return;
-		const planned: PlannedRoutine = {
-			title: detail.routine.title,
-			exercises: detail.exercises.map((e) => ({
-				exerciseName: e.exercise_name,
-				position: e.position,
-				sets: e.sets.map((s) => ({
-					setIndex: s.set_index,
-					targetRepsMin: s.target_reps_min,
-					targetRepsMax: s.target_reps_max,
-					targetWeightKg: s.target_weight_kg,
-					targetRpe: s.target_rpe,
-				})),
-			})),
-		};
-		const blocks = prefillFromRoutine(planned);
-		// Re-shape the prefill into a GymWorkoutWithSets so GymEditor's
-		// initExercises rebuilds the same blocks (it groups by consecutive
-		// exercise_name). Weight is canonical kg.
-		const sets: GymSetInput[] = [];
-		for (const b of blocks) {
-			if (b.name.trim() === '') continue;
-			for (const s of b.sets) {
-				sets.push({
-					exercise_name: b.name,
-					reps: s.reps === '' ? null : parseInt(s.reps, 10),
-					weight_kg: s.weightKg ?? null,
-					rpe: s.rpe === '' ? null : parseFloat(s.rpe),
-				});
-			}
-		}
-		startSeed = {
-			workout: {
-				id: '',
-				user_id: auth.user?.id ?? '',
-				title: detail.routine.title,
-				started_at: new Date().toISOString(),
-				duration_s: null,
-				notes: null,
-				is_public: false,
-				external_id: null,
-				last_modified_at: new Date().toISOString(),
-				created_at: new Date().toISOString(),
-			},
-			sets: sets.map((s, i) => ({
-				id: '',
-				workout_id: '',
-				set_index: i,
-				exercise_name: s.exercise_name,
-				reps: s.reps ?? null,
-				weight_kg: s.weight_kg ?? null,
-				rpe: s.rpe ?? null,
-				duration_s: null,
-			})),
-		};
-		showStart = true;
-	}
-
-	function onLogged() {
-		showStart = false;
-		startSeed = null;
-		goto('/gym');
 	}
 
 	function repLabel(s: { target_reps_min: number | null; target_reps_max: number | null }): string {
@@ -155,7 +78,7 @@
 			<div class="head-actions">
 				<button
 					class="btn btn-primary"
-					onclick={startRoutine}
+					onclick={() => goto(`/gym/session/${routineId}`)}
 					data-testid="routine-start"
 				>
 					<span class="material-symbols" aria-hidden="true">play_arrow</span>
@@ -198,15 +121,6 @@
 		</ul>
 	{/if}
 </div>
-
-<Modal open={showStart} title={detail?.routine.title ?? ''} onclose={() => (showStart = false)}>
-	<GymEditor
-		seed={startSeed}
-		{suggestions}
-		oncreated={onLogged}
-		oncancel={() => (showStart = false)}
-	/>
-</Modal>
 
 <ConfirmDialog
 	open={confirmingDelete}
