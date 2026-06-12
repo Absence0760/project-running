@@ -7489,6 +7489,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionSlotSnack => 'Lanche';
 
   @override
+  String get nutritionMealProtein => 'Proteína';
+
+  @override
+  String get nutritionMealCarbs => 'Carboidratos';
+
+  @override
+  String get nutritionMealFat => 'Gordura';
+
+  @override
+  String get nutritionMealItemsHeading => 'Itens';
+
+  @override
+  String get nutritionMealNoItems => 'Nada registrado para esta refeição.';
+
+  @override
+  String get nutritionMealTrendHeading => 'Últimos 7 dias';
+
+  @override
   String get nutritionDelete => 'Excluir';
 
   @override
@@ -15224,6 +15242,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionSlotSnack => 'Lanche';
+
+  @override
+  String get nutritionMealProtein => 'Proteína';
+
+  @override
+  String get nutritionMealCarbs => 'Carboidratos';
+
+  @override
+  String get nutritionMealFat => 'Gordura';
+
+  @override
+  String get nutritionMealItemsHeading => 'Itens';
+
+  @override
+  String get nutritionMealNoItems => 'Nada registrado para esta refeição.';
+
+  @override
+  String get nutritionMealTrendHeading => 'Últimos 7 dias';
 
   @override
   String get nutritionDelete => 'Excluir';

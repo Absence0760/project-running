@@ -9171,6 +9171,30 @@
   "nutritionSlotLunch": "Lunch",
   "nutritionSlotDinner": "Dinner",
   "nutritionSlotSnack": "Snack",
+  "nutritionMealProtein": "Protein",
+  "@nutritionMealProtein": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealCarbs": "Carbs",
+  "@nutritionMealCarbs": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealFat": "Fat",
+  "@nutritionMealFat": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealItemsHeading": "Items",
+  "@nutritionMealItemsHeading": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealNoItems": "Nothing logged for this meal.",
+  "@nutritionMealNoItems": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealTrendHeading": "Last 7 days",
+  "@nutritionMealTrendHeading": {
+    "description": "Per-meal nutrition detail screen"
+  },
   "nutritionDelete": "Delete",
   "nutritionDeleteEntryTitle": "Delete this entry?",
   "nutritionDeleteEntryMessage": "{item} will be removed from today's log.",

@@ -12375,6 +12375,42 @@ abstract class AppLocalizations {
   /// **'Snack'**
   String get nutritionSlotSnack;
 
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Protein'**
+  String get nutritionMealProtein;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Carbs'**
+  String get nutritionMealCarbs;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Fat'**
+  String get nutritionMealFat;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get nutritionMealItemsHeading;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing logged for this meal.'**
+  String get nutritionMealNoItems;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get nutritionMealTrendHeading;
+
   /// No description provided for @nutritionDelete.
   ///
   /// In en, this message translates to:

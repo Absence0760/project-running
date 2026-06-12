@@ -7490,6 +7490,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nutritionSlotSnack => 'Tentempié';
 
   @override
+  String get nutritionMealProtein => 'Proteínas';
+
+  @override
+  String get nutritionMealCarbs => 'Carbohidratos';
+
+  @override
+  String get nutritionMealFat => 'Grasas';
+
+  @override
+  String get nutritionMealItemsHeading => 'Alimentos';
+
+  @override
+  String get nutritionMealNoItems => 'Nada registrado para esta comida.';
+
+  @override
+  String get nutritionMealTrendHeading => 'Últimos 7 días';
+
+  @override
   String get nutritionDelete => 'Eliminar';
 
   @override

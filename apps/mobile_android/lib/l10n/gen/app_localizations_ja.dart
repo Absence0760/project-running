@@ -7090,6 +7090,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionSlotSnack => '間食';
 
   @override
+  String get nutritionMealProtein => 'タンパク質';
+
+  @override
+  String get nutritionMealCarbs => '炭水化物';
+
+  @override
+  String get nutritionMealFat => '脂質';
+
+  @override
+  String get nutritionMealItemsHeading => '項目';
+
+  @override
+  String get nutritionMealNoItems => 'この食事の記録はありません。';
+
+  @override
+  String get nutritionMealTrendHeading => '過去7日間';
+
+  @override
   String get nutritionDelete => '削除';
 
   @override
