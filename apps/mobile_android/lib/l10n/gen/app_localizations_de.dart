@@ -3446,6 +3446,22 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get eventMarkAttended => 'Als teilgenommen markieren';
+
+  @override
+  String get eventMarkNoShow => 'Als nicht erschienen markieren';
+
+  @override
+  String get eventAttendanceAttended => 'Teilgenommen';
+
+  @override
+  String get eventAttendanceNoShow => 'Nicht erschienen';
+
+  @override
+  String get eventAttendanceFailed =>
+      'Teilnahme konnte nicht aktualisiert werden. Bitte erneut versuchen.';
+
+  @override
   String get eventRsvpGoing => 'Bin dabei';
 
   @override

@@ -3438,6 +3438,22 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get eventMarkAttended => 'Marcar como presente';
+
+  @override
+  String get eventMarkNoShow => 'Marcar como ausente';
+
+  @override
+  String get eventAttendanceAttended => 'Presente';
+
+  @override
+  String get eventAttendanceNoShow => 'Ausente';
+
+  @override
+  String get eventAttendanceFailed =>
+      'Não foi possível atualizar a presença. Tente novamente.';
+
+  @override
   String get eventRsvpGoing => 'Eu vou';
 
   @override
@@ -10716,6 +10732,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String eventAttendeeStatus(String status) {
     return '($status)';
   }
+
+  @override
+  String get eventMarkAttended => 'Marcar como presente';
+
+  @override
+  String get eventMarkNoShow => 'Marcar como ausente';
+
+  @override
+  String get eventAttendanceAttended => 'Presente';
+
+  @override
+  String get eventAttendanceNoShow => 'Ausente';
+
+  @override
+  String get eventAttendanceFailed =>
+      'Não foi possível atualizar a presença. Tente novamente.';
 
   @override
   String get eventRsvpGoing => 'Eu vou';

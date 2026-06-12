@@ -4234,6 +4234,26 @@
       }
     }
   },
+  "eventMarkAttended": "Mark attended",
+  "@eventMarkAttended": {
+    "description": "Host control — mark an attendee as having shown up"
+  },
+  "eventMarkNoShow": "Mark no-show",
+  "@eventMarkNoShow": {
+    "description": "Host control — mark an attendee as a no-show"
+  },
+  "eventAttendanceAttended": "Attended",
+  "@eventAttendanceAttended": {
+    "description": "Read-only attendance badge — attended"
+  },
+  "eventAttendanceNoShow": "No-show",
+  "@eventAttendanceNoShow": {
+    "description": "Read-only attendance badge — did not attend"
+  },
+  "eventAttendanceFailed": "Could not update attendance. Please try again.",
+  "@eventAttendanceFailed": {
+    "description": "Error banner when marking attendance fails"
+  },
   "eventRsvpGoing": "I'm in",
   "@eventRsvpGoing": {
     "description": "RSVP chip — going"

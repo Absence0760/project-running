@@ -115,10 +115,14 @@ class AttendeeView {
   final String userId;
   final String status;
   final String? displayName;
+  // 'attended' | 'no_show' | null. Orthogonal to RSVP status; host-written
+  // via mark_attendance (instructor_business.md M6).
+  final String? attendance;
   const AttendeeView({
     required this.userId,
     required this.status,
     this.displayName,
+    this.attendance,
   });
 }
 
@@ -886,6 +890,18 @@ class SocialService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Host-only: mark whether an attendee actually showed up. Routes through
+  /// the organiser-only mark_attendance RPC; pass null to clear a prior mark.
+  Future<void> markAttendance(
+      String eventId, String userId, String? attendance) async {
+    await _c.rpc('mark_attendance', params: {
+      'p_event_id': eventId,
+      'p_user_id': userId,
+      'p_attendance': attendance,
+    });
+    notifyListeners();
+  }
+
   Future<List<AttendeeView>> fetchAttendees(String eventId, DateTime instance) async {
     final rows = await _c
         .from('event_attendees')
@@ -910,6 +926,7 @@ class SocialService extends ChangeNotifier {
           userId: a['user_id'] as String,
           status: a['status'] as String,
           displayName: byId[a['user_id']],
+          attendance: a['attendance'] as String?,
         ),
     ];
   }

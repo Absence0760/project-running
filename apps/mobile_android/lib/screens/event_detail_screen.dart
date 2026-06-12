@@ -19,6 +19,13 @@ import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
+/// Host-only attendance marking is offered iff the viewer organises the
+/// event's club AND the event is a `class` (instructor_business.md M6).
+/// Orthogonal to RSVP; non-hosts never see the marking controls.
+@visibleForTesting
+bool canMarkEventAttendance(ClubView? club, String category) =>
+    club?.isEventOrganiser == true && category == 'class';
+
 class EventDetailScreen extends StatefulWidget {
   final SocialService social;
   final String clubSlug;
@@ -38,6 +45,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   EventView? _event;
   ClubView? _club;
   List<AttendeeView> _attendees = const [];
+  String? _markingAttendance;
   List<EventResultView> _results = const [];
   RaceSessionRow? _raceSession;
   DateTime? _activeInstance;
@@ -361,6 +369,40 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
+  Future<void> _markAttendance(
+      String userId, String? current, String value) async {
+    final e = _event;
+    if (e == null || _markingAttendance != null) return;
+    // Toggle off when the host taps the already-set state.
+    final next = current == value ? null : value;
+    setState(() => _markingAttendance = userId);
+    try {
+      await widget.social.markAttendance(e.row.id, userId, next);
+      if (mounted) {
+        setState(() {
+          _attendees = [
+            for (final a in _attendees)
+              if (a.userId == userId)
+                AttendeeView(
+                  userId: a.userId,
+                  status: a.status,
+                  displayName: a.displayName,
+                  attendance: next,
+                )
+              else
+                a,
+          ];
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        showTopBanner(context, AppLocalizations.of(context).eventAttendanceFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _markingAttendance = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -392,6 +434,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Slice E: class / social events are attendance-only — no course, no race,
     // no leaderboard. isAthleticEventCategory is the single source of truth.
     final athletic = isAthleticEventCategory(e.row.category);
+    // Host-only attendance marking (instructor_business.md M6): the organiser
+    // of a `class` event records who showed up. Non-hosts see it read-only.
+    final canMarkAttendance = canMarkEventAttendance(_club, e.row.category);
 
     return Scaffold(
       appBar: AppBar(title: Text(e.row.title)),
@@ -567,6 +612,54 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             l10n.eventAttendeeStatus(a.status),
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.outline,
+                            ),
+                          ),
+                        ],
+                        if (canMarkAttendance) ...[
+                          const SizedBox(width: 6),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(
+                                minWidth: 32, minHeight: 32),
+                            padding: EdgeInsets.zero,
+                            iconSize: 18,
+                            tooltip: l10n.eventMarkAttended,
+                            color: a.attendance == 'attended'
+                                ? Colors.green
+                                : theme.colorScheme.outline,
+                            icon: const Icon(Icons.check_circle_outline),
+                            onPressed: _markingAttendance != null
+                                ? null
+                                : () => _markAttendance(
+                                    a.userId, a.attendance, 'attended'),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(
+                                minWidth: 32, minHeight: 32),
+                            padding: EdgeInsets.zero,
+                            iconSize: 18,
+                            tooltip: l10n.eventMarkNoShow,
+                            color: a.attendance == 'no_show'
+                                ? theme.colorScheme.error
+                                : theme.colorScheme.outline,
+                            icon: const Icon(Icons.cancel_outlined),
+                            onPressed: _markingAttendance != null
+                                ? null
+                                : () => _markAttendance(
+                                    a.userId, a.attendance, 'no_show'),
+                          ),
+                        ] else if (a.attendance != null) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            a.attendance == 'attended'
+                                ? l10n.eventAttendanceAttended
+                                : l10n.eventAttendanceNoShow,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: a.attendance == 'attended'
+                                  ? Colors.green
+                                  : theme.colorScheme.error,
                             ),
                           ),
                         ],

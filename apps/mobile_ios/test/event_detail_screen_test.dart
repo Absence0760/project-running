@@ -1,3 +1,4 @@
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,27 @@ import '../lib/event_category.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/event_detail_screen.dart';
 import '../lib/social_service.dart';
+
+ClubView _club(String? viewerRole) => ClubView(
+      row: ClubRow(
+        id: 'club-1',
+        slug: 'club-1',
+        name: 'Club',
+        description: null,
+        locationLabel: null,
+        isPublic: true,
+        joinPolicy: 'open',
+        ownerId: 'owner-1',
+        createdAt: DateTime(2026, 1, 1),
+        memberCount: 1,
+        isVerified: false,
+        requiresActivityWaiver: false,
+      ),
+      memberCount: 1,
+      viewerRole: viewerRole,
+      viewerStatus: viewerRole == null ? null : 'active',
+      joinPolicy: 'open',
+    );
 
 bool _supabaseReady = false;
 
@@ -87,6 +109,26 @@ void main() {
       expect(isAthleticEventCategory('social'), isFalse);
       expect(isAthleticEventCategory('run'), isTrue);
       expect(isAthleticEventCategory('cycle'), isTrue);
+    });
+  });
+
+  group('M6 attendance — host-gating predicate', () {
+    test('an organiser of a class event may mark attendance', () {
+      expect(canMarkEventAttendance(_club('owner'), 'class'), isTrue);
+      expect(canMarkEventAttendance(_club('admin'), 'class'), isTrue);
+      expect(canMarkEventAttendance(_club('event_organiser'), 'class'), isTrue);
+    });
+
+    test('a non-organiser viewer may NOT mark attendance', () {
+      expect(canMarkEventAttendance(_club('member'), 'class'), isFalse);
+      expect(canMarkEventAttendance(_club(null), 'class'), isFalse);
+      expect(canMarkEventAttendance(null, 'class'), isFalse);
+    });
+
+    test('attendance marking is class-only — never on run/cycle/social', () {
+      expect(canMarkEventAttendance(_club('owner'), 'run'), isFalse);
+      expect(canMarkEventAttendance(_club('owner'), 'cycle'), isFalse);
+      expect(canMarkEventAttendance(_club('owner'), 'social'), isFalse);
     });
   });
 }
