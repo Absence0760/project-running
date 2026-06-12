@@ -3053,6 +3053,16 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 145. Gym routines become shareable as club-scoped templates (membership-gated), NOT via a global `is_public` flag
+
+**Decided (2026-06-12, migration `20270109_001`).** `gym_programming.md` deferred "public-routine sharing" because shipping a global `is_public` public-read branch *before* a browse UI exists lets any authenticated user enumerate every public routine's `notes` + planned sets through the REST API (a `public-rows` leak). The leak-safe subset ships now: a `gym_routines.club_id` makes a routine **club-owned**, readable only by club members via `private.is_club_member` (mirrors club-owned routes + session plans, §"clone_session_template"). Two SECURITY DEFINER RPCs do the work — `publish_gym_routine_as_template(routine, club)` (author + `private.is_club_admin` gated) deep-copies a personal routine into a new club-owned one; `clone_gym_routine_template(template)` (author-or-member gated) adopts it back into a personal copy. The global `is_public` + browse UI stays deferred.
+
+**Why tighter than the session-planner publish.** `publishSessionAsTemplate` is a *client-side* insert whose RLS with-check only validates `author_id` — so a non-member author can set an arbitrary `club_id` and inject a template into a club they don't belong to (accepted there as a mild spam vector). The gym publish is a **server-side RPC that also requires `is_club_admin` of the target club**, closing that hole. Adopt mirrors `clone_session_template` exactly (rate-limited, deep-copy, nothing stripped — the published target loads ARE the template).
+
+**Don't re-litigate** by adding a global `is_public` read branch to `gym_routines` without shipping the browse UI in the same migration (the original leak concern), or by relaxing the publish admin-gate back to the session-planner author-only shape. Pinned by `gym_routine_club_templates_test.sql` (13 tests) + `tests-e2e/gym/club-routine-template.spec.ts`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
