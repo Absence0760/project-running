@@ -73,6 +73,54 @@ class FeedEntry {
   const FeedEntry({required this.run, required this.author});
 }
 
+/// Cross-modal activity-feed entry — a run or a public gym workout.
+/// Mirrors web's `ActivityFeedEntry` discriminated union (multi_modal.md
+/// § Social feed). Carries `id` / `startedAt` so the feed can merge + cursor
+/// both kinds on the same window.
+sealed class ActivityFeedEntry {
+  PublicProfile get author;
+  String get id;
+  DateTime get startedAt;
+}
+
+/// A run surfaced in the feed.
+class RunFeedEntry extends ActivityFeedEntry {
+  final RunRow run;
+  @override
+  final PublicProfile author;
+
+  RunFeedEntry({required this.run, required this.author});
+
+  @override
+  String get id => run.id;
+  @override
+  DateTime get startedAt => run.startedAt;
+}
+
+/// A public gym workout surfaced in the feed as a "lift card" — only the
+/// non-sensitive headline (title / set count / total volume in canonical kg).
+/// No notes / RPE / per-set detail leak into the feed.
+class LiftFeedEntry extends ActivityFeedEntry {
+  @override
+  final String id;
+  @override
+  final DateTime startedAt;
+  final String? title;
+  final int setCount;
+  final double volumeKg;
+  @override
+  final PublicProfile author;
+
+  LiftFeedEntry({
+    required this.id,
+    required this.startedAt,
+    required this.title,
+    required this.setCount,
+    required this.volumeKg,
+    required this.author,
+  });
+}
+
 /// A comment with the author profile resolved. Used by the
 /// comments thread on run-detail / public-share screens.
 class RunCommentWithAuthor {

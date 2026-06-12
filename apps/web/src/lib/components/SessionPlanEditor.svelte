@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		createSessionPlan,
 		updateSessionPlan,
+		fetchSessionMovementNames,
 		type SessionPlanInput,
 		type SessionPlanItemInput
 	} from '$lib/core/data';
@@ -82,6 +84,11 @@
 	let blocks = $state<EditBlock[]>(initBlocks(existing));
 	let items = $state<EditItem[]>(initItems(existing));
 	let saving = $state(false);
+	let movementSuggestions = $state<string[]>([]);
+
+	onMount(async () => {
+		movementSuggestions = await fetchSessionMovementNames();
+	});
 
 	function parseIntOrNull(raw: string): number | null {
 		const n = Number.parseInt(raw, 10);
@@ -186,6 +193,12 @@
 </script>
 
 <div class="session-editor">
+	<datalist id="session-movement-suggestions">
+		{#each movementSuggestions as s (s)}
+			<option value={s}></option>
+		{/each}
+	</datalist>
+
 	<label class="field">
 		<span>{t('session.titleLabel')}</span>
 		<input type="text" bind:value={title} maxlength="120" />
@@ -247,6 +260,7 @@
 					<input
 						class="grow"
 						type="text"
+						list="session-movement-suggestions"
 						bind:value={item.movement_name}
 						placeholder={t('session.movementPlaceholder')}
 						aria-label={t('session.movementName')}

@@ -3360,6 +3360,37 @@ class ApiClient {
     return newId as String;
   }
 
+  /// Club-owned session plans (the club's "session templates"). Visible to
+  /// members + writable by admins via RLS. Mirrors [fetchClubTemplates] +
+  /// web `fetchClubSessionTemplates` (session_planner.md P3).
+  Future<List<SessionPlanRow>> fetchClubSessionTemplates(String clubId) async {
+    try {
+      final data = await _client
+          .from(SessionPlanRow.table)
+          .select()
+          .eq(SessionPlanRow.colClubId, clubId)
+          .order(SessionPlanRow.colUpdatedAt, ascending: false);
+      return (data as List)
+          .map<SessionPlanRow>(
+              (r) => SessionPlanRow.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchClubSessionTemplates failed: $e');
+      return const [];
+    }
+  }
+
+  /// Clone a club session template into a new personal session plan. The
+  /// clone_session_template RPC enforces author/member authorisation +
+  /// rate-limits server-side. Returns the new plan's id.
+  Future<String> cloneSessionTemplate(String templateId) async {
+    final newId = await _client.rpc(
+      'clone_session_template',
+      params: {'template_id': templateId},
+    );
+    return newId as String;
+  }
+
   // ──────────────────── Phase 2 — domain joins ────────────────────
   //
   // Methods that combine multiple rows into a `core_models/social.dart`
@@ -3470,6 +3501,129 @@ class ApiClient {
         run: row,
         author: profilesById[row.userId] ??
             PublicProfile(id: row.userId, displayName: null, avatarUrl: null),
+      );
+    }).toList();
+  }
+
+  /// Cross-modal following feed (multi_modal.md § Social feed): recent public
+  /// runs AND public gym workouts from people the caller follows, merged into
+  /// one reverse-chronological window.
+  ///
+  /// Runs go through the redacted `public_runs` view (decisions §33). Lifts
+  /// read `gym_workouts` directly — that table's "owner or public read" RLS
+  /// scopes a non-owner to public rows, and only the headline columns
+  /// (title / set_count / volume_kg) are projected, never notes / per-set
+  /// data. `activityType`: 'all' merges both; 'lift' / 'gym' returns lifts
+  /// only; any run activity_type returns runs only.
+  Future<List<ActivityFeedEntry>> fetchFollowingActivityFeed({
+    int limit = 20,
+    ({DateTime startedAt, String id})? cursor,
+    String? authorId,
+    String? activityType,
+    int feedWindowDays = 14,
+  }) async {
+    final type = activityType ?? 'all';
+    final wantsLifts = type == 'all' || type == 'lift' || type == 'gym';
+    final wantsRuns = type != 'lift' && type != 'gym';
+
+    final runs = wantsRuns
+        ? await fetchFollowingFeed(
+            limit: limit,
+            cursor: cursor,
+            authorId: authorId,
+            activityType: activityType,
+            feedWindowDays: feedWindowDays,
+          )
+        : const <FeedEntry>[];
+    final lifts = wantsLifts
+        ? await _fetchFollowingLifts(
+            limit: limit,
+            cursor: cursor,
+            authorId: authorId,
+            feedWindowDays: feedWindowDays,
+          )
+        : const <LiftFeedEntry>[];
+
+    final merged = <ActivityFeedEntry>[
+      for (final r in runs) RunFeedEntry(run: r.run, author: r.author),
+      ...lifts,
+    ];
+    merged.sort((a, b) {
+      final c = b.startedAt.compareTo(a.startedAt);
+      return c != 0 ? c : b.id.compareTo(a.id);
+    });
+    return merged.length > limit ? merged.sublist(0, limit) : merged;
+  }
+
+  Future<List<LiftFeedEntry>> _fetchFollowingLifts({
+    int limit = 20,
+    ({DateTime startedAt, String id})? cursor,
+    String? authorId,
+    int feedWindowDays = 14,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+
+    final edges = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFolloweeId)
+        .eq(UserFollowRow.colFollowerId, viewerId);
+    final followeeIds = edges
+        .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
+        .toList();
+    if (followeeIds.isEmpty) return const [];
+
+    final filtered = authorId == null
+        ? followeeIds
+        : followeeIds.where((id) => id == authorId).toList();
+    if (filtered.isEmpty) return const [];
+
+    final cutoff = DateTime.now()
+        .toUtc()
+        .subtract(Duration(days: feedWindowDays))
+        .toIso8601String();
+
+    var q = _client
+        .from(GymWorkoutRow.table)
+        .select('id, user_id, started_at, title, set_count, volume_kg')
+        .eq(GymWorkoutRow.colIsPublic, true)
+        .inFilter(GymWorkoutRow.colUserId, filtered)
+        .gte(GymWorkoutRow.colStartedAt, cutoff);
+    if (cursor != null) {
+      final iso = cursor.startedAt.toIso8601String();
+      q = q.or(
+        'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
+      );
+    }
+    final workouts = await q
+        .order(GymWorkoutRow.colStartedAt, ascending: false)
+        .order(GymWorkoutRow.colId, ascending: false)
+        .limit(limit);
+    if (workouts.isEmpty) return const [];
+
+    final authorIds = workouts
+        .map<String>((w) => w[GymWorkoutRow.colUserId] as String)
+        .toSet()
+        .toList();
+    final profileRows = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, authorIds);
+    final profilesById = {
+      for (final p in profileRows)
+        p['id'] as String: PublicProfile.fromJson(p),
+    };
+
+    return workouts.map<LiftFeedEntry>((w) {
+      final userId = w[GymWorkoutRow.colUserId] as String;
+      return LiftFeedEntry(
+        id: w['id'] as String,
+        startedAt: DateTime.parse(w['started_at'] as String),
+        title: w['title'] as String?,
+        setCount: (w['set_count'] as num?)?.toInt() ?? 0,
+        volumeKg: (w['volume_kg'] as num?)?.toDouble() ?? 0,
+        author: profilesById[userId] ??
+            PublicProfile(id: userId, displayName: null, avatarUrl: null),
       );
     }).toList();
   }
@@ -4303,6 +4457,16 @@ class ApiClient {
     await _client.from(SessionPlanRow.table).delete().eq(SessionPlanRow.colId, id);
   }
 
+  /// Flip a session plan's is_public flag (owner-only via RLS). A public plan
+  /// is readable logged-out at the web /share/session/[id] page. Mirrors
+  /// [setRoutePublic] + web `setSessionPlanPublic`.
+  Future<void> setSessionPlanPublic(String id, bool isPublic) async {
+    await _client
+        .from(SessionPlanRow.table)
+        .update({SessionPlanRow.colIsPublic: isPublic})
+        .eq(SessionPlanRow.colId, id);
+  }
+
   /// Windowed, reverse-chronological feed across all logged modalities for
   /// the unified History timeline. RLS (`security_invoker` on the `activities`
   /// view) scopes it to the caller. Always bounded — the timeline paginates
@@ -4410,6 +4574,16 @@ class ApiClient {
     if (metadata != null) patch[GymWorkoutRow.colMetadata] = metadata;
     await _client.from(GymWorkoutRow.table).update(patch).eq(GymWorkoutRow.colId, id);
     if (sets != null) await _replaceGymSets(id, sets);
+  }
+
+  /// Flip a gym workout's visibility. Bidirectional (public ↔ private),
+  /// mirroring [setRoutePublic]; stamps `last_modified_at` so the offline
+  /// newer-wins reconciliation picks the change up.
+  Future<void> setGymWorkoutPublic(String id, bool isPublic) async {
+    await _client.from(GymWorkoutRow.table).update({
+      GymWorkoutRow.colIsPublic: isPublic,
+      GymWorkoutRow.colLastModifiedAt: DateTime.now().toUtc().toIso8601String(),
+    }).eq(GymWorkoutRow.colId, id);
   }
 
   /// Delete a workout. `gym_sets` cascade via the FK.
@@ -4530,6 +4704,9 @@ class ApiClient {
     final routine = GymRoutineRow.fromJson(row);
     for (var p = 0; p < kept.length; p++) {
       final ex = kept[p];
+      // gym_routine_exercises_superset_chk requires the group + order to be
+      // both null or both set, so a standalone exercise clears both.
+      final g = ex.supersetGroup;
       final exRow = await _client
           .from(GymRoutineExerciseRow.table)
           .insert({
@@ -4537,6 +4714,13 @@ class ApiClient {
             GymRoutineExerciseRow.colExerciseName: ex.exerciseName.trim(),
             GymRoutineExerciseRow.colExerciseKey: ex.exerciseKey,
             GymRoutineExerciseRow.colPosition: p,
+            GymRoutineExerciseRow.colSupersetGroup: g,
+            GymRoutineExerciseRow.colSupersetOrder:
+                g == null ? null : (ex.supersetOrder ?? 0),
+            GymRoutineExerciseRow.colModality: ex.modality ?? 'weight_reps',
+            GymRoutineExerciseRow.colProgression: ex.progression ?? 'none',
+            GymRoutineExerciseRow.colProgressionParams:
+                ex.progressionParams ?? <String, dynamic>{},
           })
           .select(GymRoutineExerciseRow.colId)
           .single();
@@ -4547,10 +4731,14 @@ class ApiClient {
             {
               GymRoutineSetRow.colRoutineExerciseId: exId,
               GymRoutineSetRow.colSetIndex: i,
+              GymRoutineSetRow.colSetType: ex.sets[i].setType ?? 'working',
               GymRoutineSetRow.colTargetRepsMin: ex.sets[i].targetRepsMin,
               GymRoutineSetRow.colTargetRepsMax: ex.sets[i].targetRepsMax,
               GymRoutineSetRow.colTargetWeightKg: ex.sets[i].targetWeightKg,
               GymRoutineSetRow.colTargetRpe: ex.sets[i].targetRpe,
+              GymRoutineSetRow.colRestS: ex.sets[i].restS,
+              GymRoutineSetRow.colTargetDurationS: ex.sets[i].targetDurationS,
+              GymRoutineSetRow.colTargetDistanceM: ex.sets[i].targetDistanceM,
             },
         ]);
       }
@@ -4772,21 +4960,34 @@ typedef GymSetInput = ({
 
 /// One planned set in a [ApiClient.createGymRoutine] call (targets only).
 /// `set_index` is assigned positionally on insert. A single rep target lives
-/// in [targetRepsMin] with [targetRepsMax] null.
+/// in [targetRepsMin] with [targetRepsMax] null. [setType] defaults to
+/// 'working' server-side; [restS] / [targetDurationS] / [targetDistanceM]
+/// carry the P2 set-type / rest / modality targets.
 typedef GymRoutineSetInput = ({
+  String? setType,
   int? targetRepsMin,
   int? targetRepsMax,
   double? targetWeightKg,
   double? targetRpe,
+  num? restS,
+  int? targetDurationS,
+  double? targetDistanceM,
 });
 
 /// One planned exercise in a [ApiClient.createGymRoutine] call. [exerciseKey]
 /// is `normaliseExerciseName(exerciseName)` stamped at write time (the frozen
 /// identity that binds the plan to logged sets). `position` is assigned
-/// positionally on insert.
+/// positionally on insert. [supersetGroup] / [supersetOrder] bracket the
+/// exercise into a superset; [modality] / [progression] / [progressionParams]
+/// carry the P2 modality + P4 progression scheme.
 typedef GymRoutineExerciseInput = ({
   String exerciseName,
   String exerciseKey,
+  int? supersetGroup,
+  int? supersetOrder,
+  String? modality,
+  String? progression,
+  Map<String, dynamic>? progressionParams,
   List<GymRoutineSetInput> sets,
 });
 

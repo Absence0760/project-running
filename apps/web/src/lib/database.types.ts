@@ -3273,6 +3273,7 @@ export type Database = {
         Args: { new_start_date: string; template_id: string }
         Returns: string
       }
+      clone_session_template: { Args: { template_id: string }; Returns: string }
       clubs_in_bbox: {
         Args: {
           p_limit?: number

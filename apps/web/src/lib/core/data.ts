@@ -34,7 +34,10 @@ import type {
 	PlanWorkout,
 	ActivePlanOverview,
 	PlanStatus,
-	NotificationKind
+	NotificationKind,
+	GymSetType,
+	GymExerciseModality,
+	GymProgressionScheme
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -3917,6 +3920,144 @@ export async function fetchFollowingFeed(opts?: {
 	}));
 }
 
+/// A public gym workout surfaced in the activity feed. Carries only the
+/// non-sensitive headline a "lift card" renders — title, set count, total
+/// working volume in canonical kg, started_at — plus the author. No notes,
+/// no RPE, no per-set detail leak into the feed; the share page is the place
+/// for full detail.
+export interface LiftFeedEntry {
+	kind: 'lift';
+	id: string;
+	user_id: string;
+	started_at: string;
+	title: string | null;
+	set_count: number;
+	volume_kg: number;
+	author: PublicProfile;
+}
+
+/// A run feed entry tagged with its kind so the feed can render a run card vs
+/// a lift card off a single discriminated union.
+export type RunFeedEntry = FeedEntry & { kind: 'run' };
+
+/// The cross-modal activity feed entry — a run or a public lift.
+export type ActivityFeedEntry = RunFeedEntry | LiftFeedEntry;
+
+/// Cross-modal following feed (multi_modal.md § Social feed): recent public
+/// runs AND public gym workouts from people the caller follows, merged into
+/// one reverse-chronological window.
+///
+/// Runs go through the redacted `public_runs` view (decisions §33) — they are
+/// deliberately invisible through the `activities` view to non-owners, so the
+/// feed reads them on the same path `fetchFollowingFeed` does. Lifts read
+/// `gym_workouts` directly: that table's "owner or public read" RLS already
+/// scopes a non-owner to public rows, and the feed projects only the
+/// headline columns (title / set_count / volume_kg) — never notes or per-set
+/// data. `set_count` + `volume_kg` are the trigger-maintained derived columns
+/// (migration 20261214_001), so a lift card is a flat per-branch read.
+///
+/// `activityType`: 'all' (default) merges both; 'lift' / 'gym' returns lifts
+/// only; any run activity_type ('run' / 'walk' / 'cycle' / 'hike') returns
+/// runs only.
+export async function fetchFollowingActivityFeed(opts?: {
+	limit?: number;
+	cursor?: { started_at: string; id: string } | null;
+	authorId?: string | null;
+	activityType?: string | null;
+}): Promise<ActivityFeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const activityType = opts?.activityType ?? 'all';
+	const wantsLifts = activityType === 'all' || activityType === 'lift' || activityType === 'gym';
+	const wantsRuns = activityType !== 'lift' && activityType !== 'gym';
+
+	const runsPromise: Promise<RunFeedEntry[]> = wantsRuns
+		? fetchFollowingFeed(opts).then((rows) =>
+				rows.map((r) => ({ ...r, kind: 'run' as const }))
+			)
+		: Promise.resolve([]);
+
+	const liftsPromise: Promise<LiftFeedEntry[]> = wantsLifts
+		? fetchFollowingLifts(opts)
+		: Promise.resolve([]);
+
+	const [runs, lifts] = await Promise.all([runsPromise, liftsPromise]);
+	return mergeFeedPages<ActivityFeedEntry>([runs, lifts], limit);
+}
+
+async function fetchFollowingLifts(opts?: {
+	limit?: number;
+	cursor?: { started_at: string; id: string } | null;
+	authorId?: string | null;
+}): Promise<LiftFeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) return [];
+
+	const { data: edges } = await supabase
+		.from('user_follows')
+		.select('followee_id')
+		.eq('follower_id', userId);
+	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
+	if (followeeIds.length === 0) return [];
+
+	const wantedAuthor = opts?.authorId ?? null;
+	const filteredAuthors = wantedAuthor
+		? followeeIds.filter((id) => id === wantedAuthor)
+		: followeeIds;
+	if (filteredAuthors.length === 0) return [];
+
+	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+	const queryChunk = async (ids: string[]) => {
+		let q = supabase
+			.from(TABLES.gym_workouts)
+			.select('id, user_id, started_at, title, set_count, volume_kg')
+			.eq('is_public', true)
+			.in('user_id', ids)
+			.gte('started_at', cutoff)
+			.order('started_at', { ascending: false })
+			.order('id', { ascending: false })
+			.limit(limit);
+		if (opts?.cursor) {
+			q = q.or(
+				`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
+			);
+		}
+		const { data } = await q;
+		return (data ?? []) as {
+			id: string;
+			user_id: string;
+			started_at: string;
+			title: string | null;
+			set_count: number | null;
+			volume_kg: number | null;
+		}[];
+	};
+
+	const pages = await Promise.all(chunk(filteredAuthors, FEED_FOLLOWEE_CHUNK).map(queryChunk));
+	const workouts = mergeFeedPages(pages, limit);
+	if (workouts.length === 0) return [];
+
+	const authorIds = Array.from(new Set(workouts.map((w) => w.user_id)));
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', authorIds);
+	const byId = new Map<string, PublicProfile>();
+	for (const p of profiles ?? []) byId.set(p.id, p);
+
+	return workouts.map((w) => ({
+		kind: 'lift' as const,
+		id: w.id,
+		user_id: w.user_id,
+		started_at: w.started_at,
+		title: w.title,
+		set_count: w.set_count ?? 0,
+		volume_kg: w.volume_kg ?? 0,
+		author: byId.get(w.user_id) ?? { id: w.user_id, display_name: null, avatar_url: null },
+	}));
+}
+
 /// Server-side privacy-zone clipping (decisions §33). Pass the run /
 /// route owner's `user_id` and a points array; receive the clipped
 /// middle. Zones never come down the wire — the RPC reads them
@@ -5870,6 +6011,18 @@ export async function updateGymWorkout(
 	if (sets !== undefined) await replaceGymSets(id, sets);
 }
 
+/// Flip a gym workout's visibility. Mirrors `setRoutePublic` — bidirectional
+/// (public ↔ private). RLS guards ownership; the caller should still gate the
+/// UI so non-owners never see the control. Stamps `last_modified_at` so the
+/// offline newer-wins reconciliation on mobile picks the change up.
+export async function setGymWorkoutPublic(id: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.gym_workouts)
+		.update({ is_public: isPublic, last_modified_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+}
+
 /// Deletes the workout; gym_sets cascade via the FK (migration 20261204_001).
 export async function deleteGymWorkout(id: string): Promise<void> {
 	const { error } = await supabase.from(TABLES.gym_workouts).delete().eq('id', id);
@@ -5900,17 +6053,24 @@ export interface GymRoutineExercise {
 	exercise_name: string;
 	exercise_key: string;
 	position: number;
+	superset_group: number | null;
+	superset_order: number | null;
+	modality: GymExerciseModality;
+	progression: GymProgressionScheme;
+	progression_params: Record<string, unknown>;
 	sets: GymRoutineSet[];
 }
 
 export interface GymRoutineSet {
 	set_index: number;
+	set_type: GymSetType;
 	target_reps_min: number | null;
 	target_reps_max: number | null;
 	target_weight_kg: number | null;
 	target_rpe: number | null;
 	rest_s: number | null;
 	target_duration_s: number | null;
+	target_distance_m: number | null;
 }
 
 export interface GymRoutineDetail {
@@ -5927,12 +6087,21 @@ export interface GymRoutineInput {
 		exercise_name: string;
 		exercise_key: string;
 		position: number;
+		superset_group?: number | null;
+		superset_order?: number | null;
+		modality?: GymExerciseModality;
+		progression?: GymProgressionScheme;
+		progression_params?: Record<string, unknown>;
 		sets: Array<{
 			set_index: number;
+			set_type?: GymSetType;
 			target_reps_min?: number | null;
 			target_reps_max?: number | null;
 			target_weight_kg?: number | null;
 			target_rpe?: number | null;
+			rest_s?: number | null;
+			target_duration_s?: number | null;
+			target_distance_m?: number | null;
 		}>;
 	}>;
 }
@@ -5965,7 +6134,9 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	if (rErr || !routine) return null;
 	const { data: exRows, error: eErr } = await supabase
 		.from(TABLES.gym_routine_exercises)
-		.select('id, exercise_name, exercise_key, position')
+		.select(
+			'id, exercise_name, exercise_key, position, superset_group, superset_order, modality, progression, progression_params',
+		)
 		.eq('routine_id', id)
 		.order('position', { ascending: true });
 	if (eErr) {
@@ -5977,6 +6148,11 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		exercise_name: string;
 		exercise_key: string;
 		position: number;
+		superset_group: number | null;
+		superset_order: number | null;
+		modality: GymExerciseModality;
+		progression: GymProgressionScheme;
+		progression_params: Record<string, unknown> | null;
 	}>;
 	if (exercises.length === 0) {
 		return { routine: routine as GymRoutineSummary, exercises: [] };
@@ -5984,7 +6160,7 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	const { data: setRows, error: sErr } = await supabase
 		.from(TABLES.gym_routine_sets)
 		.select(
-			'routine_exercise_id, set_index, target_reps_min, target_reps_max, target_weight_kg, target_rpe, rest_s, target_duration_s',
+			'routine_exercise_id, set_index, set_type, target_reps_min, target_reps_max, target_weight_kg, target_rpe, rest_s, target_duration_s, target_distance_m',
 		)
 		.in('routine_exercise_id', exercises.map((e) => e.id))
 		.order('set_index', { ascending: true });
@@ -5994,12 +6170,14 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		const list = setsByExercise.get(row.routine_exercise_id) ?? [];
 		list.push({
 			set_index: row.set_index,
+			set_type: row.set_type,
 			target_reps_min: row.target_reps_min,
 			target_reps_max: row.target_reps_max,
 			target_weight_kg: row.target_weight_kg,
 			target_rpe: row.target_rpe,
 			rest_s: row.rest_s,
 			target_duration_s: row.target_duration_s,
+			target_distance_m: row.target_distance_m,
 		});
 		setsByExercise.set(row.routine_exercise_id, list);
 	}
@@ -6010,6 +6188,11 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 			exercise_name: e.exercise_name,
 			exercise_key: e.exercise_key,
 			position: e.position,
+			superset_group: e.superset_group,
+			superset_order: e.superset_order,
+			modality: e.modality,
+			progression: e.progression,
+			progression_params: e.progression_params ?? {},
 			sets: setsByExercise.get(e.id) ?? [],
 		})),
 	};
@@ -6037,6 +6220,9 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 	if (error || !data) throw error ?? new Error('createGymRoutine failed');
 	const routine = data as GymRoutineSummary;
 	for (const ex of exercises) {
+		// gym_routine_exercises_superset_chk requires the group + order to be
+		// both null or both set, so a standalone exercise clears both.
+		const supersetGroup = ex.superset_group ?? null;
 		const { data: exRow, error: exErr } = await supabase
 			.from(TABLES.gym_routine_exercises)
 			.insert({
@@ -6044,6 +6230,11 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 				exercise_name: ex.exercise_name.trim(),
 				exercise_key: ex.exercise_key,
 				position: ex.position,
+				superset_group: supersetGroup,
+				superset_order: supersetGroup == null ? null : ex.superset_order ?? 0,
+				modality: ex.modality ?? 'weight_reps',
+				progression: ex.progression ?? 'none',
+				progression_params: ex.progression_params ?? {},
 			})
 			.select('id')
 			.single();
@@ -6051,10 +6242,14 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 		const setRows = ex.sets.map((s, i) => ({
 			routine_exercise_id: (exRow as { id: string }).id,
 			set_index: i,
+			set_type: s.set_type ?? 'working',
 			target_reps_min: s.target_reps_min ?? null,
 			target_reps_max: s.target_reps_max ?? null,
 			target_weight_kg: s.target_weight_kg ?? null,
 			target_rpe: s.target_rpe ?? null,
+			rest_s: s.rest_s ?? null,
+			target_duration_s: s.target_duration_s ?? null,
+			target_distance_m: s.target_distance_m ?? null,
 		}));
 		if (setRows.length > 0) {
 			const { error: sErr } = await supabase.from(TABLES.gym_routine_sets).insert(setRows);
@@ -6412,6 +6607,44 @@ export async function deleteSessionPlan(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/** Flip a session plan's public visibility (owner-only via RLS). A public plan
+ *  is readable logged-out at /share/session/[id]. */
+export async function setSessionPlanPublic(id: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase
+		.from('session_plans')
+		.update({ is_public: isPublic, updated_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+/** Distinct movement names the user has used across their own session plans,
+ *  most-used first, for the editor's movement-name autocomplete (mirrors
+ *  fetchGymExerciseNames). RLS on session_plan_items scopes the read to the
+ *  owner; a session plan carries dozens of items, not thousands, so a direct
+ *  distinct over the author's own plans is cheap — no RPC needed. Case is
+ *  preserved (trim only), matching the gym datalist behaviour. */
+export async function fetchSessionMovementNames(): Promise<string[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('session_plan_items')
+		.select('movement_name, session_plans!inner(author_id)')
+		.eq('session_plans.author_id', userId);
+	if (error) {
+		console.error('fetchSessionMovementNames failed', error);
+		return [];
+	}
+	const counts = new Map<string, number>();
+	for (const row of (data ?? []) as Array<{ movement_name: string | null }>) {
+		const name = (row.movement_name ?? '').trim();
+		if (name === '') continue;
+		counts.set(name, (counts.get(name) ?? 0) + 1);
+	}
+	return [...counts.entries()]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.map(([name]) => name);
+}
+
 /** Attach (or detach with null) a session plan to a class event. Organiser-only
  *  at the DB layer (the events_session_plan_organiser trigger). */
 export async function setEventSessionPlan(
@@ -6511,4 +6744,76 @@ export async function resolveTargetReports(
 	});
 	if (error) throw error;
 	return Number(data ?? 0);
+}
+
+/** Club-owned session plans (the club's "session templates"). Visible to club
+ *  members + writable by admins via RLS — mirrors fetchClubTemplates for
+ *  training plans. */
+export async function fetchClubSessionTemplates(clubId: string): Promise<SessionPlan[]> {
+	const { data, error } = await supabase
+		.from('session_plans')
+		.select('*')
+		.eq('club_id', clubId)
+		.order('updated_at', { ascending: false });
+	if (error) {
+		console.error('fetchClubSessionTemplates failed', error);
+		return [];
+	}
+	return (data ?? []) as SessionPlan[];
+}
+
+/** Publish a personal session plan into a club-owned copy (the original is left
+ *  untouched on the user's /sessions list), mirroring publishPlanAsTemplate.
+ *  Copies the head + blocks + items into a new club_id row; the publisher must
+ *  own the source. Returns the new club-owned plan's id. */
+export async function publishSessionAsTemplate(
+	sourcePlanId: string,
+	clubId: string
+): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const source = await fetchSessionPlan(sourcePlanId);
+	if (!source) throw new Error('Source session plan not found');
+	if (source.author_id !== userId) throw new Error('Only the plan owner can publish');
+
+	const input: SessionPlanInput = {
+		title: source.title,
+		discipline: source.discipline,
+		equipment: source.equipment,
+		is_public: false,
+		club_id: clubId,
+		est_duration_min: source.est_duration_min,
+		blocks: [...source.blocks]
+			.sort((a, b) => a.position - b.position)
+			.map((b) => ({ name: b.name })),
+		items: (() => {
+			const orderedBlocks = [...source.blocks].sort((a, b) => a.position - b.position);
+			const blockIndexById = new Map(orderedBlocks.map((b, i) => [b.id, i]));
+			return [...source.items]
+				.sort((a, b) => a.position - b.position)
+				.map((it) => ({
+					movement_name: it.movement_name,
+					kind: it.kind,
+					duration_s: it.duration_s,
+					reps: it.reps,
+					per_side: it.per_side,
+					tempo: it.tempo,
+					cue: it.cue,
+					block_index: it.block_id == null ? null : (blockIndexById.get(it.block_id) ?? null)
+				}));
+		})()
+	};
+	return createSessionPlan(input);
+}
+
+/** Clone a club session template into a new personal session plan (the
+ *  clone_session_template RPC enforces author/member authorisation +
+ *  rate-limits server-side). Returns the new plan's id. */
+export async function cloneSessionTemplate(templateId: string): Promise<string> {
+	const { data, error } = await supabase.rpc('clone_session_template', {
+		template_id: templateId
+	});
+	if (error) throw error;
+	return data as string;
 }

@@ -2648,6 +2648,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get feedActivityHike => 'ハイク';
 
   @override
+  String get feedActivityLift => '筋トレ';
+
+  @override
+  String get feedLiftSetsLabel => 'セット';
+
+  @override
+  String get feedLiftVolume => 'ボリューム';
+
+  @override
+  String get feedLiftUntitled => 'ワークアウト';
+
+  @override
   String get feedLoadMore => 'もっと見る';
 
   @override
@@ -3156,6 +3168,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailAdopt => '採用';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'セッションテンプレート';
+
+  @override
+  String get clubDetailSessionAdopted => 'セッションをプランに追加しました。';
+
+  @override
   String get eventNotFound => 'イベントが見つかりません。';
 
   @override
@@ -3553,6 +3571,30 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'クラブのテンプレートから始める';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      '所属クラブが公開したプランを取り込みます。下の開始日でアカウントに複製され、他のプランと同様に編集できます。';
+
+  @override
+  String get planNewTemplateButton => 'テンプレートを見る';
+
+  @override
+  String get planNewTemplateCloning => '取り込み中…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'テンプレートを取り込めませんでした: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'テンプレートを選択';
+
+  @override
+  String get planNewTemplatePickerCancel => 'キャンセル';
+
+  @override
   String get planDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
 
   @override
@@ -3578,6 +3620,76 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String planDetailWeek(int number) {
     return '第$number週';
+  }
+
+  @override
+  String planDetailDriftOverFlag(int pct) {
+    return '今週は計画より$pct%多く走っています — 疲労を溜めないよう、楽な日は控えめに。';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return '今週は計画より$pct%少なく走っています — 計画した走行量が適応を生みます。';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      '今週のロング走を逃しました — 可能なら入れましょう。最も重要なセッションです。';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'ロング走を逃しましたが、テーパー中です — 諦めてレースに向け疲労を抜きましょう。';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'ロング走を逃しました — 取り戻さなくて大丈夫。回復週が来るので体は休息を活かします。';
+
+  @override
+  String get planDetailReplan => '残りの週を再計画';
+
+  @override
+  String get planDetailReplanOnTrack => '計画は順調です — 調整は不要です。';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n件のワークアウトを調整しました',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => '提案された変更';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'ロング走 $from → $to — 逃したロング走を取り戻す';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — 走り過ぎ後に軽減';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'キャンセル';
+
+  @override
+  String get planDetailReplanApply => '変更を適用';
+
+  @override
+  String get planDetailDuplicateWeek => '週を複製';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return '第$n週を複製しました';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'プランを更新できませんでした: $error';
   }
 
   @override
@@ -6639,6 +6751,23 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymDelete => '削除';
 
   @override
+  String get gymPublic => '公開';
+
+  @override
+  String get gymPrivate => '非公開';
+
+  @override
+  String get gymMakePublic => '公開にする';
+
+  @override
+  String get gymMakePrivate => '非公開にする';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return '公開設定を更新できませんでした: $error';
+  }
+
+  @override
   String get gymNotes => 'メモ';
 
   @override
@@ -6876,6 +7005,122 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymRoutineRepeatLast => '前回を繰り返す';
 
   @override
+  String get gymRoutineTargetRepsMax => '〜';
+
+  @override
+  String get gymRoutineTargetDuration => '目標時間（秒）';
+
+  @override
+  String get gymRoutineTargetDistance => '目標距離（m）';
+
+  @override
+  String get gymRoutineRestLabel => '休憩（秒）';
+
+  @override
+  String get gymRoutineSetType => 'セットタイプ';
+
+  @override
+  String get gymRoutineSetTypeWarmup => 'ウォームアップ';
+
+  @override
+  String get gymRoutineSetTypeWorking => 'ワーキング';
+
+  @override
+  String get gymRoutineSetTypeDropset => 'ドロップセット';
+
+  @override
+  String get gymRoutineSetTypeAmrap => 'AMRAP';
+
+  @override
+  String get gymRoutineSetTypeFailure => '限界まで';
+
+  @override
+  String get gymRoutineSetTypeBackoff => 'バックオフ';
+
+  @override
+  String get gymRoutineModality => '計測方法';
+
+  @override
+  String get gymRoutineModalityWeightReps => '重量 × 回数';
+
+  @override
+  String get gymRoutineModalityTime => '時間';
+
+  @override
+  String get gymRoutineModalityDistance => '距離';
+
+  @override
+  String get gymRoutineModalityBodyweightReps => '自重の回数';
+
+  @override
+  String get gymRoutineSupersetToggle => '次の種目とスーパーセット';
+
+  @override
+  String gymRoutineSupersetBadge(int group) {
+    return 'スーパーセット $group';
+  }
+
+  @override
+  String get gymRoutineAdvanced => '詳細';
+
+  @override
+  String get gymRoutineProgression => '漸進';
+
+  @override
+  String get gymRoutineProgressionNone => 'なし';
+
+  @override
+  String get gymRoutineProgressionLinear => 'リニア';
+
+  @override
+  String get gymRoutineProgressionDoubleProgression => 'ダブルプログレッション';
+
+  @override
+  String get gymRoutineProgressionFiveByFive => '5×5';
+
+  @override
+  String get gymRoutineProgressionPercentCycle => '1RMの%サイクル';
+
+  @override
+  String get gymRoutineProgressionRpeAutoreg => 'RPE自動調整';
+
+  @override
+  String gymRoutineProgressionIncrementLabel(String unit) {
+    return '重量ステップ（$unit）';
+  }
+
+  @override
+  String get gymRoutineProgressionPercentLabel => '1RMの%';
+
+  @override
+  String gymRoutineProgressionOneRmLabel(String unit) {
+    return '1RM（$unit）';
+  }
+
+  @override
+  String get gymRoutineProgressionTargetRpeLabel => '目標RPE';
+
+  @override
+  String get gymRoutineNextTarget => '次の目標';
+
+  @override
+  String get gymRoutineNextTargetIncreaseWeight => '次回は重量を上げる';
+
+  @override
+  String get gymRoutineNextTargetIncreaseReps => '次回は回数を増やす';
+
+  @override
+  String get gymRoutineNextTargetHold => '維持 — この目標を繰り返す';
+
+  @override
+  String get gymRoutineNextTargetDeload => 'ディロード — 重量を下げる';
+
+  @override
+  String gymRoutineNextTargetRepClimb(int from, int to) {
+    return '回数アップ $from→$to';
+  }
+
+  @override
   String get nutritionTitle => '栄養';
 
   @override
@@ -6996,6 +7241,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionSlotSnack => '間食';
 
   @override
+  String get nutritionMealProtein => 'タンパク質';
+
+  @override
+  String get nutritionMealCarbs => '炭水化物';
+
+  @override
+  String get nutritionMealFat => '脂質';
+
+  @override
+  String get nutritionMealItemsHeading => '項目';
+
+  @override
+  String get nutritionMealNoItems => 'この食事の記録はありません。';
+
+  @override
+  String get nutritionMealTrendHeading => '過去7日間';
+
+  @override
   String get nutritionDelete => '削除';
 
   @override
@@ -7056,6 +7319,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get sessionNotFound => 'セッションプランが見つかりません。';
+
+  @override
+  String get sessionMakePublic => '公開する';
+
+  @override
+  String get sessionMakePrivate => '非公開にする';
+
+  @override
+  String get sessionVisibilityError => '公開設定を変更できませんでした。';
 
   @override
   String get sessionSteps => 'シーケンス';

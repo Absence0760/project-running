@@ -20,13 +20,13 @@ class SessionDetailScreen extends StatefulWidget {
   const SessionDetailScreen({
     super.key,
     required this.api,
-    required this.gymStore,
+    this.gymStore,
     required this.planId,
     this.titleHint,
   });
 
   final ApiClient api;
-  final LocalGymStore gymStore;
+  final LocalGymStore? gymStore;
   final String planId;
   final String? titleHint;
 
@@ -50,6 +50,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   String? _title;
   String? _discipline;
   List<SessionStep> _steps = const [];
+  bool _isPublic = false;
+  bool _isOwner = false;
+  bool _visibilityBusy = false;
 
   @override
   void initState() {
@@ -90,8 +93,26 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       _title = data.plan.title;
       _discipline = data.plan.discipline;
       _steps = expandSessionSteps(input).steps;
+      _isPublic = data.plan.isPublic;
+      _isOwner = widget.api.userId == data.plan.authorId;
       _loading = false;
     });
+  }
+
+  Future<void> _toggleVisibility() async {
+    if (_visibilityBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final next = !_isPublic;
+    setState(() => _visibilityBusy = true);
+    try {
+      await widget.api.setSessionPlanPublic(widget.planId, next);
+      if (mounted) setState(() => _isPublic = next);
+    } catch (e) {
+      debugPrint('toggle session visibility failed: $e');
+      if (mounted) showTopBanner(context, l10n.sessionVisibilityError);
+    } finally {
+      if (mounted) setState(() => _visibilityBusy = false);
+    }
   }
 
   String _stepName(AppLocalizations l10n, SessionStep s) {
@@ -118,6 +139,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _play() async {
+    if (widget.gymStore == null) return;
     final l10n = AppLocalizations.of(context);
     final result = await Navigator.of(context).push<_SessionRunOutcome>(
       MaterialPageRoute(
@@ -137,7 +159,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final draft = workoutDraftFromSession(expanded, _title, _discipline);
     final adherence = computeSessionAdherence(_steps, outcome.results);
     try {
-      await widget.gymStore.createLocal(
+      await widget.gymStore!.createLocal(
         title: draft.title,
         startedAt: DateTime.now().toUtc(),
         durationS: draft.durationS,
@@ -159,7 +181,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           MetadataKeys.sessionAdherence: _verdictWire(adherence.verdict),
         },
       );
-      unawaited(widget.gymStore.syncWithServer(widget.api));
+      unawaited(widget.gymStore!.syncWithServer(widget.api));
       if (mounted) showTopBanner(context, l10n.sessionRunSaved);
     } catch (e) {
       debugPrint('session run save failed: $e');
@@ -171,7 +193,17 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(_title ?? l10n.sessionTitle)),
+      appBar: AppBar(
+        title: Text(_title ?? l10n.sessionTitle),
+        actions: [
+          if (_isOwner && !_loading)
+            IconButton(
+              tooltip: _isPublic ? l10n.sessionMakePrivate : l10n.sessionMakePublic,
+              icon: Icon(_isPublic ? Icons.public : Icons.lock_outline),
+              onPressed: _visibilityBusy ? null : _toggleVisibility,
+            ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _steps.isEmpty
@@ -190,7 +222,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                   ],
                 ),
-      floatingActionButton: (_loading || _steps.isEmpty)
+      floatingActionButton: (_loading || _steps.isEmpty || widget.gymStore == null)
           ? null
           : FloatingActionButton.extended(
               onPressed: _play,

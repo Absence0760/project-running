@@ -4739,6 +4739,30 @@ abstract class AppLocalizations {
   /// **'Hike'**
   String get feedActivityHike;
 
+  /// Feed activity filter chip — gym lifts
+  ///
+  /// In en, this message translates to:
+  /// **'Lift'**
+  String get feedActivityLift;
+
+  /// Stat label under the set count on a feed lift card
+  ///
+  /// In en, this message translates to:
+  /// **'Sets'**
+  String get feedLiftSetsLabel;
+
+  /// Stat label under the total volume on a feed lift card
+  ///
+  /// In en, this message translates to:
+  /// **'Volume'**
+  String get feedLiftVolume;
+
+  /// Fallback title for an untitled public gym workout in the feed
+  ///
+  /// In en, this message translates to:
+  /// **'Workout'**
+  String get feedLiftUntitled;
+
   /// Button to load the next page of feed entries
   ///
   /// In en, this message translates to:
@@ -5591,6 +5615,18 @@ abstract class AppLocalizations {
   /// **'Adopt'**
   String get clubDetailAdopt;
 
+  /// Heading above the club's adoptable yoga/pilates session-plan templates
+  ///
+  /// In en, this message translates to:
+  /// **'Session templates'**
+  String get clubDetailSessionTemplatesTitle;
+
+  /// Confirmation after cloning a club session template into a personal plan
+  ///
+  /// In en, this message translates to:
+  /// **'Session added to your plans.'**
+  String get clubDetailSessionAdopted;
+
   /// Shown when the event does not exist
   ///
   /// In en, this message translates to:
@@ -6293,6 +6329,48 @@ abstract class AppLocalizations {
   /// **'{count} sessions'**
   String planNewSessions(int count);
 
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Start from a club template'**
+  String get planNewTemplateTitle;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Adopt a plan a club you belong to has published. It clones into your account with the start date below — edit it like any other plan.'**
+  String get planNewTemplateSubtitle;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Browse templates'**
+  String get planNewTemplateButton;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Adopting…'**
+  String get planNewTemplateCloning;
+
+  /// Toast when adopting a club template fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t adopt that template: {error}'**
+  String planNewTemplateCloneFailed(String error);
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a template'**
+  String get planNewTemplatePickerTitle;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planNewTemplatePickerCancel;
+
   /// Plan-detail load timeout error
   ///
   /// In en, this message translates to:
@@ -6340,6 +6418,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Week {number}'**
   String planDetailWeek(int number);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Running {pct}% over plan this week — ease back on the easy days so you don\'t dig a fatigue hole.'**
+  String planDetailDriftOverFlag(int pct);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Running {pct}% under plan this week — the planned volume drives the adaptation.'**
+  String planDetailDriftUnderFlag(int pct);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'You missed this week\'s long run — fit it in if you can. It\'s the session that matters most.'**
+  String get planDetailMissedLongMakeUp;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'You missed a long run, but you\'re tapering — let it go and stay fresh for race day.'**
+  String get planDetailMissedLongTaper;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'You missed a long run — skip the make-up. A step-back week is coming and your body will use the rest.'**
+  String get planDetailMissedLongRecovery;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Re-plan remaining weeks'**
+  String get planDetailReplan;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Your plan\'s on track — nothing to adjust.'**
+  String get planDetailReplanOnTrack;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{Adjusted 1 workout} other{Adjusted {n} workouts}}'**
+  String planDetailReplanApplied(int n);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Proposed changes'**
+  String get planDetailReplanPreviewTitle;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Long run {from} → {to} — make up a missed long run'**
+  String planDetailReplanMakeUp(String from, String to);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'{from} → {to} — ease off after over-running'**
+  String planDetailReplanEase(String from, String to);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planDetailReplanCancel;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Apply changes'**
+  String get planDetailReplanApply;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate week'**
+  String get planDetailDuplicateWeek;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Week {n} duplicated'**
+  String planDetailDuplicateWeekDone(int n);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update the plan: {error}'**
+  String planDetailBulkFailed(String error);
 
   /// Edit-workout button tooltip on a workout row
   ///
@@ -11619,6 +11793,36 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get gymDelete;
 
+  /// Visibility chip on the gym workout detail when the workout is shared publicly.
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get gymPublic;
+
+  /// Visibility chip on the gym workout detail when the workout is private.
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get gymPrivate;
+
+  /// Action that flips a gym workout to public.
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get gymMakePublic;
+
+  /// Action that flips a gym workout back to private.
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get gymMakePrivate;
+
+  /// Banner when toggling a gym workout's visibility fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update visibility: {error}'**
+  String gymVisibilityFailed(Object error);
+
   /// No description provided for @gymNotes.
   ///
   /// In en, this message translates to:
@@ -12033,6 +12237,222 @@ abstract class AppLocalizations {
   /// **'Repeat last'**
   String get gymRoutineRepeatLast;
 
+  /// No description provided for @gymRoutineTargetRepsMax.
+  ///
+  /// In en, this message translates to:
+  /// **'to'**
+  String get gymRoutineTargetRepsMax;
+
+  /// No description provided for @gymRoutineTargetDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Target time (s)'**
+  String get gymRoutineTargetDuration;
+
+  /// No description provided for @gymRoutineTargetDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Target distance (m)'**
+  String get gymRoutineTargetDistance;
+
+  /// No description provided for @gymRoutineRestLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rest (s)'**
+  String get gymRoutineRestLabel;
+
+  /// No description provided for @gymRoutineSetType.
+  ///
+  /// In en, this message translates to:
+  /// **'Set type'**
+  String get gymRoutineSetType;
+
+  /// No description provided for @gymRoutineSetTypeWarmup.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm-up'**
+  String get gymRoutineSetTypeWarmup;
+
+  /// No description provided for @gymRoutineSetTypeWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get gymRoutineSetTypeWorking;
+
+  /// No description provided for @gymRoutineSetTypeDropset.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop set'**
+  String get gymRoutineSetTypeDropset;
+
+  /// No description provided for @gymRoutineSetTypeAmrap.
+  ///
+  /// In en, this message translates to:
+  /// **'AMRAP'**
+  String get gymRoutineSetTypeAmrap;
+
+  /// No description provided for @gymRoutineSetTypeFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'To failure'**
+  String get gymRoutineSetTypeFailure;
+
+  /// No description provided for @gymRoutineSetTypeBackoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Back-off'**
+  String get gymRoutineSetTypeBackoff;
+
+  /// No description provided for @gymRoutineModality.
+  ///
+  /// In en, this message translates to:
+  /// **'Measured by'**
+  String get gymRoutineModality;
+
+  /// No description provided for @gymRoutineModalityWeightReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight × reps'**
+  String get gymRoutineModalityWeightReps;
+
+  /// No description provided for @gymRoutineModalityTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get gymRoutineModalityTime;
+
+  /// No description provided for @gymRoutineModalityDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get gymRoutineModalityDistance;
+
+  /// No description provided for @gymRoutineModalityBodyweightReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Bodyweight reps'**
+  String get gymRoutineModalityBodyweightReps;
+
+  /// No description provided for @gymRoutineSupersetToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Superset with the next exercise'**
+  String get gymRoutineSupersetToggle;
+
+  /// Routine detail: superset group badge
+  ///
+  /// In en, this message translates to:
+  /// **'Superset {group}'**
+  String gymRoutineSupersetBadge(int group);
+
+  /// No description provided for @gymRoutineAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get gymRoutineAdvanced;
+
+  /// No description provided for @gymRoutineProgression.
+  ///
+  /// In en, this message translates to:
+  /// **'Progression'**
+  String get gymRoutineProgression;
+
+  /// No description provided for @gymRoutineProgressionNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get gymRoutineProgressionNone;
+
+  /// No description provided for @gymRoutineProgressionLinear.
+  ///
+  /// In en, this message translates to:
+  /// **'Linear'**
+  String get gymRoutineProgressionLinear;
+
+  /// No description provided for @gymRoutineProgressionDoubleProgression.
+  ///
+  /// In en, this message translates to:
+  /// **'Double progression'**
+  String get gymRoutineProgressionDoubleProgression;
+
+  /// No description provided for @gymRoutineProgressionFiveByFive.
+  ///
+  /// In en, this message translates to:
+  /// **'5×5'**
+  String get gymRoutineProgressionFiveByFive;
+
+  /// No description provided for @gymRoutineProgressionPercentCycle.
+  ///
+  /// In en, this message translates to:
+  /// **'% of 1RM cycle'**
+  String get gymRoutineProgressionPercentCycle;
+
+  /// No description provided for @gymRoutineProgressionRpeAutoreg.
+  ///
+  /// In en, this message translates to:
+  /// **'RPE auto-regulation'**
+  String get gymRoutineProgressionRpeAutoreg;
+
+  /// Routine builder: progression weight increment field, with unit
+  ///
+  /// In en, this message translates to:
+  /// **'Weight step ({unit})'**
+  String gymRoutineProgressionIncrementLabel(String unit);
+
+  /// No description provided for @gymRoutineProgressionPercentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'% of 1RM'**
+  String get gymRoutineProgressionPercentLabel;
+
+  /// Routine builder: progression 1RM field, with unit
+  ///
+  /// In en, this message translates to:
+  /// **'1RM ({unit})'**
+  String gymRoutineProgressionOneRmLabel(String unit);
+
+  /// No description provided for @gymRoutineProgressionTargetRpeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Target RPE'**
+  String get gymRoutineProgressionTargetRpeLabel;
+
+  /// No description provided for @gymRoutineNextTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Next target'**
+  String get gymRoutineNextTarget;
+
+  /// No description provided for @gymRoutineNextTargetIncreaseWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Add load next time'**
+  String get gymRoutineNextTargetIncreaseWeight;
+
+  /// No description provided for @gymRoutineNextTargetIncreaseReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Add reps next time'**
+  String get gymRoutineNextTargetIncreaseReps;
+
+  /// No description provided for @gymRoutineNextTargetHold.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold — repeat this target'**
+  String get gymRoutineNextTargetHold;
+
+  /// No description provided for @gymRoutineNextTargetDeload.
+  ///
+  /// In en, this message translates to:
+  /// **'Deload — back off the load'**
+  String get gymRoutineNextTargetDeload;
+
+  /// Workout review: next-target rep-climb delta
+  ///
+  /// In en, this message translates to:
+  /// **'rep climb {from}→{to}'**
+  String gymRoutineNextTargetRepClimb(int from, int to);
+
   /// No description provided for @nutritionTitle.
   ///
   /// In en, this message translates to:
@@ -12237,6 +12657,42 @@ abstract class AppLocalizations {
   /// **'Snack'**
   String get nutritionSlotSnack;
 
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Protein'**
+  String get nutritionMealProtein;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Carbs'**
+  String get nutritionMealCarbs;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Fat'**
+  String get nutritionMealFat;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get nutritionMealItemsHeading;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing logged for this meal.'**
+  String get nutritionMealNoItems;
+
+  /// Per-meal nutrition detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get nutritionMealTrendHeading;
+
   /// No description provided for @nutritionDelete.
   ///
   /// In en, this message translates to:
@@ -12356,6 +12812,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Session plan not found.'**
   String get sessionNotFound;
+
+  /// Owner action to make a session plan publicly shareable
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get sessionMakePublic;
+
+  /// Owner action to make a public session plan private again
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get sessionMakePrivate;
+
+  /// Shown when toggling a session plan's public visibility fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change visibility.'**
+  String get sessionVisibilityError;
 
   /// Heading above the expanded list of movement steps
   ///

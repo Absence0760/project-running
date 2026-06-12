@@ -22,6 +22,7 @@ import '../widgets/route_track_preview.dart';
 import '../widgets/verified_badge.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
+import 'session_detail_screen.dart';
 import 'public_route_screen.dart';
 import 'route_builder_screen.dart';
 import '../widgets/top_banner.dart';
@@ -57,6 +58,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<ClubPostView> _posts = const [];
   List<ClubMemberRow> _pending = const [];
   List<TrainingPlanRow> _templates = const [];
+  List<SessionPlanRow> _sessionTemplates = const [];
+  String? _adoptingSessionId;
   List<cm.Route> _routes = const [];
   bool _loading = true;
   bool _busy = false;
@@ -1109,13 +1112,43 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (c == null) return;
     try {
       final list = await widget.training.fetchClubTemplates(c.row.id);
+      final sessions = await widget.apiClient?.fetchClubSessionTemplates(c.row.id) ??
+          const <SessionPlanRow>[];
       if (!mounted) return;
       setState(() {
         _templates = list;
+        _sessionTemplates = sessions;
         _templatesLoaded = true;
       });
     } catch (_) {
       if (mounted) setState(() => _templatesLoaded = true);
+    }
+  }
+
+  Future<void> _adoptSessionTemplate(SessionPlanRow s) async {
+    final api = widget.apiClient;
+    if (api == null || _adoptingSessionId != null) return;
+    setState(() => _adoptingSessionId = s.id);
+    try {
+      final newId = await api.cloneSessionTemplate(s.id);
+      if (!mounted) return;
+      showTopBanner(context, AppLocalizations.of(context).clubDetailSessionAdopted);
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => SessionDetailScreen(
+            api: api,
+            planId: newId,
+            titleHint: s.title,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _adoptingSessionId = null);
     }
   }
 
@@ -1262,14 +1295,13 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (!_templatesLoaded) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_templates.isEmpty) {
+    final l10n = AppLocalizations.of(context);
+    if (_templates.isEmpty && _sessionTemplates.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            c.isAdmin
-                ? AppLocalizations.of(context).clubDetailNoTemplatesAdmin
-                : AppLocalizations.of(context).clubDetailNoTemplates,
+            c.isAdmin ? l10n.clubDetailNoTemplatesAdmin : l10n.clubDetailNoTemplates,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.outline,
@@ -1280,44 +1312,87 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     }
     return RefreshIndicator(
       onRefresh: _loadTemplates,
-      child: ListView.separated(
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: _templates.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (_, i) {
-          final t = _templates[i];
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(t.name, style: theme.textTheme.titleSmall),
-                        if (t.notes != null && t.notes!.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            t.notes!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+        children: [
+          for (final t in _templates) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(t.name, style: theme.textTheme.titleSmall),
+                          if (t.notes != null && t.notes!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              t.notes!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => _adoptTemplate(t),
-                    child: Text(AppLocalizations.of(context).clubDetailAdopt),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => _adoptTemplate(t),
+                      child: Text(l10n.clubDetailAdopt),
+                    ),
+                  ],
+                ),
               ),
             ),
-          );
-        },
+            const SizedBox(height: 8),
+          ],
+          if (_sessionTemplates.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 8),
+              child: Text(l10n.clubDetailSessionTemplatesTitle,
+                  style: theme.textTheme.titleMedium),
+            ),
+            for (final s in _sessionTemplates) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(s.title, style: theme.textTheme.titleSmall),
+                            if (s.discipline != null && s.discipline!.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                s.discipline!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _adoptingSessionId == s.id
+                            ? null
+                            : () => _adoptSessionTemplate(s),
+                        child: Text(l10n.clubDetailAdopt),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+        ],
       ),
     );
   }

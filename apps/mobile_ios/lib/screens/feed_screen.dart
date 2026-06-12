@@ -34,6 +34,7 @@ class _FeedScreenState extends State<FeedScreen> {
     _ActivityOption('walk', Icons.directions_walk),
     _ActivityOption('cycle', Icons.directions_bike),
     _ActivityOption('hike', Icons.terrain),
+    _ActivityOption('lift', Icons.fitness_center),
   ];
 
   String _activityLabel(AppLocalizations l10n, String value) {
@@ -46,6 +47,8 @@ class _FeedScreenState extends State<FeedScreen> {
         return l10n.feedActivityCycle;
       case 'hike':
         return l10n.feedActivityHike;
+      case 'lift':
+        return l10n.feedActivityLift;
       default:
         return l10n.feedActivityAll;
     }
@@ -56,7 +59,7 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _exhausted = false;
   Object? _loadError;
 
-  List<FeedEntry> _entries = const [];
+  List<ActivityFeedEntry> _entries = const [];
   Map<String, EngagementSummary> _engagement = const {};
   List<UserProfileRow> _followees = const [];
 
@@ -69,6 +72,11 @@ class _FeedScreenState extends State<FeedScreen> {
     _loadInitial();
   }
 
+  // Engagement (kudos / comments) only exists for runs. Lift cards carry no
+  // engagement footer.
+  static List<String> _runIds(List<ActivityFeedEntry> es) =>
+      es.whereType<RunFeedEntry>().map((e) => e.run.id).toList();
+
   Future<void> _loadInitial() async {
     if (!mounted) return;
     setState(() {
@@ -78,7 +86,7 @@ class _FeedScreenState extends State<FeedScreen> {
     try {
       final api = widget.api;
       final results = await Future.wait([
-        api.fetchFollowingFeed(
+        api.fetchFollowingActivityFeed(
           limit: 20,
           authorId: _authorFilter == 'all' ? null : _authorFilter,
           activityType: _activityFilter,
@@ -94,14 +102,13 @@ class _FeedScreenState extends State<FeedScreen> {
             ? Future.value(const <UserProfileRow>[])
             : api.fetchFollowing(api.userId!, limit: 200),
       ]);
-      final entries = results[0] as List<FeedEntry>;
+      final entries = results[0] as List<ActivityFeedEntry>;
       final followees = results[1] as List<UserProfileRow>;
 
-      final engagement = entries.isEmpty
+      final runIds = _runIds(entries);
+      final engagement = runIds.isEmpty
           ? const <String, ({int kudosCount, bool viewerHasKudos, int commentCount})>{}
-          : await api.fetchEngagementSummaries(
-              entries.map((e) => e.run.id).toList(),
-            );
+          : await api.fetchEngagementSummaries(runIds);
       if (!mounted) return;
       setState(() {
         _entries = entries;
@@ -131,17 +138,16 @@ class _FeedScreenState extends State<FeedScreen> {
     setState(() => _loadingMore = true);
     try {
       final last = _entries.last;
-      final more = await widget.api.fetchFollowingFeed(
+      final more = await widget.api.fetchFollowingActivityFeed(
         limit: 20,
-        cursor: (startedAt: last.run.startedAt, id: last.run.id),
+        cursor: (startedAt: last.startedAt, id: last.id),
         authorId: _authorFilter == 'all' ? null : _authorFilter,
         activityType: _activityFilter,
       );
-      final moreEng = more.isEmpty
+      final moreRunIds = _runIds(more);
+      final moreEng = moreRunIds.isEmpty
           ? const <String, ({int kudosCount, bool viewerHasKudos, int commentCount})>{}
-          : await widget.api.fetchEngagementSummaries(
-              more.map((e) => e.run.id).toList(),
-            );
+          : await widget.api.fetchEngagementSummaries(moreRunIds);
       if (!mounted) return;
       setState(() {
         _entries = [..._entries, ...more];
@@ -255,27 +261,37 @@ class _FeedScreenState extends State<FeedScreen> {
                                         ),
                                       );
                                     }
-                                    return _EntryCard(
-                                      key: ValueKey(_entries[i].run.id),
-                                      api: widget.api,
-                                      entry: _entries[i],
-                                      initialEngagement:
-                                          _engagement[_entries[i].run.id],
-                                      onAuthorTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProfileScreen(
-                                            api: widget.api,
-                                            userId: _entries[i].author.id,
+                                    final entry = _entries[i];
+                                    void openAuthor() => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ProfileScreen(
+                                              api: widget.api,
+                                              userId: entry.author.id,
+                                            ),
                                           ),
-                                        ),
-                                      ),
+                                        );
+                                    if (entry is LiftFeedEntry) {
+                                      return _LiftEntryCard(
+                                        key: ValueKey(entry.id),
+                                        entry: entry,
+                                        onAuthorTap: openAuthor,
+                                      );
+                                    }
+                                    final run = entry as RunFeedEntry;
+                                    return _EntryCard(
+                                      key: ValueKey(run.run.id),
+                                      api: widget.api,
+                                      entry: FeedEntry(
+                                          run: run.run, author: run.author),
+                                      initialEngagement: _engagement[run.run.id],
+                                      onAuthorTap: openAuthor,
                                       onCardTap: () => Navigator.push(
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) => PublicRunScreen(
                                             api: widget.api,
-                                            runId: _entries[i].run.id,
+                                            runId: run.run.id,
                                           ),
                                         ),
                                       ),
@@ -532,17 +548,6 @@ class _EntryCard extends StatelessWidget {
     return '$m:${s.toString().padLeft(2, '0')} /km';
   }
 
-  static String _fmtRelative(DateTime started, String localeTag) {
-    final ms = DateTime.now().difference(started).inMilliseconds;
-    final mins = ms ~/ 60000;
-    if (mins < 1) return 'just now';
-    if (mins < 60) return '${mins}m ago';
-    final hrs = mins ~/ 60;
-    if (hrs < 24) return '${hrs}h ago';
-    final days = hrs ~/ 24;
-    if (days < 30) return '${days}d ago';
-    return formatDateMed(started, localeTag);
-  }
 }
 
 class _EngagementFooter extends StatefulWidget {
@@ -658,6 +663,118 @@ class _EngagementFooterState extends State<_EngagementFooter> {
       ),
     );
   }
+}
+
+/// A public gym workout rendered as a "lift card" — title + set count +
+/// total volume, distinct from a run card. Mirrors web's lift-card branch
+/// in SocialFeed. No kudos / comments footer (engagement is run-only).
+class _LiftEntryCard extends StatelessWidget {
+  final LiftFeedEntry entry;
+  final VoidCallback onAuthorTap;
+
+  const _LiftEntryCard({
+    super.key,
+    required this.entry,
+    required this.onAuthorTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final title = entry.title?.trim();
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onAuthorTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                children: [
+                  _MiniAvatar(
+                    displayName: entry.author.displayName,
+                    avatarUrl: entry.author.avatarUrl,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      entry.author.displayName ?? l10n.feedRunnerFallback,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  ),
+                  Text(
+                    _fmtRelative(entry.startedAt,
+                        localeToTag(Localizations.localeOf(context))),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.fitness_center,
+                        size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        (title == null || title.isEmpty)
+                            ? l10n.feedLiftUntitled
+                            : title,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _Stat(
+                      label: l10n.feedLiftSetsLabel,
+                      value: '${entry.setCount}',
+                    ),
+                    if (entry.volumeKg > 0) ...[
+                      const SizedBox(width: 32),
+                      _Stat(
+                        label: l10n.feedLiftVolume,
+                        value: WeightFormat.format(
+                            entry.volumeKg, activeWeightUnit),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _fmtRelative(DateTime started, String localeTag) {
+  final ms = DateTime.now().difference(started).inMilliseconds;
+  final mins = ms ~/ 60000;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return '${mins}m ago';
+  final hrs = mins ~/ 60;
+  if (hrs < 24) return '${hrs}h ago';
+  final days = hrs ~/ 24;
+  if (days < 30) return '${days}d ago';
+  return formatDateMed(started, localeTag);
 }
 
 class _Stat extends StatelessWidget {

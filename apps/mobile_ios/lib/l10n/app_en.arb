@@ -3356,6 +3356,22 @@
   "@feedActivityHike": {
     "description": "Feed activity filter chip — hiking"
   },
+  "feedActivityLift": "Lift",
+  "@feedActivityLift": {
+    "description": "Feed activity filter chip — gym lifts"
+  },
+  "feedLiftSetsLabel": "Sets",
+  "@feedLiftSetsLabel": {
+    "description": "Stat label under the set count on a feed lift card"
+  },
+  "feedLiftVolume": "Volume",
+  "@feedLiftVolume": {
+    "description": "Stat label under the total volume on a feed lift card"
+  },
+  "feedLiftUntitled": "Workout",
+  "@feedLiftUntitled": {
+    "description": "Fallback title for an untitled public gym workout in the feed"
+  },
   "feedLoadMore": "Load more",
   "@feedLoadMore": {
     "description": "Button to load the next page of feed entries"
@@ -4140,6 +4156,14 @@
   "@clubDetailAdopt": {
     "description": "Button to adopt a plan template"
   },
+  "clubDetailSessionTemplatesTitle": "Session templates",
+  "@clubDetailSessionTemplatesTitle": {
+    "description": "Heading above the club's adoptable yoga/pilates session-plan templates"
+  },
+  "clubDetailSessionAdopted": "Session added to your plans.",
+  "@clubDetailSessionAdopted": {
+    "description": "Confirmation after cloning a club session template into a personal plan"
+  },
   "eventNotFound": "Event not found.",
   "@eventNotFound": {
     "description": "Shown when the event does not exist"
@@ -4692,6 +4716,35 @@
       }
     }
   },
+  "planNewTemplateTitle": "Start from a club template",
+  "@planNewTemplateTitle": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateSubtitle": "Adopt a plan a club you belong to has published. It clones into your account with the start date below — edit it like any other plan.",
+  "@planNewTemplateSubtitle": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateButton": "Browse templates",
+  "@planNewTemplateButton": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateCloning": "Adopting…",
+  "@planNewTemplateCloning": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateCloneFailed": "Couldn't adopt that template: {error}",
+  "@planNewTemplateCloneFailed": {
+    "description": "Toast when adopting a club template fails",
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "planNewTemplatePickerTitle": "Choose a template",
+  "@planNewTemplatePickerTitle": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplatePickerCancel": "Cancel",
+  "@planNewTemplatePickerCancel": {
+    "description": "Plan-new club-template picker"
+  },
   "planDetailTimeoutError": "Connection timed out. Check your network and try again.",
   "@planDetailTimeoutError": {
     "description": "Plan-detail load timeout error"
@@ -4733,6 +4786,77 @@
         "type": "int"
       }
     }
+  },
+  "planDetailDriftOverFlag": "Running {pct}% over plan this week — ease back on the easy days so you don't dig a fatigue hole.",
+  "@planDetailDriftOverFlag": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "pct": { "type": "int" } }
+  },
+  "planDetailDriftUnderFlag": "Running {pct}% under plan this week — the planned volume drives the adaptation.",
+  "@planDetailDriftUnderFlag": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "pct": { "type": "int" } }
+  },
+  "planDetailMissedLongMakeUp": "You missed this week's long run — fit it in if you can. It's the session that matters most.",
+  "@planDetailMissedLongMakeUp": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailMissedLongTaper": "You missed a long run, but you're tapering — let it go and stay fresh for race day.",
+  "@planDetailMissedLongTaper": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailMissedLongRecovery": "You missed a long run — skip the make-up. A step-back week is coming and your body will use the rest.",
+  "@planDetailMissedLongRecovery": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplan": "Re-plan remaining weeks",
+  "@planDetailReplan": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanOnTrack": "Your plan's on track — nothing to adjust.",
+  "@planDetailReplanOnTrack": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanApplied": "{n, plural, one{Adjusted 1 workout} other{Adjusted {n} workouts}}",
+  "@planDetailReplanApplied": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "planDetailReplanPreviewTitle": "Proposed changes",
+  "@planDetailReplanPreviewTitle": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanMakeUp": "Long run {from} → {to} — make up a missed long run",
+  "@planDetailReplanMakeUp": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+  },
+  "planDetailReplanEase": "{from} → {to} — ease off after over-running",
+  "@planDetailReplanEase": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+  },
+  "planDetailReplanCancel": "Cancel",
+  "@planDetailReplanCancel": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanApply": "Apply changes",
+  "@planDetailReplanApply": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailDuplicateWeek": "Duplicate week",
+  "@planDetailDuplicateWeek": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailDuplicateWeekDone": "Week {n} duplicated",
+  "@planDetailDuplicateWeekDone": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "planDetailBulkFailed": "Couldn't update the plan: {error}",
+  "@planDetailBulkFailed": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "error": { "type": "String" } }
   },
   "planDetailEditTooltip": "Edit workout",
   "@planDetailEditTooltip": {
@@ -8942,6 +9066,16 @@
   "gymNotFound": "Workout not found.",
   "gymEdit": "Edit",
   "gymDelete": "Delete",
+  "gymPublic": "Public",
+  "@gymPublic": { "description": "Visibility chip on the gym workout detail when the workout is shared publicly." },
+  "gymPrivate": "Private",
+  "@gymPrivate": { "description": "Visibility chip on the gym workout detail when the workout is private." },
+  "gymMakePublic": "Make public",
+  "@gymMakePublic": { "description": "Action that flips a gym workout to public." },
+  "gymMakePrivate": "Make private",
+  "@gymMakePrivate": { "description": "Action that flips a gym workout back to private." },
+  "gymVisibilityFailed": "Couldn't update visibility: {error}",
+  "@gymVisibilityFailed": { "description": "Banner when toggling a gym workout's visibility fails.", "placeholders": { "error": {} } },
   "gymNotes": "Notes",
   "gymKg": "kg",
   "gymReps": "Reps",
@@ -9029,6 +9163,46 @@
   "gymRoutineEditorNeedExercise": "Add at least one exercise with a name.",
   "gymRoutineSaveAsRoutine": "Save as routine",
   "gymRoutineRepeatLast": "Repeat last",
+  "gymRoutineTargetRepsMax": "to",
+  "gymRoutineTargetDuration": "Target time (s)",
+  "gymRoutineTargetDistance": "Target distance (m)",
+  "gymRoutineRestLabel": "Rest (s)",
+  "gymRoutineSetType": "Set type",
+  "gymRoutineSetTypeWarmup": "Warm-up",
+  "gymRoutineSetTypeWorking": "Working",
+  "gymRoutineSetTypeDropset": "Drop set",
+  "gymRoutineSetTypeAmrap": "AMRAP",
+  "gymRoutineSetTypeFailure": "To failure",
+  "gymRoutineSetTypeBackoff": "Back-off",
+  "gymRoutineModality": "Measured by",
+  "gymRoutineModalityWeightReps": "Weight × reps",
+  "gymRoutineModalityTime": "Time",
+  "gymRoutineModalityDistance": "Distance",
+  "gymRoutineModalityBodyweightReps": "Bodyweight reps",
+  "gymRoutineSupersetToggle": "Superset with the next exercise",
+  "gymRoutineSupersetBadge": "Superset {group}",
+  "@gymRoutineSupersetBadge": {"description": "Routine detail: superset group badge", "placeholders": {"group": {"type": "int"}}},
+  "gymRoutineAdvanced": "Advanced",
+  "gymRoutineProgression": "Progression",
+  "gymRoutineProgressionNone": "None",
+  "gymRoutineProgressionLinear": "Linear",
+  "gymRoutineProgressionDoubleProgression": "Double progression",
+  "gymRoutineProgressionFiveByFive": "5×5",
+  "gymRoutineProgressionPercentCycle": "% of 1RM cycle",
+  "gymRoutineProgressionRpeAutoreg": "RPE auto-regulation",
+  "gymRoutineProgressionIncrementLabel": "Weight step ({unit})",
+  "@gymRoutineProgressionIncrementLabel": {"description": "Routine builder: progression weight increment field, with unit", "placeholders": {"unit": {"type": "String"}}},
+  "gymRoutineProgressionPercentLabel": "% of 1RM",
+  "gymRoutineProgressionOneRmLabel": "1RM ({unit})",
+  "@gymRoutineProgressionOneRmLabel": {"description": "Routine builder: progression 1RM field, with unit", "placeholders": {"unit": {"type": "String"}}},
+  "gymRoutineProgressionTargetRpeLabel": "Target RPE",
+  "gymRoutineNextTarget": "Next target",
+  "gymRoutineNextTargetIncreaseWeight": "Add load next time",
+  "gymRoutineNextTargetIncreaseReps": "Add reps next time",
+  "gymRoutineNextTargetHold": "Hold — repeat this target",
+  "gymRoutineNextTargetDeload": "Deload — back off the load",
+  "gymRoutineNextTargetRepClimb": "rep climb {from}→{to}",
+  "@gymRoutineNextTargetRepClimb": {"description": "Workout review: next-target rep-climb delta", "placeholders": {"from": {"type": "int"}, "to": {"type": "int"}}},
   "nutritionTitle": "Nutrition",
   "nutritionLogFood": "Log food",
   "nutritionCalories": "Calories",
@@ -9071,6 +9245,30 @@
   "nutritionSlotLunch": "Lunch",
   "nutritionSlotDinner": "Dinner",
   "nutritionSlotSnack": "Snack",
+  "nutritionMealProtein": "Protein",
+  "@nutritionMealProtein": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealCarbs": "Carbs",
+  "@nutritionMealCarbs": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealFat": "Fat",
+  "@nutritionMealFat": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealItemsHeading": "Items",
+  "@nutritionMealItemsHeading": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealNoItems": "Nothing logged for this meal.",
+  "@nutritionMealNoItems": {
+    "description": "Per-meal nutrition detail screen"
+  },
+  "nutritionMealTrendHeading": "Last 7 days",
+  "@nutritionMealTrendHeading": {
+    "description": "Per-meal nutrition detail screen"
+  },
   "nutritionDelete": "Delete",
   "nutritionDeleteEntryTitle": "Delete this entry?",
   "nutritionDeleteEntryMessage": "{item} will be removed from today's log.",
@@ -9104,6 +9302,12 @@
   "@sessionUntitled": {"description": "Fallback title for a session plan with no title"},
   "sessionNotFound": "Session plan not found.",
   "@sessionNotFound": {"description": "Shown when a session plan can't be loaded"},
+  "sessionMakePublic": "Make public",
+  "@sessionMakePublic": {"description": "Owner action to make a session plan publicly shareable"},
+  "sessionMakePrivate": "Make private",
+  "@sessionMakePrivate": {"description": "Owner action to make a public session plan private again"},
+  "sessionVisibilityError": "Couldn't change visibility.",
+  "@sessionVisibilityError": {"description": "Shown when toggling a session plan's public visibility fails"},
   "sessionSteps": "Sequence",
   "@sessionSteps": {"description": "Heading above the expanded list of movement steps"},
   "sessionStepHold": "{name} · hold {seconds}s",

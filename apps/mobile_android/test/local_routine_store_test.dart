@@ -57,6 +57,47 @@ void main() {
     }
   });
 
+  test('P2/P4 superset/set-type/rest/modality/progression round-trip on disk',
+      () async {
+    final f = await _store('p2p4');
+    try {
+      final r = await f.store.createLocal(title: 'Push', exercises: [
+        StoredRoutineExercise(
+          exerciseName: 'Bench',
+          exerciseKey: 'bench',
+          supersetGroup: 1,
+          supersetOrder: 0,
+          modality: 'weight_reps',
+          progression: 'double_progression',
+          progressionParams: const {'incrementKg': 2.5},
+          sets: [
+            StoredRoutineSet(
+              setType: 'warmup',
+              targetRepsMin: 8,
+              targetRepsMax: 12,
+              targetWeightKg: 60,
+              restS: 90,
+            ),
+          ],
+        ),
+      ]);
+      final reopened = LocalRoutineStore();
+      await reopened.init(overrideDirectory: f.dir);
+      final ex = reopened.byId(r.id)!.exercises.single;
+      expect(ex.supersetGroup, 1);
+      expect(ex.supersetOrder, 0);
+      expect(ex.modality, 'weight_reps');
+      expect(ex.progression, 'double_progression');
+      expect(ex.progressionParams['incrementKg'], 2.5);
+      final s = ex.sets.single;
+      expect(s.setType, 'warmup');
+      expect(s.targetRepsMax, 12);
+      expect(s.restS, 90);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   test('deleteLocal on a pendingCreate routine drops it outright', () async {
     final f = await _store('delete_local');
     try {

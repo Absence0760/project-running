@@ -12,30 +12,46 @@ typedef RoutineSyncState = SyncState;
 /// canonical single-target rep shape; a range fills both).
 class StoredRoutineSet {
   StoredRoutineSet({
+    this.setType = 'working',
     this.targetRepsMin,
     this.targetRepsMax,
     this.targetWeightKg,
     this.targetRpe,
+    this.restS,
+    this.targetDurationS,
+    this.targetDistanceM,
   });
 
+  final String setType;
   final int? targetRepsMin;
   final int? targetRepsMax;
   final double? targetWeightKg;
   final double? targetRpe;
+  final num? restS;
+  final int? targetDurationS;
+  final double? targetDistanceM;
 
   Map<String, dynamic> toJson() => {
+        'set_type': setType,
         'target_reps_min': targetRepsMin,
         'target_reps_max': targetRepsMax,
         'target_weight_kg': targetWeightKg,
         'target_rpe': targetRpe,
+        'rest_s': restS,
+        'target_duration_s': targetDurationS,
+        'target_distance_m': targetDistanceM,
       };
 
   factory StoredRoutineSet.fromJson(Map<String, dynamic> json) =>
       StoredRoutineSet(
+        setType: json['set_type'] as String? ?? 'working',
         targetRepsMin: (json['target_reps_min'] as num?)?.toInt(),
         targetRepsMax: (json['target_reps_max'] as num?)?.toInt(),
         targetWeightKg: (json['target_weight_kg'] as num?)?.toDouble(),
         targetRpe: (json['target_rpe'] as num?)?.toDouble(),
+        restS: json['rest_s'] as num?,
+        targetDurationS: (json['target_duration_s'] as num?)?.toInt(),
+        targetDistanceM: (json['target_distance_m'] as num?)?.toDouble(),
       );
 }
 
@@ -47,15 +63,30 @@ class StoredRoutineExercise {
     required this.exerciseName,
     required this.exerciseKey,
     required this.sets,
+    this.supersetGroup,
+    this.supersetOrder,
+    this.modality = 'weight_reps',
+    this.progression = 'none',
+    this.progressionParams = const {},
   });
 
   final String exerciseName;
   final String exerciseKey;
   final List<StoredRoutineSet> sets;
+  final int? supersetGroup;
+  final int? supersetOrder;
+  final String modality;
+  final String progression;
+  final Map<String, dynamic> progressionParams;
 
   Map<String, dynamic> toJson() => {
         'exercise_name': exerciseName,
         'exercise_key': exerciseKey,
+        'superset_group': supersetGroup,
+        'superset_order': supersetOrder,
+        'modality': modality,
+        'progression': progression,
+        'progression_params': progressionParams,
         'sets': [for (final s in sets) s.toJson()],
       };
 
@@ -63,6 +94,13 @@ class StoredRoutineExercise {
       StoredRoutineExercise(
         exerciseName: json['exercise_name'] as String? ?? '',
         exerciseKey: json['exercise_key'] as String? ?? '',
+        supersetGroup: (json['superset_group'] as num?)?.toInt(),
+        supersetOrder: (json['superset_order'] as num?)?.toInt(),
+        modality: json['modality'] as String? ?? 'weight_reps',
+        progression: json['progression'] as String? ?? 'none',
+        progressionParams: json['progression_params'] is Map
+            ? Map<String, dynamic>.from(json['progression_params'] as Map)
+            : const {},
         sets: ((json['sets'] as List?) ?? const [])
             .map((s) => StoredRoutineSet.fromJson(Map<String, dynamic>.from(s as Map)))
             .toList(),
@@ -327,13 +365,22 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
           (
             exerciseName: e.exerciseName,
             exerciseKey: e.exerciseKey,
+            supersetGroup: e.supersetGroup,
+            supersetOrder: e.supersetOrder,
+            modality: e.modality,
+            progression: e.progression,
+            progressionParams: e.progressionParams,
             sets: <GymRoutineSetInput>[
               for (final s in e.sets)
                 (
+                  setType: s.setType,
                   targetRepsMin: s.targetRepsMin,
                   targetRepsMax: s.targetRepsMax,
                   targetWeightKg: s.targetWeightKg,
                   targetRpe: s.targetRpe,
+                  restS: s.restS,
+                  targetDurationS: s.targetDurationS,
+                  targetDistanceM: s.targetDistanceM,
                 ),
             ],
           ),

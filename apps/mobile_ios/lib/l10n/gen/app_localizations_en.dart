@@ -2802,6 +2802,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get feedActivityHike => 'Hike';
 
   @override
+  String get feedActivityLift => 'Lift';
+
+  @override
+  String get feedLiftSetsLabel => 'Sets';
+
+  @override
+  String get feedLiftVolume => 'Volume';
+
+  @override
+  String get feedLiftUntitled => 'Workout';
+
+  @override
   String get feedLoadMore => 'Load more';
 
   @override
@@ -3348,6 +3360,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubDetailAdopt => 'Adopt';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'Session templates';
+
+  @override
+  String get clubDetailSessionAdopted => 'Session added to your plans.';
+
+  @override
   String get eventNotFound => 'Event not found.';
 
   @override
@@ -3757,6 +3775,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'Start from a club template';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Adopt a plan a club you belong to has published. It clones into your account with the start date below — edit it like any other plan.';
+
+  @override
+  String get planNewTemplateButton => 'Browse templates';
+
+  @override
+  String get planNewTemplateCloning => 'Adopting…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'Couldn\'t adopt that template: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Choose a template';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Cancel';
+
+  @override
   String get planDetailTimeoutError =>
       'Connection timed out. Check your network and try again.';
 
@@ -3784,6 +3826,78 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String planDetailWeek(int number) {
     return 'Week $number';
+  }
+
+  @override
+  String planDetailDriftOverFlag(int pct) {
+    return 'Running $pct% over plan this week — ease back on the easy days so you don\'t dig a fatigue hole.';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return 'Running $pct% under plan this week — the planned volume drives the adaptation.';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      'You missed this week\'s long run — fit it in if you can. It\'s the session that matters most.';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'You missed a long run, but you\'re tapering — let it go and stay fresh for race day.';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'You missed a long run — skip the make-up. A step-back week is coming and your body will use the rest.';
+
+  @override
+  String get planDetailReplan => 'Re-plan remaining weeks';
+
+  @override
+  String get planDetailReplanOnTrack =>
+      'Your plan\'s on track — nothing to adjust.';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Adjusted $n workouts',
+      one: 'Adjusted 1 workout',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => 'Proposed changes';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'Long run $from → $to — make up a missed long run';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — ease off after over-running';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'Cancel';
+
+  @override
+  String get planDetailReplanApply => 'Apply changes';
+
+  @override
+  String get planDetailDuplicateWeek => 'Duplicate week';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return 'Week $n duplicated';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'Couldn\'t update the plan: $error';
   }
 
   @override
@@ -6954,6 +7068,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymDelete => 'Delete';
 
   @override
+  String get gymPublic => 'Public';
+
+  @override
+  String get gymPrivate => 'Private';
+
+  @override
+  String get gymMakePublic => 'Make public';
+
+  @override
+  String get gymMakePrivate => 'Make private';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return 'Couldn\'t update visibility: $error';
+  }
+
+  @override
   String get gymNotes => 'Notes';
 
   @override
@@ -7198,6 +7329,122 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymRoutineRepeatLast => 'Repeat last';
 
   @override
+  String get gymRoutineTargetRepsMax => 'to';
+
+  @override
+  String get gymRoutineTargetDuration => 'Target time (s)';
+
+  @override
+  String get gymRoutineTargetDistance => 'Target distance (m)';
+
+  @override
+  String get gymRoutineRestLabel => 'Rest (s)';
+
+  @override
+  String get gymRoutineSetType => 'Set type';
+
+  @override
+  String get gymRoutineSetTypeWarmup => 'Warm-up';
+
+  @override
+  String get gymRoutineSetTypeWorking => 'Working';
+
+  @override
+  String get gymRoutineSetTypeDropset => 'Drop set';
+
+  @override
+  String get gymRoutineSetTypeAmrap => 'AMRAP';
+
+  @override
+  String get gymRoutineSetTypeFailure => 'To failure';
+
+  @override
+  String get gymRoutineSetTypeBackoff => 'Back-off';
+
+  @override
+  String get gymRoutineModality => 'Measured by';
+
+  @override
+  String get gymRoutineModalityWeightReps => 'Weight × reps';
+
+  @override
+  String get gymRoutineModalityTime => 'Time';
+
+  @override
+  String get gymRoutineModalityDistance => 'Distance';
+
+  @override
+  String get gymRoutineModalityBodyweightReps => 'Bodyweight reps';
+
+  @override
+  String get gymRoutineSupersetToggle => 'Superset with the next exercise';
+
+  @override
+  String gymRoutineSupersetBadge(int group) {
+    return 'Superset $group';
+  }
+
+  @override
+  String get gymRoutineAdvanced => 'Advanced';
+
+  @override
+  String get gymRoutineProgression => 'Progression';
+
+  @override
+  String get gymRoutineProgressionNone => 'None';
+
+  @override
+  String get gymRoutineProgressionLinear => 'Linear';
+
+  @override
+  String get gymRoutineProgressionDoubleProgression => 'Double progression';
+
+  @override
+  String get gymRoutineProgressionFiveByFive => '5×5';
+
+  @override
+  String get gymRoutineProgressionPercentCycle => '% of 1RM cycle';
+
+  @override
+  String get gymRoutineProgressionRpeAutoreg => 'RPE auto-regulation';
+
+  @override
+  String gymRoutineProgressionIncrementLabel(String unit) {
+    return 'Weight step ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionPercentLabel => '% of 1RM';
+
+  @override
+  String gymRoutineProgressionOneRmLabel(String unit) {
+    return '1RM ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionTargetRpeLabel => 'Target RPE';
+
+  @override
+  String get gymRoutineNextTarget => 'Next target';
+
+  @override
+  String get gymRoutineNextTargetIncreaseWeight => 'Add load next time';
+
+  @override
+  String get gymRoutineNextTargetIncreaseReps => 'Add reps next time';
+
+  @override
+  String get gymRoutineNextTargetHold => 'Hold — repeat this target';
+
+  @override
+  String get gymRoutineNextTargetDeload => 'Deload — back off the load';
+
+  @override
+  String gymRoutineNextTargetRepClimb(int from, int to) {
+    return 'rep climb $from→$to';
+  }
+
+  @override
   String get nutritionTitle => 'Nutrition';
 
   @override
@@ -7322,6 +7569,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionSlotSnack => 'Snack';
 
   @override
+  String get nutritionMealProtein => 'Protein';
+
+  @override
+  String get nutritionMealCarbs => 'Carbs';
+
+  @override
+  String get nutritionMealFat => 'Fat';
+
+  @override
+  String get nutritionMealItemsHeading => 'Items';
+
+  @override
+  String get nutritionMealNoItems => 'Nothing logged for this meal.';
+
+  @override
+  String get nutritionMealTrendHeading => 'Last 7 days';
+
+  @override
   String get nutritionDelete => 'Delete';
 
   @override
@@ -7385,6 +7650,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionNotFound => 'Session plan not found.';
+
+  @override
+  String get sessionMakePublic => 'Make public';
+
+  @override
+  String get sessionMakePrivate => 'Make private';
+
+  @override
+  String get sessionVisibilityError => 'Couldn\'t change visibility.';
 
   @override
   String get sessionSteps => 'Sequence';

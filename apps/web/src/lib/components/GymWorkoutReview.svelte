@@ -1,15 +1,44 @@
 <script lang="ts">
 	import type { RoutineAdherence, SetAdherenceStatus } from '$lib/gym/gym_adherence';
-	import type { GymStepResult } from '$lib/gym/gym_session_types';
+	import type { GymStepResult, NextTargetHint } from '$lib/gym/gym_session_types';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		adherence: RoutineAdherence | null;
 		stepResults: GymStepResult[];
+		/// P4 next-target hints, one per scheme-tracked exercise. Empty for an
+		/// ad-hoc or no-progression session — the section self-hides.
+		nextTargets?: NextTargetHint[];
 	}
 
-	let { adherence, stepResults }: Props = $props();
+	let { adherence, stepResults, nextTargets = [] }: Props = $props();
+
+	// Headline reason + a concrete delta ("+5 kg" / "rep climb 8→9"). Neutral /
+	// positive treatment — never the red/amber adherence colours.
+	function hintReason(h: NextTargetHint): string {
+		return t(`gym.routine.nextTarget.${h.reason}`);
+	}
+	function hintDelta(h: NextTargetHint): string | null {
+		if (
+			h.reason === 'increase_weight' &&
+			h.suggestedWeightKg != null &&
+			h.currentTopKg != null &&
+			h.suggestedWeightKg !== h.currentTopKg
+		) {
+			const d = h.suggestedWeightKg - h.currentTopKg;
+			return `${d > 0 ? '+' : '−'}${formatWeight(Math.abs(d))}`;
+		}
+		if (h.reason === 'deload' && h.suggestedWeightKg != null && h.currentTopKg != null) {
+			const d = h.suggestedWeightKg - h.currentTopKg;
+			return `${d > 0 ? '+' : '−'}${formatWeight(Math.abs(d))}`;
+		}
+		if (h.reason === 'increase_reps' && h.currentTopReps != null) {
+			const to = h.currentTopReps + 1;
+			return t('gym.routine.nextTarget.repClimb', { from: h.currentTopReps, to });
+		}
+		return null;
+	}
 
 	const hasData = $derived(!!adherence && stepResults.length > 0);
 
@@ -112,6 +141,26 @@
 				{/each}
 			</tbody>
 		</table>
+
+		{#if nextTargets.length > 0}
+			<div class="next-targets" data-testid="gym-next-targets">
+				<span class="next-head section-label">{t('gym.routine.nextTarget')}</span>
+				<ul class="next-list">
+					{#each nextTargets as h (h.exerciseKey)}
+						<li class="next-chip" data-testid="gym-next-target">
+							<span class="material-symbols" aria-hidden="true">
+								{h.reason === 'deload' ? 'trending_down' : 'trending_up'}
+							</span>
+							<span class="next-name">{h.exerciseName}</span>
+							{#if hintDelta(h)}
+								<span class="next-delta">{hintDelta(h)}</span>
+							{/if}
+							<span class="next-reason">{hintReason(h)}</span>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
 	</section>
 {/if}
 
@@ -122,6 +171,47 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-md);
+	}
+	.next-targets {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		border-top: 1px solid var(--color-border);
+		padding-top: var(--space-md);
+	}
+	.next-head {
+		color: var(--color-text-tertiary);
+	}
+	.next-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs);
+	}
+	.next-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.78rem;
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-sm);
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.next-chip .material-symbols {
+		font-size: 0.95rem;
+	}
+	.next-name {
+		font-weight: 600;
+	}
+	.next-delta {
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.next-reason {
+		color: var(--color-text-secondary);
 	}
 	.review-head {
 		display: flex;

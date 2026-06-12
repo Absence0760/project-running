@@ -19,6 +19,7 @@ import '../nutrition_totals.dart';
 import '../nutrition_week.dart';
 import '../settings_sync.dart';
 import '../widgets/nutrition_log_sheet.dart';
+import 'nutrition_meal_detail_screen.dart';
 
 /// Daily calorie + macro targets for the signed-in user, or null when a
 /// required body metric is missing. Shared by [NutritionScreen] and the
@@ -586,15 +587,24 @@ class _NutritionScreenState extends State<NutritionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                    child: Text(_slotLabel(l10n, g.slot),
-                        style: theme.textTheme.titleSmall)),
-                Text('${g.calories} kcal',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline)),
-              ],
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _openMealDetail(g.slot),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                        child: Text(_slotLabel(l10n, g.slot),
+                            style: theme.textTheme.titleSmall)),
+                    Text('${g.calories} kcal',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.outline)),
+                    Icon(Icons.chevron_right,
+                        size: 18, color: theme.colorScheme.outline),
+                  ],
+                ),
+              ),
             ),
             for (final e in g.entries)
               Padding(
@@ -791,6 +801,18 @@ class _NutritionScreenState extends State<NutritionScreen> {
           ],
         ),
       );
+
+  void _openMealDetail(String slot) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NutritionMealDetailScreen(
+          store: widget.store,
+          day: _todayStart,
+          slot: slot,
+        ),
+      ),
+    );
+  }
 
   String _slotLabel(AppLocalizations l10n, String slot) => switch (slot) {
         'breakfast' => l10n.nutritionSlotBreakfast,
