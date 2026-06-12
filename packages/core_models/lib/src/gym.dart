@@ -9,6 +9,7 @@ class GymSet {
     this.reps,
     this.weightKg,
     this.rpe,
+    this.durationS,
     this.setIndex,
   });
 
@@ -16,6 +17,10 @@ class GymSet {
   final int? reps;
   final double? weightKg;
   final double? rpe;
+
+  /// Optional hold/interval time in seconds for timed work (planks, holds);
+  /// null for rep/load-only sets (migration 20261231_001).
+  final int? durationS;
 
   /// Positional index within the workout. Often null for client-minted sets
   /// (assigned server-side on INSERT).
@@ -26,6 +31,7 @@ class GymSet {
         reps: (row[GymSetRow.colReps] as num?)?.toInt(),
         weightKg: (row[GymSetRow.colWeightKg] as num?)?.toDouble(),
         rpe: (row[GymSetRow.colRpe] as num?)?.toDouble(),
+        durationS: (row[GymSetRow.colDurationS] as num?)?.toInt(),
         setIndex: (row[GymSetRow.colSetIndex] as num?)?.toInt(),
       );
 }

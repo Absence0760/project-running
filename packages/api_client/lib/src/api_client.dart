@@ -4244,6 +4244,7 @@ class ApiClient {
           GymSetRow.colReps: sets[i].reps,
           GymSetRow.colWeightKg: sets[i].weightKg,
           GymSetRow.colRpe: sets[i].rpe,
+          GymSetRow.colDurationS: sets[i].durationS,
         },
     ]);
   }
@@ -4478,6 +4479,7 @@ typedef GymSetInput = ({
   int? reps,
   double? weightKg,
   double? rpe,
+  int? durationS,
 });
 
 /// One row of the `activities` UNION view (runs + gym_workouts + food_log),

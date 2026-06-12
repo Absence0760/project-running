@@ -74,8 +74,15 @@ class _FakeGymApi extends ApiClient {
   }
 }
 
-GymSetInput _set(String name, {int? reps, double? kg, double? rpe}) =>
-    (exerciseName: name, reps: reps, weightKg: kg, rpe: rpe);
+GymSetInput _set(String name,
+        {int? reps, double? kg, double? rpe, int? durationS}) =>
+    (
+      exerciseName: name,
+      reps: reps,
+      weightKg: kg,
+      rpe: rpe,
+      durationS: durationS,
+    );
 
 ({Map<String, dynamic> workout, List<Map<String, dynamic>> sets}) _serverWorkout(
   String id, {

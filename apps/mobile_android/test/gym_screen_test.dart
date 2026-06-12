@@ -130,7 +130,7 @@ void main() {
             title: 'Push day',
             startedAt: DateTime.utc(2026, 2, 1),
             sets: const [
-              (exerciseName: 'Bench', reps: 5, weightKg: 100.0, rpe: null),
+              (exerciseName: 'Bench', reps: 5, weightKg: 100.0, rpe: null, durationS: null),
             ],
           ));
       try {

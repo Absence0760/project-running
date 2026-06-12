@@ -87,6 +87,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
         reps: _numStr(s['reps'] as num?),
         weight: _numStr(display),
         rpe: _numStr(s['rpe'] as num?),
+        duration: _numStr(s['duration_s'] as num?),
       );
       final last = blocks.isEmpty ? null : blocks.last;
       if (last != null && last.name.text == name) {
@@ -131,12 +132,15 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       final name = ex.name.text.trim();
       if (name.isEmpty) continue;
       for (final s in ex.sets) {
+        final durationS = int.tryParse(s.duration.text.trim());
         out.add((
           exerciseName: name,
           reps: int.tryParse(s.reps.text.trim()),
           // Entry is in the user's display unit; store canonical kg.
           weightKg: WeightFormat.parseToKg(s.weight.text, activeWeightUnit),
           rpe: double.tryParse(s.rpe.text.trim()),
+          // duration_s is a non-negative integer column; clamp a stray negative.
+          durationS: durationS == null ? null : (durationS < 0 ? 0 : durationS),
         ));
       }
     }
@@ -309,6 +313,14 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                         const TextInputType.numberWithOptions(decimal: true),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _setNumberField(
+                        ex.sets[si].duration,
+                        l10n.gymDuration,
+                        const TextInputType.numberWithOptions(decimal: false),
+                      ),
+                    ),
                     IconButton(
                       tooltip: l10n.gymEditorRemoveSet,
                       icon: const Icon(Icons.close, size: 18),
@@ -424,14 +436,21 @@ class _EditSet {
   final TextEditingController reps;
   final TextEditingController weight;
   final TextEditingController rpe;
-  _EditSet({String reps = '', String weight = '', String rpe = ''})
+  final TextEditingController duration;
+  _EditSet(
+      {String reps = '',
+      String weight = '',
+      String rpe = '',
+      String duration = ''})
       : reps = TextEditingController(text: reps),
         weight = TextEditingController(text: weight),
-        rpe = TextEditingController(text: rpe);
+        rpe = TextEditingController(text: rpe),
+        duration = TextEditingController(text: duration);
   void dispose() {
     reps.dispose();
     weight.dispose();
     rpe.dispose();
+    duration.dispose();
   }
 }
 

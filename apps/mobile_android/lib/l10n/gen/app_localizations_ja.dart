@@ -6607,6 +6607,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymRpe => 'RPE';
 
   @override
+  String get gymDuration => '時間 (秒)';
+
+  @override
+  String gymDurationValue(String seconds) {
+    return '$seconds秒';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'セット $n';
   }

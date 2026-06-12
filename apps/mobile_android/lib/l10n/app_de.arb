@@ -1909,6 +1909,8 @@
   "gymKg": "kg",
   "gymReps": "Wdh.",
   "gymRpe": "RPE",
+  "gymDuration": "Zeit (s)",
+  "gymDurationValue": "{seconds}s",
   "gymSetN": "Satz {n}",
   "gymPrWeight": "Schwerste",
   "gymPrVolume": "Top-Volumen",

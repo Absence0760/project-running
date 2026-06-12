@@ -94,6 +94,79 @@ void main() {
     }
   });
 
+  testWidgets('a timed-only set saves duration_s with no reps/weight',
+      (tester) async {
+    final f = await _store('duration_');
+    try {
+      await tester.pumpWidget(_opener(f.store));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Fields per row: title(0), exercise(1), reps(2), weight(3), rpe(4),
+      // duration(5). Fill only the exercise + the duration (a 90 s plank).
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Core');
+      await tester.enterText(fields.at(1), 'Plank');
+      await tester.enterText(fields.at(5), '90'); // duration seconds
+
+      await tester.tap(find.text('Save workout'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(f.store.workouts, hasLength(1));
+      final w = f.store.workouts.first;
+      expect(w.sets, hasLength(1));
+      expect(w.sets.first['exercise_name'], 'Plank');
+      expect(w.sets.first['duration_s'], 90);
+      expect(w.sets.first['reps'], isNull);
+      expect(w.sets.first['weight_kg'], isNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('editing pre-fills the duration from the stored workout',
+      (tester) async {
+    final f = await _store('edit_dur_');
+    const id = 'w-edit-dur';
+    await tester.runAsync(() => f.store.replaceFromServer([
+          (
+            workout: <String, dynamic>{
+              'id': id,
+              'title': 'Hold day',
+              'started_at': DateTime.utc(2026, 3, 1).toIso8601String(),
+              'is_public': false,
+            },
+            sets: <Map<String, dynamic>>[
+              {
+                'exercise_name': 'Plank',
+                'reps': null,
+                'weight_kg': null,
+                'rpe': null,
+                'duration_s': 60,
+              },
+            ],
+          ),
+        ]));
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(store: f.store, existing: f.store.byId(id)),
+        ),
+      ));
+      await tester.pump();
+      expect(find.text('Plank'), findsOneWidget);
+      expect(find.text('60'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('editing pre-fills the title + set list from the stored workout',
       (tester) async {
     final f = await _store('edit_');

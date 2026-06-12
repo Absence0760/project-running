@@ -46,7 +46,7 @@ void main() {
         // (default: "factored in") must render.
         await gymStore.createLocal(
           startedAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
-          sets: const [(exerciseName: 'Squat', reps: 5, weightKg: 140.0, rpe: null)],
+          sets: const [(exerciseName: 'Squat', reps: 5, weightKg: 140.0, rpe: null, durationS: null)],
         );
 
         await tester.pumpWidget(

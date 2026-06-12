@@ -1188,7 +1188,7 @@ void main() {
         title: 'Leg day',
         startedAt: DateTime.utc(2026, 6, 1, 7),
         sets: const [
-          (exerciseName: 'Squat', reps: 5, weightKg: 100.0, rpe: null),
+          (exerciseName: 'Squat', reps: 5, weightKg: 100.0, rpe: null, durationS: null),
         ],
       );
       await srcFood.createLocal(
@@ -1228,7 +1228,7 @@ void main() {
         title: 'Push day',
         startedAt: DateTime.utc(2026, 6, 2, 7),
         sets: const [
-          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null),
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
         ],
       );
       final entry = await srcFood.createLocal(

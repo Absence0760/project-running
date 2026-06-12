@@ -11571,6 +11571,18 @@ abstract class AppLocalizations {
   /// **'RPE'**
   String get gymRpe;
 
+  /// No description provided for @gymDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Time (s)'**
+  String get gymDuration;
+
+  /// A set's hold/interval time in seconds
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String gymDurationValue(String seconds);
+
   /// Set ordinal label in a gym workout
   ///
   /// In en, this message translates to:

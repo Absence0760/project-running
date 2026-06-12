@@ -6997,6 +6997,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gymRpe => 'RPE';
 
   @override
+  String get gymDuration => 'Zeit (s)';
+
+  @override
+  String gymDurationValue(String seconds) {
+    return '${seconds}s';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Satz $n';
   }
