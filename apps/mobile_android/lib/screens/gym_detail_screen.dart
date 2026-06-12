@@ -189,6 +189,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
           reps: (s['reps'] as num?)?.toInt(),
           weightKg: (s['weight_kg'] as num?)?.toDouble(),
           rpe: (s['rpe'] as num?)?.toDouble(),
+          durationS: (s['duration_s'] as num?)?.toInt(),
         ),
     ];
     final saved = await showGymComposeSheet(

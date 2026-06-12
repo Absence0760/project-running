@@ -9,6 +9,7 @@ import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
+import 'gym_session_screen.dart';
 
 /// Detail view for a single routine — mirrors web `/gym/routines/[id]`.
 /// Planned targets per exercise; primary `Start routine` (P1: prefill-only —
@@ -94,6 +95,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           // prefillFromRoutine carries canonical kg in weightKg.
           weightKg: s.weightKg?.toDouble(),
           rpe: s.rpe.isEmpty ? null : double.tryParse(s.rpe),
+          durationS: null,
         ));
       }
     }
@@ -175,12 +177,39 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           : _body(r, theme, l10n),
       floatingActionButton: r == null
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _start(r),
-              icon: const Icon(Icons.play_arrow),
-              label: Text(l10n.gymRoutineStart),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'routine_start_session',
+                  onPressed: () => _startSession(r),
+                  icon: const Icon(Icons.fitness_center),
+                  label: Text(l10n.gymSessionStart),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'routine_prefill',
+                  onPressed: () => _start(r),
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(l10n.gymRoutineStart),
+                ),
+              ],
             ),
     );
+  }
+
+  Future<void> _startSession(StoredRoutine r) async {
+    final saved = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => GymSessionScreen(
+          api: widget.api,
+          routine: r,
+          gymStore: widget.gymStore,
+        ),
+      ),
+    );
+    if (saved != null && mounted) Navigator.pop(context);
   }
 
   Widget _body(StoredRoutine r, ThemeData theme, AppLocalizations l10n) {

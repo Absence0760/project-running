@@ -159,6 +159,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
     int? durationS,
     String? notes,
     bool isPublic = false,
+    Map<String, dynamic>? metadata,
     List<GymSetInput> sets = const [],
   }) async {
     final id = OfflineSyncStore.newUuid();
@@ -171,6 +172,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
       'notes': notes,
       'is_public': isPublic,
       'external_id': null,
+      if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
       'last_modified_at': now.toIso8601String(),
       'created_at': now.toIso8601String(),
     };
@@ -193,6 +195,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
     int? durationS,
     String? notes,
     bool? isPublic,
+    Map<String, dynamic>? metadata,
     List<GymSetInput>? sets,
   }) async {
     final existing = rowsById[id];
@@ -203,6 +206,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
     if (durationS != null) next['duration_s'] = durationS;
     if (notes != null) next['notes'] = notes;
     if (isPublic != null) next['is_public'] = isPublic;
+    if (metadata != null) next['metadata'] = metadata;
     next['last_modified_at'] = now.toIso8601String();
     final stored = StoredGymWorkout(
       row: next,
@@ -299,8 +303,14 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
         notes: stored.row['notes'] as String?,
         isPublic: (stored.row['is_public'] as bool?) ?? false,
         lastModifiedAt: stored.lastModifiedAt,
+        metadata: _metadataOf(stored),
         sets: _mapsToSets(stored.sets),
       );
+
+  static Map<String, dynamic>? _metadataOf(StoredGymWorkout stored) {
+    final m = stored.row['metadata'];
+    return m is Map ? Map<String, dynamic>.from(m) : null;
+  }
 
   @override
   Future<void> pushUpdate(ApiClient api, StoredGymWorkout stored) =>
@@ -311,6 +321,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
         notes: stored.row['notes'] as String?,
         isPublic: (stored.row['is_public'] as bool?) ?? false,
         lastModifiedAt: stored.lastModifiedAt,
+        metadata: _metadataOf(stored),
         sets: _mapsToSets(stored.sets),
       );
 

@@ -4230,6 +4230,79 @@ class ApiClient {
     }
   }
 
+  /// Insert a session plan + its blocks + items. The caller may mint [id] (the
+  /// offline-create path) — `session_plans.id` defaults to gen_random_uuid()
+  /// but accepts a client value, so the local id IS the server id (no
+  /// reconciliation), matching [createGymWorkout] / [createGymRoutine].
+  /// Block ids are client-minted too so an item's [SessionPlanItemInput.blockId]
+  /// references the block in the same insert without a server round-trip.
+  Future<SessionPlanRow> createSessionPlan({
+    String? id,
+    required String title,
+    String? discipline,
+    String? equipment,
+    int? estDurationMin,
+    bool isPublic = false,
+    DateTime? updatedAt,
+    List<SessionPlanBlockInput> blocks = const [],
+    List<SessionPlanItemInput> items = const [],
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(SessionPlanRow.table)
+        .insert({
+          if (id != null) SessionPlanRow.colId: id,
+          SessionPlanRow.colAuthorId: uid,
+          SessionPlanRow.colTitle: title.trim(),
+          SessionPlanRow.colDiscipline: discipline,
+          SessionPlanRow.colEquipment: equipment,
+          SessionPlanRow.colEstDurationMin: estDurationMin,
+          SessionPlanRow.colIsPublic: isPublic,
+          if (updatedAt != null)
+            SessionPlanRow.colUpdatedAt: updatedAt.toIso8601String(),
+        })
+        .select()
+        .single();
+    final plan = SessionPlanRow.fromJson(row);
+    if (blocks.isNotEmpty) {
+      await _client.from(SessionPlanBlockRow.table).insert([
+        for (final b in blocks)
+          {
+            SessionPlanBlockRow.colId: b.id,
+            SessionPlanBlockRow.colPlanId: plan.id,
+            SessionPlanBlockRow.colPosition: b.position,
+            SessionPlanBlockRow.colName: b.name,
+          },
+      ]);
+    }
+    if (items.isNotEmpty) {
+      await _client.from(SessionPlanItemRow.table).insert([
+        for (final it in items)
+          {
+            SessionPlanItemRow.colId: it.id,
+            SessionPlanItemRow.colPlanId: plan.id,
+            SessionPlanItemRow.colBlockId: it.blockId,
+            SessionPlanItemRow.colPosition: it.position,
+            SessionPlanItemRow.colMovementName: it.movementName,
+            SessionPlanItemRow.colKind: it.kind,
+            SessionPlanItemRow.colDurationS: it.durationS,
+            SessionPlanItemRow.colReps: it.reps,
+            SessionPlanItemRow.colPerSide: it.perSide,
+            SessionPlanItemRow.colTempo: it.tempo,
+            SessionPlanItemRow.colCue: it.cue,
+          },
+      ]);
+    }
+    return plan;
+  }
+
+  /// Delete a session plan; blocks + items cascade via FK. Logged gym_workouts
+  /// are untouched (the session→log link is a metadata string, not an FK).
+  Future<void> deleteSessionPlan(String id) async {
+    await _client.from(SessionPlanRow.table).delete().eq(SessionPlanRow.colId, id);
+  }
+
   /// Windowed, reverse-chronological feed across all logged modalities for
   /// the unified History timeline. RLS (`security_invoker` on the `activities`
   /// view) scopes it to the caller. Always bounded — the timeline paginates
@@ -4266,6 +4339,7 @@ class ApiClient {
     bool isPublic = false,
     String? externalId,
     DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
     List<GymSetInput> sets = const [],
   }) async {
     final uid = _client.auth.currentUser?.id;
@@ -4281,6 +4355,8 @@ class ApiClient {
           GymWorkoutRow.colNotes: notes,
           GymWorkoutRow.colIsPublic: isPublic,
           GymWorkoutRow.colExternalId: externalId,
+          if (metadata != null && metadata.isNotEmpty)
+            GymWorkoutRow.colMetadata: metadata,
           if (lastModifiedAt != null)
             GymWorkoutRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
         })
@@ -4320,6 +4396,7 @@ class ApiClient {
     String? notes,
     bool? isPublic,
     DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
     List<GymSetInput>? sets,
   }) async {
     final patch = <String, dynamic>{
@@ -4330,6 +4407,7 @@ class ApiClient {
     if (durationS != null) patch[GymWorkoutRow.colDurationS] = durationS;
     if (notes != null) patch[GymWorkoutRow.colNotes] = notes;
     if (isPublic != null) patch[GymWorkoutRow.colIsPublic] = isPublic;
+    if (metadata != null) patch[GymWorkoutRow.colMetadata] = metadata;
     await _client.from(GymWorkoutRow.table).update(patch).eq(GymWorkoutRow.colId, id);
     if (sets != null) await _replaceGymSets(id, sets);
   }
@@ -4710,6 +4788,30 @@ typedef GymRoutineExerciseInput = ({
   String exerciseName,
   String exerciseKey,
   List<GymRoutineSetInput> sets,
+});
+
+/// One block in a [ApiClient.createSessionPlan] call. `id` is client-minted so
+/// an item can reference it in the same insert without a server round-trip.
+typedef SessionPlanBlockInput = ({
+  String id,
+  int position,
+  String? name,
+});
+
+/// One movement item in a [ApiClient.createSessionPlan] call. [kind] is the raw
+/// `'hold' | 'reps' | 'flow'` wire value; [blockId] references a
+/// [SessionPlanBlockInput.id] (or null for a flat, blockless plan).
+typedef SessionPlanItemInput = ({
+  String id,
+  String? blockId,
+  int position,
+  String movementName,
+  String kind,
+  int? durationS,
+  int? reps,
+  bool perSide,
+  String? tempo,
+  String? cue,
 });
 
 /// One row of the `activities` UNION view (runs + gym_workouts + food_log),

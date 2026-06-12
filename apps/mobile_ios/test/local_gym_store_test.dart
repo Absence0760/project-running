@@ -28,6 +28,7 @@ class _FakeGymApi extends ApiClient {
     bool isPublic = false,
     String? externalId,
     DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
     List<GymSetInput> sets = const [],
   }) async {
     calls.add('create:$id');
@@ -61,6 +62,7 @@ class _FakeGymApi extends ApiClient {
     String? notes,
     bool? isPublic,
     DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
     List<GymSetInput>? sets,
   }) async {
     calls.add('update:$id');
