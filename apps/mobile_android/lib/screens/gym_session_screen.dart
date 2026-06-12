@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../gym_adherence.dart';
 import '../gym_routine.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
@@ -59,6 +60,10 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   Timer? _restTimer;
   Timer? _saveTimer;
   int _restRemaining = 0;
+  // Wall-clock anchored: derive remaining from real elapsed, not a per-tick
+  // counter, so a backgrounded / throttled timer can't drift the rest pause.
+  DateTime? _restStartWall;
+  int _restTotal = 0;
   final DateTime _startedAt = DateTime.now().toUtc();
 
   // The accumulated logged sets (Complete + Skip), kept so the durable save and
@@ -171,12 +176,22 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   }
 
   void _startRest(int seconds) {
+    _restTotal = seconds;
+    _restStartWall = DateTime.now();
     _restRemaining = seconds;
     _publishBand();
     _restTimer?.cancel();
     _restTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      _restRemaining -= 1;
-      if (_restRemaining <= 0) {
+      final start = _restStartWall;
+      if (start == null) {
+        t.cancel();
+        return;
+      }
+      final remaining =
+          (_restTotal - DateTime.now().difference(start).inSeconds)
+              .clamp(0, _restTotal);
+      _restRemaining = remaining;
+      if (remaining <= 0) {
         _restRemaining = 0;
         t.cancel();
       }
@@ -297,16 +312,66 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   int _durationS() =>
       DateTime.now().toUtc().difference(_startedAt).inSeconds.clamp(1, 1 << 30);
 
-  Map<String, dynamic> _metadataTrio() => {
-        MetadataKeys.routineId: widget.routine.id,
-        MetadataKeys.gymStepResults:
-            _runner.snapshotResults().map((r) => r.toJson()).toList(),
-        MetadataKeys.gymAdherence: switch (_runner.adherence()) {
-          GymRunnerAdherence.completed => 'completed',
-          GymRunnerAdherence.partial => 'partial',
-          GymRunnerAdherence.abandoned => 'abandoned',
-        },
+  // The stored trio mirrors web GymSessionRunner.buildMetadata byte-for-byte:
+  // gym_step_results carries the adherence-shaped rows (status hit/partial/
+  // missed/extra + deltas + targets + actuals) and gym_adherence the
+  // computeRoutineAdherence verdict — so a session logged on either platform
+  // reads identically in the web /gym/[id] review panel.
+  Map<String, dynamic> _metadataTrio() {
+    final planned = _steps
+        .map((s) => PlannedSetRef(
+              exerciseKey: s.exerciseKey,
+              setIndex: s.setIndex,
+              setType: s.setType,
+              targetRepsMin: s.targetRepsMin,
+              targetRepsMax: s.targetRepsMax,
+              targetWeightKg: s.targetWeightKg,
+              targetDurationS: s.targetDurationS,
+            ))
+        .toList();
+    final actual = <ActualSetRef>[];
+    for (final r in _runner.snapshotResults()) {
+      if (r.status != GymRunnerStepStatus.completed) continue;
+      actual.add(ActualSetRef(
+        exerciseKey: r.step.exerciseKey,
+        setIndex: r.step.setIndex,
+        reps: r.actualReps,
+        weightKg: r.actualWeightKg,
+        durationS: r.actualDurationS,
+      ));
+    }
+    final adherence = computeRoutineAdherence(planned, actual);
+    final plannedByKey = {
+      for (final p in planned) '${p.exerciseKey} ${p.setIndex}': p,
+    };
+    final actualByKey = {
+      for (final a in actual) '${a.exerciseKey} ${a.setIndex}': a,
+    };
+    final stepResults = adherence.sets.map((s) {
+      final key = '${s.exerciseKey} ${s.setIndex}';
+      final p = plannedByKey[key];
+      final a = actualByKey[key];
+      return {
+        'exercise_key': s.exerciseKey,
+        'set_index': s.setIndex,
+        'status': s.status.name,
+        'reps_delta': s.repsDelta,
+        'weight_delta_kg': s.weightDeltaKg,
+        'target_reps_min': p?.targetRepsMin,
+        'target_reps_max': p?.targetRepsMax,
+        'target_weight_kg': p?.targetWeightKg,
+        'target_duration_s': p?.targetDurationS,
+        'actual_reps': a?.reps,
+        'actual_weight_kg': a?.weightKg,
+        'actual_duration_s': a?.durationS,
       };
+    }).toList();
+    return {
+      MetadataKeys.routineId: widget.routine.id,
+      MetadataKeys.gymStepResults: stepResults,
+      MetadataKeys.gymAdherence: adherence.verdict.name,
+    };
+  }
 
   // Crash-safe incremental persistence — keep the entered sets in a single
   // draft workout so a force-kill mid-session is recoverable. Mirrors
