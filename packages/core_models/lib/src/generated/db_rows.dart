@@ -1111,6 +1111,219 @@ class GearRow {
   };
 }
 
+/// Row shape for the `gym_routine_exercises` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GymRoutineExerciseRow {
+  static const String table = 'gym_routine_exercises';
+  static const String colId = 'id';
+  static const String colRoutineId = 'routine_id';
+  static const String colExerciseName = 'exercise_name';
+  static const String colExerciseKey = 'exercise_key';
+  static const String colPosition = 'position';
+  static const String colSupersetGroup = 'superset_group';
+  static const String colSupersetOrder = 'superset_order';
+  static const String colModality = 'modality';
+  static const String colProgression = 'progression';
+  static const String colProgressionParams = 'progression_params';
+  static const String colNotes = 'notes';
+
+  final String id;
+  final String routineId;
+  final String exerciseName;
+  final String exerciseKey;
+  final int position;
+  final int? supersetGroup;
+  final int? supersetOrder;
+  final String modality;
+  final String progression;
+  final dynamic progressionParams;
+  final String? notes;
+
+  const GymRoutineExerciseRow({
+    required this.id,
+    required this.routineId,
+    required this.exerciseName,
+    required this.exerciseKey,
+    required this.position,
+    this.supersetGroup,
+    this.supersetOrder,
+    required this.modality,
+    required this.progression,
+    required this.progressionParams,
+    this.notes,
+  });
+
+  factory GymRoutineExerciseRow.fromJson(Map<String, dynamic> json) => GymRoutineExerciseRow(
+    id: json['id'] as String,
+    routineId: json['routine_id'] as String,
+    exerciseName: json['exercise_name'] as String,
+    exerciseKey: json['exercise_key'] as String,
+    position: (json['position'] as num).toInt(),
+    supersetGroup: (json['superset_group'] as num?)?.toInt(),
+    supersetOrder: (json['superset_order'] as num?)?.toInt(),
+    modality: json['modality'] as String,
+    progression: json['progression'] as String,
+    progressionParams: json['progression_params'],
+    notes: json['notes'] as String?,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRoutineId: routineId,
+    colExerciseName: exerciseName,
+    colExerciseKey: exerciseKey,
+    colPosition: position,
+    colSupersetGroup: supersetGroup,
+    colSupersetOrder: supersetOrder,
+    colModality: modality,
+    colProgression: progression,
+    colProgressionParams: progressionParams,
+    colNotes: notes,
+  };
+}
+
+/// Row shape for the `gym_routine_sets` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GymRoutineSetRow {
+  static const String table = 'gym_routine_sets';
+  static const String colId = 'id';
+  static const String colRoutineExerciseId = 'routine_exercise_id';
+  static const String colSetIndex = 'set_index';
+  static const String colSetType = 'set_type';
+  static const String colTargetRepsMin = 'target_reps_min';
+  static const String colTargetRepsMax = 'target_reps_max';
+  static const String colTargetWeightKg = 'target_weight_kg';
+  static const String colTargetPercent1rm = 'target_percent_1rm';
+  static const String colTargetRpe = 'target_rpe';
+  static const String colRestS = 'rest_s';
+  static const String colTempo = 'tempo';
+  static const String colTargetDurationS = 'target_duration_s';
+  static const String colTargetDistanceM = 'target_distance_m';
+
+  final String id;
+  final String routineExerciseId;
+  final int setIndex;
+  final String setType;
+  final int? targetRepsMin;
+  final int? targetRepsMax;
+  final double? targetWeightKg;
+  final double? targetPercent1rm;
+  final double? targetRpe;
+  final int? restS;
+  final String? tempo;
+  final int? targetDurationS;
+  final double? targetDistanceM;
+
+  const GymRoutineSetRow({
+    required this.id,
+    required this.routineExerciseId,
+    required this.setIndex,
+    required this.setType,
+    this.targetRepsMin,
+    this.targetRepsMax,
+    this.targetWeightKg,
+    this.targetPercent1rm,
+    this.targetRpe,
+    this.restS,
+    this.tempo,
+    this.targetDurationS,
+    this.targetDistanceM,
+  });
+
+  factory GymRoutineSetRow.fromJson(Map<String, dynamic> json) => GymRoutineSetRow(
+    id: json['id'] as String,
+    routineExerciseId: json['routine_exercise_id'] as String,
+    setIndex: (json['set_index'] as num).toInt(),
+    setType: json['set_type'] as String,
+    targetRepsMin: (json['target_reps_min'] as num?)?.toInt(),
+    targetRepsMax: (json['target_reps_max'] as num?)?.toInt(),
+    targetWeightKg: (json['target_weight_kg'] as num?)?.toDouble(),
+    targetPercent1rm: (json['target_percent_1rm'] as num?)?.toDouble(),
+    targetRpe: (json['target_rpe'] as num?)?.toDouble(),
+    restS: (json['rest_s'] as num?)?.toInt(),
+    tempo: json['tempo'] as String?,
+    targetDurationS: (json['target_duration_s'] as num?)?.toInt(),
+    targetDistanceM: (json['target_distance_m'] as num?)?.toDouble(),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRoutineExerciseId: routineExerciseId,
+    colSetIndex: setIndex,
+    colSetType: setType,
+    colTargetRepsMin: targetRepsMin,
+    colTargetRepsMax: targetRepsMax,
+    colTargetWeightKg: targetWeightKg,
+    colTargetPercent1rm: targetPercent1rm,
+    colTargetRpe: targetRpe,
+    colRestS: restS,
+    colTempo: tempo,
+    colTargetDurationS: targetDurationS,
+    colTargetDistanceM: targetDistanceM,
+  };
+}
+
+/// Row shape for the `gym_routines` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GymRoutineRow {
+  static const String table = 'gym_routines';
+  static const String colId = 'id';
+  static const String colAuthorId = 'author_id';
+  static const String colTitle = 'title';
+  static const String colNotes = 'notes';
+  static const String colPeriodisation = 'periodisation';
+  static const String colExerciseCount = 'exercise_count';
+  static const String colExternalId = 'external_id';
+  static const String colLastModifiedAt = 'last_modified_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String authorId;
+  final String title;
+  final String? notes;
+  final String periodisation;
+  final int exerciseCount;
+  final String? externalId;
+  final DateTime lastModifiedAt;
+  final DateTime createdAt;
+
+  const GymRoutineRow({
+    required this.id,
+    required this.authorId,
+    required this.title,
+    this.notes,
+    required this.periodisation,
+    required this.exerciseCount,
+    this.externalId,
+    required this.lastModifiedAt,
+    required this.createdAt,
+  });
+
+  factory GymRoutineRow.fromJson(Map<String, dynamic> json) => GymRoutineRow(
+    id: json['id'] as String,
+    authorId: json['author_id'] as String,
+    title: json['title'] as String,
+    notes: json['notes'] as String?,
+    periodisation: json['periodisation'] as String,
+    exerciseCount: (json['exercise_count'] as num).toInt(),
+    externalId: json['external_id'] as String?,
+    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colAuthorId: authorId,
+    colTitle: title,
+    colNotes: notes,
+    colPeriodisation: periodisation,
+    colExerciseCount: exerciseCount,
+    colExternalId: externalId,
+    colLastModifiedAt: lastModifiedAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `gym_sets` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class GymSetRow {
@@ -1178,6 +1391,7 @@ class GymWorkoutRow {
   static const String colCreatedAt = 'created_at';
   static const String colSetCount = 'set_count';
   static const String colVolumeKg = 'volume_kg';
+  static const String colMetadata = 'metadata';
 
   final String id;
   final String userId;
@@ -1191,6 +1405,7 @@ class GymWorkoutRow {
   final DateTime createdAt;
   final int setCount;
   final double volumeKg;
+  final dynamic metadata;
 
   const GymWorkoutRow({
     required this.id,
@@ -1205,6 +1420,7 @@ class GymWorkoutRow {
     required this.createdAt,
     required this.setCount,
     required this.volumeKg,
+    required this.metadata,
   });
 
   factory GymWorkoutRow.fromJson(Map<String, dynamic> json) => GymWorkoutRow(
@@ -1220,6 +1436,7 @@ class GymWorkoutRow {
     createdAt: DateTime.parse(json['created_at'] as String),
     setCount: (json['set_count'] as num).toInt(),
     volumeKg: (json['volume_kg'] as num).toDouble(),
+    metadata: json['metadata'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1235,6 +1452,7 @@ class GymWorkoutRow {
     colCreatedAt: createdAt.toIso8601String(),
     colSetCount: setCount,
     colVolumeKg: volumeKg,
+    colMetadata: metadata,
   };
 }
 

@@ -161,6 +161,24 @@ export type RefundPolicy = 'full_until_start' | 'full_until_24h' | 'no_refund';
 // event_pricing.modality — in_person only in P1; 'virtual' is a digital good
 // that re-opens the app-store IAP rule (reserved for P4).
 export type EventModality = 'in_person';
+// Gym programming engine (gym_programming.md, migration 20261230_001). Four
+// narrow-union ↔ CHECK pairs; the Dart side treats all four as raw String.
+// Keep each in lockstep with the migration (check_constraint_unions.mjs PAIRS).
+// gym_routines.periodisation — routine-level periodisation model (P1 leaves
+// every routine at 'none'; the column is wired by P4).
+export type GymPeriodisation = 'none' | 'linear' | 'block' | 'conjugate';
+// gym_routine_exercises.modality — what axis the exercise is measured on.
+export type GymExerciseModality = 'weight_reps' | 'time' | 'distance' | 'bodyweight_reps';
+// gym_routine_exercises.progression — per-exercise progression scheme (wired by P4).
+export type GymProgressionScheme =
+	| 'none'
+	| 'linear'
+	| 'double_progression'
+	| 'five_by_five'
+	| 'percent_cycle'
+	| 'rpe_autoreg';
+// gym_routine_sets.set_type — set role within an exercise.
+export type GymSetType = 'warmup' | 'working' | 'dropset' | 'amrap' | 'failure' | 'backoff';
 export type NotificationKind =
 	| 'kudos'
 	| 'comment'

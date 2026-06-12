@@ -398,6 +398,7 @@ export type Database = {
       }
       event_attendees: {
         Row: {
+          attendance: string | null
           event_id: string
           instance_start: string
           joined_at: string | null
@@ -406,6 +407,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attendance?: string | null
           event_id: string
           instance_start: string
           joined_at?: string | null
@@ -414,6 +416,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attendance?: string | null
           event_id?: string
           instance_start?: string
           joined_at?: string | null
@@ -953,6 +956,148 @@ export type Database = {
         }
         Relationships: []
       }
+      gym_routine_exercises: {
+        Row: {
+          exercise_key: string
+          exercise_name: string
+          id: string
+          modality: string
+          notes: string | null
+          position: number
+          progression: string
+          progression_params: Json
+          routine_id: string
+          superset_group: number | null
+          superset_order: number | null
+        }
+        Insert: {
+          exercise_key: string
+          exercise_name: string
+          id?: string
+          modality?: string
+          notes?: string | null
+          position: number
+          progression?: string
+          progression_params?: Json
+          routine_id: string
+          superset_group?: number | null
+          superset_order?: number | null
+        }
+        Update: {
+          exercise_key?: string
+          exercise_name?: string
+          id?: string
+          modality?: string
+          notes?: string | null
+          position?: number
+          progression?: string
+          progression_params?: Json
+          routine_id?: string
+          superset_group?: number | null
+          superset_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_routine_exercises_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "gym_routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_routine_sets: {
+        Row: {
+          id: string
+          rest_s: number | null
+          routine_exercise_id: string
+          set_index: number
+          set_type: string
+          target_distance_m: number | null
+          target_duration_s: number | null
+          target_percent_1rm: number | null
+          target_reps_max: number | null
+          target_reps_min: number | null
+          target_rpe: number | null
+          target_weight_kg: number | null
+          tempo: string | null
+        }
+        Insert: {
+          id?: string
+          rest_s?: number | null
+          routine_exercise_id: string
+          set_index: number
+          set_type?: string
+          target_distance_m?: number | null
+          target_duration_s?: number | null
+          target_percent_1rm?: number | null
+          target_reps_max?: number | null
+          target_reps_min?: number | null
+          target_rpe?: number | null
+          target_weight_kg?: number | null
+          tempo?: string | null
+        }
+        Update: {
+          id?: string
+          rest_s?: number | null
+          routine_exercise_id?: string
+          set_index?: number
+          set_type?: string
+          target_distance_m?: number | null
+          target_duration_s?: number | null
+          target_percent_1rm?: number | null
+          target_reps_max?: number | null
+          target_reps_min?: number | null
+          target_rpe?: number | null
+          target_weight_kg?: number | null
+          tempo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_routine_sets_routine_exercise_id_fkey"
+            columns: ["routine_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "gym_routine_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_routines: {
+        Row: {
+          author_id: string
+          created_at: string
+          exercise_count: number
+          external_id: string | null
+          id: string
+          last_modified_at: string
+          notes: string | null
+          periodisation: string
+          title: string
+        }
+        Insert: {
+          author_id: string
+          created_at?: string
+          exercise_count?: number
+          external_id?: string | null
+          id?: string
+          last_modified_at?: string
+          notes?: string | null
+          periodisation?: string
+          title: string
+        }
+        Update: {
+          author_id?: string
+          created_at?: string
+          exercise_count?: number
+          external_id?: string | null
+          id?: string
+          last_modified_at?: string
+          notes?: string | null
+          periodisation?: string
+          title?: string
+        }
+        Relationships: []
+      }
       gym_sets: {
         Row: {
           exercise_name: string
@@ -999,6 +1144,7 @@ export type Database = {
           id: string
           is_public: boolean
           last_modified_at: string
+          metadata: Json
           notes: string | null
           set_count: number
           started_at: string
@@ -1013,6 +1159,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           last_modified_at?: string
+          metadata?: Json
           notes?: string | null
           set_count?: number
           started_at?: string
@@ -1027,6 +1174,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           last_modified_at?: string
+          metadata?: Json
           notes?: string | null
           set_count?: number
           started_at?: string
@@ -3214,6 +3362,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mark_attendance: {
+        Args: { p_attendance: string; p_event_id: string; p_user_id: string }
+        Returns: undefined
       }
       my_pending_safety_requests: {
         Args: never
