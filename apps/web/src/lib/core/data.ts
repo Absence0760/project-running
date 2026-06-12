@@ -6424,3 +6424,91 @@ export async function setEventSessionPlan(
 		.eq('id', eventId);
 	if (error) throw error;
 }
+
+// ─── Admin moderation (web-only back-office; /admin/reports) ─────────
+// Authorization is DB-enforced: every RPC below hard-denies a non-admin
+// at the database (42501). am_i_admin only picks page chrome.
+
+export interface PendingReportTarget {
+	target_kind: ReportTargetKind;
+	target_id: string;
+	report_count: number;
+	reporter_count: number;
+	reasons: Record<string, number>;
+	latest_at: string;
+}
+
+export interface TargetReport {
+	id: string;
+	reporter_id: string;
+	reason: string;
+	notes: string | null;
+	status: string;
+	created_at: string;
+	reviewed_at: string | null;
+	reviewed_by: string | null;
+	resolution: string | null;
+}
+
+/** Whether the current user is a moderator. Chrome gate only — the RPCs
+ *  below are the real boundary. */
+export async function amIAdmin(): Promise<boolean> {
+	const { data, error } = await supabase.rpc('am_i_admin');
+	if (error) return false;
+	return data === true;
+}
+
+/** The moderation queue: one row per reported target with pending reports. */
+export async function fetchPendingReports(): Promise<PendingReportTarget[]> {
+	const { data, error } = await supabase.rpc('fetch_pending_reports');
+	if (error) throw error;
+	return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+		target_kind: r.target_kind as ReportTargetKind,
+		target_id: r.target_id as string,
+		report_count: Number(r.report_count ?? 0),
+		reporter_count: Number(r.reporter_count ?? 0),
+		reasons: (r.reasons ?? {}) as Record<string, number>,
+		latest_at: r.latest_at as string,
+	}));
+}
+
+/** Every individual report against one target (any status), newest first. */
+export async function fetchReportsForTarget(
+	targetKind: ReportTargetKind,
+	targetId: string
+): Promise<TargetReport[]> {
+	const { data, error } = await supabase.rpc('fetch_reports_for_target', {
+		p_target_kind: targetKind,
+		p_target_id: targetId,
+	});
+	if (error) throw error;
+	return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+		id: r.id as string,
+		reporter_id: r.reporter_id as string,
+		reason: r.reason as string,
+		notes: (r.notes ?? null) as string | null,
+		status: r.status as string,
+		created_at: r.created_at as string,
+		reviewed_at: (r.reviewed_at ?? null) as string | null,
+		reviewed_by: (r.reviewed_by ?? null) as string | null,
+		resolution: (r.resolution ?? null) as string | null,
+	}));
+}
+
+/** Mark all pending reports on a target reviewed/dismissed with a note.
+ *  Returns the number of reports resolved. */
+export async function resolveTargetReports(
+	targetKind: ReportTargetKind,
+	targetId: string,
+	status: 'reviewed' | 'dismissed',
+	resolution: string | null
+): Promise<number> {
+	const { data, error } = await supabase.rpc('resolve_target_reports', {
+		p_target_kind: targetKind,
+		p_target_id: targetId,
+		p_status: status,
+		p_resolution: resolution,
+	});
+	if (error) throw error;
+	return Number(data ?? 0);
+}

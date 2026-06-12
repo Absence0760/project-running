@@ -7,7 +7,7 @@
 - **Shipped (built + tested in-repo): Phases 1, 2, 2b, 3.** Phone recording (Android + iOS), Apple Watch + Wear OS standalone recording, the SvelteKit web app, the full social layer (following + feed, kudos / comments, clubs + events, segments + leaderboards, run photos, notifications inbox, gear), AI Coach, training plans + generator + training-load / VO₂ analysis, monetisation infra (RevenueCat Pro tier), and six-locale i18n across every client.
 - **In flight — Go-service production cutover.** The live-spectator WebSocket hub (+ Redis fan-out), Strava webhook, token refresh, data export, and premium endpoints are all code-complete and tested under `apps/job_worker/`. What's left is operator-only: deploy to Fly.io, point `live.threkir.com` at it, set the secrets, then flip `PUBLIC_LIVE_HUB_URL` (web) + `LIVE_HUB_URL` (mobile). No client code changes.
 - **Blocked on external credentials / approval.** Garmin Connect (developer-program application), native push FCM / APNs (Firebase + APNs keys + client token registration), RunSignUp race results (API key), live in-app-purchase sheets (RevenueCat dashboard config), watchOS complication (Xcode Widget Extension target).
-- **In progress: Phase 4 — multi-modal gym + nutrition.** Data foundation (migration `20261204_001`) + the web **gym** module are shipped; the web cross-modality Tier-1 layer has landed — lift→load wired into the dashboard fitness curve, bounded recent-lifts + 7-day nutrition in the Coach context, self-hiding gym cards on Home, and the unified `/history` activities timeline with kind chips. The web **nutrition** module has now landed too: `/nutrition` (Mifflin-St Jeor macro rings, meal-slot log, water, weekly trend) + `/nutrition/log` (Open Food Facts search → confirm portion, manual fallback) + Settings body-metrics entry + the `body_metrics` migration. The **mobile nutrition** screens have now landed too (Android + byte-identical iOS twin: `nutrition_screen.dart` + `nutrition_log_sheet.dart` + `food_search.dart`). The **mobile shell reshape has landed (G5):** the bottom nav is `Home / History / Log / Social / Settings` with a centre Log action sheet, the Home dashboard composes self-hiding today's-lift + nutrition rings + recent-lifts cards, and a Settings → Body metrics entry (Art 9 consent-gated) feeds real nutrition targets. The **mobile cross-modality layer has now landed too:** lift→load wired into the mobile dashboard fitness curve (`lift_load.dart`), the recent-lifts trend card, and the unified mobile **History** timeline (`runs_screen.dart` + `activity_timeline_list.dart`, assembled from the local stores via `lib/local_activities.dart` — offline-first). Web's gym/nutrition surfaces were then **ungated to match mobile** (2026-06-04, [decisions §63 amendment](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)): the Gym + Nutrition sidebar items are always present and the dashboard cards + history chips self-hide on data presence; the `multi_modal_nav` flag is retired. Remaining: the social-feed lift cards, and (operator) the iOS/Play privacy-form updates for body metrics + Open Food Facts. Also queued but unscheduled: an RTL locale, Protomaps self-hosted tiles, map-matching deploy, and an admin / moderation page.
+- **In progress: Phase 4 — multi-modal gym + nutrition.** Data foundation (migration `20261204_001`) + the web **gym** module are shipped; the web cross-modality Tier-1 layer has landed — lift→load wired into the dashboard fitness curve, bounded recent-lifts + 7-day nutrition in the Coach context, self-hiding gym cards on Home, and the unified `/history` activities timeline with kind chips. The web **nutrition** module has now landed too: `/nutrition` (Mifflin-St Jeor macro rings, meal-slot log, water, weekly trend) + `/nutrition/log` (Open Food Facts search → confirm portion, manual fallback) + Settings body-metrics entry + the `body_metrics` migration. The **mobile nutrition** screens have now landed too (Android + byte-identical iOS twin: `nutrition_screen.dart` + `nutrition_log_sheet.dart` + `food_search.dart`). The **mobile shell reshape has landed (G5):** the bottom nav is `Home / History / Log / Social / Settings` with a centre Log action sheet, the Home dashboard composes self-hiding today's-lift + nutrition rings + recent-lifts cards, and a Settings → Body metrics entry (Art 9 consent-gated) feeds real nutrition targets. The **mobile cross-modality layer has now landed too:** lift→load wired into the mobile dashboard fitness curve (`lift_load.dart`), the recent-lifts trend card, and the unified mobile **History** timeline (`runs_screen.dart` + `activity_timeline_list.dart`, assembled from the local stores via `lib/local_activities.dart` — offline-first). Web's gym/nutrition surfaces were then **ungated to match mobile** (2026-06-04, [decisions §63 amendment](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)): the Gym + Nutrition sidebar items are always present and the dashboard cards + history chips self-hide on data presence; the `multi_modal_nav` flag is retired. Remaining: the social-feed lift cards, and (operator) the iOS/Play privacy-form updates for body metrics + Open Food Facts. The web admin moderation page (`/admin/reports`) has now landed too (DB-enforced admin allow-list + triage queue; [decisions §142](../architecture/decisions.md#142-admin-authorization-is-db-enforced-via-app_admins--a-privateis_admin-oracle-never-client-side-route-gating)). Also queued but unscheduled: an RTL locale, Protomaps self-hosted tiles, and map-matching deploy.
 
 ---
 
@@ -903,23 +903,21 @@ spam wave forces the prioritisation.
   duplicate pending reports via a partial-unique index. RLS hides
   others' reports from each user. Migration
   `20260908_001_user_reports.sql`. Web: `ReportDialog.svelte` mounted
-  on `/u/[id]`, `/clubs/[slug]`, `/routes/[id]`. **v1 review happens
-  in Supabase Studio against the `reports` table** — a real admin
-  page is deferred (see below). (Anti-spam phase 3)
+  on `/u/[id]`, `/clubs/[slug]`, `/routes/[id]`. (Anti-spam phase 3)
+- [x] **Admin role + moderation page.** `app_admins (user_id)` allow-list
+  + a `private.is_admin(uid)` oracle (SECURITY DEFINER, `private` schema
+  so it's not a PostgREST RPC oracle — mirrors the membership oracles)
+  back four admin-gated RPCs (`am_i_admin`, `fetch_pending_reports`,
+  `fetch_reports_for_target`, `resolve_target_reports`). Every report RPC
+  hard-denies a non-admin with `42501` server-side — the real boundary,
+  since the web SPA can't gate on the client. Web: `/admin/reports` queue
+  (one row per reported target, newest-active first) → detail modal →
+  triage (mark reviewed/dismissed + note). **Web-only** back-office tooling
+  ([decisions §142](../architecture/decisions.md#142-admin-authorization-is-db-enforced-via-app_admins--a-privateis_admin-oracle-never-client-side-route-gating)). Triage-only — no content takedown in v1.
+  Migration `20270104_001_admin_moderation.sql`.
 
 ### Deferred
 
-- [ ] **Admin role + moderation page.** Today there is no `app_admin`
-  table or `is_app_admin()` SQL helper; "moderation" means a service-
-  role session in Supabase Studio looking at the `reports` table.
-  Build a v1 admin page (likely `/admin/reports`) gated on an explicit
-  admin allowlist, with the queue ordered by `(target_kind,
-  target_id, count(*) over (...))` so repeated reports against the
-  same target rise. Schema: an `app_admins (user_id)` table + an
-  `is_app_admin()` SQL helper following the `is_club_admin()` shape
-  from `20260417_001`. Web: a thin SvelteKit route. **Don't start
-  this until report volume justifies it** — a hand-written SQL query
-  scales further than people expect.
 - [ ] **Auto-hide after N reports** from vetted reporters. Once an
   admin page exists, add a SECURITY DEFINER `auto_hide_target()`
   function that flips a `clubs.shadow_hidden` / `routes.shadow_hidden`
