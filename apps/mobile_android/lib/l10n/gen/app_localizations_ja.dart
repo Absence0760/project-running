@@ -3362,6 +3362,32 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveSpectatorBadgeConnecting => '接続中';
 
   @override
+  String get liveSpectatorBadgeStale => '遅延';
+
+  @override
+  String get liveUpdatedNow => 'たった今更新';
+
+  @override
+  String liveUpdatedSeconds(int n) {
+    return '$n秒前に更新';
+  }
+
+  @override
+  String liveUpdatedMinutes(int n) {
+    return '$n分前に更新';
+  }
+
+  @override
+  String liveUpdatedHours(int n) {
+    return '$n時間前に更新';
+  }
+
+  @override
+  String liveUpdatedDays(int n) {
+    return '$n日前に更新';
+  }
+
+  @override
   String get plansTitle => 'トレーニングプラン';
 
   @override

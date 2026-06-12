@@ -4433,6 +4433,34 @@
   "@liveSpectatorBadgeConnecting": {
     "description": "Status badge — connecting"
   },
+  "liveSpectatorBadgeStale": "Delayed",
+  "@liveSpectatorBadgeStale": {
+    "description": "Status badge — last ping is stale, position may not be current"
+  },
+  "liveUpdatedNow": "Updated just now",
+  "@liveUpdatedNow": {
+    "description": "Spectator freshness — last ping under 10s ago"
+  },
+  "liveUpdatedSeconds": "Updated {n}s ago",
+  "@liveUpdatedSeconds": {
+    "description": "Spectator freshness — seconds since last ping",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "liveUpdatedMinutes": "Updated {n} min ago",
+  "@liveUpdatedMinutes": {
+    "description": "Spectator freshness — minutes since last ping",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "liveUpdatedHours": "Updated {n}h ago",
+  "@liveUpdatedHours": {
+    "description": "Spectator freshness — hours since last ping",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "liveUpdatedDays": "Updated {n}d ago",
+  "@liveUpdatedDays": {
+    "description": "Spectator freshness — days since last ping",
+    "placeholders": { "n": { "type": "int" } }
+  },
   "plansTitle": "Training plans",
   "@plansTitle": {
     "description": "Plans list AppBar title"

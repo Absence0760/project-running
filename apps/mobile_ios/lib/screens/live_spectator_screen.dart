@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../live_freshness.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
@@ -52,16 +53,30 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   double _distanceM = 0;
   int _elapsedS = 0;
 
+  // Freshness: epoch-ms of the last ping (UTC-normalised) plus a 1s
+  // clock so "updated N ago" / the stale badge recompute even while no
+  // new ping arrives. Without this a lost-signal runner stays a fresh
+  // "Live" dot forever (the spectator + SAR staleness-honesty bug).
+  int? _lastPingAtMs;
+  int _nowMs = DateTime.now().millisecondsSinceEpoch;
+  Timer? _freshnessTimer;
+
   RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _hydrate();
+    _freshnessTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() => _nowMs = DateTime.now().millisecondsSinceEpoch);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _freshnessTimer?.cancel();
     final ch = _channel;
     if (ch != null) Supabase.instance.client.removeChannel(ch);
     super.dispose();
@@ -118,14 +133,20 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     if (lat == null || lng == null) return;
     final ele = (row['ele'] as num?)?.toDouble();
     final at = row['at'] as String?;
+    // tryParse never throws — a manually-edited row or future format
+    // change would otherwise crash the realtime callback (no outer
+    // catch) and tear down live tracking for the spectator.
+    final parsedAt = at == null ? null : DateTime.tryParse(at);
+    // Absolute epoch-ms (UTC-normalised) so the freshness age is correct
+    // regardless of the spectator's device time zone.
+    if (parsedAt != null) {
+      _lastPingAtMs = parsedAt.toUtc().millisecondsSinceEpoch;
+    }
     _trace.add(Waypoint(
       lat: lat,
       lng: lng,
       elevationMetres: ele,
-      // tryParse never throws — a manually-edited row or future format
-      // change would otherwise crash the realtime callback (no outer
-      // catch) and tear down live tracking for the spectator.
-      timestamp: at == null ? null : DateTime.tryParse(at),
+      timestamp: parsedAt,
     ));
     final dist = (row['distance_m'] as num?)?.toDouble();
     if (dist != null) _distanceM = dist;
@@ -137,13 +158,15 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final fresh = _lastPingAtMs == null ? null : freshnessFor(_lastPingAtMs!, _nowMs);
+    final stale = fresh?.stale ?? false;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.liveSpectatorTitle),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(child: _StatusBadge(status: _status)),
+            child: Center(child: _StatusBadge(status: _status, stale: stale)),
           ),
         ],
       ),
@@ -178,22 +201,42 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       color: theme.colorScheme.surfaceContainerHighest,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          _Metric(
-                            label: l10n.runStatDistance,
-                            value: formatDistanceForPref(_distanceM),
-                          ),
-                          _Metric(
-                            label: l10n.runStatTime,
-                            value: formatLiveDuration(Duration(seconds: _elapsedS)),
-                          ),
-                          _Metric(
-                            label: l10n.runStatPace,
-                            value: _distanceM > 0 && _elapsedS > 0
-                                ? formatLivePace(_elapsedS / (_distanceM / 1000))
-                                : '—',
+                          if (fresh != null) ...[
+                            Text(
+                              _freshnessLabel(l10n, fresh),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: stale
+                                    ? const Color(0xFFF59E0B)
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight:
+                                    stale ? FontWeight.w700 : FontWeight.w500,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _Metric(
+                                label: l10n.runStatDistance,
+                                value: formatDistanceForPref(_distanceM),
+                              ),
+                              _Metric(
+                                label: l10n.runStatTime,
+                                value:
+                                    formatLiveDuration(Duration(seconds: _elapsedS)),
+                              ),
+                              _Metric(
+                                label: l10n.runStatPace,
+                                value: _distanceM > 0 && _elapsedS > 0
+                                    ? formatLivePace(_elapsedS / (_distanceM / 1000))
+                                    : '—',
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -232,19 +275,39 @@ String formatLivePace(double secPerKm) {
   return '$m:${s.toString().padLeft(2, '0')} /km';
 }
 
+String _freshnessLabel(AppLocalizations l10n, Freshness f) {
+  switch (f.bucket) {
+    case FreshnessBucket.now:
+      return l10n.liveUpdatedNow;
+    case FreshnessBucket.seconds:
+      return l10n.liveUpdatedSeconds(f.value);
+    case FreshnessBucket.minutes:
+      return l10n.liveUpdatedMinutes(f.value);
+    case FreshnessBucket.hours:
+      return l10n.liveUpdatedHours(f.value);
+    case FreshnessBucket.days:
+      return l10n.liveUpdatedDays(f.value);
+  }
+}
+
 class _StatusBadge extends StatelessWidget {
   final String status;
-  const _StatusBadge({required this.status});
+  final bool stale;
+  const _StatusBadge({required this.status, this.stale = false});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final (label, color) = switch (status) {
-      'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),
-      'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
-      _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
-    };
+    // A stale last ping is shown as "Delayed" (amber), never as a fresh
+    // green "Live" — the position can no longer be trusted as current.
+    final (label, color) = status == 'live' && stale
+        ? (l10n.liveSpectatorBadgeStale, const Color(0xFFF59E0B))
+        : switch (status) {
+            'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),
+            'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
+            _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
+          };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

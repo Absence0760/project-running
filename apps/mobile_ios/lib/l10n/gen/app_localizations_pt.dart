@@ -3590,6 +3590,32 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorBadgeConnecting => 'Conectando';
 
   @override
+  String get liveSpectatorBadgeStale => 'Atrasado';
+
+  @override
+  String get liveUpdatedNow => 'Atualizado agora mesmo';
+
+  @override
+  String liveUpdatedSeconds(int n) {
+    return 'Atualizado há ${n}s';
+  }
+
+  @override
+  String liveUpdatedMinutes(int n) {
+    return 'Atualizado há $n min';
+  }
+
+  @override
+  String liveUpdatedHours(int n) {
+    return 'Atualizado há $n h';
+  }
+
+  @override
+  String liveUpdatedDays(int n) {
+    return 'Atualizado há $n d';
+  }
+
+  @override
   String get plansTitle => 'Planos de treino';
 
   @override
@@ -10882,6 +10908,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeConnecting => 'Conectando';
+
+  @override
+  String get liveSpectatorBadgeStale => 'Atrasado';
+
+  @override
+  String get liveUpdatedNow => 'Atualizado agora mesmo';
+
+  @override
+  String liveUpdatedSeconds(int n) {
+    return 'Atualizado há ${n}s';
+  }
+
+  @override
+  String liveUpdatedMinutes(int n) {
+    return 'Atualizado há $n min';
+  }
+
+  @override
+  String liveUpdatedHours(int n) {
+    return 'Atualizado há $n h';
+  }
+
+  @override
+  String liveUpdatedDays(int n) {
+    return 'Atualizado há $n d';
+  }
 
   @override
   String get plansTitle => 'Planos de treino';

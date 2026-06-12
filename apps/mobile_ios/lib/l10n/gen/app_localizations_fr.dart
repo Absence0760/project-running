@@ -3600,6 +3600,32 @@ class AppLocalizationsFr extends AppLocalizations {
   String get liveSpectatorBadgeConnecting => 'Connexion';
 
   @override
+  String get liveSpectatorBadgeStale => 'Retardé';
+
+  @override
+  String get liveUpdatedNow => 'Mis à jour à l\'instant';
+
+  @override
+  String liveUpdatedSeconds(int n) {
+    return 'Mis à jour il y a ${n}s';
+  }
+
+  @override
+  String liveUpdatedMinutes(int n) {
+    return 'Mis à jour il y a $n min';
+  }
+
+  @override
+  String liveUpdatedHours(int n) {
+    return 'Mis à jour il y a $n h';
+  }
+
+  @override
+  String liveUpdatedDays(int n) {
+    return 'Mis à jour il y a $n j';
+  }
+
+  @override
   String get plansTitle => 'Plans d\'entraînement';
 
   @override

@@ -5963,6 +5963,42 @@ abstract class AppLocalizations {
   /// **'Connecting'**
   String get liveSpectatorBadgeConnecting;
 
+  /// Status badge — last ping is stale, position may not be current
+  ///
+  /// In en, this message translates to:
+  /// **'Delayed'**
+  String get liveSpectatorBadgeStale;
+
+  /// Spectator freshness — last ping under 10s ago
+  ///
+  /// In en, this message translates to:
+  /// **'Updated just now'**
+  String get liveUpdatedNow;
+
+  /// Spectator freshness — seconds since last ping
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {n}s ago'**
+  String liveUpdatedSeconds(int n);
+
+  /// Spectator freshness — minutes since last ping
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {n} min ago'**
+  String liveUpdatedMinutes(int n);
+
+  /// Spectator freshness — hours since last ping
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {n}h ago'**
+  String liveUpdatedHours(int n);
+
+  /// Spectator freshness — days since last ping
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {n}d ago'**
+  String liveUpdatedDays(int n);
+
   /// Plans list AppBar title
   ///
   /// In en, this message translates to:
