@@ -49,6 +49,7 @@ class _FakeGymApi extends ApiClient {
       ),
       lastModifiedAt: lastModifiedAt ?? DateTime.now().toUtc(),
       createdAt: DateTime.now().toUtc(),
+      metadata: const <String, dynamic>{},
     );
   }
 
