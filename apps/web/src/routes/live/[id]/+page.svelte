@@ -17,6 +17,7 @@
 		type LivePing,
 	} from '$lib/runs/live_hub';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
+	import { freshnessFor, type Freshness } from '$lib/runs/live_freshness';
 	import { m } from '$lib/i18n/store.svelte';
 
 	// audit/cookie-consent (2026-05-25): MapTiler tile fetches log
@@ -40,6 +41,16 @@
 	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error' | 'not-found';
 	let status = $state<Status>('connecting');
 	let demoTicker: ReturnType<typeof setInterval> | null = null;
+	// Freshness: the ms timestamp of the last ping we rendered, plus a
+	// once-a-second clock so "updated N ago" / the stale badge recompute
+	// even while no new ping arrives. Without this a runner who lost
+	// signal stays a fresh green "LIVE" dot forever (the spectator /
+	// SAR staleness-honesty bug).
+	let lastPingAtMs = $state<number | null>(null);
+	let nowMs = $state(Date.now());
+	let freshnessTicker: ReturnType<typeof setInterval> | null = null;
+	const freshness = $derived(lastPingAtMs != null ? freshnessFor(lastPingAtMs, nowMs) : null);
+	const isStale = $derived(freshness?.stale ?? false);
 	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 	// Go live-hub teardown handle. Held alongside `realtimeChannel`
 	// because exactly one of the two transports is active per session
@@ -66,6 +77,21 @@
 		return parts.map((p) => p.charAt(0).toUpperCase()).join('') || '?';
 	}
 
+	function freshnessText(f: Freshness): string {
+		switch (f.bucket) {
+			case 'now':
+				return m('live.updatedNow');
+			case 'seconds':
+				return m('live.updatedSeconds', { n: f.value });
+			case 'minutes':
+				return m('live.updatedMinutes', { n: f.value });
+			case 'hours':
+				return m('live.updatedHours', { n: f.value });
+			case 'days':
+				return m('live.updatedDays', { n: f.value });
+		}
+	}
+
 	function ensureMarker(lat: number, lng: number) {
 		if (!map) return;
 		if (!runnerMarker) {
@@ -84,7 +110,14 @@
 		lng: number;
 		distance_m?: number | null;
 		elapsed_s?: number | null;
+		sent_at_ms?: number | null;
+		at?: string | null;
 	}) {
+		// Stamp freshness from the ping's own clock — `sent_at_ms` on the
+		// Go-hub path, the `at` column on the Supabase path. Finite-guard
+		// so a malformed `at` doesn't reset the age to NaN.
+		const ts = ping.sent_at_ms ?? (ping.at != null ? Date.parse(ping.at) : NaN);
+		if (Number.isFinite(ts)) lastPingAtMs = ts as number;
 		traceCoords.push([ping.lng, ping.lat]);
 		// Stat-strip values update regardless of map readiness — a slow or
 		// failing map style fetch (e.g. MapTiler down, missing key) must
@@ -166,6 +199,7 @@
 						lng: p.lng,
 						distance_m: p.distance_m ?? null,
 						elapsed_s: p.elapsed_s ?? null,
+						sent_at_ms: p.sent_at_ms ?? null,
 					});
 					if (status !== 'live') status = 'live';
 				},
@@ -194,6 +228,7 @@
 						lng: number;
 						distance_m: number | null;
 						elapsed_s: number | null;
+						at: string | null;
 					};
 					pushPing(row);
 					if (status !== 'live') status = 'live';
@@ -215,7 +250,7 @@
 			distance += 12 + Math.random() * 5;
 			const lng = fallbackLng + Math.cos(angle) * 0.005;
 			const lat = fallbackLat + Math.sin(angle) * 0.003;
-			pushPing({ lat, lng, distance_m: distance, elapsed_s: elapsed });
+			pushPing({ lat, lng, distance_m: distance, elapsed_s: elapsed, sent_at_ms: Date.now() });
 		}, 3000);
 	}
 
@@ -318,6 +353,11 @@
 		// is the per-page acceptance path when the banner hasn't been
 		// answered yet.
 		if (hasAcceptedConsent()) mapConsented = true;
+		// Drives the freshness readout / stale-badge transition while no
+		// new ping arrives.
+		freshnessTicker = setInterval(() => {
+			nowMs = Date.now();
+		}, 1000);
 		(async () => {
 			if (!(await ensureRunIsVisible())) return;
 			if (visibleRun && runIsFinished(visibleRun)) {
@@ -402,6 +442,7 @@
 
 	onDestroy(() => {
 		if (demoTicker) clearInterval(demoTicker);
+		if (freshnessTicker) clearInterval(freshnessTicker);
 		if (realtimeChannel) supabase.removeChannel(realtimeChannel);
 		liveHubHandle?.close();
 		stopResizeWatch?.();
@@ -426,7 +467,8 @@
 		</a>
 		<div
 			class="live-badge"
-			class:active={status === 'live'}
+			class:active={status === 'live' && !isStale}
+			class:stale={status === 'live' && isStale}
 			class:demo={status === 'demo'}
 			class:finished={status === 'finished'}
 			class:not-found={status === 'not-found'}
@@ -435,7 +477,11 @@
 				<span class="badge-spinner" aria-hidden="true"></span>
 				{m('live.badgeConnecting')}
 			{:else if status === 'live'}
-				<span class="pulse-dot"></span> {m('live.badgeLive')}
+				{#if isStale}
+					{m('live.badgeStale')}
+				{:else}
+					<span class="pulse-dot"></span> {m('live.badgeLive')}
+				{/if}
 			{:else if status === 'demo'}
 				{m('live.badgeDemo')}
 			{:else if status === 'finished'}
@@ -471,7 +517,7 @@
 						{:else if status === 'demo'}
 							{m('live.subSynthesisedDemo')}
 						{:else if status === 'live'}
-							{m('live.subLiveFromDevice')}
+							{freshness ? freshnessText(freshness) : m('live.subLiveFromDevice')}
 						{:else if status === 'finished'}
 							{m('live.subRunFinished')}
 						{:else}
@@ -588,7 +634,8 @@
 		border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
 	}
 
-	.live-badge.demo {
+	.live-badge.demo,
+	.live-badge.stale {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 		color: var(--color-warning);
 		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
