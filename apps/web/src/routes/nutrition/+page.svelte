@@ -58,6 +58,14 @@
 		return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 	}
 
+	/// Zero-padded local YYYY-MM-DD for the per-meal detail route URL.
+	function todayIsoDate(): string {
+		const d = new Date();
+		const mm = String(d.getMonth() + 1).padStart(2, '0');
+		const dd = String(d.getDate()).padStart(2, '0');
+		return `${d.getFullYear()}-${mm}-${dd}`;
+	}
+
 	const consumed = $derived<FoodMacros>(sumMacros(entries));
 	const groups = $derived<MealSlotGroup<FoodEntry>[]>(groupByMealSlot(entries));
 
@@ -351,10 +359,10 @@
 				<div class="meal-groups">
 					{#each groups as g (g.slot)}
 						<div class="meal-group">
-							<div class="meal-head">
+							<a class="meal-head meal-head-link" href={`/nutrition/${todayIsoDate()}/${g.slot}`}>
 								<h2>{m(`nutrition.slot_${g.slot}`)}</h2>
-								<span class="meal-kcal">{g.calories} kcal</span>
-							</div>
+								<span class="meal-kcal">{g.calories} kcal<span class="material-symbols meal-chevron" aria-hidden="true">chevron_right</span></span>
+							</a>
 							<ul class="meal-list">
 								{#each g.entries as e (e.id)}
 									<li>
@@ -681,10 +689,24 @@
 		font-size: 0.95rem;
 		font-weight: 700;
 	}
+	.meal-head-link {
+		text-decoration: none;
+		color: inherit;
+		cursor: pointer;
+	}
+	.meal-head-link:hover h2 {
+		color: var(--color-primary);
+	}
 	.meal-kcal {
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
 		font-variant-numeric: tabular-nums;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.1rem;
+	}
+	.meal-chevron {
+		font-size: 1.1rem;
 	}
 	.meal-list {
 		list-style: none;

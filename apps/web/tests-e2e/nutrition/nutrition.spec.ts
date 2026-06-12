@@ -267,4 +267,42 @@ test.describe('/nutrition — manual log, render, water', () => {
 			await admin.from('runs').delete().eq('id', run!.id);
 		}
 	});
+
+	test('a meal-slot header links to the per-meal detail route', async ({ page }) => {
+		const admin = getAdminClient();
+		const item = `E2E Detail ${Date.now()}`;
+		const { data: created } = await admin
+			.from('food_log')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				item_name: item,
+				calories: 275,
+				protein_g: 18,
+				meal_slot: 'breakfast',
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/nutrition');
+			const row = page.locator('.meal-list li', { hasText: item });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+
+			// Tap the Breakfast meal-group header → per-meal detail route.
+			await page.locator('.meal-head-link', { hasText: 'Breakfast' }).click();
+			await expect(page).toHaveURL(/\/nutrition\/\d{4}-\d{2}-\d{2}\/breakfast$/, {
+				timeout: 10_000
+			});
+
+			// The detail shows the slot title, the macro breakdown, the logged
+			// item, and a 7-day trend.
+			await expect(page.getByRole('heading', { name: 'Breakfast' })).toBeVisible();
+			await expect(page.getByTestId('meal-macros')).toContainText('275');
+			await expect(page.getByText(item)).toBeVisible();
+			await expect(page.getByTestId('meal-trend')).toBeVisible();
+		} finally {
+			await admin.from('food_log').delete().eq('id', created!.id);
+		}
+	});
 });
