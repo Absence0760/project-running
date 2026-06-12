@@ -8,7 +8,9 @@
 		fetchMyClubs,
 		fetchClubTemplates,
 		clonePlanTemplate,
+		createTrainingPlan,
 	} from '$lib/core/data';
+	import { STARTER_PLANS, starterById, instantiateStarter } from '$lib/training/starter_plans';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
@@ -23,6 +25,8 @@
 	let selectedTemplateId = $state('');
 	let startDate = $state(defaultStartDate());
 	let cloning = $state(false);
+	let selectedStarterId = $state('');
+	let creatingStarter = $state(false);
 
 	// Back/cancel target. Defaults to /plans; when the user arrived from a
 	// club's Templates tab (the "Adopt" link), return them there instead.
@@ -104,6 +108,48 @@
 			cloning = false;
 		}
 	}
+
+	/// Localized display name per starter id (literal m() keys so the i18n
+	/// parity tooling can see them).
+	function starterName(id: string): string {
+		switch (id) {
+			case 'c25k':
+				return m('plansNew.starterC25k');
+			case 'half_12wk':
+				return m('plansNew.starterHalf12');
+			case 'marathon_16wk':
+				return m('plansNew.starterMarathon16');
+			default:
+				return id;
+		}
+	}
+
+	async function createFromStarter() {
+		if (!selectedStarterId || !startDate || creatingStarter) return;
+		const starter = starterById(selectedStarterId);
+		const generated = instantiateStarter(selectedStarterId, startDate);
+		if (!starter || !generated) return;
+		creatingStarter = true;
+		try {
+			const plan = await createTrainingPlan({
+				name: starterName(selectedStarterId),
+				goalEvent: starter.goalEvent,
+				goalDistanceM: generated.goalDistanceM,
+				startDate,
+				daysPerWeek: starter.daysPerWeek,
+				generated
+			});
+			showToast(m('plansNew.toastCreated'));
+			goto(`/plans/${plan.id}`);
+		} catch (e) {
+			showToast(
+				m('plansNew.toastCreateFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		} finally {
+			creatingStarter = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -123,6 +169,39 @@
 			{m('plansNew.tagline')}
 		</p>
 	</header>
+
+	<section class="starter-picker">
+		<h2>{m('plansNew.starterHeading')}</h2>
+		<p class="picker-hint">{m('plansNew.starterHint')}</p>
+		<div class="picker-row">
+			<label class="picker-field">
+				<span>{m('plansNew.starterLabel')}</span>
+				<select bind:value={selectedStarterId}>
+					<option value="">{m('plansNew.selectPlaceholder')}</option>
+					{#each STARTER_PLANS as s (s.id)}
+						<option value={s.id}>{starterName(s.id)}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="picker-field">
+				<span>{m('plansNew.startDateLabel')}</span>
+				<input type="date" bind:value={startDate} />
+			</label>
+			<button
+				class="btn btn-primary"
+				type="button"
+				disabled={!selectedStarterId || !startDate || creatingStarter}
+				onclick={createFromStarter}
+			>
+				{#if creatingStarter}
+					<span class="btn-spinner" aria-hidden="true"></span>
+					{m('plansNew.creating')}
+				{:else}
+					{m('plansNew.createStarter')}
+				{/if}
+			</button>
+		</div>
+	</section>
 
 	{#if !loadingTemplates && templates.length > 0}
 		<section class="template-picker">
@@ -161,9 +240,9 @@
 				</button>
 			</div>
 		</section>
-
-		<div class="or-rule"><span>{m('plansNew.orFromScratch')}</span></div>
 	{/if}
+
+	<div class="or-rule"><span>{m('plansNew.orFromScratch')}</span></div>
 
 	<PlanEditor
 		oncreated={(plan) => goto(`/plans/${plan.id}`)}
@@ -217,14 +296,16 @@
 		max-width: 44rem;
 	}
 
-	.template-picker {
+	.template-picker,
+	.starter-picker {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-md) var(--space-lg);
 		margin-bottom: var(--space-lg);
 	}
-	.template-picker h2 {
+	.template-picker h2,
+	.starter-picker h2 {
 		font-size: 1.1rem;
 		font-weight: 700;
 		margin: 0 0 0.2rem 0;
