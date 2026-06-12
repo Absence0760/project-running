@@ -6,8 +6,11 @@
 	import {
 		fetchGymRoutineDetail,
 		deleteGymRoutine,
+		fetchMyClubs,
+		publishGymRoutineAsTemplate,
 		type GymRoutineDetail,
 	} from '$lib/core/data';
+	import type { ClubWithMeta } from '$lib/types';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -16,12 +19,37 @@
 	let detail = $state<GymRoutineDetail | null>(null);
 	let loading = $state(true);
 	let confirmingDelete = $state(false);
+	let adminClubs = $state<ClubWithMeta[]>([]);
+	let publishingTo = $state('');
+	let publishBusy = $state(false);
 
 	const routineId = $derived($page.params.id ?? '');
+	const isOwner = $derived(!!detail && !!auth.user && detail.routine.author_id === auth.user.id);
 
 	async function load() {
 		detail = await fetchGymRoutineDetail(routineId);
 		loading = false;
+		// Only the author of a personal (non-club) routine with at least one
+		// admin club sees the publish-as-template control.
+		if (detail && auth.user?.id && detail.routine.author_id === auth.user.id && !detail.routine.club_id) {
+			const clubs = await fetchMyClubs();
+			adminClubs = clubs.filter((c) => c.viewer_role === 'owner' || c.viewer_role === 'admin');
+		}
+	}
+
+	async function publishToClub() {
+		if (!detail || !publishingTo || publishBusy) return;
+		publishBusy = true;
+		try {
+			await publishGymRoutineAsTemplate(detail.routine.id, publishingTo);
+			showToast(t('gym.routine.publishSuccess'), 'success');
+			publishingTo = '';
+		} catch (e) {
+			console.error('publish gym routine template failed', e);
+			showToast(t('gym.routine.publishFailed'), 'error');
+		} finally {
+			publishBusy = false;
+		}
 	}
 
 	onMount(async () => {
@@ -118,6 +146,32 @@
 			</div>
 		</header>
 
+		{#if detail.routine.club_id}
+			<p class="club-template-badge" data-testid="routine-club-template">
+				<span class="material-symbols" aria-hidden="true">groups</span>
+				{t('gym.routine.clubTemplateBadge')}
+			</p>
+		{:else if isOwner && adminClubs.length > 0}
+			<section class="publish-row">
+				<span class="publish-label">{t('gym.routine.publishLabel')}</span>
+				<select bind:value={publishingTo} aria-label={t('gym.routine.publishLabel')}>
+					<option value="">{t('gym.routine.publishPick')}</option>
+					{#each adminClubs as c (c.id)}
+						<option value={c.id}>{c.name}</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					class="btn btn-secondary"
+					onclick={publishToClub}
+					disabled={!publishingTo || publishBusy}
+					data-testid="routine-publish"
+				>
+					{t('gym.routine.publish')}
+				</button>
+			</section>
+		{/if}
+
 		<ul class="exercise-list" data-testid="routine-exercises">
 			{#each detail.exercises as ex (ex.id)}
 				<li class="card-elevated exercise-card" class:supersetted={ex.superset_group != null}>
@@ -199,6 +253,28 @@
 	.head-actions {
 		display: flex;
 		gap: var(--space-sm);
+	}
+	.publish-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		margin: 0 0 var(--space-lg);
+	}
+	.publish-label {
+		color: var(--text-muted);
+		font-size: 0.9rem;
+	}
+	.club-template-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		color: var(--color-primary);
+		font-size: 0.9rem;
+		margin: 0 0 var(--space-lg);
+	}
+	.club-template-badge .material-symbols {
+		font-size: 1.1rem;
 	}
 	.exercise-list {
 		list-style: none;

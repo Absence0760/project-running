@@ -24,6 +24,8 @@
 		setPlanIsTemplate,
 		fetchClubSessionTemplates,
 		cloneSessionTemplate,
+		fetchClubGymRoutineTemplates,
+		cloneGymRoutineTemplate,
 		approveMember,
 		bulkApproveMembers,
 		rejectMember,
@@ -39,6 +41,7 @@
 	import { formatDistance } from '$lib/core/mock-data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
+	import type { GymRoutineSummary } from '$lib/core/data';
 	import type { Route, TrainingPlan, SessionPlan } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -96,6 +99,8 @@
 	let clubTemplates = $state<TrainingPlan[]>([]);
 	let sessionTemplates = $state<SessionPlan[]>([]);
 	let adoptingSession = $state('');
+	let gymRoutineTemplates = $state<GymRoutineSummary[]>([]);
+	let adoptingRoutine = $state('');
 
 	async function handleEventCreated(event: { id: string }) {
 		showEventModal = false;
@@ -141,7 +146,7 @@
 			loading = false;
 			return;
 		}
-		const [up, pa, po, me, pe, rt, tp, st] = await Promise.all([
+		const [up, pa, po, me, pe, rt, tp, st, gr] = await Promise.all([
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
@@ -151,7 +156,8 @@
 				: Promise.resolve([]),
 			fetchClubRoutes(club.id),
 			fetchClubTemplates(club.id),
-			fetchClubSessionTemplates(club.id)
+			fetchClubSessionTemplates(club.id),
+			fetchClubGymRoutineTemplates(club.id)
 		]);
 		upcoming = up;
 		past = pa;
@@ -161,7 +167,25 @@
 		clubRoutes = rt;
 		clubTemplates = tp;
 		sessionTemplates = st;
+		gymRoutineTemplates = gr;
 		loading = false;
+	}
+
+	async function adoptGymRoutineTemplate(templateId: string) {
+		if (adoptingRoutine) return;
+		adoptingRoutine = templateId;
+		try {
+			const newId = await cloneGymRoutineTemplate(templateId);
+			showToast(tr('clubHome.gymRoutineAdopted'));
+			goto(`/gym/routines/${newId}`);
+		} catch (e) {
+			showToast(
+				tr('clubHome.toastFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		} finally {
+			adoptingRoutine = '';
+		}
 	}
 
 	async function adoptSessionTemplate(templateId: string) {
@@ -1295,6 +1319,37 @@
 										disabled={adoptingSession === s.id}
 										onclick={() => adoptSessionTemplate(s.id)}
 										data-testid="session-template-adopt"
+									>
+										<span class="material-symbols" aria-hidden="true">content_copy</span>
+										{tr('clubHome.adopt')}
+									</button>
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			{#if gymRoutineTemplates.length > 0}
+				<h3 class="session-templates-head">{tr('clubHome.gymRoutineTemplatesTitle')}</h3>
+				<p class="section-hint">{tr('clubHome.gymRoutineTemplatesHint')}</p>
+				<ul class="template-list">
+					{#each gymRoutineTemplates as g (g.id)}
+						<li class="template-row">
+							<a href="/gym/routines/{g.id}" class="template-link">
+								<strong>{g.title}</strong>
+								<span class="template-meta">
+									{tr('clubHome.routineExerciseCount', { n: g.exercise_count })}
+								</span>
+							</a>
+							<div class="template-actions">
+								{#if isMember}
+									<button
+										class="btn btn-primary btn-sm"
+										type="button"
+										disabled={adoptingRoutine === g.id}
+										onclick={() => adoptGymRoutineTemplate(g.id)}
+										data-testid="gym-routine-template-adopt"
 									>
 										<span class="material-symbols" aria-hidden="true">content_copy</span>
 										{tr('clubHome.adopt')}

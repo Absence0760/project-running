@@ -6126,6 +6126,7 @@ export async function deleteGymWorkout(id: string): Promise<void> {
 export interface GymRoutineSummary {
 	id: string;
 	author_id: string;
+	club_id: string | null;
 	title: string;
 	notes: string | null;
 	exercise_count: number;
@@ -6197,7 +6198,7 @@ export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]
 	if (!userId) return [];
 	const { data, error } = await supabase
 		.from(TABLES.gym_routines)
-		.select('id, author_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('author_id', userId)
 		.order('last_modified_at', { ascending: false })
 		.limit(limit);
@@ -6213,7 +6214,7 @@ export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]
 export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetail | null> {
 	const { data: routine, error: rErr } = await supabase
 		.from(TABLES.gym_routines)
-		.select('id, author_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('id', id)
 		.maybeSingle();
 	if (rErr || !routine) return null;
@@ -6300,7 +6301,7 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 			exercise_count: exercises.length,
 			last_modified_at: nowIso,
 		})
-		.select('id, author_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
 		.single();
 	if (error || !data) throw error ?? new Error('createGymRoutine failed');
 	const routine = data as GymRoutineSummary;
@@ -6898,6 +6899,45 @@ export async function publishSessionAsTemplate(
 export async function cloneSessionTemplate(templateId: string): Promise<string> {
 	const { data, error } = await supabase.rpc('clone_session_template', {
 		template_id: templateId
+	});
+	if (error) throw error;
+	return data as string;
+}
+
+/** Club-owned gym routines published as templates (gym_routines.club_id set).
+ *  RLS exposes these to club members via private.is_club_member. */
+export async function fetchClubGymRoutineTemplates(clubId: string): Promise<GymRoutineSummary[]> {
+	const { data, error } = await supabase
+		.from(TABLES.gym_routines)
+		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
+		.eq('club_id', clubId)
+		.order('last_modified_at', { ascending: false });
+	if (error) {
+		console.error('fetchClubGymRoutineTemplates failed', error);
+		return [];
+	}
+	return (data ?? []) as GymRoutineSummary[];
+}
+
+/** Publish a personal gym routine into a club-owned template. The
+ *  publish_gym_routine_as_template RPC is author + club-admin gated and
+ *  deep-copies the routine + exercises + sets server-side (the personal
+ *  original is left untouched). Returns the new club-owned routine id. */
+export async function publishGymRoutineAsTemplate(routineId: string, clubId: string): Promise<string> {
+	const { data, error } = await supabase.rpc('publish_gym_routine_as_template', {
+		p_routine_id: routineId,
+		p_club_id: clubId
+	});
+	if (error) throw error;
+	return data as string;
+}
+
+/** Adopt a club gym-routine template into a new personal routine via the
+ *  clone_gym_routine_template RPC (author-or-member gated, rate-limited
+ *  server-side). Returns the new personal routine's id. */
+export async function cloneGymRoutineTemplate(templateId: string): Promise<string> {
+	const { data, error } = await supabase.rpc('clone_gym_routine_template', {
+		p_template_id: templateId
 	});
 	if (error) throw error;
 	return data as string;
