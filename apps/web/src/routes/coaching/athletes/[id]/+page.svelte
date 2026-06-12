@@ -25,8 +25,6 @@
 	let notOnRoster = $state(false);
 	let runs = $state<AthleteRunSummary[]>([]);
 	let overview = $state<ActivePlanOverview | null>(null);
-	// Assign-a-plan: the coach's own plans (clone source), the picker selection,
-	// the start date the cloned plan is anchored to, and an in-flight guard.
 	let myPlans = $state<TrainingPlan[]>([]);
 	let assignSelectedId = $state('');
 	let assignStartDate = $state(localTodayISO());

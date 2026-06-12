@@ -5628,13 +5628,9 @@ export async function fetchAthletePlanOverview(
 	};
 }
 
-/// Coach assigns one of their own plans/templates to a linked athlete.
-/// Deep-clones it into an athlete-OWNED active plan via the
-/// assign_plan_to_athlete RPC (migration 20270106_001), which gates on the
-/// active coach link (consent), verifies the caller can read the source, and
-/// raises if the athlete already has an active plan. Returns the new
-/// (athlete-owned) plan id. The thrown error carries the RPC's raise text,
-/// which the caller surfaces to the coach.
+/// Assigns a coach's plan to a linked athlete via the assign_plan_to_athlete
+/// RPC (migration 20270106_001). The thrown error carries the RPC's raise text
+/// (e.g. the athlete already has an active plan), which the caller surfaces.
 export async function assignPlanToAthlete(
 	sourcePlanId: string,
 	athleteId: string,
