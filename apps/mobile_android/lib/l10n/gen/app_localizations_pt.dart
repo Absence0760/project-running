@@ -2821,6 +2821,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get feedActivityHike => 'Trilha';
 
   @override
+  String get feedActivityLift => 'Força';
+
+  @override
+  String get feedLiftSetsLabel => 'Séries';
+
+  @override
+  String get feedLiftVolume => 'Volume';
+
+  @override
+  String get feedLiftUntitled => 'Treino';
+
+  @override
   String get feedLoadMore => 'Carregar mais';
 
   @override
@@ -7021,6 +7033,23 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gymDelete => 'Excluir';
+
+  @override
+  String get gymPublic => 'Público';
+
+  @override
+  String get gymPrivate => 'Privado';
+
+  @override
+  String get gymMakePublic => 'Tornar público';
+
+  @override
+  String get gymMakePrivate => 'Tornar privado';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return 'Não foi possível atualizar a visibilidade: $error';
+  }
 
   @override
   String get gymNotes => 'Notas';
@@ -10462,6 +10491,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get feedActivityHike => 'Trilha';
 
   @override
+  String get feedActivityLift => 'Força';
+
+  @override
+  String get feedLiftSetsLabel => 'Séries';
+
+  @override
+  String get feedLiftVolume => 'Volume';
+
+  @override
+  String get feedLiftUntitled => 'Treino';
+
+  @override
   String get feedLoadMore => 'Carregar mais';
 
   @override
@@ -14662,6 +14703,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymDelete => 'Excluir';
+
+  @override
+  String get gymPublic => 'Público';
+
+  @override
+  String get gymPrivate => 'Privado';
+
+  @override
+  String get gymMakePublic => 'Tornar público';
+
+  @override
+  String get gymMakePrivate => 'Tornar privado';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return 'Não foi possível atualizar a visibilidade: $error';
+  }
 
   @override
   String get gymNotes => 'Notas';

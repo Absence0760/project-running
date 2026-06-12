@@ -3356,6 +3356,22 @@
   "@feedActivityHike": {
     "description": "Feed activity filter chip — hiking"
   },
+  "feedActivityLift": "Lift",
+  "@feedActivityLift": {
+    "description": "Feed activity filter chip — gym lifts"
+  },
+  "feedLiftSetsLabel": "Sets",
+  "@feedLiftSetsLabel": {
+    "description": "Stat label under the set count on a feed lift card"
+  },
+  "feedLiftVolume": "Volume",
+  "@feedLiftVolume": {
+    "description": "Stat label under the total volume on a feed lift card"
+  },
+  "feedLiftUntitled": "Workout",
+  "@feedLiftUntitled": {
+    "description": "Fallback title for an untitled public gym workout in the feed"
+  },
   "feedLoadMore": "Load more",
   "@feedLoadMore": {
     "description": "Button to load the next page of feed entries"
@@ -8942,6 +8958,16 @@
   "gymNotFound": "Workout not found.",
   "gymEdit": "Edit",
   "gymDelete": "Delete",
+  "gymPublic": "Public",
+  "@gymPublic": { "description": "Visibility chip on the gym workout detail when the workout is shared publicly." },
+  "gymPrivate": "Private",
+  "@gymPrivate": { "description": "Visibility chip on the gym workout detail when the workout is private." },
+  "gymMakePublic": "Make public",
+  "@gymMakePublic": { "description": "Action that flips a gym workout to public." },
+  "gymMakePrivate": "Make private",
+  "@gymMakePrivate": { "description": "Action that flips a gym workout back to private." },
+  "gymVisibilityFailed": "Couldn't update visibility: {error}",
+  "@gymVisibilityFailed": { "description": "Banner when toggling a gym workout's visibility fails.", "placeholders": { "error": {} } },
   "gymNotes": "Notes",
   "gymKg": "kg",
   "gymReps": "Reps",

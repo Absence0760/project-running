@@ -2833,6 +2833,18 @@ class AppLocalizationsFr extends AppLocalizations {
   String get feedActivityHike => 'Rando';
 
   @override
+  String get feedActivityLift => 'Muscu';
+
+  @override
+  String get feedLiftSetsLabel => 'Séries';
+
+  @override
+  String get feedLiftVolume => 'Volume';
+
+  @override
+  String get feedLiftUntitled => 'Séance';
+
+  @override
   String get feedLoadMore => 'Charger plus';
 
   @override
@@ -7042,6 +7054,23 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymDelete => 'Supprimer';
+
+  @override
+  String get gymPublic => 'Public';
+
+  @override
+  String get gymPrivate => 'Privé';
+
+  @override
+  String get gymMakePublic => 'Rendre public';
+
+  @override
+  String get gymMakePrivate => 'Rendre privé';
+
+  @override
+  String gymVisibilityFailed(Object error) {
+    return 'Impossible de mettre à jour la visibilité : $error';
+  }
 
   @override
   String get gymNotes => 'Notes';
