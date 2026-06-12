@@ -1515,6 +1515,9 @@ export const messages = {
 	"clubHome.sessionTemplatesTitle": "Session-Vorlagen",
 	"clubHome.sessionTemplatesHint": "Mitglieder können eine Club-Session-Sequenz in ihren eigenen Session-Plan übernehmen. Änderungen an einer Kopie wirken sich nicht auf die Vorlage aus.",
 	"clubHome.sessionAdopted": "Session zu deinen Plänen hinzugefügt.",
+	"clubHome.newSessionTemplate": "Neue Session-Vorlage",
+	"clubHome.sessionTemplateCreated": "Session-Vorlage im Club veröffentlicht.",
+	"clubHome.emptySessionTemplates": "Noch keine Session-Vorlagen. Erstelle eine zeitgesteuerte Posen- oder Bewegungssequenz, die Mitglieder übernehmen oder per Mitmach-Modus mitmachen können.",
 	"clubHome.gymRoutineTemplatesTitle": "Gym-Routine-Vorlagen",
 	"clubHome.gymRoutineTemplatesHint": "Mitglieder können eine Club-Gym-Routine in ihre eigenen Routinen übernehmen. Änderungen an einer Kopie wirken sich nicht auf die Vorlage aus.",
 	"clubHome.gymRoutineAdopted": "Routine zu deinen Gym-Routinen hinzugefügt.",
@@ -3381,6 +3384,7 @@ export const messages = {
 	// EventEditor session-plan picker (event_gym_template.ts)
 	"session.event.planPicker": "Session-Plan",
 	"session.event.planNone": "Keiner",
+	"session.event.planEmptyHint": "Noch keine Session-Pläne — erstelle einen im Tab „Vorlagen“ eines Clubs.",
 	"session.event.planFailed": "Sitzungsplan konnte nicht aktualisiert werden.",
 
 	// Admin moderation (/admin/reports) — web-only back-office

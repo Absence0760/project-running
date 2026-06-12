@@ -284,6 +284,9 @@
 					<option value={sp.id}>{sp.title}</option>
 				{/each}
 			</select>
+			{#if sessionPlans.length === 0}
+				<span class="hint">{m('session.event.planEmptyHint')}</span>
+			{/if}
 		</label>
 	{/if}
 

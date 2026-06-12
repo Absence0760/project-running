@@ -1515,6 +1515,9 @@ export const messages = {
 	"clubHome.sessionTemplatesTitle": "Modèles de séance",
 	"clubHome.sessionTemplatesHint": "Les membres peuvent reprendre une séquence de séance du club dans leur propre plan de séance. Les modifications apportées à une copie ne se répercutent pas sur le modèle.",
 	"clubHome.sessionAdopted": "Séance ajoutée à vos plans.",
+	"clubHome.newSessionTemplate": "Nouveau modèle de séance",
+	"clubHome.sessionTemplateCreated": "Modèle de séance publié dans le club.",
+	"clubHome.emptySessionTemplates": "Aucun modèle de séance pour l'instant. Créez une séquence de poses ou de mouvements minutée que les membres pourront reprendre ou suivre.",
 	"clubHome.gymRoutineTemplatesTitle": "Modèles de routine de gym",
 	"clubHome.gymRoutineTemplatesHint": "Les membres peuvent adopter une routine de gym du club dans leurs propres routines. Les modifications d'une copie ne se répercutent pas sur le modèle.",
 	"clubHome.gymRoutineAdopted": "Routine ajoutée à vos routines de gym.",
@@ -3381,6 +3384,7 @@ export const messages = {
 	// EventEditor session-plan picker (event_gym_template.ts)
 	"session.event.planPicker": "Plan de séance",
 	"session.event.planNone": "Aucun",
+	"session.event.planEmptyHint": "Aucun plan de séance pour l'instant — créez-en un dans l'onglet Modèles d'un club.",
 	"session.event.planFailed": "Impossible de mettre à jour le plan de séance.",
 
 	// Admin moderation (/admin/reports) — web-only back-office

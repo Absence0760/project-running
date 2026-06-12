@@ -1511,6 +1511,9 @@ export const messages = {
 	"clubHome.sessionTemplatesTitle": "セッションテンプレート",
 	"clubHome.sessionTemplatesHint": "メンバーはクラブのセッションシーケンスを自分のセッションプランに取り込めます。コピーへの編集はテンプレートには反映されません。",
 	"clubHome.sessionAdopted": "セッションをあなたのプランに追加しました。",
+	"clubHome.newSessionTemplate": "新しいセッションテンプレート",
+	"clubHome.sessionTemplateCreated": "セッションテンプレートをクラブに公開しました。",
+	"clubHome.emptySessionTemplates": "まだセッションテンプレートはありません。メンバーが取り込んだりフォローアロングしたりできる、ポーズや動きのタイム付きシーケンスを作成しましょう。",
 	"clubHome.gymRoutineTemplatesTitle": "ジムルーティンのテンプレート",
 	"clubHome.gymRoutineTemplatesHint": "メンバーはクラブのジムルーティンを自分のルーティンに取り込めます。コピーへの編集はテンプレートには反映されません。",
 	"clubHome.gymRoutineAdopted": "ルーティンをあなたのジムルーティンに追加しました。",
@@ -3377,6 +3380,7 @@ export const messages = {
 	// EventEditor session-plan picker (event_gym_template.ts)
 	"session.event.planPicker": "セッションプラン",
 	"session.event.planNone": "なし",
+	"session.event.planEmptyHint": "まだセッションプランはありません。クラブの「テンプレート」タブで作成しましょう。",
 	"session.event.planFailed": "セッションプランを更新できませんでした。",
 
 	// Admin moderation (/admin/reports) — web-only back-office

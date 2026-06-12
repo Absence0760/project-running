@@ -18,12 +18,15 @@
 
 	interface Props {
 		existing?: SessionPlanWithItems | null;
+		/// When set on a create (no `existing`), the new plan is club-owned — it
+		/// lands directly as a club session template instead of a personal plan.
+		clubId?: string | null;
 		oncreated?: (id: string) => void;
 		onupdated?: () => void;
 		oncancel: () => void;
 	}
 
-	let { existing = null, oncreated, onupdated, oncancel }: Props = $props();
+	let { existing = null, clubId = null, oncreated, onupdated, oncancel }: Props = $props();
 
 	type EditBlock = { name: string };
 	type EditItem = {
@@ -166,7 +169,7 @@
 			discipline: discipline.trim() || null,
 			equipment: equipment.trim() || null,
 			is_public: isPublic,
-			club_id: existing?.club_id ?? null,
+			club_id: existing?.club_id ?? clubId,
 			est_duration_min: estMinutes > 0 ? estMinutes : null,
 			blocks: blocks.map((b) => ({ name: b.name.trim() || null })),
 			items: itemInputs

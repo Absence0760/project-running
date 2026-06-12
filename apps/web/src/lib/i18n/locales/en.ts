@@ -1524,6 +1524,9 @@ export const en = {
 	"clubHome.sessionTemplatesTitle": "Session templates",
 	"clubHome.sessionTemplatesHint": "Members can adopt a club session sequence into their own session plan. Edits to a copy don't propagate back to the template.",
 	"clubHome.sessionAdopted": "Session added to your plans.",
+	"clubHome.newSessionTemplate": "New session template",
+	"clubHome.sessionTemplateCreated": "Session template published to the club.",
+	"clubHome.emptySessionTemplates": "No session templates yet. Build a timed pose or movement sequence members can adopt or follow along.",
 	"clubHome.gymRoutineTemplatesTitle": "Gym routine templates",
 	"clubHome.gymRoutineTemplatesHint": "Members can adopt a club gym routine into their own routines. Edits to a copy don't propagate back to the template.",
 	"clubHome.gymRoutineAdopted": "Routine added to your gym routines.",
@@ -3390,6 +3393,7 @@ export const en = {
 	// EventEditor session-plan picker (event_gym_template.ts)
 	"session.event.planPicker": "Session plan",
 	"session.event.planNone": "None",
+	"session.event.planEmptyHint": "No session plans yet — build one on a club's Templates tab.",
 	"session.event.planFailed": "Couldn't update the session plan.",
 
 	// Admin moderation (/admin/reports) — web-only back-office

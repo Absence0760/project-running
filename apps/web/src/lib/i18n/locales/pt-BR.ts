@@ -1514,6 +1514,9 @@ export const messages = {
 	"clubHome.sessionTemplatesTitle": "Modelos de sessão",
 	"clubHome.sessionTemplatesHint": "Os membros podem adotar uma sequência de sessão do clube em seu próprio plano de sessão. Edições em uma cópia não se propagam de volta ao modelo.",
 	"clubHome.sessionAdopted": "Sessão adicionada aos seus planos.",
+	"clubHome.newSessionTemplate": "Novo modelo de sessão",
+	"clubHome.sessionTemplateCreated": "Modelo de sessão publicado no clube.",
+	"clubHome.emptySessionTemplates": "Ainda não há modelos de sessão. Monte uma sequência cronometrada de poses ou movimentos que os membros possam adotar ou acompanhar.",
 	"clubHome.gymRoutineTemplatesTitle": "Modelos de rotina de academia",
 	"clubHome.gymRoutineTemplatesHint": "Os membros podem adotar uma rotina de academia do clube em suas próprias rotinas. Edições em uma cópia não voltam para o modelo.",
 	"clubHome.gymRoutineAdopted": "Rotina adicionada às suas rotinas de academia.",
@@ -3380,6 +3383,7 @@ export const messages = {
 	// EventEditor session-plan picker (event_gym_template.ts)
 	"session.event.planPicker": "Plano de sessão",
 	"session.event.planNone": "Nenhum",
+	"session.event.planEmptyHint": "Ainda não há planos de sessão — crie um na aba Modelos de um clube.",
 	"session.event.planFailed": "Não foi possível atualizar o plano de sessão.",
 
 	// Admin moderation (/admin/reports) — web-only back-office
