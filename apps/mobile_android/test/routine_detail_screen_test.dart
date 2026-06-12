@@ -43,8 +43,12 @@ void main() {
                 StoredRoutineExercise(
                   exerciseName: 'Squat',
                   exerciseKey: 'squat',
+                  supersetGroup: 1,
+                  supersetOrder: 0,
+                  progression: 'linear',
                   sets: [
-                    StoredRoutineSet(targetRepsMin: 5, targetWeightKg: 100),
+                    StoredRoutineSet(
+                        setType: 'warmup', targetRepsMin: 5, targetWeightKg: 100),
                     StoredRoutineSet(
                         targetRepsMin: 8, targetRepsMax: 12, targetWeightKg: 80),
                   ],
@@ -57,9 +61,13 @@ void main() {
 
       expect(find.text('Leg day'), findsOneWidget);
       expect(find.text('Squat'), findsOneWidget);
-      // Single-value rep target, and a range target.
-      expect(find.text('5'), findsOneWidget);
-      expect(find.text('8–12'), findsOneWidget);
+      // Modality-aware target: reps × weight (single combined cell).
+      expect(find.text('5 × 100.0 kg'), findsOneWidget);
+      expect(find.text('8–12 × 80.0 kg'), findsOneWidget);
+      // Set type + superset badge + progression chip render (P2/P4).
+      expect(find.text('Warm-up'), findsOneWidget);
+      expect(find.text('Superset 1'), findsOneWidget);
+      expect(find.text('Linear'), findsOneWidget);
       // Start FAB present (P1 prefill-only).
       expect(find.text('Start routine'), findsOneWidget);
     } finally {

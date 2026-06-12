@@ -12225,6 +12225,222 @@ abstract class AppLocalizations {
   /// **'Repeat last'**
   String get gymRoutineRepeatLast;
 
+  /// No description provided for @gymRoutineTargetRepsMax.
+  ///
+  /// In en, this message translates to:
+  /// **'to'**
+  String get gymRoutineTargetRepsMax;
+
+  /// No description provided for @gymRoutineTargetDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Target time (s)'**
+  String get gymRoutineTargetDuration;
+
+  /// No description provided for @gymRoutineTargetDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Target distance (m)'**
+  String get gymRoutineTargetDistance;
+
+  /// No description provided for @gymRoutineRestLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rest (s)'**
+  String get gymRoutineRestLabel;
+
+  /// No description provided for @gymRoutineSetType.
+  ///
+  /// In en, this message translates to:
+  /// **'Set type'**
+  String get gymRoutineSetType;
+
+  /// No description provided for @gymRoutineSetTypeWarmup.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm-up'**
+  String get gymRoutineSetTypeWarmup;
+
+  /// No description provided for @gymRoutineSetTypeWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get gymRoutineSetTypeWorking;
+
+  /// No description provided for @gymRoutineSetTypeDropset.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop set'**
+  String get gymRoutineSetTypeDropset;
+
+  /// No description provided for @gymRoutineSetTypeAmrap.
+  ///
+  /// In en, this message translates to:
+  /// **'AMRAP'**
+  String get gymRoutineSetTypeAmrap;
+
+  /// No description provided for @gymRoutineSetTypeFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'To failure'**
+  String get gymRoutineSetTypeFailure;
+
+  /// No description provided for @gymRoutineSetTypeBackoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Back-off'**
+  String get gymRoutineSetTypeBackoff;
+
+  /// No description provided for @gymRoutineModality.
+  ///
+  /// In en, this message translates to:
+  /// **'Measured by'**
+  String get gymRoutineModality;
+
+  /// No description provided for @gymRoutineModalityWeightReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight × reps'**
+  String get gymRoutineModalityWeightReps;
+
+  /// No description provided for @gymRoutineModalityTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get gymRoutineModalityTime;
+
+  /// No description provided for @gymRoutineModalityDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get gymRoutineModalityDistance;
+
+  /// No description provided for @gymRoutineModalityBodyweightReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Bodyweight reps'**
+  String get gymRoutineModalityBodyweightReps;
+
+  /// No description provided for @gymRoutineSupersetToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Superset with the next exercise'**
+  String get gymRoutineSupersetToggle;
+
+  /// Routine detail: superset group badge
+  ///
+  /// In en, this message translates to:
+  /// **'Superset {group}'**
+  String gymRoutineSupersetBadge(int group);
+
+  /// No description provided for @gymRoutineAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get gymRoutineAdvanced;
+
+  /// No description provided for @gymRoutineProgression.
+  ///
+  /// In en, this message translates to:
+  /// **'Progression'**
+  String get gymRoutineProgression;
+
+  /// No description provided for @gymRoutineProgressionNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get gymRoutineProgressionNone;
+
+  /// No description provided for @gymRoutineProgressionLinear.
+  ///
+  /// In en, this message translates to:
+  /// **'Linear'**
+  String get gymRoutineProgressionLinear;
+
+  /// No description provided for @gymRoutineProgressionDoubleProgression.
+  ///
+  /// In en, this message translates to:
+  /// **'Double progression'**
+  String get gymRoutineProgressionDoubleProgression;
+
+  /// No description provided for @gymRoutineProgressionFiveByFive.
+  ///
+  /// In en, this message translates to:
+  /// **'5×5'**
+  String get gymRoutineProgressionFiveByFive;
+
+  /// No description provided for @gymRoutineProgressionPercentCycle.
+  ///
+  /// In en, this message translates to:
+  /// **'% of 1RM cycle'**
+  String get gymRoutineProgressionPercentCycle;
+
+  /// No description provided for @gymRoutineProgressionRpeAutoreg.
+  ///
+  /// In en, this message translates to:
+  /// **'RPE auto-regulation'**
+  String get gymRoutineProgressionRpeAutoreg;
+
+  /// Routine builder: progression weight increment field, with unit
+  ///
+  /// In en, this message translates to:
+  /// **'Weight step ({unit})'**
+  String gymRoutineProgressionIncrementLabel(String unit);
+
+  /// No description provided for @gymRoutineProgressionPercentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'% of 1RM'**
+  String get gymRoutineProgressionPercentLabel;
+
+  /// Routine builder: progression 1RM field, with unit
+  ///
+  /// In en, this message translates to:
+  /// **'1RM ({unit})'**
+  String gymRoutineProgressionOneRmLabel(String unit);
+
+  /// No description provided for @gymRoutineProgressionTargetRpeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Target RPE'**
+  String get gymRoutineProgressionTargetRpeLabel;
+
+  /// No description provided for @gymRoutineNextTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Next target'**
+  String get gymRoutineNextTarget;
+
+  /// No description provided for @gymRoutineNextTargetIncreaseWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Add load next time'**
+  String get gymRoutineNextTargetIncreaseWeight;
+
+  /// No description provided for @gymRoutineNextTargetIncreaseReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Add reps next time'**
+  String get gymRoutineNextTargetIncreaseReps;
+
+  /// No description provided for @gymRoutineNextTargetHold.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold — repeat this target'**
+  String get gymRoutineNextTargetHold;
+
+  /// No description provided for @gymRoutineNextTargetDeload.
+  ///
+  /// In en, this message translates to:
+  /// **'Deload — back off the load'**
+  String get gymRoutineNextTargetDeload;
+
+  /// Workout review: next-target rep-climb delta
+  ///
+  /// In en, this message translates to:
+  /// **'rep climb {from}→{to}'**
+  String gymRoutineNextTargetRepClimb(int from, int to);
+
   /// No description provided for @nutritionTitle.
   ///
   /// In en, this message translates to:

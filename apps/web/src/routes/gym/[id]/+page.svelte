@@ -6,6 +6,7 @@
 	import {
 		fetchGymWorkoutWithSets,
 		fetchExerciseSetHistory,
+		fetchGymRoutineDetail,
 		deleteGymWorkout,
 		setGymWorkoutPublic,
 		type GymWorkoutWithSets,
@@ -14,6 +15,7 @@
 	} from '$lib/core/data';
 	import { workoutPrs, normaliseExerciseName, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
 	import { previousExerciseSession, type ExerciseSession } from '$lib/gym/exercise_history';
+	import { nextPrescription, type ProgressionSetLike } from '$lib/gym/gym_progression';
 	import {
 		routineFromWorkout,
 		prefillFromRoutine,
@@ -26,7 +28,7 @@
 	import RoutineEditor from '$lib/components/RoutineEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import GymWorkoutReview from '$lib/components/GymWorkoutReview.svelte';
-	import type { GymStepResult } from '$lib/gym/gym_session_types';
+	import type { GymStepResult, NextTargetHint } from '$lib/gym/gym_session_types';
 	import type { RoutineAdherence, RoutineVerdict, SetAdherence } from '$lib/gym/gym_adherence';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -46,6 +48,9 @@
 	let repeatSeed = $state<GymWorkoutWithSets | null>(null);
 	let visibilityBusy = $state(false);
 	let shareBusy = $state(false);
+	// P4: per-exercise "next target" hints from nextPrescription. Only populated
+	// for a from-routine session whose routine carries a progression scheme.
+	let nextTargets = $state<NextTargetHint[]>([]);
 
 	// "Save as routine": promote this logged session's grouped sets into a
 	// routine draft (gym_routine.ts), then prefill the RoutineEditor with it.
@@ -126,7 +131,68 @@
 		} else {
 			history = [];
 		}
+		nextTargets = await loadNextTargets(w).catch(() => []);
 		loading = false;
+	}
+
+	// P4: when this session ran a routine that carries a progression scheme,
+	// suggest the next target for each scheme-tracked exercise from THIS session's
+	// logged sets. Pure suggestion — never auto-applied. The chip self-hides for
+	// ad-hoc workouts (no routine_id) and 'none'-scheme exercises.
+	async function loadNextTargets(w: GymWorkoutWithSets | null): Promise<NextTargetHint[]> {
+		const out: NextTargetHint[] = [];
+		if (!w || w.workout.user_id !== auth.user?.id) return out;
+		const meta = (w.workout as { metadata?: Record<string, unknown> | null }).metadata;
+		const routineId = meta && typeof meta === 'object' ? meta['routine_id'] : null;
+		if (typeof routineId !== 'string' || routineId === '') return out;
+
+		const routine = await fetchGymRoutineDetail(routineId);
+		if (!routine) return out;
+
+		const setsByKey = new Map<string, ProgressionSetLike[]>();
+		for (const s of w.sets) {
+			const key = normaliseExerciseName(s.exercise_name);
+			if (key === '') continue;
+			const list = setsByKey.get(key) ?? [];
+			list.push({ reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe });
+			setsByKey.set(key, list);
+		}
+
+		for (const ex of routine.exercises) {
+			if (ex.progression === 'none') continue;
+			const key = normaliseExerciseName(ex.exercise_name);
+			const lastSets = setsByKey.get(key);
+			if (!lastSets || lastSets.length === 0) continue;
+			const firstSet = ex.sets[0];
+			const sug = nextPrescription({
+				scheme: ex.progression,
+				lastSets,
+				targetRepsMin: firstSet?.target_reps_min ?? null,
+				targetRepsMax: firstSet?.target_reps_max ?? null,
+				params: ex.progression_params,
+			});
+			if (sug.reason === 'none') continue;
+
+			let topKg: number | null = null;
+			let topReps: number | null = null;
+			for (const s of lastSets) {
+				if (s.weight_kg != null && s.weight_kg > 0 && (topKg == null || s.weight_kg > topKg)) {
+					topKg = s.weight_kg;
+					topReps = s.reps;
+				}
+			}
+			out.push({
+				exerciseKey: key,
+				exerciseName: ex.exercise_name,
+				suggestedWeightKg: sug.suggestedWeightKg,
+				suggestedRepsMin: sug.suggestedRepsMin,
+				suggestedRepsMax: sug.suggestedRepsMax,
+				currentTopKg: topKg,
+				currentTopReps: topReps,
+				reason: sug.reason,
+			});
+		}
+		return out;
 	}
 
 	onMount(async () => {
@@ -422,7 +488,11 @@
 		</div>
 
 		{#if review && isOwner}
-			<GymWorkoutReview adherence={review.adherence} stepResults={review.stepResults} />
+			<GymWorkoutReview
+				adherence={review.adherence}
+				stepResults={review.stepResults}
+				{nextTargets}
+			/>
 		{/if}
 
 		{#each blocks as block (block.name)}

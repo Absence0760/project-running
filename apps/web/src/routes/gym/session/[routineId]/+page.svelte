@@ -3,8 +3,15 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchGymRoutineDetail, type GymRoutineDetail } from '$lib/core/data';
+	import {
+		fetchGymRoutineDetail,
+		fetchExerciseSetHistory,
+		type GymRoutineDetail,
+	} from '$lib/core/data';
 	import { expandRoutineSteps, type RoutineStep, type PlannedRoutine } from '$lib/gym/gym_routine';
+	import { nextPrescription } from '$lib/gym/gym_progression';
+	import { lastSessionSets } from '$lib/gym/progression_prefill';
+	import { normaliseExerciseName } from '$lib/gym/gym_prs';
 	import GymSessionRunner from '$lib/components/GymSessionRunner.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -22,8 +29,11 @@
 				exercises: detail.exercises.map((e) => ({
 					exerciseName: e.exercise_name,
 					position: e.position,
+					supersetGroup: e.superset_group,
+					supersetOrder: e.superset_order,
 					sets: e.sets.map((s) => ({
 						setIndex: s.set_index,
+						setType: s.set_type,
 						targetRepsMin: s.target_reps_min,
 						targetRepsMax: s.target_reps_max,
 						targetWeightKg: s.target_weight_kg,
@@ -33,9 +43,63 @@
 					})),
 				})),
 			};
-			steps = expandRoutineSteps(planned).steps;
+			const expanded = expandRoutineSteps(planned).steps;
+			steps = await prefillFromProgression(expanded, detail).catch(() => expanded);
 		}
 		loading = false;
+	}
+
+	// P4: for each exercise carrying a progression scheme, suggest the next
+	// targets from its logged history and prefill them onto the expanded steps —
+	// still editable in the band (the band seeds from the step targets). The
+	// prescriber only suggests; the runner never auto-logs.
+	async function prefillFromProgression(
+		expanded: RoutineStep[],
+		d: GymRoutineDetail,
+	): Promise<RoutineStep[]> {
+		const schemed = d.exercises.filter((e) => e.progression !== 'none');
+		if (schemed.length === 0) return expanded;
+
+		const byKey = new Map<string, (typeof d.exercises)[number]>();
+		for (const e of schemed) byKey.set(normaliseExerciseName(e.exercise_name), e);
+
+		const suggestions = new Map<
+			string,
+			{ weightKg: number | null; repsMin: number | null; repsMax: number | null }
+		>();
+		await Promise.all(
+			[...byKey.entries()].map(async ([key, ex]) => {
+				const history = await fetchExerciseSetHistory(ex.exercise_name);
+				const last = lastSessionSets(history, ex.exercise_name);
+				if (!last) return;
+				const firstSet = ex.sets[0];
+				const sug = nextPrescription({
+					scheme: ex.progression,
+					lastSets: last,
+					targetRepsMin: firstSet?.target_reps_min ?? null,
+					targetRepsMax: firstSet?.target_reps_max ?? null,
+					params: ex.progression_params,
+				});
+				if (sug.reason === 'none') return;
+				suggestions.set(key, {
+					weightKg: sug.suggestedWeightKg,
+					repsMin: sug.suggestedRepsMin,
+					repsMax: sug.suggestedRepsMax,
+				});
+			}),
+		);
+		if (suggestions.size === 0) return expanded;
+
+		return expanded.map((step) => {
+			const sug = suggestions.get(step.exerciseKey);
+			if (!sug) return step;
+			return {
+				...step,
+				targetWeightKg: sug.weightKg ?? step.targetWeightKg,
+				targetRepsMin: sug.repsMin ?? step.targetRepsMin,
+				targetRepsMax: sug.repsMax ?? step.targetRepsMax,
+			};
+		});
 	}
 
 	onMount(async () => {

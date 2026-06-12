@@ -81,13 +81,25 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
                     StoredRoutineExercise(
                       exerciseName: e.exercise.exerciseName,
                       exerciseKey: e.exercise.exerciseKey,
+                      supersetGroup: e.exercise.supersetGroup,
+                      supersetOrder: e.exercise.supersetOrder,
+                      modality: e.exercise.modality,
+                      progression: e.exercise.progression,
+                      progressionParams: e.exercise.progressionParams is Map
+                          ? Map<String, dynamic>.from(
+                              e.exercise.progressionParams as Map)
+                          : const {},
                       sets: [
                         for (final s in e.sets)
                           StoredRoutineSet(
+                            setType: s.setType,
                             targetRepsMin: s.targetRepsMin,
                             targetRepsMax: s.targetRepsMax,
                             targetWeightKg: s.targetWeightKg,
                             targetRpe: s.targetRpe,
+                            restS: s.restS,
+                            targetDurationS: s.targetDurationS,
+                            targetDistanceM: s.targetDistanceM,
                           ),
                       ],
                     ),

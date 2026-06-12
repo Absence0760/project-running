@@ -241,13 +241,43 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              ex.exerciseName.isEmpty ? '—' : ex.exerciseName,
-              style: theme.textTheme.titleSmall,
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                Text(
+                  ex.exerciseName.isEmpty ? '—' : ex.exerciseName,
+                  style: theme.textTheme.titleSmall,
+                ),
+                if (ex.supersetGroup != null)
+                  _chip(
+                    Icons.repeat,
+                    l10n.gymRoutineSupersetBadge(ex.supersetGroup!),
+                    theme.colorScheme.primary,
+                    theme.colorScheme.primaryContainer,
+                    theme,
+                  ),
+                if (ex.progression != 'none')
+                  _chip(
+                    Icons.trending_up,
+                    _schemeLabel(ex.progression, l10n),
+                    theme.colorScheme.onSurfaceVariant,
+                    theme.colorScheme.surfaceContainerHighest,
+                    theme,
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
+                Expanded(
+                  child: Text(
+                    l10n.gymRoutineSetType,
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ),
                 Expanded(
                   child: Text(
                     l10n.gymRoutineTargetReps,
@@ -257,8 +287,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 ),
                 Expanded(
                   child: Text(
-                    l10n.gymRoutineTargetWeight(
-                        WeightFormat.label(activeWeightUnit)),
+                    l10n.gymRoutineRestLabel,
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.colorScheme.outline),
                   ),
@@ -272,15 +301,18 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(_repLabel(s),
+                      child: Text(_setTypeLabel(s.setType, l10n),
+                          style: theme.textTheme.bodyMedium),
+                    ),
+                    Expanded(
+                      child: Text(_targetLabel(ex.modality, s, l10n),
                           style: theme.textTheme.bodyMedium),
                     ),
                     Expanded(
                       child: Text(
-                        s.targetWeightKg == null
+                        s.restS == null
                             ? '—'
-                            : WeightFormat.format(
-                                s.targetWeightKg!, activeWeightUnit),
+                            : l10n.gymDurationValue('${s.restS}'),
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
@@ -293,11 +325,85 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     );
   }
 
+  Widget _chip(IconData icon, String label, Color fg, Color bg,
+          ThemeData theme) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: fg),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: fg, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      );
+
   String _repLabel(StoredRoutineSet s) {
     final lo = s.targetRepsMin;
     if (lo == null) return '—';
     final hi = s.targetRepsMax;
     if (hi != null && hi != lo) return '$lo–$hi';
     return '$lo';
+  }
+
+  String _targetLabel(
+      String modality, StoredRoutineSet s, AppLocalizations l10n) {
+    if (modality == 'time') {
+      return s.targetDurationS == null
+          ? '—'
+          : l10n.gymDurationValue('${s.targetDurationS}');
+    }
+    if (modality == 'distance') {
+      return s.targetDistanceM == null ? '—' : '${s.targetDistanceM} m';
+    }
+    final reps = _repLabel(s);
+    if (modality == 'bodyweight_reps') return reps;
+    final weight = s.targetWeightKg == null
+        ? '—'
+        : WeightFormat.format(s.targetWeightKg!, activeWeightUnit);
+    return '$reps × $weight';
+  }
+
+  String _setTypeLabel(String s, AppLocalizations l10n) {
+    switch (s) {
+      case 'warmup':
+        return l10n.gymRoutineSetTypeWarmup;
+      case 'working':
+        return l10n.gymRoutineSetTypeWorking;
+      case 'dropset':
+        return l10n.gymRoutineSetTypeDropset;
+      case 'amrap':
+        return l10n.gymRoutineSetTypeAmrap;
+      case 'failure':
+        return l10n.gymRoutineSetTypeFailure;
+      case 'backoff':
+        return l10n.gymRoutineSetTypeBackoff;
+    }
+    return s;
+  }
+
+  String _schemeLabel(String s, AppLocalizations l10n) {
+    switch (s) {
+      case 'linear':
+        return l10n.gymRoutineProgressionLinear;
+      case 'double_progression':
+        return l10n.gymRoutineProgressionDoubleProgression;
+      case 'five_by_five':
+        return l10n.gymRoutineProgressionFiveByFive;
+      case 'percent_cycle':
+        return l10n.gymRoutineProgressionPercentCycle;
+      case 'rpe_autoreg':
+        return l10n.gymRoutineProgressionRpeAutoreg;
+    }
+    return l10n.gymRoutineProgressionNone;
   }
 }
