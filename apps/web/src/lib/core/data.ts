@@ -34,7 +34,10 @@ import type {
 	PlanWorkout,
 	ActivePlanOverview,
 	PlanStatus,
-	NotificationKind
+	NotificationKind,
+	GymSetType,
+	GymExerciseModality,
+	GymProgressionScheme
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -5900,17 +5903,24 @@ export interface GymRoutineExercise {
 	exercise_name: string;
 	exercise_key: string;
 	position: number;
+	superset_group: number | null;
+	superset_order: number | null;
+	modality: GymExerciseModality;
+	progression: GymProgressionScheme;
+	progression_params: Record<string, unknown>;
 	sets: GymRoutineSet[];
 }
 
 export interface GymRoutineSet {
 	set_index: number;
+	set_type: GymSetType;
 	target_reps_min: number | null;
 	target_reps_max: number | null;
 	target_weight_kg: number | null;
 	target_rpe: number | null;
 	rest_s: number | null;
 	target_duration_s: number | null;
+	target_distance_m: number | null;
 }
 
 export interface GymRoutineDetail {
@@ -5927,12 +5937,21 @@ export interface GymRoutineInput {
 		exercise_name: string;
 		exercise_key: string;
 		position: number;
+		superset_group?: number | null;
+		superset_order?: number | null;
+		modality?: GymExerciseModality;
+		progression?: GymProgressionScheme;
+		progression_params?: Record<string, unknown>;
 		sets: Array<{
 			set_index: number;
+			set_type?: GymSetType;
 			target_reps_min?: number | null;
 			target_reps_max?: number | null;
 			target_weight_kg?: number | null;
 			target_rpe?: number | null;
+			rest_s?: number | null;
+			target_duration_s?: number | null;
+			target_distance_m?: number | null;
 		}>;
 	}>;
 }
@@ -5965,7 +5984,9 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	if (rErr || !routine) return null;
 	const { data: exRows, error: eErr } = await supabase
 		.from(TABLES.gym_routine_exercises)
-		.select('id, exercise_name, exercise_key, position')
+		.select(
+			'id, exercise_name, exercise_key, position, superset_group, superset_order, modality, progression, progression_params',
+		)
 		.eq('routine_id', id)
 		.order('position', { ascending: true });
 	if (eErr) {
@@ -5977,6 +5998,11 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		exercise_name: string;
 		exercise_key: string;
 		position: number;
+		superset_group: number | null;
+		superset_order: number | null;
+		modality: GymExerciseModality;
+		progression: GymProgressionScheme;
+		progression_params: Record<string, unknown> | null;
 	}>;
 	if (exercises.length === 0) {
 		return { routine: routine as GymRoutineSummary, exercises: [] };
@@ -5984,7 +6010,7 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	const { data: setRows, error: sErr } = await supabase
 		.from(TABLES.gym_routine_sets)
 		.select(
-			'routine_exercise_id, set_index, target_reps_min, target_reps_max, target_weight_kg, target_rpe, rest_s, target_duration_s',
+			'routine_exercise_id, set_index, set_type, target_reps_min, target_reps_max, target_weight_kg, target_rpe, rest_s, target_duration_s, target_distance_m',
 		)
 		.in('routine_exercise_id', exercises.map((e) => e.id))
 		.order('set_index', { ascending: true });
@@ -5994,12 +6020,14 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		const list = setsByExercise.get(row.routine_exercise_id) ?? [];
 		list.push({
 			set_index: row.set_index,
+			set_type: row.set_type,
 			target_reps_min: row.target_reps_min,
 			target_reps_max: row.target_reps_max,
 			target_weight_kg: row.target_weight_kg,
 			target_rpe: row.target_rpe,
 			rest_s: row.rest_s,
 			target_duration_s: row.target_duration_s,
+			target_distance_m: row.target_distance_m,
 		});
 		setsByExercise.set(row.routine_exercise_id, list);
 	}
@@ -6010,6 +6038,11 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 			exercise_name: e.exercise_name,
 			exercise_key: e.exercise_key,
 			position: e.position,
+			superset_group: e.superset_group,
+			superset_order: e.superset_order,
+			modality: e.modality,
+			progression: e.progression,
+			progression_params: e.progression_params ?? {},
 			sets: setsByExercise.get(e.id) ?? [],
 		})),
 	};
@@ -6037,6 +6070,9 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 	if (error || !data) throw error ?? new Error('createGymRoutine failed');
 	const routine = data as GymRoutineSummary;
 	for (const ex of exercises) {
+		// gym_routine_exercises_superset_chk requires the group + order to be
+		// both null or both set, so a standalone exercise clears both.
+		const supersetGroup = ex.superset_group ?? null;
 		const { data: exRow, error: exErr } = await supabase
 			.from(TABLES.gym_routine_exercises)
 			.insert({
@@ -6044,6 +6080,11 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 				exercise_name: ex.exercise_name.trim(),
 				exercise_key: ex.exercise_key,
 				position: ex.position,
+				superset_group: supersetGroup,
+				superset_order: supersetGroup == null ? null : ex.superset_order ?? 0,
+				modality: ex.modality ?? 'weight_reps',
+				progression: ex.progression ?? 'none',
+				progression_params: ex.progression_params ?? {},
 			})
 			.select('id')
 			.single();
@@ -6051,10 +6092,14 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 		const setRows = ex.sets.map((s, i) => ({
 			routine_exercise_id: (exRow as { id: string }).id,
 			set_index: i,
+			set_type: s.set_type ?? 'working',
 			target_reps_min: s.target_reps_min ?? null,
 			target_reps_max: s.target_reps_max ?? null,
 			target_weight_kg: s.target_weight_kg ?? null,
 			target_rpe: s.target_rpe ?? null,
+			rest_s: s.rest_s ?? null,
+			target_duration_s: s.target_duration_s ?? null,
+			target_distance_m: s.target_distance_m ?? null,
 		}));
 		if (setRows.length > 0) {
 			const { error: sErr } = await supabase.from(TABLES.gym_routine_sets).insert(setRows);
