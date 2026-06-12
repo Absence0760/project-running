@@ -7646,6 +7646,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sessionNotFound => 'Session plan not found.';
 
   @override
+  String get sessionMakePublic => 'Make public';
+
+  @override
+  String get sessionMakePrivate => 'Make private';
+
+  @override
+  String get sessionVisibilityError => 'Couldn\'t change visibility.';
+
+  @override
   String get sessionSteps => 'Sequence';
 
   @override

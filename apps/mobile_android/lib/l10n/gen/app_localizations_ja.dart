@@ -7315,6 +7315,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sessionNotFound => 'セッションプランが見つかりません。';
 
   @override
+  String get sessionMakePublic => '公開する';
+
+  @override
+  String get sessionMakePrivate => '非公開にする';
+
+  @override
+  String get sessionVisibilityError => '公開設定を変更できませんでした。';
+
+  @override
   String get sessionSteps => 'シーケンス';
 
   @override

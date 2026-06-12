@@ -4426,6 +4426,16 @@ class ApiClient {
     await _client.from(SessionPlanRow.table).delete().eq(SessionPlanRow.colId, id);
   }
 
+  /// Flip a session plan's is_public flag (owner-only via RLS). A public plan
+  /// is readable logged-out at the web /share/session/[id] page. Mirrors
+  /// [setRoutePublic] + web `setSessionPlanPublic`.
+  Future<void> setSessionPlanPublic(String id, bool isPublic) async {
+    await _client
+        .from(SessionPlanRow.table)
+        .update({SessionPlanRow.colIsPublic: isPublic})
+        .eq(SessionPlanRow.colId, id);
+  }
+
   /// Windowed, reverse-chronological feed across all logged modalities for
   /// the unified History timeline. RLS (`security_invoker` on the `activities`
   /// view) scopes it to the caller. Always bounded — the timeline paginates

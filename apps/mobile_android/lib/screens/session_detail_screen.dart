@@ -50,6 +50,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   String? _title;
   String? _discipline;
   List<SessionStep> _steps = const [];
+  bool _isPublic = false;
+  bool _isOwner = false;
+  bool _visibilityBusy = false;
 
   @override
   void initState() {
@@ -90,8 +93,26 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       _title = data.plan.title;
       _discipline = data.plan.discipline;
       _steps = expandSessionSteps(input).steps;
+      _isPublic = data.plan.isPublic;
+      _isOwner = widget.api.userId == data.plan.authorId;
       _loading = false;
     });
+  }
+
+  Future<void> _toggleVisibility() async {
+    if (_visibilityBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final next = !_isPublic;
+    setState(() => _visibilityBusy = true);
+    try {
+      await widget.api.setSessionPlanPublic(widget.planId, next);
+      if (mounted) setState(() => _isPublic = next);
+    } catch (e) {
+      debugPrint('toggle session visibility failed: $e');
+      if (mounted) showTopBanner(context, l10n.sessionVisibilityError);
+    } finally {
+      if (mounted) setState(() => _visibilityBusy = false);
+    }
   }
 
   String _stepName(AppLocalizations l10n, SessionStep s) {
@@ -171,7 +192,17 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(_title ?? l10n.sessionTitle)),
+      appBar: AppBar(
+        title: Text(_title ?? l10n.sessionTitle),
+        actions: [
+          if (_isOwner && !_loading)
+            IconButton(
+              tooltip: _isPublic ? l10n.sessionMakePrivate : l10n.sessionMakePublic,
+              icon: Icon(_isPublic ? Icons.public : Icons.lock_outline),
+              onPressed: _visibilityBusy ? null : _toggleVisibility,
+            ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _steps.isEmpty

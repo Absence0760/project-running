@@ -12801,6 +12801,24 @@ abstract class AppLocalizations {
   /// **'Session plan not found.'**
   String get sessionNotFound;
 
+  /// Owner action to make a session plan publicly shareable
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get sessionMakePublic;
+
+  /// Owner action to make a public session plan private again
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get sessionMakePrivate;
+
+  /// Shown when toggling a session plan's public visibility fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change visibility.'**
+  String get sessionVisibilityError;
+
   /// Heading above the expanded list of movement steps
   ///
   /// In en, this message translates to:

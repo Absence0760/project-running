@@ -7741,6 +7741,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get sessionNotFound => 'Plan de séance introuvable.';
 
   @override
+  String get sessionMakePublic => 'Rendre public';
+
+  @override
+  String get sessionMakePrivate => 'Rendre privé';
+
+  @override
+  String get sessionVisibilityError => 'Impossible de modifier la visibilité.';
+
+  @override
   String get sessionSteps => 'Séquence';
 
   @override

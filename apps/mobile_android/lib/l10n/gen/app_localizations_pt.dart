@@ -7718,6 +7718,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sessionNotFound => 'Plano de sessão não encontrado.';
 
   @override
+  String get sessionMakePublic => 'Tornar público';
+
+  @override
+  String get sessionMakePrivate => 'Tornar privado';
+
+  @override
+  String get sessionVisibilityError =>
+      'Não foi possível alterar a visibilidade.';
+
+  @override
   String get sessionSteps => 'Sequência';
 
   @override
@@ -15617,6 +15627,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get sessionNotFound => 'Plano de sessão não encontrado.';
+
+  @override
+  String get sessionMakePublic => 'Tornar público';
+
+  @override
+  String get sessionMakePrivate => 'Tornar privado';
+
+  @override
+  String get sessionVisibilityError =>
+      'Não foi possível alterar a visibilidade.';
 
   @override
   String get sessionSteps => 'Sequência';
