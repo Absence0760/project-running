@@ -424,6 +424,7 @@ export const messages = {
 	"planDetail.adaptiveReplanHint": "Ajusta as próximas semanas quando suas últimas semanas mostram uma tendência sustentada.",
 	"planDetail.adaptiveOnTrack": "Suas últimas semanas estão dentro do plano — nenhum ajuste necessário.",
 	"planDetail.adaptiveNoSafeChange": "Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.",
+	"planDetail.adaptiveFitnessHeld": "Pausado — você está acumulando fadiga agora, então aumentar o volume não é recomendado.",
 	"planDetail.adaptiveReasonUnder": "abaixo do seu plano por várias semanas",
 	"planDetail.adaptiveReasonOver": "acima do seu plano por várias semanas",
 	"planDetail.adaptiveConfidenceHigh": "confiança alta",

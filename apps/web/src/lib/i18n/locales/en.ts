@@ -434,6 +434,7 @@ export const en = {
 	"planDetail.adaptiveReplanHint": "Adjusts upcoming weeks when your last few completed weeks show a sustained trend.",
 	"planDetail.adaptiveOnTrack": "Your recent weeks are on track — no adjustment needed.",
 	"planDetail.adaptiveNoSafeChange": "You've drifted from plan recently, but there's no safe adjustment to make right now.",
+	"planDetail.adaptiveFitnessHeld": "Held back — you're carrying fatigue right now, so adding volume isn't advised.",
 	"planDetail.adaptiveReasonUnder": "under your plan for multiple weeks",
 	"planDetail.adaptiveReasonOver": "over your plan for multiple weeks",
 	"planDetail.adaptiveConfidenceHigh": "high confidence",

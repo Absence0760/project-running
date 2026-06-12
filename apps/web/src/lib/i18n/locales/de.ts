@@ -425,6 +425,7 @@ export const messages = {
 	"planDetail.adaptiveReplanHint": "Passt kommende Wochen an, wenn deine letzten Wochen einen anhaltenden Trend zeigen.",
 	"planDetail.adaptiveOnTrack": "Deine letzten Wochen sind im Plan – keine Anpassung nötig.",
 	"planDetail.adaptiveNoSafeChange": "Du bist zuletzt vom Plan abgewichen, aber es gibt gerade keine sichere Anpassung.",
+	"planDetail.adaptiveFitnessHeld": "Zurückgehalten – du trägst gerade Ermüdung, daher ist mehr Volumen nicht ratsam.",
 	"planDetail.adaptiveReasonUnder": "seit mehreren Wochen unter deinem Plan",
 	"planDetail.adaptiveReasonOver": "seit mehreren Wochen über deinem Plan",
 	"planDetail.adaptiveConfidenceHigh": "hohe Konfidenz",

@@ -20,6 +20,16 @@
 		type AdaptiveReason,
 		type AdaptiveConfidence
 	} from '$lib/training/plan_adaptive_replan';
+	import { computeTrainingLoadSeries } from '$lib/training/training_load';
+
+	// P2 fitness direction gate (gen v2, decisions §144). OFF by default — the
+	// health-derived-load → prescription path stays inert in prod until this
+	// flag is flipped, which is the CISO/Security-Analyst sign-off-gated action
+	// (mirrors the paid-events pre-prod gate, §139). Flipping it ON is what
+	// "ships" P2; the wiring below is otherwise dormant.
+	const ADAPTIVE_FITNESS_GATE =
+		import.meta.env.PUBLIC_ADAPTIVE_FITNESS_GATE === '1' ||
+		import.meta.env.PUBLIC_ADAPTIVE_FITNESS_GATE === 'true';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
@@ -300,9 +310,29 @@
 
 	/// Adaptive (trend-based) re-plan: only proposes when the last few
 	/// completed weeks show a sustained drift, suppressing single-week noise.
+	/// Latest training-load point as the P2 fitness input — null unless the
+	/// gate flag is on, so the health-derived-load path is dormant by default.
+	function adaptiveFitnessInput(): { tsb: number; atl: number; ctl: number } | null {
+		if (!ADAPTIVE_FITNESS_GATE) return null;
+		const last = computeTrainingLoadSeries(recentRuns, {}, 90, new Date()).at(-1);
+		return last ? { tsb: last.tsb, atl: last.atl, ctl: last.ctl } : null;
+	}
+
 	function proposeAdaptiveReplan(): void {
 		if (!plan || !isOwner || bulkBusy) return;
-		const r = adaptiveReplanRemaining({ weeks: buildReplanInput(), today });
+		const r = adaptiveReplanRemaining({
+			weeks: buildReplanInput(),
+			today,
+			fitness: adaptiveFitnessInput()
+		});
+		if (r.fitnessGated) {
+			// P2: an add-volume trend was withheld because the runner is carrying
+			// fatigue (TSB < 0) — the adherence and fitness signals disagree.
+			showToast(m('planDetail.adaptiveFitnessHeld'));
+			replanPreview = null;
+			adaptiveInfo = null;
+			return;
+		}
 		if (r.reason === 'on_track') {
 			showToast(m('planDetail.adaptiveOnTrack'));
 			replanPreview = null;
