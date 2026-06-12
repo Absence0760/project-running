@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/event_gym_template.dart';
 import '../lib/social_service.dart';
 
 /// Parity tests for `SocialService.createEvent` — the insert-body
@@ -195,6 +196,9 @@ void main() {
       for (final key in const [
         'club_id',
         'title',
+        'category',
+        'discipline',
+        'gym_template',
         'description',
         'starts_at',
         'duration_min',
@@ -215,6 +219,96 @@ void main() {
             reason: 'Column "$key" must always appear in the insert '
                 'body so web and mobile write identical row shapes.');
       }
+    });
+  });
+
+  group('buildCreateEventBody — typed events (slice E, parity with web)', () {
+    test('defaults to the run category', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+      );
+      expect(body['category'], 'run');
+    });
+
+    test('category is written through', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+        category: 'cycle',
+      );
+      expect(body['category'], 'cycle');
+    });
+
+    test('a class persists its trimmed discipline + gym_template', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+        category: 'class',
+        discipline: '  Vinyasa yoga  ',
+        gymTemplate:
+            const EventGymTemplate(discipline: 'Vinyasa yoga', durationMin: 60),
+      );
+      expect(body['discipline'], 'Vinyasa yoga');
+      expect(body['gym_template'],
+          equals({'discipline': 'Vinyasa yoga', 'duration_min': 60}));
+    });
+
+    test('a non-class category never writes a discipline or gym_template', () {
+      // Web only persists discipline / gym_template for a class — a run
+      // (or social) with a stray discipline must drop it.
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+        category: 'run',
+        discipline: 'should be ignored',
+        gymTemplate:
+            const EventGymTemplate(discipline: 'should be ignored', durationMin: 30),
+      );
+      expect(body['discipline'], isNull);
+      expect(body['gym_template'], isNull);
+    });
+
+    test('athletic fields (route/distance/pace) are dropped off-category', () {
+      // A class / social meetup carries no course — mirror the web editor
+      // clearing those fields the moment the category leaves run/cycle.
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+        category: 'social',
+        routeId: 'route-1',
+        distanceM: 5000,
+        paceTargetSec: 300,
+      );
+      expect(body['route_id'], isNull);
+      expect(body['distance_m'], isNull);
+      expect(body['pace_target_sec'], isNull);
+    });
+
+    test('athletic fields survive on a run', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+        category: 'run',
+        routeId: 'route-1',
+        distanceM: 5000,
+        paceTargetSec: 300,
+      );
+      expect(body['route_id'], 'route-1');
+      expect(body['distance_m'], 5000);
+      expect(body['pace_target_sec'], 300);
     });
   });
 }

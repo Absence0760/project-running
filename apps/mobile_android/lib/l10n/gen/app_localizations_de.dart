@@ -6323,6 +6323,32 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventFormCreate => 'Veranstaltung erstellen';
 
   @override
+  String get eventEditorCategory => 'Veranstaltungstyp';
+
+  @override
+  String get eventEditorCatRun => 'Gruppenlauf';
+
+  @override
+  String get eventEditorCatCycle => 'Radfahren';
+
+  @override
+  String get eventEditorCatClass => 'Kurs';
+
+  @override
+  String get eventEditorCatSocial => 'Treffen';
+
+  @override
+  String get eventEditorCategoryHint =>
+      'Wähle die Art der Veranstaltung – ein Kurs oder Treffen lässt Strecke, Distanz, Tempo und Rennergebnisse weg.';
+
+  @override
+  String get eventEditorDiscipline => 'Disziplin';
+
+  @override
+  String get eventEditorDisciplinePlaceholder =>
+      'z. B. Vinyasa-Yoga, Pilates, Mobility';
+
+  @override
   String get clubFormTitle => 'Neuer Club';
 
   @override

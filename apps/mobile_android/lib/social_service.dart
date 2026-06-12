@@ -5,6 +5,8 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'event_category.dart';
+import 'event_gym_template.dart';
 import 'geocoding.dart';
 import 'l10n/date_format.dart';
 import 'l10n/locale_support.dart';
@@ -626,6 +628,9 @@ class SocialService extends ChangeNotifier {
     required String clubId,
     required String title,
     required DateTime startsAt,
+    String category = 'run',
+    String? discipline,
+    EventGymTemplate? gymTemplate,
     String? description,
     int? durationMin,
     String? meetLabel,
@@ -647,6 +652,9 @@ class SocialService extends ChangeNotifier {
       clubId: clubId,
       title: title,
       startsAt: startsAt,
+      category: category,
+      discipline: discipline,
+      gymTemplate: gymTemplate,
       description: description,
       durationMin: durationMin,
       meetLabel: meetLabel,
@@ -679,6 +687,9 @@ class SocialService extends ChangeNotifier {
     required String clubId,
     required String title,
     required DateTime startsAt,
+    String category = 'run',
+    String? discipline,
+    EventGymTemplate? gymTemplate,
     String? description,
     int? durationMin,
     String? meetLabel,
@@ -697,18 +708,28 @@ class SocialService extends ChangeNotifier {
       final t = s?.trim();
       return (t == null || t.isEmpty) ? null : t;
     }
+    final athletic = isAthleticEventCategory(category);
+    final isClass = category == 'class';
     return <String, dynamic>{
       'club_id': clubId,
       'title': title.trim(),
+      'category': category,
+      'discipline': isClass ? trimToNull(discipline) : null,
+      'gym_template': isClass && gymTemplate != null
+          ? <String, dynamic>{
+              'discipline': gymTemplate.discipline,
+              'duration_min': gymTemplate.durationMin,
+            }
+          : null,
       'description': trimToNull(description),
       'starts_at': startsAt.toIso8601String(),
       'duration_min': durationMin,
       'meet_label': trimToNull(meetLabel),
       'meet_lat': meetLat,
       'meet_lng': meetLng,
-      'route_id': routeId,
-      'distance_m': distanceM,
-      'pace_target_sec': paceTargetSec,
+      'route_id': athletic ? routeId : null,
+      'distance_m': athletic ? distanceM : null,
+      'pace_target_sec': athletic ? paceTargetSec : null,
       'capacity': capacity,
       'author_id': authorId,
       'recurrence_freq': recurrenceFreq,

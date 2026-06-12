@@ -10467,6 +10467,54 @@ abstract class AppLocalizations {
   /// **'Create event'**
   String get eventFormCreate;
 
+  /// Label for the event-category picker
+  ///
+  /// In en, this message translates to:
+  /// **'Event type'**
+  String get eventEditorCategory;
+
+  /// Event category: a group run
+  ///
+  /// In en, this message translates to:
+  /// **'Group run'**
+  String get eventEditorCatRun;
+
+  /// Event category: a cycle
+  ///
+  /// In en, this message translates to:
+  /// **'Cycle'**
+  String get eventEditorCatCycle;
+
+  /// Event category: an instructor-led class
+  ///
+  /// In en, this message translates to:
+  /// **'Class'**
+  String get eventEditorCatClass;
+
+  /// Event category: a social meetup
+  ///
+  /// In en, this message translates to:
+  /// **'Social'**
+  String get eventEditorCatSocial;
+
+  /// Helper text under the event-category picker
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the kind of event — a class or social meetup skips route, distance, pace and race results.'**
+  String get eventEditorCategoryHint;
+
+  /// Label for the free-text class-discipline field
+  ///
+  /// In en, this message translates to:
+  /// **'Discipline'**
+  String get eventEditorDiscipline;
+
+  /// Placeholder for the class-discipline field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Vinyasa yoga, Pilates, mobility'**
+  String get eventEditorDisciplinePlaceholder;
+
   /// AppBar title of the create-club screen
   ///
   /// In en, this message translates to:

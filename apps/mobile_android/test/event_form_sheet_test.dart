@@ -72,5 +72,39 @@ void main() {
       // because it opens a date/time picker on tap.
       expect(find.text('Starts at'), findsOneWidget);
     });
+
+    testWidgets('shows the category picker with all four types as the first '
+        'control', (tester) async {
+      await _openSheet(tester);
+      expect(find.text('Event type'), findsOneWidget);
+      for (final label in ['Group run', 'Cycle', 'Class', 'Social']) {
+        expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+      }
+    });
+
+    testWidgets('a run event shows the distance field and no discipline field',
+        (tester) async {
+      await _openSheet(tester);
+      expect(find.widgetWithText(TextField, 'Distance (km)'), findsOneWidget);
+      expect(find.text('Discipline'), findsNothing);
+    });
+
+    testWidgets('picking Class reveals the discipline field and hides the '
+        'athletic distance field', (tester) async {
+      await _openSheet(tester);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Class'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discipline'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Distance (km)'), findsNothing);
+    });
+
+    testWidgets('picking Social hides both the discipline and distance fields',
+        (tester) async {
+      await _openSheet(tester);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Social'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discipline'), findsNothing);
+      expect(find.widgetWithText(TextField, 'Distance (km)'), findsNothing);
+    });
   });
 }
