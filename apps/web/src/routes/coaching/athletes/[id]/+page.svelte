@@ -6,11 +6,14 @@
 		fetchMyAthletes,
 		fetchAthleteRuns,
 		fetchAthletePlanOverview,
+		fetchMyPlans,
+		assignPlanToAthlete,
 		type CoachAthleteLink,
 		type AthleteRunSummary
 	} from '$lib/core/data';
-	import type { ActivePlanOverview, PlanWorkout } from '$lib/types';
+	import type { ActivePlanOverview, PlanWorkout, TrainingPlan } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { formatDuration, formatDate } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
@@ -22,6 +25,17 @@
 	let notOnRoster = $state(false);
 	let runs = $state<AthleteRunSummary[]>([]);
 	let overview = $state<ActivePlanOverview | null>(null);
+	// Assign-a-plan: the coach's own plans (clone source), the picker selection,
+	// the start date the cloned plan is anchored to, and an in-flight guard.
+	let myPlans = $state<TrainingPlan[]>([]);
+	let assignSelectedId = $state('');
+	let assignStartDate = $state(localTodayISO());
+	let assigning = $state(false);
+
+	function localTodayISO(): string {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+	}
 
 	async function load() {
 		loading = true;
@@ -47,14 +61,45 @@
 			loading = false;
 			return;
 		}
-		[runs, overview] = await Promise.all([
+		[runs, overview, myPlans] = await Promise.all([
 			fetchAthleteRuns(id, 20),
-			fetchAthletePlanOverview(id)
+			fetchAthletePlanOverview(id),
+			fetchMyPlans()
 		]);
 		loading = false;
 	}
 
 	onMount(load);
+
+	// The athlete's active plan, if any, was assigned by THIS coach.
+	const assignedByMe = $derived(
+		overview?.plan.assigned_by_coach_id != null &&
+			overview.plan.assigned_by_coach_id === auth.user?.id
+	);
+
+	async function assignPlan() {
+		const id = athleteId;
+		if (!id || !assignSelectedId || assigning) return;
+		assigning = true;
+		try {
+			await assignPlanToAthlete(assignSelectedId, id, assignStartDate);
+			showToast(
+				m('coachingAthlete.assignSuccess', {
+					name: link?.display_name ?? m('coachingAthlete.runnerFallback')
+				}),
+				'success'
+			);
+			assignSelectedId = '';
+			// Reload the overview so the freshly-assigned plan shows immediately.
+			overview = await fetchAthletePlanOverview(id);
+		} catch (e) {
+			// The RPC raises a specific message (e.g. already has an active plan);
+			// surface it rather than a swallowed failure.
+			showToast(e instanceof Error ? e.message : m('coachingAthlete.assignError'), 'error');
+		} finally {
+			assigning = false;
+		}
+	}
 
 	function activityLabel(r: AthleteRunSummary): string {
 		const a = r.activity_type ?? 'run';
@@ -142,9 +187,46 @@
 			<h2>{m('coachingAthlete.planCompliance')}</h2>
 			{#if !overview}
 				<p class="empty">{m('coachingAthlete.noActivePlan')}</p>
+				{#if myPlans.length > 0}
+					<div class="assign-box">
+						<h3 class="assign-title">{m('coachingAthlete.assignTitle')}</h3>
+						<p class="assign-hint">
+							{m('coachingAthlete.assignHint', {
+								name: link?.display_name ?? m('coachingAthlete.runnerFallback')
+							})}
+						</p>
+						<div class="assign-fields">
+							<label class="assign-field">
+								<span>{m('coachingAthlete.assignSelectLabel')}</span>
+								<select bind:value={assignSelectedId} disabled={assigning}>
+									<option value="" disabled>{m('coachingAthlete.assignSelectPlaceholder')}</option>
+									{#each myPlans as p (p.id)}
+										<option value={p.id}>{p.name}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="assign-field">
+								<span>{m('coachingAthlete.assignStartLabel')}</span>
+								<input type="date" bind:value={assignStartDate} disabled={assigning} />
+							</label>
+						</div>
+						<button
+							class="btn btn-primary"
+							onclick={assignPlan}
+							disabled={!assignSelectedId || assigning}
+						>
+							{assigning ? m('coachingAthlete.assigning') : m('coachingAthlete.assignButton')}
+						</button>
+					</div>
+				{:else}
+					<p class="assign-hint">{m('coachingAthlete.assignNoPlans')}</p>
+				{/if}
 			{:else}
 				<div class="plan-summary">
 					<a class="plan-name" href="/plans/{overview.plan.id}">{overview.plan.name}</a>
+					{#if assignedByMe}
+						<span class="assigned-badge">{m('coachingAthlete.assignedByYou')}</span>
+					{/if}
 					{#if compliance}
 						<div class="compliance-bar" role="img"
 							aria-label={m('coachingAthlete.complianceBarLabel', { pct: compliance.pct })}>
@@ -181,6 +263,9 @@
 						</li>
 					{/each}
 				</ul>
+				{#if !assignedByMe}
+					<p class="cannot-assign">{m('coachingAthlete.cannotAssignHasPlan')}</p>
+				{/if}
 			{/if}
 		</section>
 
@@ -252,6 +337,60 @@
 		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 		margin: 0;
+	}
+	.assign-box {
+		margin-top: var(--space-md);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+	}
+	.assign-title {
+		margin: 0 0 var(--space-2xs);
+		font-size: 1rem;
+		font-weight: 700;
+	}
+	.assign-hint {
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		margin: 0 0 var(--space-md);
+	}
+	.assign-fields {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.assign-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+	}
+	.assign-field select,
+	.assign-field input {
+		padding: var(--space-xs) var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-size: 0.9rem;
+	}
+	.assign-field select {
+		min-width: 16rem;
+	}
+	.assigned-badge {
+		margin-inline-start: var(--space-sm);
+		font-size: 0.72rem;
+		font-weight: 600;
+		border-radius: 9999px;
+		padding: 1px 10px;
+		background: color-mix(in srgb, var(--color-primary, #4f46e5) 16%, transparent);
+		color: var(--color-primary, #4f46e5);
+	}
+	.cannot-assign {
+		margin: var(--space-md) 0 0;
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
 	}
 	.card {
 		background: var(--color-surface);

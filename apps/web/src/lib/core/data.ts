@@ -5628,6 +5628,27 @@ export async function fetchAthletePlanOverview(
 	};
 }
 
+/// Coach assigns one of their own plans/templates to a linked athlete.
+/// Deep-clones it into an athlete-OWNED active plan via the
+/// assign_plan_to_athlete RPC (migration 20270106_001), which gates on the
+/// active coach link (consent), verifies the caller can read the source, and
+/// raises if the athlete already has an active plan. Returns the new
+/// (athlete-owned) plan id. The thrown error carries the RPC's raise text,
+/// which the caller surfaces to the coach.
+export async function assignPlanToAthlete(
+	sourcePlanId: string,
+	athleteId: string,
+	startDate: string
+): Promise<string> {
+	const { data, error } = await supabase.rpc('assign_plan_to_athlete', {
+		p_source_plan_id: sourcePlanId,
+		p_athlete_id: athleteId,
+		p_start_date: startDate
+	});
+	if (error) throw error;
+	return data as string;
+}
+
 /// Unredeemed invites the signed-in coach has minted.
 export async function fetchPendingCoachInvites(): Promise<PendingCoachInvite[]> {
 	const userId = auth.user?.id;
