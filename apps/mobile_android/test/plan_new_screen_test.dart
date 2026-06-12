@@ -1,7 +1,9 @@
+import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plan_new_screen.dart';
+import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 
 Future<void> _pump(WidgetTester tester) {
@@ -13,6 +15,54 @@ Future<void> _pump(WidgetTester tester) {
     ),
   );
 }
+
+class _FakeSocial extends SocialService {
+  final List<ClubView> clubs;
+  _FakeSocial(this.clubs);
+  @override
+  Future<List<ClubView>> fetchMyClubs() async => clubs;
+}
+
+class _FakeTraining extends TrainingService {
+  final Map<String, List<TrainingPlanRow>> templatesByClub;
+  _FakeTraining(this.templatesByClub);
+  @override
+  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async =>
+      templatesByClub[clubId] ?? const [];
+}
+
+ClubView _club(String id, String name) => ClubView(
+      row: ClubRow(
+        id: id,
+        ownerId: 'owner-uuid',
+        name: name,
+        slug: id,
+        joinPolicy: 'open',
+        memberCount: 5,
+        isVerified: false,
+        requiresActivityWaiver: false,
+      ),
+      memberCount: 5,
+      viewerRole: 'member',
+      viewerStatus: 'active',
+      joinPolicy: 'open',
+    );
+
+TrainingPlanRow _template(String id, String name) => TrainingPlanRow(
+      id: id,
+      userId: 'owner-uuid',
+      name: name,
+      goalEvent: 'distance_half',
+      goalDistanceM: 21097.5,
+      startDate: DateTime(2026, 1, 1),
+      endDate: DateTime(2026, 3, 1),
+      daysPerWeek: 4,
+      status: 'completed',
+      source: 'generated',
+      isTemplate: true,
+      clubId: 'club-1',
+      createdAt: DateTime(2026, 1, 1),
+    );
 
 void main() {
   group('PlanNewScreen — initial render', () {
@@ -96,6 +146,65 @@ void main() {
       await tester.tap(confirmFinder);
       await tester.pump();
       expect(warnFinder, findsNothing);
+    });
+  });
+
+  group('PlanNewScreen — club-template picker', () {
+    Future<void> pumpWithTemplates(
+      WidgetTester tester, {
+      required List<ClubView> clubs,
+      required Map<String, List<TrainingPlanRow>> templates,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(
+            training: _FakeTraining(templates),
+            social: _FakeSocial(clubs),
+          ),
+        ),
+      );
+      // The template fetch is async network/store I/O — let it resolve.
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
+      await tester.pump();
+    }
+
+    testWidgets('hidden when the viewer has no club templates',
+        (tester) async {
+      await pumpWithTemplates(tester, clubs: const [], templates: const {});
+      expect(find.text('Start from a club template'), findsNothing);
+    });
+
+    testWidgets('shows the template card when a club has a template',
+        (tester) async {
+      await pumpWithTemplates(
+        tester,
+        clubs: [_club('club-1', 'Trail Club')],
+        templates: {
+          'club-1': [_template('tpl-1', 'Spring Half')],
+        },
+      );
+      expect(find.text('Start from a club template'), findsOneWidget);
+      expect(find.text('Browse templates'), findsOneWidget);
+    });
+
+    testWidgets('opening the picker lists each template with its club',
+        (tester) async {
+      await pumpWithTemplates(
+        tester,
+        clubs: [_club('club-1', 'Trail Club')],
+        templates: {
+          'club-1': [_template('tpl-1', 'Spring Half')],
+        },
+      );
+      await tester.tap(find.text('Browse templates'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose a template'), findsOneWidget);
+      expect(find.text('Spring Half'), findsOneWidget);
+      expect(find.text('Trail Club'), findsOneWidget);
     });
   });
 }

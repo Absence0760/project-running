@@ -3787,6 +3787,30 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'Empezar desde una plantilla de club';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Adopta un plan que haya publicado un club al que perteneces. Se clona en tu cuenta con la fecha de inicio de abajo — edítalo como cualquier otro plan.';
+
+  @override
+  String get planNewTemplateButton => 'Ver plantillas';
+
+  @override
+  String get planNewTemplateCloning => 'Adoptando…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'No se pudo adoptar esa plantilla: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Elige una plantilla';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Cancelar';
+
+  @override
   String get planDetailTimeoutError =>
       'Se agotó el tiempo de conexión. Comprueba tu red e inténtalo de nuevo.';
 

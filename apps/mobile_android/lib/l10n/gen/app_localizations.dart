@@ -6293,6 +6293,48 @@ abstract class AppLocalizations {
   /// **'{count} sessions'**
   String planNewSessions(int count);
 
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Start from a club template'**
+  String get planNewTemplateTitle;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Adopt a plan a club you belong to has published. It clones into your account with the start date below — edit it like any other plan.'**
+  String get planNewTemplateSubtitle;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Browse templates'**
+  String get planNewTemplateButton;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Adopting…'**
+  String get planNewTemplateCloning;
+
+  /// Toast when adopting a club template fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t adopt that template: {error}'**
+  String planNewTemplateCloneFailed(String error);
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a template'**
+  String get planNewTemplatePickerTitle;
+
+  /// Plan-new club-template picker
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planNewTemplatePickerCancel;
+
   /// Plan-detail load timeout error
   ///
   /// In en, this message translates to:

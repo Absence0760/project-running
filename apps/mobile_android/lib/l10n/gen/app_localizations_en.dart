@@ -3757,6 +3757,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'Start from a club template';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Adopt a plan a club you belong to has published. It clones into your account with the start date below — edit it like any other plan.';
+
+  @override
+  String get planNewTemplateButton => 'Browse templates';
+
+  @override
+  String get planNewTemplateCloning => 'Adopting…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'Couldn\'t adopt that template: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Choose a template';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Cancel';
+
+  @override
   String get planDetailTimeoutError =>
       'Connection timed out. Check your network and try again.';
 

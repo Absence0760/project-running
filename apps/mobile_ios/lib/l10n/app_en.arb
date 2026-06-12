@@ -4692,6 +4692,35 @@
       }
     }
   },
+  "planNewTemplateTitle": "Start from a club template",
+  "@planNewTemplateTitle": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateSubtitle": "Adopt a plan a club you belong to has published. It clones into your account with the start date below — edit it like any other plan.",
+  "@planNewTemplateSubtitle": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateButton": "Browse templates",
+  "@planNewTemplateButton": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateCloning": "Adopting…",
+  "@planNewTemplateCloning": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplateCloneFailed": "Couldn't adopt that template: {error}",
+  "@planNewTemplateCloneFailed": {
+    "description": "Toast when adopting a club template fails",
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "planNewTemplatePickerTitle": "Choose a template",
+  "@planNewTemplatePickerTitle": {
+    "description": "Plan-new club-template picker"
+  },
+  "planNewTemplatePickerCancel": "Cancel",
+  "@planNewTemplatePickerCancel": {
+    "description": "Plan-new club-template picker"
+  },
   "planDetailTimeoutError": "Connection timed out. Check your network and try again.",
   "@planDetailTimeoutError": {
     "description": "Plan-detail load timeout error"

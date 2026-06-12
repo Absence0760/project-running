@@ -3800,6 +3800,30 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'Partir d’un modèle de club';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Adoptez un plan publié par un club dont vous faites partie. Il est cloné dans votre compte avec la date de début ci-dessous — modifiable comme tout autre plan.';
+
+  @override
+  String get planNewTemplateButton => 'Parcourir les modèles';
+
+  @override
+  String get planNewTemplateCloning => 'Adoption…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'Impossible d’adopter ce modèle : $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Choisir un modèle';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Annuler';
+
+  @override
   String get planDetailTimeoutError =>
       'Délai de connexion dépassé. Vérifiez votre réseau et réessayez.';
 

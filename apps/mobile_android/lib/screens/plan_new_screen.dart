@@ -1,18 +1,37 @@
+import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../backend_timeout.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../social_service.dart' show ClubView, SocialService;
 import '../training.dart';
 import '../training_labels.dart';
 import '../training_service.dart';
+import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
+
+/// A club plan template paired with the owning club's display name, for the
+/// "Start from a club template" picker. Mirrors the web `/plans/new`
+/// template-picker option shape.
+class _TemplateOption {
+  final TrainingPlanRow template;
+  final String clubName;
+  const _TemplateOption(this.template, this.clubName);
+}
 
 /// Wizard: goal race + goal time + recent 5K + days/week. Live preview of
 /// paces + week outline updates as inputs change. Mirrors the web page.
 class PlanNewScreen extends StatefulWidget {
   final TrainingService training;
-  const PlanNewScreen({super.key, required this.training});
+
+  /// Optional SocialService injection so tests can drive the club-template
+  /// picker with a fake. Production callsites pass `null` and the screen
+  /// constructs its own against the global Supabase client.
+  final SocialService? social;
+
+  const PlanNewScreen({super.key, required this.training, this.social});
 
   @override
   State<PlanNewScreen> createState() => _PlanNewScreenState();
@@ -57,6 +76,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   // schedule.
   int? _viewerAge;
 
+  late final SocialService _social = widget.social ?? SocialService();
+  List<_TemplateOption> _templates = const [];
+  bool _cloning = false;
+
   static DateTime _nextSunday() {
     var d = DateTime.now().add(const Duration(days: 7));
     while (d.weekday != DateTime.sunday) {
@@ -76,6 +99,62 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       if (!mounted) return;
       setState(() => _viewerAge = a);
     });
+    _loadTemplates();
+  }
+
+  /// Best-effort fetch of every plan template the viewer can adopt across
+  /// their clubs (mirrors web `/plans/new`'s onMount). A failure leaves the
+  /// picker hidden — generating from scratch is always available.
+  Future<void> _loadTemplates() async {
+    try {
+      final clubs =
+          await _social.fetchMyClubs().timeout(kBackendLoadTimeout);
+      final options = <_TemplateOption>[];
+      for (final ClubView c in clubs) {
+        final list = await widget.training
+            .fetchClubTemplates(c.row.id)
+            .timeout(kBackendLoadTimeout);
+        for (final t in list) {
+          options.add(_TemplateOption(t, c.row.name));
+        }
+      }
+      if (!mounted) return;
+      setState(() => _templates = options);
+    } catch (_) {
+      /* L4 best-effort — leave the picker hidden on any failure. */
+    }
+  }
+
+  Future<void> _pickTemplate() async {
+    if (_templates.isEmpty || _cloning) return;
+    final l10n = AppLocalizations.of(context);
+    final picked = await showModalBottomSheet<_TemplateOption>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _TemplatePicker(options: _templates),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _cloning = true);
+    try {
+      final newId = await widget.training
+          .clonePlanTemplate(
+            templateId: picked.template.id,
+            startDate: _startDate,
+          )
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              PlanDetailScreen(training: widget.training, planId: newId),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _cloning = false);
+        showTopBanner(context, l10n.planNewTemplateCloneFailed(e.toString()));
+      }
+    }
   }
 
   int? get _goalTimeSec {
@@ -175,6 +254,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, 32 + bottomInset),
         children: [
+          if (_templates.isNotEmpty) ...[
+            _templateCard(theme, l10n),
+            const SizedBox(height: 20),
+          ],
           TextField(
             controller: _nameCtrl,
             decoration: InputDecoration(
@@ -356,6 +439,53 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     );
   }
 
+  Widget _templateCard(ThemeData theme, AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.library_books,
+                  size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(l10n.planNewTemplateTitle,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(l10n.planNewTemplateSubtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              )),
+          const SizedBox(height: 10),
+          FilledButton.tonalIcon(
+            onPressed: _cloning ? null : _pickTemplate,
+            icon: _cloning
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add, size: 18),
+            label: Text(_cloning
+                ? l10n.planNewTemplateCloning
+                : l10n.planNewTemplateButton),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPreview(
       ThemeData theme, AppLocalizations l10n, GeneratedPlan p) {
     return Container(
@@ -502,6 +632,63 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         final n = int.tryParse(s);
         if (n != null && n >= min && n <= max) onChanged(n);
       },
+    );
+  }
+}
+
+/// Modal that lists the viewer's adoptable club templates and pops the
+/// chosen option (or `null` on cancel). Pure presentation — the parent
+/// does the clone so cancel doesn't leave a half-state.
+class _TemplatePicker extends StatelessWidget {
+  final List<_TemplateOption> options;
+  const _TemplatePicker({required this.options});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(l10n.planNewTemplatePickerTitle,
+                style: theme.textTheme.titleLarge),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (_, i) {
+                  final o = options[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_note),
+                    title: Text(o.template.name),
+                    subtitle: Text(o.clubName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        )),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(context, o),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(l10n.planNewTemplatePickerCancel),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

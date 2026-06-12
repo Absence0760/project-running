@@ -3794,6 +3794,30 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'Mit einer Vereinsvorlage starten';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Übernimm einen Plan, den ein Verein veröffentlicht hat. Er wird mit dem Startdatum unten in dein Konto kopiert — bearbeitbar wie jeder andere Plan.';
+
+  @override
+  String get planNewTemplateButton => 'Vorlagen durchsuchen';
+
+  @override
+  String get planNewTemplateCloning => 'Wird übernommen…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'Vorlage konnte nicht übernommen werden: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Vorlage wählen';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Abbrechen';
+
+  @override
   String get planDetailTimeoutError =>
       'Zeitüberschreitung der Verbindung. Prüfe dein Netzwerk und versuche es erneut.';
 

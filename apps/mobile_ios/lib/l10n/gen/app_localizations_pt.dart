@@ -3788,6 +3788,30 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'Começar com um modelo do clube';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Adote um plano que um clube ao qual você pertence publicou. Ele é clonado na sua conta com a data de início abaixo — edite como qualquer outro plano.';
+
+  @override
+  String get planNewTemplateButton => 'Ver modelos';
+
+  @override
+  String get planNewTemplateCloning => 'Adotando…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'Não foi possível adotar esse modelo: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Escolha um modelo';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Cancelar';
+
+  @override
   String get planDetailTimeoutError =>
       'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
 
@@ -11427,6 +11451,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planNewSessions(int count) {
     return '$count sessões';
   }
+
+  @override
+  String get planNewTemplateTitle => 'Começar com um modelo do clube';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      'Adote um plano que um clube ao qual você pertence publicou. Ele é clonado na sua conta com a data de início abaixo — edite como qualquer outro plano.';
+
+  @override
+  String get planNewTemplateButton => 'Ver modelos';
+
+  @override
+  String get planNewTemplateCloning => 'Adotando…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'Não foi possível adotar esse modelo: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'Escolha um modelo';
+
+  @override
+  String get planNewTemplatePickerCancel => 'Cancelar';
 
   @override
   String get planDetailTimeoutError =>

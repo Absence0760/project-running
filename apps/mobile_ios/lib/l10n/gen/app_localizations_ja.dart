@@ -3553,6 +3553,30 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get planNewTemplateTitle => 'クラブのテンプレートから始める';
+
+  @override
+  String get planNewTemplateSubtitle =>
+      '所属クラブが公開したプランを取り込みます。下の開始日でアカウントに複製され、他のプランと同様に編集できます。';
+
+  @override
+  String get planNewTemplateButton => 'テンプレートを見る';
+
+  @override
+  String get planNewTemplateCloning => '取り込み中…';
+
+  @override
+  String planNewTemplateCloneFailed(String error) {
+    return 'テンプレートを取り込めませんでした: $error';
+  }
+
+  @override
+  String get planNewTemplatePickerTitle => 'テンプレートを選択';
+
+  @override
+  String get planNewTemplatePickerCancel => 'キャンセル';
+
+  @override
   String get planDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
 
   @override
