@@ -1,8 +1,6 @@
 import type { SetAdherenceStatus } from './gym_adherence';
 
-/// The runner's in-progress entry for one set (canonical kg). Web-only — the
-/// guided-session UI state; not a parity pair (the Dart side drives the
-/// GymWorkoutRunner directly).
+// Web-only; not a parity pair — the Dart side drives GymWorkoutRunner directly. Weights canonical kg.
 export interface EnteredSet {
 	reps: number | null;
 	weightKg: number | null;
@@ -10,7 +8,7 @@ export interface EnteredSet {
 	durationS: number | null;
 }
 
-/// One persisted `gym_step_results` row (metadata.md). Weights canonical kg.
+// Weights canonical kg.
 export interface GymStepResult {
 	exercise_key: string;
 	set_index: number;

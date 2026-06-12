@@ -160,6 +160,10 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 - [ ] **Externalise the RevenueCat web SDK behind hosted checkout** — `@revenuecat/purchases-js` is a top-level static import in `apps/web/src/lib/billing/revenuecat.ts`, so the full SDK (~178 KB gzipped) ships in the `/settings/upgrade` route bundle and is the second-largest single lib after maplibre-gl. The `web-bundle-budget.yml` total ceiling was raised 1500 → 1900 on 2026-06-10 to acknowledge legitimate cumulative growth (the app measured 1689 KB), but that metric sums *all* chunks incl. lazy ones, so code-splitting won't recover the weight — only removing the SDK does. Durable fix: drive Pro checkout + the management-URL link through RevenueCat's hosted-checkout redirect instead of the embedded JS SDK, dropping ~178 KB and buying back headroom under the *old* 1500 ceiling. Rewrites the billing flow (`startProCheckout` / `managementUrl` / the configured-vs-unconfigured fallback) + needs its own e2e + a mobile-parity check, so it was out of scope for the CI fix that surfaced it.
 
+## Tech debt
+
+- [ ] **Auth-readiness spin-wait loop copied into the gym-session route** — the `onMount` polling loop (`for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) await sleep(50)`) was copied again into `apps/web/src/routes/gym/session/[routineId]/+page.svelte`. The durable fix is to expose an auth-ready Promise / reactive signal on the auth store (`$lib/stores/auth.svelte.ts`) that routes can `await` once instead of each open-coding a bounded poll. Don't propagate the pattern to any further new routes; convert the existing copies when the store gains the signal.
+
 ## Performance — deferred hot spots (perf-hunt 2026-06-10)
 
 The 2026-06-10 perf-hunt over the web read/query layer fixed the migration-free

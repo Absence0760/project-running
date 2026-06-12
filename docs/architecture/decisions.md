@@ -2999,6 +2999,8 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 **Don't re-litigate** by re-modelling session content onto `gym_workouts` rows or building the runner/logging before P1 shows instructors/self-practitioners actually author sessions. Full design in [session_planner.md](../features/session_planner.md).
 
+**Amendment (2026-06-12) — P2 shipped; "remain deferred" above is now stale for the follow-along + log layer.** The P2 follow-along runner + logging landed web-first and on the mobile twin: web `SessionRunner.svelte` + `SessionExecutionBand.svelte` (the `/sessions/[id]` Start overlay), the mobile follow-along runner on `session_detail_screen.dart` backed by `LocalSessionStore` (byte-identical iOS twin), `workoutDraftFromSession`, the `gym_workouts.metadata` session trio (`session_plan_id` / `session_step_results` / `session_adherence`), and the `computeSessionAdherence` parity pair. TTS cueing on web and P3–P4 (catalog/sharing, deeper progression) remain deferred — only the P2 follow-along + log clause of the trade-off above is superseded.
+
 ---
 
 ## 141. The gym programming engine ships as a four-slice, web-first depth tier that relocates the engagement gate into P1
@@ -3010,6 +3012,8 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 **Trade-off.** P1 builds the routine schema before the gate formally clears — accepted because P1 is itself the cheapest probe and a durable standalone win ("repeat last" + ending the flat-`set_index` reconstruction heuristic via explicit `position` + `exercise_key`). If repeat-rate is weak, freeze at P1 and leave P2–P4 specced-but-unbuilt.
 
 **Don't re-litigate** by modelling routines on `plan_workouts` jsonb or building the runner/progression before the P1 signal lands. If Coach-authored progression (P4) ever reads logged sets, loop in the CISO/Security Analyst before that path ships. Full design in [gym_programming.md](../features/gym_programming.md).
+
+**Amendment (2026-06-12) — P2/P3 execution shipped; "freeze at P1, leave P2–P4 specced-but-unbuilt" above no longer describes P2/P3.** The execution layer landed across platforms: web `GymSessionRunner` (`/gym/session/[routineId]`) with `GymExecutionBand.svelte` + `RestTimer.svelte`, the shared `GymWorkoutRunner` in `packages/run_recorder/`, the mobile `gym_session_screen.dart` + `gym_execution_band.dart` twin backed by `LocalGymStore` (byte-identical iOS), `expandRoutineSteps`, and the `gym_adherence` (`computeRoutineAdherence`) + `gym_progression` (`nextPrescription`) parity pairs writing the `gym_workouts.metadata` execution trio (`routine_id` / `gym_step_results` / `gym_adherence`). P4 (deeper progression-engine wiring) remains specced and still gated on the P1 repeat-rate signal — only the P2/P3 portion of the trade-off above is superseded.
 
 ---
 
