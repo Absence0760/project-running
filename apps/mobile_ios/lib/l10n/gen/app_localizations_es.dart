@@ -3438,6 +3438,22 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get eventMarkAttended => 'Marcar como asistió';
+
+  @override
+  String get eventMarkNoShow => 'Marcar como ausente';
+
+  @override
+  String get eventAttendanceAttended => 'Asistió';
+
+  @override
+  String get eventAttendanceNoShow => 'Ausente';
+
+  @override
+  String get eventAttendanceFailed =>
+      'No se pudo actualizar la asistencia. Inténtalo de nuevo.';
+
+  @override
   String get eventRsvpGoing => 'Voy';
 
   @override

@@ -20,6 +20,7 @@ import type {
 	Event,
 	EventWithMeta,
 	EventAttendee,
+	EventAttendance,
 	RsvpStatus,
 	ClubPost,
 	ClubPostWithAuthor,
@@ -2281,6 +2282,23 @@ export async function clearRsvp(eventId: string, instanceStart: string): Promise
 		.eq('event_id', eventId)
 		.eq('user_id', userId)
 		.eq('instance_start', instanceStart);
+	if (error) throw error;
+}
+
+// Host-only: mark whether an attendee actually showed up. Orthogonal to the
+// attendee's RSVP status — routes through the mark_attendance SECURITY DEFINER
+// RPC (instructor_business.md M6) which enforces organiser-only writes and
+// touches only the attendance column. Pass null to clear a prior mark.
+export async function markAttendance(
+	eventId: string,
+	userId: string,
+	attendance: EventAttendance | null
+): Promise<void> {
+	const { error } = await supabase.rpc('mark_attendance', {
+		p_event_id: eventId,
+		p_user_id: userId,
+		p_attendance: attendance
+	});
 	if (error) throw error;
 }
 

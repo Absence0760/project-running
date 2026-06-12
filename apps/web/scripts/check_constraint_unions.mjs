@@ -39,6 +39,7 @@ const PAIRS = [
 	{ tableColumn: 'event_orders.status', tsUnion: 'OrderStatus' },
 	{ tableColumn: 'event_pricing.refund_policy', tsUnion: 'RefundPolicy' },
 	{ tableColumn: 'event_pricing.modality', tsUnion: 'EventModality' },
+	{ tableColumn: 'event_attendees.attendance', tsUnion: 'EventAttendance' },
 ];
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or

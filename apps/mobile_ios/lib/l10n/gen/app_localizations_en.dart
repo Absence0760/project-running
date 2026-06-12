@@ -3413,6 +3413,22 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get eventMarkAttended => 'Mark attended';
+
+  @override
+  String get eventMarkNoShow => 'Mark no-show';
+
+  @override
+  String get eventAttendanceAttended => 'Attended';
+
+  @override
+  String get eventAttendanceNoShow => 'No-show';
+
+  @override
+  String get eventAttendanceFailed =>
+      'Could not update attendance. Please try again.';
+
+  @override
   String get eventRsvpGoing => 'I\'m in';
 
   @override

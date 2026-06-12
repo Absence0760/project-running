@@ -5693,6 +5693,36 @@ abstract class AppLocalizations {
   /// **'({status})'**
   String eventAttendeeStatus(String status);
 
+  /// Host control — mark an attendee as having shown up
+  ///
+  /// In en, this message translates to:
+  /// **'Mark attended'**
+  String get eventMarkAttended;
+
+  /// Host control — mark an attendee as a no-show
+  ///
+  /// In en, this message translates to:
+  /// **'Mark no-show'**
+  String get eventMarkNoShow;
+
+  /// Read-only attendance badge — attended
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get eventAttendanceAttended;
+
+  /// Read-only attendance badge — did not attend
+  ///
+  /// In en, this message translates to:
+  /// **'No-show'**
+  String get eventAttendanceNoShow;
+
+  /// Error banner when marking attendance fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update attendance. Please try again.'**
+  String get eventAttendanceFailed;
+
   /// RSVP chip — going
   ///
   /// In en, this message translates to:

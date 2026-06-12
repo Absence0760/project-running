@@ -438,6 +438,7 @@ class EventAttendeeRow {
   static const String colJoinedAt = 'joined_at';
   static const String colInstanceStart = 'instance_start';
   static const String colOrderId = 'order_id';
+  static const String colAttendance = 'attendance';
 
   final String eventId;
   final String userId;
@@ -445,6 +446,7 @@ class EventAttendeeRow {
   final DateTime? joinedAt;
   final DateTime instanceStart;
   final String? orderId;
+  final String? attendance;
 
   const EventAttendeeRow({
     required this.eventId,
@@ -453,6 +455,7 @@ class EventAttendeeRow {
     this.joinedAt,
     required this.instanceStart,
     this.orderId,
+    this.attendance,
   });
 
   factory EventAttendeeRow.fromJson(Map<String, dynamic> json) => EventAttendeeRow(
@@ -462,6 +465,7 @@ class EventAttendeeRow {
     joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
     instanceStart: DateTime.parse(json['instance_start'] as String),
     orderId: json['order_id'] as String?,
+    attendance: json['attendance'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -471,6 +475,7 @@ class EventAttendeeRow {
     colJoinedAt: joinedAt?.toIso8601String(),
     colInstanceStart: instanceStart.toIso8601String(),
     colOrderId: orderId,
+    colAttendance: attendance,
   };
 }
 

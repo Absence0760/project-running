@@ -135,6 +135,12 @@ export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' |
 // (migration 20261018_001) when a 'going' RSVP exceeds events.capacity; the
 // client never writes it directly. No DB CHECK exists on event_attendees.status.
 export type RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted';
+// Attendance is orthogonal to RSVP status (instructor_business.md M6): a
+// host marks who actually showed up, NULL until then. Host-written via the
+// mark_attendance RPC, attendee-readable. Enforced by the
+// event_attendees_attendance_check CHECK (migration 20261231_006) — keep this
+// union in lockstep (check_constraint_unions.mjs PAIRS).
+export type EventAttendance = 'attended' | 'no_show';
 export type MembershipStatus = 'active' | 'pending';
 export type JoinPolicy = 'open' | 'request' | 'invite';
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
@@ -212,7 +218,10 @@ export type Event = Omit<
 	// class the host didn't template.
 	gym_template: EventGymTemplate | null;
 };
-export type EventAttendee = Omit<EventAttendeeRow, 'status'> & { status: RsvpStatus };
+export type EventAttendee = Omit<EventAttendeeRow, 'status' | 'attendance'> & {
+	status: RsvpStatus;
+	attendance: EventAttendance | null;
+};
 export type ClubPost = Omit<ClubPostRow, never>;
 
 export type EventPricing = Omit<EventPricingRow, 'modality' | 'refund_policy'> & {

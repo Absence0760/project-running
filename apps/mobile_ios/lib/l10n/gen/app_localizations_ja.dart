@@ -3219,6 +3219,21 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get eventMarkAttended => '出席として記録';
+
+  @override
+  String get eventMarkNoShow => '欠席として記録';
+
+  @override
+  String get eventAttendanceAttended => '出席';
+
+  @override
+  String get eventAttendanceNoShow => '欠席';
+
+  @override
+  String get eventAttendanceFailed => '出席を更新できませんでした。もう一度お試しください。';
+
+  @override
   String get eventRsvpGoing => '参加する';
 
   @override

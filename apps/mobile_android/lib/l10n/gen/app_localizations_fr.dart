@@ -3452,6 +3452,22 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get eventMarkAttended => 'Marquer comme présent';
+
+  @override
+  String get eventMarkNoShow => 'Marquer comme absent';
+
+  @override
+  String get eventAttendanceAttended => 'Présent';
+
+  @override
+  String get eventAttendanceNoShow => 'Absent';
+
+  @override
+  String get eventAttendanceFailed =>
+      'Impossible de mettre à jour la présence. Veuillez réessayer.';
+
+  @override
   String get eventRsvpGoing => 'Je viens';
 
   @override
