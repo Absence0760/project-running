@@ -3398,6 +3398,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubDetailAdopt => 'Adopter';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'Modèles de séance';
+
+  @override
+  String get clubDetailSessionAdopted => 'Séance ajoutée à vos plans.';
+
+  @override
   String get eventNotFound => 'Événement introuvable.';
 
   @override

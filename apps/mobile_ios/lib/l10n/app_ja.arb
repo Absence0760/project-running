@@ -918,6 +918,8 @@
   "clubDetailNoTemplatesAdmin": "まだテンプレートがありません。プラン詳細ページから公開してください。",
   "clubDetailNoTemplates": "このクラブのプランテンプレートはまだありません。",
   "clubDetailAdopt": "採用",
+  "clubDetailSessionTemplatesTitle": "セッションテンプレート",
+  "clubDetailSessionAdopted": "セッションをプランに追加しました。",
   "eventNotFound": "イベントが見つかりません。",
   "eventLoadError": "このイベントを読み込めませんでした。再試行してください。",
   "eventTimeoutError": "接続がタイムアウトしました。ネットワークを確認して再試行してください。",

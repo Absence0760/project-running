@@ -918,6 +918,8 @@
   "clubDetailNoTemplatesAdmin": "Nenhum modelo ainda. Publique um dos seus planos na página de detalhes.",
   "clubDetailNoTemplates": "Nenhum modelo de plano para este clube ainda.",
   "clubDetailAdopt": "Adotar",
+  "clubDetailSessionTemplatesTitle": "Modelos de sessão",
+  "clubDetailSessionAdopted": "Sessão adicionada aos seus planos.",
   "eventNotFound": "Evento não encontrado.",
   "eventLoadError": "Não foi possível carregar este evento. Toque em Tentar novamente.",
   "eventTimeoutError": "A conexão expirou. Verifique sua rede e tente novamente.",

@@ -6,9 +6,12 @@
 		fetchSessionPlan,
 		deleteSessionPlan,
 		setSessionPlanPublic,
+		publishSessionAsTemplate,
+		fetchMyClubs,
 		createGymWorkout,
 		type SessionPlanWithItems
 	} from '$lib/core/data';
+	import type { ClubWithMeta } from '$lib/types';
 	import {
 		expandSessionSteps,
 		type SessionPlanInput,
@@ -31,6 +34,9 @@
 	let running = $state(false);
 	let visibilityBusy = $state(false);
 	let shareBusy = $state(false);
+	let adminClubs = $state<ClubWithMeta[]>([]);
+	let publishingTo = $state('');
+	let publishBusy = $state(false);
 	let failedFinish = $state<{ results: SessionStepResult[]; adherence: SessionAdherence } | null>(
 		null
 	);
@@ -41,6 +47,29 @@
 	async function load() {
 		plan = await fetchSessionPlan(planId);
 		loading = false;
+		// Only an owner of a personal (non-club) plan with at least one admin
+		// club sees the publish-as-template control.
+		if (plan && auth.user?.id && plan.author_id === auth.user.id && !plan.club_id) {
+			const clubs = await fetchMyClubs();
+			adminClubs = clubs.filter(
+				(c) => c.viewer_role === 'owner' || c.viewer_role === 'admin'
+			);
+		}
+	}
+
+	async function publishToClub() {
+		if (!plan || !publishingTo || publishBusy) return;
+		publishBusy = true;
+		try {
+			await publishSessionAsTemplate(plan.id, publishingTo);
+			showToast(t('session.publishSuccess'), 'success');
+			publishingTo = '';
+		} catch (e) {
+			console.error('publish session template failed', e);
+			showToast(t('session.publishFailed'), 'error');
+		} finally {
+			publishBusy = false;
+		}
 	}
 
 	onMount(async () => {
@@ -265,6 +294,27 @@
 				{/each}
 			</ol>
 		</section>
+
+		{#if isOwner && !plan.club_id && adminClubs.length > 0}
+			<section class="publish-row">
+				<span class="publish-label">{t('session.publishLabel')}</span>
+				<select bind:value={publishingTo} aria-label={t('session.publishLabel')}>
+					<option value="">{t('session.publishPick')}</option>
+					{#each adminClubs as c (c.id)}
+						<option value={c.id}>{c.name}</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					class="btn btn-secondary"
+					onclick={publishToClub}
+					disabled={!publishingTo || publishBusy}
+					data-testid="session-publish"
+				>
+					{t('session.publish')}
+				</button>
+			</section>
+		{/if}
 	{/if}
 </div>
 
@@ -356,5 +406,18 @@
 	.step-cue {
 		color: var(--text-muted);
 		font-size: 0.85rem;
+	}
+	.publish-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		margin-top: var(--space-lg);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--border);
+	}
+	.publish-label {
+		font-size: 0.9rem;
+		color: var(--text-muted);
 	}
 </style>

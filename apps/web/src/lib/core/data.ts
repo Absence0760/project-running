@@ -6657,3 +6657,75 @@ export async function setEventSessionPlan(
 		.eq('id', eventId);
 	if (error) throw error;
 }
+
+/** Club-owned session plans (the club's "session templates"). Visible to club
+ *  members + writable by admins via RLS — mirrors fetchClubTemplates for
+ *  training plans. */
+export async function fetchClubSessionTemplates(clubId: string): Promise<SessionPlan[]> {
+	const { data, error } = await supabase
+		.from('session_plans')
+		.select('*')
+		.eq('club_id', clubId)
+		.order('updated_at', { ascending: false });
+	if (error) {
+		console.error('fetchClubSessionTemplates failed', error);
+		return [];
+	}
+	return (data ?? []) as SessionPlan[];
+}
+
+/** Publish a personal session plan into a club-owned copy (the original is left
+ *  untouched on the user's /sessions list), mirroring publishPlanAsTemplate.
+ *  Copies the head + blocks + items into a new club_id row; the publisher must
+ *  own the source. Returns the new club-owned plan's id. */
+export async function publishSessionAsTemplate(
+	sourcePlanId: string,
+	clubId: string
+): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const source = await fetchSessionPlan(sourcePlanId);
+	if (!source) throw new Error('Source session plan not found');
+	if (source.author_id !== userId) throw new Error('Only the plan owner can publish');
+
+	const input: SessionPlanInput = {
+		title: source.title,
+		discipline: source.discipline,
+		equipment: source.equipment,
+		is_public: false,
+		club_id: clubId,
+		est_duration_min: source.est_duration_min,
+		blocks: [...source.blocks]
+			.sort((a, b) => a.position - b.position)
+			.map((b) => ({ name: b.name })),
+		items: (() => {
+			const orderedBlocks = [...source.blocks].sort((a, b) => a.position - b.position);
+			const blockIndexById = new Map(orderedBlocks.map((b, i) => [b.id, i]));
+			return [...source.items]
+				.sort((a, b) => a.position - b.position)
+				.map((it) => ({
+					movement_name: it.movement_name,
+					kind: it.kind,
+					duration_s: it.duration_s,
+					reps: it.reps,
+					per_side: it.per_side,
+					tempo: it.tempo,
+					cue: it.cue,
+					block_index: it.block_id == null ? null : (blockIndexById.get(it.block_id) ?? null)
+				}));
+		})()
+	};
+	return createSessionPlan(input);
+}
+
+/** Clone a club session template into a new personal session plan (the
+ *  clone_session_template RPC enforces author/member authorisation +
+ *  rate-limits server-side). Returns the new plan's id. */
+export async function cloneSessionTemplate(templateId: string): Promise<string> {
+	const { data, error } = await supabase.rpc('clone_session_template', {
+		template_id: templateId
+	});
+	if (error) throw error;
+	return data as string;
+}

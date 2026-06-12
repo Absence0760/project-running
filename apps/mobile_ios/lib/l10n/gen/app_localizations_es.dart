@@ -3385,6 +3385,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get clubDetailAdopt => 'Adoptar';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'Plantillas de sesión';
+
+  @override
+  String get clubDetailSessionAdopted => 'Sesión añadida a tus planes.';
+
+  @override
   String get eventNotFound => 'Evento no encontrado.';
 
   @override

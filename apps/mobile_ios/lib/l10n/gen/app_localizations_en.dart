@@ -3360,6 +3360,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubDetailAdopt => 'Adopt';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'Session templates';
+
+  @override
+  String get clubDetailSessionAdopted => 'Session added to your plans.';
+
+  @override
   String get eventNotFound => 'Event not found.';
 
   @override

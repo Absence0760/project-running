@@ -3168,6 +3168,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailAdopt => '採用';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'セッションテンプレート';
+
+  @override
+  String get clubDetailSessionAdopted => 'セッションをプランに追加しました。';
+
+  @override
   String get eventNotFound => 'イベントが見つかりません。';
 
   @override

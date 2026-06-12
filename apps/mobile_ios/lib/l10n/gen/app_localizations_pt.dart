@@ -3388,6 +3388,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailAdopt => 'Adotar';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'Modelos de sessão';
+
+  @override
+  String get clubDetailSessionAdopted => 'Sessão adicionada aos seus planos.';
+
+  @override
   String get eventNotFound => 'Evento não encontrado.';
 
   @override
@@ -11297,6 +11303,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clubDetailAdopt => 'Adotar';
+
+  @override
+  String get clubDetailSessionTemplatesTitle => 'Modelos de sessão';
+
+  @override
+  String get clubDetailSessionAdopted => 'Sessão adicionada aos seus planos.';
 
   @override
   String get eventNotFound => 'Evento não encontrado.';

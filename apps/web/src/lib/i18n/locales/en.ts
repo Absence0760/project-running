@@ -1510,6 +1510,9 @@ export const en = {
 	"clubHome.templatesHint": "Members can clone any template into a personal plan with a start date of their choosing. Edits to a clone don't propagate back to the template.",
 	"clubHome.daysPerWeek": "{n}/wk",
 	"clubHome.adopt": "Adopt",
+	"clubHome.sessionTemplatesTitle": "Session templates",
+	"clubHome.sessionTemplatesHint": "Members can adopt a club session sequence into their own session plan. Edits to a copy don't propagate back to the template.",
+	"clubHome.sessionAdopted": "Session added to your plans.",
 	"clubHome.unpublishTitle": "Remove from club templates (the plan stays in the author's library)",
 	"clubHome.unpublish": "Unpublish",
 	"clubHome.emptyTemplatesTitle": "No plan templates yet",
@@ -3267,6 +3270,11 @@ export const en = {
 	"session.shareLinkCopied": "Share link copied.",
 	"session.shareLinkError": "Couldn't copy the share link.",
 	"session.visibilityError": "Couldn't change visibility.",
+	"session.publishLabel": "Publish to a club",
+	"session.publishPick": "Pick a club…",
+	"session.publish": "Publish",
+	"session.publishSuccess": "Session published to the club.",
+	"session.publishFailed": "Couldn't publish the session.",
 
 	// Live guided gym session runner (gym_programming.md slice P3)
 	"gym.session.title": "Guided session",

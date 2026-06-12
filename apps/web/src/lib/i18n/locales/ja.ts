@@ -1497,6 +1497,9 @@ export const messages = {
 	"clubHome.templatesHint": "メンバーは任意のテンプレートを、好きな開始日で個人プランに複製できます。複製への編集はテンプレートには反映されません。",
 	"clubHome.daysPerWeek": "週{n}回",
 	"clubHome.adopt": "採用",
+	"clubHome.sessionTemplatesTitle": "セッションテンプレート",
+	"clubHome.sessionTemplatesHint": "メンバーはクラブのセッションシーケンスを自分のセッションプランに取り込めます。コピーへの編集はテンプレートには反映されません。",
+	"clubHome.sessionAdopted": "セッションをあなたのプランに追加しました。",
 	"clubHome.unpublishTitle": "クラブのテンプレートから削除（プランは作成者のライブラリに残ります）",
 	"clubHome.unpublish": "公開を取り消す",
 	"clubHome.emptyTemplatesTitle": "まだプランのテンプレートがありません",
@@ -3254,6 +3257,11 @@ export const messages = {
 	"session.shareLinkCopied": "共有リンクをコピーしました。",
 	"session.shareLinkError": "共有リンクをコピーできませんでした。",
 	"session.visibilityError": "公開設定を変更できませんでした。",
+	"session.publishLabel": "クラブに公開",
+	"session.publishPick": "クラブを選択…",
+	"session.publish": "公開",
+	"session.publishSuccess": "セッションをクラブに公開しました。",
+	"session.publishFailed": "セッションを公開できませんでした。",
 
 	// Live guided gym session runner (gym_programming.md slice P3)
 	"gym.session.title": "ガイド付きセッション",

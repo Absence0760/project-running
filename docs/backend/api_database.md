@@ -529,7 +529,9 @@ Reusable yoga/pilates/class movement sequences (a sibling of the gym routine eng
 - **`session_plan_items`** — `id` PK, `plan_id` (FK, cascade), `block_id` (nullable FK → blocks, cascade), `position`, `movement_name`, `kind` (CHECK `in ('hold','reps','flow')` — narrow union `SessionItemKind`, in `check_constraint_unions.mjs`), `duration_s` (nullable, for hold/flow), `reps` (nullable, for reps), `per_side` (default false — split into L/R at expand time by `expandSessionSteps`), `tempo` (nullable), `cue` (nullable). RLS inherits the parent.
 - **`events.session_plan_id`** — nullable FK → `session_plans` (`on delete set null`). A `class` event optionally attaches a full sequence (the rich successor to the `gym_template` jsonb hint). Set **only by an event organiser** — the `enforce_event_session_plan_organiser` BEFORE trigger raises `42501` for a non-organiser (defence-in-depth behind the events UPDATE RLS), with a trusted-caller bypass for the service role + direct SQL. The column carries an explicit `grant select (session_plan_id) ... to authenticated, anon` because `events` is under a column-level SELECT lockdown.
 
-**Narrow union**: `SessionItemKind = 'hold' | 'reps' | 'flow'`. pgtap coverage: `supabase/tests/session_plans_rls_test.sql` (author own read/write, public world-read, club member-read / admin-write, the kind CHECK, organiser-only `events.session_plan_id`).
+**Narrow union**: `SessionItemKind = 'hold' | 'reps' | 'flow'`. pgtap coverage: `supabase/tests/session_plans_rls_test.sql` (author own read/write, public world-read, club member-read / admin-write, the kind CHECK, organiser-only `events.session_plan_id`); `clone_session_template_test.sql` (club-member adopt, copy fidelity, non-member reject).
+
+**Sharing (P3, 2026-06-12)**: `is_public = true` powers the logged-out web share page `/share/session/[id]` — anon SELECT grants on the three tables + the public-plan / inherit-visibility policies already expose a public plan's blocks/items, so no migration was needed beyond the P1 schema. `setSessionPlanPublic` (web + `ApiClient.setSessionPlanPublic` mobile) is the owner-only toggle. A `club_id`-set plan is the club's adoptable "session template"; `clone_session_template` is the adopt path (above).
 
 ### Training & coaching
 
@@ -1525,6 +1527,10 @@ SECURITY DEFINER. Owner-only manual re-match trigger called by the "Re-match" bu
 ### `clone_plan_template(template_id uuid, new_start_date date)`
 
 SECURITY DEFINER RPC for plan-template adoption (decisions §35). Verifies the caller can SELECT the template (own plan or club member of the template's `club_id`), then duplicates `training_plans` + `plan_weeks` + `plan_workouts` into a new user-owned plan anchored at `new_start_date`. All workout `scheduled_date` values are shifted by the date offset between the template's `start_date` and the new start date. The new plan's `parent_template_id` points back at the template; `is_template = false` and `status = 'active'`. Returns the new plan's id. Granted to `authenticated`.
+
+### `clone_session_template(template_id uuid)`
+
+SECURITY DEFINER RPC for session-plan template adoption (session_planner.md P3, migration `20270104_001`). The yoga/pilates analogue of `clone_plan_template`: verifies the caller is the template's author or a member of its owning club (`private.is_club_member`, via the `public, private` search_path), then duplicates `session_plans` + `session_plan_blocks` + `session_plan_items` into a new **personal** plan (`author_id = caller`, `club_id = null`, `is_public = false`), preserving block grouping + `per_side` + positions. A session plan carries no private fitness data, so nothing is stripped on clone. Anti-bulk-clone rate-limited (`enforce_create_rate_limit`, 20/hour). Returns the new plan's id. Granted to `authenticated`. pgtap: `clone_session_template_test.sql`. Surfaced as Adopt on the club-detail Templates tab (`cloneSessionTemplate` web / `ApiClient.cloneSessionTemplate` mobile); the publish direction is the client-side `publishSessionAsTemplate` (copies into a `club_id` row, original untouched).
 
 ### `duplicate_plan_week(p_plan_id uuid, p_week_index int)`
 

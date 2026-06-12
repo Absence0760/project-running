@@ -3360,6 +3360,37 @@ class ApiClient {
     return newId as String;
   }
 
+  /// Club-owned session plans (the club's "session templates"). Visible to
+  /// members + writable by admins via RLS. Mirrors [fetchClubTemplates] +
+  /// web `fetchClubSessionTemplates` (session_planner.md P3).
+  Future<List<SessionPlanRow>> fetchClubSessionTemplates(String clubId) async {
+    try {
+      final data = await _client
+          .from(SessionPlanRow.table)
+          .select()
+          .eq(SessionPlanRow.colClubId, clubId)
+          .order(SessionPlanRow.colUpdatedAt, ascending: false);
+      return (data as List)
+          .map<SessionPlanRow>(
+              (r) => SessionPlanRow.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchClubSessionTemplates failed: $e');
+      return const [];
+    }
+  }
+
+  /// Clone a club session template into a new personal session plan. The
+  /// clone_session_template RPC enforces author/member authorisation +
+  /// rate-limits server-side. Returns the new plan's id.
+  Future<String> cloneSessionTemplate(String templateId) async {
+    final newId = await _client.rpc(
+      'clone_session_template',
+      params: {'template_id': templateId},
+    );
+    return newId as String;
+  }
+
   // ──────────────────── Phase 2 — domain joins ────────────────────
   //
   // Methods that combine multiple rows into a `core_models/social.dart`

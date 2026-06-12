@@ -918,6 +918,8 @@
   "clubDetailNoTemplatesAdmin": "Noch keine Vorlagen. Veröffentliche einen deiner Pläne über dessen Detailseite.",
   "clubDetailNoTemplates": "Noch keine Planvorlagen für diesen Club.",
   "clubDetailAdopt": "Übernehmen",
+  "clubDetailSessionTemplatesTitle": "Sitzungsvorlagen",
+  "clubDetailSessionAdopted": "Sitzung zu deinen Plänen hinzugefügt.",
   "eventNotFound": "Event nicht gefunden.",
   "eventLoadError": "Dieses Event konnte nicht geladen werden. Tippe auf Wiederholen.",
   "eventTimeoutError": "Zeitüberschreitung. Überprüfe dein Netzwerk und versuche es erneut.",

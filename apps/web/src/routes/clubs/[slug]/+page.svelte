@@ -22,6 +22,8 @@
 		setRouteClubId,
 		fetchClubTemplates,
 		setPlanIsTemplate,
+		fetchClubSessionTemplates,
+		cloneSessionTemplate,
 		approveMember,
 		bulkApproveMembers,
 		rejectMember,
@@ -37,7 +39,7 @@
 	import { formatDistance } from '$lib/core/mock-data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
-	import type { Route, TrainingPlan } from '$lib/types';
+	import type { Route, TrainingPlan, SessionPlan } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
@@ -92,6 +94,8 @@
 	let showTransferModal = $state(false);
 	let transferRouteId = $state('');
 	let clubTemplates = $state<TrainingPlan[]>([]);
+	let sessionTemplates = $state<SessionPlan[]>([]);
+	let adoptingSession = $state('');
 
 	async function handleEventCreated(event: { id: string }) {
 		showEventModal = false;
@@ -137,7 +141,7 @@
 			loading = false;
 			return;
 		}
-		const [up, pa, po, me, pe, rt, tp] = await Promise.all([
+		const [up, pa, po, me, pe, rt, tp, st] = await Promise.all([
 			fetchUpcomingEvents(club.id),
 			fetchPastEvents(club.id, 6),
 			fetchClubPosts(club.id, 20),
@@ -146,7 +150,8 @@
 				? fetchPendingRequests(club.id)
 				: Promise.resolve([]),
 			fetchClubRoutes(club.id),
-			fetchClubTemplates(club.id)
+			fetchClubTemplates(club.id),
+			fetchClubSessionTemplates(club.id)
 		]);
 		upcoming = up;
 		past = pa;
@@ -155,7 +160,25 @@
 		pending = pe;
 		clubRoutes = rt;
 		clubTemplates = tp;
+		sessionTemplates = st;
 		loading = false;
+	}
+
+	async function adoptSessionTemplate(templateId: string) {
+		if (adoptingSession) return;
+		adoptingSession = templateId;
+		try {
+			const newId = await cloneSessionTemplate(templateId);
+			showToast(tr('clubHome.sessionAdopted'));
+			goto(`/sessions/${newId}`);
+		} catch (e) {
+			showToast(
+				tr('clubHome.toastFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		} finally {
+			adoptingSession = '';
+		}
 	}
 
 	async function unmakeTemplate(planId: string) {
@@ -1250,6 +1273,38 @@
 					{/if}
 				</div>
 			{/if}
+
+			{#if sessionTemplates.length > 0}
+				<h3 class="session-templates-head">{tr('clubHome.sessionTemplatesTitle')}</h3>
+				<p class="section-hint">{tr('clubHome.sessionTemplatesHint')}</p>
+				<ul class="template-list">
+					{#each sessionTemplates as s (s.id)}
+						<li class="template-row">
+							<a href="/sessions/{s.id}" class="template-link">
+								<strong>{s.title}</strong>
+								<span class="template-meta">
+									{#if s.discipline}{s.discipline}{/if}
+									{#if s.est_duration_min}· {tr('session.estDuration', { minutes: s.est_duration_min })}{/if}
+								</span>
+							</a>
+							<div class="template-actions">
+								{#if isMember}
+									<button
+										class="btn btn-primary btn-sm"
+										type="button"
+										disabled={adoptingSession === s.id}
+										onclick={() => adoptSessionTemplate(s.id)}
+										data-testid="session-template-adopt"
+									>
+										<span class="material-symbols" aria-hidden="true">content_copy</span>
+										{tr('clubHome.adopt')}
+									</button>
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{:else if tab === 'members'}
 			{#if members.length === 0}
 				<div class="empty-card">
@@ -2197,6 +2252,12 @@
 		font-size: 0.9rem;
 		line-height: 1.5;
 		margin: 0 0 var(--space-md) 0;
+	}
+
+	.session-templates-head {
+		margin: var(--space-xl) 0 var(--space-2xs) 0;
+		font-size: 1.05rem;
+		font-weight: 700;
 	}
 
 	.template-list {

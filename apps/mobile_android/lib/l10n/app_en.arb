@@ -4156,6 +4156,14 @@
   "@clubDetailAdopt": {
     "description": "Button to adopt a plan template"
   },
+  "clubDetailSessionTemplatesTitle": "Session templates",
+  "@clubDetailSessionTemplatesTitle": {
+    "description": "Heading above the club's adoptable yoga/pilates session-plan templates"
+  },
+  "clubDetailSessionAdopted": "Session added to your plans.",
+  "@clubDetailSessionAdopted": {
+    "description": "Confirmation after cloning a club session template into a personal plan"
+  },
   "eventNotFound": "Event not found.",
   "@eventNotFound": {
     "description": "Shown when the event does not exist"

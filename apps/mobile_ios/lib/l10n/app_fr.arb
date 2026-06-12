@@ -918,6 +918,8 @@
   "clubDetailNoTemplatesAdmin": "Aucun modèle pour le moment. Publiez l'un de vos plans depuis sa page de détail.",
   "clubDetailNoTemplates": "Aucun modèle de plan pour ce club pour le moment.",
   "clubDetailAdopt": "Adopter",
+  "clubDetailSessionTemplatesTitle": "Modèles de séance",
+  "clubDetailSessionAdopted": "Séance ajoutée à vos plans.",
   "eventNotFound": "Événement introuvable.",
   "eventLoadError": "Impossible de charger cet événement. Appuyez sur Réessayer.",
   "eventTimeoutError": "Délai de connexion dépassé. Vérifiez votre réseau et réessayez.",

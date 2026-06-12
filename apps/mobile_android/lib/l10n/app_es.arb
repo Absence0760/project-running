@@ -918,6 +918,8 @@
   "clubDetailNoTemplatesAdmin": "Aún no hay plantillas. Publica uno de tus planes desde su página de detalle.",
   "clubDetailNoTemplates": "Aún no hay plantillas de plan para este club.",
   "clubDetailAdopt": "Adoptar",
+  "clubDetailSessionTemplatesTitle": "Plantillas de sesión",
+  "clubDetailSessionAdopted": "Sesión añadida a tus planes.",
   "eventNotFound": "Evento no encontrado.",
   "eventLoadError": "No se pudo cargar este evento. Toca Reintentar.",
   "eventTimeoutError": "Se agotó el tiempo de conexión. Comprueba tu red e inténtalo de nuevo.",

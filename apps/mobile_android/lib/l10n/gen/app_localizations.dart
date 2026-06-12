@@ -5615,6 +5615,18 @@ abstract class AppLocalizations {
   /// **'Adopt'**
   String get clubDetailAdopt;
 
+  /// Heading above the club's adoptable yoga/pilates session-plan templates
+  ///
+  /// In en, this message translates to:
+  /// **'Session templates'**
+  String get clubDetailSessionTemplatesTitle;
+
+  /// Confirmation after cloning a club session template into a personal plan
+  ///
+  /// In en, this message translates to:
+  /// **'Session added to your plans.'**
+  String get clubDetailSessionAdopted;
+
   /// Shown when the event does not exist
   ///
   /// In en, this message translates to:

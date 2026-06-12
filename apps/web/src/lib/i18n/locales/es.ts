@@ -1501,6 +1501,9 @@ export const messages = {
 	"clubHome.templatesHint": "Los miembros pueden clonar cualquier plantilla en un plan personal con la fecha de inicio que elijan. Los cambios en un clon no se reflejan en la plantilla.",
 	"clubHome.daysPerWeek": "{n}/sem.",
 	"clubHome.adopt": "Adoptar",
+	"clubHome.sessionTemplatesTitle": "Plantillas de sesión",
+	"clubHome.sessionTemplatesHint": "Los miembros pueden adoptar una secuencia de sesión del club en su propio plan de sesión. Los cambios en una copia no se propagan a la plantilla.",
+	"clubHome.sessionAdopted": "Sesión añadida a tus planes.",
 	"clubHome.unpublishTitle": "Quitar de las plantillas del club (el plan permanece en la biblioteca del autor)",
 	"clubHome.unpublish": "Despublicar",
 	"clubHome.emptyTemplatesTitle": "Aún no hay plantillas de plan",
@@ -3258,6 +3261,11 @@ export const messages = {
 	"session.shareLinkCopied": "Enlace para compartir copiado.",
 	"session.shareLinkError": "No se pudo copiar el enlace para compartir.",
 	"session.visibilityError": "No se pudo cambiar la visibilidad.",
+	"session.publishLabel": "Publicar en un club",
+	"session.publishPick": "Elige un club…",
+	"session.publish": "Publicar",
+	"session.publishSuccess": "Sesión publicada en el club.",
+	"session.publishFailed": "No se pudo publicar la sesión.",
 
 	// Live guided gym session runner (gym_programming.md slice P3)
 	"gym.session.title": "Sesión guiada",

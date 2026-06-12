@@ -3396,6 +3396,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubDetailAdopt => 'Übernehmen';
 
   @override
+  String get clubDetailSessionTemplatesTitle => 'Sitzungsvorlagen';
+
+  @override
+  String get clubDetailSessionAdopted =>
+      'Sitzung zu deinen Plänen hinzugefügt.';
+
+  @override
   String get eventNotFound => 'Event nicht gefunden.';
 
   @override
