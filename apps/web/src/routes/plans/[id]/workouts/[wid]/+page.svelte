@@ -4,11 +4,18 @@
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchWorkout, markWorkoutCompleted } from '$lib/core/data';
+	import {
+		fetchWorkout,
+		markWorkoutCompleted,
+		fetchRelinkCandidateRuns,
+		type RelinkCandidateRun
+	} from '$lib/core/data';
 	import { fmtHms, isWorkoutCompleted } from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
+	import { formatDateShort } from '$lib/format/time';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import type { WorkoutStructure } from '$lib/training/training';
@@ -18,6 +25,12 @@
 	let workout = $state<PlanWorkout | null>(null);
 	let loading = $state(true);
 	let showUnlinkConfirm = $state(false);
+
+	let showRelink = $state(false);
+	let relinkLoading = $state(false);
+	let relinkError = $state(false);
+	let relinkCandidates = $state<RelinkCandidateRun[]>([]);
+	let relinkSaving = $state(false);
 
 	let cameFromPlan = $state(false);
 	afterNavigate(({ from }) => {
@@ -59,6 +72,37 @@
 		showUnlinkConfirm = false;
 		await markWorkoutCompleted(workout.id, null);
 		await load();
+	}
+
+	async function openRelink() {
+		if (!workout) return;
+		showRelink = true;
+		relinkError = false;
+		relinkLoading = true;
+		relinkCandidates = [];
+		try {
+			relinkCandidates = await fetchRelinkCandidateRuns(workout);
+		} catch (e) {
+			console.error('fetchRelinkCandidateRuns failed', e);
+			relinkError = true;
+		} finally {
+			relinkLoading = false;
+		}
+	}
+
+	async function pickRelink(runId: string) {
+		if (!workout || relinkSaving) return;
+		relinkSaving = true;
+		try {
+			await markWorkoutCompleted(workout.id, runId);
+			showRelink = false;
+			await load();
+		} catch (e) {
+			console.error('re-link failed', e);
+			relinkError = true;
+		} finally {
+			relinkSaving = false;
+		}
 	}
 
 	// A step's "magnitude" for the proportional bar: distance when present,
@@ -223,9 +267,16 @@
 				<div class="completed-card">
 					<span class="material-symbols" aria-hidden="true">check_circle</span>
 					<span class="completed-label">{t('workoutDetail.completed')}</span>
-					<button class="btn-ghost" onclick={unlink}>
-						{workout.completed_run_id ? t('workoutDetail.unlink') : t('workoutDetail.markNotDone')}
-					</button>
+					<div class="completed-actions">
+						{#if workout.completed_run_id}
+							<button class="btn-ghost" onclick={openRelink}>
+								{t('workoutDetail.relink')}
+							</button>
+						{/if}
+						<button class="btn-ghost" onclick={unlink}>
+							{workout.completed_run_id ? t('workoutDetail.unlink') : t('workoutDetail.markNotDone')}
+						</button>
+					</div>
 				</div>
 			{/if}
 		</header>
@@ -348,6 +399,44 @@
 	oncancel={() => showUnlinkConfirm = false}
 	danger
 />
+
+<Modal
+	open={showRelink}
+	onclose={() => (showRelink = false)}
+	title={t('workoutDetail.relinkTitle')}
+	narrow
+	data-testid="relink-modal"
+>
+	<p class="relink-hint">{t('workoutDetail.relinkHint')}</p>
+	{#if relinkLoading}
+		<p class="relink-status" role="status">{t('workoutDetail.relinkLoading')}</p>
+	{:else if relinkError}
+		<p class="relink-status relink-error" role="alert">{t('workoutDetail.relinkError')}</p>
+	{:else if relinkCandidates.length === 0}
+		<p class="relink-status">{t('workoutDetail.relinkEmpty')}</p>
+	{:else}
+		<ul class="relink-list">
+			{#each relinkCandidates as run (run.id)}
+				<li>
+					<button
+						class="relink-run"
+						class:current={run.id === workout?.completed_run_id}
+						disabled={relinkSaving}
+						onclick={() => pickRelink(run.id)}
+					>
+						<span class="relink-run-date">{formatDateShort(run.started_at)}</span>
+						<span class="relink-run-stats">
+							{fmtKm(run.distance_m, 2)} · {fmtHms(run.duration_s)}
+						</span>
+						{#if run.id === workout?.completed_run_id}
+							<span class="relink-current-tag">{t('workoutDetail.relinkCurrent')}</span>
+						{/if}
+					</button>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</Modal>
 {/if}
 
 <style>
@@ -486,6 +575,11 @@
 	}
 	.completed-card .material-symbols { font-size: 1.15rem; }
 	.completed-card .completed-label { font-size: 0.92rem; }
+	.completed-actions {
+		display: inline-flex;
+		gap: 0.65rem;
+		align-items: center;
+	}
 	.btn-ghost {
 		background: none;
 		border: none;
@@ -494,6 +588,64 @@
 		text-decoration: underline;
 		cursor: pointer;
 		font-size: 0.85rem;
+	}
+
+	.relink-hint {
+		margin: 0 0 var(--space-sm) 0;
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+	.relink-status {
+		margin: var(--space-sm) 0;
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+	}
+	.relink-error { color: var(--color-danger); }
+	.relink-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+	.relink-run {
+		width: 100%;
+		display: flex;
+		align-items: baseline;
+		gap: 0.6rem;
+		padding: 0.6rem 0.8rem;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		text-align: start;
+		font: inherit;
+		color: var(--color-text);
+	}
+	.relink-run:hover:not(:disabled) {
+		border-color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-secondary));
+	}
+	.relink-run:disabled { opacity: 0.6; cursor: default; }
+	.relink-run.current { border-color: var(--color-success); }
+	.relink-run-date {
+		font-weight: 700;
+		font-size: 0.92rem;
+	}
+	.relink-run-stats {
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+		font-size: 0.9rem;
+	}
+	.relink-current-tag {
+		margin-inline-start: auto;
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-success);
 	}
 
 	.card {
