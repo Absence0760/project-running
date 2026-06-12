@@ -126,3 +126,36 @@ export function expandSessionSteps(plan: SessionPlanInput): ExpandedSession {
 
 	return { steps, totalS: cumulative };
 }
+
+export interface SessionStepResult {
+	itemId: string;
+	movementName: string;
+	kind: SessionItemKind;
+	side: 'left' | 'right' | null;
+	targetDurationS: number | null;
+	actualDurationS: number | null;
+	status: 'completed' | 'skipped';
+}
+
+export interface SessionAdherence {
+	completedSteps: number;
+	totalSteps: number;
+	adherencePct: number;
+	verdict: 'completed' | 'partial' | 'abandoned';
+}
+
+export function computeSessionAdherence(
+	steps: SessionStep[],
+	results: SessionStepResult[]
+): SessionAdherence {
+	const totalSteps = steps.length;
+	const completedSteps = results.filter((r) => r.status === 'completed').length;
+	const adherencePct = totalSteps === 0 ? 0 : completedSteps / totalSteps;
+
+	let verdict: SessionAdherence['verdict'];
+	if (completedSteps === 0) verdict = 'abandoned';
+	else if (adherencePct >= 0.8) verdict = 'completed';
+	else verdict = 'partial';
+
+	return { completedSteps, totalSteps, adherencePct, verdict };
+}

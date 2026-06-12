@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { expandSessionSteps, type SessionPlanInput } from './session_steps';
+import {
+	expandSessionSteps,
+	computeSessionAdherence,
+	type SessionPlanInput,
+	type SessionStep,
+	type SessionStepResult
+} from './session_steps';
 
 function item(over: Partial<SessionPlanInput['items'][number]> = {}) {
 	return {
@@ -107,4 +113,100 @@ test('single item: one non-per-side hold -> one step', () => {
 	assert.equal(out.steps[0].cue, 'Soften');
 	assert.equal(out.steps[0].cumulativeS, 300);
 	assert.equal(out.totalS, 300);
+});
+
+function step(over: Partial<SessionStep> = {}): SessionStep {
+	return {
+		itemId: 'i',
+		movementName: 'Pose',
+		kind: 'hold',
+		durationS: 30,
+		reps: null,
+		tempo: null,
+		cue: null,
+		side: null,
+		cumulativeS: 30,
+		...over
+	};
+}
+
+function result(over: Partial<SessionStepResult> = {}): SessionStepResult {
+	return {
+		itemId: 'i',
+		movementName: 'Pose',
+		kind: 'hold',
+		side: null,
+		targetDurationS: 30,
+		actualDurationS: 30,
+		status: 'completed',
+		...over
+	};
+}
+
+test('adherence: all steps completed -> completed verdict, pct 1.0', () => {
+	const steps = [step({ itemId: 'a' }), step({ itemId: 'b' }), step({ itemId: 'c' })];
+	const results = [
+		result({ itemId: 'a' }),
+		result({ itemId: 'b' }),
+		result({ itemId: 'c' })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.completedSteps, 3);
+	assert.equal(out.totalSteps, 3);
+	assert.equal(out.adherencePct, 1);
+	assert.equal(out.verdict, 'completed');
+});
+
+test('adherence: zero completed -> abandoned verdict', () => {
+	const steps = [step({ itemId: 'a' }), step({ itemId: 'b' })];
+	const results = [
+		result({ itemId: 'a', status: 'skipped', actualDurationS: null }),
+		result({ itemId: 'b', status: 'skipped', actualDurationS: null })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.completedSteps, 0);
+	assert.equal(out.adherencePct, 0);
+	assert.equal(out.verdict, 'abandoned');
+});
+
+test('adherence: 80% boundary -> completed verdict', () => {
+	const steps = ['a', 'b', 'c', 'd', 'e'].map((id) => step({ itemId: id }));
+	const results = [
+		result({ itemId: 'a' }),
+		result({ itemId: 'b' }),
+		result({ itemId: 'c' }),
+		result({ itemId: 'd' }),
+		result({ itemId: 'e', status: 'skipped', actualDurationS: null })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.completedSteps, 4);
+	assert.equal(out.adherencePct, 0.8);
+	assert.equal(out.verdict, 'completed');
+});
+
+test('adherence: below 80% -> partial verdict', () => {
+	const steps = ['a', 'b', 'c', 'd'].map((id) => step({ itemId: id }));
+	const results = [
+		result({ itemId: 'a' }),
+		result({ itemId: 'b' }),
+		result({ itemId: 'c', status: 'skipped', actualDurationS: null }),
+		result({ itemId: 'd', status: 'skipped', actualDurationS: null })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.completedSteps, 2);
+	assert.equal(out.adherencePct, 0.5);
+	assert.equal(out.verdict, 'partial');
+});
+
+test('adherence: a skipped step counts toward total but not completed', () => {
+	const steps = [step({ itemId: 'a' }), step({ itemId: 'b' })];
+	const results = [
+		result({ itemId: 'a' }),
+		result({ itemId: 'b', status: 'skipped', actualDurationS: null })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.totalSteps, 2);
+	assert.equal(out.completedSteps, 1);
+	assert.equal(out.adherencePct, 0.5);
+	assert.equal(out.verdict, 'partial');
 });

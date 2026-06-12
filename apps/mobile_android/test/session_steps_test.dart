@@ -143,4 +143,141 @@ void main() {
     expect(out.steps[0].cumulativeS, 300);
     expect(out.totalS, 300);
   });
+
+  SessionStep _step({
+    String itemId = 'i',
+    String movementName = 'Pose',
+    SessionItemKind kind = SessionItemKind.hold,
+    int? durationS = 30,
+    int? reps,
+    String? tempo,
+    String? cue,
+    SessionSide? side,
+    int cumulativeS = 30,
+  }) {
+    return SessionStep(
+      itemId: itemId,
+      movementName: movementName,
+      kind: kind,
+      durationS: durationS,
+      reps: reps,
+      tempo: tempo,
+      cue: cue,
+      side: side,
+      cumulativeS: cumulativeS,
+    );
+  }
+
+  SessionStepResult _result({
+    String itemId = 'i',
+    String movementName = 'Pose',
+    SessionItemKind kind = SessionItemKind.hold,
+    SessionSide? side,
+    int? targetDurationS = 30,
+    int? actualDurationS = 30,
+    SessionStepStatus status = SessionStepStatus.completed,
+  }) {
+    return SessionStepResult(
+      itemId: itemId,
+      movementName: movementName,
+      kind: kind,
+      side: side,
+      targetDurationS: targetDurationS,
+      actualDurationS: actualDurationS,
+      status: status,
+    );
+  }
+
+  test('adherence: all steps completed -> completed verdict, pct 1.0', () {
+    final steps = [
+      _step(itemId: 'a'),
+      _step(itemId: 'b'),
+      _step(itemId: 'c'),
+    ];
+    final results = [
+      _result(itemId: 'a'),
+      _result(itemId: 'b'),
+      _result(itemId: 'c'),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.completedSteps, 3);
+    expect(out.totalSteps, 3);
+    expect(out.adherencePct, 1.0);
+    expect(out.verdict, SessionVerdict.completed);
+  });
+
+  test('adherence: zero completed -> abandoned verdict', () {
+    final steps = [_step(itemId: 'a'), _step(itemId: 'b')];
+    final results = [
+      _result(
+          itemId: 'a',
+          status: SessionStepStatus.skipped,
+          actualDurationS: null),
+      _result(
+          itemId: 'b',
+          status: SessionStepStatus.skipped,
+          actualDurationS: null),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.completedSteps, 0);
+    expect(out.adherencePct, 0.0);
+    expect(out.verdict, SessionVerdict.abandoned);
+  });
+
+  test('adherence: 80% boundary -> completed verdict', () {
+    final steps = ['a', 'b', 'c', 'd', 'e']
+        .map((id) => _step(itemId: id))
+        .toList();
+    final results = [
+      _result(itemId: 'a'),
+      _result(itemId: 'b'),
+      _result(itemId: 'c'),
+      _result(itemId: 'd'),
+      _result(
+          itemId: 'e',
+          status: SessionStepStatus.skipped,
+          actualDurationS: null),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.completedSteps, 4);
+    expect(out.adherencePct, 0.8);
+    expect(out.verdict, SessionVerdict.completed);
+  });
+
+  test('adherence: below 80% -> partial verdict', () {
+    final steps =
+        ['a', 'b', 'c', 'd'].map((id) => _step(itemId: id)).toList();
+    final results = [
+      _result(itemId: 'a'),
+      _result(itemId: 'b'),
+      _result(
+          itemId: 'c',
+          status: SessionStepStatus.skipped,
+          actualDurationS: null),
+      _result(
+          itemId: 'd',
+          status: SessionStepStatus.skipped,
+          actualDurationS: null),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.completedSteps, 2);
+    expect(out.adherencePct, 0.5);
+    expect(out.verdict, SessionVerdict.partial);
+  });
+
+  test('adherence: a skipped step counts toward total but not completed', () {
+    final steps = [_step(itemId: 'a'), _step(itemId: 'b')];
+    final results = [
+      _result(itemId: 'a'),
+      _result(
+          itemId: 'b',
+          status: SessionStepStatus.skipped,
+          actualDurationS: null),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.totalSteps, 2);
+    expect(out.completedSteps, 1);
+    expect(out.adherencePct, 0.5);
+    expect(out.verdict, SessionVerdict.partial);
+  });
 }

@@ -169,3 +169,68 @@ ExpandedSession expandSessionSteps(SessionPlanInput plan) {
 
   return ExpandedSession(steps: steps, totalS: cumulative);
 }
+
+enum SessionStepStatus { completed, skipped }
+
+class SessionStepResult {
+  const SessionStepResult({
+    required this.itemId,
+    required this.movementName,
+    required this.kind,
+    required this.side,
+    required this.targetDurationS,
+    required this.actualDurationS,
+    required this.status,
+  });
+
+  final String itemId;
+  final String movementName;
+  final SessionItemKind kind;
+  final SessionSide? side;
+  final int? targetDurationS;
+  final int? actualDurationS;
+  final SessionStepStatus status;
+}
+
+enum SessionVerdict { completed, partial, abandoned }
+
+class SessionAdherence {
+  const SessionAdherence({
+    required this.completedSteps,
+    required this.totalSteps,
+    required this.adherencePct,
+    required this.verdict,
+  });
+
+  final int completedSteps;
+  final int totalSteps;
+  final double adherencePct;
+  final SessionVerdict verdict;
+}
+
+SessionAdherence computeSessionAdherence(
+  List<SessionStep> steps,
+  List<SessionStepResult> results,
+) {
+  final totalSteps = steps.length;
+  final completedSteps = results
+      .where((r) => r.status == SessionStepStatus.completed)
+      .length;
+  final adherencePct = totalSteps == 0 ? 0.0 : completedSteps / totalSteps;
+
+  final SessionVerdict verdict;
+  if (completedSteps == 0) {
+    verdict = SessionVerdict.abandoned;
+  } else if (adherencePct >= 0.8) {
+    verdict = SessionVerdict.completed;
+  } else {
+    verdict = SessionVerdict.partial;
+  }
+
+  return SessionAdherence(
+    completedSteps: completedSteps,
+    totalSteps: totalSteps,
+    adherencePct: adherencePct,
+    verdict: verdict,
+  );
+}
