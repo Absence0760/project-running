@@ -135,6 +135,11 @@ class StoredRoutine implements SyncEntry {
   String? get notes => row['notes'] as String?;
   int get exerciseCount => (row['exercise_count'] as num?)?.toInt() ?? 0;
 
+  /// Non-null when this routine is a club-owned template
+  /// (`gym_routines.club_id`). Personal routines leave it null. Gates the
+  /// publish control + drives the "Club template" badge on the detail screen.
+  String? get clubId => row['club_id'] as String?;
+
   @override
   Map<String, dynamic> toJson() => {
         kLocalStoreVersionKey: kLocalStoreSchemaVersion,

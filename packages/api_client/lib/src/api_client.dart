@@ -4754,6 +4754,52 @@ class ApiClient {
     await _client.from(GymRoutineRow.table).delete().eq(GymRoutineRow.colId, id);
   }
 
+  /// Club-owned gym routines published as templates (`gym_routines.club_id`
+  /// set). RLS exposes these to club members. Mirrors web
+  /// `fetchClubGymRoutineTemplates` + the session-template fetch's fail-soft
+  /// shape (gym_routine_club_templates, migration 20270109_001).
+  Future<List<GymRoutineRow>> fetchClubGymRoutineTemplates(String clubId) async {
+    try {
+      final data = await _client
+          .from(GymRoutineRow.table)
+          .select()
+          .eq(GymRoutineRow.colClubId, clubId)
+          .order(GymRoutineRow.colLastModifiedAt, ascending: false);
+      return (data as List)
+          .map((r) => GymRoutineRow.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchClubGymRoutineTemplates failed: $e');
+      return const [];
+    }
+  }
+
+  /// Publish a personal gym routine into a club-owned template. The
+  /// publish_gym_routine_as_template RPC is author + club-admin gated and
+  /// deep-copies the routine + exercises + sets server-side (the personal
+  /// original is left untouched). Returns the new club-owned routine's id.
+  Future<String> publishGymRoutineAsTemplate({
+    required String routineId,
+    required String clubId,
+  }) async {
+    final newId = await _client.rpc(
+      'publish_gym_routine_as_template',
+      params: {'p_routine_id': routineId, 'p_club_id': clubId},
+    );
+    return newId as String;
+  }
+
+  /// Adopt a club gym-routine template into a new personal routine via the
+  /// clone_gym_routine_template RPC (author-or-member gated, rate-limited
+  /// server-side). Returns the new personal routine's id.
+  Future<String> cloneGymRoutineTemplate(String templateId) async {
+    final newId = await _client.rpc(
+      'clone_gym_routine_template',
+      params: {'p_template_id': templateId},
+    );
+    return newId as String;
+  }
+
   // ─────────────────── Nutrition / food log (Phase 4) ───────────────────
 
   /// Food entries in the half-open day range [from, to), newest first.
