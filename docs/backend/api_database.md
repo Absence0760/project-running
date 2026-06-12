@@ -646,6 +646,18 @@ create table body_metrics (
 
 RLS + range CHECK + cascade-delete + the owner-only `height_cm` grant are pinned by `body_metrics_rls_test.sql`.
 
+#### `gym_routines` / `gym_routine_exercises` / `gym_routine_sets`
+
+The gym-programming **P1** reusable-plan tier (migration `20261230_001`, [gym_programming.md](../features/gym_programming.md)). A routine is a named, ordered list of planned exercises, each with planned target sets — **relational, not jsonb** (the deliberate divergence from `plan_workouts.structure jsonb`, justified by per-exercise querying + row-by-row progression). It is **not** a dated activity, so it does **not** feed the `activities` view.
+
+- `gym_routines` — owner column is **`author_id`** (authored content, F17), **author-only RLS** for all four commands (no public-read branch in v1 — a public-routine browse UI would ship `is_public` + its read policy in the same migration to avoid a `public-rows` leak). `exercise_count` + `last_modified_at` are **client-stamped** (non-authoritative cache, newer-wins; no server trigger). Cascade-deletes from `auth.users` (Art. 17). Index `(author_id, last_modified_at desc)` + unique `(author_id, external_id) where external_id not null`.
+- `gym_routine_exercises` — `exercise_key` = `normaliseExerciseName(exercise_name)` stamped at write time (binds the plan to logged `gym_sets`); `position` orders the groups; `superset_group`/`superset_order` exist for P2 but P1 leaves them null (paired-null CHECK). RLS via `EXISTS` against the parent routine's `author_id`.
+- `gym_routine_sets` — planned targets per set: `target_reps_min`/`_max` (single value = min only), `target_weight_kg` **XOR** `target_percent_1rm` (load-mutex CHECK), `target_rpe`, `rest_s`, `tempo`, `set_type` (default `working`). RLS via `EXISTS` up through `gym_routine_exercises` → `gym_routines.author_id`.
+- Four narrow-union ↔ CHECK pairs land here (`periodisation`, `modality`, `progression`, `set_type`); only the columns ship in P1, the engine that reads them is P2-P4.
+- The plan→logged-session link lives in `gym_workouts.metadata.routine_id` (a string, **not** an FK), added by the same migration — so deleting a routine leaves prior sessions intact. `gym_workouts.metadata` (jsonb, default `'{}'`) is added here as the prerequisite; the `activities` lift branch enumerates explicit columns so the new column does not change the UNION shape.
+
+Author-only RLS on all three tables + the EXISTS parent gates + the full-tree cascade from `auth.users` are pinned by `gym_routines_rls_test.sql`. The three tables (+ nested embeds) ship in the DSAR export (`export-data` `backup_spec.ts`, pinned by `backup_spec.test.ts`).
+
 #### `user_settings` / `user_device_settings`
 
 Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/backend/settings.md](settings.md) for the registered key catalogue.
