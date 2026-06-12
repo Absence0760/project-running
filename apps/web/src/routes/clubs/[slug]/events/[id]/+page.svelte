@@ -15,6 +15,7 @@
 		fetchRouteById,
 		rsvpEvent,
 		clearRsvp,
+		markAttendance,
 		deleteEvent,
 		createClubPost,
 		fetchEventResults,
@@ -70,6 +71,7 @@
 		ClubPostWithAuthor,
 		Route,
 		RsvpStatus,
+		EventAttendance,
 		EventPricing
 	} from '$lib/types';
 
@@ -203,6 +205,13 @@
 	// leaderboard; class / social are attendance-only. Default athletic until
 	// the event loads so a momentary null never flashes a class layout for a run.
 	let isAthletic = $derived(event ? isAthleticCategory(event.category) : true);
+	// Host-only attendance marking (instructor_business.md M6): the organiser
+	// of a `class` event records who actually showed up. Orthogonal to RSVP —
+	// non-hosts only ever see the resulting state read-only.
+	let canMarkAttendance = $derived(
+		isEventOrganiser && event?.category === 'class'
+	);
+	let markingAttendance = $state<string | null>(null);
 	let isPast = $derived(
 		!!event &&
 			(event.recurrence_freq
@@ -936,6 +945,21 @@
 			error = e instanceof Error ? e.message : m('clubEvent.rsvpFailed');
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function setAttendance(userId: string, current: EventAttendance | null, value: EventAttendance) {
+		if (!event || markingAttendance) return;
+		// Toggle off when the host taps the already-set state.
+		const next: EventAttendance | null = current === value ? null : value;
+		markingAttendance = userId;
+		try {
+			await markAttendance(event.id, userId, next);
+			attendees = attendees.map((a) => (a.user_id === userId ? { ...a, attendance: next } : a));
+		} catch (e: unknown) {
+			showToast(e instanceof Error ? e.message : m('clubEvent.attendanceFailed'), 'error');
+		} finally {
+			markingAttendance = null;
 		}
 	}
 
@@ -1784,6 +1808,38 @@
 								<strong>{a.display_name ?? m('clubEvent.memberFallback')}</strong>
 								<span class="status">{a.status}</span>
 							</div>
+							{#if canMarkAttendance}
+								<div class="attendance-controls" role="group" aria-label={m('clubEvent.attendanceLabel')}>
+									<button
+										type="button"
+										class="att-btn attended"
+										class:active={a.attendance === 'attended'}
+										aria-pressed={a.attendance === 'attended'}
+										disabled={markingAttendance !== null}
+										title={m('clubEvent.markAttended')}
+										onclick={() => setAttendance(a.user_id, a.attendance, 'attended')}
+									>
+										<span class="material-symbols" aria-hidden="true">check</span>
+										<span class="att-btn-label">{m('clubEvent.markAttended')}</span>
+									</button>
+									<button
+										type="button"
+										class="att-btn no-show"
+										class:active={a.attendance === 'no_show'}
+										aria-pressed={a.attendance === 'no_show'}
+										disabled={markingAttendance !== null}
+										title={m('clubEvent.markNoShow')}
+										onclick={() => setAttendance(a.user_id, a.attendance, 'no_show')}
+									>
+										<span class="material-symbols" aria-hidden="true">close</span>
+										<span class="att-btn-label">{m('clubEvent.markNoShow')}</span>
+									</button>
+								</div>
+							{:else if a.attendance}
+								<span class="attendance-badge {a.attendance}">
+									{a.attendance === 'attended' ? m('clubEvent.attendanceAttended') : m('clubEvent.attendanceNoShow')}
+								</span>
+							{/if}
 						</div>
 					{/each}
 				</div>
@@ -2395,12 +2451,85 @@
 		display: flex;
 		flex-direction: column;
 		line-height: 1.2;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.att-info .status {
 		font-size: 0.75rem;
 		text-transform: capitalize;
 		color: var(--color-text-tertiary);
+	}
+
+	.attendance-controls {
+		display: flex;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+
+	.att-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.2rem;
+		width: 1.9rem;
+		height: 1.9rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg);
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+	}
+
+	.att-btn .material-symbols {
+		font-size: 1.1rem;
+	}
+
+	.att-btn-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.att-btn:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	.att-btn.attended.active {
+		background: var(--color-success-light, var(--color-bg-secondary));
+		border-color: var(--color-success, var(--color-accent));
+		color: var(--color-success, var(--color-accent));
+	}
+
+	.att-btn.no-show.active {
+		background: var(--color-danger-light);
+		border-color: var(--color-danger);
+		color: var(--color-danger);
+	}
+
+	.attendance-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		padding: 0.1rem 0.45rem;
+		border-radius: var(--radius-sm);
+		flex-shrink: 0;
+	}
+
+	.attendance-badge.attended {
+		background: var(--color-success-light, var(--color-bg-secondary));
+		color: var(--color-success, var(--color-accent));
+	}
+
+	.attendance-badge.no_show {
+		background: var(--color-danger-light);
+		color: var(--color-danger);
 	}
 
 
