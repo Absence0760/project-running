@@ -22,6 +22,7 @@ import '../widgets/route_track_preview.dart';
 import '../widgets/verified_badge.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
+import 'session_detail_screen.dart';
 import 'public_route_screen.dart';
 import 'route_builder_screen.dart';
 import '../widgets/top_banner.dart';
@@ -1129,9 +1130,19 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (api == null || _adoptingSessionId != null) return;
     setState(() => _adoptingSessionId = s.id);
     try {
-      await api.cloneSessionTemplate(s.id);
+      final newId = await api.cloneSessionTemplate(s.id);
       if (!mounted) return;
       showTopBanner(context, AppLocalizations.of(context).clubDetailSessionAdopted);
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => SessionDetailScreen(
+            api: api,
+            planId: newId,
+            titleHint: s.title,
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       showTopBanner(

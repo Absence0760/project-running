@@ -11,7 +11,7 @@
 
 begin;
 
-select plan(15);
+select plan(17);
 
 -- ─── Fixtures ───────────────────────────────────────────────────────
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -152,6 +152,15 @@ select ok(
 select ok(
   has_function_privilege('authenticated', 'public.clone_plan_template(uuid, date)', 'EXECUTE'),
   'authenticated keeps EXECUTE on clone_plan_template'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.clone_session_template(uuid)', 'EXECUTE'),
+  'anon must NOT have EXECUTE on clone_session_template — same lockdown pattern'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.clone_session_template(uuid)', 'EXECUTE'),
+  'authenticated keeps EXECUTE on clone_session_template'
 );
 
 -- ─────────────────────────────────────────────────────────────────────

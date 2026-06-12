@@ -20,13 +20,13 @@ class SessionDetailScreen extends StatefulWidget {
   const SessionDetailScreen({
     super.key,
     required this.api,
-    required this.gymStore,
+    this.gymStore,
     required this.planId,
     this.titleHint,
   });
 
   final ApiClient api;
-  final LocalGymStore gymStore;
+  final LocalGymStore? gymStore;
   final String planId;
   final String? titleHint;
 
@@ -139,6 +139,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 
   Future<void> _play() async {
+    if (widget.gymStore == null) return;
     final l10n = AppLocalizations.of(context);
     final result = await Navigator.of(context).push<_SessionRunOutcome>(
       MaterialPageRoute(
@@ -158,7 +159,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final draft = workoutDraftFromSession(expanded, _title, _discipline);
     final adherence = computeSessionAdherence(_steps, outcome.results);
     try {
-      await widget.gymStore.createLocal(
+      await widget.gymStore!.createLocal(
         title: draft.title,
         startedAt: DateTime.now().toUtc(),
         durationS: draft.durationS,
@@ -180,7 +181,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           MetadataKeys.sessionAdherence: _verdictWire(adherence.verdict),
         },
       );
-      unawaited(widget.gymStore.syncWithServer(widget.api));
+      unawaited(widget.gymStore!.syncWithServer(widget.api));
       if (mounted) showTopBanner(context, l10n.sessionRunSaved);
     } catch (e) {
       debugPrint('session run save failed: $e');
@@ -221,7 +222,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                   ],
                 ),
-      floatingActionButton: (_loading || _steps.isEmpty)
+      floatingActionButton: (_loading || _steps.isEmpty || widget.gymStore == null)
           ? null
           : FloatingActionButton.extended(
               onPressed: _play,
