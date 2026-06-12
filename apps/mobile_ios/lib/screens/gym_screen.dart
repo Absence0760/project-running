@@ -7,10 +7,12 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
+import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
 import 'gym_detail_screen.dart';
 import 'gym_records_screen.dart';
+import 'routine_library_screen.dart';
 
 /// Total working volume (Σ reps·weight, rounded) for a stored workout — the
 /// list-row stat. Sets missing reps or weight contribute nothing.
@@ -126,16 +128,34 @@ class _GymScreenState extends State<GymScreen> {
   bool _refreshing = false;
   bool _isOnline = true;
 
+  // Routines (gym_programming.md P1) are a parallel planning surface owned by
+  // this screen — the same "each surface owns its store" precedent the gym /
+  // food stores follow (decisions §122). Lazily init'd; re-hydrates from disk.
+  final LocalRoutineStore _routineStore = LocalRoutineStore();
+  bool _routineStoreReady = false;
+
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChange);
+    _routineStore.addListener(_onStoreChange);
+    _initRoutines();
     _refresh();
+  }
+
+  Future<void> _initRoutines() async {
+    try {
+      await _routineStore.init();
+    } catch (e) {
+      debugPrint('gym_screen: routine store init failed: $e');
+    }
+    if (mounted) setState(() => _routineStoreReady = true);
   }
 
   @override
   void dispose() {
     widget.store.removeListener(_onStoreChange);
+    _routineStore.removeListener(_onStoreChange);
     super.dispose();
   }
 
@@ -180,6 +200,18 @@ class _GymScreenState extends State<GymScreen> {
     if (saved == true) await _maybeSync();
   }
 
+  void _openRoutines() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RoutineLibraryScreen(
+          api: widget.api,
+          store: _routineStore,
+          gymStore: widget.store,
+        ),
+      ),
+    );
+  }
+
   Future<void> _open(StoredGymWorkout w) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -204,6 +236,12 @@ class _GymScreenState extends State<GymScreen> {
       appBar: AppBar(
         title: Text(l10n.gymTitle),
         actions: [
+          if (_routineStoreReady)
+            IconButton(
+              tooltip: l10n.gymRoutineTitle,
+              icon: const Icon(Icons.list_alt),
+              onPressed: _openRoutines,
+            ),
           if (exerciseRecords(gymSetHistory(workouts)).isNotEmpty)
             IconButton(
               tooltip: l10n.gymRecordsTitle,

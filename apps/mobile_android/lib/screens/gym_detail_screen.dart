@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 
 import '../exercise_history.dart';
 import '../gym_prs.dart';
+import '../gym_routine.dart' as routine_helper;
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
+import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
+import '../widgets/routine_builder_sheet.dart';
+import '../widgets/top_banner.dart';
 import 'gym_exercise_screen.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions, gymSetHistory;
 
@@ -39,11 +43,28 @@ class GymDetailScreen extends StatefulWidget {
 class _GymDetailScreenState extends State<GymDetailScreen> {
   bool _isOnline = true;
 
+  // Self-owned routine store so "Save as routine" works wherever the detail
+  // screen is reached from (gym list, history, dashboard) without threading a
+  // store through every call site — same lazily-init'd, per-surface ownership
+  // as the gym/food stores (decisions §122). gym_programming.md P1.
+  final LocalRoutineStore _routineStore = LocalRoutineStore();
+  bool _routineStoreReady = false;
+
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChange);
     _ensureLoaded();
+    _initRoutines();
+  }
+
+  Future<void> _initRoutines() async {
+    try {
+      await _routineStore.init();
+    } catch (e) {
+      debugPrint('gym_detail_screen: routine store init failed: $e');
+    }
+    if (mounted) setState(() => _routineStoreReady = true);
   }
 
   @override
@@ -86,6 +107,95 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       context: context,
       store: widget.store,
       existing: w,
+      suggestions: gymExerciseSuggestions(widget.store.workouts),
+    );
+    if (saved == true) await _maybeSync();
+  }
+
+  /// "Save as routine" — promote this logged session's grouped sets into a
+  /// routine draft (gym_routine.dart#routineFromWorkout), then open the routine
+  /// builder seeded with it. Mirrors web's openSaveAsRoutine. The builder owns
+  /// the create + sync.
+  Future<void> _saveAsRoutine(StoredGymWorkout w) async {
+    final draft = routine_helper.routineFromWorkout(
+      w.workout.title,
+      [
+        for (final s in w.sets)
+          routine_helper.LoggedSet(
+            exerciseName: (s['exercise_name'] as String?) ?? '',
+            reps: s['reps'] as num?,
+            weightKg: s['weight_kg'] as num?,
+            rpe: s['rpe'] as num?,
+          ),
+      ],
+    );
+    // Reuse prefillFromRoutine so the builder's seed matches web's path
+    // exactly (ordered blocks, single-value rep prefill).
+    final blocks = routine_helper.prefillFromRoutine(
+      routine_helper.PlannedRoutine(
+        title: draft.title,
+        exercises: [
+          for (final e in draft.exercises)
+            routine_helper.PlannedExercise(
+              exerciseName: e.exerciseName,
+              position: e.position,
+              sets: [
+                for (final st in e.sets)
+                  routine_helper.PlannedSet(
+                    setIndex: st.setIndex,
+                    targetRepsMin: st.targetRepsMin?.toInt(),
+                    targetRepsMax: st.targetRepsMax?.toInt(),
+                    targetWeightKg: st.targetWeightKg?.toDouble(),
+                    targetRpe: st.targetRpe?.toDouble(),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+    final seed = [
+      for (final b in blocks)
+        RoutineSeedExercise(
+          name: b.name,
+          sets: [
+            for (final s in b.sets)
+              RoutineSeedSet(reps: s.reps, weightKg: s.weightKg?.toDouble(), rpe: s.rpe),
+          ],
+        ),
+    ];
+    final id = await showRoutineBuilderSheet(
+      context: context,
+      store: _routineStore,
+      seedExercises: seed,
+      seedTitle: draft.title,
+      suggestions: gymExerciseSuggestions(widget.store.workouts),
+    );
+    if (id != null) {
+      final api = widget.api;
+      if (api != null && _isOnline) await _routineStore.syncWithServer(api);
+      if (mounted) {
+        showTopBanner(context, AppLocalizations.of(context).gymRoutineCreated);
+      }
+    }
+  }
+
+  /// "Repeat last" — instantiate this session's sets into a fresh gym log (no
+  /// saved routine required). Mirrors web's openRepeat → GymEditor seed.
+  Future<void> _repeatLast(StoredGymWorkout w) async {
+    final seed = <GymSetInput>[
+      for (final s in w.sets)
+        (
+          exerciseName: (s['exercise_name'] as String?) ?? '',
+          reps: (s['reps'] as num?)?.toInt(),
+          weightKg: (s['weight_kg'] as num?)?.toDouble(),
+          rpe: (s['rpe'] as num?)?.toDouble(),
+        ),
+    ];
+    final saved = await showGymComposeSheet(
+      context: context,
+      store: widget.store,
+      seedSets: seed,
+      seedTitle: w.workout.title,
       suggestions: gymExerciseSuggestions(widget.store.workouts),
     );
     if (saved == true) await _maybeSync();
@@ -232,6 +342,17 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         actions: w == null
             ? null
             : [
+                IconButton(
+                  tooltip: l10n.gymRoutineRepeatLast,
+                  icon: const Icon(Icons.replay),
+                  onPressed: () => _repeatLast(w),
+                ),
+                if (_routineStoreReady)
+                  IconButton(
+                    tooltip: l10n.gymRoutineSaveAsRoutine,
+                    icon: const Icon(Icons.list_alt),
+                    onPressed: () => _saveAsRoutine(w),
+                  ),
                 IconButton(
                   tooltip: l10n.gymEdit,
                   icon: const Icon(Icons.edit_outlined),
