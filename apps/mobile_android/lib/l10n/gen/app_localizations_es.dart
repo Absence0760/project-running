@@ -4002,6 +4002,30 @@ class AppLocalizationsEs extends AppLocalizations {
   String get workoutUnlink => 'Desvincular';
 
   @override
+  String get workoutRelink => 'Revincular';
+
+  @override
+  String get workoutRelinkTitle => 'Vincular otra carrera';
+
+  @override
+  String get workoutRelinkHint =>
+      'Elige una carrera cercana a la fecha de este entrenamiento para contarla como esta sesión. No se muestran las carreras ya vinculadas a otro entrenamiento.';
+
+  @override
+  String get workoutRelinkLoading => 'Buscando tus carreras…';
+
+  @override
+  String get workoutRelinkError =>
+      'No se pudieron cargar tus carreras. Inténtalo de nuevo.';
+
+  @override
+  String get workoutRelinkEmpty =>
+      'No hay carreras válidas cerca de esta fecha.';
+
+  @override
+  String get workoutRelinkCurrent => 'Actual';
+
+  @override
   String get workoutStart => 'Iniciar entrenamiento';
 
   @override

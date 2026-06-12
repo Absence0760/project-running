@@ -6623,6 +6623,48 @@ abstract class AppLocalizations {
   /// **'Unlink'**
   String get workoutUnlink;
 
+  /// Re-link-to-a-different-run button on workout detail
+  ///
+  /// In en, this message translates to:
+  /// **'Re-link'**
+  String get workoutRelink;
+
+  /// Title of the re-link picker dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Link a different run'**
+  String get workoutRelinkTitle;
+
+  /// Explanatory hint in the re-link picker
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a run near this workout\'s date to count it as this session. Runs already linked to another workout aren\'t shown.'**
+  String get workoutRelinkHint;
+
+  /// Loading state in the re-link picker
+  ///
+  /// In en, this message translates to:
+  /// **'Finding your runs…'**
+  String get workoutRelinkLoading;
+
+  /// Error state in the re-link picker
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your runs. Try again.'**
+  String get workoutRelinkError;
+
+  /// Empty state in the re-link picker
+  ///
+  /// In en, this message translates to:
+  /// **'No eligible runs near this date.'**
+  String get workoutRelinkEmpty;
+
+  /// Tag on the currently-linked run in the re-link picker
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get workoutRelinkCurrent;
+
   /// Start-workout button on workout detail
   ///
   /// In en, this message translates to:

@@ -4945,6 +4945,34 @@
   "@workoutUnlink": {
     "description": "Unlink-completed-run button"
   },
+  "workoutRelink": "Re-link",
+  "@workoutRelink": {
+    "description": "Re-link-to-a-different-run button on workout detail"
+  },
+  "workoutRelinkTitle": "Link a different run",
+  "@workoutRelinkTitle": {
+    "description": "Title of the re-link picker dialog"
+  },
+  "workoutRelinkHint": "Pick a run near this workout's date to count it as this session. Runs already linked to another workout aren't shown.",
+  "@workoutRelinkHint": {
+    "description": "Explanatory hint in the re-link picker"
+  },
+  "workoutRelinkLoading": "Finding your runs…",
+  "@workoutRelinkLoading": {
+    "description": "Loading state in the re-link picker"
+  },
+  "workoutRelinkError": "Couldn't load your runs. Try again.",
+  "@workoutRelinkError": {
+    "description": "Error state in the re-link picker"
+  },
+  "workoutRelinkEmpty": "No eligible runs near this date.",
+  "@workoutRelinkEmpty": {
+    "description": "Empty state in the re-link picker"
+  },
+  "workoutRelinkCurrent": "Current",
+  "@workoutRelinkCurrent": {
+    "description": "Tag on the currently-linked run in the re-link picker"
+  },
   "workoutStart": "Start workout",
   "@workoutStart": {
     "description": "Start-workout button on workout detail"

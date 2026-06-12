@@ -3760,6 +3760,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get workoutUnlink => 'リンク解除';
 
   @override
+  String get workoutRelink => 'リンクし直す';
+
+  @override
+  String get workoutRelinkTitle => '別のランを紐づける';
+
+  @override
+  String get workoutRelinkHint =>
+      'このワークアウトの日付に近いランを選んで、このセッションとして数えます。すでに別のワークアウトに紐づいているランは表示されません。';
+
+  @override
+  String get workoutRelinkLoading => 'ランを検索中…';
+
+  @override
+  String get workoutRelinkError => 'ランを読み込めませんでした。もう一度お試しください。';
+
+  @override
+  String get workoutRelinkEmpty => 'この日付の近くに対象のランがありません。';
+
+  @override
+  String get workoutRelinkCurrent => '現在';
+
+  @override
   String get workoutStart => 'ワークアウトを開始';
 
   @override

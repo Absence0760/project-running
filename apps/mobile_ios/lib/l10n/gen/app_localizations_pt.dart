@@ -4004,6 +4004,29 @@ class AppLocalizationsPt extends AppLocalizations {
   String get workoutUnlink => 'Desvincular';
 
   @override
+  String get workoutRelink => 'Revincular';
+
+  @override
+  String get workoutRelinkTitle => 'Vincular outra corrida';
+
+  @override
+  String get workoutRelinkHint =>
+      'Escolha uma corrida próxima da data deste treino para contá-la como esta sessão. Corridas já vinculadas a outro treino não são exibidas.';
+
+  @override
+  String get workoutRelinkLoading => 'Procurando suas corridas…';
+
+  @override
+  String get workoutRelinkError =>
+      'Não foi possível carregar suas corridas. Tente novamente.';
+
+  @override
+  String get workoutRelinkEmpty => 'Nenhuma corrida elegível perto desta data.';
+
+  @override
+  String get workoutRelinkCurrent => 'Atual';
+
+  @override
   String get workoutStart => 'Iniciar treino';
 
   @override
@@ -11919,6 +11942,29 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutRelink => 'Revincular';
+
+  @override
+  String get workoutRelinkTitle => 'Vincular outra corrida';
+
+  @override
+  String get workoutRelinkHint =>
+      'Escolha uma corrida próxima da data deste treino para contá-la como esta sessão. Corridas já vinculadas a outro treino não são exibidas.';
+
+  @override
+  String get workoutRelinkLoading => 'Procurando suas corridas…';
+
+  @override
+  String get workoutRelinkError =>
+      'Não foi possível carregar suas corridas. Tente novamente.';
+
+  @override
+  String get workoutRelinkEmpty => 'Nenhuma corrida elegível perto desta data.';
+
+  @override
+  String get workoutRelinkCurrent => 'Atual';
 
   @override
   String get workoutStart => 'Iniciar treino';

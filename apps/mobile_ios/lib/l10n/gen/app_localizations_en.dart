@@ -3972,6 +3972,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get workoutUnlink => 'Unlink';
 
   @override
+  String get workoutRelink => 'Re-link';
+
+  @override
+  String get workoutRelinkTitle => 'Link a different run';
+
+  @override
+  String get workoutRelinkHint =>
+      'Pick a run near this workout\'s date to count it as this session. Runs already linked to another workout aren\'t shown.';
+
+  @override
+  String get workoutRelinkLoading => 'Finding your runs…';
+
+  @override
+  String get workoutRelinkError => 'Couldn\'t load your runs. Try again.';
+
+  @override
+  String get workoutRelinkEmpty => 'No eligible runs near this date.';
+
+  @override
+  String get workoutRelinkCurrent => 'Current';
+
+  @override
   String get workoutStart => 'Start workout';
 
   @override
