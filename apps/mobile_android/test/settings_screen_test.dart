@@ -77,6 +77,7 @@ void main() {
       for (final label in const [
         'Account',
         'Preferences',
+        'Coaching',
         'Integrations',
         'Devices',
         'Gear',
@@ -139,6 +140,11 @@ void main() {
     testWidgets('Pro & support tile pushes SettingsProScreen', (tester) async {
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
+      await tester.scrollUntilVisible(
+        find.text('Pro & support'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('Pro & support'));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsProScreen), findsOneWidget);

@@ -3799,6 +3799,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planNewTemplatePickerCancel => 'Cancel';
 
   @override
+  String get planNewStarterTitle => 'Start from a built-in plan';
+
+  @override
+  String get planNewStarterSubtitle =>
+      'Pick a proven training plan and we\'ll schedule it from your start date — you can tweak it after.';
+
+  @override
+  String get planNewStarterButton => 'Browse starter plans';
+
+  @override
+  String get planNewStarterCreating => 'Creating…';
+
+  @override
+  String get planNewStarterPickerTitle => 'Choose a starter plan';
+
+  @override
+  String get planNewStarterPickerCancel => 'Cancel';
+
+  @override
+  String planNewStarterCreateFailed(String error) {
+    return 'Couldn\'t create that plan: $error';
+  }
+
+  @override
+  String get planNewStarterC25k => 'Couch to 5K (beginner walk-run)';
+
+  @override
+  String get planNewStarterHalf12 => 'Half Marathon — 12 weeks';
+
+  @override
+  String get planNewStarterMarathon16 => 'Marathon — 16 weeks';
+
+  @override
   String get planDetailTimeoutError =>
       'Connection timed out. Check your network and try again.';
 
@@ -3855,6 +3888,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get planDetailReplan => 'Re-plan remaining weeks';
+
+  @override
+  String get planDetailAdaptiveReplan => 'Adaptive re-plan';
+
+  @override
+  String get planDetailAdaptiveOnTrack =>
+      'Your recent weeks are on track — no adjustment needed.';
+
+  @override
+  String get planDetailAdaptiveNoSafeChange =>
+      'You\'ve drifted from plan recently, but there\'s no safe adjustment to make right now.';
+
+  @override
+  String get planDetailAdaptiveReasonUnder =>
+      'under your plan for multiple weeks';
+
+  @override
+  String get planDetailAdaptiveReasonOver =>
+      'over your plan for multiple weeks';
+
+  @override
+  String get planDetailAdaptiveConfidenceHigh => 'high confidence';
+
+  @override
+  String get planDetailAdaptiveConfidenceMedium => 'medium confidence';
+
+  @override
+  String planDetailAdaptiveBadge(String reason, String confidence) {
+    return 'Based on a trend — you\'ve been $reason ($confidence)';
+  }
 
   @override
   String get planDetailReplanOnTrack =>
@@ -6991,6 +7054,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Track shoes + bikes and per-item mileage';
 
   @override
+  String get settingsTabCoachingSubtitle =>
+      'Coach athletes or follow your own coach';
+
+  @override
   String get settingsTabProSubtitle =>
       'Subscribe, restore purchases, manage billing';
 
@@ -7849,4 +7916,230 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionRunSwitchSides => 'Switch sides';
+
+  @override
+  String get coachingTitle => 'Coaching';
+
+  @override
+  String get coachingLede =>
+      'Coach athletes by sharing an invite link, then review their training. Or follow your own coach here.';
+
+  @override
+  String get coachingCancel => 'Cancel';
+
+  @override
+  String get coachingMyAthletes => 'My athletes';
+
+  @override
+  String get coachingMyAthletesSub => 'Runners who accepted your invite';
+
+  @override
+  String get coachingInviteAnAthlete => 'Invite an athlete';
+
+  @override
+  String get coachingCreating => 'Creating…';
+
+  @override
+  String get coachingPendingInvite => 'Pending invite';
+
+  @override
+  String coachingPendingInviteSub(String date) {
+    return 'Created $date · not yet accepted';
+  }
+
+  @override
+  String get coachingCopyLink => 'Copy link';
+
+  @override
+  String get coachingShareLink => 'Share link';
+
+  @override
+  String get coachingRevoke => 'Revoke';
+
+  @override
+  String get coachingNoAthletes =>
+      'No athletes yet. Invite one to get started.';
+
+  @override
+  String get coachingRunner => 'Runner';
+
+  @override
+  String coachingCoachingSince(String date) {
+    return 'Coaching since $date';
+  }
+
+  @override
+  String get coachingReview => 'Review';
+
+  @override
+  String get coachingRemove => 'Remove';
+
+  @override
+  String get coachingMyCoaches => 'My coaches';
+
+  @override
+  String get coachingMyCoachesSub => 'Coaches who can see your training';
+
+  @override
+  String get coachingNoCoaches => 'You haven\'t accepted a coach invite yet.';
+
+  @override
+  String get coachingCoach => 'Coach';
+
+  @override
+  String coachingLinkedSince(String date) {
+    return 'Linked since $date';
+  }
+
+  @override
+  String get coachingLeave => 'Leave';
+
+  @override
+  String get coachingInviteLinkCopied => 'Invite link copied';
+
+  @override
+  String get coachingThisAthlete => 'this athlete';
+
+  @override
+  String get coachingThisCoach => 'this coach';
+
+  @override
+  String get coachingRevokeTitle => 'Revoke invite?';
+
+  @override
+  String get coachingRevokeBody =>
+      'The invite link will stop working. You can always create a new one.';
+
+  @override
+  String get coachingRemoveAthleteTitle => 'Remove athlete?';
+
+  @override
+  String coachingRemoveAthleteBody(String name) {
+    return 'Stop coaching $name? You\'ll lose access to their runs and plans.';
+  }
+
+  @override
+  String get coachingLeaveCoachTitle => 'Leave coach?';
+
+  @override
+  String coachingLeaveCoachBody(String name) {
+    return 'Stop sharing your training with $name?';
+  }
+
+  @override
+  String coachingLoadError(String error) {
+    return 'Couldn\'t load coaching: $error';
+  }
+
+  @override
+  String coachingCreateInviteError(String error) {
+    return 'Couldn\'t create invite: $error';
+  }
+
+  @override
+  String coachingRevokeInviteError(String error) {
+    return 'Couldn\'t revoke invite: $error';
+  }
+
+  @override
+  String coachingRemoveAthleteError(String error) {
+    return 'Couldn\'t remove athlete: $error';
+  }
+
+  @override
+  String coachingEndLinkError(String error) {
+    return 'Couldn\'t end the link: $error';
+  }
+
+  @override
+  String get coachingAthleteAthleteFallback => 'Athlete';
+
+  @override
+  String get coachingAthleteRunnerFallback => 'Runner';
+
+  @override
+  String coachingAthleteCoachingSince(String date) {
+    return 'Coaching since $date';
+  }
+
+  @override
+  String get coachingAthletePlanCompliance => 'Plan compliance';
+
+  @override
+  String get coachingAthleteNoActivePlan => 'No active training plan.';
+
+  @override
+  String get coachingAthleteAssignTitle => 'Assign a plan';
+
+  @override
+  String coachingAthleteAssignHint(String name) {
+    return 'Pick one of your plans to assign to $name.';
+  }
+
+  @override
+  String get coachingAthleteAssignSelectLabel => 'Plan';
+
+  @override
+  String get coachingAthleteAssignSelectPlaceholder => 'Choose a plan…';
+
+  @override
+  String get coachingAthleteAssignStartLabel => 'Start date';
+
+  @override
+  String get coachingAthleteAssigning => 'Assigning…';
+
+  @override
+  String get coachingAthleteAssignButton => 'Assign plan';
+
+  @override
+  String get coachingAthleteAssignNoPlans =>
+      'Create a training plan first, then you can assign it to your athletes.';
+
+  @override
+  String get coachingAthleteAssignedByYou => 'Assigned by you';
+
+  @override
+  String get coachingAthleteCannotAssignHasPlan =>
+      'This athlete already has an active plan. They\'ll need to finish or end it before you can assign a new one.';
+
+  @override
+  String get coachingAthleteComplete => 'complete';
+
+  @override
+  String coachingAthleteDoneCount(int done, int total) {
+    return '$done of $total done';
+  }
+
+  @override
+  String coachingAthleteMissedCount(int n) {
+    return '$n missed';
+  }
+
+  @override
+  String get coachingAthleteStatusDone => 'Done';
+
+  @override
+  String get coachingAthleteStatusMissed => 'Missed';
+
+  @override
+  String get coachingAthleteStatusUpcoming => 'Upcoming';
+
+  @override
+  String get coachingAthleteRecentRuns => 'Recent runs';
+
+  @override
+  String get coachingAthleteNoRunsYet => 'No runs logged yet.';
+
+  @override
+  String get coachingAthletePrivate => 'Private';
+
+  @override
+  String coachingAthleteAssignSuccess(String name) {
+    return 'Plan assigned to $name';
+  }
+
+  @override
+  String coachingAthleteLoadError(String error) {
+    return 'Couldn\'t load athlete: $error';
+  }
 }

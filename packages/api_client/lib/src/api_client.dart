@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:core_models/core_models.dart';
@@ -4946,6 +4947,351 @@ class ApiClient {
         .delete()
         .eq(BodyMetricRow.colUserId, uid);
   }
+
+  // ──────────────────── Coach-athlete roster (persona #46) ────────────────
+  //
+  // Mirror of the web coaching data layer (apps/web/src/lib/core/data.ts):
+  // a coach mints a shareable invite token (createCoachInvite); the athlete
+  // redeems it (redeemCoachInvite -> redeem_coach_invite RPC) to form an
+  // active link. RLS scopes every read/write to the two parties; profiles
+  // are joined in a second query, mirroring the followers/following fetches.
+
+  /// Mint a pending invite. The token is client-generated; only the coach
+  /// can read their own pending rows (RLS). Returns the token so the caller
+  /// can build the `/coaching/accept/<token>` share link.
+  Future<String> createCoachInvite({String? note}) async {
+    final uid = userId;
+    if (uid == null) throw Exception('Not authenticated');
+    // 128 bits of secure randomness as 32 hex chars — same shape as web's
+    // crypto.randomUUID().replace(/-/g, '') invite token, without adding a
+    // uuid dependency to this package.
+    final rng = Random.secure();
+    final token =
+        List.generate(32, (_) => rng.nextInt(16).toRadixString(16)).join();
+    await _client.from(CoachAthleteRow.table).insert({
+      CoachAthleteRow.colCoachId: uid,
+      CoachAthleteRow.colStatus: 'pending',
+      CoachAthleteRow.colInviteToken: token,
+      CoachAthleteRow.colNote: note?.trim().isEmpty ?? true ? null : note!.trim(),
+    });
+    return token;
+  }
+
+  /// Active athletes on the signed-in coach's roster, newest acceptance first.
+  Future<List<CoachAthleteLink>> fetchMyAthletes() async {
+    final uid = userId;
+    if (uid == null) return const [];
+    final rows = await _client
+        .from(CoachAthleteRow.table)
+        .select('id, status, note, created_at, accepted_at, athlete_id')
+        .eq(CoachAthleteRow.colCoachId, uid)
+        .eq(CoachAthleteRow.colStatus, 'active')
+        .order(CoachAthleteRow.colAcceptedAt, ascending: false);
+    return _linksWithProfiles(
+        (rows as List).cast<Map<String, dynamic>>(), CoachAthleteRow.colAthleteId);
+  }
+
+  /// Active coaches the signed-in athlete is linked to, newest first.
+  Future<List<CoachAthleteLink>> fetchMyCoaches() async {
+    final uid = userId;
+    if (uid == null) return const [];
+    final rows = await _client
+        .from(CoachAthleteRow.table)
+        .select('id, status, note, created_at, accepted_at, coach_id')
+        .eq(CoachAthleteRow.colAthleteId, uid)
+        .eq(CoachAthleteRow.colStatus, 'active')
+        .order(CoachAthleteRow.colAcceptedAt, ascending: false);
+    return _linksWithProfiles(
+        (rows as List).cast<Map<String, dynamic>>(), CoachAthleteRow.colCoachId);
+  }
+
+  Future<List<CoachAthleteLink>> _linksWithProfiles(
+      List<Map<String, dynamic>> rows, String otherIdCol) async {
+    if (rows.isEmpty) return const [];
+    final ids = rows.map((r) => r[otherIdCol] as String).toSet().toList();
+    final profiles = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, ids);
+    final byId = <String, ({String? displayName, String? avatarUrl})>{};
+    for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
+      byId[p['id'] as String] = (
+        displayName: p['display_name'] as String?,
+        avatarUrl: p['avatar_url'] as String?,
+      );
+    }
+    return rows.map((r) {
+      final otherId = r[otherIdCol] as String;
+      final prof = byId[otherId];
+      return CoachAthleteLink(
+        id: r['id'] as String,
+        status: r['status'] as String,
+        note: r['note'] as String?,
+        createdAt: DateTime.parse(r['created_at'] as String),
+        acceptedAt: r['accepted_at'] == null
+            ? null
+            : DateTime.parse(r['accepted_at'] as String),
+        userId: otherId,
+        displayName: prof?.displayName,
+        avatarUrl: prof?.avatarUrl,
+      );
+    }).toList();
+  }
+
+  /// Unredeemed invites the signed-in coach has minted, newest first.
+  Future<List<PendingCoachInvite>> fetchPendingCoachInvites() async {
+    final uid = userId;
+    if (uid == null) return const [];
+    final rows = await _client
+        .from(CoachAthleteRow.table)
+        .select('id, invite_token, note, created_at')
+        .eq(CoachAthleteRow.colCoachId, uid)
+        .eq(CoachAthleteRow.colStatus, 'pending')
+        .isFilter(CoachAthleteRow.colAthleteId, null)
+        .order(CoachAthleteRow.colCreatedAt, ascending: false);
+    return (rows as List).cast<Map<String, dynamic>>().map((r) {
+      return PendingCoachInvite(
+        id: r['id'] as String,
+        inviteToken: r['invite_token'] as String,
+        note: r['note'] as String?,
+        createdAt: DateTime.parse(r['created_at'] as String),
+      );
+    }).toList();
+  }
+
+  /// Redeem an invite token. Returns the coach's user id. Throws the RPC's
+  /// raise text (e.g. an expired or already-redeemed token).
+  Future<String> redeemCoachInvite(String token) async {
+    final res = await _client.rpc('redeem_coach_invite', params: {'token': token});
+    return res as String;
+  }
+
+  /// End an active link (either party may call). Goes through the
+  /// `end_coach_link` RPC, not a direct UPDATE — `coach_athletes` has no
+  /// client UPDATE policy, so a coach can't reassign athlete_id to forge a
+  /// link. Soft-ends via status so the row survives for audit.
+  Future<void> endCoachLink(String id) async {
+    await _client.rpc('end_coach_link', params: {'p_id': id});
+  }
+
+  /// Revoke (hard-delete) an unredeemed invite. RLS only permits this on the
+  /// coach's own pending, athlete-less rows.
+  Future<void> revokeCoachInvite(String id) async {
+    await _client.from(CoachAthleteRow.table).delete().eq(CoachAthleteRow.colId, id);
+  }
+
+  /// One athlete's recent runs for the coach review surface. The RLS policy
+  /// `active coach reads athlete runs` (migration 20261103_001) grants a
+  /// `status='active'` coach SELECT on the athlete's run rows — public AND
+  /// private — straight off the base table, so the `user_id` filter here is
+  /// the *athlete*. Column-narrowed: no track download (the raw GPS trace
+  /// stays owner-only — decisions § 98). Returns [] when the caller isn't an
+  /// active coach (RLS simply yields zero rows).
+  Future<List<AthleteRunSummary>> fetchAthleteRuns(String athleteId,
+      {int limit = 20}) async {
+    if (userId == null || athleteId.isEmpty) return const [];
+    final data = await _client
+        .from(RunRow.table)
+        .select(
+            'id, started_at, distance_m, duration_s, is_public, source, route_id, activity_type, metadata')
+        .eq(RunRow.colUserId, athleteId)
+        .order(RunRow.colStartedAt, ascending: false)
+        .limit(limit);
+    return (data as List).cast<Map<String, dynamic>>().map((r) {
+      return AthleteRunSummary(
+        id: r['id'] as String,
+        startedAt: DateTime.parse(r['started_at'] as String),
+        distanceM: ((r['distance_m'] as num?) ?? 0).toDouble(),
+        durationS: ((r['duration_s'] as num?) ?? 0).toInt(),
+        isPublic: (r['is_public'] as bool?) ?? false,
+        source: r['source'] as String?,
+        routeId: r['route_id'] as String?,
+        activityType: (r['activity_type'] as String?) ?? 'run',
+        metadata: r['metadata'] as Map<String, dynamic>?,
+      );
+    }).toList();
+  }
+
+  /// The athlete's active training plan + its weeks/workouts for the coach
+  /// review surface. Mirrors web `fetchAthletePlanOverview` — the coach
+  /// plan-read policies (migration 20261116_001) grant SELECT on
+  /// `training_plans` / `plan_weeks` / `plan_workouts` for active-linked
+  /// athletes. Null when the athlete has no active plan, or the caller isn't
+  /// their active coach (RLS yields no rows). `completionPct` excludes rest
+  /// days, matching the web roll-up.
+  Future<AthletePlanOverview?> fetchAthletePlanOverview(String athleteId) async {
+    if (userId == null || athleteId.isEmpty) return null;
+    final planRow = await _client
+        .from(TrainingPlanRow.table)
+        .select()
+        .eq(TrainingPlanRow.colUserId, athleteId)
+        .eq('status', 'active')
+        .maybeSingle();
+    if (planRow == null) return null;
+    final plan = TrainingPlanRow.fromJson(planRow);
+    final weekRows = await _client
+        .from(PlanWeekRow.table)
+        .select()
+        .eq(PlanWeekRow.colPlanId, plan.id)
+        .order(PlanWeekRow.colWeekIndex, ascending: true);
+    final weeks = (weekRows as List)
+        .cast<Map<String, dynamic>>()
+        .map(PlanWeekRow.fromJson)
+        .toList();
+    var workouts = <PlanWorkoutRow>[];
+    if (weeks.isNotEmpty) {
+      final woRows = await _client
+          .from(PlanWorkoutRow.table)
+          .select()
+          .inFilter(PlanWorkoutRow.colWeekId, [for (final w in weeks) w.id])
+          .order(PlanWorkoutRow.colScheduledDate, ascending: true);
+      workouts = (woRows as List)
+          .cast<Map<String, dynamic>>()
+          .map(PlanWorkoutRow.fromJson)
+          .toList();
+    }
+    final real = workouts.where((w) => w.kind != 'rest').toList();
+    final done = real
+        .where((w) => w.manuallyCompleted == true || w.completedRunId != null)
+        .length;
+    final pct = real.isEmpty ? 0 : (100 * done / real.length).round();
+    return AthletePlanOverview(
+      plan: plan,
+      weeks: weeks,
+      workouts: workouts,
+      completionPct: pct,
+    );
+  }
+
+  /// Training plans owned by the signed-in coach, newest first — the source
+  /// plans the assign control offers. Mirrors web `fetchMyPlans`.
+  Future<List<TrainingPlanRow>> fetchMyPlans({int limit = 100}) async {
+    final uid = userId;
+    if (uid == null) return const [];
+    final rows = await _client
+        .from(TrainingPlanRow.table)
+        .select()
+        .eq(TrainingPlanRow.colUserId, uid)
+        .order(TrainingPlanRow.colCreatedAt, ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(TrainingPlanRow.fromJson)
+        .toList();
+  }
+
+  /// Assign one of the coach's plans to a linked athlete via the
+  /// `assign_plan_to_athlete` RPC (migration 20270106_001). The thrown error
+  /// carries the RPC's raise text (e.g. the athlete already has an active
+  /// plan), which the caller surfaces. Returns the new plan id.
+  Future<String> assignPlanToAthlete({
+    required String sourcePlanId,
+    required String athleteId,
+    required DateTime startDate,
+    String? Function(DateTime)? toIso,
+  }) async {
+    try {
+      final res = await _client.rpc('assign_plan_to_athlete', params: {
+        'p_source_plan_id': sourcePlanId,
+        'p_athlete_id': athleteId,
+        'p_start_date': (toIso ?? _isoDate)(startDate),
+      });
+      return res as String;
+    } on PostgrestException catch (e) {
+      // Surface the RPC's RAISE text verbatim (e.g. "athlete already has an
+      // active plan") rather than the noisy PostgrestException.toString(), so
+      // the caller can show it directly without re-parsing the SQLSTATE.
+      throw Exception(e.message);
+    }
+  }
+
+  static String _isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+/// One athlete on a coach's roster, or one coach on an athlete's list — the
+/// mirror of web's `CoachAthleteLink`. `userId` is whichever party is *not*
+/// the viewer (the athlete for a coach's roster, the coach for an athlete's
+/// list).
+class CoachAthleteLink {
+  final String id;
+  final String status;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime? acceptedAt;
+  final String userId;
+  final String? displayName;
+  final String? avatarUrl;
+
+  const CoachAthleteLink({
+    required this.id,
+    required this.status,
+    required this.note,
+    required this.createdAt,
+    required this.acceptedAt,
+    required this.userId,
+    required this.displayName,
+    required this.avatarUrl,
+  });
+}
+
+/// An unredeemed coach invite — mirror of web's `PendingCoachInvite`.
+class PendingCoachInvite {
+  final String id;
+  final String inviteToken;
+  final String? note;
+  final DateTime createdAt;
+
+  const PendingCoachInvite({
+    required this.id,
+    required this.inviteToken,
+    required this.note,
+    required this.createdAt,
+  });
+}
+
+/// One of an athlete's recent runs on the coach review surface — mirror of
+/// web's `AthleteRunSummary`. Column-narrowed: no track.
+class AthleteRunSummary {
+  final String id;
+  final DateTime startedAt;
+  final double distanceM;
+  final int durationS;
+  final bool isPublic;
+  final String? source;
+  final String? routeId;
+  final String activityType;
+  final Map<String, dynamic>? metadata;
+
+  const AthleteRunSummary({
+    required this.id,
+    required this.startedAt,
+    required this.distanceM,
+    required this.durationS,
+    required this.isPublic,
+    required this.source,
+    required this.routeId,
+    required this.activityType,
+    required this.metadata,
+  });
+}
+
+/// An athlete's active plan + weeks/workouts + completion percentage for the
+/// coach review surface — mirror of web's `ActivePlanOverview` (scoped to the
+/// athlete, with no `todayWorkout` — the coach surface shows a window, not a
+/// today card).
+class AthletePlanOverview {
+  final TrainingPlanRow plan;
+  final List<PlanWeekRow> weeks;
+  final List<PlanWorkoutRow> workouts;
+  final int completionPct;
+
+  const AthletePlanOverview({
+    required this.plan,
+    required this.weeks,
+    required this.workouts,
+    required this.completionPct,
+  });
 }
 
 /// One set in a [ApiClient.createGymWorkout] / `updateGymWorkout` call,

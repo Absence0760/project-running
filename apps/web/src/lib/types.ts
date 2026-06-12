@@ -205,7 +205,8 @@ export type NotificationKind =
 	| 'message'
 	| 'club_post'
 	| 'run_completed'
-	| 'event_reminder';
+	| 'event_reminder'
+	| 'plan_assigned';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)
