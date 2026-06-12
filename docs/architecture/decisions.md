@@ -3029,6 +3029,30 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 143. A coach assigns a training plan by deep-cloning one of their own into an athlete-owned plan; clone-not-subscribe, gated on the active link
+
+**Decided (2026-06-12, migration `20270106_001`).** The coach-athlete link (§97) + consent-gated read (§98) let a coach *review* an athlete but not *give* them a plan. `assign_plan_to_athlete(source_plan, athlete, start_date)` closes that: a SECURITY DEFINER RPC that deep-clones one of the coach's own plans (or a club template they can read) into a new `training_plans` row **owned by the athlete** (`user_id = athlete_id`), date-shifted from `start_date`, mirroring the `clone_plan_template` precedent. A nullable `training_plans.assigned_by_coach_id` records provenance. Surfaced on `/coaching/athletes/[id]` when the athlete has no active plan.
+
+**Why athlete-owned, clone-not-subscribe.** The assigned plan flows through the unchanged "users own their plans" RLS, the client-side auto-match, and every plan surface exactly like a self-created plan — the athlete can edit, complete, or abandon it, and later edits to the coach's source do **not** propagate (same call as §35 templates). The coach keeps the read + `plan_workouts`-edit access from `20261116_001` to keep tuning it. Consent is the `status='active'` link (the athlete redeemed the invite); ending the link blocks future assignments but leaves already-assigned plans with the athlete (it is their data).
+
+**Trade-off.** The RPC **raises if the athlete already has an active plan** rather than silently abandoning the athlete's own plan — the coach coordinates with them first (the UI shows an explanatory note instead of the form). Web-only this slice (the whole `/coaching` roster is web-only per §24); the assigned plan reaches the athlete through the mobile plan surfaces that already exist, so no twin work. The athlete is notified on assign — a `plan_assigned` notification raised by a trigger on the assigned-plan insert (migration `20270107_001`, in-app/bell only). Coach-authored-directly-in-athlete-account (vs. clone-from-own) is deferred.
+
+**Don't re-litigate** by adding an FK from `gym_workouts`/`runs` to the source plan (the link is provenance only), by letting the coach's source-plan edits propagate to assigned instances, or by auto-superseding the athlete's existing active plan. Pinned by `assign_plan_to_athlete_test.sql` (consent gate, ownership, deep-clone, self-assign, unreadable-source, active-plan conflict, ended-link revocation) + `tests-e2e/coaching/assign-plan.spec.ts`.
+
+---
+
+## 144. Plan generator v2 (adaptive rescheduling) ships as a trend-gated, suggestion-only layer over the shipped re-plan engine; the fitness-signal phase is CISO-gated
+
+**Decided (2026-06-12, P1 shipped).** "Adaptive weekly rescheduling driven by adherence" (the last deferred training-engine item) ships as a thin pure layer, **not** a new engine. P1's `adaptiveReplanRemaining` (TS↔Dart parity pair `plan_adaptive_replan`) classifies the trailing 3 *completed* weeks' drift via the existing `weeklyDrift`, and only when a **sustained trend** (≥2 of 3 weeks flagged the same direction) is found does it delegate the actual future-only deltas to the shipped `replanRemaining`. So the new layer decides **whether + why**; the existing engine decides **what**. It reuses the existing preview-and-apply surface (web `/plans/[id]` + mobile `plan_detail_screen`) with a reason + confidence badge. No schema, no RPC, no fitness signal in P1.
+
+**Why trend-gated over the existing manual re-plan.** The shipped "Re-plan remaining" acts on a single signal (a missed long run, last week over). The adaptive layer's whole value is **suppressing single-week noise** — it requires a 2-of-3 trend before nagging, so a one-off bad week doesn't trigger a plan rewrite. Same conservative discipline (past + taper frozen, never auto-mutates, only suggests) inherited from `replanRemaining`.
+
+**The CISO gate.** P2 introduces fitness-gated direction (TSB/ATL/CTL from `training_load.ts`) — the first time health-derived load (HR/TRIMP) feeds a *training prescription*. Per the SOC 2 posture, **P2 must not reach prod users without CISO / Security-Analyst sign-off.** As of 2026-06-12 the P2 math is merged + wired on web (`/plans/[id]`), but the fitness input is passed **only behind `PUBLIC_ADAPTIVE_FITNESS_GATE` (off by default)** — so it is inert in prod (mirrors the paid-events "built but credential-gated before prod" pattern, §139). **Flipping that flag on for a prod build is the sign-off-gated action.** P3 (atomic multi-week reschedule RPC, needed only once a change re-indexes `plan_weeks` — i.e. P4 territory; premature before then, §"no preemptive abstractions") and P4 (date-shifts + deload insertion) are deferred. The mobile UI wiring of the fitness input follows web per §24.
+
+**Don't re-litigate** by lowering the 2-of-3 trend bar (it's the noise filter), by letting the adaptive layer mutate past/taper weeks, by adding a fitness signal to P1's module, or by shipping P2 without the sign-off. The full phased design is in `reviews/plan-generator-v2.md`. Pinned by `plan_adaptive_replan.test.ts` ↔ `plan_adaptive_replan_test.dart` (7 each) + `tests-e2e/plans/adaptive-replan.spec.ts`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

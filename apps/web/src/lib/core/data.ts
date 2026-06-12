@@ -5696,6 +5696,23 @@ export async function fetchAthletePlanOverview(
 	};
 }
 
+/// Assigns a coach's plan to a linked athlete via the assign_plan_to_athlete
+/// RPC (migration 20270106_001). The thrown error carries the RPC's raise text
+/// (e.g. the athlete already has an active plan), which the caller surfaces.
+export async function assignPlanToAthlete(
+	sourcePlanId: string,
+	athleteId: string,
+	startDate: string
+): Promise<string> {
+	const { data, error } = await supabase.rpc('assign_plan_to_athlete', {
+		p_source_plan_id: sourcePlanId,
+		p_athlete_id: athleteId,
+		p_start_date: startDate
+	});
+	if (error) throw error;
+	return data as string;
+}
+
 /// Unredeemed invites the signed-in coach has minted.
 export async function fetchPendingCoachInvites(): Promise<PendingCoachInvite[]> {
 	const userId = auth.user?.id;

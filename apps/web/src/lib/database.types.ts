@@ -2614,6 +2614,7 @@ export type Database = {
       }
       training_plans: {
         Row: {
+          assigned_by_coach_id: string | null
           club_id: string | null
           created_at: string | null
           current_5k_seconds: number | null
@@ -2636,6 +2637,7 @@ export type Database = {
           vdot: number | null
         }
         Insert: {
+          assigned_by_coach_id?: string | null
           club_id?: string | null
           created_at?: string | null
           current_5k_seconds?: number | null
@@ -2658,6 +2660,7 @@ export type Database = {
           vdot?: number | null
         }
         Update: {
+          assigned_by_coach_id?: string | null
           club_id?: string | null
           created_at?: string | null
           current_5k_seconds?: number | null
@@ -3197,6 +3200,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      assign_plan_to_athlete: {
+        Args: {
+          p_athlete_id: string
+          p_source_plan_id: string
+          p_start_date: string
+        }
+        Returns: string
       }
       block_user: {
         Args: { p_reason?: string; p_target: string }
