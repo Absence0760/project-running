@@ -3939,6 +3939,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Du bist zuletzt vom Plan abgewichen, aber es gibt gerade keine sichere Anpassung.';
 
   @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Zurückgehalten – du trägst gerade Ermüdung, daher ist mehr Volumen nicht ratsam.';
+
+  @override
   String get planDetailAdaptiveReasonUnder =>
       'seit mehreren Wochen unter deinem Plan';
 

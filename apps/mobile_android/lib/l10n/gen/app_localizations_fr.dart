@@ -3944,6 +3944,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Tu as récemment dévié du plan, mais aucun ajustement sûr n\'est possible pour l\'instant.';
 
   @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Mis en pause — tu accumules de la fatigue en ce moment, augmenter le volume n\'est pas conseillé.';
+
+  @override
   String get planDetailAdaptiveReasonUnder =>
       'en dessous de ton plan depuis plusieurs semaines';
 

@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../local_run_store.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../plan_adherence.dart';
 import '../plan_replan.dart';
@@ -16,6 +18,7 @@ import '../plan_adaptive_replan.dart';
 import '../social_service.dart' show ClubView, RecentRunRow, SocialService;
 import '../training.dart';
 import '../training_labels.dart';
+import '../training_load.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -29,6 +32,22 @@ import 'workout_detail_screen.dart';
 /// run is linked OR the runner manually marked it complete.
 bool _isWorkoutCompleted(PlanWorkoutRow wo) =>
     wo.completedRunId != null || wo.manuallyCompleted;
+
+/// P2 fitness direction gate (gen v2, decisions §144). OFF by default — the
+/// health-derived-load → prescription path stays inert until this dotenv flag
+/// is flipped, which is the CISO/Security-Analyst sign-off-gated action
+/// (reviews/plan-generator-v2-p2-ciso-note.md; mirrors the web
+/// PUBLIC_ADAPTIVE_FITNESS_GATE + the paid-events pre-prod gate, §139). The
+/// wiring below is dormant until then.
+bool get _adaptiveFitnessGate {
+  try {
+    final v = dotenv.env['ADAPTIVE_FITNESS_GATE'];
+    return v == '1' || v == 'true';
+  } catch (_) {
+    // dotenv not loaded (e.g. widget tests) → gate stays off.
+    return false;
+  }
+}
 
 /// Filter the viewer's club memberships to ones they can publish a
 /// plan-template into — owner or admin. Pure so it's directly
@@ -55,12 +74,19 @@ class PlanDetailScreen extends StatefulWidget {
   @visibleForTesting
   final String? viewerIdOverride;
 
+  /// Source of full `Run`s (with `metadata.avg_bpm`) for the P2 adaptive-replan
+  /// fitness gate. Only consumed when `ADAPTIVE_FITNESS_GATE` is on (gated OFF
+  /// by default, pending P2 CISO sign-off); null leaves the P1 behaviour intact.
+  /// Threaded from the Fitness hub via PlansScreen; other call sites pass null.
+  final LocalRunStore? runStore;
+
   const PlanDetailScreen({
     super.key,
     required this.training,
     required this.planId,
     this.social,
     this.viewerIdOverride,
+    this.runStore,
   });
 
   @override
@@ -259,13 +285,41 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     });
   }
 
+  /// P2 (gated): the runner's latest training-load point as the fitness input.
+  /// Null unless `ADAPTIVE_FITNESS_GATE` is on, so the health-derived-load path
+  /// is dormant by default. Mirrors web's `adaptiveFitnessInput`: feed FULL
+  /// `Run`s (with `metadata.avg_bpm`) from `LocalRunStore` — NOT `_recentRuns`
+  /// (`RecentRunRow`, no HR) — to `computeTrainingLoadSeries`, default HR prefs.
+  AdaptiveFitness? _adaptiveFitnessInput() {
+    if (!_adaptiveFitnessGate) return null;
+    final runs = widget.runStore?.runs;
+    if (runs == null || runs.isEmpty) return null;
+    final series = computeTrainingLoadSeries(runs, endDate: DateTime.now());
+    if (series.isEmpty) return null;
+    final last = series.last;
+    return AdaptiveFitness(tsb: last.tsb, atl: last.atl, ctl: last.ctl);
+  }
+
   /// Adaptive (trend-based) re-plan: only proposes when the last few completed
   /// weeks show a sustained drift, suppressing single-week noise.
   void _proposeAdaptiveReplan(TrainingPlanRow plan) {
     if (!_isOwner(plan) || _bulkBusy) return;
     final l10n = AppLocalizations.of(context);
     final res = adaptiveReplanRemaining(
-        weeks: _buildReplanInput(plan), today: toIsoDate(DateTime.now()));
+      weeks: _buildReplanInput(plan),
+      today: toIsoDate(DateTime.now()),
+      fitness: _adaptiveFitnessInput(),
+    );
+    if (res.fitnessGated) {
+      // P2: an add-volume trend was withheld because the runner is carrying
+      // fatigue (TSB < 0) — the adherence and fitness signals disagree.
+      setState(() {
+        _replanPreview = null;
+        _adaptiveInfo = null;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveFitnessHeld);
+      return;
+    }
     if (res.reason == AdaptiveReason.onTrack) {
       setState(() {
         _replanPreview = null;

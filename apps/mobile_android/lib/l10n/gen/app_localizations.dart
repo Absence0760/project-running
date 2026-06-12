@@ -6539,6 +6539,12 @@ abstract class AppLocalizations {
   /// **'You\'ve drifted from plan recently, but there\'s no safe adjustment to make right now.'**
   String get planDetailAdaptiveNoSafeChange;
 
+  /// No description provided for @planDetailAdaptiveFitnessHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'Held back — you\'re carrying fatigue right now, so adding volume isn\'t advised.'**
+  String get planDetailAdaptiveFitnessHeld;
+
   /// No description provided for @planDetailAdaptiveReasonUnder.
   ///
   /// In en, this message translates to:

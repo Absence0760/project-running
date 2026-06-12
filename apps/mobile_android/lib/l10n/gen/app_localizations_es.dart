@@ -3931,6 +3931,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Te has desviado del plan últimamente, pero ahora mismo no hay un ajuste seguro que hacer.';
 
   @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'En pausa: ahora mismo arrastras fatiga, así que no se recomienda añadir volumen.';
+
+  @override
   String get planDetailAdaptiveReasonUnder =>
       'por debajo de tu plan durante varias semanas';
 

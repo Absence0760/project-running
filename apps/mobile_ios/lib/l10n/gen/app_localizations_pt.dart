@@ -3932,6 +3932,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.';
 
   @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Pausado — você está acumulando fadiga agora, então aumentar o volume não é recomendado.';
+
+  @override
   String get planDetailAdaptiveReasonUnder =>
       'abaixo do seu plano por várias semanas';
 
@@ -12144,6 +12148,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get planDetailAdaptiveNoSafeChange =>
       'Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.';
+
+  @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Pausado — você está acumulando fadiga agora, então aumentar o volume não é recomendado.';
 
   @override
   String get planDetailAdaptiveReasonUnder =>

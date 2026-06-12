@@ -3901,6 +3901,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You\'ve drifted from plan recently, but there\'s no safe adjustment to make right now.';
 
   @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Held back — you\'re carrying fatigue right now, so adding volume isn\'t advised.';
+
+  @override
   String get planDetailAdaptiveReasonUnder =>
       'under your plan for multiple weeks';
 

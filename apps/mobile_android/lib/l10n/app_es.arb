@@ -1072,6 +1072,7 @@
   "planDetailAdaptiveReplan": "Replanificación adaptativa",
   "planDetailAdaptiveOnTrack": "Tus últimas semanas van según el plan: no hace falta ajustar nada.",
   "planDetailAdaptiveNoSafeChange": "Te has desviado del plan últimamente, pero ahora mismo no hay un ajuste seguro que hacer.",
+  "planDetailAdaptiveFitnessHeld": "En pausa: ahora mismo arrastras fatiga, así que no se recomienda añadir volumen.",
   "planDetailAdaptiveReasonUnder": "por debajo de tu plan durante varias semanas",
   "planDetailAdaptiveReasonOver": "por encima de tu plan durante varias semanas",
   "planDetailAdaptiveConfidenceHigh": "confianza alta",

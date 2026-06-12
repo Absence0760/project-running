@@ -3694,6 +3694,10 @@ class AppLocalizationsJa extends AppLocalizations {
       '最近は計画から外れていますが、今は安全に調整できる変更がありません。';
 
   @override
+  String get planDetailAdaptiveFitnessHeld =>
+      '保留しました — 現在疲労がたまっているため、走行量を増やすのはおすすめしません。';
+
+  @override
   String get planDetailAdaptiveReasonUnder => '数週間にわたって計画を下回っています';
 
   @override
