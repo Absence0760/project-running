@@ -3001,6 +3001,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 141. The gym programming engine ships as a four-slice, web-first depth tier that relocates the engagement gate into P1
+
+**Decided (2026-06-11, P1 shipped — migration `20270101_001`).** (Originally drafted in `gym_programming.md` as §140; §140 went to the session-plans ADR, which landed first — this is the same decision, renumbered to §141.) The engine sequences so **P1 (reusable routines + "repeat last") *is* the validation gate**, not a separate measurement phase: `gym_routines` → `gym_routine_exercises` → `gym_routine_sets` + a `gym_workouts.metadata` jsonb bag, prefill-only. If repeat-rate clears an owner-set threshold (~20% of gym sessions over 4–6 weeks) we proceed to P2 (supersets / set-types / rest / time-distance + `expandRoutineSteps`), P3 (a `GymWorkoutRunner` mirroring `WorkoutRunner` — prescribed-vs-actual `gym_step_results` + `gym_adherence` in `gym_workouts.metadata`, adherence on reps/load at the 80%-of-target cutoff applied **per axis**, not pace), and P4 (linear / double-progression / 5×5 / %-e1RM / RPE-autoreg; Coach-authored progression clamped by the same pure prescriber).
+
+**Why relational, not jsonb.** The plan is relational — the deliberate divergence from `plan_workouts.structure jsonb`, justified by per-exercise querying + row-by-row progression — with one jsonb escape hatch (`progression_params`). The plan→session link lives in `gym_workouts.metadata.routine_id` (a string, **not** an FK), so deleting a routine leaves prior sessions intact (immutable history). P1 shipped web (`/gym/routines` library + builder + detail) **and** the mobile twin (`LocalRoutineStore` + screens, byte-identical iOS); the `gym_routine` parity pair (`routineFromWorkout` + `prefillFromRoutine`) reuses `gym_prs.normaliseExerciseName`. The manual engine is fully free; only Coach-*authored* progression (P4) is metered via the existing per-tier coach cap.
+
+**Trade-off.** P1 builds the routine schema before the gate formally clears — accepted because P1 is itself the cheapest probe and a durable standalone win ("repeat last" + ending the flat-`set_index` reconstruction heuristic via explicit `position` + `exercise_key`). If repeat-rate is weak, freeze at P1 and leave P2–P4 specced-but-unbuilt.
+
+**Don't re-litigate** by modelling routines on `plan_workouts` jsonb or building the runner/progression before the P1 signal lands. If Coach-authored progression (P4) ever reads logged sets, loop in the CISO/Security Analyst before that path ships. Full design in [gym_programming.md](../features/gym_programming.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
