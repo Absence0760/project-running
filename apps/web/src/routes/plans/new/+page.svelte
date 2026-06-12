@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatISO } from '$lib/training/training';
 	import { goto, afterNavigate } from '$app/navigation';
+	import { page } from '$app/stores';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import {
 		fetchMyClubs,
@@ -23,24 +24,37 @@
 	let startDate = $state(defaultStartDate());
 	let cloning = $state(false);
 
-	let cameFromPlans = $state(false);
+	// Back/cancel target. Defaults to /plans; when the user arrived from a
+	// club's Templates tab (the "Adopt" link), return them there instead.
+	let backHref = $state('/plans');
+	let backLabel = $state(m('plansNew.backToPlans'));
+	let backViaHistory = $state(false);
+	let backCaptured = $state(false);
 	afterNavigate(({ from }) => {
-		if (cameFromPlans || !from) return;
+		if (backCaptured || !from) return;
 		if (from.url.pathname === '/plans' || from.url.pathname.startsWith('/plans?')) {
-			cameFromPlans = true;
+			backViaHistory = true;
+			backCaptured = true;
+		} else if (
+			from.url.pathname.startsWith('/clubs/') &&
+			from.url.searchParams.get('tab') === 'templates'
+		) {
+			backHref = from.url.pathname + from.url.search;
+			backLabel = m('plansNew.backToClubTemplates');
+			backCaptured = true;
 		}
 	});
 
 	function handleBack(e: MouseEvent): void {
-		if (cameFromPlans) {
+		if (backViaHistory) {
 			e.preventDefault();
 			history.back();
 		}
 	}
 
 	function handleCancel(): void {
-		if (cameFromPlans) history.back();
-		else goto('/plans');
+		if (backViaHistory) history.back();
+		else goto(backHref);
 	}
 
 	function defaultStartDate(): string {
@@ -62,6 +76,14 @@
 				})
 			);
 			templates = lists.flat();
+			// Pre-select the template a club's "Adopt" deep link points at
+			// (/plans/new?from=<templateId>). Only honour it when it's one of
+			// the user's loaded club templates — a stale or foreign id leaves
+			// the picker on its placeholder rather than a phantom selection.
+			const from = $page.url.searchParams.get('from');
+			if (from && templates.some((t) => t.template.id === from)) {
+				selectedTemplateId = from;
+			}
 		} catch (e) {
 			console.warn('fetch templates failed', e);
 		} finally {
@@ -89,9 +111,9 @@
 </svelte:head>
 
 <div class="page">
-	<a href="/plans" class="back-link" onclick={handleBack}>
+	<a href={backHref} class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
-		{m('plansNew.backToPlans')}
+		{backLabel}
 	</a>
 
 	<header class="page-header">
