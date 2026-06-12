@@ -30,6 +30,8 @@ class MetadataKeys {
   static const String fastestHalfMarathonS = 'fastest_half_marathon_s';
   static const String fastestMarathonS = 'fastest_marathon_s';
   static const String garminId = 'garmin_id';
+  static const String gymAdherence = 'gym_adherence';
+  static const String gymStepResults = 'gym_step_results';
   static const String healthConnectType = 'health_connect_type';
   static const String hrSeriesUrl = 'hr_series_url';
   static const String importedAt = 'imported_at';
@@ -50,8 +52,12 @@ class MetadataKeys {
   static const String position = 'position';
   static const String raceName = 'race_name';
   static const String recoveredFromCrash = 'recovered_from_crash';
+  static const String routineId = 'routine_id';
   static const String runningDynamics = 'running_dynamics';
   static const String runNumber = 'run_number';
+  static const String sessionAdherence = 'session_adherence';
+  static const String sessionPlanId = 'session_plan_id';
+  static const String sessionStepResults = 'session_step_results';
   static const String sourceFile = 'source_file';
   static const String steps = 'steps';
   static const String stravaActivityType = 'strava_activity_type';

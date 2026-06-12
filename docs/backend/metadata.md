@@ -170,6 +170,34 @@ Per-canonical-distance fastest times computed by the client at save time. Person
 
 ---
 
+# `gym_workouts.metadata` key registry
+
+`gym_workouts.metadata` is a second `jsonb` bag — the gym/session analogue of `runs.metadata`. It carries the planned-vs-actual linkage written when a `gym_workout` row was logged by following a routine (gym programming P2) or a session plan (session planner P2). Same schema-less-bag caveat applies: codegen can't catch a casing/typo drift here, so route every Dart read/write through the `MetadataKeys.*` constants and keep this section in lockstep.
+
+**All six keys are classified OWNER-ONLY — never public-safe.** `gym_step_results` / `session_step_results` carry the runner's planned-vs-actual detail (per-set weight/reps, per-item timings, what was skipped) — the gym/session equivalent of the run-side `workout_step_results` that the `public_runs` view already strips. There is no public projection of `gym_workouts` today; if one is ever added, these keys must be on its strip list. Weights inside `gym_step_results` are canonical kg (the pure logic never formats — the reader formats through the weight pref). Retention: lifetime of the `gym_workouts` row; cleared only when the workout row is deleted.
+
+### Routine linkage (gym programming P2)
+
+Written by `GymWorkoutRunner` (`packages/run_recorder/lib/src/gym_workout_runner.dart`) on finish, when the logged workout was started from a saved routine. Planned-vs-actual is computed by the `gym_adherence` parity pair (web `apps/web/src/lib/gym/gym_adherence.ts` ↔ mobile `apps/mobile_android/lib/gym_adherence.dart`); the routine itself is shaped by the `gym_routine` pair.
+
+| Key | Shape | Writers | Readers | Required? | Notes |
+|---|---|---|---|---|---|
+| `routine_id` | `string` (uuid) — the linked `gym_routines` row | `GymWorkoutRunner` (finish, when a routine was active) | gym-workout detail (web + mobile, planned-vs-actual section) | Optional | Presence implies an explicit routine link. Owner-only. |
+| `gym_step_results` | `array<{ exercise_key: string, set_index: int, status: 'hit' \| 'partial' \| 'missed' \| 'extra', reps_delta: int?, weight_delta_kg: double?, target_reps_min: int?, target_reps_max: int?, target_weight_kg: double?, target_duration_s: int?, actual_reps: int?, actual_weight_kg: double?, actual_duration_s: int? }>` | Same | Same (planned-vs-actual table) | Optional; present alongside `routine_id` | One row per planned set, matched to actuals by `(exercise_key, set_index)` — never by name spelling. `status = 'extra'` marks a logged set with no planned counterpart. Weights are canonical kg. Owner-only — mirrors the run-side `workout_step_results`. |
+| `gym_adherence` | `string` — `completed` \| `partial` \| `abandoned` | Same | Same | Optional; present alongside `routine_id` | `completed` at ≥ 80 % of planned sets hit, `abandoned` at zero, `partial` between — mirrors the run-side `workout_adherence` threshold. Owner-only. |
+
+### Session plan linkage (session planner P2)
+
+Written by the session follow-along runner on finish, when the logged `gym_workout` was driven by a `session_plans` row (yoga/pilates — cross-modal: a session is logged as a `gym_workout`). The timed step sequence is flattened by the `session_steps` pair (`expandSessionSteps`, web `apps/web/src/lib/social/session_steps.ts` ↔ mobile `apps/mobile_android/lib/session_steps.dart`).
+
+| Key | Shape | Writers | Readers | Required? | Notes |
+|---|---|---|---|---|---|
+| `session_plan_id` | `string` (uuid) — the linked `session_plans` row | session follow-along runner (finish, when a session was active) | session-workout detail (web + mobile) | Optional | Presence implies an explicit session-plan link. Owner-only. |
+| `session_step_results` | `array<{ step_index: int, kind: string, side?: 'left' \| 'right', target_duration_s: int, actual_duration_s: int?, status: 'completed' \| 'skipped' }>` | Same | Same (planned-vs-actual / completion view) | Optional; present alongside `session_plan_id` | One row per expanded timed step (per-side items split into L/R, matching `expandSessionSteps`). Owner-only — carries the runner's per-item completion detail. |
+| `session_adherence` | `string` — `completed` \| `partial` \| `abandoned` | Same | Same | Optional; present alongside `session_plan_id` | Same threshold semantics as `gym_adherence` / `workout_adherence`. Owner-only. |
+
+---
+
 ## Conventions
 
 When adding a new metadata key:

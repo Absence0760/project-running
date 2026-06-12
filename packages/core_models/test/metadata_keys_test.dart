@@ -12,6 +12,12 @@ void main() {
       expect(MetadataKeys.isDnf, 'is_dnf');
       expect(MetadataKeys.recoveredFromCrash, 'recovered_from_crash');
       expect(MetadataKeys.workoutStepResults, 'workout_step_results');
+      expect(MetadataKeys.routineId, 'routine_id');
+      expect(MetadataKeys.gymStepResults, 'gym_step_results');
+      expect(MetadataKeys.gymAdherence, 'gym_adherence');
+      expect(MetadataKeys.sessionPlanId, 'session_plan_id');
+      expect(MetadataKeys.sessionStepResults, 'session_step_results');
+      expect(MetadataKeys.sessionAdherence, 'session_adherence');
     });
 
     test('every value is unique snake_case', () {
@@ -31,6 +37,8 @@ void main() {
         MetadataKeys.fastestHalfMarathonS,
         MetadataKeys.fastestMarathonS,
         MetadataKeys.garminId,
+        MetadataKeys.gymAdherence,
+        MetadataKeys.gymStepResults,
         MetadataKeys.healthConnectType,
         MetadataKeys.hrSeriesUrl,
         MetadataKeys.importedAt,
@@ -51,8 +59,12 @@ void main() {
         MetadataKeys.position,
         MetadataKeys.raceName,
         MetadataKeys.recoveredFromCrash,
+        MetadataKeys.routineId,
         MetadataKeys.runningDynamics,
         MetadataKeys.runNumber,
+        MetadataKeys.sessionAdherence,
+        MetadataKeys.sessionPlanId,
+        MetadataKeys.sessionStepResults,
         MetadataKeys.sourceFile,
         MetadataKeys.steps,
         MetadataKeys.stravaActivityType,
