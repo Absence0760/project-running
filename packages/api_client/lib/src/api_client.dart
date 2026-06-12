@@ -4530,6 +4530,9 @@ class ApiClient {
     final routine = GymRoutineRow.fromJson(row);
     for (var p = 0; p < kept.length; p++) {
       final ex = kept[p];
+      // gym_routine_exercises_superset_chk requires the group + order to be
+      // both null or both set, so a standalone exercise clears both.
+      final g = ex.supersetGroup;
       final exRow = await _client
           .from(GymRoutineExerciseRow.table)
           .insert({
@@ -4537,6 +4540,13 @@ class ApiClient {
             GymRoutineExerciseRow.colExerciseName: ex.exerciseName.trim(),
             GymRoutineExerciseRow.colExerciseKey: ex.exerciseKey,
             GymRoutineExerciseRow.colPosition: p,
+            GymRoutineExerciseRow.colSupersetGroup: g,
+            GymRoutineExerciseRow.colSupersetOrder:
+                g == null ? null : (ex.supersetOrder ?? 0),
+            GymRoutineExerciseRow.colModality: ex.modality ?? 'weight_reps',
+            GymRoutineExerciseRow.colProgression: ex.progression ?? 'none',
+            GymRoutineExerciseRow.colProgressionParams:
+                ex.progressionParams ?? <String, dynamic>{},
           })
           .select(GymRoutineExerciseRow.colId)
           .single();
@@ -4547,10 +4557,14 @@ class ApiClient {
             {
               GymRoutineSetRow.colRoutineExerciseId: exId,
               GymRoutineSetRow.colSetIndex: i,
+              GymRoutineSetRow.colSetType: ex.sets[i].setType ?? 'working',
               GymRoutineSetRow.colTargetRepsMin: ex.sets[i].targetRepsMin,
               GymRoutineSetRow.colTargetRepsMax: ex.sets[i].targetRepsMax,
               GymRoutineSetRow.colTargetWeightKg: ex.sets[i].targetWeightKg,
               GymRoutineSetRow.colTargetRpe: ex.sets[i].targetRpe,
+              GymRoutineSetRow.colRestS: ex.sets[i].restS,
+              GymRoutineSetRow.colTargetDurationS: ex.sets[i].targetDurationS,
+              GymRoutineSetRow.colTargetDistanceM: ex.sets[i].targetDistanceM,
             },
         ]);
       }
@@ -4772,21 +4786,34 @@ typedef GymSetInput = ({
 
 /// One planned set in a [ApiClient.createGymRoutine] call (targets only).
 /// `set_index` is assigned positionally on insert. A single rep target lives
-/// in [targetRepsMin] with [targetRepsMax] null.
+/// in [targetRepsMin] with [targetRepsMax] null. [setType] defaults to
+/// 'working' server-side; [restS] / [targetDurationS] / [targetDistanceM]
+/// carry the P2 set-type / rest / modality targets.
 typedef GymRoutineSetInput = ({
+  String? setType,
   int? targetRepsMin,
   int? targetRepsMax,
   double? targetWeightKg,
   double? targetRpe,
+  num? restS,
+  int? targetDurationS,
+  double? targetDistanceM,
 });
 
 /// One planned exercise in a [ApiClient.createGymRoutine] call. [exerciseKey]
 /// is `normaliseExerciseName(exerciseName)` stamped at write time (the frozen
 /// identity that binds the plan to logged sets). `position` is assigned
-/// positionally on insert.
+/// positionally on insert. [supersetGroup] / [supersetOrder] bracket the
+/// exercise into a superset; [modality] / [progression] / [progressionParams]
+/// carry the P2 modality + P4 progression scheme.
 typedef GymRoutineExerciseInput = ({
   String exerciseName,
   String exerciseKey,
+  int? supersetGroup,
+  int? supersetOrder,
+  String? modality,
+  String? progression,
+  Map<String, dynamic>? progressionParams,
   List<GymRoutineSetInput> sets,
 });
 
