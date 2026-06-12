@@ -3595,6 +3595,39 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewTemplatePickerCancel => 'キャンセル';
 
   @override
+  String get planNewStarterTitle => '組み込みプランから始める';
+
+  @override
+  String get planNewStarterSubtitle =>
+      '実績のあるトレーニングプランを選ぶと、開始日からスケジュールします。後で調整できます。';
+
+  @override
+  String get planNewStarterButton => 'スタータープランを見る';
+
+  @override
+  String get planNewStarterCreating => '作成中…';
+
+  @override
+  String get planNewStarterPickerTitle => 'スタータープランを選ぶ';
+
+  @override
+  String get planNewStarterPickerCancel => 'キャンセル';
+
+  @override
+  String planNewStarterCreateFailed(String error) {
+    return 'そのプランを作成できませんでした: $error';
+  }
+
+  @override
+  String get planNewStarterC25k => 'カウチ・トゥ・5K（初心者ウォークラン）';
+
+  @override
+  String get planNewStarterHalf12 => 'ハーフマラソン — 12週間';
+
+  @override
+  String get planNewStarterMarathon16 => 'マラソン — 16週間';
+
+  @override
   String get planDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
 
   @override

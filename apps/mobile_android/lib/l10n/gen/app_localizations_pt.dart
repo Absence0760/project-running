@@ -3830,6 +3830,39 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planNewTemplatePickerCancel => 'Cancelar';
 
   @override
+  String get planNewStarterTitle => 'Começar com um plano integrado';
+
+  @override
+  String get planNewStarterSubtitle =>
+      'Escolha um plano de treino comprovado e o agendamos a partir da sua data de início; você pode ajustá-lo depois.';
+
+  @override
+  String get planNewStarterButton => 'Explorar planos iniciais';
+
+  @override
+  String get planNewStarterCreating => 'Criando…';
+
+  @override
+  String get planNewStarterPickerTitle => 'Escolha um plano inicial';
+
+  @override
+  String get planNewStarterPickerCancel => 'Cancelar';
+
+  @override
+  String planNewStarterCreateFailed(String error) {
+    return 'Não foi possível criar esse plano: $error';
+  }
+
+  @override
+  String get planNewStarterC25k => 'Couch to 5K (iniciante caminhada-corrida)';
+
+  @override
+  String get planNewStarterHalf12 => 'Meia maratona — 12 semanas';
+
+  @override
+  String get planNewStarterMarathon16 => 'Maratona — 16 semanas';
+
+  @override
   String get planDetailTimeoutError =>
       'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
 
@@ -12006,6 +12039,39 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planNewTemplatePickerCancel => 'Cancelar';
+
+  @override
+  String get planNewStarterTitle => 'Começar com um plano integrado';
+
+  @override
+  String get planNewStarterSubtitle =>
+      'Escolha um plano de treino comprovado e o agendamos a partir da sua data de início; você pode ajustá-lo depois.';
+
+  @override
+  String get planNewStarterButton => 'Explorar planos iniciais';
+
+  @override
+  String get planNewStarterCreating => 'Criando…';
+
+  @override
+  String get planNewStarterPickerTitle => 'Escolha um plano inicial';
+
+  @override
+  String get planNewStarterPickerCancel => 'Cancelar';
+
+  @override
+  String planNewStarterCreateFailed(String error) {
+    return 'Não foi possível criar esse plano: $error';
+  }
+
+  @override
+  String get planNewStarterC25k => 'Couch to 5K (iniciante caminhada-corrida)';
+
+  @override
+  String get planNewStarterHalf12 => 'Meia maratona — 12 semanas';
+
+  @override
+  String get planNewStarterMarathon16 => 'Maratona — 16 semanas';
 
   @override
   String get planDetailTimeoutError =>
