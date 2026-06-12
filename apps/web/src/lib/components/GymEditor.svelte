@@ -23,11 +23,11 @@
 
 	let { existing = null, suggestions = [], oncreated, onupdated, oncancel }: Props = $props();
 
-	type EditSet = { reps: string; weight: string; rpe: string };
+	type EditSet = { reps: string; weight: string; rpe: string; duration: string };
 	type EditExercise = { name: string; sets: EditSet[] };
 
 	function emptySet(): EditSet {
-		return { reps: '', weight: '', rpe: '' };
+		return { reps: '', weight: '', rpe: '', duration: '' };
 	}
 
 	/// Reconstruct exercise blocks from a stored workout. Sets arrive in
@@ -48,6 +48,7 @@
 				// to kg on save. Storage stays canonical kg.
 				weight: weightInputValue(s.weight_kg),
 				rpe: s.rpe == null ? '' : String(s.rpe),
+				duration: s.duration_s == null ? '' : String(s.duration_s),
 			};
 			if (last && last.name === s.exercise_name) last.sets.push(row);
 			else blocks.push({ name: s.exercise_name, sets: [row] });
@@ -85,6 +86,13 @@
 		return Number.isFinite(n) ? n : null;
 	}
 
+	/// duration_s is an integer column — floor any decimal entry so a "90.5"
+	/// can't be rejected by the DB. Null when blank / non-numeric.
+	function intSeconds(s: string): number | null {
+		const n = num(s);
+		return n == null ? null : Math.max(0, Math.floor(n));
+	}
+
 	function buildSets(): GymSetInput[] {
 		const out: GymSetInput[] = [];
 		for (const ex of exercises) {
@@ -97,6 +105,7 @@
 					// The field carries the user's chosen unit; persist canonical kg.
 					weight_kg: parseWeight(set.weight),
 					rpe: num(set.rpe),
+					duration_s: intSeconds(set.duration),
 				});
 			}
 		}
@@ -172,6 +181,7 @@
 					<span class="section-label set-cap">{t('gym.reps')}</span>
 					<span class="section-label set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
 					<span class="section-label set-cap">{t('gym.rpe')}</span>
+					<span class="section-label set-cap">{t('gym.duration')}</span>
 					<span></span>
 				</div>
 				{#each ex.sets as _set, si (si)}
@@ -208,6 +218,17 @@
 								step="0.5"
 								aria-label={t('gym.rpe')}
 								bind:value={exercises[ei].sets[si].rpe}
+							/>
+						</label>
+						<label class="set-field">
+							<span class="section-label set-cap-inline">{t('gym.duration')}</span>
+							<input
+								type="number"
+								inputmode="numeric"
+								min="0"
+								step="1"
+								aria-label={t('gym.duration')}
+								bind:value={exercises[ei].sets[si].duration}
 							/>
 						</label>
 						<button
@@ -321,7 +342,7 @@
 	.set-head,
 	.set-row {
 		display: grid;
-		grid-template-columns: 3.5rem repeat(3, 1fr) 2rem;
+		grid-template-columns: 3.5rem repeat(4, 1fr) 2rem;
 		gap: var(--space-sm);
 		align-items: center;
 	}
@@ -432,7 +453,7 @@
 			display: none;
 		}
 		.set-row {
-			grid-template-columns: 1fr 1fr 1fr 2rem;
+			grid-template-columns: 1fr 1fr 1fr 1fr 2rem;
 			align-items: end;
 			row-gap: var(--space-xs);
 			padding: var(--space-sm);

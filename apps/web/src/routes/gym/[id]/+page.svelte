@@ -140,7 +140,12 @@
 		const parts: string[] = [];
 		if (s.reps != null) parts.push(`${s.reps}`);
 		if (s.weight_kg != null) parts.push(formatWeight(s.weight_kg));
-		return parts.join(' × ');
+		const repWeight = parts.join(' × ');
+		if (s.duration_s != null) {
+			const dur = t('gym.durationValue', { seconds: s.duration_s });
+			return repWeight ? `${repWeight} · ${dur}` : dur;
+		}
+		return repWeight;
 	}
 
 	// Header summary stats — total exercises / sets / working volume.

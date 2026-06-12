@@ -2928,6 +2928,8 @@ export const messages = {
 	"gym.reps": "レップ",
 	"gym.weightUnit": "重量 ({unit})",
 	"gym.rpe": "RPE",
+	"gym.duration": "時間 (秒)",
+	"gym.durationValue": "{seconds}秒",
 	"gym.setN": "セット {n}",
 	"gym.exercisesShort": "{count, plural, other {# 種目}}",
 	"gym.volumeShort": "{volume}",

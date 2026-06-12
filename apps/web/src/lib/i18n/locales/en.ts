@@ -2941,6 +2941,8 @@ export const en = {
 	"gym.reps": "Reps",
 	"gym.weightUnit": "Weight ({unit})",
 	"gym.rpe": "RPE",
+	"gym.duration": "Time (s)",
+	"gym.durationValue": "{seconds}s",
 	"gym.setN": "Set {n}",
 	"gym.exercisesShort": "{count, plural, one {# exercise} other {# exercises}}",
 	"gym.volumeShort": "{volume}",
