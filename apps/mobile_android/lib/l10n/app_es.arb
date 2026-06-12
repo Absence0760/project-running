@@ -1049,6 +1049,7 @@
   "planDetailNotFound": "Plan no encontrado.",
   "planDetailPublishTooltip": "Publicar como plantilla del club",
   "planDetailDaysPerWeek": "{count} días/sem.",
+  "planDetailCurrentWeek": "Esta semana",
   "planDetailToday": "HOY",
   "planDetailCompleted": "Completado",
   "planDetailWeek": "Semana {number}",

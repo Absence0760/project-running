@@ -3612,6 +3612,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get planDetailCurrentWeek => '今週';
+
+  @override
   String get planDetailToday => '今日';
 
   @override

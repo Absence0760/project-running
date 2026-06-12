@@ -390,6 +390,7 @@ export const en = {
 	"planDetail.dowThu": "Thu",
 	"planDetail.dowFri": "Fri",
 	"planDetail.dowSat": "Sat",
+	"planDetail.currentWeek": "This week",
 	"planDetail.ariaCompletedSuffix": ", completed",
 	"planDetail.loadingPlan": "Loading plan",
 	"planDetail.notFoundTitle": "Plan not found",

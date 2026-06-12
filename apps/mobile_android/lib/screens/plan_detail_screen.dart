@@ -18,6 +18,7 @@ import '../training_labels.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/current_week_strip.dart';
 import '../widgets/plan_calendar.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/workout_edit_sheet.dart';
@@ -425,6 +426,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ],
             ..._adherenceSection(theme, l10n, p),
             ..._replanSection(theme, l10n, p),
+            if (_weeks.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              CurrentWeekStrip(
+                startDate: p.startDate,
+                weekIndex: _weeks[currentWeek].weekIndex,
+                weekWorkouts: _byWeek[_weeks[currentWeek].id] ?? const [],
+                onSelect: _openWorkout,
+              ),
+            ],
             const SizedBox(height: 16),
             PlanCalendar(
               startDate: p.startDate,

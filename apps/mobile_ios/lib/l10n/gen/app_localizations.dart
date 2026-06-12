@@ -6401,6 +6401,12 @@ abstract class AppLocalizations {
   /// **'{count} days/wk'**
   String planDetailDaysPerWeek(int count);
 
+  /// Heading for the focused current-week 7-day strip on plan detail
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get planDetailCurrentWeek;
+
   /// Today-card eyebrow label
   ///
   /// In en, this message translates to:

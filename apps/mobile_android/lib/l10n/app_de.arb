@@ -1049,6 +1049,7 @@
   "planDetailNotFound": "Plan nicht gefunden.",
   "planDetailPublishTooltip": "Als Vereinsvorlage veröffentlichen",
   "planDetailDaysPerWeek": "{count} Tage/Wo.",
+  "planDetailCurrentWeek": "Diese Woche",
   "planDetailToday": "HEUTE",
   "planDetailCompleted": "Erledigt",
   "planDetailWeek": "Woche {number}",

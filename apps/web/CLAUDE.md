@@ -24,7 +24,7 @@ Deployed to AWS — S3 (static SvelteKit build) + CloudFront + Route 53 for ever
 src/
   lib/
     components/     # Modal + SplitPane (primitives), Avatar (shared img-or-initial avatar; per-site size/font/bg props), RunMap, ElevationProfile (Android-style interactive chart), ImportRoute, RouteBuilder, CoachChat,
-                    # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer,
+                    # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, CurrentWeekStrip (focused current-week 7-day planned-vs-completed ribbon on /plans/[id], above the month calendar; window anchored to start_date + currentWeek.week_index*7 so its done/active count matches the week card, re-ordered for display by the week_start pref), RouteExplorer,
                     # CalendarHeatmap, PersonalHeatmap (geographic heatmap of the user's own tracks on /runs/heatmap — distinct from RouteHeatmap's public community map), LicenseList, ClubEditor, EventEditor, PlanEditor (editable preview), PlanMetaEditor, RunEditor
                     # (modal-hosted creation forms), GymEditor (Phase 4 gym composer — modal-hosted, free-text exercise + inline sets, used by /gym + /gym/[id]), FoodLogEditor (Phase 4 nutrition composer — modal-hosted on /nutrition + page-hosted on /nutrition/log; OFF search → inline confirm-portion step + manual-macro fallback), PrivacyZonePicker (MapLibre map picker for owner zones, decisions §33),
                     # TrainingLoadChart (90-day fitness/fatigue/form trio on /dashboard, decisions §34),

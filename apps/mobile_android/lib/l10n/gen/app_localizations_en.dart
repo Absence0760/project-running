@@ -3818,6 +3818,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planDetailCurrentWeek => 'This week';
+
+  @override
   String get planDetailToday => 'TODAY';
 
   @override

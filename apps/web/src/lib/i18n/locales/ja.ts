@@ -377,6 +377,7 @@ export const messages = {
 	"planDetail.dowThu": "木",
 	"planDetail.dowFri": "金",
 	"planDetail.dowSat": "土",
+	"planDetail.currentWeek": "今週",
 	"planDetail.ariaCompletedSuffix": "、完了",
 	"planDetail.loadingPlan": "プランを読み込み中",
 	"planDetail.notFoundTitle": "プランが見つかりません",

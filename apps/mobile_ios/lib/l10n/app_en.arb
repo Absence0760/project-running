@@ -4770,6 +4770,10 @@
       }
     }
   },
+  "planDetailCurrentWeek": "This week",
+  "@planDetailCurrentWeek": {
+    "description": "Heading for the focused current-week 7-day strip on plan detail"
+  },
   "planDetailToday": "TODAY",
   "@planDetailToday": {
     "description": "Today-card eyebrow label"

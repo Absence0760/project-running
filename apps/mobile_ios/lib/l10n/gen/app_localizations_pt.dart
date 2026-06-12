@@ -3849,6 +3849,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planDetailCurrentWeek => 'Esta semana';
+
+  @override
   String get planDetailToday => 'HOJE';
 
   @override
@@ -11764,6 +11767,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planDetailDaysPerWeek(int count) {
     return '$count dias/sem.';
   }
+
+  @override
+  String get planDetailCurrentWeek => 'Esta semana';
 
   @override
   String get planDetailToday => 'HOJE';

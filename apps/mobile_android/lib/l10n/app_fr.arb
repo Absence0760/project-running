@@ -1049,6 +1049,7 @@
   "planDetailNotFound": "Plan introuvable.",
   "planDetailPublishTooltip": "Publier comme modèle de club",
   "planDetailDaysPerWeek": "{count} jours/sem.",
+  "planDetailCurrentWeek": "Cette semaine",
   "planDetailToday": "AUJOURD'HUI",
   "planDetailCompleted": "Terminé",
   "planDetailWeek": "Semaine {number}",
