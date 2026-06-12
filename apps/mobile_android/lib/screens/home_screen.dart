@@ -215,6 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
           key: const PageStorageKey('gym'),
           api: widget.apiClient,
           store: widget.gymStore,
+          social: widget.social,
         ),
       ),
       _LazyKeepAliveTab(

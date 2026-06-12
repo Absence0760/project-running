@@ -1,11 +1,13 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../gym_routine.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
+import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
@@ -22,12 +24,24 @@ class RoutineDetailScreen extends StatefulWidget {
   final LocalGymStore gymStore;
   final String routineId;
 
+  /// Optional. When supplied (and the viewer authors this personal routine
+  /// with at least one admin club), the detail grows a publish-as-template
+  /// control mirroring web `/gym/routines/[id]`'s publish-row. Omitting it
+  /// just hides the control — older callers don't need to wire it.
+  final SocialService? social;
+
+  /// Test seam — overrides the Supabase auth uid the publish gate compares
+  /// against the routine's author_id (mirrors plan_detail_screen).
+  final String? viewerIdOverride;
+
   const RoutineDetailScreen({
     super.key,
     required this.api,
     required this.store,
     required this.gymStore,
     required this.routineId,
+    this.social,
+    this.viewerIdOverride,
   });
 
   @override
@@ -36,11 +50,15 @@ class RoutineDetailScreen extends StatefulWidget {
 
 class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   bool _isOnline = true;
+  List<ClubView> _adminClubs = const [];
+  String _publishingTo = '';
+  bool _publishBusy = false;
 
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChange);
+    _loadAdminClubs();
   }
 
   @override
@@ -51,6 +69,51 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
 
   void _onStoreChange() {
     if (mounted) setState(() {});
+  }
+
+  /// Mirrors web's publish gate: only the author of a personal (non-club)
+  /// routine with at least one admin club sees the publish control, so fetch
+  /// the viewer's admin clubs up front. Best-effort — a failure leaves the
+  /// control hidden, never blocks the screen.
+  Future<void> _loadAdminClubs() async {
+    final social = widget.social;
+    final r = widget.store.byId(widget.routineId);
+    if (social == null || r == null || r.clubId != null) return;
+    final uid = widget.viewerIdOverride ??
+        Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null || r.row['author_id'] != uid) return;
+    try {
+      final clubs = await social.fetchMyClubs();
+      if (!mounted) return;
+      setState(() {
+        _adminClubs = clubs.where((c) => c.isAdmin).toList();
+      });
+    } catch (_) {
+      // Leave the control hidden on failure.
+    }
+  }
+
+  Future<void> _publishToClub(StoredRoutine r) async {
+    final social = widget.social;
+    if (social == null || _publishingTo.isEmpty || _publishBusy) return;
+    final api = widget.api;
+    if (api == null) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _publishBusy = true);
+    try {
+      await api.publishGymRoutineAsTemplate(
+        routineId: r.id,
+        clubId: _publishingTo,
+      );
+      if (!mounted) return;
+      setState(() => _publishingTo = '');
+      showTopBanner(context, l10n.gymRoutinePublishSuccess);
+    } catch (_) {
+      if (!mounted) return;
+      showTopBanner(context, l10n.gymRoutinePublishFailed);
+    } finally {
+      if (mounted) setState(() => _publishBusy = false);
+    }
   }
 
   Future<void> _maybeSync() async {
@@ -226,8 +289,75 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           const SizedBox(height: 8),
           Text(notes, style: theme.textTheme.bodyMedium),
         ],
+        if (r.clubId != null) ...[
+          const SizedBox(height: 12),
+          _clubTemplateBadge(theme, l10n),
+        ] else if (_adminClubs.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _publishRow(r, theme, l10n),
+        ],
         const SizedBox(height: 16),
         for (final ex in r.exercises) _exerciseCard(ex, theme, l10n),
+      ],
+    );
+  }
+
+  Widget _clubTemplateBadge(ThemeData theme, AppLocalizations l10n) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.groups, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            l10n.gymRoutineClubTemplateBadge,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.primary),
+          ),
+        ],
+      );
+
+  Widget _publishRow(
+      StoredRoutine r, ThemeData theme, AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.gymRoutinePublishLabel,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _publishingTo.isEmpty ? null : _publishingTo,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                hint: Text(l10n.gymRoutinePublishPick),
+                items: [
+                  for (final c in _adminClubs)
+                    DropdownMenuItem<String>(
+                      value: c.row.id,
+                      child: Text(c.row.name, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: _publishBusy
+                    ? null
+                    : (v) => setState(() => _publishingTo = v ?? ''),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: (_publishingTo.isEmpty || _publishBusy)
+                  ? null
+                  : () => _publishToClub(r),
+              child: Text(l10n.gymRoutinePublish),
+            ),
+          ],
+        ),
       ],
     );
   }

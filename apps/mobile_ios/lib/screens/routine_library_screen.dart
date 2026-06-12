@@ -6,6 +6,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
+import '../social_service.dart';
 import '../widgets/routine_builder_sheet.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 import 'routine_detail_screen.dart';
@@ -27,11 +28,16 @@ class RoutineLibraryScreen extends StatefulWidget {
   /// not a database) — mirrors web feeding `fetchGymExerciseNames`.
   final LocalGymStore gymStore;
 
+  /// Optional. Forwarded to [RoutineDetailScreen] so the routine detail can
+  /// offer the publish-as-club-template control. Omitting it hides publishing.
+  final SocialService? social;
+
   const RoutineLibraryScreen({
     super.key,
     required this.api,
     required this.store,
     required this.gymStore,
+    this.social,
   });
 
   @override
@@ -140,6 +146,7 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
           store: widget.store,
           gymStore: widget.gymStore,
           routineId: id,
+          social: widget.social,
         ),
       ),
     );

@@ -157,6 +157,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
             key: const PageStorageKey('fitness-gym'),
             api: widget.apiClient,
             store: widget.gymStore,
+            social: widget.social,
           ),
           NutritionScreen(
             key: const PageStorageKey('fitness-nutrition'),
