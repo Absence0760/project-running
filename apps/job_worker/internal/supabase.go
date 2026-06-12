@@ -1898,3 +1898,251 @@ type premiumRunRow struct {
 	ActivityType string                 `json:"activity_type"`
 	Metadata     map[string]interface{} `json:"metadata"`
 }
+
+// ─────────────────── weekly digest (engagement, gated) ───────────────────
+
+// IsEmailSuppressed reports whether an address is on the hard-block list
+// (bounce / complaint / explicit unsubscribe — migration 20270108_001).
+// The digest builder + handler MUST consult this before any send. Service
+// role bypasses the fail-closed RLS (no policy → anon/authenticated denied;
+// the worker is the sole reader/writer). An empty address is treated as
+// suppressed (can't send to nothing) so a missing-email path never sends.
+func (c *SupabaseClient) IsEmailSuppressed(ctx context.Context, email string) (bool, error) {
+	if email == "" {
+		return true, nil
+	}
+	q := url.Values{}
+	// email is the table's primary key; an exact match is the lookup.
+	q.Set("email", "eq."+email)
+	q.Set("select", "email")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/" + schema.TableEmailSuppressions + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	var rows []struct {
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
+}
+
+// InsertEmailSuppression adds an address to the hard-block list with the
+// given reason ('bounce' | 'complaint' | 'unsubscribe' | 'manual'). Used by
+// the unsubscribe endpoint (reason 'unsubscribe') and, later, the provider
+// bounce/complaint webhook. Idempotent: a 23505 on the email primary key
+// (already suppressed) is swallowed as success — re-unsubscribing is a no-op,
+// not an error.
+func (c *SupabaseClient) InsertEmailSuppression(ctx context.Context, email, reason string) error {
+	body, err := json.Marshal(map[string]any{"email": email, "reason": reason})
+	if err != nil {
+		return err
+	}
+	u := c.BaseURL + "/rest/v1/" + schema.TableEmailSuppressions
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	if err == nil {
+		return nil
+	}
+	var hErr *HTTPError
+	if errors.As(err, &hErr) && hErr.StatusCode == http.StatusConflict && strings.Contains(hErr.Body, "23505") {
+		return nil // already suppressed — idempotent
+	}
+	return err
+}
+
+// SetWeeklyDigestPrefOff flips the recipient's opt-in pref to 'off' in
+// user_settings.prefs, via the merge-aware `set_user_setting` RPC if present.
+// We instead PATCH the jsonb key directly with `prefs = prefs || '{...}'`
+// using a PostgREST jsonb merge so the rest of the bag is preserved. Service
+// role bypasses RLS. Used by the unsubscribe endpoint alongside the
+// suppression insert (belt-and-braces: pref off AND address blocked).
+func (c *SupabaseClient) SetWeeklyDigestPrefOff(ctx context.Context, userID string) error {
+	// PostgREST can't express `prefs = prefs || jsonb` in a PATCH body, so
+	// read-merge-write: fetch the current bag, set the one key, write it back.
+	prefs, err := c.FetchUserSettingsPrefs(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if prefs == nil {
+		prefs = map[string]interface{}{}
+	}
+	prefs[schema.PrefsEmailWeeklyDigest] = "off"
+	payload, err := json.Marshal(map[string]any{
+		"user_id": userID,
+		"prefs":   prefs,
+	})
+	if err != nil {
+		return err
+	}
+	// Upsert on the user_id conflict target so a user with no settings row
+	// yet still gets one with the digest explicitly off.
+	u := c.BaseURL + "/rest/v1/" + schema.TableUserSettings + "?on_conflict=user_id"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "resolution=merge-duplicates,return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
+// BuildWeeklyDigest assembles the bounded per-user weekly summary the digest
+// handler renders. `since` is the 7-day window start. Each field is a small
+// windowed read over an existing table — no track downloads, no fan-out:
+//   - runs:                count + distance sum over runs.started_at >= since
+//   - kudos received:      notifications kind=kudos for the user, created_at >= since
+//   - new PBs:             personal_records achieved_at >= since
+// Service role bypasses RLS; the userID filter is the access gate.
+func (c *SupabaseClient) BuildWeeklyDigest(ctx context.Context, userID string, since time.Time) (DigestSummary, error) {
+	var out DigestSummary
+	cutoff := since.UTC().Format(time.RFC3339)
+
+	// Runs in the window: distance_m only, summed in Go. A week of runs is
+	// bounded (a serious ultrarunner logs a handful), so reading the rows is
+	// cheaper than a custom aggregate RPC.
+	runsQ := url.Values{}
+	runsQ.Set("user_id", "eq."+userID)
+	runsQ.Set("started_at", "gte."+cutoff)
+	runsQ.Set("select", "distance_m")
+	runsQ.Set("limit", "1000")
+	runsURL := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + runsQ.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, runsURL, nil)
+	if err != nil {
+		return out, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return out, err
+	}
+	var runRows []struct {
+		DistanceM float64 `json:"distance_m"`
+	}
+	if err := json.Unmarshal(body, &runRows); err != nil {
+		return out, err
+	}
+	out.RunCount = len(runRows)
+	for _, r := range runRows {
+		out.DistanceM += r.DistanceM
+	}
+
+	// Kudos received this week — count of notifications of kind 'kudos'.
+	kudosQ := url.Values{}
+	kudosQ.Set("user_id", "eq."+userID)
+	kudosQ.Set("kind", "eq.kudos")
+	kudosQ.Set("created_at", "gte."+cutoff)
+	kudosQ.Set("select", "id")
+	kudosQ.Set("limit", "1000")
+	kudosURL := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + kudosQ.Encode()
+	kReq, err := http.NewRequestWithContext(ctx, http.MethodGet, kudosURL, nil)
+	if err != nil {
+		return out, err
+	}
+	kBody, err := c.do(ctx, kReq)
+	if err != nil {
+		return out, err
+	}
+	var kRows []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(kBody, &kRows); err != nil {
+		return out, err
+	}
+	out.KudosCount = len(kRows)
+
+	// New PBs this week — personal_records achieved in the window.
+	prQ := url.Values{}
+	prQ.Set("user_id", "eq."+userID)
+	prQ.Set("achieved_at", "gte."+cutoff)
+	prQ.Set("select", "distance")
+	prQ.Set("limit", "1000")
+	prURL := c.BaseURL + "/rest/v1/" + schema.TablePersonalRecords + "?" + prQ.Encode()
+	prReq, err := http.NewRequestWithContext(ctx, http.MethodGet, prURL, nil)
+	if err != nil {
+		return out, err
+	}
+	prBody, err := c.do(ctx, prReq)
+	if err != nil {
+		return out, err
+	}
+	var prRows []struct {
+		Distance string `json:"distance"`
+	}
+	if err := json.Unmarshal(prBody, &prRows); err != nil {
+		return out, err
+	}
+	out.NewPBs = len(prRows)
+
+	return out, nil
+}
+
+// FetchDigestCandidates returns the user ids that have opted IN to the weekly
+// digest (user_settings.prefs.email_weekly_digest = 'on'). This is the
+// builder's selection step — it enqueues one weekly_digest job per id. The
+// per-recipient suppression + pref re-check happens again in the handler
+// (defence in depth: the pref could flip, or the address could land on the
+// suppression list, between enqueue and send). Bounded at `limit`.
+//
+// The pref lives in a jsonb bag, so the filter is a PostgREST jsonb path
+// equality: `prefs->>email_weekly_digest=eq.on`.
+func (c *SupabaseClient) FetchDigestCandidates(ctx context.Context, limit int) ([]string, error) {
+	q := url.Values{}
+	q.Set("prefs->>"+schema.PrefsEmailWeeklyDigest, "eq.on")
+	q.Set("select", "user_id")
+	q.Set("limit", strconv.Itoa(limit))
+	u := c.BaseURL + "/rest/v1/" + schema.TableUserSettings + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.UserID)
+	}
+	return out, nil
+}
+
+// EnqueueWeeklyDigest inserts a `kind='weekly_digest'` job for one recipient.
+// Called by the digest builder. The CHECK on jobs.kind (migration
+// 20270108_001) gates the insert; an out-of-allowlist kind would 23514.
+func (c *SupabaseClient) EnqueueWeeklyDigest(ctx context.Context, userID string) error {
+	body, err := json.Marshal(map[string]any{
+		"kind":    "weekly_digest",
+		"payload": map[string]any{"user_id": userID},
+	})
+	if err != nil {
+		return err
+	}
+	u := c.BaseURL + "/rest/v1/" + schema.TableJobs
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}

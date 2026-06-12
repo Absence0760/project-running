@@ -210,6 +210,29 @@ type SafetyEmailPayload struct {
 	ConfirmToken  string  `json:"confirm_token"`
 }
 
+// WeeklyDigestPayload is the payload for `kind='weekly_digest'` jobs
+// (migration 20270108_001). Engagement mail — BEHIND THE GATE: the builder
+// that enqueues these is UNSCHEDULED (no pg_cron) and the handler skips
+// unless the recipient's opt-IN `email_weekly_digest` pref == 'on' and the
+// address is NOT in email_suppressions. There is no notifications row; the
+// handler builds a bounded per-user weekly summary from existing data and
+// renders it via the localized catalogue with an RFC 8058 unsubscribe token.
+type WeeklyDigestPayload struct {
+	UserID string `json:"user_id"`
+}
+
+// DigestSummary is the bounded weekly roll-up the digest handler renders.
+// Every field is a small scalar derived from a single windowed COUNT/SUM
+// over an existing table — no track downloads, no fan-out. RunCount==0 with
+// KudosCount==0 and NewPBs==0 means "nothing happened this week"; the
+// handler still sends (a quiet week is a legitimate nudge), the copy adapts.
+type DigestSummary struct {
+	RunCount   int     // runs started in the 7-day window
+	DistanceM  float64 // total distance over those runs
+	KudosCount int     // kudos received in the window (notifications kind=kudos)
+	NewPBs     int     // personal records achieved in the window
+}
+
 // StravaActivity is the subset of Strava's `/api/v3/activities/{id}`
 // response the ingest path consumes. Mirrors the EF shape at
 // `apps/backend/supabase/functions/_shared/strava.ts` — keep these

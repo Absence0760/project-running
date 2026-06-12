@@ -170,6 +170,16 @@ apps/job_worker/
 │   ├── webpush/             # dependency-light Web Push sender (RFC 8291 aes128gcm + RFC 8292 VAPID)
 │   │   ├── webpush.go       # Sender.Send: ECDH+HKDF+AES-GCM encrypt + ES256 VAPID JWT + POST
 │   │   └── webpush_test.go  # round-trip decrypt + VAPID-JWT verify + status classification
+│   ├── handler_weekly_digest.go # kind='weekly_digest' — opt-in + suppression gate, bounded summary render (GATED: no scheduled send)
+│   ├── handler_weekly_digest_test.go # 13 tests on opt-in / suppression hard-block / fail-closed / quiet-week / unsubscribe header
+│   ├── digest_builder.go    # EnqueueAllWeeklyDigests — selects opted-in recipients, enqueues jobs (UNSCHEDULED; pg_cron is the CISO/counsel-gated step)
+│   ├── digest_builder_test.go # 4 tests on enqueue / no-candidates / select-error / per-recipient skip
+│   ├── digesttoken/         # stateless keyed-HMAC RFC 8058 unsubscribe token (no PII, no table, constant-time verify)
+│   │   ├── token.go         # Mint / Verify over (user_id, 'weekly_digest')
+│   │   └── token_test.go    # 8 tests: round-trip / wrong-user / wrong-secret / tamper / fail-closed / no-PII
+│   ├── unsubscribe/         # unauth RFC 8058 one-click opt-out endpoint (/unsubscribe/weekly-digest)
+│   │   ├── server.go        # verify token → flip pref off + insert suppression; fail-closed on bad/missing token
+│   │   └── server_test.go   # 10 tests: valid GET/POST / bad / missing / cross-user / no-secret 503 / no-address / 500
 │   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload
 │   ├── handler_strava_event_test.go # 10 tests on the ingest dispatch
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests

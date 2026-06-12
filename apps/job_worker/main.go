@@ -19,6 +19,7 @@ import (
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/unsubscribe"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
 )
 
@@ -151,6 +152,24 @@ type premiumBackend struct {
 
 func (b *premiumBackend) FetchUserSubscriptionTier(ctx context.Context, userID string) (string, error) {
 	return b.client.FetchUserSubscriptionTier(ctx, userID)
+}
+
+// unsubscribeBackend adapts SupabaseClient to unsubscribe.Backend. Same
+// leaf-package reasoning as the others.
+type unsubscribeBackend struct {
+	client *internal.SupabaseClient
+}
+
+func (b *unsubscribeBackend) SetWeeklyDigestPrefOff(ctx context.Context, userID string) error {
+	return b.client.SetWeeklyDigestPrefOff(ctx, userID)
+}
+
+func (b *unsubscribeBackend) InsertEmailSuppression(ctx context.Context, email, reason string) error {
+	return b.client.InsertEmailSuppression(ctx, email, reason)
+}
+
+func (b *unsubscribeBackend) FetchUserEmail(ctx context.Context, userID string) (string, error) {
+	return b.client.FetchUserEmail(ctx, userID)
 }
 
 func (b *premiumBackend) FetchPremiumRuns(ctx context.Context, userID string, since time.Time, limit int) ([]premium.PremiumRun, error) {
@@ -345,13 +364,23 @@ func main() {
 	var lastClaimAtUnix atomic.Int64
 	lastClaimAtUnix.Store(time.Now().Unix())
 
+	// Weekly-digest unsubscribe secret. Keys the stateless RFC 8058
+	// unsubscribe HMAC the digest handler mints + the unsubscribe endpoint
+	// verifies. Optional — unset → the digest renders WITHOUT a
+	// List-Unsubscribe header/link and the endpoint 503s (the consistent
+	// fail-closed posture). NOTE: this only gates the unsubscribe plumbing;
+	// the digest SEND itself is gated by no scheduled builder existing —
+	// enabling that is a separate CISO/counsel step (decisions / email.md).
+	digestUnsubSecret := os.Getenv("WEEKLY_DIGEST_UNSUB_SECRET")
+
 	worker := &internal.Worker{
-		Backend:    client,
-		Matcher:    matcher,
-		Strava:     strava,
-		Email:      emailSender,
-		WebPush:    webPushSender,
-		AppBaseURL: appBaseURL,
+		Backend:           client,
+		Matcher:           matcher,
+		Strava:            strava,
+		Email:             emailSender,
+		WebPush:           webPushSender,
+		AppBaseURL:        appBaseURL,
+		DigestUnsubSecret: digestUnsubSecret,
 		Config: internal.Config{
 			WorkerID:       workerID,
 			PollInterval:   2 * time.Second,
@@ -518,7 +547,26 @@ func main() {
 		logger.Warn("premium: DISABLED — SUPABASE_JWT_SECRET unset; Pro endpoints return 503")
 	}
 
-	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv, premiumSrv)
+	// Weekly-digest unsubscribe endpoint — unauthenticated RFC 8058 one-click
+	// opt-out at /unsubscribe/weekly-digest. The stateless HMAC token is the
+	// credential (no session); verifying it flips the opt-in pref to 'off' and
+	// inserts an email_suppressions row. Refuses with 503 when the secret is
+	// unset — same fail-closed posture as the JWT-gated endpoints. This is the
+	// opt-OUT side; it is safe to enable independently of any digest SEND
+	// (which stays gated on no scheduled builder existing).
+	var unsubSrv *unsubscribe.Server
+	if digestUnsubSecret != "" {
+		unsubSrv = &unsubscribe.Server{
+			Secret:  digestUnsubSecret,
+			Backend: &unsubscribeBackend{client: client},
+			Log:     logger.With("component", "unsubscribe"),
+		}
+		logger.Info("unsubscribe: enabled (weekly-digest opt-out mounted at /unsubscribe/weekly-digest)")
+	} else {
+		logger.Warn("unsubscribe: DISABLED — WEEKLY_DIGEST_UNSUB_SECRET unset; unsubscribe endpoint returns 503 + digest renders without a List-Unsubscribe link")
+	}
+
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv, premiumSrv, unsubSrv)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -545,7 +593,7 @@ func main() {
 // happens to take that long to handle; longer-running jobs would
 // trigger a restart, which is the correct response for "this job is
 // hung".
-func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server, prem *premium.Server) *http.Server {
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server, prem *premium.Server, unsub *unsubscribe.Server) *http.Server {
 	mux := http.NewServeMux()
 	if hub != nil {
 		hub.RegisterRoutes(mux)
@@ -558,6 +606,9 @@ func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, w
 	}
 	if prem != nil {
 		prem.RegisterRoutes(mux)
+	}
+	if unsub != nil {
+		unsub.RegisterRoutes(mux)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		ageSec := time.Now().Unix() - lastClaim.Load()

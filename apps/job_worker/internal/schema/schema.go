@@ -65,6 +65,10 @@ const (
 	TableFoodLog            = "food_log"
 	TableBodyMetrics        = "body_metrics"
 	TableSafetyContacts     = "safety_contacts"
+	// TableEmailSuppressions is the hard-block list (bounce / complaint /
+	// explicit unsubscribe) the weekly-digest builder + handler MUST consult
+	// before any send. Migration 20270108_001. Fail-closed RLS — worker-only.
+	TableEmailSuppressions = "email_suppressions"
 )
 
 // Bucket is a Supabase Storage bucket name — the `<bucket>` in
@@ -97,4 +101,10 @@ const (
 // per-user preferences registry documented in docs/backend/settings.md.
 const (
 	PrefsPrivacyZones = "privacy_zones"
+	// PrefsEmailWeeklyDigest is the opt-IN consent for the weekly engagement
+	// digest (default 'off', migration 20270108_001). Marketing/promotional
+	// mail — NEVER folded into email_notifications (you can't infer marketing
+	// consent from a transactional-email setting). Only the literal 'on'
+	// opts a recipient in; anything else (absent, 'off', non-string) is a skip.
+	PrefsEmailWeeklyDigest = "email_weekly_digest"
 )
