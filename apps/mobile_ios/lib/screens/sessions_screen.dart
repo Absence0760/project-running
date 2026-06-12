@@ -3,14 +3,17 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../local_gym_store.dart';
 import 'session_detail_screen.dart';
 
 /// Read-only list of the user's session plans (session_planner.md P1). Tapping a
-/// row opens the expanded read view. Building/editing lives on web first.
+/// row opens the expanded read view. Building/editing lives on web first; the
+/// detail screen's follow-along runner logs a gym_workout into [gymStore].
 class SessionsScreen extends StatefulWidget {
-  const SessionsScreen({super.key, required this.api});
+  const SessionsScreen({super.key, required this.api, required this.gymStore});
 
   final ApiClient api;
+  final LocalGymStore gymStore;
 
   @override
   State<SessionsScreen> createState() => _SessionsScreenState();
@@ -63,6 +66,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                         MaterialPageRoute<void>(
                           builder: (_) => SessionDetailScreen(
                             api: widget.api,
+                            gymStore: widget.gymStore,
                             planId: p.id,
                             titleHint: p.title,
                           ),
