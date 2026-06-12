@@ -5424,6 +5424,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get prefsEmailNotifOff => 'Aus';
 
   @override
+  String get prefsEmailWeeklyDigest =>
+      'Wöchentliche Zusammenfassung per E-Mail';
+
+  @override
+  String get prefsEmailWeeklyDigestHint =>
+      'Abonniere eine wöchentliche Übersicht über dein Training und Community-Highlights. Standardmäßig aus; getrennt von deinen Benachrichtigungs-E-Mails.';
+
+  @override
   String get prefsWeekStart => 'Woche beginnt am';
 
   @override

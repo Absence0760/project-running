@@ -5415,6 +5415,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsEmailNotifOff => 'Desativadas';
 
   @override
+  String get prefsEmailWeeklyDigest => 'E-mail de resumo semanal';
+
+  @override
+  String get prefsEmailWeeklyDigestHint =>
+      'Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.';
+
+  @override
   String get prefsWeekStart => 'A semana começa em';
 
   @override
@@ -13654,6 +13661,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsEmailNotifOff => 'Desativadas';
+
+  @override
+  String get prefsEmailWeeklyDigest => 'E-mail de resumo semanal';
+
+  @override
+  String get prefsEmailWeeklyDigestHint =>
+      'Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.';
 
   @override
   String get prefsWeekStart => 'A semana começa em';

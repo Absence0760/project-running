@@ -51,6 +51,10 @@
 	let weeklyMileageGoal = $state('');
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let emailNotifications = $state<'all' | 'important' | 'off'>('important');
+	// Opt-IN consent for the weekly engagement digest (bulk/promotional mail).
+	// Default off — marketing consent is never inferred from the transactional
+	// email_notifications key, so it's a deliberately separate toggle.
+	let emailWeeklyDigest = $state(false);
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(false);
 	// 'full' (default) speaks every cue; 'minimal' drops the chatty in-rep
@@ -265,6 +269,7 @@
 			weeklyMileageGoal = (effective<number>(settings, 'weekly_mileage_goal_m') ?? '')?.toString() ?? '';
 			coachPersonality = effective(settings, 'coach_personality', 'supportive') ?? 'supportive';
 			emailNotifications = effective(settings, 'email_notifications', 'important') ?? 'important';
+			emailWeeklyDigest = effective<string>(settings, 'email_weekly_digest', 'off') === 'on';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
 			voiceFeedbackEnabled = effective(settings, 'voice_feedback_enabled', false) ?? false;
 			voiceFeedbackVerbosity =
@@ -885,6 +890,18 @@
 				</label>
 				<p class="section-hint">{m('prefs.emailNotifHint')}</p>
 			</div>
+			<label class="checkbox-row">
+				<input
+					type="checkbox"
+					bind:checked={emailWeeklyDigest}
+					onchange={() => autoSave({ email_weekly_digest: emailWeeklyDigest ? 'on' : 'off' })}
+					data-testid="email-weekly-digest"
+				/>
+				<span>
+					{m('prefs.emailWeeklyDigest')}
+					<span class="hint">{m('prefs.emailWeeklyDigestHint')}</span>
+				</span>
+			</label>
 		</section>
 	{/if}
 </div>

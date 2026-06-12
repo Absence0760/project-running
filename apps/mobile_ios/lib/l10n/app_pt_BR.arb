@@ -1464,6 +1464,8 @@
   "prefsEmailNotifAll": "Todas",
   "prefsEmailNotifImportant": "Apenas importantes",
   "prefsEmailNotifOff": "Desativadas",
+  "prefsEmailWeeklyDigest": "E-mail de resumo semanal",
+  "prefsEmailWeeklyDigestHint": "Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.",
   "prefsWeekStart": "A semana começa em",
   "prefsWeekStartMonday": "Segunda-feira",
   "prefsWeekStartSunday": "Domingo",

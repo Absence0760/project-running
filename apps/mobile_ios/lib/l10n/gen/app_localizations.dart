@@ -8896,6 +8896,18 @@ abstract class AppLocalizations {
   /// **'Off'**
   String get prefsEmailNotifOff;
 
+  /// Toggle title for opting in to the weekly engagement digest email
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly digest email'**
+  String get prefsEmailWeeklyDigest;
+
+  /// Subtitle for the weekly-digest opt-in toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.'**
+  String get prefsEmailWeeklyDigestHint;
+
   /// Tile and picker title for the week-start day
   ///
   /// In en, this message translates to:

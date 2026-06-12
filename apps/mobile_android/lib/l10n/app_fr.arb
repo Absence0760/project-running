@@ -1464,6 +1464,8 @@
   "prefsEmailNotifAll": "Toutes",
   "prefsEmailNotifImportant": "Importantes uniquement",
   "prefsEmailNotifOff": "Désactivées",
+  "prefsEmailWeeklyDigest": "E-mail récapitulatif hebdomadaire",
+  "prefsEmailWeeklyDigestHint": "Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.",
   "prefsWeekStart": "La semaine commence le",
   "prefsWeekStartMonday": "Lundi",
   "prefsWeekStartSunday": "Dimanche",

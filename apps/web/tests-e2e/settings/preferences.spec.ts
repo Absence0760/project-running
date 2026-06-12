@@ -225,6 +225,46 @@ test.describe('/settings/preferences', () => {
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
+	test('Weekly digest opt-in toggle save round-trip persists across reload', async ({
+		page
+	}) => {
+		// email_weekly_digest is OPT-IN consent for the weekly engagement digest
+		// (bulk/promotional mail), stored as 'on'|'off' (default 'off'), a
+		// deliberately separate key from the transactional email_notifications.
+		// The Go worker's weekly_digest handler reads it server-side, so the
+		// load-bearing assertion is that the toggle writes the bag with the
+		// 'on'/'off' string and survives a reload — a regression that dropped
+		// the key from autoSave would leave every user permanently opted out.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const toggle = page.getByTestId('email-weekly-digest');
+		// Default when the key is absent: off (unchecked).
+		await expect(toggle).not.toBeChecked();
+
+		// Opt in. The bag write must be the literal 'on' string.
+		const optInPatch = page.waitForRequest(
+			(req) =>
+				req.method() === 'PATCH' &&
+				req.url().includes('/rest/v1/user_settings') &&
+				(req.postData() ?? '').includes('"email_weekly_digest":"on"'),
+			{ timeout: 8_000 }
+		);
+		await toggle.check();
+		await optInPatch; // throws if the opt-in write never fires
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+
+		await page.reload();
+		await expect(page.getByTestId('email-weekly-digest')).toBeChecked();
+
+		// Opt back out so later specs see the default; the write is 'off'.
+		const optOutToggle = page.getByTestId('email-weekly-digest');
+		await optOutToggle.uncheck();
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+		await page.reload();
+		await expect(page.getByTestId('email-weekly-digest')).not.toBeChecked();
+	});
+
 	test('changing language writes locale to the settings bag (email localization)', async ({
 		page
 	}) => {

@@ -5102,6 +5102,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsEmailNotifOff => 'オフ';
 
   @override
+  String get prefsEmailWeeklyDigest => '週刊ダイジェストメール';
+
+  @override
+  String get prefsEmailWeeklyDigestHint =>
+      'トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。';
+
+  @override
   String get prefsWeekStart => '週の開始曜日';
 
   @override
