@@ -4164,6 +4164,23 @@
   "@clubDetailSessionAdopted": {
     "description": "Confirmation after cloning a club session template into a personal plan"
   },
+  "clubDetailGymRoutineTemplatesTitle": "Gym routine templates",
+  "@clubDetailGymRoutineTemplatesTitle": {
+    "description": "Heading above the club's adoptable gym-routine templates"
+  },
+  "clubDetailGymRoutineTemplatesHint": "Members can adopt a club gym routine into their own routines. Edits to a copy don't propagate back to the template.",
+  "@clubDetailGymRoutineTemplatesHint": {
+    "description": "Hint under the club gym-routine-templates heading"
+  },
+  "clubDetailGymRoutineAdopted": "Routine added to your gym routines.",
+  "@clubDetailGymRoutineAdopted": {
+    "description": "Confirmation after cloning a club gym-routine template into a personal routine"
+  },
+  "clubDetailRoutineExerciseCount": "{n} exercises",
+  "@clubDetailRoutineExerciseCount": {
+    "description": "Exercise count meta on a club gym-routine-template row",
+    "placeholders": {"n": {"type": "int"}}
+  },
   "eventNotFound": "Event not found.",
   "@eventNotFound": {
     "description": "Shown when the event does not exist"
@@ -9270,6 +9287,30 @@
   "gymRoutineExerciseCount": "{count, plural, one{{count} exercise} other{{count} exercises}}",
   "@gymRoutineExerciseCount": {"description": "Exercise count on a routine card / detail header", "placeholders": {"count": {"type": "int"}}},
   "gymRoutineStart": "Start routine",
+  "gymRoutinePublishLabel": "Publish to a club",
+  "@gymRoutinePublishLabel": {
+    "description": "Label above the publish-as-template control on the routine detail screen"
+  },
+  "gymRoutinePublishPick": "Pick a club…",
+  "@gymRoutinePublishPick": {
+    "description": "Placeholder option in the publish-to-club dropdown"
+  },
+  "gymRoutinePublish": "Publish",
+  "@gymRoutinePublish": {
+    "description": "Button that publishes a personal routine as a club template"
+  },
+  "gymRoutinePublishSuccess": "Routine published to the club.",
+  "@gymRoutinePublishSuccess": {
+    "description": "Confirmation after publishing a routine as a club template"
+  },
+  "gymRoutinePublishFailed": "Couldn't publish the routine.",
+  "@gymRoutinePublishFailed": {
+    "description": "Error after a failed publish-as-template"
+  },
+  "gymRoutineClubTemplateBadge": "Club template",
+  "@gymRoutineClubTemplateBadge": {
+    "description": "Badge shown on a routine that is already a club-owned template"
+  },
   "gymRoutineDelete": "Delete",
   "gymRoutineDeleteConfirmTitle": "Delete routine?",
   "gymRoutineDeleteConfirmBody": "This permanently removes the routine. Logged workouts are unaffected.",

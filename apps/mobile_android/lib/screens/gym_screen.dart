@@ -9,6 +9,7 @@ import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
+import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
 import 'gym_detail_screen.dart';
 import 'gym_records_screen.dart';
@@ -118,7 +119,17 @@ class GymScreen extends StatefulWidget {
   final ApiClient? api;
   final LocalGymStore store;
 
-  const GymScreen({super.key, required this.api, required this.store});
+  /// Optional. Forwarded to the routine library → routine detail so a routine
+  /// author can publish a personal routine as a club template. Omitting it
+  /// hides publishing; reading / adopting club templates never needs it.
+  final SocialService? social;
+
+  const GymScreen({
+    super.key,
+    required this.api,
+    required this.store,
+    this.social,
+  });
 
   @override
   State<GymScreen> createState() => _GymScreenState();
@@ -207,6 +218,7 @@ class _GymScreenState extends State<GymScreen> {
           api: widget.api,
           store: _routineStore,
           gymStore: widget.store,
+          social: widget.social,
         ),
       ),
     );

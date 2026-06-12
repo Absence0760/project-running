@@ -3174,6 +3174,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailSessionAdopted => 'セッションをプランに追加しました。';
 
   @override
+  String get clubDetailGymRoutineTemplatesTitle => 'ジムルーティンのテンプレート';
+
+  @override
+  String get clubDetailGymRoutineTemplatesHint =>
+      'メンバーはクラブのジムルーティンを自分のルーティンに取り込めます。コピーへの編集はテンプレートには反映されません。';
+
+  @override
+  String get clubDetailGymRoutineAdopted => 'ルーティンをあなたのジムルーティンに追加しました。';
+
+  @override
+  String clubDetailRoutineExerciseCount(int n) {
+    return '$n種目';
+  }
+
+  @override
   String get eventNotFound => 'イベントが見つかりません。';
 
   @override
@@ -7064,6 +7079,24 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymRoutineStart => 'ルーティンを開始';
+
+  @override
+  String get gymRoutinePublishLabel => 'クラブに公開';
+
+  @override
+  String get gymRoutinePublishPick => 'クラブを選択…';
+
+  @override
+  String get gymRoutinePublish => '公開';
+
+  @override
+  String get gymRoutinePublishSuccess => 'ルーティンをクラブに公開しました。';
+
+  @override
+  String get gymRoutinePublishFailed => 'ルーティンを公開できませんでした。';
+
+  @override
+  String get gymRoutineClubTemplateBadge => 'クラブテンプレート';
 
   @override
   String get gymRoutineDelete => '削除';

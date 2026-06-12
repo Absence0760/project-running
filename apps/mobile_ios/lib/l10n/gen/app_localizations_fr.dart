@@ -3404,6 +3404,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubDetailSessionAdopted => 'Séance ajoutée à vos plans.';
 
   @override
+  String get clubDetailGymRoutineTemplatesTitle => 'Modèles de routine de gym';
+
+  @override
+  String get clubDetailGymRoutineTemplatesHint =>
+      'Les membres peuvent adopter une routine de gym du club dans leurs propres routines. Les modifications d\'une copie ne se répercutent pas sur le modèle.';
+
+  @override
+  String get clubDetailGymRoutineAdopted =>
+      'Routine ajoutée à vos routines de gym.';
+
+  @override
+  String clubDetailRoutineExerciseCount(int n) {
+    return '$n exercices';
+  }
+
+  @override
   String get eventNotFound => 'Événement introuvable.';
 
   @override
@@ -7483,6 +7499,24 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymRoutineStart => 'Démarrer la routine';
+
+  @override
+  String get gymRoutinePublishLabel => 'Publier dans un club';
+
+  @override
+  String get gymRoutinePublishPick => 'Choisir un club…';
+
+  @override
+  String get gymRoutinePublish => 'Publier';
+
+  @override
+  String get gymRoutinePublishSuccess => 'Routine publiée dans le club.';
+
+  @override
+  String get gymRoutinePublishFailed => 'Impossible de publier la routine.';
+
+  @override
+  String get gymRoutineClubTemplateBadge => 'Modèle du club';
 
   @override
   String get gymRoutineDelete => 'Supprimer';
