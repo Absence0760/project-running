@@ -3041,6 +3041,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 144. Plan generator v2 (adaptive rescheduling) ships as a trend-gated, suggestion-only layer over the shipped re-plan engine; the fitness-signal phase is CISO-gated
+
+**Decided (2026-06-12, P1 shipped).** "Adaptive weekly rescheduling driven by adherence" (the last deferred training-engine item) ships as a thin pure layer, **not** a new engine. P1's `adaptiveReplanRemaining` (TS↔Dart parity pair `plan_adaptive_replan`) classifies the trailing 3 *completed* weeks' drift via the existing `weeklyDrift`, and only when a **sustained trend** (≥2 of 3 weeks flagged the same direction) is found does it delegate the actual future-only deltas to the shipped `replanRemaining`. So the new layer decides **whether + why**; the existing engine decides **what**. It reuses the existing preview-and-apply surface (web `/plans/[id]` + mobile `plan_detail_screen`) with a reason + confidence badge. No schema, no RPC, no fitness signal in P1.
+
+**Why trend-gated over the existing manual re-plan.** The shipped "Re-plan remaining" acts on a single signal (a missed long run, last week over). The adaptive layer's whole value is **suppressing single-week noise** — it requires a 2-of-3 trend before nagging, so a one-off bad week doesn't trigger a plan rewrite. Same conservative discipline (past + taper frozen, never auto-mutates, only suggests) inherited from `replanRemaining`.
+
+**The CISO gate.** P2 introduces fitness-gated direction (TSB/ATL/CTL from `training_load.ts`) — the first time health-derived load (HR/TRIMP) feeds a *training prescription*. Per the SOC 2 posture, **P2 must not ship without CISO / Security-Analyst sign-off**; the engine math may be written on a branch, but enabling it for users is gated. P3 (atomic multi-week reschedule RPC, needed once a change re-indexes `plan_weeks`) and P4 (date-shifts + deload insertion) are deferred.
+
+**Don't re-litigate** by lowering the 2-of-3 trend bar (it's the noise filter), by letting the adaptive layer mutate past/taper weeks, by adding a fitness signal to P1's module, or by shipping P2 without the sign-off. The full phased design is in `reviews/plan-generator-v2.md`. Pinned by `plan_adaptive_replan.test.ts` ↔ `plan_adaptive_replan_test.dart` (7 each) + `tests-e2e/plans/adaptive-replan.spec.ts`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
