@@ -107,6 +107,9 @@ const _tables = <String>{
   'instructor_payout_accounts',
   'event_pricing',
   'event_orders',
+  'session_plans',
+  'session_plan_blocks',
+  'session_plan_items',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule

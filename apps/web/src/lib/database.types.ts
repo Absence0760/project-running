@@ -732,6 +732,7 @@ export type Database = {
           recurrence_freq: string | null
           recurrence_until: string | null
           route_id: string | null
+          session_plan_id: string | null
           starts_at: string
           title: string
           updated_at: string | null
@@ -758,6 +759,7 @@ export type Database = {
           recurrence_freq?: string | null
           recurrence_until?: string | null
           route_id?: string | null
+          session_plan_id?: string | null
           starts_at: string
           title: string
           updated_at?: string | null
@@ -784,6 +786,7 @@ export type Database = {
           recurrence_freq?: string | null
           recurrence_until?: string | null
           route_id?: string | null
+          session_plan_id?: string | null
           starts_at?: string
           title?: string
           updated_at?: string | null
@@ -808,6 +811,13 @@ export type Database = {
             columns: ["route_id"]
             isOneToOne: false
             referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_session_plan_id_fkey"
+            columns: ["session_plan_id"]
+            isOneToOne: false
+            referencedRelation: "session_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -2296,6 +2306,139 @@ export type Database = {
             columns: ["route_id"]
             isOneToOne: false
             referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_plan_blocks: {
+        Row: {
+          id: string
+          name: string | null
+          plan_id: string
+          position: number
+        }
+        Insert: {
+          id?: string
+          name?: string | null
+          plan_id: string
+          position: number
+        }
+        Update: {
+          id?: string
+          name?: string | null
+          plan_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_plan_blocks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "session_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_plan_items: {
+        Row: {
+          block_id: string | null
+          cue: string | null
+          duration_s: number | null
+          id: string
+          kind: string
+          movement_name: string
+          per_side: boolean
+          plan_id: string
+          position: number
+          reps: number | null
+          tempo: string | null
+        }
+        Insert: {
+          block_id?: string | null
+          cue?: string | null
+          duration_s?: number | null
+          id?: string
+          kind?: string
+          movement_name: string
+          per_side?: boolean
+          plan_id: string
+          position: number
+          reps?: number | null
+          tempo?: string | null
+        }
+        Update: {
+          block_id?: string | null
+          cue?: string | null
+          duration_s?: number | null
+          id?: string
+          kind?: string
+          movement_name?: string
+          per_side?: boolean
+          plan_id?: string
+          position?: number
+          reps?: number | null
+          tempo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_plan_items_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "session_plan_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "session_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_plans: {
+        Row: {
+          author_id: string
+          club_id: string | null
+          created_at: string
+          discipline: string | null
+          equipment: string | null
+          est_duration_min: number | null
+          id: string
+          is_public: boolean
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          club_id?: string | null
+          created_at?: string
+          discipline?: string | null
+          equipment?: string | null
+          est_duration_min?: number | null
+          id?: string
+          is_public?: boolean
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          club_id?: string | null
+          created_at?: string
+          discipline?: string | null
+          equipment?: string | null
+          est_duration_min?: number | null
+          id?: string
+          is_public?: boolean
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_plans_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
         ]

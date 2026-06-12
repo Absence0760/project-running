@@ -16,6 +16,9 @@ type ClubPostRow = Database['public']['Tables']['club_posts']['Row'];
 type EventPricingRow = Database['public']['Tables']['event_pricing']['Row'];
 type EventOrderRow = Database['public']['Tables']['event_orders']['Row'];
 type InstructorPayoutAccountRow = Database['public']['Tables']['instructor_payout_accounts']['Row'];
+type SessionPlanRow = Database['public']['Tables']['session_plans']['Row'];
+type SessionPlanBlockRow = Database['public']['Tables']['session_plan_blocks']['Row'];
+type SessionPlanItemRow = Database['public']['Tables']['session_plan_items']['Row'];
 type TrainingPlanRow = Database['public']['Tables']['training_plans']['Row'];
 type PlanWeekRow = Database['public']['Tables']['plan_weeks']['Row'];
 type PlanWorkoutRow = Database['public']['Tables']['plan_workouts']['Row'];
@@ -162,6 +165,11 @@ export type RefundPolicy = 'full_until_start' | 'full_until_24h' | 'no_refund';
 // event_pricing.modality — in_person only in P1; 'virtual' is a digital good
 // that re-opens the app-store IAP rule (reserved for P4).
 export type EventModality = 'in_person';
+// session_plan_items.kind — a yoga/pilates movement is a timed hold, a counted
+// set of reps, or a continuous flow. Enforced by the session_plan_items_kind_check
+// CHECK constraint (migration 20270103_001) — keep this union in lockstep
+// (check_constraint_unions.mjs PAIRS). session_planner.md P1.
+export type SessionItemKind = 'hold' | 'reps' | 'flow';
 export type NotificationKind =
 	| 'kudos'
 	| 'comment'
@@ -221,6 +229,16 @@ export type EventPricing = Omit<EventPricingRow, 'modality' | 'refund_policy'> &
 };
 export type EventOrder = Omit<EventOrderRow, 'status'> & { status: OrderStatus };
 export type InstructorPayoutAccount = InstructorPayoutAccountRow;
+
+export type SessionPlan = SessionPlanRow;
+export type SessionPlanBlock = SessionPlanBlockRow;
+export type SessionPlanItem = Omit<SessionPlanItemRow, 'kind'> & { kind: SessionItemKind };
+
+/** A plan with its blocks + items, the shape the editor + read view consume. */
+export type SessionPlanWithItems = SessionPlan & {
+	blocks: SessionPlanBlock[];
+	items: SessionPlanItem[];
+};
 
 /** Shape returned by club list/detail queries — member count + current-user membership. */
 export type ClubWithMeta = Club & {
