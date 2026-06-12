@@ -176,6 +176,15 @@ alter table events add column session_plan_id uuid references session_plans on d
 create index events_session_plan_idx on events (session_plan_id)
   where session_plan_id is not null;
 
+-- events has a column-level SELECT lockdown (20260818_001 redo): each new
+-- client-read column needs an explicit grant (the category / discipline /
+-- gym_template precedent). session_plan_id carries no PII (an FK id, NULL for
+-- an un-attached class), so the lowest-surface durable fix is the column grant,
+-- not an oracle. Row visibility is unchanged — it still flows through the
+-- events SELECT RLS policy. UPDATE was never column-narrowed (20260818_001
+-- revoked only SELECT), so the organiser write needs no grant here.
+grant select (session_plan_id) on events to authenticated, anon;
+
 -- Only an organiser of the event's club may attach/detach a plan. SECURITY
 -- DEFINER so the organiser check is reliable regardless of the writer's
 -- visibility; search_path includes private for the oracle (the is_event_visible
