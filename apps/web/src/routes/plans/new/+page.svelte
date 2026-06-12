@@ -4,11 +4,14 @@
 	import { goto, afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
+	import SessionPlanEditor from '$lib/components/SessionPlanEditor.svelte';
+	import RoutineEditor from '$lib/components/RoutineEditor.svelte';
 	import {
 		fetchMyClubs,
 		fetchClubTemplates,
 		clonePlanTemplate,
 		createTrainingPlan,
+		fetchGymExerciseNames,
 	} from '$lib/core/data';
 	import { STARTER_PLANS, starterById, instantiateStarter } from '$lib/training/starter_plans';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -20,6 +23,21 @@
 		clubName: string;
 	}
 
+	type PlanKind = 'training' | 'session' | 'gym';
+
+	function initialKind(): PlanKind {
+		const t = $page.url.searchParams.get('type');
+		return t === 'session' || t === 'gym' ? t : 'training';
+	}
+
+	// `?club=<id>` (set by a club's Templates-tab "New …" links) targets the
+	// new artifact at that club. Honoured one-step only by the session branch —
+	// session_plans support a club-owned create; training + gym templates are
+	// build-then-publish, so the club param is informational there.
+	const clubId = $page.url.searchParams.get('club');
+
+	let kind = $state<PlanKind>(initialKind());
+
 	let templates = $state<TemplateOption[]>([]);
 	let loadingTemplates = $state(true);
 	let selectedTemplateId = $state('');
@@ -27,6 +45,33 @@
 	let cloning = $state(false);
 	let selectedStarterId = $state('');
 	let creatingStarter = $state(false);
+	let gymSuggestions = $state<string[]>([]);
+
+	const headingKey = $derived(
+		kind === 'session'
+			? 'plansNew.headingSession'
+			: kind === 'gym'
+				? 'plansNew.headingGym'
+				: 'plansNew.heading'
+	);
+	const taglineKey = $derived(
+		kind === 'session'
+			? 'plansNew.taglineSession'
+			: kind === 'gym'
+				? 'plansNew.taglineGym'
+				: 'plansNew.tagline'
+	);
+
+	function onSessionCreated(id: string): void {
+		// When created for a club, return to the Templates tab the link came
+		// from so the new template is visible in its list; otherwise open it.
+		if (clubId && backHref.startsWith('/clubs/')) goto(backHref);
+		else goto(`/sessions/${id}`);
+	}
+
+	function onGymCreated(id: string): void {
+		goto(`/gym/routines/${id}`);
+	}
 
 	// Back/cancel target. Defaults to /plans; when the user arrived from a
 	// club's Templates tab (the "Adopt" link), return them there instead.
@@ -92,6 +137,11 @@
 			console.warn('fetch templates failed', e);
 		} finally {
 			loadingTemplates = false;
+		}
+		try {
+			gymSuggestions = await fetchGymExerciseNames();
+		} catch (e) {
+			console.warn('fetch gym exercise names failed', e);
 		}
 	});
 
@@ -164,12 +214,46 @@
 
 	<header class="page-header">
 		<p class="kicker">{m('plansNew.kicker')}</p>
-		<h1>{m('plansNew.heading')}</h1>
+		<h1>{m(headingKey)}</h1>
 		<p class="tagline">
-			{m('plansNew.tagline')}
+			{m(taglineKey)}
 		</p>
 	</header>
 
+	<div class="kind-chooser" role="group" aria-label={m('plansNew.chooserLabel')}>
+		<button
+			type="button"
+			class="kind-tab"
+			class:active={kind === 'training'}
+			aria-pressed={kind === 'training'}
+			onclick={() => (kind = 'training')}
+			data-testid="kind-training"
+		>
+			{m('plansNew.kindTraining')}
+		</button>
+		<button
+			type="button"
+			class="kind-tab"
+			class:active={kind === 'session'}
+			aria-pressed={kind === 'session'}
+			onclick={() => (kind = 'session')}
+			data-testid="kind-session"
+		>
+			{m('plansNew.kindSession')}
+		</button>
+		<button
+			type="button"
+			class="kind-tab"
+			class:active={kind === 'gym'}
+			aria-pressed={kind === 'gym'}
+			onclick={() => (kind = 'gym')}
+			data-testid="kind-gym"
+		>
+			{m('plansNew.kindGym')}
+		</button>
+	</div>
+
+	{#if kind === 'training'}
 	<section class="starter-picker">
 		<h2>{m('plansNew.starterHeading')}</h2>
 		<p class="picker-hint">{m('plansNew.starterHint')}</p>
@@ -248,6 +332,14 @@
 		oncreated={(plan) => goto(`/plans/${plan.id}`)}
 		oncancel={handleCancel}
 	/>
+	{:else if kind === 'session'}
+		{#if clubId}
+			<p class="picker-hint club-target-note">{m('plansNew.sessionForClub')}</p>
+		{/if}
+		<SessionPlanEditor {clubId} oncreated={onSessionCreated} oncancel={handleCancel} />
+	{:else}
+		<RoutineEditor suggestions={gymSuggestions} oncreated={onGymCreated} oncancel={handleCancel} />
+	{/if}
 </div>
 
 <style>
@@ -294,6 +386,37 @@
 		line-height: 1.5;
 		margin: 0;
 		max-width: 44rem;
+	}
+
+	.kind-chooser {
+		display: inline-flex;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		margin-bottom: var(--space-lg);
+	}
+	.kind-tab {
+		appearance: none;
+		border: none;
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+		font-weight: 600;
+		padding: 0.5rem 1rem;
+		border-radius: var(--radius-md);
+		cursor: pointer;
+	}
+	.kind-tab:hover {
+		color: var(--color-text);
+	}
+	.kind-tab.active {
+		background: var(--color-primary);
+		color: var(--color-on-primary, #fff);
+	}
+	.club-target-note {
+		margin-bottom: var(--space-md);
 	}
 
 	.template-picker,

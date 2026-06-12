@@ -5,17 +5,17 @@ import { USER_A } from '../fixtures/users';
 
 /**
  * Session planner P3 (session_planner.md) — create a club-owned session template
- * directly from the club Templates tab, rather than building a personal plan
- * first and publishing it.
+ * from the club Templates tab. The "New session template" affordance links to
+ * the unified create hub (/plans/new?type=session&club=<id>), which mounts the
+ * SessionPlanEditor in club-owned mode; on save it returns to the Templates tab
+ * with the new template listed and the row carries club_id.
  *
- * USER_A owns Richmond Run Club (admin), so the admin-only "New session
- * template" front door is visible and the SessionPlanEditor mounted there writes
- * a club_id-set session_plans row in one step.
+ * USER_A owns Richmond Run Club (admin), so the admin-only link is visible.
  */
 
 const RICHMOND_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
 
-test.describe('/clubs — create session template from Templates tab', () => {
+test.describe('/clubs — create session template via the hub', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	const createdTitles: string[] = [];
@@ -31,7 +31,7 @@ test.describe('/clubs — create session template from Templates tab', () => {
 		}
 	});
 
-	test('admin creates a club-owned session template inline; it lands club_id-set and lists', async ({
+	test('admin creates a club-owned session template; it lands club_id-set and lists', async ({
 		page
 	}) => {
 		const title = `e2e-club-session-create ${Date.now()}`;
@@ -39,12 +39,15 @@ test.describe('/clubs — create session template from Templates tab', () => {
 
 		await page.goto('/clubs/richmond-run-club?tab=templates');
 
-		// The admin-only front door.
-		const newBtn = page.getByTestId('new-session-template');
-		await expect(newBtn).toBeVisible({ timeout: 10_000 });
-		await newBtn.click();
+		// The admin-only front door links to the unified create hub, pre-scoped
+		// to session + this club.
+		const newLink = page.getByTestId('new-session-template');
+		await expect(newLink).toBeVisible({ timeout: 10_000 });
+		await newLink.click();
+		await page.waitForURL(/\/plans\/new\?.*type=session/, { timeout: 10_000 });
+		await page.waitForURL(new RegExp(`club=${RICHMOND_CLUB_ID}`), { timeout: 10_000 });
 
-		// The editor mounts inline (not in a modal) — scope all fields to it.
+		// The session branch is active — the editor is mounted.
 		const editor = page.locator('.session-editor');
 		await expect(editor).toBeVisible({ timeout: 5_000 });
 		await editor.getByLabel('Title', { exact: true }).fill(title);
@@ -54,9 +57,9 @@ test.describe('/clubs — create session template from Templates tab', () => {
 
 		await editor.getByRole('button', { name: 'Save', exact: true }).click();
 
-		// On save the editor closes and the new template lists on the same tab —
-		// no navigation away from the club.
-		await expect(editor).toBeHidden({ timeout: 10_000 });
+		// A club-owned create returns to the Templates tab it came from, with the
+		// new template listed.
+		await page.waitForURL(/\/clubs\/richmond-run-club/, { timeout: 10_000 });
 		await expect(page.getByRole('link', { name: title })).toBeVisible({ timeout: 10_000 });
 
 		// It persisted as a club-owned plan (club_id set, author = the admin).

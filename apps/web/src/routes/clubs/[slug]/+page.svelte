@@ -48,7 +48,6 @@
 	import EventEditor from '$lib/components/EventEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
-	import SessionPlanEditor from '$lib/components/SessionPlanEditor.svelte';
 	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
 	import type {
 		ClubWithMeta,
@@ -100,7 +99,6 @@
 	let clubTemplates = $state<TrainingPlan[]>([]);
 	let sessionTemplates = $state<SessionPlan[]>([]);
 	let adoptingSession = $state('');
-	let showCreateSession = $state(false);
 	let gymRoutineTemplates = $state<GymRoutineSummary[]>([]);
 	let adoptingRoutine = $state('');
 
@@ -205,12 +203,6 @@
 		} finally {
 			adoptingSession = '';
 		}
-	}
-
-	async function onSessionTemplateCreated() {
-		showCreateSession = false;
-		if (club) sessionTemplates = await fetchClubSessionTemplates(club.id);
-		showToast(tr('clubHome.sessionTemplateCreated'));
 	}
 
 	async function unmakeTemplate(planId: string) {
@@ -1310,23 +1302,14 @@
 				<h3 class="session-templates-head">{tr('clubHome.sessionTemplatesTitle')}</h3>
 				<p class="section-hint">{tr('clubHome.sessionTemplatesHint')}</p>
 				{#if isAdmin}
-					{#if showCreateSession}
-						<SessionPlanEditor
-							clubId={club.id}
-							oncreated={onSessionTemplateCreated}
-							oncancel={() => (showCreateSession = false)}
-						/>
-					{:else}
-						<button
-							class="btn btn-primary btn-sm new-session-template-btn"
-							type="button"
-							onclick={() => (showCreateSession = true)}
-							data-testid="new-session-template"
-						>
-							<span class="material-symbols" aria-hidden="true">add</span>
-							{tr('clubHome.newSessionTemplate')}
-						</button>
-					{/if}
+					<a
+						class="btn btn-primary btn-sm new-session-template-btn"
+						href="/plans/new?type=session&club={club.id}"
+						data-testid="new-session-template"
+					>
+						<span class="material-symbols" aria-hidden="true">add</span>
+						{tr('clubHome.newSessionTemplate')}
+					</a>
 				{/if}
 				{#if sessionTemplates.length > 0}
 					<ul class="template-list">
@@ -1356,7 +1339,7 @@
 							</li>
 						{/each}
 					</ul>
-				{:else if isAdmin && !showCreateSession}
+				{:else if isAdmin}
 					<p class="section-hint">{tr('clubHome.emptySessionTemplates')}</p>
 				{/if}
 			{/if}
