@@ -6311,6 +6311,32 @@ class AppLocalizationsPt extends AppLocalizations {
   String get eventFormCreate => 'Criar evento';
 
   @override
+  String get eventEditorCategory => 'Tipo de evento';
+
+  @override
+  String get eventEditorCatRun => 'Corrida em grupo';
+
+  @override
+  String get eventEditorCatCycle => 'Ciclismo';
+
+  @override
+  String get eventEditorCatClass => 'Aula';
+
+  @override
+  String get eventEditorCatSocial => 'Social';
+
+  @override
+  String get eventEditorCategoryHint =>
+      'Escolha o tipo de evento — uma aula ou encontro social ignora rota, distância, ritmo e resultados de corrida.';
+
+  @override
+  String get eventEditorDiscipline => 'Modalidade';
+
+  @override
+  String get eventEditorDisciplinePlaceholder =>
+      'ex.: ioga Vinyasa, Pilates, mobilidade';
+
+  @override
   String get clubFormTitle => 'Novo clube';
 
   @override
@@ -14557,6 +14583,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get eventFormCreate => 'Criar evento';
+
+  @override
+  String get eventEditorCategory => 'Tipo de evento';
+
+  @override
+  String get eventEditorCatRun => 'Corrida em grupo';
+
+  @override
+  String get eventEditorCatCycle => 'Ciclismo';
+
+  @override
+  String get eventEditorCatClass => 'Aula';
+
+  @override
+  String get eventEditorCatSocial => 'Social';
+
+  @override
+  String get eventEditorCategoryHint =>
+      'Escolha o tipo de evento — uma aula ou encontro social ignora rota, distância, ritmo e resultados de corrida.';
+
+  @override
+  String get eventEditorDiscipline => 'Modalidade';
+
+  @override
+  String get eventEditorDisciplinePlaceholder =>
+      'ex.: ioga Vinyasa, Pilates, mobilidade';
 
   @override
   String get clubFormTitle => 'Novo clube';

@@ -7975,6 +7975,38 @@
   "@eventFormCreate": {
     "description": "Button to create the event"
   },
+  "eventEditorCategory": "Event type",
+  "@eventEditorCategory": {
+    "description": "Label for the event-category picker"
+  },
+  "eventEditorCatRun": "Group run",
+  "@eventEditorCatRun": {
+    "description": "Event category: a group run"
+  },
+  "eventEditorCatCycle": "Cycle",
+  "@eventEditorCatCycle": {
+    "description": "Event category: a cycle"
+  },
+  "eventEditorCatClass": "Class",
+  "@eventEditorCatClass": {
+    "description": "Event category: an instructor-led class"
+  },
+  "eventEditorCatSocial": "Social",
+  "@eventEditorCatSocial": {
+    "description": "Event category: a social meetup"
+  },
+  "eventEditorCategoryHint": "Pick the kind of event — a class or social meetup skips route, distance, pace and race results.",
+  "@eventEditorCategoryHint": {
+    "description": "Helper text under the event-category picker"
+  },
+  "eventEditorDiscipline": "Discipline",
+  "@eventEditorDiscipline": {
+    "description": "Label for the free-text class-discipline field"
+  },
+  "eventEditorDisciplinePlaceholder": "e.g. Vinyasa yoga, Pilates, mobility",
+  "@eventEditorDisciplinePlaceholder": {
+    "description": "Placeholder for the class-discipline field"
+  },
   "clubFormTitle": "New club",
   "@clubFormTitle": {
     "description": "AppBar title of the create-club screen"

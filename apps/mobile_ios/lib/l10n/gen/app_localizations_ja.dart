@@ -5970,6 +5970,31 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventFormCreate => 'イベントを作成';
 
   @override
+  String get eventEditorCategory => 'イベントの種類';
+
+  @override
+  String get eventEditorCatRun => 'グループラン';
+
+  @override
+  String get eventEditorCatCycle => 'サイクリング';
+
+  @override
+  String get eventEditorCatClass => 'クラス';
+
+  @override
+  String get eventEditorCatSocial => 'ソーシャル';
+
+  @override
+  String get eventEditorCategoryHint =>
+      'イベントの種類を選びます。クラスやソーシャルの集まりではルート、距離、ペース、レース結果は省略されます。';
+
+  @override
+  String get eventEditorDiscipline => '種目';
+
+  @override
+  String get eventEditorDisciplinePlaceholder => '例：ヴィンヤサヨガ、ピラティス、モビリティ';
+
+  @override
   String get clubFormTitle => '新しいクラブ';
 
   @override

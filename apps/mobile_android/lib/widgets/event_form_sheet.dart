@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../event_category.dart';
+import '../event_gym_template.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -37,6 +39,8 @@ class _EventFormState extends State<_EventForm> {
   final _meetLabel = TextEditingController();
   final _distanceKm = TextEditingController();
   final _durationMin = TextEditingController();
+  final _discipline = TextEditingController();
+  String _category = 'run';
   DateTime _starts = DateTime.now().add(const Duration(days: 1, hours: 1));
   String _recurrence = 'none'; // none | weekly | biweekly | monthly
   bool _busy = false;
@@ -49,7 +53,25 @@ class _EventFormState extends State<_EventForm> {
     _meetLabel.dispose();
     _distanceKm.dispose();
     _durationMin.dispose();
+    _discipline.dispose();
     super.dispose();
+  }
+
+  // Hiding a field leaves its controller text intact, so a user who types
+  // a distance then switches to a class would silently submit it. Clear
+  // the now-irrelevant fields the moment the category leaves the set that
+  // owns them, mirroring the web editor's pickCategory.
+  void _pickCategory(String next) {
+    if (_category == next) return;
+    setState(() {
+      _category = next;
+      if (!isAthleticEventCategory(next)) {
+        _distanceKm.clear();
+      }
+      if (next != 'class') {
+        _discipline.clear();
+      }
+    });
   }
 
   Future<void> _pickDateTime() async {
@@ -79,8 +101,11 @@ class _EventFormState extends State<_EventForm> {
   Future<void> _submit() async {
     final title = _title.text.trim();
     if (title.isEmpty || _busy) return;
-    final distance = double.tryParse(_distanceKm.text.trim());
+    final athletic = isAthleticEventCategory(_category);
+    final distance =
+        athletic ? double.tryParse(_distanceKm.text.trim()) : null;
     final duration = int.tryParse(_durationMin.text.trim());
+    final discipline = _category == 'class' ? _discipline.text.trim() : null;
     setState(() {
       _busy = true;
       _error = null;
@@ -111,6 +136,11 @@ class _EventFormState extends State<_EventForm> {
         clubId: widget.clubId,
         title: title,
         startsAt: _starts,
+        category: _category,
+        discipline: discipline,
+        gymTemplate: _category == 'class'
+            ? gymTemplateFromInputs(discipline, duration)
+            : null,
         description:
             _description.text.trim().isEmpty ? null : _description.text.trim(),
         durationMin: duration,
@@ -138,9 +168,48 @@ class _EventFormState extends State<_EventForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final athletic = isAthleticEventCategory(_category);
     // Heading lives in the host AppBar (showFullScreenForm).
     return FullScreenFormBody(
       children: [
+            Text(l10n.eventEditorCategory, style: theme.textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final option in [
+                  ('run', l10n.eventEditorCatRun),
+                  ('cycle', l10n.eventEditorCatCycle),
+                  ('class', l10n.eventEditorCatClass),
+                  ('social', l10n.eventEditorCatSocial),
+                ])
+                  ChoiceChip(
+                    label: Text(option.$2),
+                    selected: _category == option.$1,
+                    onSelected: (_) => _pickCategory(option.$1),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.eventEditorCategoryHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_category == 'class') ...[
+              TextField(
+                controller: _discipline,
+                maxLength: 60,
+                decoration: InputDecoration(
+                  labelText: l10n.eventEditorDiscipline,
+                  hintText: l10n.eventEditorDisciplinePlaceholder,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _title,
               autofocus: true,
@@ -186,17 +255,19 @@ class _EventFormState extends State<_EventForm> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _distanceKm,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: l10n.eventFormDistanceLabel,
-                      border: const OutlineInputBorder(),
+                if (athletic) ...[
+                  Expanded(
+                    child: TextField(
+                      controller: _distanceKm,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: l10n.eventFormDistanceLabel,
+                        border: const OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: TextField(
                     controller: _durationMin,
