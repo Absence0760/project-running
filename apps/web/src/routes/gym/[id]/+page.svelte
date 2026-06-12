@@ -354,7 +354,7 @@
 			{/if}
 		</div>
 
-		{#if review}
+		{#if review && isOwner}
 			<GymWorkoutReview adherence={review.adherence} stepResults={review.stepResults} />
 		{/if}
 
