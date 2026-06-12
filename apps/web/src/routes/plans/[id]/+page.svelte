@@ -71,15 +71,29 @@
 	let backHref = $state('/plans');
 	let backLabel = $state(m('planDetail.backAllPlans'));
 	let cameFromKnownParent = $state(false);
+	// /dashboard + /plans restore via history.back() (preserves the parent's
+	// scroll + filter snapshot). The club Templates tab can't: history.back()
+	// from a template chain can land on an unrelated surface (e.g. /runs), so
+	// we navigate to the captured club URL explicitly instead.
+	let backViaHistory = $state(false);
 	afterNavigate(({ from }) => {
 		if (cameFromKnownParent || !from) return;
 		if (from.url.pathname === '/dashboard') {
 			backHref = '/dashboard';
 			backLabel = m('planDetail.backDashboard');
+			backViaHistory = true;
 			cameFromKnownParent = true;
 		} else if (from.url.pathname === '/plans') {
 			backHref = '/plans';
 			backLabel = m('planDetail.backAllPlans');
+			backViaHistory = true;
+			cameFromKnownParent = true;
+		} else if (
+			from.url.pathname.startsWith('/clubs/') &&
+			from.url.searchParams.get('tab') === 'templates'
+		) {
+			backHref = from.url.pathname + from.url.search;
+			backLabel = m('planDetail.backClubTemplates');
 			cameFromKnownParent = true;
 		}
 	});
@@ -303,7 +317,7 @@
 	}
 
 	function handleBack(e: MouseEvent): void {
-		if (cameFromKnownParent) {
+		if (cameFromKnownParent && backViaHistory) {
 			e.preventDefault();
 			history.back();
 		}

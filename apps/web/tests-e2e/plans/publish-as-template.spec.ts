@@ -137,6 +137,84 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		await expect(adoptLink).toHaveAttribute('href', `/plans/new?from=${cloneId}`);
 	});
 
+	test('Adopt deep link (/plans/new?from=<id>) pre-selects the template in the cloner', async ({
+		page
+	}) => {
+		// Publish a template, then follow the Adopt link the templates tab
+		// builds. /plans/new?from=<id> must pre-select that template in the
+		// club-template picker (not leave it on the placeholder), so the
+		// member lands ready to clone the plan they actually clicked.
+		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+		const publishRow = page.locator('.publish-row');
+		await expect(publishRow).toBeVisible({ timeout: 10_000 });
+		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
+		await publishRow.getByRole('button', { name: 'Publish' }).click();
+		await expect(publishRow.locator('select')).toHaveValue('', {
+			timeout: 10_000
+		});
+
+		const admin = getAdminClient();
+		const { data: clones } = await admin
+			.from('training_plans')
+			.select('id')
+			.eq('is_template', true)
+			.eq('club_id', SYDNEY_RUN_CLUB_ID)
+			.eq('name', 'Richmond Half 2026');
+		expect(clones?.length).toBe(1);
+		const cloneId = (clones![0] as { id: string }).id;
+
+		await page.goto(`/plans/new?from=${cloneId}`);
+		const picker = page.locator('.template-picker');
+		await expect(picker).toBeVisible({ timeout: 10_000 });
+		await expect(picker.locator('select')).toHaveValue(cloneId, { timeout: 10_000 });
+		// The pre-selection enables the clone CTA with no further input —
+		// start date defaults to the next Monday.
+		await expect(picker.getByRole('button', { name: 'Clone template' })).toBeEnabled();
+	});
+
+	test('back button returns to the club Templates tab from both template surfaces', async ({
+		page
+	}) => {
+		// Reaching a template from the club's Templates tab and pressing
+		// Back must return to that tab — not fall through to /plans (or,
+		// via a history.back() chain, an unrelated surface like /runs).
+		// Covers both entry points: clicking the template name (→
+		// /plans/[id]) and clicking Adopt (→ /plans/new).
+		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+		const publishRow = page.locator('.publish-row');
+		await expect(publishRow).toBeVisible({ timeout: 10_000 });
+		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
+		await publishRow.getByRole('button', { name: 'Publish' }).click();
+		await expect(publishRow.locator('select')).toHaveValue('', { timeout: 10_000 });
+
+		const openTemplatesTab = async () => {
+			await page.goto('/clubs/richmond-run-club');
+			await expect(
+				page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
+			).toBeVisible({ timeout: 10_000 });
+			await page.getByRole('tab', { name: /^Templates/ }).click();
+			await expect(page.locator('.template-row').first()).toBeVisible({ timeout: 10_000 });
+		};
+
+		// Entry 1: template name → /plans/[id] → Back.
+		await openTemplatesTab();
+		await page.locator('.template-row .template-link').first().click();
+		await page.waitForURL(/\/plans\/[0-9a-f-]+$/, { timeout: 10_000 });
+		const detailBack = page.locator('a.back').first();
+		await expect(detailBack).toHaveAttribute('href', '/clubs/richmond-run-club?tab=templates');
+		await detailBack.click();
+		await page.waitForURL(/\/clubs\/richmond-run-club\?tab=templates$/, { timeout: 10_000 });
+
+		// Entry 2: Adopt → /plans/new → Back.
+		await openTemplatesTab();
+		await page.locator('.template-row').getByRole('link', { name: /Adopt/ }).first().click();
+		await page.waitForURL(/\/plans\/new/, { timeout: 10_000 });
+		const newBack = page.locator('a.back-link').first();
+		await expect(newBack).toHaveAttribute('href', '/clubs/richmond-run-club?tab=templates');
+		await newBack.click();
+		await page.waitForURL(/\/clubs\/richmond-run-club\?tab=templates$/, { timeout: 10_000 });
+	});
+
 	test('cloned template plan-detail renders the Club-template chip', async ({
 		page
 	}) => {

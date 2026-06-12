@@ -1510,7 +1510,15 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 
 /** Clubs the current user belongs to (owner or member). */
 export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
-	const userId = auth.user?.id;
+	// Fall back to the session when the JS auth store hasn't hydrated yet —
+	// on a fresh page load (bookmark, refresh, hard nav to /plans/new) the
+	// store's user can still be null while a valid session sits in storage.
+	// Without this, the first caller in a page's onMount silently gets [].
+	let userId = auth.user?.id;
+	if (!userId) {
+		const { data: { session } } = await supabase.auth.getSession();
+		userId = session?.user?.id;
+	}
 	if (!userId) return [];
 	const { data } = await supabase
 		.from(TABLES.club_members)
