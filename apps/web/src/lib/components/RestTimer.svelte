@@ -13,24 +13,21 @@
 
 	$effect(() => {
 		remaining = seconds;
-		let id: ReturnType<typeof setInterval> | null = null;
-		try {
-			id = setInterval(() => {
-				remaining -= 1;
-				if (remaining <= 0) {
-					remaining = 0;
-					ondone();
-				}
-			}, 1000);
-		} catch (e) {
-			console.error('rest timer interval failed', e);
-		}
-		return () => {
-			try {
+		let id: ReturnType<typeof setInterval> | null = setInterval(() => {
+			remaining -= 1;
+			if (remaining <= 0) {
+				remaining = 0;
 				if (id != null) clearInterval(id);
-			} catch (e) {
-				console.error('rest timer clear failed', e);
+				id = null;
+				try {
+					ondone();
+				} catch (e) {
+					console.error('rest timer ondone failed', e);
+				}
 			}
+		}, 1000);
+		return () => {
+			if (id != null) clearInterval(id);
 		};
 	});
 </script>
