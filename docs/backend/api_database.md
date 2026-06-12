@@ -376,7 +376,20 @@ User-submitted reports against a profile, club, or route. Polymorphic via `(targ
 
 Inserts go through the `submit_report(p_target_kind, p_target_id, p_reason, p_notes)` SECURITY DEFINER RPC, which validates the target row exists, rejects self-reports on `target_kind='user'`, rate-limits via the shared `enforce_create_rate_limit` helper at 10/hour per reporter, and surfaces duplicate-pending as a 23505 with a "you already have a pending report" hint. RLS hides others' reports from each user — the only way to *read* `reports` cross-user is via service_role, which is intentional: reports are pending evidence, not public attribution.
 
-There is no admin UI yet — v1 moderation happens in Supabase Studio against the `reports` table. The deferred admin queue, auto-hide-after-N, and reputation-weighted reports are tracked in [roadmap.md § Anti-spam / moderation](../product/roadmap.md#anti-spam--moderation--whats-shipped-whats-deferred). Migration `20260908_001_user_reports.sql`. Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e tests).
+Moderation runs through the web admin surface `/admin/reports` (web-only back-office tooling — migration `20270104_001_admin_moderation.sql`). Auto-hide-after-N and reputation-weighted reports remain deferred and are tracked in [roadmap.md § Anti-spam / moderation](../product/roadmap.md#anti-spam--moderation--whats-shipped-whats-deferred). Migration `20260908_001_user_reports.sql`. Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e tests).
+
+#### `app_admins` + the moderation RPCs
+
+`app_admins (user_id, granted_at, granted_by)` is the moderator allow-list — one row per admin. RLS is enabled with no user-JWT policy, so under RLS a normal caller sees zero rows; grants/revokes happen via service_role (Studio) or `seed.sql` (the seed user is seeded admin for local testing). The oracle `private.is_admin(uid)` (SECURITY DEFINER, `search_path`-pinned, in `private` so PostgREST does not expose it — mirrors the membership oracles of `20261120_001`) backs every gate.
+
+Four RPCs, all SECURITY DEFINER, all (except the chrome gate) hard-denying a non-admin with a `42501` before touching any report data:
+
+- `am_i_admin()` → boolean. The only admin function in `public` (PostgREST-callable); used purely to pick page chrome — never the authorization boundary.
+- `fetch_pending_reports()` → one row per reported target with pending reports: `(target_kind, target_id, report_count, reporter_count, reasons jsonb, latest_at)`, newest-active first. Drives the queue.
+- `fetch_reports_for_target(p_target_kind, p_target_id)` → every individual report (any status) against one target, newest first.
+- `resolve_target_reports(p_target_kind, p_target_id, p_status, p_resolution)` → sets all pending reports on the target to `'reviewed'`/`'dismissed'` with `reviewed_by = auth.uid()` + `reviewed_at = now()` + the note; returns the row count. Rejects an invalid status with `22023`. Triage-only — no content takedown / visibility flip in v1.
+
+Pinned by `apps/backend/supabase/tests/admin_moderation_test.sql` (22 pgtap subtests; the load-bearing assertions are admin-allowed vs non-admin/anon-DENIED on every RPC) + `apps/web/tests-e2e/admin/reports.spec.ts`.
 
 ### Clubs & events
 

@@ -72,6 +72,11 @@ VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km',
         178.0, '1992-09-12', 'male')
 ON CONFLICT (id) DO NOTHING;
 
+-- Make the seed user an admin so /admin/reports is testable locally.
+INSERT INTO app_admins (user_id)
+VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890')
+ON CONFLICT (user_id) DO NOTHING;
+
 -- 2a. User settings — runner_context for the AI Coach. Without these the
 -- coach has nothing to ground HR / age / weekly-goal answers in. Keys
 -- match `docs/backend/settings.md` § Universal prefs registry.

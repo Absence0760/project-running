@@ -34,6 +34,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_admins: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_quota: {
         Row: {
           count: number
@@ -3145,6 +3163,7 @@ export type Database = {
         Args: { parent_id: string }
         Returns: boolean
       }
+      am_i_admin: { Args: never; Returns: boolean }
       approve_event_result: {
         Args: {
           p_approve: boolean
@@ -3353,6 +3372,31 @@ export type Database = {
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
       event_is_athletic: { Args: { target_event: string }; Returns: boolean }
+      fetch_pending_reports: {
+        Args: never
+        Returns: {
+          latest_at: string
+          reasons: Json
+          report_count: number
+          reporter_count: number
+          target_id: string
+          target_kind: string
+        }[]
+      }
+      fetch_reports_for_target: {
+        Args: { p_target_id: string; p_target_kind: string }
+        Returns: {
+          created_at: string
+          id: string
+          notes: string
+          reason: string
+          reporter_id: string
+          resolution: string
+          reviewed_at: string
+          reviewed_by: string
+          status: string
+        }[]
+      }
       find_failed_jobs: {
         Args: { p_failed_within?: string }
         Returns: {
@@ -3611,6 +3655,15 @@ export type Database = {
       refresh_personal_records_for_user: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      resolve_target_reports: {
+        Args: {
+          p_resolution?: string
+          p_status: string
+          p_target_id: string
+          p_target_kind: string
+        }
+        Returns: number
       }
       routes_intersecting_track: {
         Args: {

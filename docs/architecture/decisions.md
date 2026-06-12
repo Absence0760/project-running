@@ -3017,6 +3017,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 142. Admin authorization is DB-enforced via `app_admins` + a `private.is_admin` oracle, never client-side route gating
+
+**Decided (2026-06-12, migration `20270104_001`).** The report-moderation back-office (`/admin/reports`) is the first admin-only surface. Because the web app is a **statically-prerendered SPA** served from S3/CloudFront, any client-side route guard is shipped to the browser and is therefore not a security boundary — a non-admin can read the bundle and call the API directly. So authorization lives entirely at the database: an `app_admins (user_id, …)` allow-list table (RLS-enabled, no user-JWT read policy → default-deny; grant/revoke via service_role), a `private.is_admin(uid)` SECURITY DEFINER oracle in the `private` schema (so PostgREST never exposes it as an anon RPC oracle, mirroring the membership oracles of §… `20261120_001`), and **every moderation RPC hard-denies a non-admin with `42501` before touching report data**. The client calls a cheap `am_i_admin()` RPC *only* to choose chrome (queue vs not-authorized state); it changes nothing about who can actually read or write.
+
+**Why a table, not a `user_profiles.is_admin` column.** A dedicated table keeps the grant cleanly auditable (`granted_at`/`granted_by`), revocable with one DELETE, and outside the column-grant lockdown surface that `user_profiles` already carries. It also means no client ever reads an admin flag off its own profile row.
+
+**Trade-off.** Triage-only in v1: an admin marks a target's pending reports reviewed/dismissed with a note — there is deliberately no content takedown / visibility flip (suppression stays a separate, considered action; auto-hide was already out-of-scope per the report MVP). Admin tooling is **web-only** (no mobile/watch twin) per §24 — back-office surfaces don't need a device mirror.
+
+**Don't re-litigate** by adding a client-side `requireAdmin` guard *as the* boundary, by moving `is_admin` into `public`, or by relaxing any RPC's `42501` gate. If a takedown action is added later, it must be its own admin-gated RPC with its own audit trail. Pinned by `admin_moderation_test.sql` (admin-allowed vs non-admin/anon-DENIED on every RPC).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
