@@ -43,7 +43,8 @@
 					})),
 				})),
 			};
-			steps = await prefillFromProgression(expandRoutineSteps(planned).steps, detail);
+			const expanded = expandRoutineSteps(planned).steps;
+			steps = await prefillFromProgression(expanded, detail).catch(() => expanded);
 		}
 		loading = false;
 	}

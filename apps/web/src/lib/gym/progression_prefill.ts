@@ -1,10 +1,5 @@
-// Web-only glue between the logged-set history and the gym_progression
-// prescriber (gym_programming.md P4). Pure — no DB, no Svelte. It picks the most
-// recent logged session of an exercise and reduces it to the ProgressionSetLike
-// list nextPrescription consumes. The prescriber itself is the parity pair
-// gym_progression.ts ↔ gym_progression.dart and is NOT touched here — we only
-// call it. The mobile twin ports this glue inline against the same Dart
-// prescriber.
+// Glue for the gym_progression P4 prefill (gym_programming.md). The prescriber
+// gym_progression.ts ↔ gym_progression.dart is only called here, never modified.
 
 import { normaliseExerciseName } from './gym_prs';
 import type { ProgressionSetLike } from './gym_progression';

@@ -1,11 +1,6 @@
-// Pure shaping for the RoutineEditor (gym_programming.md P2/P4 authoring).
-//
-// The editor carries a "supersetWithNext" flag per exercise (UX: bracket this
-// block into a superset with the one below it). assignSupersetGroups turns that
-// per-row flag into the relational (superset_group, superset_order) the schema
-// stores, honouring the gym_routine_exercises_superset_chk invariant (group +
-// order are both null or both set). Web-only — the mobile builder ports this
-// inline; the runner consumes the persisted columns via expandRoutineSteps.
+// Pure shaping for the RoutineEditor (gym_programming.md P2 authoring).
+// assignSupersetGroups must keep (superset_group, superset_order) both-null or
+// both-set to satisfy the gym_routine_exercises_superset_chk constraint.
 
 export interface SupersetAssignment {
 	supersetGroup: number | null;

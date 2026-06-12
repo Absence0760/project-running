@@ -128,7 +128,7 @@
 		} else {
 			history = [];
 		}
-		nextTargets = await loadNextTargets(w);
+		nextTargets = await loadNextTargets(w).catch(() => []);
 		loading = false;
 	}
 
