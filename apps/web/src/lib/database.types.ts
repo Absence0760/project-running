@@ -955,6 +955,7 @@ export type Database = {
       }
       gym_sets: {
         Row: {
+          duration_s: number | null
           exercise_name: string
           id: string
           reps: number | null
@@ -964,6 +965,7 @@ export type Database = {
           workout_id: string
         }
         Insert: {
+          duration_s?: number | null
           exercise_name: string
           id?: string
           reps?: number | null
@@ -973,6 +975,7 @@ export type Database = {
           workout_id: string
         }
         Update: {
+          duration_s?: number | null
           exercise_name?: string
           id?: string
           reps?: number | null
@@ -3153,6 +3156,7 @@ export type Database = {
       gym_exercise_set_history: {
         Args: { p_name: string }
         Returns: {
+          duration_s: number
           exercise_name: string
           reps: number
           rpe: number
