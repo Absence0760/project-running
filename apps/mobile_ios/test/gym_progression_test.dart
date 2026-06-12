@@ -1,0 +1,168 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import '../lib/gym_progression.dart';
+
+ProgressionSetLike s(num? reps, num? weightKg, [num? rpe]) =>
+    ProgressionSetLike(reps: reps, weightKg: weightKg, rpe: rpe);
+
+void main() {
+  test('none scheme suggests nothing', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.none,
+      lastSets: [s(5, 100)],
+    ));
+    expect(out.suggestedWeightKg, isNull);
+    expect(out.suggestedRepsMin, isNull);
+    expect(out.suggestedRepsMax, isNull);
+    expect(out.reason, ProgressionReason.none);
+  });
+
+  test('linear: all sets hit top reps -> +2.5kg increase_weight', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [s(5, 100), s(5, 100), s(5, 100)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(out.reason, ProgressionReason.increaseWeight);
+    expect(out.suggestedWeightKg, 102.5);
+  });
+
+  test('linear: a missed set -> hold at the same weight', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [s(5, 100), s(4, 100), s(5, 100)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(out.reason, ProgressionReason.hold);
+    expect(out.suggestedWeightKg, 100);
+  });
+
+  test('double_progression: below repsMax -> increase_reps, same weight', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.doubleProgression,
+      lastSets: [s(8, 60), s(8, 60), s(8, 60)],
+      targetRepsMin: 8,
+      targetRepsMax: 12,
+    ));
+    expect(out.reason, ProgressionReason.increaseReps);
+    expect(out.suggestedWeightKg, 60);
+    expect(out.suggestedRepsMax, 12);
+  });
+
+  test('double_progression: at repsMax -> +2.5kg, reset reps to repsMin', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.doubleProgression,
+      lastSets: [s(12, 60), s(12, 60), s(12, 60)],
+      targetRepsMin: 8,
+      targetRepsMax: 12,
+    ));
+    expect(out.reason, ProgressionReason.increaseWeight);
+    expect(out.suggestedWeightKg, 62.5);
+    expect(out.suggestedRepsMin, 8);
+    expect(out.suggestedRepsMax, 8);
+  });
+
+  test('five_by_five: 5x5 success -> +2.5kg', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [s(5, 80), s(5, 80), s(5, 80), s(5, 80), s(5, 80)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(out.reason, ProgressionReason.increaseWeight);
+    expect(out.suggestedWeightKg, 82.5);
+  });
+
+  test('five_by_five: one rep short -> hold', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [s(5, 80), s(5, 80), s(5, 80), s(5, 80), s(4, 80)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(out.reason, ProgressionReason.hold);
+    expect(out.suggestedWeightKg, 80);
+  });
+
+  test('five_by_five: 3 consecutive misses -> deload', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [s(5, 80), s(5, 80), s(5, 80), s(5, 80), s(3, 80)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+      params: const {'consecutiveMisses': 3},
+    ));
+    expect(out.reason, ProgressionReason.deload);
+    expect(out.suggestedWeightKg, 72);
+  });
+
+  test('percent_cycle: prescribes params.percent * oneRmKg', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.percentCycle,
+      lastSets: [s(3, 120)],
+      params: const {'percent': 0.85, 'oneRmKg': 150},
+    ));
+    expect(out.reason, ProgressionReason.increaseWeight);
+    expect(out.suggestedWeightKg, 127.5);
+  });
+
+  test('rpe_autoreg: achieved RPE below target -> increase_weight', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.rpeAutoreg,
+      lastSets: [s(5, 100, 7), s(5, 100, 7.5)],
+      params: const {'targetRpe': 8},
+    ));
+    expect(out.reason, ProgressionReason.increaseWeight);
+    expect(out.suggestedWeightKg, 102.5);
+  });
+
+  test('rpe_autoreg: achieved RPE above target -> hold', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.rpeAutoreg,
+      lastSets: [s(5, 100, 9), s(5, 100, 9.5)],
+      params: const {'targetRpe': 8},
+    ));
+    expect(out.reason, ProgressionReason.hold);
+    expect(out.suggestedWeightKg, 100);
+  });
+
+  test('empty lastSets -> hold (or none for none scheme)', () {
+    final held = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: const [],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(held.reason, ProgressionReason.hold);
+    final noneOut = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.none,
+      lastSets: [],
+    ));
+    expect(noneOut.reason, ProgressionReason.none);
+  });
+
+  test('null weights (bodyweight) -> reps-only suggestion, never a weight', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [s(10, null), s(10, null), s(10, null)],
+      targetRepsMin: 10,
+      targetRepsMax: 10,
+    ));
+    expect(out.suggestedWeightKg, isNull);
+    expect(out.reason, ProgressionReason.increaseReps);
+  });
+
+  test('negative/zero params never suggest a negative weight', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [s(5, 100), s(5, 100)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+      params: const {'incrementKg': -200},
+    ));
+    expect(out.suggestedWeightKg, isNotNull);
+    expect(out.suggestedWeightKg! > 0, isTrue);
+  });
+}
