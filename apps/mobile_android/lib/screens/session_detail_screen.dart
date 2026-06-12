@@ -273,6 +273,7 @@ class _SessionRunnerPageState extends State<_SessionRunnerPage> {
   Timer? _timer;
   bool _paused = false;
   DateTime? _segmentStartWall;
+  int _prePauseElapsedMs = 0;
   bool _lastFiftyAnnounced = false;
 
   @override
@@ -312,6 +313,7 @@ class _SessionRunnerPageState extends State<_SessionRunnerPage> {
   void _enterStep() {
     _timer?.cancel();
     _lastFiftyAnnounced = false;
+    _prePauseElapsedMs = 0;
     final step = _current;
     if (step == null) {
       _finish();
@@ -337,7 +339,9 @@ class _SessionRunnerPageState extends State<_SessionRunnerPage> {
         // per-tick counter, so a backgrounded / throttled timer can't drift.
         final start = _segmentStartWall;
         if (start == null) return;
-        final elapsed = DateTime.now().difference(start).inMilliseconds / 1000.0;
+        final elapsed = (_prePauseElapsedMs +
+                DateTime.now().difference(start).inMilliseconds) /
+            1000.0;
         final remaining = (target - elapsed).ceil();
         if (remaining <= 0) {
           _advance(SessionStepStatus.completed);
@@ -373,7 +377,10 @@ class _SessionRunnerPageState extends State<_SessionRunnerPage> {
       final start = _segmentStartWall;
       actual = start == null
           ? null
-          : DateTime.now().difference(start).inSeconds;
+          : ((_prePauseElapsedMs +
+                      DateTime.now().difference(start).inMilliseconds) /
+                  1000)
+              .round();
     }
     _results.add(SessionStepResult(
       itemId: step.itemId,
@@ -403,6 +410,10 @@ class _SessionRunnerPageState extends State<_SessionRunnerPage> {
     final step = _current;
     if (step == null || !_isTimed(step)) return;
     if (_paused) {
+      final start = _segmentStartWall;
+      if (start != null) {
+        _prePauseElapsedMs += DateTime.now().difference(start).inMilliseconds;
+      }
       _timer?.cancel();
     } else {
       _segmentStartWall = DateTime.now();
