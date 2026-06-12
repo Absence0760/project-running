@@ -4763,6 +4763,77 @@
       }
     }
   },
+  "planDetailDriftOverFlag": "Running {pct}% over plan this week — ease back on the easy days so you don't dig a fatigue hole.",
+  "@planDetailDriftOverFlag": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "pct": { "type": "int" } }
+  },
+  "planDetailDriftUnderFlag": "Running {pct}% under plan this week — the planned volume drives the adaptation.",
+  "@planDetailDriftUnderFlag": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "pct": { "type": "int" } }
+  },
+  "planDetailMissedLongMakeUp": "You missed this week's long run — fit it in if you can. It's the session that matters most.",
+  "@planDetailMissedLongMakeUp": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailMissedLongTaper": "You missed a long run, but you're tapering — let it go and stay fresh for race day.",
+  "@planDetailMissedLongTaper": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailMissedLongRecovery": "You missed a long run — skip the make-up. A step-back week is coming and your body will use the rest.",
+  "@planDetailMissedLongRecovery": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplan": "Re-plan remaining weeks",
+  "@planDetailReplan": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanOnTrack": "Your plan's on track — nothing to adjust.",
+  "@planDetailReplanOnTrack": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanApplied": "{n, plural, one{Adjusted 1 workout} other{Adjusted {n} workouts}}",
+  "@planDetailReplanApplied": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "planDetailReplanPreviewTitle": "Proposed changes",
+  "@planDetailReplanPreviewTitle": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanMakeUp": "Long run {from} → {to} — make up a missed long run",
+  "@planDetailReplanMakeUp": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+  },
+  "planDetailReplanEase": "{from} → {to} — ease off after over-running",
+  "@planDetailReplanEase": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+  },
+  "planDetailReplanCancel": "Cancel",
+  "@planDetailReplanCancel": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailReplanApply": "Apply changes",
+  "@planDetailReplanApply": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailDuplicateWeek": "Duplicate week",
+  "@planDetailDuplicateWeek": {
+    "description": "Plan-detail adherence/replan/duplicate"
+  },
+  "planDetailDuplicateWeekDone": "Week {n} duplicated",
+  "@planDetailDuplicateWeekDone": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "planDetailBulkFailed": "Couldn't update the plan: {error}",
+  "@planDetailBulkFailed": {
+    "description": "Plan-detail adherence/replan/duplicate",
+    "placeholders": { "error": { "type": "String" } }
+  },
   "planDetailEditTooltip": "Edit workout",
   "@planDetailEditTooltip": {
     "description": "Edit-workout button tooltip on a workout row"

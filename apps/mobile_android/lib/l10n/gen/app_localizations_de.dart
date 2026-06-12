@@ -3848,6 +3848,77 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String planDetailDriftOverFlag(int pct) {
+    return 'Diese Woche $pct% über Plan — nimm an den lockeren Tagen zurück, damit du kein Müdigkeitsloch gräbst.';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return 'Diese Woche $pct% unter Plan — der geplante Umfang treibt die Anpassung.';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      'Du hast den Long Run dieser Woche verpasst — hol ihn nach, wenn du kannst. Das ist die wichtigste Einheit.';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'Du hast einen Long Run verpasst, aber du tapest — lass ihn aus und bleib frisch für den Wettkampf.';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'Du hast einen Long Run verpasst — verzichte auf das Nachholen. Eine Entlastungswoche steht an und dein Körper nutzt die Ruhe.';
+
+  @override
+  String get planDetailReplan => 'Restliche Wochen neu planen';
+
+  @override
+  String get planDetailReplanOnTrack => 'Dein Plan läuft — nichts anzupassen.';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n Einheiten angepasst',
+      one: '1 Einheit angepasst',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => 'Vorgeschlagene Änderungen';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'Long Run $from → $to — verpassten Long Run nachholen';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — nach Überlastung zurücknehmen';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'Abbrechen';
+
+  @override
+  String get planDetailReplanApply => 'Änderungen übernehmen';
+
+  @override
+  String get planDetailDuplicateWeek => 'Woche duplizieren';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return 'Woche $n dupliziert';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'Plan konnte nicht aktualisiert werden: $error';
+  }
+
+  @override
   String get planDetailEditTooltip => 'Training bearbeiten';
 
   @override

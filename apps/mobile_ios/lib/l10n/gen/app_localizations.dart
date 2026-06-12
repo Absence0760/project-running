@@ -6383,6 +6383,102 @@ abstract class AppLocalizations {
   /// **'Week {number}'**
   String planDetailWeek(int number);
 
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Running {pct}% over plan this week — ease back on the easy days so you don\'t dig a fatigue hole.'**
+  String planDetailDriftOverFlag(int pct);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Running {pct}% under plan this week — the planned volume drives the adaptation.'**
+  String planDetailDriftUnderFlag(int pct);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'You missed this week\'s long run — fit it in if you can. It\'s the session that matters most.'**
+  String get planDetailMissedLongMakeUp;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'You missed a long run, but you\'re tapering — let it go and stay fresh for race day.'**
+  String get planDetailMissedLongTaper;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'You missed a long run — skip the make-up. A step-back week is coming and your body will use the rest.'**
+  String get planDetailMissedLongRecovery;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Re-plan remaining weeks'**
+  String get planDetailReplan;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Your plan\'s on track — nothing to adjust.'**
+  String get planDetailReplanOnTrack;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{Adjusted 1 workout} other{Adjusted {n} workouts}}'**
+  String planDetailReplanApplied(int n);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Proposed changes'**
+  String get planDetailReplanPreviewTitle;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Long run {from} → {to} — make up a missed long run'**
+  String planDetailReplanMakeUp(String from, String to);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'{from} → {to} — ease off after over-running'**
+  String planDetailReplanEase(String from, String to);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planDetailReplanCancel;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Apply changes'**
+  String get planDetailReplanApply;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate week'**
+  String get planDetailDuplicateWeek;
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Week {n} duplicated'**
+  String planDetailDuplicateWeekDone(int n);
+
+  /// Plan-detail adherence/replan/duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update the plan: {error}'**
+  String planDetailBulkFailed(String error);
+
   /// Edit-workout button tooltip on a workout row
   ///
   /// In en, this message translates to:

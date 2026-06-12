@@ -3605,6 +3605,76 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String planDetailDriftOverFlag(int pct) {
+    return '今週は計画より$pct%多く走っています — 疲労を溜めないよう、楽な日は控えめに。';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return '今週は計画より$pct%少なく走っています — 計画した走行量が適応を生みます。';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      '今週のロング走を逃しました — 可能なら入れましょう。最も重要なセッションです。';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'ロング走を逃しましたが、テーパー中です — 諦めてレースに向け疲労を抜きましょう。';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'ロング走を逃しました — 取り戻さなくて大丈夫。回復週が来るので体は休息を活かします。';
+
+  @override
+  String get planDetailReplan => '残りの週を再計画';
+
+  @override
+  String get planDetailReplanOnTrack => '計画は順調です — 調整は不要です。';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n件のワークアウトを調整しました',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => '提案された変更';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'ロング走 $from → $to — 逃したロング走を取り戻す';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — 走り過ぎ後に軽減';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'キャンセル';
+
+  @override
+  String get planDetailReplanApply => '変更を適用';
+
+  @override
+  String get planDetailDuplicateWeek => '週を複製';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return '第$n週を複製しました';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'プランを更新できませんでした: $error';
+  }
+
+  @override
   String get planDetailEditTooltip => 'ワークアウトを編集';
 
   @override

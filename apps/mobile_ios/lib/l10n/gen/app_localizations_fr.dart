@@ -3854,6 +3854,78 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String planDetailDriftOverFlag(int pct) {
+    return '$pct% au-dessus du plan cette semaine — lève le pied les jours faciles pour ne pas creuser un trou de fatigue.';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return '$pct% en dessous du plan cette semaine — le volume prévu pilote l’adaptation.';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      'Tu as manqué la sortie longue de la semaine — caser-la si possible. C’est la séance la plus importante.';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'Tu as manqué une sortie longue, mais tu es en affûtage — laisse tomber et reste frais pour la course.';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'Tu as manqué une sortie longue — n’essaie pas de la rattraper. Une semaine de récupération arrive et ton corps en profitera.';
+
+  @override
+  String get planDetailReplan => 'Replanifier les semaines restantes';
+
+  @override
+  String get planDetailReplanOnTrack =>
+      'Ton plan est sur la bonne voie — rien à ajuster.';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n séances ajustées',
+      one: '1 séance ajustée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => 'Changements proposés';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'Sortie longue $from → $to — rattraper une sortie longue manquée';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — alléger après un excès de volume';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'Annuler';
+
+  @override
+  String get planDetailReplanApply => 'Appliquer les changements';
+
+  @override
+  String get planDetailDuplicateWeek => 'Dupliquer la semaine';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return 'Semaine $n dupliquée';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'Impossible de mettre à jour le plan : $error';
+  }
+
+  @override
   String get planDetailEditTooltip => 'Modifier la séance';
 
   @override

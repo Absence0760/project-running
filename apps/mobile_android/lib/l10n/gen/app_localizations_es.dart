@@ -3841,6 +3841,77 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String planDetailDriftOverFlag(int pct) {
+    return 'Esta semana $pct% por encima del plan — afloja en los días suaves para no cavar un hoyo de fatiga.';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return 'Esta semana $pct% por debajo del plan — el volumen previsto impulsa la adaptación.';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      'Te perdiste la tirada larga de esta semana — encájala si puedes. Es la sesión que más importa.';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'Te perdiste una tirada larga, pero estás afinando — déjala y llega fresco al día de la carrera.';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'Te perdiste una tirada larga — no la recuperes. Viene una semana de descarga y tu cuerpo aprovechará el descanso.';
+
+  @override
+  String get planDetailReplan => 'Replanificar las semanas restantes';
+
+  @override
+  String get planDetailReplanOnTrack => 'Tu plan va bien — nada que ajustar.';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n entrenamientos ajustados',
+      one: '1 entrenamiento ajustado',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => 'Cambios propuestos';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'Tirada larga $from → $to — recuperar una tirada larga perdida';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — aligerar tras pasarte de volumen';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'Cancelar';
+
+  @override
+  String get planDetailReplanApply => 'Aplicar cambios';
+
+  @override
+  String get planDetailDuplicateWeek => 'Duplicar semana';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return 'Semana $n duplicada';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'No se pudo actualizar el plan: $error';
+  }
+
+  @override
   String get planDetailEditTooltip => 'Editar entrenamiento';
 
   @override

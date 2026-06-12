@@ -252,6 +252,23 @@ class TrainingService extends ChangeNotifier {
     return newId as String;
   }
 
+  /// Duplicate a plan week — insert a copy right after [weekIndex], pushing
+  /// every later week + the plan end date back by 7 days. The
+  /// (plan_id, week_index) re-index is atomic server-side (duplicate_plan_week
+  /// RPC) — a client-side multi-update would transiently break the unique
+  /// index. Mirrors web `data.ts#duplicatePlanWeek`. Returns the new week id.
+  Future<String> duplicatePlanWeek(String planId, int weekIndex) async {
+    final newId = await _c.rpc(
+      'duplicate_plan_week',
+      params: {
+        'p_plan_id': planId,
+        'p_week_index': weekIndex,
+      },
+    );
+    notifyListeners();
+    return newId as String;
+  }
+
   Future<List<TrainingPlanRow>> fetchMyPlans() async {
     final uid = _uid;
     if (uid == null) return const [];

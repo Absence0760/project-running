@@ -3811,6 +3811,78 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String planDetailDriftOverFlag(int pct) {
+    return 'Running $pct% over plan this week — ease back on the easy days so you don\'t dig a fatigue hole.';
+  }
+
+  @override
+  String planDetailDriftUnderFlag(int pct) {
+    return 'Running $pct% under plan this week — the planned volume drives the adaptation.';
+  }
+
+  @override
+  String get planDetailMissedLongMakeUp =>
+      'You missed this week\'s long run — fit it in if you can. It\'s the session that matters most.';
+
+  @override
+  String get planDetailMissedLongTaper =>
+      'You missed a long run, but you\'re tapering — let it go and stay fresh for race day.';
+
+  @override
+  String get planDetailMissedLongRecovery =>
+      'You missed a long run — skip the make-up. A step-back week is coming and your body will use the rest.';
+
+  @override
+  String get planDetailReplan => 'Re-plan remaining weeks';
+
+  @override
+  String get planDetailReplanOnTrack =>
+      'Your plan\'s on track — nothing to adjust.';
+
+  @override
+  String planDetailReplanApplied(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Adjusted $n workouts',
+      one: 'Adjusted 1 workout',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailReplanPreviewTitle => 'Proposed changes';
+
+  @override
+  String planDetailReplanMakeUp(String from, String to) {
+    return 'Long run $from → $to — make up a missed long run';
+  }
+
+  @override
+  String planDetailReplanEase(String from, String to) {
+    return '$from → $to — ease off after over-running';
+  }
+
+  @override
+  String get planDetailReplanCancel => 'Cancel';
+
+  @override
+  String get planDetailReplanApply => 'Apply changes';
+
+  @override
+  String get planDetailDuplicateWeek => 'Duplicate week';
+
+  @override
+  String planDetailDuplicateWeekDone(int n) {
+    return 'Week $n duplicated';
+  }
+
+  @override
+  String planDetailBulkFailed(String error) {
+    return 'Couldn\'t update the plan: $error';
+  }
+
+  @override
   String get planDetailEditTooltip => 'Edit workout';
 
   @override

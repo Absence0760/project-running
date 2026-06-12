@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../main.dart' show pendingStartWorkout;
-import '../social_service.dart' show ClubView, SocialService;
+import '../plan_adherence.dart';
+import '../plan_replan.dart';
+import '../social_service.dart' show ClubView, RecentRunRow, SocialService;
 import '../training.dart';
 import '../training_labels.dart';
 import '../training_service.dart';
@@ -19,6 +22,11 @@ import '../widgets/plan_calendar.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/workout_edit_sheet.dart';
 import 'workout_detail_screen.dart';
+
+/// Web `isWorkoutCompleted` twin — a planned workout is done when a tracked
+/// run is linked OR the runner manually marked it complete.
+bool _isWorkoutCompleted(PlanWorkoutRow wo) =>
+    wo.completedRunId != null || wo.manuallyCompleted;
 
 /// Filter the viewer's club memberships to ones they can publish a
 /// plan-template into — owner or admin. Pure so it's directly
@@ -38,11 +46,19 @@ class PlanDetailScreen extends StatefulWidget {
   /// client.
   final SocialService? social;
 
+  /// Test-only override for the signed-in user id. Production passes null and
+  /// the screen reads it from the global Supabase auth session; widget tests
+  /// inject it so the owner-gated adherence / re-plan / duplicate surfaces are
+  /// reachable without a live auth session.
+  @visibleForTesting
+  final String? viewerIdOverride;
+
   const PlanDetailScreen({
     super.key,
     required this.training,
     required this.planId,
     this.social,
+    this.viewerIdOverride,
   });
 
   @override
@@ -56,6 +72,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   bool _loading = true;
   _PlanDetailLoadError? _error;
   bool _publishing = false;
+  bool _bulkBusy = false;
+  List<RecentRunRow> _recentRuns = const [];
+  List<ReplanChange>? _replanPreview;
 
   // Lazily construct a SocialService against the global Supabase client
   // when none was injected. Tests pass a fake via the constructor.
@@ -87,6 +106,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         _byWeek = byWeek;
         _loading = false;
       });
+      _loadRecentRuns();
     } on TimeoutException catch (e) {
       debugPrint('PlanDetailScreen._load timed out: $e');
       if (mounted) {
@@ -103,6 +123,176 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
           _error = _PlanDetailLoadError.generic;
         });
       }
+    }
+  }
+
+  /// Best-effort fetch of the viewer's recent runs so the adherence banner
+  /// + re-plan flow can compare actual weekly mileage to the plan. A failure
+  /// leaves the adherence surfaces hidden — the rest of the plan still loads.
+  Future<void> _loadRecentRuns() async {
+    final plan = _plan;
+    if (plan == null || !_isOwner(plan)) return;
+    try {
+      final runs =
+          await _social.fetchRecentRuns(limit: 50).timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() => _recentRuns = runs);
+    } catch (_) {
+      /* L4 best-effort — leave the adherence surfaces hidden. */
+    }
+  }
+
+  bool _isOwner(TrainingPlanRow plan) {
+    final uid = widget.viewerIdOverride ??
+        Supabase.instance.client.auth.currentUser?.id;
+    return uid != null && plan.userId == uid;
+  }
+
+  int _currentWeekIndex(TrainingPlanRow plan) {
+    final dayIndex = DateTime.now().difference(plan.startDate).inDays;
+    return dayIndex < 0 ? 0 : (dayIndex ~/ 7).clamp(0, _weeks.length - 1);
+  }
+
+  /// Summed actual run mileage dated inside `[weekIndex]`'s 7-day window.
+  double _actualMetresForWeek(TrainingPlanRow plan, int weekIndex) {
+    final weekStart = plan.startDate.add(Duration(days: weekIndex * 7));
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    var actual = 0.0;
+    for (final r in _recentRuns) {
+      final t = r.startedAt.toLocal();
+      if (!t.isBefore(weekStart) && t.isBefore(weekEnd)) actual += r.distanceM;
+    }
+    return actual;
+  }
+
+  double _plannedMetresForWeek(PlanWeekRow week) {
+    var planned = week.targetVolumeM ?? 0;
+    if (!(planned > 0)) {
+      planned = 0;
+      for (final wo in _byWeek[week.id] ?? const <PlanWorkoutRow>[]) {
+        if (wo.kind != 'rest') planned += wo.targetDistanceM ?? 0;
+      }
+    }
+    return planned;
+  }
+
+  /// Current-week mileage drift, or null when on-track / not the owner.
+  WeeklyDrift? _currentWeekDrift(TrainingPlanRow plan) {
+    if (!_isOwner(plan) || _weeks.isEmpty) return null;
+    final idx = _currentWeekIndex(plan);
+    if (idx >= _weeks.length) return null;
+    final week = _weeks[idx];
+    final d = weeklyDrift(
+        _plannedMetresForWeek(week), _actualMetresForWeek(plan, idx));
+    return d.flagged ? d : null;
+  }
+
+  /// A long run in the current week that's past + uncompleted → make-up/skip
+  /// advice driven by phase + whether a step-back week is imminent.
+  MissedWorkoutAdvice? _missedLongRun(TrainingPlanRow plan) {
+    if (!_isOwner(plan) || _weeks.isEmpty) return null;
+    final idx = _currentWeekIndex(plan);
+    if (idx >= _weeks.length) return null;
+    final week = _weeks[idx];
+    final today = toIsoDate(DateTime.now());
+    final missed = (_byWeek[week.id] ?? const <PlanWorkoutRow>[]).where((w) =>
+        w.kind == 'long' &&
+        toIsoDate(w.scheduledDate).compareTo(today) < 0 &&
+        !_isWorkoutCompleted(w));
+    if (missed.isEmpty) return null;
+    final next = idx + 1 < _weeks.length ? _weeks[idx + 1] : null;
+    final nextVol = next?.targetVolumeM ?? 0;
+    final curVol = week.targetVolumeM ?? 0;
+    final recoveryImminent =
+        next != null && nextVol > 0 && curVol > 0 && nextVol < curVol * 0.85;
+    return missedWorkoutAdvice(MissedWorkoutInput(
+      kind: 'long',
+      isTaper: week.phase == 'taper' || week.phase == 'race',
+      recoveryWeekImminent: recoveryImminent,
+    ));
+  }
+
+  List<ReplanWeek> _buildReplanInput(TrainingPlanRow plan) {
+    final today = toIsoDate(DateTime.now());
+    final todayD = DateTime.now();
+    return _weeks.map((w) {
+      final weekStart = plan.startDate.add(Duration(days: w.weekIndex * 7));
+      final weekEnd = weekStart.add(const Duration(days: 7));
+      return ReplanWeek(
+        weekIndex: w.weekIndex,
+        phase: w.phase,
+        plannedMetres: _plannedMetresForWeek(w),
+        actualMetres: _actualMetresForWeek(plan, w.weekIndex),
+        isComplete: !weekEnd.isAfter(todayD),
+        workouts: (_byWeek[w.id] ?? const <PlanWorkoutRow>[])
+            .map((x) => ReplanWorkout(
+                  id: x.id,
+                  scheduledDate: toIsoDate(x.scheduledDate),
+                  kind: x.kind,
+                  targetDistanceM: x.targetDistanceM,
+                  completed: _isWorkoutCompleted(x),
+                  isPast: toIsoDate(x.scheduledDate).compareTo(today) < 0,
+                ))
+            .toList(),
+      );
+    }).toList();
+  }
+
+  void _proposeReplan(TrainingPlanRow plan) {
+    if (!_isOwner(plan) || _bulkBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final res = replanRemaining(
+        weeks: _buildReplanInput(plan), today: toIsoDate(DateTime.now()));
+    if (res.onTrack || res.changes.isEmpty) {
+      setState(() => _replanPreview = null);
+      showTopBanner(context, l10n.planDetailReplanOnTrack);
+      return;
+    }
+    setState(() => _replanPreview = res.changes);
+  }
+
+  Future<void> _applyReplan() async {
+    final changes = _replanPreview;
+    if (changes == null || _bulkBusy) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _bulkBusy = true);
+    try {
+      for (final c in changes) {
+        await widget.training
+            .updateWorkout(c.workoutId, targetDistanceM: c.toMetres)
+            .timeout(kBackendLoadTimeout);
+      }
+      if (!mounted) return;
+      setState(() {
+        _replanPreview = null;
+        _bulkBusy = false;
+      });
+      showTopBanner(context, l10n.planDetailReplanApplied(changes.length));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bulkBusy = false);
+      showTopBanner(context, l10n.planDetailBulkFailed(e.toString()));
+    }
+  }
+
+  Future<void> _duplicateWeek(TrainingPlanRow plan, PlanWeekRow week) async {
+    if (_bulkBusy) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _bulkBusy = true);
+    try {
+      await widget.training
+          .duplicatePlanWeek(plan.id, week.weekIndex)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() => _bulkBusy = false);
+      showTopBanner(
+          context, l10n.planDetailDuplicateWeekDone(week.weekIndex + 1));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bulkBusy = false);
+      showTopBanner(context, l10n.planDetailBulkFailed(e.toString()));
     }
   }
 
@@ -233,6 +423,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               const SizedBox(height: 12),
               _todayCard(theme, l10n, p, todayWorkout),
             ],
+            ..._adherenceSection(theme, l10n, p),
+            ..._replanSection(theme, l10n, p),
             const SizedBox(height: 16),
             PlanCalendar(
               startDate: p.startDate,
@@ -247,6 +439,145 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _adherenceSection(
+      ThemeData theme, AppLocalizations l10n, TrainingPlanRow p) {
+    final drift = _currentWeekDrift(p);
+    final missed = _missedLongRun(p);
+    if (drift == null && missed == null) return const [];
+    final flags = <Widget>[];
+    if (drift != null) {
+      final pctOff = (drift.driftFraction.abs() * 100).round();
+      flags.add(_adherenceFlag(
+        theme,
+        Icons.insights,
+        drift.direction == DriftDirection.over
+            ? l10n.planDetailDriftOverFlag(pctOff)
+            : l10n.planDetailDriftUnderFlag(pctOff),
+      ));
+    }
+    if (missed != null) {
+      final text = missed.reason == MissedWorkoutReason.taper
+          ? l10n.planDetailMissedLongTaper
+          : missed.reason == MissedWorkoutReason.recoverySoon
+              ? l10n.planDetailMissedLongRecovery
+              : l10n.planDetailMissedLongMakeUp;
+      flags.add(_adherenceFlag(theme, Icons.event_busy, text));
+    }
+    return [
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < flags.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              flags[i],
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _adherenceFlag(ThemeData theme, IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(text, style: theme.textTheme.bodySmall),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _replanSection(
+      ThemeData theme, AppLocalizations l10n, TrainingPlanRow p) {
+    if (!_isOwner(p) || p.isTemplate) return const [];
+    final preview = _replanPreview;
+    return [
+      const SizedBox(height: 12),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _bulkBusy ? null : () => _proposeReplan(p),
+          icon: const Icon(Icons.auto_fix_high, size: 18),
+          label: Text(l10n.planDetailReplan),
+        ),
+      ),
+      if (preview != null) ...[
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            border: Border.all(color: theme.dividerColor),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.planDetailReplanPreviewTitle,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              for (final c in preview)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 92,
+                        child: Text(c.scheduledDate,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            )),
+                      ),
+                      Expanded(
+                        child: Text(
+                          c.reason == ReplanReason.makeUpLong
+                              ? l10n.planDetailReplanMakeUp(
+                                  fmtKm(c.fromMetres), fmtKm(c.toMetres))
+                              : l10n.planDetailReplanEase(
+                                  fmtKm(c.fromMetres), fmtKm(c.toMetres)),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _bulkBusy
+                        ? null
+                        : () => setState(() => _replanPreview = null),
+                    child: Text(l10n.planDetailReplanCancel),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _bulkBusy ? null : _applyReplan,
+                    child: Text(l10n.planDetailReplanApply),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    ];
   }
 
   Widget _heroCard(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
@@ -437,6 +768,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   )),
+              if (_isOwner(p) && !p.isTemplate)
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: IconButton(
+                    iconSize: 16,
+                    padding: EdgeInsets.zero,
+                    splashRadius: 18,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: l10n.planDetailDuplicateWeek,
+                    icon: Icon(Icons.content_copy,
+                        color: theme.colorScheme.outline),
+                    onPressed: _bulkBusy ? null : () => _duplicateWeek(p, w),
+                  ),
+                ),
             ],
           ),
           if (w.notes != null && w.notes!.isNotEmpty)
