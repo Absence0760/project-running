@@ -226,11 +226,14 @@ ProgressionSuggestion nextPrescription(ProgressionInput input) {
             reason: ProgressionReason.hold,
           );
         }
+        final prescribed = _round1(percent * oneRm);
         return ProgressionSuggestion(
-          suggestedWeightKg: _round1(percent * oneRm),
+          suggestedWeightKg: prescribed,
           suggestedRepsMin: repsMin,
           suggestedRepsMax: repsMax,
-          reason: ProgressionReason.increaseWeight,
+          reason: weight != null && prescribed > weight
+              ? ProgressionReason.increaseWeight
+              : ProgressionReason.hold,
         );
       }
 

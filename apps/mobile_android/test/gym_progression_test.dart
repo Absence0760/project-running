@@ -108,6 +108,16 @@ void main() {
     expect(out.suggestedWeightKg, 127.5);
   });
 
+  test('percent_cycle: prescription below last top weight -> hold', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.percentCycle,
+      lastSets: [s(3, 120)],
+      params: const {'percent': 0.7, 'oneRmKg': 100},
+    ));
+    expect(out.suggestedWeightKg, 70);
+    expect(out.reason, ProgressionReason.hold);
+  });
+
   test('rpe_autoreg: achieved RPE below target -> increase_weight', () {
     final out = nextPrescription(ProgressionInput(
       scheme: ProgressionScheme.rpeAutoreg,

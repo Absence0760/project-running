@@ -134,6 +134,18 @@ test('percent_cycle: prescribes params.percent * oneRmKg', () => {
 	assert.equal(out.suggestedWeightKg, 127.5);
 });
 
+test('percent_cycle: prescription below last top weight -> hold', () => {
+	const out = nextPrescription(
+		input({
+			scheme: 'percent_cycle',
+			lastSets: [s(3, 120)],
+			params: { percent: 0.7, oneRmKg: 100 },
+		}),
+	);
+	assert.equal(out.suggestedWeightKg, 70);
+	assert.equal(out.reason, 'hold');
+});
+
 test('rpe_autoreg: achieved RPE below target -> increase_weight', () => {
 	const out = nextPrescription(
 		input({

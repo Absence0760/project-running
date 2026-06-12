@@ -175,11 +175,12 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 			if (percent == null || oneRm == null || !(percent > 0) || !(oneRm > 0)) {
 				return { suggestedWeightKg: weight, suggestedRepsMin: repsMin, suggestedRepsMax: repsMax, reason: 'hold' };
 			}
+			const prescribed = round1(percent * oneRm);
 			return {
-				suggestedWeightKg: round1(percent * oneRm),
+				suggestedWeightKg: prescribed,
 				suggestedRepsMin: repsMin,
 				suggestedRepsMax: repsMax,
-				reason: 'increase_weight',
+				reason: weight != null && prescribed > weight ? 'increase_weight' : 'hold',
 			};
 		}
 
