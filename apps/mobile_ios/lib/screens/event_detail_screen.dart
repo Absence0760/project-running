@@ -19,6 +19,13 @@ import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
+/// Host-only attendance marking is offered iff the viewer organises the
+/// event's club AND the event is a `class` (instructor_business.md M6).
+/// Orthogonal to RSVP; non-hosts never see the marking controls.
+@visibleForTesting
+bool canMarkEventAttendance(ClubView? club, String category) =>
+    club?.isEventOrganiser == true && category == 'class';
+
 class EventDetailScreen extends StatefulWidget {
   final SocialService social;
   final String clubSlug;
@@ -429,8 +436,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final athletic = isAthleticEventCategory(e.row.category);
     // Host-only attendance marking (instructor_business.md M6): the organiser
     // of a `class` event records who showed up. Non-hosts see it read-only.
-    final canMarkAttendance =
-        _club?.isEventOrganiser == true && e.row.category == 'class';
+    final canMarkAttendance = canMarkEventAttendance(_club, e.row.category);
 
     return Scaffold(
       appBar: AppBar(title: Text(e.row.title)),
