@@ -4073,6 +4073,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get workoutUnlink => 'Verknüpfung lösen';
 
   @override
+  String get workoutRelink => 'Neu verknüpfen';
+
+  @override
+  String get workoutRelinkTitle => 'Anderen Lauf verknüpfen';
+
+  @override
+  String get workoutRelinkHint =>
+      'Wähle einen Lauf in der Nähe des Workout-Datums, um ihn als diese Einheit zu zählen. Läufe, die bereits mit einem anderen Workout verknüpft sind, werden nicht angezeigt.';
+
+  @override
+  String get workoutRelinkLoading => 'Läufe werden gesucht…';
+
+  @override
+  String get workoutRelinkError =>
+      'Läufe konnten nicht geladen werden. Versuche es erneut.';
+
+  @override
+  String get workoutRelinkEmpty =>
+      'Keine passenden Läufe in der Nähe dieses Datums.';
+
+  @override
+  String get workoutRelinkCurrent => 'Aktuell';
+
+  @override
   String get workoutStart => 'Training starten';
 
   @override

@@ -41,6 +41,10 @@ import type {
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
+import {
+	filterRelinkCandidates,
+	type RelinkCandidateRun
+} from '../training/relink_candidates';
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import type {
@@ -3424,6 +3428,70 @@ export async function autoMatchRunToPlanWorkout(
 	const match = withDistance[0];
 	await markWorkoutCompleted(match.id, runId);
 	return match.id;
+}
+
+export type { RelinkCandidateRun } from '../training/relink_candidates';
+
+/**
+ * Candidate runs the owner can re-link to a planned workout.
+ *
+ * Owner-scoped (RLS + an explicit `user_id` filter), within ±7 days of
+ * the workout's `scheduled_date`, and — crucially — EXCLUDING any run
+ * already linked (`completed_run_id`) to a *different* plan workout, so
+ * re-linking can't double-count a single run across two workouts in
+ * `plan_progress`. The workout's own current run stays in the list so
+ * the current pick is visible. Newest-first.
+ */
+export async function fetchRelinkCandidateRuns(
+	workout: PlanWorkout
+): Promise<RelinkCandidateRun[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+
+	// The set of run ids already linked anywhere in this owner's plans.
+	// Scope through the owner's plan_weeks (RLS chains the same way, but
+	// the explicit scope is defence in depth — see autoMatchRunToPlan-
+	// Workout). A run linked to ANOTHER workout must not be offered.
+	const { data: plans } = await supabase
+		.from('training_plans')
+		.select('id, plan_weeks(id)')
+		.eq('user_id', userId);
+	const weekIds = (plans ?? []).flatMap((p) =>
+		((p as { plan_weeks: { id: string }[] }).plan_weeks ?? []).map((w) => w.id)
+	);
+	const linkedRunIds: string[] = [];
+	if (weekIds.length > 0) {
+		const { data: linkedRows } = await supabase
+			.from('plan_workouts')
+			.select('completed_run_id')
+			.in('week_id', weekIds)
+			.not('completed_run_id', 'is', null);
+		for (const row of linkedRows ?? []) {
+			const id = (row as { completed_run_id: string | null }).completed_run_id;
+			if (id) linkedRunIds.push(id);
+		}
+	}
+
+	// Owner's runs, explicitly scoped (RLS + user_id). Pull scalars only.
+	const { data: runRows } = await supabase
+		.from('runs')
+		.select('id, started_at, distance_m, duration_s')
+		.eq('user_id', userId)
+		.order('started_at', { ascending: false });
+
+	const runs: RelinkCandidateRun[] = (runRows ?? []).map((r) => ({
+		id: (r as { id: string }).id,
+		started_at: (r as { started_at: string }).started_at,
+		distance_m: (r as { distance_m: number }).distance_m,
+		duration_s: (r as { duration_s: number }).duration_s
+	}));
+
+	return filterRelinkCandidates({
+		runs,
+		linkedRunIds,
+		currentRunId: workout.completed_run_id ?? null,
+		scheduledDate: workout.scheduled_date
+	});
 }
 
 /**
