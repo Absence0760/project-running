@@ -76,7 +76,7 @@ test.describe('/social?tab=feed — lift cards', () => {
 			.insert({
 				user_id: USER_A.id,
 				item_name: publicMealName,
-				logged_at: startedAt,
+				started_at: startedAt,
 				is_public: true
 			})
 			.select('id')
