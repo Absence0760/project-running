@@ -7332,6 +7332,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String sessionSideLeft(Object name) {
+    return '$name (esquerda)';
+  }
+
+  @override
+  String sessionSideRight(Object name) {
+    return '$name (direita)';
+  }
+
+  @override
   String sessionEstDuration(Object minutes) {
     return '~ $minutes min';
   }
@@ -14662,6 +14672,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String sessionStepFlow(Object name, Object seconds) {
     return '$name · flow ${seconds}s';
+  }
+
+  @override
+  String sessionSideLeft(Object name) {
+    return '$name (esquerda)';
+  }
+
+  @override
+  String sessionSideRight(Object name) {
+    return '$name (direita)';
   }
 
   @override

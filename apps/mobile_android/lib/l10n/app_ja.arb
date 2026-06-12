@@ -2017,5 +2017,7 @@
   "sessionStepHold": "{name}・キープ {seconds}秒",
   "sessionStepReps": "{name}・{reps}回",
   "sessionStepFlow": "{name}・フロー {seconds}秒",
+  "sessionSideLeft": "{name}（左）",
+  "sessionSideRight": "{name}（右）",
   "sessionEstDuration": "約 {minutes} 分"
 }

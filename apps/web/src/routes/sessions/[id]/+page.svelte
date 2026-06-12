@@ -54,14 +54,21 @@
 		return expandSessionSteps(input);
 	});
 
+	function stepName(step: (typeof expanded.steps)[number]): string {
+		if (step.side === 'left') return t('session.sideLeft', { name: step.movementName });
+		if (step.side === 'right') return t('session.sideRight', { name: step.movementName });
+		return step.movementName;
+	}
+
 	function stepLabel(step: (typeof expanded.steps)[number]): string {
+		const name = stepName(step);
 		if (step.kind === 'reps') {
-			return t('session.stepReps', { name: step.movementName, reps: step.reps ?? 0 });
+			return t('session.stepReps', { name, reps: step.reps ?? 0 });
 		}
 		if (step.kind === 'flow') {
-			return t('session.stepFlow', { name: step.movementName, seconds: step.durationS ?? 0 });
+			return t('session.stepFlow', { name, seconds: step.durationS ?? 0 });
 		}
-		return t('session.stepHold', { name: step.movementName, seconds: step.durationS ?? 0 });
+		return t('session.stepHold', { name, seconds: step.durationS ?? 0 });
 	}
 
 	async function doDelete() {

@@ -10,8 +10,11 @@
 ///  - order: blocks ascending by `position`, each block's items ascending by
 ///    `position`; any blockless items (a flat plan) follow, ascending by
 ///    `position`. Ties broken by input order (a stable sort).
-///  - a `perSide` item splits into two consecutive steps, "<name> (Left)" then
-///    "<name> (Right)", each carrying the same kind/duration/reps/cue/tempo.
+///  - a `perSide` item splits into two consecutive steps carrying the same
+///    movementName/kind/duration/reps/cue/tempo, distinguished by `side`
+///    (left then right); the read view localizes the side word (the engine
+///    never bakes an English suffix into movementName — that would leak
+///    untranslated English into a non-English UI).
 ///  - each step carries cumulative time = sum of every prior step's
 ///    contribution plus its own; a `reps` step (or any step with no positive
 ///    duration) contributes 0 to the time estimate (the runner waits on a Done
@@ -140,15 +143,10 @@ ExpandedSession expandSessionSteps(SessionPlanInput plan) {
 
   void pushStep(SessionPlanItemInput item, SessionSide? side) {
     cumulative += _stepDurationS(item.durationS);
-    final suffix = side == SessionSide.left
-        ? ' (Left)'
-        : side == SessionSide.right
-            ? ' (Right)'
-            : '';
     steps.add(
       SessionStep(
         itemId: item.id,
-        movementName: item.movementName + suffix,
+        movementName: item.movementName,
         kind: item.kind,
         durationS: item.durationS,
         reps: item.reps,

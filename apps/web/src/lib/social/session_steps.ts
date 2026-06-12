@@ -11,8 +11,11 @@
  *  - order: blocks ascending by `position`, each block's items ascending by
  *    `position`; any blockless items (a flat plan) follow, ascending by
  *    `position`. Ties broken by input order (a stable sort).
- *  - a `per_side` item splits into two consecutive steps, "<name> (Left)" then
- *    "<name> (Right)", each carrying the same kind/duration/reps/cue/tempo.
+ *  - a `per_side` item splits into two consecutive steps carrying the same
+ *    movementName/kind/duration/reps/cue/tempo, distinguished by `side`
+ *    ('left' then 'right'); the read view localizes the side word (the engine
+ *    never bakes an English suffix into movementName — that would leak
+ *    untranslated English into a non-English UI).
  *  - each step carries cumulative time = sum of every prior step's contribution
  *    plus its own; a `reps` step (or any step with no positive duration)
  *    contributes 0 to the time estimate (the runner waits on a Done tap).
@@ -68,6 +71,10 @@ export interface ExpandedSession {
 
 /** The positive-duration contribution of a step to the time estimate (else 0). */
 function stepDurationS(durationS: number | null): number {
+	// Number.isFinite + Math.floor guard against NaN/Infinity/fractional inputs
+	// only because TS numbers are floats; the int-native Dart twin's `int?`
+	// can't carry those, so the guards have no Dart counterpart by design — not
+	// parity drift.
 	if (durationS === null || !Number.isFinite(durationS) || durationS <= 0) return 0;
 	return Math.floor(durationS);
 }
@@ -95,10 +102,9 @@ export function expandSessionSteps(plan: SessionPlanInput): ExpandedSession {
 
 	const pushStep = (item: SessionPlanItemInput, side: 'left' | 'right' | null) => {
 		cumulative += stepDurationS(item.duration_s);
-		const suffix = side === 'left' ? ' (Left)' : side === 'right' ? ' (Right)' : '';
 		steps.push({
 			itemId: item.id,
-			movementName: item.movement_name + suffix,
+			movementName: item.movement_name,
 			kind: item.kind,
 			durationS: item.duration_s,
 			reps: item.reps,

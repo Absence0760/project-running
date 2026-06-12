@@ -3105,6 +3105,8 @@ export const messages = {
 	"session.stepHold": "{name} · sustentar {seconds}s",
 	"session.stepReps": "{name} · {reps} reps.",
 	"session.stepFlow": "{name} · flow {seconds}s",
+	"session.sideLeft": "{name} (esquerda)",
+	"session.sideRight": "{name} (direita)",
 	"session.attachToEvent": "Vincular a um evento de aula",
 	"session.attachNone": "Nenhum",
 	"session.attachSave": "Vincular",

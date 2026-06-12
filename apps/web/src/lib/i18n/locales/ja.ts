@@ -3102,6 +3102,8 @@ export const messages = {
 	"session.stepHold": "{name}・キープ {seconds}秒",
 	"session.stepReps": "{name}・{reps}回",
 	"session.stepFlow": "{name}・フロー {seconds}秒",
+	"session.sideLeft": "{name}（左）",
+	"session.sideRight": "{name}（右）",
 	"session.attachToEvent": "クラスイベントに紐付ける",
 	"session.attachNone": "なし",
 	"session.attachSave": "紐付ける",

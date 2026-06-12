@@ -3115,6 +3115,8 @@ export const en = {
 	"session.stepHold": "{name} · hold {seconds}s",
 	"session.stepReps": "{name} · {reps} reps",
 	"session.stepFlow": "{name} · flow {seconds}s",
+	"session.sideLeft": "{name} (Left)",
+	"session.sideRight": "{name} (Right)",
 	"session.attachToEvent": "Attach to a class event",
 	"session.attachNone": "None",
 	"session.attachSave": "Attach",

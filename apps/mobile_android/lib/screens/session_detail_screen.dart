@@ -80,14 +80,26 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     });
   }
 
+  String _stepName(AppLocalizations l10n, SessionStep s) {
+    switch (s.side) {
+      case SessionSide.left:
+        return l10n.sessionSideLeft(s.movementName);
+      case SessionSide.right:
+        return l10n.sessionSideRight(s.movementName);
+      case null:
+        return s.movementName;
+    }
+  }
+
   String _stepLabel(AppLocalizations l10n, SessionStep s) {
+    final name = _stepName(l10n, s);
     switch (s.kind) {
       case SessionItemKind.reps:
-        return l10n.sessionStepReps(s.movementName, s.reps ?? 0);
+        return l10n.sessionStepReps(name, s.reps ?? 0);
       case SessionItemKind.flow:
-        return l10n.sessionStepFlow(s.movementName, s.durationS ?? 0);
+        return l10n.sessionStepFlow(name, s.durationS ?? 0);
       case SessionItemKind.hold:
-        return l10n.sessionStepHold(s.movementName, s.durationS ?? 0);
+        return l10n.sessionStepHold(name, s.durationS ?? 0);
     }
   }
 

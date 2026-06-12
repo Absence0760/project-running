@@ -7353,6 +7353,16 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String sessionSideLeft(Object name) {
+    return '$name (gauche)';
+  }
+
+  @override
+  String sessionSideRight(Object name) {
+    return '$name (droite)';
+  }
+
+  @override
   String sessionEstDuration(Object minutes) {
     return '~ $minutes min';
   }

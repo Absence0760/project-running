@@ -51,7 +51,7 @@ test('per-side split: a per_side item becomes consecutive Left then Right steps'
 	assert.equal(out.steps.length, 2);
 	assert.deepEqual(
 		out.steps.map((s) => s.movementName),
-		['Low Lunge (Left)', 'Low Lunge (Right)']
+		['Low Lunge', 'Low Lunge']
 	);
 	assert.deepEqual(
 		out.steps.map((s) => s.side),

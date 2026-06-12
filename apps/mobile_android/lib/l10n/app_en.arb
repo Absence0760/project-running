@@ -9032,6 +9032,10 @@
   "@sessionStepReps": {"description": "A counted-reps step in the sequence", "placeholders": {"name": {"type": "Object"}, "reps": {"type": "Object"}}},
   "sessionStepFlow": "{name} · flow {seconds}s",
   "@sessionStepFlow": {"description": "A continuous flow step in the sequence", "placeholders": {"name": {"type": "Object"}, "seconds": {"type": "Object"}}},
+  "sessionSideLeft": "{name} (Left)",
+  "@sessionSideLeft": {"description": "The left half of a per-side movement step in the sequence", "placeholders": {"name": {"type": "Object"}}},
+  "sessionSideRight": "{name} (Right)",
+  "@sessionSideRight": {"description": "The right half of a per-side movement step in the sequence", "placeholders": {"name": {"type": "Object"}}},
   "sessionEstDuration": "Est. {minutes} min",
   "@sessionEstDuration": {"description": "Estimated total duration of a session plan in minutes", "placeholders": {"minutes": {"type": "Object"}}}
 }

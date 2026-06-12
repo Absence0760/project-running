@@ -2017,5 +2017,7 @@
   "sessionStepHold": "{name} · halten {seconds}s",
   "sessionStepReps": "{name} · {reps} Wdh.",
   "sessionStepFlow": "{name} · Flow {seconds}s",
+  "sessionSideLeft": "{name} (links)",
+  "sessionSideRight": "{name} (rechts)",
   "sessionEstDuration": "ca. {minutes} Min."
 }

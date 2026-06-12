@@ -78,7 +78,7 @@ void main() {
     final out = expandSessionSteps(plan);
     expect(out.steps.length, 2);
     expect(out.steps.map((s) => s.movementName).toList(),
-        ['Low Lunge (Left)', 'Low Lunge (Right)']);
+        ['Low Lunge', 'Low Lunge']);
     expect(out.steps.map((s) => s.side).toList(),
         [SessionSide.left, SessionSide.right]);
     expect(out.steps.map((s) => s.cumulativeS).toList(), [45, 90]);

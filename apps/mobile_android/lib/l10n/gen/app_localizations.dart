@@ -12141,6 +12141,18 @@ abstract class AppLocalizations {
   /// **'{name} · flow {seconds}s'**
   String sessionStepFlow(Object name, Object seconds);
 
+  /// The left half of a per-side movement step in the sequence
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (Left)'**
+  String sessionSideLeft(Object name);
+
+  /// The right half of a per-side movement step in the sequence
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (Right)'**
+  String sessionSideRight(Object name);
+
   /// Estimated total duration of a session plan in minutes
   ///
   /// In en, this message translates to:

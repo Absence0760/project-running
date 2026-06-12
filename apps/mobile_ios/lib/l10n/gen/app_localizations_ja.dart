@@ -6936,6 +6936,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String sessionSideLeft(Object name) {
+    return '$name（左）';
+  }
+
+  @override
+  String sessionSideRight(Object name) {
+    return '$name（右）';
+  }
+
+  @override
   String sessionEstDuration(Object minutes) {
     return '約 $minutes 分';
   }
