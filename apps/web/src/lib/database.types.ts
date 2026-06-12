@@ -1111,6 +1111,7 @@ export type Database = {
       gym_routines: {
         Row: {
           author_id: string
+          club_id: string | null
           created_at: string
           exercise_count: number
           external_id: string | null
@@ -1122,6 +1123,7 @@ export type Database = {
         }
         Insert: {
           author_id: string
+          club_id?: string | null
           created_at?: string
           exercise_count?: number
           external_id?: string | null
@@ -1133,6 +1135,7 @@ export type Database = {
         }
         Update: {
           author_id?: string
+          club_id?: string | null
           created_at?: string
           exercise_count?: number
           external_id?: string | null
@@ -1142,7 +1145,15 @@ export type Database = {
           periodisation?: string
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gym_routines_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gym_sets: {
         Row: {
@@ -3298,6 +3309,10 @@ export type Database = {
         Args: { points: Json; target_user_id: string }
         Returns: Json
       }
+      clone_gym_routine_template: {
+        Args: { p_template_id: string }
+        Returns: string
+      }
       clone_plan_template: {
         Args: { new_start_date: string; template_id: string }
         Returns: string
@@ -3671,6 +3686,10 @@ export type Database = {
           model: string
           name: string
         }[]
+      }
+      publish_gym_routine_as_template: {
+        Args: { p_club_id: string; p_routine_id: string }
+        Returns: string
       }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
