@@ -172,4 +172,70 @@ void main() {
     expect(r.reason, AdaptiveReason.onTrack);
     expect(r.trailingDirections.length, 1);
   });
+
+  // ── P2: fitness direction gate (branch feat/gen-v2-p2-fitness, CISO-gated) ──
+
+  List<ReplanWeek> underTrendWeeks() {
+    final missed = _wo('missed', '2026-06-15', 'long', 28000, isPast: true);
+    final future = _wo('next', '2026-07-06', 'long', 22000);
+    return [
+      _week(0, 'under', workouts: [missed]),
+      _week(1, 'under'),
+      _week(2, 'under'),
+      ReplanWeek(
+        weekIndex: 3,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [future],
+      ),
+    ];
+  }
+
+  test('adaptiveReplanRemaining: an under-fitness trend is suppressed for a fatigued runner (tsb<0)', () {
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeks(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: -18, atl: 90, ctl: 72),
+    );
+    expect(r.reason, AdaptiveReason.onTrack);
+    expect(r.fitnessGated, true);
+    expect(r.changes.length, 0);
+  });
+
+  test('adaptiveReplanRemaining: an under-fitness trend proceeds for a fresh runner (tsb>=0)', () {
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeks(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: 6, atl: 60, ctl: 66),
+    );
+    expect(r.reason, AdaptiveReason.trendUnderfitness);
+    expect(r.fitnessGated, false);
+    expect(r.changes.any((c) => c.workoutId == 'next'), true);
+  });
+
+  test('adaptiveReplanRemaining: an over-training trend is not fitness-gated even when fatigued', () {
+    final easy = _wo('easy', '2026-07-07', 'easy', 8000);
+    final weeks = [
+      _week(0, 'over'),
+      _week(1, 'ontrack'),
+      _week(2, 'over'),
+      ReplanWeek(
+        weekIndex: 3,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [easy],
+      ),
+    ];
+    final r = adaptiveReplanRemaining(
+      weeks: weeks,
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: -22, atl: 100, ctl: 78),
+    );
+    expect(r.reason, AdaptiveReason.trendOvertraining);
+    expect(r.fitnessGated, false);
+  });
 }
