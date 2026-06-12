@@ -3474,6 +3474,129 @@ class ApiClient {
     }).toList();
   }
 
+  /// Cross-modal following feed (multi_modal.md § Social feed): recent public
+  /// runs AND public gym workouts from people the caller follows, merged into
+  /// one reverse-chronological window.
+  ///
+  /// Runs go through the redacted `public_runs` view (decisions §33). Lifts
+  /// read `gym_workouts` directly — that table's "owner or public read" RLS
+  /// scopes a non-owner to public rows, and only the headline columns
+  /// (title / set_count / volume_kg) are projected, never notes / per-set
+  /// data. `activityType`: 'all' merges both; 'lift' / 'gym' returns lifts
+  /// only; any run activity_type returns runs only.
+  Future<List<ActivityFeedEntry>> fetchFollowingActivityFeed({
+    int limit = 20,
+    ({DateTime startedAt, String id})? cursor,
+    String? authorId,
+    String? activityType,
+    int feedWindowDays = 14,
+  }) async {
+    final type = activityType ?? 'all';
+    final wantsLifts = type == 'all' || type == 'lift' || type == 'gym';
+    final wantsRuns = type != 'lift' && type != 'gym';
+
+    final runs = wantsRuns
+        ? await fetchFollowingFeed(
+            limit: limit,
+            cursor: cursor,
+            authorId: authorId,
+            activityType: activityType,
+            feedWindowDays: feedWindowDays,
+          )
+        : const <FeedEntry>[];
+    final lifts = wantsLifts
+        ? await _fetchFollowingLifts(
+            limit: limit,
+            cursor: cursor,
+            authorId: authorId,
+            feedWindowDays: feedWindowDays,
+          )
+        : const <LiftFeedEntry>[];
+
+    final merged = <ActivityFeedEntry>[
+      for (final r in runs) RunFeedEntry(run: r.run, author: r.author),
+      ...lifts,
+    ];
+    merged.sort((a, b) {
+      final c = b.startedAt.compareTo(a.startedAt);
+      return c != 0 ? c : b.id.compareTo(a.id);
+    });
+    return merged.length > limit ? merged.sublist(0, limit) : merged;
+  }
+
+  Future<List<LiftFeedEntry>> _fetchFollowingLifts({
+    int limit = 20,
+    ({DateTime startedAt, String id})? cursor,
+    String? authorId,
+    int feedWindowDays = 14,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+
+    final edges = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFolloweeId)
+        .eq(UserFollowRow.colFollowerId, viewerId);
+    final followeeIds = edges
+        .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
+        .toList();
+    if (followeeIds.isEmpty) return const [];
+
+    final filtered = authorId == null
+        ? followeeIds
+        : followeeIds.where((id) => id == authorId).toList();
+    if (filtered.isEmpty) return const [];
+
+    final cutoff = DateTime.now()
+        .toUtc()
+        .subtract(Duration(days: feedWindowDays))
+        .toIso8601String();
+
+    var q = _client
+        .from(GymWorkoutRow.table)
+        .select('id, user_id, started_at, title, set_count, volume_kg')
+        .eq(GymWorkoutRow.colIsPublic, true)
+        .inFilter(GymWorkoutRow.colUserId, filtered)
+        .gte(GymWorkoutRow.colStartedAt, cutoff);
+    if (cursor != null) {
+      final iso = cursor.startedAt.toIso8601String();
+      q = q.or(
+        'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
+      );
+    }
+    final workouts = await q
+        .order(GymWorkoutRow.colStartedAt, ascending: false)
+        .order(GymWorkoutRow.colId, ascending: false)
+        .limit(limit);
+    if (workouts.isEmpty) return const [];
+
+    final authorIds = workouts
+        .map<String>((w) => w[GymWorkoutRow.colUserId] as String)
+        .toSet()
+        .toList();
+    final profileRows = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter(UserProfileRow.colId, authorIds);
+    final profilesById = {
+      for (final p in profileRows)
+        p['id'] as String: PublicProfile.fromJson(p),
+    };
+
+    return workouts.map<LiftFeedEntry>((w) {
+      final userId = w[GymWorkoutRow.colUserId] as String;
+      return LiftFeedEntry(
+        id: w['id'] as String,
+        startedAt: DateTime.parse(w['started_at'] as String),
+        title: w['title'] as String?,
+        setCount: (w['set_count'] as num?)?.toInt() ?? 0,
+        volumeKg: (w['volume_kg'] as num?)?.toDouble() ?? 0,
+        author: profilesById[userId] ??
+            PublicProfile(id: userId, displayName: null, avatarUrl: null),
+      );
+    }).toList();
+  }
+
   /// Comments on a run with author profiles joined.
   Future<List<RunCommentWithAuthor>> fetchRunCommentsWithAuthors(
     String runId, {
@@ -4410,6 +4533,16 @@ class ApiClient {
     if (metadata != null) patch[GymWorkoutRow.colMetadata] = metadata;
     await _client.from(GymWorkoutRow.table).update(patch).eq(GymWorkoutRow.colId, id);
     if (sets != null) await _replaceGymSets(id, sets);
+  }
+
+  /// Flip a gym workout's visibility. Bidirectional (public ↔ private),
+  /// mirroring [setRoutePublic]; stamps `last_modified_at` so the offline
+  /// newer-wins reconciliation picks the change up.
+  Future<void> setGymWorkoutPublic(String id, bool isPublic) async {
+    await _client.from(GymWorkoutRow.table).update({
+      GymWorkoutRow.colIsPublic: isPublic,
+      GymWorkoutRow.colLastModifiedAt: DateTime.now().toUtc().toIso8601String(),
+    }).eq(GymWorkoutRow.colId, id);
   }
 
   /// Delete a workout. `gym_sets` cascade via the FK.
