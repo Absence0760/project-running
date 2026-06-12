@@ -95,7 +95,7 @@ New narrow union (TS `types.ts` + CHECK, lockstep — append to `check_constrain
 
 - `SessionItemKind = 'hold' | 'reps' | 'flow'`
 
-New `runs.metadata`/`gym_workouts.metadata` keys (document in [metadata.md](../backend/metadata.md)): `session_plan_id`, `session_step_results`, `session_adherence`.
+New `gym_workouts.metadata` keys (document in [metadata.md](../backend/metadata.md)): `session_plan_id`, `session_step_results`, `session_adherence`. (Sessions log as `gym_workouts`, never as runs, so these are gym keys — not `runs.metadata`.) **Prerequisite:** `gym_workouts` has **no `metadata` column today** — it's added by the gym_programming.md P-tier migration (see [gym_programming.md § Prerequisite](gym_programming.md#prerequisite-add-gym_workoutsmetadata)). The follow-along log (P2) therefore depends on that column existing; if it hasn't landed, this spec's P2 migration must add it.
 
 ## The expand-once helper (parity pair)
 

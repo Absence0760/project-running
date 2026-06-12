@@ -4,7 +4,7 @@ A scoped **depth-tier gym-programming engine** — reusable routines, structured
 
 > **Status:** specced, not built. This is the canonical design for the four-slice rollout. P1 is the only slice approved to start; P2–P4 are gated (see [Phasing](#phasing--rollout) and [The validation gate](#the-validation-gate-stated-honestly)).
 
-**Contents:** [Product contract](#product-contract) · [The validation gate](#the-validation-gate-stated-honestly) · [Data flow](#data-flow) · [Data model](#data-model) · [Progression engine](#progression-engine) · [Execution: planned-vs-actual + adherence](#execution-planned-vs-actual--adherence) · [Web UI](#web-ui) · [Mobile & watch](#mobile--watch) · [Persistence](#persistence) · [Failure modes](#failure-modes) · [Testing](#testing) · [File list](#file-list) · [Phasing & rollout](#phasing--rollout) · [Open questions](#open-questions) · [Rough sizing](#rough-sizing) · [Appendix A — ADR §139](#appendix-a--decisionsmd--139) · [Appendix B — roadmap edits](#appendix-b--roadmapmd-phase-4-checklist-edits) · [Appendix C — docs-to-update checklist](#appendix-c--docs-to-update-when-each-slice-lands)
+**Contents:** [Product contract](#product-contract) · [The validation gate](#the-validation-gate-stated-honestly) · [Data flow](#data-flow) · [Data model](#data-model) · [Progression engine](#progression-engine) · [Execution: planned-vs-actual + adherence](#execution-planned-vs-actual--adherence) · [Web UI](#web-ui) · [Mobile & watch](#mobile--watch) · [Persistence](#persistence) · [Failure modes](#failure-modes) · [Testing](#testing) · [File list](#file-list) · [Phasing & rollout](#phasing--rollout) · [Open questions](#open-questions) · [Rough sizing](#rough-sizing) · [Appendix A — ADR §140](#appendix-a--decisionsmd--140) · [Appendix B — roadmap edits](#appendix-b--roadmapmd-phase-4-checklist-edits) · [Appendix C — docs-to-update checklist](#appendix-c--docs-to-update-when-each-slice-lands)
 
 ## Product contract
 
@@ -18,11 +18,11 @@ A user who logs gym sessions can:
 
 Everything **self-hides** until a routine exists: a runner who never programs sees today's gym log unchanged. The engine **only suggests** — it never auto-mutates targets from logged data without a confirm step.
 
-Non-goals for v1: multi-week program grouping (a `gym_programs` layer over routines is deferred), public-routine browse/discovery UI, a structured exercise catalog (binding stays free-text via `normaliseExerciseName`), and any wrist follow-along (see [Mobile & watch § watch scope](#5-watch-scope--defer-the-wrist-follow-along)).
+Non-goals for v1: multi-week program grouping (a `gym_programs` layer over routines is deferred), public-routine browse/discovery UI, a structured exercise catalog (binding stays free-text via `normaliseExerciseName`), and any wrist follow-along (see [Mobile & watch § watch scope](#watch-scope--defer-the-wrist-follow-along)).
 
 ## The validation gate (stated honestly)
 
-The roadmap lists full programming as the gym **"heavy" depth tier** and marks "exercise database, workout templates, programmes, RPE-driven progression" **Not in scope** for the shipped lightweight log ([roadmap.md L559](../product/roadmap.md); the depth-tier heading at L582, "Gym — heavy" at L592). The sequencing **gate** is at [roadmap.md L529](../product/roadmap.md): *measure gym engagement before committing further investment.*
+The roadmap lists full programming as the gym **"heavy" depth tier** and marks "exercise database, workout templates, programmes, RPE-driven progression" **Not in scope** for the shipped lightweight log ([roadmap.md](../product/roadmap.md), the `**Not in scope:**` bullet; the "Gym — heavy (full programming)" heading just below it). The sequencing **gate** is the roadmap's *measure gym engagement before committing to nutrition* validation-gate sentence in the Phase-4 sequencing block. (These line numbers drift — search by the quoted text, don't trust a line number.)
 
 **This design does not jump that gate — it relocates it.** Rather than running a separate measurement-only phase, we sequence the engine so its cheapest slice (**P1**, reusable routines + "repeat last", near-zero new schema) *is itself the gate probe*. P1 ships a self-contained durable win; if its repeat-rate signal clears an owner-set threshold (suggest ≥20% of gym sessions over 4–6 weeks), P2–P4 are justified. If it doesn't, we freeze at P1 and leave P2–P4 specced-but-unbuilt.
 
@@ -250,7 +250,7 @@ alter table public.gym_workouts
 ```
 
 - **Migration-lock safety:** `add column … default '{}'` is **metadata-only** on PG11+ (no table rewrite, no blocking scan) — safe on the populated prod table. The three new routine tables are empty at creation, so none take a blocking lock. No FK is added to `gym_workouts` (the link is a metadata string), so there is no `SHARE ROW EXCLUSIVE` validation scan to worry about. Run `/audit:migration-locks` to confirm before landing.
-- **`activities` view check (required task):** adding a column to `gym_workouts` is only safe if the `activities` UNION view's lift branch enumerates explicit columns. **Read the view definition and confirm the lift branch does not `select *`** — if it did, the new `metadata` column would change the branch's shape and break column-count alignment with the run branch. (It selects `(id, user_id, kind, started_at, summary)`, so `metadata` is excluded — but verify, don't assume.)
+- **`activities` view check (required task):** adding a column to `gym_workouts` is only safe if the `activities` UNION view's lift branch enumerates explicit columns. **Read the view definition and confirm the lift branch does not `select *`** — if it did, the new `metadata` column would change the branch's shape and break column-count alignment with the run branch. (It selects `(id, user_id, kind, started_at, summary, is_public)` — explicit columns per branch, so `metadata` is excluded — but verify, don't assume.)
 
 ### Both codegen regenerations (mandatory)
 
@@ -267,11 +267,11 @@ The engine is **three** pure TS↔Dart parity pairs, not one monolith (the clean
 
 | Pair (web ↔ mobile) | Responsibility |
 |---|---|
-| `gym/gym_routine.ts` ↔ `gym/gym_routine.dart` | `routineFromWorkout`, `prefillFromRoutine`, `expandRoutineSteps` (grouped/round-robin plan → flat step list) |
-| `gym/gym_adherence.ts` ↔ `gym/gym_adherence.dart` | the per-axis 80%-cutoff reducer + skip/abandon logic → `'completed' \| 'partial' \| 'abandoned'` |
-| `gym/gym_progression.ts` ↔ `gym/gym_progression.dart` | `prescribeNext` — the next-target prescriber per scheme |
+| `gym/gym_routine.ts` ↔ `gym_routine.dart` | `routineFromWorkout`, `prefillFromRoutine`, `expandRoutineSteps` (grouped/round-robin plan → flat step list) |
+| `gym/gym_adherence.ts` ↔ `gym_adherence.dart` | the per-axis 80%-cutoff reducer + skip/abandon logic → `'completed' \| 'partial' \| 'abandoned'` |
+| `gym/gym_progression.ts` ↔ `gym_progression.dart` | `prescribeNext` — the next-target prescriber per scheme |
 
-Mobile lives at `apps/mobile_android/lib/gym/…` and is mirrored **byte-identical** into `apps/mobile_ios/`. Each pair has identical algorithm, edge cases, outputs, and **test count** on both sides. They reuse `estimatedOneRepMax` + `normaliseExerciseName` (from `gym_prs`) and consume the `ExerciseSession[]` series from `exercise_history.ts` (`previousExerciseSession`) — so the prescriber and the "vs last time" hint can never drift. (`exercise_history`'s mobile mirror must land as part of this work if "next target" reuses `previousExerciseSession`, not be deferred again.)
+Mobile lives flat under `apps/mobile_android/lib/` (where the existing gym helpers `gym_prs.dart` / `exercise_history.dart` / `lift_load.dart` already sit — there is no `lib/gym/` subdir on mobile today; web nests under `gym/`, mobile is flat) and is mirrored **byte-identical** into `apps/mobile_ios/`. Each pair has identical algorithm, edge cases, outputs, and **test count** on both sides. They reuse `estimatedOneRepMax` + `normaliseExerciseName` (from `gym_prs`) and consume the `ExerciseSession[]` series from `exercise_history.ts` (`previousExerciseSession`) — so the prescriber and the "vs last time" hint can never drift. (The mobile `exercise_history.dart` mirror has already landed and is a tracked parity pair, so "next target" can reuse `previousExerciseSession` without new mirror work.)
 
 ### Core types (`gym_progression`)
 
@@ -533,15 +533,15 @@ Mobile widget tests cover the builder, execute band, and detail-Start instantiat
 
 ## File list
 
-**Migration** — `apps/backend/supabase/migrations/20261227_001_gym_programming.sql` (next free slot; latest is `20261226_001`): `alter table gym_workouts add column metadata jsonb`, the three routine tables + indexes + RLS + four CHECKs.
+**Migration** — `apps/backend/supabase/migrations/20261231_001_gym_programming.sql` (next free slot; latest is `20261230_001` — re-confirm the next slot at land time, the migrations directory moves): `alter table gym_workouts add column metadata jsonb`, the three routine tables + indexes + RLS + four CHECKs.
 
 **Generated (committed):** `apps/web/src/lib/database.types.ts`, `packages/core_models/lib/src/generated/db_rows.dart`.
 
 **Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/gym/gym_routine.ts`, `src/lib/gym/gym_adherence.ts`, `src/lib/gym/gym_progression.ts`, `src/lib/core/schema.ts` (metadata routing), `RoutineLibrary.svelte`, `RoutineCard.svelte`, `RoutineEditor.svelte`, `ExerciseBlockList.svelte` (extracted), `GymSessionRunner.svelte`, `GymExecutionBand.svelte`, `RestTimer.svelte`, `GymWorkoutReview.svelte`, routes `/gym/routines/[id]`, `/gym/routines/new`, `/gym/session/[routineId]`, `/gym/[id]` (+ panel), i18n in all six locales.
 
-**Mobile (`mobile_android` → byte-identical `mobile_ios`):** `lib/gym/gym_routine.dart`, `lib/gym/gym_adherence.dart`, `lib/gym/gym_progression.dart`, `lib/stores/local_routine_store.dart`, `screens/routine_library_screen.dart`, `screens/routine_detail_screen.dart`, `screens/routine_execute_screen.dart`, `widgets/routine_builder_sheet.dart`, `widgets/gym_execution_band.dart`, extend `gym_screen.dart` / `gym_detail_screen.dart` / `gym_summary_card.dart`, ARBs.
+**Mobile (`mobile_android` → byte-identical `mobile_ios`):** `lib/gym_routine.dart`, `lib/gym_adherence.dart`, `lib/gym_progression.dart`, `lib/local_routine_store.dart` (stores live flat in `lib/`, e.g. `local_gym_store.dart` — there is no `lib/stores/`), `screens/routine_library_screen.dart`, `screens/routine_detail_screen.dart`, `screens/routine_execute_screen.dart`, `widgets/routine_builder_sheet.dart`, `widgets/gym_execution_band.dart`, extend `gym_screen.dart` / `gym_detail_screen.dart` / `gym_summary_card.dart`, ARBs.
 
-**Shared:** `packages/run_recorder/lib/src/gym_workout_runner.dart` (+ re-export), the mobile `exercise_history.dart` mirror if not already landed.
+**Shared:** `packages/run_recorder/lib/src/gym_workout_runner.dart` (+ re-export). The mobile `exercise_history.dart` mirror is already landed (a tracked parity pair), so no new mirror work is needed there.
 
 **Edge Function:** extend `export-data` + its completeness pgtap.
 
@@ -555,7 +555,7 @@ Four web-first, independently-shippable slices. Each ships value alone, mirrors 
 
 **Why first.** Smallest schema, highest leverage, and **this slice is the validation gate** — "repeat last" needs no new table (reuses `gym_exercise_set_history` + `previousExerciseSession`) and validates the core bet before P2–P4 are committed.
 
-**Schema (`20261227_001`).** `gym_workouts.metadata` column (prerequisite); `gym_routines`; `gym_routine_exercises` (carrying the `target_reps_min/max` range, `exercise_key`, `position`); `gym_routine_sets`. Author-only RLS; `(routine_id, set_index)` index. No narrow-union CHECK pair is *exercised* by P1 UI, but the columns + CHECKs land now (the full schema ships in one migration).
+**Schema (`20261231_001`).** `gym_workouts.metadata` column (prerequisite); `gym_routines`; `gym_routine_exercises` (carrying the `target_reps_min/max` range, `exercise_key`, `position`); `gym_routine_sets`. Author-only RLS; `(routine_id, set_index)` index. No narrow-union CHECK pair is *exercised* by P1 UI, but the columns + CHECKs land now (the full schema ships in one migration).
 
 **Parity / store / tests.** `gym_routine` pair (`routineFromWorkout`, `prefillFromRoutine`). `LocalRoutineStore`. Playwright save-as-routine + repeat-last + self-hide; pgtap RLS + cascade; **`export-data` extended + its pgtap** (DSAR completeness, day one).
 
@@ -579,7 +579,7 @@ Four web-first, independently-shippable slices. Each ships value alone, mirrors 
 
 ### P4 — Progression schemes (the engine) — ~5–6 days
 
-**Scope.** Per-exercise schemes prescribing the next session's targets from logged history. Ship the highest-value first: **linear**, **double_progression**, **five_by_five**, **percent_cycle**, **rpe_autoreg** (the `progression` column + `progression_params`). The `periodisation` (routine-level) and the four narrow-union CHECK pairs are already in `20261227_001`; P4 wires the engine. Coach-authored progression (if built) is **validated/clamped by the same pure `prescribeNext` guardrails** before write — the engine is authoritative, the LLM advisory.
+**Scope.** Per-exercise schemes prescribing the next session's targets from logged history. Ship the highest-value first: **linear**, **double_progression**, **five_by_five**, **percent_cycle**, **rpe_autoreg** (the `progression` column + `progression_params`). The `periodisation` (routine-level) and the four narrow-union CHECK pairs are already in `20261231_001`; P4 wires the engine. Coach-authored progression (if built) is **validated/clamped by the same pure `prescribeNext` guardrails** before write — the engine is authoritative, the LLM advisory.
 
 **Parity / tests.** `gym_progression` pair, deterministic, identical edge cases + test count; `shared-library-syncer` after edits. `/audit:schema-drift` (CHECK↔union) must pass. Playwright for scheme selection + next-target preview.
 
@@ -593,7 +593,7 @@ Four web-first, independently-shippable slices. Each ships value alone, mirrors 
 4. **`set_type` at the DB.** It's a column here (queryable). Confirm no screen needs to *aggregate* by set type in a way the current shape can't serve.
 5. **Coach-authored progression data flow.** The LLM reads logged sets (health-adjacent). Confirm it stays within the existing coach data-handling envelope; loop in CISO if it widens what leaves the system (SOC 2 / GovRAMP).
 6. **Tier-2 "command" trust.** P4 prescribes — clamp rules + a "confirm next target" step are mandatory; auto-apply is never allowed.
-7. **`activities` view interaction.** Executed sessions remain `gym_workouts` rows feeding the UNION lift branch — confirmed the view enumerates `(id, user_id, kind, started_at, summary)` (not `select *`) so the new `metadata` column does not leak into the lift branch. Re-verify if the view is ever rewritten.
+7. **`activities` view interaction.** Executed sessions remain `gym_workouts` rows feeding the UNION lift branch — confirmed the view enumerates `(id, user_id, kind, started_at, summary, is_public)` (not `select *`) so the new `metadata` column does not leak into the lift branch. Re-verify if the view is ever rewritten.
 8. **Paywall.** Recommend **fully free** (manual authoring/execution/progression) — consistent with the empty `PRO_ONLY_FEATURES` and "Pro buys behaviour, not access." The only marginal-cost surface is Coach *writing* a routine (an LLM call) → gate **that write** via the existing per-tier daily coach cap, not a screen gate. Do **not** add a `PRO_ONLY_FEATURES` key. Surface the tradeoff (the manual engine is free, so Pro's gym pull is "let Coach build it faster"); a screen gate is the available-but-costly conversion lever that would break the "free reaches every screen" trust property.
 
 ## Rough sizing
@@ -609,22 +609,23 @@ Four web-first, independently-shippable slices. Each ships value alone, mirrors 
 
 ---
 
-## Appendix A — `decisions.md` § 139
+## Appendix A — `decisions.md` § 140
 
-> Append as `## 139.` **by file position** — note that `decisions.md` already contains a **duplicate `## 137.`** (the round-by-distance Lambda and the env-file convention), with §138 the highest distinct section; counting naively gives §139, which is correct only because the duplicate cancels the off-by-one. Do **not** silently renumber the existing duplicate (conventions forbid rewriting ADR history) — add the note below so a future session doesn't "fix" the numbering and shift §139.
+> Append as the next section **by file position** — `## 139.` is already taken ("Routes is a run-modality surface; mobile nav is a Fitness hub"), so the gym ADR is `## 140.`. Note `decisions.md` also contains a **duplicate `## 137.`** (the round-by-distance Lambda and the env-file convention), so the file's heading sequence runs 135 · 136 · 137 · 137 · 138 · 139 — the next distinct number after the highest existing heading (§139) is **§140**. Do **not** silently renumber the existing duplicate or any later section (conventions forbid rewriting ADR history) — re-confirm the next free number at land time, since more ADRs may have landed.
 
-> **§139 — The gym programming engine ships as a four-slice, web-first depth tier that relocates the "measure gym engagement first" gate into its cheapest slice rather than jumping it.** Instead of a separate measurement-only phase, we sequence the engine so P1 (reusable routines + "repeat last", near-zero new schema) *is* the validation gate: if repeat-rate clears an owner-set threshold (~20% of gym sessions over 4–6 weeks) we proceed to P2 (supersets / set-types / rest / time-distance structure), P3 (a `GymWorkoutRunner` mirroring `WorkoutRunner` — on-top-of-session state machine, prescribed-vs-actual `gym_step_results` + `gym_adherence` trail in a newly-added `gym_workouts.metadata` jsonb column, adherence on reps/load at the run engine's 80%-of-target cutoff applied **per axis**, not pace), and P4 (linear / double-progression / 5×5 / %-of-e1RM / RPE-autoreg progression schemes; Coach-authored progression validated and clamped by the same pure prescriber). The plan is **relational** (`gym_routines` → `gym_routine_exercises` → `gym_routine_sets`) — the deliberate divergence from `plan_workouts.structure jsonb`, justified by per-exercise querying and row-by-row progression — with one jsonb escape hatch (`progression_params`). The plan→session link lives in `gym_workouts.metadata.routine_id` (a string, **not** an FK), so deleting a routine leaves prior sessions intact (immutable history) and the step-result shape evolves without a migration. Each slice is independently shippable and ends the flat-`set_index` reconstruction heuristic by introducing explicit `position` + `exercise_key` + `superset_group`. The manual engine is **fully free** (consistent with the empty `PRO_ONLY_FEATURES` and "free reaches every screen"); only Coach-*authored* progression is metered, via the existing per-tier daily coach cap, never a screen gate. If repeat-rate is weak we freeze at P1 (still a durable win — it ships "repeat last" and ends the reconstruction heuristic) and leave P2–P4 specced-but-unbuilt; the explicit tradeoff is faster-to-signal at the cost of building the routine schema before the gate formally clears.
+> **§140 — The gym programming engine ships as a four-slice, web-first depth tier that relocates the "measure gym engagement first" gate into its cheapest slice rather than jumping it.** Instead of a separate measurement-only phase, we sequence the engine so P1 (reusable routines + "repeat last", near-zero new schema) *is* the validation gate: if repeat-rate clears an owner-set threshold (~20% of gym sessions over 4–6 weeks) we proceed to P2 (supersets / set-types / rest / time-distance structure), P3 (a `GymWorkoutRunner` mirroring `WorkoutRunner` — on-top-of-session state machine, prescribed-vs-actual `gym_step_results` + `gym_adherence` trail in a newly-added `gym_workouts.metadata` jsonb column, adherence on reps/load at the run engine's 80%-of-target cutoff applied **per axis**, not pace), and P4 (linear / double-progression / 5×5 / %-of-e1RM / RPE-autoreg progression schemes; Coach-authored progression validated and clamped by the same pure prescriber). The plan is **relational** (`gym_routines` → `gym_routine_exercises` → `gym_routine_sets`) — the deliberate divergence from `plan_workouts.structure jsonb`, justified by per-exercise querying and row-by-row progression — with one jsonb escape hatch (`progression_params`). The plan→session link lives in `gym_workouts.metadata.routine_id` (a string, **not** an FK), so deleting a routine leaves prior sessions intact (immutable history) and the step-result shape evolves without a migration. Each slice is independently shippable and ends the flat-`set_index` reconstruction heuristic by introducing explicit `position` + `exercise_key` + `superset_group`. The manual engine is **fully free** (consistent with the empty `PRO_ONLY_FEATURES` and "free reaches every screen"); only Coach-*authored* progression is metered, via the existing per-tier daily coach cap, never a screen gate. If repeat-rate is weak we freeze at P1 (still a durable win — it ships "repeat last" and ends the reconstruction heuristic) and leave P2–P4 specced-but-unbuilt; the explicit tradeoff is faster-to-signal at the cost of building the routine schema before the gate formally clears.
 
 ## Appendix B — `roadmap.md` Phase-4 checklist edits
 
-Flip the **L559** "Not in scope" bullet (verified exact text: `- [ ] **Not in scope:** exercise database, workout templates, programmes, RPE-driven progression (all in the gym depth tier below).` — re-confirm the anchor at land time, including the checkbox the design diff must keep) into a planned, gated sub-phase. The gate sentence at **L529** and the depth-tier heading (**L582**) / "Gym — heavy" (**L592**) stay as-is.
+Flip the "Not in scope" bullet (verified exact text: `- [ ] **Not in scope:** exercise database, workout templates, programmes, RPE-driven progression (all in the gym depth tier below).` — find it by this text, not a line number; the design diff must keep the checkbox) into a planned, gated sub-phase. The *measure gym engagement* gate sentence in the Phase-4 sequencing block and the "Gym — heavy (full programming)" depth-tier heading stay as-is.
 
 ```diff
 - - [ ] **Not in scope:** exercise database, workout templates, programmes, RPE-driven progression (all in the gym depth tier below).
-+ - **Gym programming engine (depth tier, gated on engagement — ADR §139).**
++ - **Gym programming engine (depth tier, gated on engagement — ADR §140).**
 +   Web-first, four independently-shippable slices; P1 is the validation probe
-+   (relocates the L529 gate into its cheapest slice rather than running a
-+   separate measurement phase). The lightweight free-form log is unchanged.
++   (relocates the "measure gym engagement" validation gate into its cheapest
++   slice rather than running a separate measurement phase). The lightweight
++   free-form log is unchanged.
 +   - [ ] P1 — Reusable routines + "repeat last" (gym_routines /
 +         gym_routine_exercises / gym_routine_sets; adds gym_workouts.metadata;
 +         ends the flat set_index reconstruction heuristic). **Gate probe:
@@ -658,4 +659,4 @@ Flip the **L559** "Not in scope" bullet (verified exact text: `- [ ] **Not in sc
 | `paywall.md` (only if Coach-authored progression is metered) | — | — | — | ✓ |
 | `apps/web/.../local_testing.md` + `manual_testing.md` (gym section) | ✓ | ✓ | ✓ | ✓ |
 | `apps/watch_wear/CLAUDE.md` + `apps/watch_ios/CLAUDE.md` (deferral note) | ✓ (one line, both) | — | — | — |
-| `decisions.md` (§139) | ✓ (lands with P1) | — | — | — |
+| `decisions.md` (§140) | ✓ (lands with P1) | — | — | — |

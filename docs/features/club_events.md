@@ -277,14 +277,14 @@ Per the [test-hygiene rule](../architecture/conventions.md#test-hygiene--review-
 
 Slice E (web + backend):
 
-- `apps/backend/supabase/migrations/2026XXXX_001_typed_events.sql` — `events.category` / `discipline` / `host_user_id` + CHECK + backfill + the `race_sessions`/`event_results` category guards.
+- `apps/backend/supabase/migrations/20261227_001_typed_events.sql` — `events.category` / `discipline` / `host_user_id` / `gym_template` + CHECK + backfill + the `race_sessions`/`event_results` category guards; `20261228_001_typed_events_column_grants.sql` grants cross-user `SELECT (category, discipline)` (the column-locked `events` table left them deny-by-default); `20261230_001_grant_gym_template_select.sql` grants `SELECT (gym_template)` for the class→gym seam.
 - `apps/web/src/lib/social/event_category.ts` — pure category→capabilities predicate (parity-paired).
 - `EventEditor` + `/clubs/[slug]/events/[id]` (web) + mobile `event_detail_screen.dart` — compose by category.
 - Regenerate both type files; add `EventCategory` to `types.ts` + `check_constraint_unions.mjs`.
 
 Slice P (web + backend):
 
-- `apps/backend/supabase/migrations/2026XXXX_002_paid_events.sql` — the three tables + `event_attendees.order_id` + RLS + CHECK + capacity/refund trigger extensions.
+- `apps/backend/supabase/migrations/20261229_001_paid_events.sql` — the three tables + `event_attendees.order_id` + RLS + CHECK + capacity/refund trigger extensions.
 - `apps/backend/supabase/functions/events-connect-onboard/index.ts`, `events-checkout/index.ts`, `stripe-events-webhook/index.ts` (separate from `revenuecat-webhook`).
 - `apps/web/src/lib/social/paid_registration.ts` — pure fee/sales-window/refund helpers.
 - `apps/web/src/lib/core/data.ts` — `fetchEventPricing` / `startEventCheckout` / `fetchPayoutAccount` / `startConnectOnboarding` / host registrations summary.
