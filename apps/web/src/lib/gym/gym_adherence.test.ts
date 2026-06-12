@@ -13,8 +13,17 @@ function planned(
 	targetWeightKg: number | null = null,
 	targetDurationS: number | null = null,
 	targetRepsMax: number | null = null,
+	setType: string = 'working',
 ): PlannedSetRef {
-	return { exerciseKey, setIndex, targetRepsMin, targetRepsMax, targetWeightKg, targetDurationS };
+	return {
+		exerciseKey,
+		setIndex,
+		setType,
+		targetRepsMin,
+		targetRepsMax,
+		targetWeightKg,
+		targetDurationS,
+	};
 }
 
 function actual(
@@ -80,10 +89,46 @@ test('reps below min -> partial status', () => {
 	assert.equal(r.completedCount, 0);
 });
 
-test('weight below target -> missed', () => {
-	const r = computeRoutineAdherence([planned('press', 0, 5, 60)], [actual('press', 0, 5, 50)]);
+test('weight below 80% of target -> missed', () => {
+	const r = computeRoutineAdherence([planned('press', 0, 5, 60)], [actual('press', 0, 5, 45)]);
 	assert.equal(r.sets[0].status, 'missed');
 	assert.equal(r.completedCount, 0);
+});
+
+test('reps at 80% of floor -> hit', () => {
+	const r = computeRoutineAdherence([planned('curl', 0, 10, 20)], [actual('curl', 0, 8, 20)]);
+	assert.equal(r.sets[0].status, 'hit');
+	assert.equal(r.verdict, 'completed');
+});
+
+test('weight at 80% of target -> hit', () => {
+	const r = computeRoutineAdherence([planned('press', 0, 5, 100)], [actual('press', 0, 5, 80)]);
+	assert.equal(r.sets[0].status, 'hit');
+});
+
+test('weight at 79% of target -> missed', () => {
+	const r = computeRoutineAdherence([planned('press', 0, 5, 100)], [actual('press', 0, 5, 79)]);
+	assert.equal(r.sets[0].status, 'missed');
+});
+
+test('warmup set is excluded from the verdict denominator', () => {
+	const r = computeRoutineAdherence(
+		[planned('squat', 0, 5, 60, null, null, 'warmup'), planned('squat', 1, 5, 100)],
+		[actual('squat', 1, 5, 100)],
+	);
+	assert.equal(r.plannedCount, 1);
+	assert.equal(r.completedCount, 1);
+	assert.equal(r.verdict, 'completed');
+	assert.ok(!r.sets.some((s) => s.exerciseKey === 'squat' && s.setIndex === 0));
+});
+
+test('amrap set is hit when any reps logged', () => {
+	const r = computeRoutineAdherence(
+		[planned('pullup', 0, 5, null, null, null, 'amrap')],
+		[actual('pullup', 0, 3, null)],
+	);
+	assert.equal(r.sets[0].status, 'hit');
+	assert.equal(r.verdict, 'completed');
 });
 
 test('extra unplanned set -> extra, not counted in plannedCount', () => {

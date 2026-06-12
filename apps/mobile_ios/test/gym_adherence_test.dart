@@ -9,9 +9,11 @@ PlannedSetRef planned(
   num? targetWeightKg,
   num? targetDurationS,
   num? targetRepsMax,
+  String setType = 'working',
 ]) => PlannedSetRef(
   exerciseKey: exerciseKey,
   setIndex: setIndex,
+  setType: setType,
   targetRepsMin: targetRepsMin,
   targetRepsMax: targetRepsMax,
   targetWeightKg: targetWeightKg,
@@ -97,13 +99,64 @@ void main() {
     expect(r.completedCount, 0);
   });
 
-  test('weight below target -> missed', () {
+  test('weight below 80% of target -> missed', () {
     final r = computeRoutineAdherence(
       [planned('press', 0, 5, 60)],
-      [actual('press', 0, 5, 50)],
+      [actual('press', 0, 5, 45)],
     );
     expect(r.sets[0].status, SetAdherenceStatus.missed);
     expect(r.completedCount, 0);
+  });
+
+  test('reps at 80% of floor -> hit', () {
+    final r = computeRoutineAdherence(
+      [planned('curl', 0, 10, 20)],
+      [actual('curl', 0, 8, 20)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+    expect(r.verdict, RoutineVerdict.completed);
+  });
+
+  test('weight at 80% of target -> hit', () {
+    final r = computeRoutineAdherence(
+      [planned('press', 0, 5, 100)],
+      [actual('press', 0, 5, 80)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+  });
+
+  test('weight at 79% of target -> missed', () {
+    final r = computeRoutineAdherence(
+      [planned('press', 0, 5, 100)],
+      [actual('press', 0, 5, 79)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.missed);
+  });
+
+  test('warmup set is excluded from the verdict denominator', () {
+    final r = computeRoutineAdherence(
+      [
+        planned('squat', 0, 5, 60, null, null, 'warmup'),
+        planned('squat', 1, 5, 100),
+      ],
+      [actual('squat', 1, 5, 100)],
+    );
+    expect(r.plannedCount, 1);
+    expect(r.completedCount, 1);
+    expect(r.verdict, RoutineVerdict.completed);
+    expect(
+      r.sets.any((s) => s.exerciseKey == 'squat' && s.setIndex == 0),
+      isFalse,
+    );
+  });
+
+  test('amrap set is hit when any reps logged', () {
+    final r = computeRoutineAdherence(
+      [planned('pullup', 0, 5, null, null, null, 'amrap')],
+      [actual('pullup', 0, 3, null)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+    expect(r.verdict, RoutineVerdict.completed);
   });
 
   test('extra unplanned set -> extra, not counted in plannedCount', () {

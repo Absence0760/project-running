@@ -105,6 +105,7 @@
 		const planned: PlannedSetRef[] = steps.map((step) => ({
 			exerciseKey: step.exerciseKey,
 			setIndex: step.setIndex,
+			setType: step.setType,
 			targetRepsMin: step.targetRepsMin,
 			targetRepsMax: step.targetRepsMax,
 			targetWeightKg: step.targetWeightKg,
