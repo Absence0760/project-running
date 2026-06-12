@@ -551,3 +551,61 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   (`Workmanager().registerProcessingTask`) registered via `WorkmanagerPlugin.registerBGProcessingTask`.
   Needs on-device testing. iOS-only — Android uses `WorkManager` and is unaffected. See
   `apps/mobile_ios/CLAUDE.md § Catch-up status`.
+
+## Live-tracking / spectator hunt (2026-06-11) — verified findings deferred
+
+A persona-driven bug-hunt (moab240/utmb/ws100 spectator + sweep/medical/SAR personas)
+on the live-tracking surface. The headline staleness-honesty bug (a lost-signal runner
+shown as a fresh "LIVE" dot) was fixed this round on web + mobile (the `live_freshness`
+parity pair). The findings below were verified by code-read but deferred — each needs a
+migration, a privacy/product decision, or an auth state-machine change that shouldn't be
+rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
+`reviews/persona-moab240-spectator.md`, `reviews/persona-utmb-spectator.md`.
+
+- [ ] **[critical, privacy] Event live-leaderboard leaks every runner's real display name to anon worldwide viewers.**
+  `apps/web/src/routes/live/event/[id]/[instance]/+page.svelte` `load()` queries `user_profiles`
+  for `display_name` and `nameFor()` renders the real name to any unauthenticated caller — no
+  follow-edge gate. The sibling `/live/[id]` page correctly uses `shouldRevealDisplayName` /
+  `runnerHandle` (anon sees `Runner #XXXX`, only mutual-follows see the name). The event page
+  exposes real-time position + real name of every participant to anyone with the URL. **Route
+  via `/safe-edit`** (privacy boundary): apply the same `runner_handle` gate the solo page uses.
+- [ ] **[high, backend] `live_run_pings` 4h retention deletes the live feed + last-known position mid-run for ultras.**
+  `20260509_001_live_run_pings.sql:93` deletes pings `< now() - interval '4 hours'`; the sibling
+  `race_pings` uses 48h (`20261213_001`). For any run > 4h (every ultra this app targets) the cron
+  continuously deletes the oldest breadcrumbs while the run is live, and a SAR-critical last-known
+  position ages out within ~4h of signal loss. Fix: widen `live_run_pings` retention to match
+  `race_pings` (48h) — or, better, retain until the run/`race_session` ends rather than a flat
+  window. **Land directly on `main`** (a new migration) to avoid a migration-number race with the
+  parallel marketplace work; verify against the local stack (DB up on 54322) with a pgtap negative-check.
+- [ ] **[high, privacy/safety] Privacy-zone clipping drops the last-known ping with no SAR carve-out.**
+  `20260618_001` / `20260704_001` BEFORE-INSERT triggers `return NULL` for any ping inside a privacy
+  zone, so a runner who stops *inside* their own zone (injured at home/hotel) vanishes from the
+  spectator + SAR feed at their pre-zone position. This is a *documented* privacy-vs-safety trade-off,
+  so it is a **product/privacy decision, not a bug to rush** — route to the owner + a `/audit/privacy-zones`
+  review. Option: keep the single most-recent ping as a coarse "last seen near here" for an active run.
+- [ ] **[high, intricate] `recurrence.ts` expands instances in viewer-local time → wrong `instance_start` for cross-TZ spectators.**
+  `apps/web/src/lib/social/recurrence.ts` `startOfWeek`/`setHours` build instance instants in the
+  viewer's local zone, so a spectator in another zone computes a drifted `instance_start` and the
+  event live page can show "race not armed" for an in-progress race. **Route via `/safe-edit`** — it's a
+  TS↔Dart parity pair (`recurrence`) and touches the marketplace's per-instance logic, so coordinate
+  with the instructor-business session to avoid a collision.
+- [ ] **[medium, web] WS reconnect reuses a stale JWT.** `live_hub.ts` builds the subscribe URL once with
+  `?token=<jwt>`; `connect()` reuses it on every reconnect, so after ~1h a private-run reconnect 403s and
+  spins forever with only a spinner. Fix: re-read the session token before each reconnect (pass a token
+  provider, not a static string). Auth state-machine — route via `/safe-edit`.
+- [ ] **[medium, web] Event leaderboard: non-deterministic tie order + a 1000-ping cap can drop a back-of-pack runner.**
+  `live/event/.../+page.svelte` sorts by `distance_m` with no tie-break (ranks jitter on refresh), and
+  `fetchRecentRacePings` caps at 1000 newest rows so a slow runner can fall out of the "latest per user"
+  Map entirely. Fix: stable tie-break (e.g. `elapsed_s` then `user_id`) + a per-user-latest query.
+- [ ] **[medium, mobile] Live spectator pace hardcodes `/km`, ignoring the imperial preference.**
+  `live_spectator_screen.dart` `formatLivePace` always appends `/km` while distance respects
+  `formatDistanceForPref`; an imperial viewer sees mixed units. Mirror the web `formatPace` unit switch;
+  needs the iOS twin + a test update (the existing widget test pins `/km`).
+- [ ] **[medium] No terminal "Finished" / "DNF" state on mobile (and DNF unmodelled on both).** Web has
+  `runIsFinished`; mobile shows "Idle" forever after a finish. Neither distinguishes "no signal" from a
+  race-marked DNF. Feature-scale; pairs with the staleness work.
+- [ ] **[low] Demo ticker has no Page Visibility pause** (`live/[id]/+page.svelte` `startDemo`) — a
+  backgrounded multi-day tab keeps animating every 3s. Add a `visibilitychange` guard.
+
+Dismissed (not bugs): the mobile `formatLivePace` "5:60/km" rollover is already pinned by an existing
+test (cosmetic, intentional-enough); pace-shown-is-average-not-current is a labelling nuance, not a defect.
