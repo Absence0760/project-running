@@ -5820,7 +5820,7 @@ export async function deleteGymWorkout(id: string): Promise<void> {
 // --- Gym routines (gym_programming.md slice P1) ---
 //
 // A reusable plan: gym_routines parent + gym_routine_exercises + their
-// gym_routine_sets. Author-only RLS (migration 20261230_001). last_modified_at
+// gym_routine_sets. Author-only RLS (migration 20261231_001). last_modified_at
 // + exercise_count are client-stamped (newer-wins sync, non-authoritative
 // count — no server trigger), mirroring gym_workouts. The plan is NOT a dated
 // activity, so it does not feed the activities view. P1 leaves the superset /
@@ -5999,7 +5999,7 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 	return routine;
 }
 
-/// Deletes a routine; exercises + sets cascade via FK (migration 20261230_001).
+/// Deletes a routine; exercises + sets cascade via FK (migration 20261231_001).
 /// Logged gym_workouts are untouched (the plan→log link is a metadata string,
 /// not an FK).
 export async function deleteGymRoutine(id: string): Promise<void> {

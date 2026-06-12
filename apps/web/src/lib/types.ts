@@ -161,7 +161,7 @@ export type RefundPolicy = 'full_until_start' | 'full_until_24h' | 'no_refund';
 // event_pricing.modality — in_person only in P1; 'virtual' is a digital good
 // that re-opens the app-store IAP rule (reserved for P4).
 export type EventModality = 'in_person';
-// Gym programming engine (gym_programming.md, migration 20261230_001). Four
+// Gym programming engine (gym_programming.md, migration 20261231_001). Four
 // narrow-union ↔ CHECK pairs; the Dart side treats all four as raw String.
 // Keep each in lockstep with the migration (check_constraint_unions.mjs PAIRS).
 // gym_routines.periodisation — routine-level periodisation model (P1 leaves

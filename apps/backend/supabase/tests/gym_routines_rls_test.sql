@@ -1,4 +1,4 @@
--- Pins migration 20261230_001 (gym programming P1: gym_routines +
+-- Pins migration 20261231_001 (gym programming P1: gym_routines +
 -- gym_routine_exercises + gym_routine_sets). The contract:
 --
 --   1. gym_routines is author-only for SELECT/INSERT/UPDATE/DELETE — there is
