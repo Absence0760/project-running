@@ -7496,4 +7496,158 @@ class AppLocalizationsDe extends AppLocalizations {
   String sessionEstDuration(Object minutes) {
     return 'ca. $minutes Min.';
   }
+
+  @override
+  String get gymSessionStart => 'Einheit starten';
+
+  @override
+  String gymSessionStep(Object exercise, Object set, Object total) {
+    return '$exercise · Satz $set von $total';
+  }
+
+  @override
+  String get gymSessionComplete => 'Einheit abgeschlossen';
+
+  @override
+  String get gymSessionSkipSet => 'Satz überspringen';
+
+  @override
+  String get gymSessionRewind => 'Zurück';
+
+  @override
+  String get gymSessionAbandon => 'Abbrechen';
+
+  @override
+  String get gymSessionFinish => 'Fertig';
+
+  @override
+  String get gymSessionDiscardTitle => 'Einheit verwerfen?';
+
+  @override
+  String get gymSessionDiscardBody =>
+      'Dein Fortschritt in dieser Einheit wird nicht gespeichert.';
+
+  @override
+  String get gymSessionDiscardConfirm => 'Verwerfen';
+
+  @override
+  String get gymSessionSaved => 'Training gespeichert';
+
+  @override
+  String get gymSessionSaveFailed => 'Training konnte nicht gespeichert werden';
+
+  @override
+  String gymSessionSetProgress(Object done, Object total) {
+    return '$done/$total';
+  }
+
+  @override
+  String get gymSessionLogSet => 'Satz abschließen';
+
+  @override
+  String get gymSessionRest => 'Pause';
+
+  @override
+  String gymSessionRestRemaining(Object seconds) {
+    return 'Pause ${seconds}s';
+  }
+
+  @override
+  String get gymSessionRestSkip => 'Pause überspringen';
+
+  @override
+  String get gymSessionTarget => 'Ziel';
+
+  @override
+  String gymReviewAdherence(Object pct) {
+    return '$pct% Umsetzung';
+  }
+
+  @override
+  String get gymReviewVerdictCompleted => 'Abgeschlossen';
+
+  @override
+  String get gymReviewVerdictPartial => 'Teilweise erledigt';
+
+  @override
+  String get gymReviewVerdictAbandoned => 'Abgebrochen';
+
+  @override
+  String get gymReviewStatusHit => 'Erreicht';
+
+  @override
+  String get gymReviewStatusPartial => 'Teilweise';
+
+  @override
+  String get gymReviewStatusMissed => 'Verpasst';
+
+  @override
+  String get gymReviewStatusExtra => 'Extra';
+
+  @override
+  String get sessionRunStart => 'Einheit starten';
+
+  @override
+  String sessionRunStep(Object name) {
+    return '$name';
+  }
+
+  @override
+  String get sessionRunDone => 'Fertig';
+
+  @override
+  String get sessionRunSkip => 'Überspringen';
+
+  @override
+  String get sessionRunPause => 'Pause';
+
+  @override
+  String get sessionRunResume => 'Fortsetzen';
+
+  @override
+  String get sessionRunAbandon => 'Abbrechen';
+
+  @override
+  String get sessionRunFinish => 'Beenden';
+
+  @override
+  String sessionRunRemaining(Object seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String get sessionRunComplete => 'Einheit abgeschlossen';
+
+  @override
+  String get sessionRunSaved => 'Einheit gespeichert';
+
+  @override
+  String get sessionRunSaveFailed => 'Einheit konnte nicht gespeichert werden';
+
+  @override
+  String get sessionRunDiscardTitle => 'Einheit verwerfen?';
+
+  @override
+  String get sessionRunDiscardBody =>
+      'Dein Fortschritt in dieser Einheit wird nicht gespeichert.';
+
+  @override
+  String get sessionRunDiscardConfirm => 'Verwerfen';
+
+  @override
+  String get sessionRunVerdictCompleted => 'Abgeschlossen';
+
+  @override
+  String get sessionRunVerdictPartial => 'Teilweise erledigt';
+
+  @override
+  String get sessionRunVerdictAbandoned => 'Abgebrochen';
+
+  @override
+  String sessionRunStepCount(int index, int total) {
+    return 'Schritt $index von $total';
+  }
+
+  @override
+  String get sessionRunSwitchSides => 'Seite wechseln';
 }

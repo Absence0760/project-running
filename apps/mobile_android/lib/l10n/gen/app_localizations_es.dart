@@ -7492,4 +7492,158 @@ class AppLocalizationsEs extends AppLocalizations {
   String sessionEstDuration(Object minutes) {
     return '~ $minutes min';
   }
+
+  @override
+  String get gymSessionStart => 'Iniciar sesión';
+
+  @override
+  String gymSessionStep(Object exercise, Object set, Object total) {
+    return '$exercise · serie $set de $total';
+  }
+
+  @override
+  String get gymSessionComplete => 'Sesión completada';
+
+  @override
+  String get gymSessionSkipSet => 'Saltar serie';
+
+  @override
+  String get gymSessionRewind => 'Anterior';
+
+  @override
+  String get gymSessionAbandon => 'Abandonar';
+
+  @override
+  String get gymSessionFinish => 'Finalizar';
+
+  @override
+  String get gymSessionDiscardTitle => '¿Descartar la sesión?';
+
+  @override
+  String get gymSessionDiscardBody =>
+      'No se guardará tu progreso en esta sesión.';
+
+  @override
+  String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionSaved => 'Entrenamiento guardado';
+
+  @override
+  String get gymSessionSaveFailed => 'No se pudo guardar el entrenamiento';
+
+  @override
+  String gymSessionSetProgress(Object done, Object total) {
+    return '$done/$total';
+  }
+
+  @override
+  String get gymSessionLogSet => 'Completar serie';
+
+  @override
+  String get gymSessionRest => 'Descanso';
+
+  @override
+  String gymSessionRestRemaining(Object seconds) {
+    return 'Descanso ${seconds}s';
+  }
+
+  @override
+  String get gymSessionRestSkip => 'Saltar descanso';
+
+  @override
+  String get gymSessionTarget => 'Objetivo';
+
+  @override
+  String gymReviewAdherence(Object pct) {
+    return '$pct% de cumplimiento';
+  }
+
+  @override
+  String get gymReviewVerdictCompleted => 'Completada';
+
+  @override
+  String get gymReviewVerdictPartial => 'Parcialmente hecha';
+
+  @override
+  String get gymReviewVerdictAbandoned => 'Abandonada';
+
+  @override
+  String get gymReviewStatusHit => 'Logrado';
+
+  @override
+  String get gymReviewStatusPartial => 'Parcial';
+
+  @override
+  String get gymReviewStatusMissed => 'Fallado';
+
+  @override
+  String get gymReviewStatusExtra => 'Extra';
+
+  @override
+  String get sessionRunStart => 'Iniciar sesión';
+
+  @override
+  String sessionRunStep(Object name) {
+    return '$name';
+  }
+
+  @override
+  String get sessionRunDone => 'Hecho';
+
+  @override
+  String get sessionRunSkip => 'Saltar';
+
+  @override
+  String get sessionRunPause => 'Pausar';
+
+  @override
+  String get sessionRunResume => 'Reanudar';
+
+  @override
+  String get sessionRunAbandon => 'Abandonar';
+
+  @override
+  String get sessionRunFinish => 'Finalizar';
+
+  @override
+  String sessionRunRemaining(Object seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String get sessionRunComplete => 'Sesión completada';
+
+  @override
+  String get sessionRunSaved => 'Sesión guardada';
+
+  @override
+  String get sessionRunSaveFailed => 'No se pudo guardar la sesión';
+
+  @override
+  String get sessionRunDiscardTitle => '¿Descartar la sesión?';
+
+  @override
+  String get sessionRunDiscardBody =>
+      'No se guardará tu progreso en esta sesión.';
+
+  @override
+  String get sessionRunDiscardConfirm => 'Descartar';
+
+  @override
+  String get sessionRunVerdictCompleted => 'Completada';
+
+  @override
+  String get sessionRunVerdictPartial => 'Parcialmente hecha';
+
+  @override
+  String get sessionRunVerdictAbandoned => 'Abandonada';
+
+  @override
+  String sessionRunStepCount(int index, int total) {
+    return 'Paso $index de $total';
+  }
+
+  @override
+  String get sessionRunSwitchSides => 'Cambia de lado';
 }

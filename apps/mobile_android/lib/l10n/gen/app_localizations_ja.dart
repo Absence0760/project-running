@@ -7089,4 +7089,156 @@ class AppLocalizationsJa extends AppLocalizations {
   String sessionEstDuration(Object minutes) {
     return '約 $minutes 分';
   }
+
+  @override
+  String get gymSessionStart => 'セッションを開始';
+
+  @override
+  String gymSessionStep(Object exercise, Object set, Object total) {
+    return '$exercise・セット $set/$total';
+  }
+
+  @override
+  String get gymSessionComplete => 'セッション完了';
+
+  @override
+  String get gymSessionSkipSet => 'セットをスキップ';
+
+  @override
+  String get gymSessionRewind => '前へ';
+
+  @override
+  String get gymSessionAbandon => '中止';
+
+  @override
+  String get gymSessionFinish => '完了';
+
+  @override
+  String get gymSessionDiscardTitle => 'セッションを破棄しますか？';
+
+  @override
+  String get gymSessionDiscardBody => 'このセッションの進捗は保存されません。';
+
+  @override
+  String get gymSessionDiscardConfirm => '破棄';
+
+  @override
+  String get gymSessionSaved => 'ワークアウトを保存しました';
+
+  @override
+  String get gymSessionSaveFailed => 'ワークアウトを保存できませんでした';
+
+  @override
+  String gymSessionSetProgress(Object done, Object total) {
+    return '$done/$total';
+  }
+
+  @override
+  String get gymSessionLogSet => 'セットを完了';
+
+  @override
+  String get gymSessionRest => '休憩';
+
+  @override
+  String gymSessionRestRemaining(Object seconds) {
+    return '休憩 残り$seconds秒';
+  }
+
+  @override
+  String get gymSessionRestSkip => '休憩をスキップ';
+
+  @override
+  String get gymSessionTarget => '目標';
+
+  @override
+  String gymReviewAdherence(Object pct) {
+    return '達成率 $pct%';
+  }
+
+  @override
+  String get gymReviewVerdictCompleted => '完了';
+
+  @override
+  String get gymReviewVerdictPartial => '一部完了';
+
+  @override
+  String get gymReviewVerdictAbandoned => '中止';
+
+  @override
+  String get gymReviewStatusHit => '達成';
+
+  @override
+  String get gymReviewStatusPartial => '一部';
+
+  @override
+  String get gymReviewStatusMissed => '未達成';
+
+  @override
+  String get gymReviewStatusExtra => '追加';
+
+  @override
+  String get sessionRunStart => 'セッションを開始';
+
+  @override
+  String sessionRunStep(Object name) {
+    return '$name';
+  }
+
+  @override
+  String get sessionRunDone => '完了';
+
+  @override
+  String get sessionRunSkip => 'スキップ';
+
+  @override
+  String get sessionRunPause => '一時停止';
+
+  @override
+  String get sessionRunResume => '再開';
+
+  @override
+  String get sessionRunAbandon => '中止';
+
+  @override
+  String get sessionRunFinish => '終了';
+
+  @override
+  String sessionRunRemaining(Object seconds) {
+    return '$seconds秒';
+  }
+
+  @override
+  String get sessionRunComplete => 'セッション完了';
+
+  @override
+  String get sessionRunSaved => 'セッションを保存しました';
+
+  @override
+  String get sessionRunSaveFailed => 'セッションを保存できませんでした';
+
+  @override
+  String get sessionRunDiscardTitle => 'セッションを破棄しますか？';
+
+  @override
+  String get sessionRunDiscardBody => 'このセッションの進捗は保存されません。';
+
+  @override
+  String get sessionRunDiscardConfirm => '破棄';
+
+  @override
+  String get sessionRunVerdictCompleted => '完了';
+
+  @override
+  String get sessionRunVerdictPartial => '一部完了';
+
+  @override
+  String get sessionRunVerdictAbandoned => '中止';
+
+  @override
+  String sessionRunStepCount(int index, int total) {
+    return 'ステップ $index / $total';
+  }
+
+  @override
+  String get sessionRunSwitchSides => '反対側に切り替え';
 }

@@ -12398,6 +12398,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Est. {minutes} min'**
   String sessionEstDuration(Object minutes);
+
+  /// Button to begin the guided weightlifting session runner
+  ///
+  /// In en, this message translates to:
+  /// **'Start session'**
+  String get gymSessionStart;
+
+  /// Current step label in the guided weightlifting session
+  ///
+  /// In en, this message translates to:
+  /// **'{exercise} · set {set} of {total}'**
+  String gymSessionStep(Object exercise, Object set, Object total);
+
+  /// Heading shown when every set in the session is done
+  ///
+  /// In en, this message translates to:
+  /// **'Session complete'**
+  String get gymSessionComplete;
+
+  /// Button to skip the current set in the session runner
+  ///
+  /// In en, this message translates to:
+  /// **'Skip set'**
+  String get gymSessionSkipSet;
+
+  /// Button to step back to the previous set in the session runner
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get gymSessionRewind;
+
+  /// Button to abandon the guided weightlifting session
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon'**
+  String get gymSessionAbandon;
+
+  /// Button to finish and save the guided weightlifting session
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get gymSessionFinish;
+
+  /// Title of the dialog confirming abandonment of a guided session
+  ///
+  /// In en, this message translates to:
+  /// **'Discard session?'**
+  String get gymSessionDiscardTitle;
+
+  /// Body of the dialog confirming abandonment of a guided session
+  ///
+  /// In en, this message translates to:
+  /// **'Your progress in this session won\'t be saved.'**
+  String get gymSessionDiscardBody;
+
+  /// Confirm button to discard the guided session
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get gymSessionDiscardConfirm;
+
+  /// Banner shown after a guided session is saved
+  ///
+  /// In en, this message translates to:
+  /// **'Workout saved'**
+  String get gymSessionSaved;
+
+  /// Banner shown when saving a guided session fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save workout'**
+  String get gymSessionSaveFailed;
+
+  /// Logged-vs-planned set count on the guided-session finish view
+  ///
+  /// In en, this message translates to:
+  /// **'{done}/{total}'**
+  String gymSessionSetProgress(Object done, Object total);
+
+  /// Button to log the current set's reps/weight and advance the guided session
+  ///
+  /// In en, this message translates to:
+  /// **'Complete set'**
+  String get gymSessionLogSet;
+
+  /// Label for the rest period between sets in the session runner
+  ///
+  /// In en, this message translates to:
+  /// **'Rest'**
+  String get gymSessionRest;
+
+  /// Countdown of remaining rest seconds between sets
+  ///
+  /// In en, this message translates to:
+  /// **'Rest {seconds}s'**
+  String gymSessionRestRemaining(Object seconds);
+
+  /// Button to skip the rest period and advance to the next set
+  ///
+  /// In en, this message translates to:
+  /// **'Skip rest'**
+  String get gymSessionRestSkip;
+
+  /// Label preceding the planned reps and weight for the current set
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get gymSessionTarget;
+
+  /// Adherence percentage summary on the guided-session review screen
+  ///
+  /// In en, this message translates to:
+  /// **'{pct}% adherence'**
+  String gymReviewAdherence(Object pct);
+
+  /// Verdict label when the guided session was fully completed
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get gymReviewVerdictCompleted;
+
+  /// Verdict label when the guided session was partly completed
+  ///
+  /// In en, this message translates to:
+  /// **'Partly done'**
+  String get gymReviewVerdictPartial;
+
+  /// Verdict label when the guided session was abandoned
+  ///
+  /// In en, this message translates to:
+  /// **'Abandoned'**
+  String get gymReviewVerdictAbandoned;
+
+  /// Per-set status when the planned target was met
+  ///
+  /// In en, this message translates to:
+  /// **'Hit'**
+  String get gymReviewStatusHit;
+
+  /// Per-set status when only part of the planned target was met
+  ///
+  /// In en, this message translates to:
+  /// **'Partial'**
+  String get gymReviewStatusPartial;
+
+  /// Per-set status when the planned set was not performed
+  ///
+  /// In en, this message translates to:
+  /// **'Missed'**
+  String get gymReviewStatusMissed;
+
+  /// Per-set status for a set performed beyond the plan
+  ///
+  /// In en, this message translates to:
+  /// **'Extra'**
+  String get gymReviewStatusExtra;
+
+  /// Button to begin the timed yoga/pilates follow-along player
+  ///
+  /// In en, this message translates to:
+  /// **'Start session'**
+  String get sessionRunStart;
+
+  /// Current movement name in the follow-along session player
+  ///
+  /// In en, this message translates to:
+  /// **'{name}'**
+  String sessionRunStep(Object name);
+
+  /// Button to mark the current movement complete in the session player
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get sessionRunDone;
+
+  /// Button to skip the current movement in the session player
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get sessionRunSkip;
+
+  /// Button to pause the follow-along session player
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get sessionRunPause;
+
+  /// Button to resume the paused follow-along session player
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get sessionRunResume;
+
+  /// Button to abandon the follow-along session
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon'**
+  String get sessionRunAbandon;
+
+  /// Button to finish and save the follow-along session
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get sessionRunFinish;
+
+  /// Remaining seconds on the current timed movement
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String sessionRunRemaining(Object seconds);
+
+  /// Heading shown when the follow-along session is finished
+  ///
+  /// In en, this message translates to:
+  /// **'Session complete'**
+  String get sessionRunComplete;
+
+  /// Banner shown after a follow-along session is saved
+  ///
+  /// In en, this message translates to:
+  /// **'Session saved'**
+  String get sessionRunSaved;
+
+  /// Banner shown when saving a follow-along session fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save session'**
+  String get sessionRunSaveFailed;
+
+  /// Title of the dialog confirming abandonment of a follow-along session
+  ///
+  /// In en, this message translates to:
+  /// **'Discard session?'**
+  String get sessionRunDiscardTitle;
+
+  /// Body of the dialog confirming abandonment of a follow-along session
+  ///
+  /// In en, this message translates to:
+  /// **'Your progress in this session won\'t be saved.'**
+  String get sessionRunDiscardBody;
+
+  /// Confirm button to discard the follow-along session
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get sessionRunDiscardConfirm;
+
+  /// Verdict label when the follow-along session was fully completed
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get sessionRunVerdictCompleted;
+
+  /// Verdict label when the follow-along session was partly completed
+  ///
+  /// In en, this message translates to:
+  /// **'Partly done'**
+  String get sessionRunVerdictPartial;
+
+  /// Verdict label when the follow-along session was abandoned
+  ///
+  /// In en, this message translates to:
+  /// **'Abandoned'**
+  String get sessionRunVerdictAbandoned;
+
+  /// Progress counter in the follow-along session player
+  ///
+  /// In en, this message translates to:
+  /// **'Step {index} of {total}'**
+  String sessionRunStepCount(int index, int total);
+
+  /// Spoken cue when a per-side movement switches from left to right in the session player
+  ///
+  /// In en, this message translates to:
+  /// **'Switch sides'**
+  String get sessionRunSwitchSides;
 }
 
 class _AppLocalizationsDelegate
