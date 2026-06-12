@@ -35,6 +35,10 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/social/event_category.ts` | `apps/mobile_android/lib/event_category.dart` | `social/event_category.test.ts` ↔ `test/event_category_test.dart` |
 | `apps/web/src/lib/social/event_gym_template.ts` | `apps/mobile_android/lib/event_gym_template.dart` | `social/event_gym_template.test.ts` ↔ `test/event_gym_template_test.dart` |
 | `apps/web/src/lib/runs/live_freshness.ts` | `apps/mobile_android/lib/live_freshness.dart` | `runs/live_freshness.test.ts` ↔ `test/live_freshness_test.dart` |
+| `apps/web/src/lib/social/session_steps.ts` (`expandSessionSteps`, `computeSessionAdherence`) | `apps/mobile_android/lib/session_steps.dart` | `social/session_steps.test.ts` ↔ `test/session_steps_test.dart` |
+| `apps/web/src/lib/gym/gym_routine.ts` (`routineFromWorkout`, `prefillFromRoutine`, `expandRoutineSteps`) | `apps/mobile_android/lib/gym_routine.dart` | `gym/gym_routine.test.ts` ↔ `test/gym_routine_test.dart` |
+| `apps/web/src/lib/gym/gym_adherence.ts` (`computeRoutineAdherence`) | `apps/mobile_android/lib/gym_adherence.dart` | `gym/gym_adherence.test.ts` ↔ `test/gym_adherence_test.dart` |
+| `apps/web/src/lib/gym/gym_progression.ts` (`nextPrescription`) | `apps/mobile_android/lib/gym_progression.dart` | `gym/gym_progression.test.ts` ↔ `test/gym_progression_test.dart` |
 
 The mobile_android side is the byte-identical twin source — `apps/mobile_ios/` mirrors it automatically (handled by `mobile-twin-mirror`), so you only compare web ↔ android.
 
