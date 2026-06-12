@@ -1,0 +1,29 @@
+-- Open the class -> gym seam read path.
+--
+-- `events.gym_template` (jsonb, added in 20261227_001) is the optional hint a
+-- class host attaches so an attendee can log the session as a gym workout in
+-- one tap. 20261228_001 deliberately left it REVOKED from anon/authenticated
+-- SELECT ("reserved; the attendee-side write ships later") while granting the
+-- sibling `category` / `discipline` display columns. That slice now ships, so
+-- the attendee read path needs the column.
+--
+-- Shape (a loose jsonb bag, parsed tolerantly client-side by
+-- event_gym_template.ts / .dart):
+--   { "discipline": text | null, "duration_min": int | null }
+-- A class the host didn't template carries NULL (not {}), so the attendee
+-- "Log this as a workout" affordance stays hidden for it.
+--
+-- This is a plain column SELECT grant — the same shape as the category /
+-- discipline grant in 20261228_001 — not a SECURITY DEFINER RPC: gym_template
+-- carries no PII (a discipline string + a duration), so the lowest-surface
+-- durable fix is to grant the column rather than route it through an oracle.
+-- Row visibility is unchanged — it still flows through the existing events
+-- SELECT RLS policy; this only widens which columns the role may read.
+--
+-- `host_user_id` (payout recipient, paid-events slice) STAYS revoked — it has
+-- no client read site.
+--
+-- WRITE path: 20260818_001 revoked only SELECT on events; INSERT/UPDATE for
+-- authenticated were never narrowed, so the event author already writes
+-- gym_template through createEvent's INSERT. No write grant is needed here.
+grant select (gym_template) on events to authenticated, anon;
