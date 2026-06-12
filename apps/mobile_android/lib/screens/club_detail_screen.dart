@@ -11,7 +11,9 @@ import 'package:api_client/api_client.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../local_gym_store.dart';
 import '../local_route_store.dart';
+import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -22,6 +24,7 @@ import '../widgets/route_track_preview.dart';
 import '../widgets/verified_badge.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
+import 'routine_detail_screen.dart';
 import 'session_detail_screen.dart';
 import 'public_route_screen.dart';
 import 'route_builder_screen.dart';
@@ -60,6 +63,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<TrainingPlanRow> _templates = const [];
   List<SessionPlanRow> _sessionTemplates = const [];
   String? _adoptingSessionId;
+  List<GymRoutineRow> _gymRoutineTemplates = const [];
+  String? _adoptingRoutineId;
   List<cm.Route> _routes = const [];
   bool _loading = true;
   bool _busy = false;
@@ -1114,14 +1119,94 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       final list = await widget.training.fetchClubTemplates(c.row.id);
       final sessions = await widget.apiClient?.fetchClubSessionTemplates(c.row.id) ??
           const <SessionPlanRow>[];
+      final routines =
+          await widget.apiClient?.fetchClubGymRoutineTemplates(c.row.id) ??
+              const <GymRoutineRow>[];
       if (!mounted) return;
       setState(() {
         _templates = list;
         _sessionTemplates = sessions;
+        _gymRoutineTemplates = routines;
         _templatesLoaded = true;
       });
     } catch (_) {
       if (mounted) setState(() => _templatesLoaded = true);
+    }
+  }
+
+  Future<void> _adoptGymRoutineTemplate(GymRoutineRow g) async {
+    final api = widget.apiClient;
+    if (api == null || _adoptingRoutineId != null) return;
+    setState(() => _adoptingRoutineId = g.id);
+    try {
+      final newId = await api.cloneGymRoutineTemplate(g.id);
+      if (!mounted) return;
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailGymRoutineAdopted);
+      // The clone lands as a personal routine server-side; a throwaway
+      // store hydrates the user's routines (including the new one) so the
+      // detail screen renders it offline-first, mirroring how the gym
+      // screen owns its own LocalRoutineStore.
+      final store = LocalRoutineStore();
+      await store.init();
+      await store.syncWithServer(api);
+      final detail = await api.fetchGymRoutineDetail(newId);
+      if (detail != null) {
+        await store.replaceFromServer([
+          (
+            routine: detail.routine.toJson(),
+            exercises: [
+              for (final e in detail.exercises)
+                StoredRoutineExercise(
+                  exerciseName: e.exercise.exerciseName,
+                  exerciseKey: e.exercise.exerciseKey,
+                  supersetGroup: e.exercise.supersetGroup,
+                  supersetOrder: e.exercise.supersetOrder,
+                  modality: e.exercise.modality,
+                  progression: e.exercise.progression,
+                  progressionParams: e.exercise.progressionParams is Map
+                      ? Map<String, dynamic>.from(
+                          e.exercise.progressionParams as Map)
+                      : const <String, dynamic>{},
+                  sets: [
+                    for (final s in e.sets)
+                      StoredRoutineSet(
+                        setType: s.setType,
+                        targetRepsMin: s.targetRepsMin,
+                        targetRepsMax: s.targetRepsMax,
+                        targetWeightKg: s.targetWeightKg,
+                        targetRpe: s.targetRpe,
+                        restS: s.restS,
+                        targetDurationS: s.targetDurationS,
+                        targetDistanceM: s.targetDistanceM,
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ]);
+      }
+      if (!mounted) return;
+      final gymStore = LocalGymStore();
+      await gymStore.init();
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => RoutineDetailScreen(
+            api: api,
+            store: store,
+            gymStore: gymStore,
+            routineId: newId,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _adoptingRoutineId = null);
     }
   }
 
@@ -1296,7 +1381,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       return const Center(child: CircularProgressIndicator());
     }
     final l10n = AppLocalizations.of(context);
-    if (_templates.isEmpty && _sessionTemplates.isEmpty) {
+    if (_templates.isEmpty &&
+        _sessionTemplates.isEmpty &&
+        _gymRoutineTemplates.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -1385,6 +1472,57 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                             : () => _adoptSessionTemplate(s),
                         child: Text(l10n.clubDetailAdopt),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+          if (_gymRoutineTemplates.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Text(l10n.clubDetailGymRoutineTemplatesTitle,
+                  style: theme.textTheme.titleMedium),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                l10n.clubDetailGymRoutineTemplatesHint,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+            for (final g in _gymRoutineTemplates) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(g.title, style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 4),
+                            Text(
+                              l10n.clubDetailRoutineExerciseCount(
+                                  g.exerciseCount),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (c.isMember)
+                        FilledButton(
+                          onPressed: _adoptingRoutineId == g.id
+                              ? null
+                              : () => _adoptGymRoutineTemplate(g),
+                          child: Text(l10n.clubDetailAdopt),
+                        ),
                     ],
                   ),
                 ),
