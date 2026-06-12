@@ -7,9 +7,13 @@ import '../preferences.dart';
 import 'full_screen_form.dart';
 
 /// Open the gym-workout composer as a fullscreen dialog. Pass [existing] to
-/// edit a stored workout in place; omit for a new one. Resolves `true` when
-/// a workout was created or updated (so the caller can kick a sync), null
-/// when the user backed out.
+/// edit a stored workout in place; omit for a new one. Pass [seedSets] /
+/// [seedTitle] to prefill a NEW log (still the create path) — the "Start
+/// routine" / "Repeat last" entry seeds the composer with a routine's planned
+/// targets (or a prior session's sets) as the new session's actuals, mirroring
+/// web's `prefillFromRoutine` → GymEditor seed. Resolves `true` when a workout
+/// was created or updated (so the caller can kick a sync), null when the user
+/// backed out.
 ///
 /// Flutter twin of web `GymEditor.svelte` — a free-text exercise name with
 /// history autocomplete plus inline sets (reps / weight / RPE). Writes
@@ -19,6 +23,8 @@ Future<bool?> showGymComposeSheet({
   required BuildContext context,
   required LocalGymStore store,
   StoredGymWorkout? existing,
+  List<GymSetInput>? seedSets,
+  String? seedTitle,
   List<String> suggestions = const [],
   String? prefillTitle,
 }) {
@@ -29,6 +35,8 @@ Future<bool?> showGymComposeSheet({
     builder: (ctx) => GymComposeSheet(
       store: store,
       existing: existing,
+      seedSets: seedSets,
+      seedTitle: seedTitle,
       suggestions: suggestions,
       prefillTitle: prefillTitle,
     ),
@@ -38,6 +46,11 @@ Future<bool?> showGymComposeSheet({
 class GymComposeSheet extends StatefulWidget {
   final LocalGymStore store;
   final StoredGymWorkout? existing;
+
+  /// Prefill a NEW log with these sets (the create path, not an edit). Ignored
+  /// when [existing] is non-null.
+  final List<GymSetInput>? seedSets;
+  final String? seedTitle;
   final List<String> suggestions;
 
   /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
@@ -47,6 +60,8 @@ class GymComposeSheet extends StatefulWidget {
     super.key,
     required this.store,
     this.existing,
+    this.seedSets,
+    this.seedTitle,
     this.suggestions = const [],
     this.prefillTitle,
   });
@@ -67,17 +82,31 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     super.initState();
     final existing = widget.existing;
     _titleCtl = TextEditingController(
-        text: existing?.workout.title ?? widget.prefillTitle ?? '');
+        text:
+            existing?.workout.title ?? widget.seedTitle ?? widget.prefillTitle ?? '');
     _isPublic = existing?.workout.isPublic ?? false;
-    _exercises = _initExercises(existing);
+    // Edit path reads the stored workout's sets; the new-log seed path
+    // (Start routine / Repeat last) reads the prefilled seed sets.
+    _exercises = _initExercises(existing?.sets ??
+        (widget.seedSets == null
+            ? null
+            : [
+                for (final s in widget.seedSets!)
+                  <String, dynamic>{
+                    'exercise_name': s.exerciseName,
+                    'reps': s.reps,
+                    'weight_kg': s.weightKg,
+                    'rpe': s.rpe,
+                  },
+              ]));
   }
 
-  /// Rebuild exercise blocks from a stored workout. Sets arrive in
-  /// `set_index` order grouped by exercise (that's how the composer writes
-  /// them), so a consecutive run of the same `exercise_name` rebuilds a
-  /// block. An empty / missing workout seeds one blank exercise + set.
-  List<_EditExercise> _initExercises(StoredGymWorkout? src) {
-    final sets = src?.sets ?? const [];
+  /// Rebuild exercise blocks from a list of stored set maps. Sets arrive in
+  /// order grouped by exercise (that's how the composer writes them), so a
+  /// consecutive run of the same `exercise_name` rebuilds a block. An empty /
+  /// missing list seeds one blank exercise + set.
+  List<_EditExercise> _initExercises(List<Map<String, dynamic>>? src) {
+    final sets = src ?? const <Map<String, dynamic>>[];
     if (sets.isEmpty) {
       return [_EditExercise()];
     }

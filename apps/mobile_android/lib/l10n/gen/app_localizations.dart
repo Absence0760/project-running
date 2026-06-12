@@ -11871,6 +11871,168 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save workout.'**
   String get gymSaveFailed;
 
+  /// No description provided for @gymRoutineLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Routines'**
+  String get gymRoutineLink;
+
+  /// No description provided for @gymRoutineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Routines'**
+  String get gymRoutineTitle;
+
+  /// No description provided for @gymRoutineNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New routine'**
+  String get gymRoutineNew;
+
+  /// No description provided for @gymRoutineBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to routines'**
+  String get gymRoutineBack;
+
+  /// No description provided for @gymRoutineNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Routine not found.'**
+  String get gymRoutineNotFound;
+
+  /// Exercise count on a routine card / detail header
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} exercise} other{{count} exercises}}'**
+  String gymRoutineExerciseCount(int count);
+
+  /// No description provided for @gymRoutineStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start routine'**
+  String get gymRoutineStart;
+
+  /// No description provided for @gymRoutineDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get gymRoutineDelete;
+
+  /// No description provided for @gymRoutineDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete routine?'**
+  String get gymRoutineDeleteConfirmTitle;
+
+  /// No description provided for @gymRoutineDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently removes the routine. Logged workouts are unaffected.'**
+  String get gymRoutineDeleteConfirmBody;
+
+  /// No description provided for @gymRoutineDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Routine deleted'**
+  String get gymRoutineDeleted;
+
+  /// No description provided for @gymRoutineCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Routine saved'**
+  String get gymRoutineCreated;
+
+  /// No description provided for @gymRoutineSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save routine.'**
+  String get gymRoutineSaveFailed;
+
+  /// No description provided for @gymRoutineEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No routines yet'**
+  String get gymRoutineEmptyTitle;
+
+  /// No description provided for @gymRoutineEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a logged workout as a routine, or build one from scratch, to reuse it.'**
+  String get gymRoutineEmptyBody;
+
+  /// No description provided for @gymRoutineTargetReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Target reps'**
+  String get gymRoutineTargetReps;
+
+  /// Routine builder/detail: target weight column header with unit
+  ///
+  /// In en, this message translates to:
+  /// **'Target weight ({unit})'**
+  String gymRoutineTargetWeight(String unit);
+
+  /// No description provided for @gymRoutineEditorNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New routine'**
+  String get gymRoutineEditorNewTitle;
+
+  /// No description provided for @gymRoutineEditorTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Routine name'**
+  String get gymRoutineEditorTitleLabel;
+
+  /// No description provided for @gymRoutineEditorTitlePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Push day A'**
+  String get gymRoutineEditorTitlePlaceholder;
+
+  /// No description provided for @gymRoutineEditorNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get gymRoutineEditorNotesLabel;
+
+  /// No description provided for @gymRoutineEditorSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save routine'**
+  String get gymRoutineEditorSave;
+
+  /// No description provided for @gymRoutineEditorCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get gymRoutineEditorCancel;
+
+  /// No description provided for @gymRoutineEditorNeedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the routine a name.'**
+  String get gymRoutineEditorNeedTitle;
+
+  /// No description provided for @gymRoutineEditorNeedExercise.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one exercise with a name.'**
+  String get gymRoutineEditorNeedExercise;
+
+  /// No description provided for @gymRoutineSaveAsRoutine.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as routine'**
+  String get gymRoutineSaveAsRoutine;
+
+  /// No description provided for @gymRoutineRepeatLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat last'**
+  String get gymRoutineRepeatLast;
+
   /// No description provided for @nutritionTitle.
   ///
   /// In en, this message translates to:

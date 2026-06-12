@@ -1072,3 +1072,58 @@ func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing
 		t.Error("safety_contacts must be fetched scoped to contact_user_id (rows where the subject is the contact)")
 	}
 }
+
+// gym_programming.md § DSAR export: the gym-programming P1 reusable plan
+// (migration 20261231_001) keys on author_id, NOT user_id, so the
+// export-completeness guard's user_id-column scan can't flag it — it is
+// wired into the spec explicitly, and this test is its guard. The routine
+// must ship author-scoped, embedding its child gym_routine_exercises and
+// their gym_routine_sets (neither has a user_id of its own — both cascade
+// from the parent routine, so they can't be filtered directly), the same
+// nested-embed shape gym_workouts/gym_sets and training_plans use. Keep the
+// shape in lockstep with the TS twin in backup_spec.test.ts.
+func TestFetchExportPersonalDataTables_IncludesGymRoutines(t *testing.T) {
+	var routinesQ string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/rest/v1/gym_routines") {
+			routinesQ = r.URL.RawQuery
+			_, _ = w.Write([]byte(`[{"id":"gr1","title":"Push day","exercises":[{"id":"gre1","exercise_name":"Bench","sets":[{"set_index":0,"target_reps_min":5,"target_weight_kg":80}]}]}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows, ok := out["gym_routines.json"]
+	if !ok || len(rows) == 0 {
+		t.Fatalf("gym_routines.json must appear in the export manifest with at least one row — gym-programming P1 DSAR gap; got out=%v", extraTableKeys(out))
+	}
+	// author-scoped, NOT user_id-scoped (the column the guard scans for).
+	if !strings.Contains(routinesQ, "author_id=eq.user-A") {
+		t.Errorf("gym_routines must be scoped to the subject's author_id; got query=%q", routinesQ)
+	}
+	if strings.Contains(routinesQ, "user_id=eq.") {
+		t.Errorf("gym_routines has no user_id column — it must filter on author_id; got query=%q", routinesQ)
+	}
+	// The owner-less child tables must ship via the nested embed (the same
+	// shape gym_workouts uses for gym_sets), and the embedded rows must
+	// survive into the result.
+	if !strings.Contains(routinesQ, "gym_routine_exercises") {
+		t.Errorf("gym_routines select must embed gym_routine_exercises so the owner-less child table ships; got query=%q", routinesQ)
+	}
+	if !strings.Contains(routinesQ, "gym_routine_sets") {
+		t.Errorf("gym_routines select must embed gym_routine_sets so the owner-less grandchild table ships; got query=%q", routinesQ)
+	}
+	exercises, ok := rows[0]["exercises"].([]interface{})
+	if !ok || len(exercises) == 0 {
+		t.Fatalf("gym_routines rows must carry the embedded exercises; got row=%v", rows[0])
+	}
+	ex0, _ := exercises[0].(map[string]interface{})
+	if _, present := ex0["sets"]; !present {
+		t.Errorf("embedded gym_routine_exercises must carry their nested sets; got exercise=%v", ex0)
+	}
+}

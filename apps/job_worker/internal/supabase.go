@@ -1616,6 +1616,20 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			name: "gym_workouts.json", table: schema.TableGymWorkouts, filter: uidEq,
 			sel: "*,sets:gym_sets(*)",
 		},
+		// gym_routines (+ exercises + their planned sets via nested embeds).
+		// The gym-programming P1 reusable plan (migration 20261231_001).
+		// Author-scoped (NOT user_id), so the export-completeness guard's
+		// user_id-column scan can't flag it — it is wired in explicitly.
+		// gym_routine_exercises / gym_routine_sets have no user_id of their
+		// own (they cascade from the parent routine), so the export nests
+		// them, mirroring the training_plans + gym_workouts embeds. Keep the
+		// shape in lockstep with the TS twin in backup_spec.ts.
+		// gym_programming.md § DSAR export.
+		{
+			name: "gym_routines.json", table: schema.TableGymRoutines,
+			filter: "author_id=eq." + uid,
+			sel:    "*,exercises:gym_routine_exercises(*,sets:gym_routine_sets(*))",
+		},
 		// food_log — Phase 4 nutrition diary (per-item calories + macros,
 		// migration 20261204_001). Owner-scoped personal data the subject
 		// has an Art 20 right to receive.

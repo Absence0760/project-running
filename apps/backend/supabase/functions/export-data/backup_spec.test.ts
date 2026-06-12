@@ -25,7 +25,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// directions: owned + as-contact); a regression that drops one of
 	// these is a silent Art 20 completeness gap. Keep in lockstep with
 	// the Go worker's `FetchExportPersonalDataTables` spec list.
-	assertEquals(specs.length, 39, `expected 39 specs, got ${specs.length}`);
+	assertEquals(specs.length, 40, `expected 40 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -63,6 +63,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'club_posts.json',
 		'event_exceptions.json',
 		'gym_workouts.json',
+		'gym_routines.json',
 		'food_log.json',
 		'body_metrics.json',
 		'safety_contacts_owned.json',
@@ -121,6 +122,24 @@ Deno.test('gym + nutrition logs exported for the subject (Phase 4 multi-modal, G
 	assertEquals(food.table, 'food_log');
 	assertEquals(food.filter, `user_id=eq.${TEST_UID}`);
 	assertEquals(food.select, '*');
+});
+
+Deno.test('gym_routines exported author-scoped with exercises + planned sets nested (GDPR Art 20)', () => {
+	// gym_programming.md § DSAR export. The P1 reusable plan (migration
+	// 20261231_001) is the subject's own authored content. It is keyed by
+	// author_id (not user_id), and gym_routine_exercises / gym_routine_sets
+	// have no owner column of their own — they cascade from the parent
+	// routine — so the spec nests them two levels deep, mirroring the
+	// gym_workouts → gym_sets embed, rather than separate owner-less tables.
+	const specs = buildBackupSpecs(TEST_UID);
+	const routines = specs.find((s) => s.entry === 'gym_routines.json');
+	assertExists(routines);
+	assertEquals(routines.table, 'gym_routines');
+	assertEquals(routines.filter, `author_id=eq.${TEST_UID}`);
+	// The nested embed pulls the child exercises and their planned sets so
+	// the owner-less child tables still ship in full.
+	assertEquals(routines.select.includes('gym_routine_exercises'), true);
+	assertEquals(routines.select.includes('gym_routine_sets'), true);
 });
 
 Deno.test('direct_messages exported in both directions (GDPR Art 20)', () => {

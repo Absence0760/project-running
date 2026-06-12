@@ -7177,6 +7177,100 @@ class AppLocalizationsEs extends AppLocalizations {
   String get gymSaveFailed => 'No se pudo guardar el entrenamiento.';
 
   @override
+  String get gymRoutineLink => 'Rutinas';
+
+  @override
+  String get gymRoutineTitle => 'Rutinas';
+
+  @override
+  String get gymRoutineNew => 'Nueva rutina';
+
+  @override
+  String get gymRoutineBack => 'Volver a rutinas';
+
+  @override
+  String get gymRoutineNotFound => 'Rutina no encontrada.';
+
+  @override
+  String gymRoutineExerciseCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ejercicios',
+      one: '$count ejercicio',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymRoutineStart => 'Iniciar rutina';
+
+  @override
+  String get gymRoutineDelete => 'Eliminar';
+
+  @override
+  String get gymRoutineDeleteConfirmTitle => '¿Eliminar rutina?';
+
+  @override
+  String get gymRoutineDeleteConfirmBody =>
+      'Esto elimina la rutina de forma permanente. Los entrenamientos registrados no se ven afectados.';
+
+  @override
+  String get gymRoutineDeleted => 'Rutina eliminada';
+
+  @override
+  String get gymRoutineCreated => 'Rutina guardada';
+
+  @override
+  String get gymRoutineSaveFailed => 'No se pudo guardar la rutina.';
+
+  @override
+  String get gymRoutineEmptyTitle => 'Aún no hay rutinas';
+
+  @override
+  String get gymRoutineEmptyBody =>
+      'Guarda un entrenamiento registrado como rutina, o crea una, para reutilizarla.';
+
+  @override
+  String get gymRoutineTargetReps => 'Repeticiones objetivo';
+
+  @override
+  String gymRoutineTargetWeight(String unit) {
+    return 'Peso objetivo ($unit)';
+  }
+
+  @override
+  String get gymRoutineEditorNewTitle => 'Nueva rutina';
+
+  @override
+  String get gymRoutineEditorTitleLabel => 'Nombre de la rutina';
+
+  @override
+  String get gymRoutineEditorTitlePlaceholder => 'p. ej. Día de empuje A';
+
+  @override
+  String get gymRoutineEditorNotesLabel => 'Notas (opcional)';
+
+  @override
+  String get gymRoutineEditorSave => 'Guardar rutina';
+
+  @override
+  String get gymRoutineEditorCancel => 'Cancelar';
+
+  @override
+  String get gymRoutineEditorNeedTitle => 'Ponle un nombre a la rutina.';
+
+  @override
+  String get gymRoutineEditorNeedExercise =>
+      'Añade al menos un ejercicio con nombre.';
+
+  @override
+  String get gymRoutineSaveAsRoutine => 'Guardar como rutina';
+
+  @override
+  String get gymRoutineRepeatLast => 'Repetir el último';
+
+  @override
   String get nutritionTitle => 'Nutrición';
 
   @override

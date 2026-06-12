@@ -186,6 +186,18 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: uidEq,
 			select: '*,sets:gym_sets(*)',
 		},
+		// gym_routines (+ exercises + their planned sets via nested embeds).
+		// The gym-programming P1 reusable plan (migration 20261231_001).
+		// Author-scoped; gym_routine_exercises / gym_routine_sets have no
+		// user_id of their own (they cascade from the parent routine), so the
+		// export nests them — mirroring the training_plans + gym_workouts
+		// embeds. gym_programming.md § DSAR export.
+		{
+			entry: 'gym_routines.json',
+			table: 'gym_routines',
+			filter: `author_id=eq.${uid}`,
+			select: '*,exercises:gym_routine_exercises(*,sets:gym_routine_sets(*))',
+		},
 		// food_log — Phase 4 nutrition diary (calories + macros per item,
 		// migration 20261204_001). Owner-scoped Art 20 personal data.
 		{ entry: 'food_log.json', table: 'food_log', filter: uidEq, select: '*' },

@@ -6785,6 +6785,97 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymSaveFailed => 'ワークアウトを保存できませんでした。';
 
   @override
+  String get gymRoutineLink => 'ルーティン';
+
+  @override
+  String get gymRoutineTitle => 'ルーティン';
+
+  @override
+  String get gymRoutineNew => '新しいルーティン';
+
+  @override
+  String get gymRoutineBack => 'ルーティンに戻る';
+
+  @override
+  String get gymRoutineNotFound => 'ルーティンが見つかりません。';
+
+  @override
+  String gymRoutineExerciseCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count種目',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymRoutineStart => 'ルーティンを開始';
+
+  @override
+  String get gymRoutineDelete => '削除';
+
+  @override
+  String get gymRoutineDeleteConfirmTitle => 'ルーティンを削除しますか？';
+
+  @override
+  String get gymRoutineDeleteConfirmBody =>
+      'ルーティンを完全に削除します。記録済みのワークアウトには影響しません。';
+
+  @override
+  String get gymRoutineDeleted => 'ルーティンを削除しました';
+
+  @override
+  String get gymRoutineCreated => 'ルーティンを保存しました';
+
+  @override
+  String get gymRoutineSaveFailed => 'ルーティンを保存できませんでした。';
+
+  @override
+  String get gymRoutineEmptyTitle => 'まだルーティンがありません';
+
+  @override
+  String get gymRoutineEmptyBody => '記録したワークアウトをルーティンとして保存するか、新規作成して再利用しましょう。';
+
+  @override
+  String get gymRoutineTargetReps => '目標レップ数';
+
+  @override
+  String gymRoutineTargetWeight(String unit) {
+    return '目標重量（$unit）';
+  }
+
+  @override
+  String get gymRoutineEditorNewTitle => '新しいルーティン';
+
+  @override
+  String get gymRoutineEditorTitleLabel => 'ルーティン名';
+
+  @override
+  String get gymRoutineEditorTitlePlaceholder => '例：プッシュデーA';
+
+  @override
+  String get gymRoutineEditorNotesLabel => 'メモ（任意）';
+
+  @override
+  String get gymRoutineEditorSave => 'ルーティンを保存';
+
+  @override
+  String get gymRoutineEditorCancel => 'キャンセル';
+
+  @override
+  String get gymRoutineEditorNeedTitle => 'ルーティンに名前を付けてください。';
+
+  @override
+  String get gymRoutineEditorNeedExercise => '名前付きの種目を少なくとも1つ追加してください。';
+
+  @override
+  String get gymRoutineSaveAsRoutine => 'ルーティンとして保存';
+
+  @override
+  String get gymRoutineRepeatLast => '前回を繰り返す';
+
+  @override
   String get nutritionTitle => '栄養';
 
   @override

@@ -41,6 +41,10 @@ const PAIRS = [
 	{ tableColumn: 'event_pricing.modality', tsUnion: 'EventModality' },
 	{ tableColumn: 'event_attendees.attendance', tsUnion: 'EventAttendance' },
 	{ tableColumn: 'session_plan_items.kind', tsUnion: 'SessionItemKind' },
+	{ tableColumn: 'gym_routines.periodisation', tsUnion: 'GymPeriodisation' },
+	{ tableColumn: 'gym_routine_exercises.modality', tsUnion: 'GymExerciseModality' },
+	{ tableColumn: 'gym_routine_exercises.progression', tsUnion: 'GymProgressionScheme' },
+	{ tableColumn: 'gym_routine_sets.set_type', tsUnion: 'GymSetType' },
 ];
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or

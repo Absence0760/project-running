@@ -7195,6 +7195,100 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymSaveFailed => 'Impossible d\'enregistrer la séance.';
 
   @override
+  String get gymRoutineLink => 'Routines';
+
+  @override
+  String get gymRoutineTitle => 'Routines';
+
+  @override
+  String get gymRoutineNew => 'Nouvelle routine';
+
+  @override
+  String get gymRoutineBack => 'Retour aux routines';
+
+  @override
+  String get gymRoutineNotFound => 'Routine introuvable.';
+
+  @override
+  String gymRoutineExerciseCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exercices',
+      one: '$count exercice',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymRoutineStart => 'Démarrer la routine';
+
+  @override
+  String get gymRoutineDelete => 'Supprimer';
+
+  @override
+  String get gymRoutineDeleteConfirmTitle => 'Supprimer la routine ?';
+
+  @override
+  String get gymRoutineDeleteConfirmBody =>
+      'Cela supprime définitivement la routine. Les séances enregistrées ne sont pas affectées.';
+
+  @override
+  String get gymRoutineDeleted => 'Routine supprimée';
+
+  @override
+  String get gymRoutineCreated => 'Routine enregistrée';
+
+  @override
+  String get gymRoutineSaveFailed => 'Impossible d\'enregistrer la routine.';
+
+  @override
+  String get gymRoutineEmptyTitle => 'Aucune routine';
+
+  @override
+  String get gymRoutineEmptyBody =>
+      'Enregistrez une séance comme routine, ou créez-en une, pour la réutiliser.';
+
+  @override
+  String get gymRoutineTargetReps => 'Répétitions cibles';
+
+  @override
+  String gymRoutineTargetWeight(String unit) {
+    return 'Charge cible ($unit)';
+  }
+
+  @override
+  String get gymRoutineEditorNewTitle => 'Nouvelle routine';
+
+  @override
+  String get gymRoutineEditorTitleLabel => 'Nom de la routine';
+
+  @override
+  String get gymRoutineEditorTitlePlaceholder => 'ex. Jour poussée A';
+
+  @override
+  String get gymRoutineEditorNotesLabel => 'Notes (facultatif)';
+
+  @override
+  String get gymRoutineEditorSave => 'Enregistrer la routine';
+
+  @override
+  String get gymRoutineEditorCancel => 'Annuler';
+
+  @override
+  String get gymRoutineEditorNeedTitle => 'Donnez un nom à la routine.';
+
+  @override
+  String get gymRoutineEditorNeedExercise =>
+      'Ajoutez au moins un exercice avec un nom.';
+
+  @override
+  String get gymRoutineSaveAsRoutine => 'Enregistrer comme routine';
+
+  @override
+  String get gymRoutineRepeatLast => 'Répéter la dernière';
+
+  @override
   String get nutritionTitle => 'Nutrition';
 
   @override

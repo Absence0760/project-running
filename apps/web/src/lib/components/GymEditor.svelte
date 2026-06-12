@@ -16,6 +16,10 @@
 		/// title; sets stay empty for the user to fill. Ignored when `existing`
 		/// is set (an edit owns its own values).
 		prefill?: { title?: string | null } | null;
+		/// Prefill the editor with these sets/title but save as a NEW workout
+		/// (the "Repeat last" / "Start routine" path) — distinct from `existing`,
+		/// which edits an existing row. Ignored when `existing` is set.
+		seed?: GymWorkoutWithSets | null;
 		/// Distinct exercise names from the user's history, for the datalist
 		/// autocomplete (multi_modal.md § Gym — "autocomplete from the
 		/// user's own history, not a database").
@@ -28,6 +32,7 @@
 	let {
 		existing = null,
 		prefill = null,
+		seed: seedWorkout = null,
 		suggestions = [],
 		oncreated,
 		onupdated,
@@ -70,10 +75,13 @@
 	// The editor is mounted fresh each time the host modal opens, so the
 	// prop is read once at construction to seed local state. untrack keeps
 	// that one-time read from registering a (never-changing) dependency.
-	const seed = untrack(() => existing);
+	// Precedence for the field initialisers: `existing` (edit) → `seed`
+	// (repeat-last / start-routine, carries sets) → `prefill` (class -> gym seam,
+	// title only). The save() branch keys off `existing` alone.
+	const seed = untrack(() => existing ?? seedWorkout);
 	const seedPrefill = untrack(() => prefill);
 	let title = $state(seed?.workout.title ?? seedPrefill?.title ?? '');
-	let isPublic = $state(seed?.workout.is_public ?? false);
+	let isPublic = $state(untrack(() => existing?.workout.is_public ?? false));
 	let exercises = $state<EditExercise[]>(initExercises(seed));
 	let saving = $state(false);
 	let error = $state('');
