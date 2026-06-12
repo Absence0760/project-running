@@ -7289,6 +7289,125 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymRoutineRepeatLast => 'Répéter la dernière';
 
   @override
+  String get gymRoutineTargetRepsMax => 'à';
+
+  @override
+  String get gymRoutineTargetDuration => 'Temps cible (s)';
+
+  @override
+  String get gymRoutineTargetDistance => 'Distance cible (m)';
+
+  @override
+  String get gymRoutineRestLabel => 'Repos (s)';
+
+  @override
+  String get gymRoutineSetType => 'Type de série';
+
+  @override
+  String get gymRoutineSetTypeWarmup => 'Échauffement';
+
+  @override
+  String get gymRoutineSetTypeWorking => 'Série de travail';
+
+  @override
+  String get gymRoutineSetTypeDropset => 'Drop set';
+
+  @override
+  String get gymRoutineSetTypeAmrap => 'AMRAP';
+
+  @override
+  String get gymRoutineSetTypeFailure => 'Jusqu\'à l\'échec';
+
+  @override
+  String get gymRoutineSetTypeBackoff => 'Back-off';
+
+  @override
+  String get gymRoutineModality => 'Mesuré en';
+
+  @override
+  String get gymRoutineModalityWeightReps => 'Poids × répétitions';
+
+  @override
+  String get gymRoutineModalityTime => 'Temps';
+
+  @override
+  String get gymRoutineModalityDistance => 'Distance';
+
+  @override
+  String get gymRoutineModalityBodyweightReps =>
+      'Répétitions au poids du corps';
+
+  @override
+  String get gymRoutineSupersetToggle => 'Superset avec l\'exercice suivant';
+
+  @override
+  String gymRoutineSupersetBadge(int group) {
+    return 'Superset $group';
+  }
+
+  @override
+  String get gymRoutineAdvanced => 'Avancé';
+
+  @override
+  String get gymRoutineProgression => 'Progression';
+
+  @override
+  String get gymRoutineProgressionNone => 'Aucune';
+
+  @override
+  String get gymRoutineProgressionLinear => 'Linéaire';
+
+  @override
+  String get gymRoutineProgressionDoubleProgression => 'Double progression';
+
+  @override
+  String get gymRoutineProgressionFiveByFive => '5×5';
+
+  @override
+  String get gymRoutineProgressionPercentCycle => 'Cycle % du 1RM';
+
+  @override
+  String get gymRoutineProgressionRpeAutoreg => 'Autorégulation RPE';
+
+  @override
+  String gymRoutineProgressionIncrementLabel(String unit) {
+    return 'Pas de poids ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionPercentLabel => '% du 1RM';
+
+  @override
+  String gymRoutineProgressionOneRmLabel(String unit) {
+    return '1RM ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionTargetRpeLabel => 'RPE cible';
+
+  @override
+  String get gymRoutineNextTarget => 'Prochain objectif';
+
+  @override
+  String get gymRoutineNextTargetIncreaseWeight =>
+      'Augmenter la charge la prochaine fois';
+
+  @override
+  String get gymRoutineNextTargetIncreaseReps =>
+      'Augmenter les répétitions la prochaine fois';
+
+  @override
+  String get gymRoutineNextTargetHold => 'Maintenir — répéter cet objectif';
+
+  @override
+  String get gymRoutineNextTargetDeload => 'Deload — réduire la charge';
+
+  @override
+  String gymRoutineNextTargetRepClimb(int from, int to) {
+    return 'montée de répétitions $from→$to';
+  }
+
+  @override
   String get nutritionTitle => 'Nutrition';
 
   @override

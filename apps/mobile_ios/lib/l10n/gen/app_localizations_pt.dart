@@ -7269,6 +7269,123 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymRoutineRepeatLast => 'Repetir o último';
 
   @override
+  String get gymRoutineTargetRepsMax => 'a';
+
+  @override
+  String get gymRoutineTargetDuration => 'Tempo alvo (s)';
+
+  @override
+  String get gymRoutineTargetDistance => 'Distância alvo (m)';
+
+  @override
+  String get gymRoutineRestLabel => 'Descanso (s)';
+
+  @override
+  String get gymRoutineSetType => 'Tipo de série';
+
+  @override
+  String get gymRoutineSetTypeWarmup => 'Aquecimento';
+
+  @override
+  String get gymRoutineSetTypeWorking => 'Série de trabalho';
+
+  @override
+  String get gymRoutineSetTypeDropset => 'Drop set';
+
+  @override
+  String get gymRoutineSetTypeAmrap => 'AMRAP';
+
+  @override
+  String get gymRoutineSetTypeFailure => 'Até a falha';
+
+  @override
+  String get gymRoutineSetTypeBackoff => 'Back-off';
+
+  @override
+  String get gymRoutineModality => 'Medido por';
+
+  @override
+  String get gymRoutineModalityWeightReps => 'Peso × reps';
+
+  @override
+  String get gymRoutineModalityTime => 'Tempo';
+
+  @override
+  String get gymRoutineModalityDistance => 'Distância';
+
+  @override
+  String get gymRoutineModalityBodyweightReps => 'Reps com peso corporal';
+
+  @override
+  String get gymRoutineSupersetToggle => 'Supersérie com o próximo exercício';
+
+  @override
+  String gymRoutineSupersetBadge(int group) {
+    return 'Supersérie $group';
+  }
+
+  @override
+  String get gymRoutineAdvanced => 'Avançado';
+
+  @override
+  String get gymRoutineProgression => 'Progressão';
+
+  @override
+  String get gymRoutineProgressionNone => 'Nenhuma';
+
+  @override
+  String get gymRoutineProgressionLinear => 'Linear';
+
+  @override
+  String get gymRoutineProgressionDoubleProgression => 'Dupla progressão';
+
+  @override
+  String get gymRoutineProgressionFiveByFive => '5×5';
+
+  @override
+  String get gymRoutineProgressionPercentCycle => 'Ciclo % de 1RM';
+
+  @override
+  String get gymRoutineProgressionRpeAutoreg => 'Autorregulação RPE';
+
+  @override
+  String gymRoutineProgressionIncrementLabel(String unit) {
+    return 'Passo de peso ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionPercentLabel => '% de 1RM';
+
+  @override
+  String gymRoutineProgressionOneRmLabel(String unit) {
+    return '1RM ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionTargetRpeLabel => 'RPE alvo';
+
+  @override
+  String get gymRoutineNextTarget => 'Próximo alvo';
+
+  @override
+  String get gymRoutineNextTargetIncreaseWeight => 'Aumentar carga na próxima';
+
+  @override
+  String get gymRoutineNextTargetIncreaseReps =>
+      'Aumentar repetições na próxima';
+
+  @override
+  String get gymRoutineNextTargetHold => 'Manter — repetir este alvo';
+
+  @override
+  String get gymRoutineNextTargetDeload => 'Deload — reduzir a carga';
+
+  @override
+  String gymRoutineNextTargetRepClimb(int from, int to) {
+    return 'subida de reps $from→$to';
+  }
+
+  @override
   String get nutritionTitle => 'Nutrição';
 
   @override
@@ -14908,6 +15025,123 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymRoutineRepeatLast => 'Repetir o último';
+
+  @override
+  String get gymRoutineTargetRepsMax => 'a';
+
+  @override
+  String get gymRoutineTargetDuration => 'Tempo alvo (s)';
+
+  @override
+  String get gymRoutineTargetDistance => 'Distância alvo (m)';
+
+  @override
+  String get gymRoutineRestLabel => 'Descanso (s)';
+
+  @override
+  String get gymRoutineSetType => 'Tipo de série';
+
+  @override
+  String get gymRoutineSetTypeWarmup => 'Aquecimento';
+
+  @override
+  String get gymRoutineSetTypeWorking => 'Série de trabalho';
+
+  @override
+  String get gymRoutineSetTypeDropset => 'Drop set';
+
+  @override
+  String get gymRoutineSetTypeAmrap => 'AMRAP';
+
+  @override
+  String get gymRoutineSetTypeFailure => 'Até a falha';
+
+  @override
+  String get gymRoutineSetTypeBackoff => 'Back-off';
+
+  @override
+  String get gymRoutineModality => 'Medido por';
+
+  @override
+  String get gymRoutineModalityWeightReps => 'Peso × reps';
+
+  @override
+  String get gymRoutineModalityTime => 'Tempo';
+
+  @override
+  String get gymRoutineModalityDistance => 'Distância';
+
+  @override
+  String get gymRoutineModalityBodyweightReps => 'Reps com peso corporal';
+
+  @override
+  String get gymRoutineSupersetToggle => 'Supersérie com o próximo exercício';
+
+  @override
+  String gymRoutineSupersetBadge(int group) {
+    return 'Supersérie $group';
+  }
+
+  @override
+  String get gymRoutineAdvanced => 'Avançado';
+
+  @override
+  String get gymRoutineProgression => 'Progressão';
+
+  @override
+  String get gymRoutineProgressionNone => 'Nenhuma';
+
+  @override
+  String get gymRoutineProgressionLinear => 'Linear';
+
+  @override
+  String get gymRoutineProgressionDoubleProgression => 'Dupla progressão';
+
+  @override
+  String get gymRoutineProgressionFiveByFive => '5×5';
+
+  @override
+  String get gymRoutineProgressionPercentCycle => 'Ciclo % de 1RM';
+
+  @override
+  String get gymRoutineProgressionRpeAutoreg => 'Autorregulação RPE';
+
+  @override
+  String gymRoutineProgressionIncrementLabel(String unit) {
+    return 'Passo de peso ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionPercentLabel => '% de 1RM';
+
+  @override
+  String gymRoutineProgressionOneRmLabel(String unit) {
+    return '1RM ($unit)';
+  }
+
+  @override
+  String get gymRoutineProgressionTargetRpeLabel => 'RPE alvo';
+
+  @override
+  String get gymRoutineNextTarget => 'Próximo alvo';
+
+  @override
+  String get gymRoutineNextTargetIncreaseWeight => 'Aumentar carga na próxima';
+
+  @override
+  String get gymRoutineNextTargetIncreaseReps =>
+      'Aumentar repetições na próxima';
+
+  @override
+  String get gymRoutineNextTargetHold => 'Manter — repetir este alvo';
+
+  @override
+  String get gymRoutineNextTargetDeload => 'Deload — reduzir a carga';
+
+  @override
+  String gymRoutineNextTargetRepClimb(int from, int to) {
+    return 'subida de reps $from→$to';
+  }
 
   @override
   String get nutritionTitle => 'Nutrição';

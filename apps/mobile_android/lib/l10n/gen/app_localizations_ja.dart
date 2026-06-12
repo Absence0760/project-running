@@ -6876,6 +6876,122 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymRoutineRepeatLast => '前回を繰り返す';
 
   @override
+  String get gymRoutineTargetRepsMax => '〜';
+
+  @override
+  String get gymRoutineTargetDuration => '目標時間（秒）';
+
+  @override
+  String get gymRoutineTargetDistance => '目標距離（m）';
+
+  @override
+  String get gymRoutineRestLabel => '休憩（秒）';
+
+  @override
+  String get gymRoutineSetType => 'セットタイプ';
+
+  @override
+  String get gymRoutineSetTypeWarmup => 'ウォームアップ';
+
+  @override
+  String get gymRoutineSetTypeWorking => 'ワーキング';
+
+  @override
+  String get gymRoutineSetTypeDropset => 'ドロップセット';
+
+  @override
+  String get gymRoutineSetTypeAmrap => 'AMRAP';
+
+  @override
+  String get gymRoutineSetTypeFailure => '限界まで';
+
+  @override
+  String get gymRoutineSetTypeBackoff => 'バックオフ';
+
+  @override
+  String get gymRoutineModality => '計測方法';
+
+  @override
+  String get gymRoutineModalityWeightReps => '重量 × 回数';
+
+  @override
+  String get gymRoutineModalityTime => '時間';
+
+  @override
+  String get gymRoutineModalityDistance => '距離';
+
+  @override
+  String get gymRoutineModalityBodyweightReps => '自重の回数';
+
+  @override
+  String get gymRoutineSupersetToggle => '次の種目とスーパーセット';
+
+  @override
+  String gymRoutineSupersetBadge(int group) {
+    return 'スーパーセット $group';
+  }
+
+  @override
+  String get gymRoutineAdvanced => '詳細';
+
+  @override
+  String get gymRoutineProgression => '漸進';
+
+  @override
+  String get gymRoutineProgressionNone => 'なし';
+
+  @override
+  String get gymRoutineProgressionLinear => 'リニア';
+
+  @override
+  String get gymRoutineProgressionDoubleProgression => 'ダブルプログレッション';
+
+  @override
+  String get gymRoutineProgressionFiveByFive => '5×5';
+
+  @override
+  String get gymRoutineProgressionPercentCycle => '1RMの%サイクル';
+
+  @override
+  String get gymRoutineProgressionRpeAutoreg => 'RPE自動調整';
+
+  @override
+  String gymRoutineProgressionIncrementLabel(String unit) {
+    return '重量ステップ（$unit）';
+  }
+
+  @override
+  String get gymRoutineProgressionPercentLabel => '1RMの%';
+
+  @override
+  String gymRoutineProgressionOneRmLabel(String unit) {
+    return '1RM（$unit）';
+  }
+
+  @override
+  String get gymRoutineProgressionTargetRpeLabel => '目標RPE';
+
+  @override
+  String get gymRoutineNextTarget => '次の目標';
+
+  @override
+  String get gymRoutineNextTargetIncreaseWeight => '次回は重量を上げる';
+
+  @override
+  String get gymRoutineNextTargetIncreaseReps => '次回は回数を増やす';
+
+  @override
+  String get gymRoutineNextTargetHold => '維持 — この目標を繰り返す';
+
+  @override
+  String get gymRoutineNextTargetDeload => 'ディロード — 重量を下げる';
+
+  @override
+  String gymRoutineNextTargetRepClimb(int from, int to) {
+    return '回数アップ $from→$to';
+  }
+
+  @override
   String get nutritionTitle => '栄養';
 
   @override

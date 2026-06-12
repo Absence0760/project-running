@@ -4,6 +4,7 @@ import '../gym_prs.dart' show normaliseExerciseName;
 import '../l10n/gen/app_localizations.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
+import '../routine_editor_build.dart';
 import 'full_screen_form.dart';
 
 /// Open the routine builder as a fullscreen dialog. Pass [seedExercises] /
@@ -11,11 +12,11 @@ import 'full_screen_form.dart';
 /// "Save as routine" promotion). Resolves the created routine's id when saved,
 /// null when the user backed out.
 ///
-/// Flutter twin of web `RoutineEditor.svelte` (+ the `gym_compose_sheet.dart`
-/// idiom): a free-text exercise name with history autocomplete plus inline
-/// planned sets (target reps / weight). Writes through [LocalRoutineStore] so
-/// building a routine works offline. P1 is build / save only — no execution
-/// loop, no supersets, no progression.
+/// Flutter twin of web `RoutineEditor.svelte`: a free-text exercise name with
+/// history autocomplete, a per-exercise modality picker that swaps the target
+/// field, a superset toggle that brackets adjacent exercises into a group, a
+/// progression scheme + params selector, and per-set set-type + rest. Writes
+/// through [LocalRoutineStore] so building a routine works offline.
 Future<String?> showRoutineBuilderSheet({
   required BuildContext context,
   required LocalRoutineStore store,
@@ -51,6 +52,29 @@ class RoutineSeedSet {
   final double? weightKg;
   final String rpe;
 }
+
+const _setTypes = <String>[
+  'warmup',
+  'working',
+  'dropset',
+  'amrap',
+  'failure',
+  'backoff',
+];
+const _modalities = <String>[
+  'weight_reps',
+  'time',
+  'distance',
+  'bodyweight_reps',
+];
+const _schemes = <String>[
+  'none',
+  'linear',
+  'double_progression',
+  'five_by_five',
+  'percent_cycle',
+  'rpe_autoreg',
+];
 
 class RoutineBuilderSheet extends StatefulWidget {
   final LocalRoutineStore store;
@@ -135,23 +159,62 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
     });
   }
 
+  Map<String, dynamic> _progressionParams(_EditExercise ex) {
+    final params = <String, dynamic>{};
+    final inc = WeightFormat.parseToKg(ex.increment.text, activeWeightUnit);
+    if (inc != null) params['incrementKg'] = inc;
+    if (ex.progression == 'percent_cycle') {
+      final pct = double.tryParse(ex.percent.text.trim().replaceAll(',', '.'));
+      final oneRm = WeightFormat.parseToKg(ex.oneRm.text, activeWeightUnit);
+      if (pct != null) params['percent'] = pct / 100;
+      if (oneRm != null) params['oneRmKg'] = oneRm;
+    }
+    if (ex.progression == 'rpe_autoreg') {
+      final rpe = double.tryParse(ex.targetRpe.text.trim().replaceAll(',', '.'));
+      if (rpe != null) params['targetRpe'] = rpe;
+    }
+    return params;
+  }
+
   List<StoredRoutineExercise> _buildExercises() {
+    // Drop blank-named exercises first so superset linking only sees real rows
+    // (a blank row between two flagged blocks must not bridge them).
+    final named = _exercises.where((e) => e.name.text.trim().isNotEmpty).toList();
+    if (named.isEmpty) return const [];
+    final groups = assignSupersetGroups([for (final e in named) e.supersetWithNext]);
+
     final out = <StoredRoutineExercise>[];
-    for (final ex in _exercises) {
+    for (var i = 0; i < named.length; i++) {
+      final ex = named[i];
       final name = ex.name.text.trim();
-      if (name.isEmpty) continue;
+      final isRepModality =
+          ex.modality == 'weight_reps' || ex.modality == 'bodyweight_reps';
       out.add(StoredRoutineExercise(
         exerciseName: name,
         exerciseKey: normaliseExerciseName(name),
+        supersetGroup: groups[i].supersetGroup,
+        supersetOrder: groups[i].supersetOrder,
+        modality: ex.modality,
+        progression: ex.progression,
+        progressionParams: _progressionParams(ex),
         sets: [
           for (final s in ex.sets)
             StoredRoutineSet(
-              targetRepsMin: int.tryParse(s.reps.text.trim()),
-              targetRepsMax: null,
+              setType: s.setType,
+              targetRepsMin: isRepModality ? int.tryParse(s.reps.text.trim()) : null,
+              targetRepsMax:
+                  isRepModality ? int.tryParse(s.repsMax.text.trim()) : null,
               // Entry is in the display unit; store canonical kg.
-              targetWeightKg:
-                  WeightFormat.parseToKg(s.weight.text, activeWeightUnit),
+              targetWeightKg: ex.modality == 'weight_reps'
+                  ? WeightFormat.parseToKg(s.weight.text, activeWeightUnit)
+                  : null,
               targetRpe: null,
+              restS: int.tryParse(s.rest.text.trim()),
+              targetDurationS:
+                  ex.modality == 'time' ? int.tryParse(s.duration.text.trim()) : null,
+              targetDistanceM: ex.modality == 'distance'
+                  ? double.tryParse(s.distance.text.trim().replaceAll(',', '.'))
+                  : null,
             ),
         ],
       ));
@@ -265,8 +328,60 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
     );
   }
 
+  String _setTypeLabel(String s, AppLocalizations l10n) {
+    switch (s) {
+      case 'warmup':
+        return l10n.gymRoutineSetTypeWarmup;
+      case 'working':
+        return l10n.gymRoutineSetTypeWorking;
+      case 'dropset':
+        return l10n.gymRoutineSetTypeDropset;
+      case 'amrap':
+        return l10n.gymRoutineSetTypeAmrap;
+      case 'failure':
+        return l10n.gymRoutineSetTypeFailure;
+      case 'backoff':
+        return l10n.gymRoutineSetTypeBackoff;
+    }
+    return s;
+  }
+
+  String _modalityLabel(String m, AppLocalizations l10n) {
+    switch (m) {
+      case 'weight_reps':
+        return l10n.gymRoutineModalityWeightReps;
+      case 'time':
+        return l10n.gymRoutineModalityTime;
+      case 'distance':
+        return l10n.gymRoutineModalityDistance;
+      case 'bodyweight_reps':
+        return l10n.gymRoutineModalityBodyweightReps;
+    }
+    return m;
+  }
+
+  String _schemeLabel(String s, AppLocalizations l10n) {
+    switch (s) {
+      case 'none':
+        return l10n.gymRoutineProgressionNone;
+      case 'linear':
+        return l10n.gymRoutineProgressionLinear;
+      case 'double_progression':
+        return l10n.gymRoutineProgressionDoubleProgression;
+      case 'five_by_five':
+        return l10n.gymRoutineProgressionFiveByFive;
+      case 'percent_cycle':
+        return l10n.gymRoutineProgressionPercentCycle;
+      case 'rpe_autoreg':
+        return l10n.gymRoutineProgressionRpeAutoreg;
+    }
+    return s;
+  }
+
   Widget _exerciseCard(
       _EditExercise ex, int i, ThemeData theme, AppLocalizations l10n) {
+    final isRep =
+        ex.modality == 'weight_reps' || ex.modality == 'bodyweight_reps';
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -285,69 +400,30 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const SizedBox(width: 44),
-                Expanded(
-                  child: Text(
-                    l10n.gymRoutineTargetReps,
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.outline),
-                  ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: DropdownButtonFormField<String>(
+                initialValue: ex.modality,
+                isDense: true,
+                decoration: InputDecoration(
+                  isDense: true,
+                  labelText: l10n.gymRoutineModality,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: const OutlineInputBorder(),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.gymRoutineTargetWeight(
-                        WeightFormat.label(activeWeightUnit)),
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.outline),
-                  ),
-                ),
-                const SizedBox(width: 40),
-              ],
-            ),
-            const SizedBox(height: 4),
-            for (var si = 0; si < ex.sets.length; si++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 44,
-                      child: Text(
-                        l10n.gymSetN(si + 1),
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline),
-                      ),
-                    ),
-                    Expanded(
-                      child: _setNumberField(
-                        ex.sets[si].reps,
-                        l10n.gymRoutineTargetReps,
-                        const TextInputType.numberWithOptions(decimal: false),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _setNumberField(
-                        ex.sets[si].weight,
-                        WeightFormat.label(activeWeightUnit),
-                        const TextInputType.numberWithOptions(decimal: true),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: l10n.gymEditorRemoveSet,
-                      icon: const Icon(Icons.close, size: 18),
-                      color: theme.colorScheme.outline,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => _removeSet(ex, si),
-                    ),
-                  ],
-                ),
+                items: [
+                  for (final m in _modalities)
+                    DropdownMenuItem(value: m, child: Text(_modalityLabel(m, l10n))),
+                ],
+                onChanged: (v) =>
+                    setState(() => ex.modality = v ?? ex.modality),
               ),
+            ),
+            const SizedBox(height: 8),
+            for (var si = 0; si < ex.sets.length; si++)
+              _setRow(ex, ex.sets[si], si, isRep, theme, l10n),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
@@ -355,9 +431,140 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
                 child: Text(l10n.gymEditorAddSet),
               ),
             ),
+            if (i != _exercises.length - 1)
+              SwitchListTile(
+                value: ex.supersetWithNext,
+                onChanged: (v) => setState(() => ex.supersetWithNext = v),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(l10n.gymRoutineSupersetToggle,
+                    style: theme.textTheme.bodySmall),
+              ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text(l10n.gymRoutineAdvanced, style: theme.textTheme.bodySmall),
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              children: [_advancedBody(ex, theme, l10n)],
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _setRow(_EditExercise ex, _EditSet s, int si, bool isRep,
+      ThemeData theme, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 96,
+            child: DropdownButtonFormField<String>(
+              initialValue: s.setType,
+              isDense: true,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final t in _setTypes)
+                  DropdownMenuItem(
+                    value: t,
+                    child: Text(_setTypeLabel(t, l10n),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (v) => setState(() => s.setType = v ?? s.setType),
+            ),
+          ),
+          const SizedBox(width: 6),
+          if (isRep) ...[
+            Expanded(
+              child: _numField(s.reps, l10n.gymRoutineTargetReps, false),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _numField(s.repsMax, l10n.gymRoutineTargetRepsMax, false),
+            ),
+          ] else if (ex.modality == 'time')
+            Expanded(
+              child: _numField(s.duration, l10n.gymRoutineTargetDuration, false),
+            )
+          else
+            Expanded(
+              child: _numField(s.distance, l10n.gymRoutineTargetDistance, true),
+            ),
+          if (ex.modality == 'weight_reps') ...[
+            const SizedBox(width: 4),
+            Expanded(
+              child: _numField(
+                  s.weight, WeightFormat.label(activeWeightUnit), true),
+            ),
+          ],
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 60,
+            child: _numField(s.rest, l10n.gymRoutineRestLabel, false),
+          ),
+          IconButton(
+            tooltip: l10n.gymEditorRemoveSet,
+            icon: const Icon(Icons.close, size: 18),
+            color: theme.colorScheme.outline,
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _removeSet(ex, si),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _advancedBody(
+      _EditExercise ex, ThemeData theme, AppLocalizations l10n) {
+    final unit = WeightFormat.label(activeWeightUnit);
+    final scheme = ex.progression;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: scheme,
+          isDense: true,
+          decoration: InputDecoration(
+            isDense: true,
+            labelText: l10n.gymRoutineProgression,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            for (final s in _schemes)
+              DropdownMenuItem(value: s, child: Text(_schemeLabel(s, l10n))),
+          ],
+          onChanged: (v) => setState(() => ex.progression = v ?? ex.progression),
+        ),
+        if (scheme == 'linear' ||
+            scheme == 'double_progression' ||
+            scheme == 'five_by_five' ||
+            scheme == 'rpe_autoreg') ...[
+          const SizedBox(height: 8),
+          _numField(
+              ex.increment, l10n.gymRoutineProgressionIncrementLabel(unit), true),
+        ],
+        if (scheme == 'percent_cycle') ...[
+          const SizedBox(height: 8),
+          _numField(ex.percent, l10n.gymRoutineProgressionPercentLabel, true),
+          const SizedBox(height: 8),
+          _numField(ex.oneRm, l10n.gymRoutineProgressionOneRmLabel(unit), true),
+        ],
+        if (scheme == 'rpe_autoreg') ...[
+          const SizedBox(height: 8),
+          _numField(
+              ex.targetRpe, l10n.gymRoutineProgressionTargetRpeLabel, true),
+        ],
+      ],
     );
   }
 
@@ -419,16 +626,16 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
     );
   }
 
-  Widget _setNumberField(
-      TextEditingController controller, String hint, TextInputType keyboard) {
+  Widget _numField(
+      TextEditingController controller, String hint, bool decimal) {
     return TextField(
       controller: controller,
-      keyboardType: keyboard,
+      keyboardType: TextInputType.numberWithOptions(decimal: decimal),
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         isDense: true,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         border: const OutlineInputBorder(),
         hintText: hint,
       ),
@@ -448,14 +655,28 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
 }
 
 class _EditSet {
+  String setType;
   final TextEditingController reps;
+  final TextEditingController repsMax;
   final TextEditingController weight;
+  final TextEditingController rest;
+  final TextEditingController duration;
+  final TextEditingController distance;
   _EditSet({String reps = '', String weight = ''})
-      : reps = TextEditingController(text: reps),
-        weight = TextEditingController(text: weight);
+      : setType = 'working',
+        reps = TextEditingController(text: reps),
+        repsMax = TextEditingController(),
+        weight = TextEditingController(text: weight),
+        rest = TextEditingController(),
+        duration = TextEditingController(),
+        distance = TextEditingController();
   void dispose() {
     reps.dispose();
+    repsMax.dispose();
     weight.dispose();
+    rest.dispose();
+    duration.dispose();
+    distance.dispose();
   }
 }
 
@@ -463,13 +684,31 @@ class _EditExercise {
   final TextEditingController name;
   final FocusNode nameFocus;
   final List<_EditSet> sets;
+  String modality;
+  String progression;
+  bool supersetWithNext;
+  final TextEditingController increment;
+  final TextEditingController percent;
+  final TextEditingController oneRm;
+  final TextEditingController targetRpe;
   _EditExercise({String name = '', List<_EditSet>? sets})
       : name = TextEditingController(text: name),
         nameFocus = FocusNode(),
-        sets = sets ?? [_EditSet()];
+        sets = sets ?? [_EditSet()],
+        modality = 'weight_reps',
+        progression = 'none',
+        supersetWithNext = false,
+        increment = TextEditingController(),
+        percent = TextEditingController(),
+        oneRm = TextEditingController(),
+        targetRpe = TextEditingController();
   void dispose() {
     name.dispose();
     nameFocus.dispose();
+    increment.dispose();
+    percent.dispose();
+    oneRm.dispose();
+    targetRpe.dispose();
     for (final s in sets) {
       s.dispose();
     }
