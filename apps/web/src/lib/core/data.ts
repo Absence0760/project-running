@@ -48,6 +48,10 @@ import type {
 	SessionPlanWithItems,
 	SessionItemKind
 } from '../types';
+// Re-export the session-plan domain shapes so consumers can import them from the
+// data-layer facade alongside fetchSessionPlan* (which returns SessionPlanWithItems)
+// and the SessionPlan*Input types defined below.
+export type { SessionPlan, SessionPlanBlock, SessionPlanItem, SessionPlanWithItems } from '../types';
 import { nextInstanceAfter } from '../social/recurrence';
 import {
 	parseGymTemplate,

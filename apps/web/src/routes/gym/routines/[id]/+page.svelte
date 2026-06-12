@@ -108,6 +108,7 @@
 				reps: s.reps ?? null,
 				weight_kg: s.weight_kg ?? null,
 				rpe: s.rpe ?? null,
+				duration_s: null,
 			})),
 		};
 		showStart = true;
