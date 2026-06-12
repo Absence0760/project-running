@@ -4276,6 +4276,154 @@ class ApiClient {
     await _client.from(GymWorkoutRow.table).delete().eq(GymWorkoutRow.colId, id);
   }
 
+  // ─────────────────── Gym routines (gym_programming.md P1) ───────────────────
+  //
+  // A reusable plan: gym_routines parent + gym_routine_exercises + their
+  // gym_routine_sets (migration 20261231_001, author-only RLS). Mirrors web
+  // core/data.ts (createGymRoutine / fetchGymRoutines / fetchGymRoutineDetail /
+  // deleteGymRoutine). last_modified_at + exercise_count are client-stamped
+  // (newer-wins sync, non-authoritative count — no server trigger). The plan is
+  // NOT a dated activity, so it never feeds the activities view. P1 leaves the
+  // superset / progression / periodisation columns at their defaults.
+
+  /// Authored routines for the signed-in user, most-recently-modified first.
+  /// Author-only RLS scopes the read; the explicit `author_id` filter is
+  /// defence-in-depth, matching the other personal-data reads.
+  Future<List<GymRoutineRow>> fetchGymRoutines({int limit = 100}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final data = await _client
+        .from(GymRoutineRow.table)
+        .select()
+        .eq(GymRoutineRow.colAuthorId, uid)
+        .order(GymRoutineRow.colLastModifiedAt, ascending: false)
+        .limit(limit);
+    return (data as List)
+        .map((r) => GymRoutineRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// A single routine with its exercises (by position) + their planned sets
+  /// (by set_index). Two round-trips (exercises, then every set whose
+  /// `routine_exercise_id` is in that list) grouped client-side — the shape
+  /// [LocalRoutineStore] consumes. Null when the id doesn't resolve (RLS hides
+  /// others').
+  Future<({
+    GymRoutineRow routine,
+    List<({GymRoutineExerciseRow exercise, List<GymRoutineSetRow> sets})> exercises,
+  })?> fetchGymRoutineDetail(String id) async {
+    final r = await _client
+        .from(GymRoutineRow.table)
+        .select()
+        .eq(GymRoutineRow.colId, id)
+        .maybeSingle();
+    if (r == null) return null;
+    final routine = GymRoutineRow.fromJson(r);
+    final exRows = await _client
+        .from(GymRoutineExerciseRow.table)
+        .select()
+        .eq(GymRoutineExerciseRow.colRoutineId, id)
+        .order(GymRoutineExerciseRow.colPosition, ascending: true);
+    final exercises = (exRows as List)
+        .map((e) => GymRoutineExerciseRow.fromJson(e as Map<String, dynamic>))
+        .toList();
+    if (exercises.isEmpty) {
+      return (
+        routine: routine,
+        exercises:
+            <({GymRoutineExerciseRow exercise, List<GymRoutineSetRow> sets})>[],
+      );
+    }
+    final setRows = await _client
+        .from(GymRoutineSetRow.table)
+        .select()
+        .inFilter(GymRoutineSetRow.colRoutineExerciseId,
+            [for (final e in exercises) e.id])
+        .order(GymRoutineSetRow.colSetIndex, ascending: true);
+    final byExercise = <String, List<GymRoutineSetRow>>{};
+    for (final raw in (setRows as List).cast<Map<String, dynamic>>()) {
+      final s = GymRoutineSetRow.fromJson(raw);
+      (byExercise[s.routineExerciseId] ??= []).add(s);
+    }
+    return (
+      routine: routine,
+      exercises: [
+        for (final e in exercises)
+          (exercise: e, sets: byExercise[e.id] ?? const []),
+      ],
+    );
+  }
+
+  /// Insert a routine + its exercises + their planned sets. Blank-named
+  /// exercises are dropped. `exercise_count` is stamped client-side from the
+  /// surviving exercise list (non-authoritative cache). The caller may mint
+  /// [id] (offline-create path) — `gym_routines.id` defaults to
+  /// gen_random_uuid() but accepts a client value, so the local id IS the
+  /// server id (no reconciliation), matching the gym/gear pattern. Child rows
+  /// (exercises, sets) always get fresh server ids on insert.
+  Future<GymRoutineRow> createGymRoutine({
+    String? id,
+    required String title,
+    String? notes,
+    DateTime? lastModifiedAt,
+    List<GymRoutineExerciseInput> exercises = const [],
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    final kept = exercises
+        .where((e) => e.exerciseName.trim().isNotEmpty)
+        .toList(growable: false);
+    final row = await _client
+        .from(GymRoutineRow.table)
+        .insert({
+          if (id != null) GymRoutineRow.colId: id,
+          GymRoutineRow.colAuthorId: uid,
+          GymRoutineRow.colTitle: title.trim(),
+          GymRoutineRow.colNotes: notes,
+          GymRoutineRow.colExerciseCount: kept.length,
+          if (lastModifiedAt != null)
+            GymRoutineRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
+        })
+        .select()
+        .single();
+    final routine = GymRoutineRow.fromJson(row);
+    for (var p = 0; p < kept.length; p++) {
+      final ex = kept[p];
+      final exRow = await _client
+          .from(GymRoutineExerciseRow.table)
+          .insert({
+            GymRoutineExerciseRow.colRoutineId: routine.id,
+            GymRoutineExerciseRow.colExerciseName: ex.exerciseName.trim(),
+            GymRoutineExerciseRow.colExerciseKey: ex.exerciseKey,
+            GymRoutineExerciseRow.colPosition: p,
+          })
+          .select(GymRoutineExerciseRow.colId)
+          .single();
+      final exId = exRow[GymRoutineExerciseRow.colId] as String;
+      if (ex.sets.isNotEmpty) {
+        await _client.from(GymRoutineSetRow.table).insert([
+          for (var i = 0; i < ex.sets.length; i++)
+            {
+              GymRoutineSetRow.colRoutineExerciseId: exId,
+              GymRoutineSetRow.colSetIndex: i,
+              GymRoutineSetRow.colTargetRepsMin: ex.sets[i].targetRepsMin,
+              GymRoutineSetRow.colTargetRepsMax: ex.sets[i].targetRepsMax,
+              GymRoutineSetRow.colTargetWeightKg: ex.sets[i].targetWeightKg,
+              GymRoutineSetRow.colTargetRpe: ex.sets[i].targetRpe,
+            },
+        ]);
+      }
+    }
+    return routine;
+  }
+
+  /// Delete a routine; exercises + sets cascade via FK (migration
+  /// 20261231_001). Logged gym_workouts are untouched (the plan→log link is a
+  /// metadata string, not an FK).
+  Future<void> deleteGymRoutine(String id) async {
+    await _client.from(GymRoutineRow.table).delete().eq(GymRoutineRow.colId, id);
+  }
+
   // ─────────────────── Nutrition / food log (Phase 4) ───────────────────
 
   /// Food entries in the half-open day range [from, to), newest first.
@@ -4478,6 +4626,26 @@ typedef GymSetInput = ({
   int? reps,
   double? weightKg,
   double? rpe,
+});
+
+/// One planned set in a [ApiClient.createGymRoutine] call (targets only).
+/// `set_index` is assigned positionally on insert. A single rep target lives
+/// in [targetRepsMin] with [targetRepsMax] null.
+typedef GymRoutineSetInput = ({
+  int? targetRepsMin,
+  int? targetRepsMax,
+  double? targetWeightKg,
+  double? targetRpe,
+});
+
+/// One planned exercise in a [ApiClient.createGymRoutine] call. [exerciseKey]
+/// is `normaliseExerciseName(exerciseName)` stamped at write time (the frozen
+/// identity that binds the plan to logged sets). `position` is assigned
+/// positionally on insert.
+typedef GymRoutineExerciseInput = ({
+  String exerciseName,
+  String exerciseKey,
+  List<GymRoutineSetInput> sets,
 });
 
 /// One row of the `activities` UNION view (runs + gym_workouts + food_log),
