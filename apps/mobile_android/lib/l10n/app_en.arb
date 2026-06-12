@@ -4810,6 +4810,18 @@
     "description": "Plan-detail adherence/replan/duplicate"
   },
   "planDetailReplan": "Re-plan remaining weeks",
+  "planDetailAdaptiveReplan": "Adaptive re-plan",
+  "planDetailAdaptiveOnTrack": "Your recent weeks are on track — no adjustment needed.",
+  "planDetailAdaptiveNoSafeChange": "You've drifted from plan recently, but there's no safe adjustment to make right now.",
+  "planDetailAdaptiveReasonUnder": "under your plan for multiple weeks",
+  "planDetailAdaptiveReasonOver": "over your plan for multiple weeks",
+  "planDetailAdaptiveConfidenceHigh": "high confidence",
+  "planDetailAdaptiveConfidenceMedium": "medium confidence",
+  "planDetailAdaptiveBadge": "Based on a trend — you've been {reason} ({confidence})",
+  "@planDetailAdaptiveBadge": {
+    "description": "Plan-detail adaptive re-plan trend badge",
+    "placeholders": { "reason": { "type": "String" }, "confidence": { "type": "String" } }
+  },
   "@planDetailReplan": {
     "description": "Plan-detail adherence/replan/duplicate"
   },

@@ -3885,6 +3885,36 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planDetailReplan => 'Replanejar as semanas restantes';
 
   @override
+  String get planDetailAdaptiveReplan => 'Replanejamento adaptativo';
+
+  @override
+  String get planDetailAdaptiveOnTrack =>
+      'Suas últimas semanas estão dentro do plano — nenhum ajuste necessário.';
+
+  @override
+  String get planDetailAdaptiveNoSafeChange =>
+      'Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.';
+
+  @override
+  String get planDetailAdaptiveReasonUnder =>
+      'abaixo do seu plano por várias semanas';
+
+  @override
+  String get planDetailAdaptiveReasonOver =>
+      'acima do seu plano por várias semanas';
+
+  @override
+  String get planDetailAdaptiveConfidenceHigh => 'confiança alta';
+
+  @override
+  String get planDetailAdaptiveConfidenceMedium => 'confiança média';
+
+  @override
+  String planDetailAdaptiveBadge(String reason, String confidence) {
+    return 'Com base em uma tendência — você esteve $reason ($confidence)';
+  }
+
+  @override
   String get planDetailReplanOnTrack =>
       'Seu plano está em dia — nada a ajustar.';
 
@@ -11800,6 +11830,36 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planDetailReplan => 'Replanejar as semanas restantes';
+
+  @override
+  String get planDetailAdaptiveReplan => 'Replanejamento adaptativo';
+
+  @override
+  String get planDetailAdaptiveOnTrack =>
+      'Suas últimas semanas estão dentro do plano — nenhum ajuste necessário.';
+
+  @override
+  String get planDetailAdaptiveNoSafeChange =>
+      'Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.';
+
+  @override
+  String get planDetailAdaptiveReasonUnder =>
+      'abaixo do seu plano por várias semanas';
+
+  @override
+  String get planDetailAdaptiveReasonOver =>
+      'acima do seu plano por várias semanas';
+
+  @override
+  String get planDetailAdaptiveConfidenceHigh => 'confiança alta';
+
+  @override
+  String get planDetailAdaptiveConfidenceMedium => 'confiança média';
+
+  @override
+  String planDetailAdaptiveBadge(String reason, String confidence) {
+    return 'Com base em uma tendência — você esteve $reason ($confidence)';
+  }
 
   @override
   String get planDetailReplanOnTrack =>

@@ -3854,6 +3854,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planDetailReplan => 'Re-plan remaining weeks';
 
   @override
+  String get planDetailAdaptiveReplan => 'Adaptive re-plan';
+
+  @override
+  String get planDetailAdaptiveOnTrack =>
+      'Your recent weeks are on track — no adjustment needed.';
+
+  @override
+  String get planDetailAdaptiveNoSafeChange =>
+      'You\'ve drifted from plan recently, but there\'s no safe adjustment to make right now.';
+
+  @override
+  String get planDetailAdaptiveReasonUnder =>
+      'under your plan for multiple weeks';
+
+  @override
+  String get planDetailAdaptiveReasonOver =>
+      'over your plan for multiple weeks';
+
+  @override
+  String get planDetailAdaptiveConfidenceHigh => 'high confidence';
+
+  @override
+  String get planDetailAdaptiveConfidenceMedium => 'medium confidence';
+
+  @override
+  String planDetailAdaptiveBadge(String reason, String confidence) {
+    return 'Based on a trend — you\'ve been $reason ($confidence)';
+  }
+
+  @override
   String get planDetailReplanOnTrack =>
       'Your plan\'s on track — nothing to adjust.';
 

@@ -12,6 +12,7 @@ import '../l10n/number_format.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../plan_adherence.dart';
 import '../plan_replan.dart';
+import '../plan_adaptive_replan.dart';
 import '../social_service.dart' show ClubView, RecentRunRow, SocialService;
 import '../training.dart';
 import '../training_labels.dart';
@@ -75,6 +76,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   bool _bulkBusy = false;
   List<RecentRunRow> _recentRuns = const [];
   List<ReplanChange>? _replanPreview;
+  // Set only when the current preview came from the adaptive (trend-based)
+  // path, so its header can explain the multi-week reason + confidence.
+  ({AdaptiveReason reason, AdaptiveConfidence confidence})? _adaptiveInfo;
 
   // Lazily construct a SocialService against the global Supabase client
   // when none was injected. Tests pass a fake via the constructor.
@@ -248,7 +252,50 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       showTopBanner(context, l10n.planDetailReplanOnTrack);
       return;
     }
-    setState(() => _replanPreview = res.changes);
+    setState(() {
+      _adaptiveInfo = null;
+      _replanPreview = res.changes;
+    });
+  }
+
+  /// Adaptive (trend-based) re-plan: only proposes when the last few completed
+  /// weeks show a sustained drift, suppressing single-week noise.
+  void _proposeAdaptiveReplan(TrainingPlanRow plan) {
+    if (!_isOwner(plan) || _bulkBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final res = adaptiveReplanRemaining(
+        weeks: _buildReplanInput(plan), today: toIsoDate(DateTime.now()));
+    if (res.reason == AdaptiveReason.onTrack) {
+      setState(() {
+        _replanPreview = null;
+        _adaptiveInfo = null;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveOnTrack);
+      return;
+    }
+    if (res.changes.isEmpty) {
+      setState(() {
+        _replanPreview = null;
+        _adaptiveInfo = null;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveNoSafeChange);
+      return;
+    }
+    setState(() {
+      _adaptiveInfo = (reason: res.reason, confidence: res.confidence);
+      _replanPreview = res.changes;
+    });
+  }
+
+  String _adaptiveBadgeText(AppLocalizations l10n) {
+    final info = _adaptiveInfo!;
+    final reason = info.reason == AdaptiveReason.trendUnderfitness
+        ? l10n.planDetailAdaptiveReasonUnder
+        : l10n.planDetailAdaptiveReasonOver;
+    final confidence = info.confidence == AdaptiveConfidence.high
+        ? l10n.planDetailAdaptiveConfidenceHigh
+        : l10n.planDetailAdaptiveConfidenceMedium;
+    return l10n.planDetailAdaptiveBadge(reason, confidence);
   }
 
   Future<void> _applyReplan() async {
@@ -265,6 +312,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       if (!mounted) return;
       setState(() {
         _replanPreview = null;
+        _adaptiveInfo = null;
         _bulkBusy = false;
       });
       showTopBanner(context, l10n.planDetailReplanApplied(changes.length));
@@ -508,10 +556,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       const SizedBox(height: 12),
       Align(
         alignment: Alignment.centerLeft,
-        child: OutlinedButton.icon(
-          onPressed: _bulkBusy ? null : () => _proposeReplan(p),
-          icon: const Icon(Icons.auto_fix_high, size: 18),
-          label: Text(l10n.planDetailReplan),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _bulkBusy ? null : () => _proposeReplan(p),
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              label: Text(l10n.planDetailReplan),
+            ),
+            OutlinedButton.icon(
+              onPressed: _bulkBusy ? null : () => _proposeAdaptiveReplan(p),
+              icon: const Icon(Icons.trending_up, size: 18),
+              label: Text(l10n.planDetailAdaptiveReplan),
+            ),
+          ],
         ),
       ),
       if (preview != null) ...[
@@ -529,6 +588,14 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               Text(l10n.planDetailReplanPreviewTitle,
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700)),
+              if (_adaptiveInfo != null) ...[
+                const SizedBox(height: 4),
+                Text(_adaptiveBadgeText(l10n),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
               const SizedBox(height: 8),
               for (final c in preview)
                 Padding(
@@ -563,7 +630,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   TextButton(
                     onPressed: _bulkBusy
                         ? null
-                        : () => setState(() => _replanPreview = null),
+                        : () => setState(() {
+                              _replanPreview = null;
+                              _adaptiveInfo = null;
+                            }),
                     child: Text(l10n.planDetailReplanCancel),
                   ),
                   const SizedBox(width: 8),

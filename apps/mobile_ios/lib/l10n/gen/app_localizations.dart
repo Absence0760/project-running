@@ -6455,6 +6455,54 @@ abstract class AppLocalizations {
   /// **'Re-plan remaining weeks'**
   String get planDetailReplan;
 
+  /// No description provided for @planDetailAdaptiveReplan.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive re-plan'**
+  String get planDetailAdaptiveReplan;
+
+  /// No description provided for @planDetailAdaptiveOnTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Your recent weeks are on track — no adjustment needed.'**
+  String get planDetailAdaptiveOnTrack;
+
+  /// No description provided for @planDetailAdaptiveNoSafeChange.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve drifted from plan recently, but there\'s no safe adjustment to make right now.'**
+  String get planDetailAdaptiveNoSafeChange;
+
+  /// No description provided for @planDetailAdaptiveReasonUnder.
+  ///
+  /// In en, this message translates to:
+  /// **'under your plan for multiple weeks'**
+  String get planDetailAdaptiveReasonUnder;
+
+  /// No description provided for @planDetailAdaptiveReasonOver.
+  ///
+  /// In en, this message translates to:
+  /// **'over your plan for multiple weeks'**
+  String get planDetailAdaptiveReasonOver;
+
+  /// No description provided for @planDetailAdaptiveConfidenceHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'high confidence'**
+  String get planDetailAdaptiveConfidenceHigh;
+
+  /// No description provided for @planDetailAdaptiveConfidenceMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'medium confidence'**
+  String get planDetailAdaptiveConfidenceMedium;
+
+  /// Plan-detail adaptive re-plan trend badge
+  ///
+  /// In en, this message translates to:
+  /// **'Based on a trend — you\'ve been {reason} ({confidence})'**
+  String planDetailAdaptiveBadge(String reason, String confidence);
+
   /// Plan-detail adherence/replan/duplicate
   ///
   /// In en, this message translates to:
