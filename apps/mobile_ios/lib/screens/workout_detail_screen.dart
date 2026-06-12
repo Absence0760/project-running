@@ -4,11 +4,15 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/date_format.dart';
+import '../l10n/locale_support.dart';
+import '../relink_candidates.dart';
 import '../training.dart';
 import '../training_labels.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/top_banner.dart';
 
 class WorkoutDetailScreen extends StatefulWidget {
   final TrainingService training;
@@ -66,6 +70,25 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           _error = _WorkoutLoadError.generic;
         });
       }
+    }
+  }
+
+  Future<void> _openRelinkPicker(PlanWorkoutRow workout) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _RelinkPickerDialog(
+        training: widget.training,
+        workout: workout,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    try {
+      await widget.training.markCompleted(widget.workoutId, picked);
+      await _load();
+    } catch (e, s) {
+      debugPrint('WorkoutDetailScreen._openRelinkPicker re-link failed: $e\n$s');
+      if (mounted) showTopBanner(context, l10n.workoutRelinkError);
     }
   }
 
@@ -157,6 +180,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                         fontWeight: FontWeight.w700,
                       )),
                   const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: () => _openRelinkPicker(w),
+                    child: Text(l10n.workoutRelink),
+                  ),
                   TextButton(
                     onPressed: () async {
                       await widget.training
@@ -335,3 +362,116 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 }
 
 enum _WorkoutLoadError { timeout, generic }
+
+class _RelinkPickerDialog extends StatefulWidget {
+  final TrainingService training;
+  final PlanWorkoutRow workout;
+  const _RelinkPickerDialog({required this.training, required this.workout});
+
+  @override
+  State<_RelinkPickerDialog> createState() => _RelinkPickerDialogState();
+}
+
+class _RelinkPickerDialogState extends State<_RelinkPickerDialog> {
+  bool _loading = true;
+  bool _error = false;
+  List<RelinkCandidateRun> _candidates = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final c = await widget.training
+          .fetchRelinkCandidates(widget.workout)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _candidates = c;
+        _loading = false;
+      });
+    } catch (e, s) {
+      debugPrint('_RelinkPickerDialog._fetch failed: $e\n$s');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final tag = localeToTag(Localizations.localeOf(context));
+    final currentId = widget.workout.completedRunId;
+
+    Widget body;
+    if (_loading) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (_error) {
+      body = Text(l10n.workoutRelinkError);
+    } else if (_candidates.isEmpty) {
+      body = Text(l10n.workoutRelinkEmpty);
+    } else {
+      body = ListView.builder(
+        shrinkWrap: true,
+        itemCount: _candidates.length,
+        itemBuilder: (ctx, i) {
+          final run = _candidates[i];
+          final isCurrent = run.id == currentId;
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(formatDateShort(run.startedAt, tag)),
+            subtitle: Text(
+              '${fmtKm(run.distanceM, 2)} · ${fmtHms(run.durationS)}',
+            ),
+            trailing: isCurrent
+                ? Text(
+                    l10n.workoutRelinkCurrent,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  )
+                : null,
+            onTap: () => Navigator.of(context).pop(run.id),
+          );
+        },
+      );
+    }
+
+    return AlertDialog(
+      title: Text(l10n.workoutRelinkTitle),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.workoutRelinkHint,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Flexible(child: body),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+        ),
+      ],
+    );
+  }
+}

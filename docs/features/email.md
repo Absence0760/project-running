@@ -93,12 +93,7 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
 
 ## Planned / not built
 
-- [ ] **Weekly digest + lifecycle drip** (engagement) — mileage/PB/kudos digest
-  (weekly pg_cron → per-opted-in-user `lifecycle_email`), re-engagement,
-  onboarding drip, streak/goal nudges. **Prerequisites** (bulk/marketing mail,
-  unlike the transactional ones): a per-category **preference center** (separate
-  keys, not folded into `email_notifications`), **RFC 8058 one-click
-  unsubscribe**, and **bounce/complaint suppression**.
+- [~] **Weekly digest + lifecycle drip** (engagement) — **FOUNDATION BUILT, SEND GATED (2026-06-12, migration `20270108_001`).** In place: the `weekly_digest` jobs.kind, the `email_suppressions` hard-block table (fail-closed RLS, worker-only), the **opt-IN** `email_weekly_digest` pref (default `off`, separate key — never folded into `email_notifications`), and a **stateless keyed-HMAC RFC 8058 unsubscribe token** (non-guessable, no PII, no token table). **NOT built / NOT enabled:** the per-recipient digest builder + its weekly `pg_cron` schedule (no marketing send is scheduled), the `weekly_digest` worker handler render, the unauth unsubscribe endpoint, the per-category preference-center UI. Enabling an actual marketing send is **gated on CISO + counsel sign-off** (bulk/promotional mail under CAN-SPAM + GDPR/ePrivacy, unlike the transactional kinds). Build-behind-the-gate is intentional; flipping it on is a deliberate later step.
 - [ ] **Account-deletion receipt** — feasible but needs a different mechanism:
   the worker can't look up the address post-deletion, `delete-account` drains
   the user's pending jobs, and the send-once log cascades away with the user.

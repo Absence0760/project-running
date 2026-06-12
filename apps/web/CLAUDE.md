@@ -24,7 +24,7 @@ Deployed to AWS — S3 (static SvelteKit build) + CloudFront + Route 53 for ever
 src/
   lib/
     components/     # Modal + SplitPane (primitives), Avatar (shared img-or-initial avatar; per-site size/font/bg props), RunMap, ElevationProfile (Android-style interactive chart), ImportRoute, RouteBuilder, CoachChat,
-                    # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer,
+                    # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, CurrentWeekStrip (focused current-week 7-day planned-vs-completed ribbon on /plans/[id], above the month calendar; window anchored to start_date + currentWeek.week_index*7 so its done/active count matches the week card, re-ordered for display by the week_start pref), RouteExplorer,
                     # CalendarHeatmap, PersonalHeatmap (geographic heatmap of the user's own tracks on /runs/heatmap — distinct from RouteHeatmap's public community map), LicenseList, ClubEditor, EventEditor, PlanEditor (editable preview), PlanMetaEditor, RunEditor
                     # (modal-hosted creation forms), GymEditor (Phase 4 gym composer — modal-hosted, free-text exercise + inline sets, used by /gym + /gym/[id]), FoodLogEditor (Phase 4 nutrition composer — modal-hosted on /nutrition + page-hosted on /nutrition/log; OFF search → inline confirm-portion step + manual-macro fallback), PrivacyZonePicker (MapLibre map picker for owner zones, decisions §33),
                     # TrainingLoadChart (90-day fitness/fatigue/form trio on /dashboard, decisions §34),
@@ -58,6 +58,7 @@ src/
     training/training.ts     # VDOT, Riegel, plan generator, week phasing, predictionConfidence (race-predictor data-quality grade)
     training/training.test.ts  # node:test suite for the training engine — `npx tsx --test`
     training/plan_adherence.ts  # pure weeklyDrift (>20% over/under plan) + missedWorkoutAdvice (make-up/skip a missed long run). Web-first; mounted on /plans/[id]. 11 unit tests.
+    training/relink_candidates.ts  # pure filterRelinkCandidates — eligible runs to re-link a planned workout to (±7-day window, excludes runs already linked to another workout so plan_progress can't double-count, keeps the current run). Backs the Re-link picker on /plans/[id]/workouts/[wid]; fetchRelinkCandidateRuns in core/data.ts does the owner-scoped fetch. TS↔Dart parity pair (relink_candidates.dart). 9 unit tests.
     training/plan_progress.ts   # pure orderedPlanPhases (base→build→peak→taper marker) + longestCompletedLongRunMetres. Mounted on the /plans/[id] header. 8 unit tests.
     training/plan_serialize.ts  # pure planToMarkdown/planToJson + parsePlanMarkdown/parsePlanJson round-trip. Export menu on /plans/[id]; paste-import disclosure in PlanEditor (/plans/new). 12 unit tests.
     training/plan_bulk_ops.ts   # pure shiftIsoDate + recoveryWorkoutPatch/recoveryWeekVolume. Owner bulk ops on /plans/[id] (shift plan ±N days, mark week recovery). 9 unit tests. Duplicate-week is a separate atomic re-index RPC (duplicate_plan_week, migration 20261205_001 + duplicatePlanWeek in data.ts), not a pure helper — the (plan_id, week_index) unique constraint makes a client-side multi-update unsafe.

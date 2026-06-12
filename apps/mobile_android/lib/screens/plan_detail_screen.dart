@@ -3,21 +3,26 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../local_run_store.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../plan_adherence.dart';
 import '../plan_replan.dart';
+import '../plan_adaptive_replan.dart';
 import '../social_service.dart' show ClubView, RecentRunRow, SocialService;
 import '../training.dart';
 import '../training_labels.dart';
+import '../training_load.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/current_week_strip.dart';
 import '../widgets/plan_calendar.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/workout_edit_sheet.dart';
@@ -27,6 +32,22 @@ import 'workout_detail_screen.dart';
 /// run is linked OR the runner manually marked it complete.
 bool _isWorkoutCompleted(PlanWorkoutRow wo) =>
     wo.completedRunId != null || wo.manuallyCompleted;
+
+/// P2 fitness direction gate (gen v2, decisions §144). OFF by default — the
+/// health-derived-load → prescription path stays inert until this dotenv flag
+/// is flipped, which is the CISO/Security-Analyst sign-off-gated action
+/// (reviews/plan-generator-v2-p2-ciso-note.md; mirrors the web
+/// PUBLIC_ADAPTIVE_FITNESS_GATE + the paid-events pre-prod gate, §139). The
+/// wiring below is dormant until then.
+bool get _adaptiveFitnessGate {
+  try {
+    final v = dotenv.env['ADAPTIVE_FITNESS_GATE'];
+    return v == '1' || v == 'true';
+  } catch (_) {
+    // dotenv not loaded (e.g. widget tests) → gate stays off.
+    return false;
+  }
+}
 
 /// Filter the viewer's club memberships to ones they can publish a
 /// plan-template into — owner or admin. Pure so it's directly
@@ -53,12 +74,19 @@ class PlanDetailScreen extends StatefulWidget {
   @visibleForTesting
   final String? viewerIdOverride;
 
+  /// Source of full `Run`s (with `metadata.avg_bpm`) for the P2 adaptive-replan
+  /// fitness gate. Only consumed when `ADAPTIVE_FITNESS_GATE` is on (gated OFF
+  /// by default, pending P2 CISO sign-off); null leaves the P1 behaviour intact.
+  /// Threaded from the Fitness hub via PlansScreen; other call sites pass null.
+  final LocalRunStore? runStore;
+
   const PlanDetailScreen({
     super.key,
     required this.training,
     required this.planId,
     this.social,
     this.viewerIdOverride,
+    this.runStore,
   });
 
   @override
@@ -75,6 +103,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   bool _bulkBusy = false;
   List<RecentRunRow> _recentRuns = const [];
   List<ReplanChange>? _replanPreview;
+  // Set only when the current preview came from the adaptive (trend-based)
+  // path, so its header can explain the multi-week reason + confidence.
+  ({AdaptiveReason reason, AdaptiveConfidence confidence})? _adaptiveInfo;
 
   // Lazily construct a SocialService against the global Supabase client
   // when none was injected. Tests pass a fake via the constructor.
@@ -248,7 +279,78 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       showTopBanner(context, l10n.planDetailReplanOnTrack);
       return;
     }
-    setState(() => _replanPreview = res.changes);
+    setState(() {
+      _adaptiveInfo = null;
+      _replanPreview = res.changes;
+    });
+  }
+
+  /// P2 (gated): the runner's latest training-load point as the fitness input.
+  /// Null unless `ADAPTIVE_FITNESS_GATE` is on, so the health-derived-load path
+  /// is dormant by default. Mirrors web's `adaptiveFitnessInput`: feed FULL
+  /// `Run`s (with `metadata.avg_bpm`) from `LocalRunStore` — NOT `_recentRuns`
+  /// (`RecentRunRow`, no HR) — to `computeTrainingLoadSeries`, default HR prefs.
+  AdaptiveFitness? _adaptiveFitnessInput() {
+    if (!_adaptiveFitnessGate) return null;
+    final runs = widget.runStore?.runs;
+    if (runs == null || runs.isEmpty) return null;
+    final series = computeTrainingLoadSeries(runs, endDate: DateTime.now());
+    if (series.isEmpty) return null;
+    final last = series.last;
+    return AdaptiveFitness(tsb: last.tsb, atl: last.atl, ctl: last.ctl);
+  }
+
+  /// Adaptive (trend-based) re-plan: only proposes when the last few completed
+  /// weeks show a sustained drift, suppressing single-week noise.
+  void _proposeAdaptiveReplan(TrainingPlanRow plan) {
+    if (!_isOwner(plan) || _bulkBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final res = adaptiveReplanRemaining(
+      weeks: _buildReplanInput(plan),
+      today: toIsoDate(DateTime.now()),
+      fitness: _adaptiveFitnessInput(),
+    );
+    if (res.fitnessGated) {
+      // P2: an add-volume trend was withheld because the runner is carrying
+      // fatigue (TSB < 0) — the adherence and fitness signals disagree.
+      setState(() {
+        _replanPreview = null;
+        _adaptiveInfo = null;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveFitnessHeld);
+      return;
+    }
+    if (res.reason == AdaptiveReason.onTrack) {
+      setState(() {
+        _replanPreview = null;
+        _adaptiveInfo = null;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveOnTrack);
+      return;
+    }
+    if (res.changes.isEmpty) {
+      setState(() {
+        _replanPreview = null;
+        _adaptiveInfo = null;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveNoSafeChange);
+      return;
+    }
+    setState(() {
+      _adaptiveInfo = (reason: res.reason, confidence: res.confidence);
+      _replanPreview = res.changes;
+    });
+  }
+
+  String _adaptiveBadgeText(AppLocalizations l10n) {
+    final info = _adaptiveInfo!;
+    final reason = info.reason == AdaptiveReason.trendUnderfitness
+        ? l10n.planDetailAdaptiveReasonUnder
+        : l10n.planDetailAdaptiveReasonOver;
+    final confidence = info.confidence == AdaptiveConfidence.high
+        ? l10n.planDetailAdaptiveConfidenceHigh
+        : l10n.planDetailAdaptiveConfidenceMedium;
+    return l10n.planDetailAdaptiveBadge(reason, confidence);
   }
 
   Future<void> _applyReplan() async {
@@ -265,6 +367,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       if (!mounted) return;
       setState(() {
         _replanPreview = null;
+        _adaptiveInfo = null;
         _bulkBusy = false;
       });
       showTopBanner(context, l10n.planDetailReplanApplied(changes.length));
@@ -425,6 +528,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ],
             ..._adherenceSection(theme, l10n, p),
             ..._replanSection(theme, l10n, p),
+            if (_weeks.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              CurrentWeekStrip(
+                startDate: p.startDate,
+                weekIndex: _weeks[currentWeek].weekIndex,
+                weekWorkouts: _byWeek[_weeks[currentWeek].id] ?? const [],
+                onSelect: _openWorkout,
+              ),
+            ],
             const SizedBox(height: 16),
             PlanCalendar(
               startDate: p.startDate,
@@ -508,10 +620,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       const SizedBox(height: 12),
       Align(
         alignment: Alignment.centerLeft,
-        child: OutlinedButton.icon(
-          onPressed: _bulkBusy ? null : () => _proposeReplan(p),
-          icon: const Icon(Icons.auto_fix_high, size: 18),
-          label: Text(l10n.planDetailReplan),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _bulkBusy ? null : () => _proposeReplan(p),
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+              label: Text(l10n.planDetailReplan),
+            ),
+            OutlinedButton.icon(
+              onPressed: _bulkBusy ? null : () => _proposeAdaptiveReplan(p),
+              icon: const Icon(Icons.trending_up, size: 18),
+              label: Text(l10n.planDetailAdaptiveReplan),
+            ),
+          ],
         ),
       ),
       if (preview != null) ...[
@@ -529,6 +652,14 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               Text(l10n.planDetailReplanPreviewTitle,
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700)),
+              if (_adaptiveInfo != null) ...[
+                const SizedBox(height: 4),
+                Text(_adaptiveBadgeText(l10n),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
               const SizedBox(height: 8),
               for (final c in preview)
                 Padding(
@@ -563,7 +694,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   TextButton(
                     onPressed: _bulkBusy
                         ? null
-                        : () => setState(() => _replanPreview = null),
+                        : () => setState(() {
+                              _replanPreview = null;
+                              _adaptiveInfo = null;
+                            }),
                     child: Text(l10n.planDetailReplanCancel),
                   ),
                   const SizedBox(width: 8),

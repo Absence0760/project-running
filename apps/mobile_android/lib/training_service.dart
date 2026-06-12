@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'training.dart' show TrainingGender;
 
+import 'relink_candidates.dart';
 import 'training.dart';
 
 /// View-model pairing a plan row with its current-week index + today's
@@ -553,6 +554,68 @@ class TrainingService extends ChangeNotifier {
       'completed_at': isCompleting ? DateTime.now().toIso8601String() : null,
     }).eq('id', workoutId);
     notifyListeners();
+  }
+
+  /// Candidate runs the owner can re-link to [workout].
+  ///
+  /// Owner-scoped, within ±7 days of the scheduled date, EXCLUDING any
+  /// run already linked to a *different* plan workout so re-linking can't
+  /// double-count a run in `plan_progress`. The workout's own current run
+  /// stays in the list. Newest-first. Mirrors web `fetchRelinkCandidate-
+  /// Runs`; the eligibility logic is the `relink_candidates.dart` twin.
+  Future<List<RelinkCandidateRun>> fetchRelinkCandidates(
+    PlanWorkoutRow workout,
+  ) async {
+    final uid = _uid;
+    if (uid == null) return const [];
+
+    // Run ids already linked anywhere in this owner's plans. Scope
+    // through the owner's plan_weeks (RLS chains the same way; the
+    // explicit scope is defence in depth).
+    final planRows = await _c
+        .from(TrainingPlanRow.table)
+        .select('id, plan_weeks(id)')
+        .eq('user_id', uid);
+    final weekIds = <String>[];
+    for (final p in (planRows as List).cast<Map<String, dynamic>>()) {
+      final weeks = (p['plan_weeks'] as List?) ?? const [];
+      for (final w in weeks.cast<Map<String, dynamic>>()) {
+        weekIds.add(w['id'] as String);
+      }
+    }
+    final linkedRunIds = <String>[];
+    if (weekIds.isNotEmpty) {
+      final linkedRows = await _c
+          .from(PlanWorkoutRow.table)
+          .select('completed_run_id')
+          .inFilter('week_id', weekIds)
+          .not('completed_run_id', 'is', null);
+      for (final r in (linkedRows as List).cast<Map<String, dynamic>>()) {
+        final id = r['completed_run_id'] as String?;
+        if (id != null) linkedRunIds.add(id);
+      }
+    }
+
+    final runRows = await _c
+        .from('runs')
+        .select('id, started_at, distance_m, duration_s')
+        .eq('user_id', uid)
+        .order('started_at', ascending: false);
+    final runs = (runRows as List).cast<Map<String, dynamic>>().map((r) {
+      return RelinkCandidateRun(
+        id: r['id'] as String,
+        startedAt: DateTime.parse(r['started_at'] as String),
+        distanceM: (r['distance_m'] as num).toDouble(),
+        durationS: (r['duration_s'] as num).toInt(),
+      );
+    }).toList();
+
+    return filterRelinkCandidates(
+      runs: runs,
+      linkedRunIds: linkedRunIds,
+      currentRunId: workout.completedRunId,
+      scheduledDate: workout.scheduledDate,
+    );
   }
 
   /// Patch the editable fields on a planned workout. Pass any subset
