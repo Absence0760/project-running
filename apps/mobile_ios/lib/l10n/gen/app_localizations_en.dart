@@ -5273,6 +5273,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsEmailNotifOff => 'Off';
 
   @override
+  String get prefsEmailWeeklyDigest => 'Weekly digest email';
+
+  @override
+  String get prefsEmailWeeklyDigestHint =>
+      'Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.';
+
+  @override
   String get prefsWeekStart => 'Week starts on';
 
   @override

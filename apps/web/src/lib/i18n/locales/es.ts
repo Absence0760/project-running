@@ -2932,6 +2932,8 @@ export const messages = {
 	"prefs.emailNotifAll": "Todas",
 	"prefs.emailNotifOff": "Desactivadas",
 	"prefs.emailNotifHint": "Elige qué notificaciones también se envían a tu correo. La campana de la app siempre muestra todo.",
+	"prefs.emailWeeklyDigest": "Correo de resumen semanal",
+	"prefs.emailWeeklyDigestHint": "Suscríbete a un resumen semanal de tu entrenamiento y lo más destacado de la comunidad. Desactivado por defecto; independiente de tus correos de notificaciones.",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "Gym",
 	"nav.nutrition": "Nutrición",

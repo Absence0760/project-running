@@ -1437,6 +1437,8 @@
   "prefsEmailNotifAll": "すべて",
   "prefsEmailNotifImportant": "重要なものだけ",
   "prefsEmailNotifOff": "オフ",
+  "prefsEmailWeeklyDigest": "週刊ダイジェストメール",
+  "prefsEmailWeeklyDigestHint": "トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。",
   "prefsWeekStart": "週の開始曜日",
   "prefsWeekStartMonday": "月曜日",
   "prefsWeekStartSunday": "日曜日",

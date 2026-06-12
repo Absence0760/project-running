@@ -2928,6 +2928,8 @@ export const messages = {
 	"prefs.emailNotifAll": "すべて",
 	"prefs.emailNotifOff": "オフ",
 	"prefs.emailNotifHint": "メールでも送信する通知を選びます。アプリのベルには常にすべて表示されます。",
+	"prefs.emailWeeklyDigest": "週刊ダイジェストメール",
+	"prefs.emailWeeklyDigestHint": "トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "ジム",
 	"nav.nutrition": "栄養",

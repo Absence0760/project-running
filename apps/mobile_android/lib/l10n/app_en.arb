@@ -6678,6 +6678,14 @@
   "@prefsEmailNotifOff": {
     "description": "Email-notification option: no emails (in-app bell still shows everything)"
   },
+  "prefsEmailWeeklyDigest": "Weekly digest email",
+  "@prefsEmailWeeklyDigest": {
+    "description": "Toggle title for opting in to the weekly engagement digest email"
+  },
+  "prefsEmailWeeklyDigestHint": "Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.",
+  "@prefsEmailWeeklyDigestHint": {
+    "description": "Subtitle for the weekly-digest opt-in toggle"
+  },
   "prefsWeekStart": "Week starts on",
   "@prefsWeekStart": {
     "description": "Tile and picker title for the week-start day"

@@ -5339,6 +5339,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prefsEmailNotifOff => 'Désactivées';
 
   @override
+  String get prefsEmailWeeklyDigest => 'E-mail récapitulatif hebdomadaire';
+
+  @override
+  String get prefsEmailWeeklyDigestHint =>
+      'Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.';
+
+  @override
   String get prefsWeekStart => 'La semaine commence le';
 
   @override
