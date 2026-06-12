@@ -5627,6 +5627,30 @@ abstract class AppLocalizations {
   /// **'Session added to your plans.'**
   String get clubDetailSessionAdopted;
 
+  /// Heading above the club's adoptable gym-routine templates
+  ///
+  /// In en, this message translates to:
+  /// **'Gym routine templates'**
+  String get clubDetailGymRoutineTemplatesTitle;
+
+  /// Hint under the club gym-routine-templates heading
+  ///
+  /// In en, this message translates to:
+  /// **'Members can adopt a club gym routine into their own routines. Edits to a copy don\'t propagate back to the template.'**
+  String get clubDetailGymRoutineTemplatesHint;
+
+  /// Confirmation after cloning a club gym-routine template into a personal routine
+  ///
+  /// In en, this message translates to:
+  /// **'Routine added to your gym routines.'**
+  String get clubDetailGymRoutineAdopted;
+
+  /// Exercise count meta on a club gym-routine-template row
+  ///
+  /// In en, this message translates to:
+  /// **'{n} exercises'**
+  String clubDetailRoutineExerciseCount(int n);
+
   /// Shown when the event does not exist
   ///
   /// In en, this message translates to:
@@ -12344,6 +12368,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start routine'**
   String get gymRoutineStart;
+
+  /// Label above the publish-as-template control on the routine detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Publish to a club'**
+  String get gymRoutinePublishLabel;
+
+  /// Placeholder option in the publish-to-club dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a club…'**
+  String get gymRoutinePublishPick;
+
+  /// Button that publishes a personal routine as a club template
+  ///
+  /// In en, this message translates to:
+  /// **'Publish'**
+  String get gymRoutinePublish;
+
+  /// Confirmation after publishing a routine as a club template
+  ///
+  /// In en, this message translates to:
+  /// **'Routine published to the club.'**
+  String get gymRoutinePublishSuccess;
+
+  /// Error after a failed publish-as-template
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t publish the routine.'**
+  String get gymRoutinePublishFailed;
+
+  /// Badge shown on a routine that is already a club-owned template
+  ///
+  /// In en, this message translates to:
+  /// **'Club template'**
+  String get gymRoutineClubTemplateBadge;
 
   /// No description provided for @gymRoutineDelete.
   ///

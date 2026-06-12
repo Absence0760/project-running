@@ -3394,6 +3394,23 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailSessionAdopted => 'Sessão adicionada aos seus planos.';
 
   @override
+  String get clubDetailGymRoutineTemplatesTitle =>
+      'Modelos de rotina de academia';
+
+  @override
+  String get clubDetailGymRoutineTemplatesHint =>
+      'Os membros podem adotar uma rotina de academia do clube nas próprias rotinas. As edições em uma cópia não se propagam para o modelo.';
+
+  @override
+  String get clubDetailGymRoutineAdopted =>
+      'Rotina adicionada às suas rotinas de academia.';
+
+  @override
+  String clubDetailRoutineExerciseCount(int n) {
+    return '$n exercícios';
+  }
+
+  @override
   String get eventNotFound => 'Evento não encontrado.';
 
   @override
@@ -7463,6 +7480,24 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gymRoutineStart => 'Iniciar rotina';
+
+  @override
+  String get gymRoutinePublishLabel => 'Publicar em um clube';
+
+  @override
+  String get gymRoutinePublishPick => 'Escolha um clube…';
+
+  @override
+  String get gymRoutinePublish => 'Publicar';
+
+  @override
+  String get gymRoutinePublishSuccess => 'Rotina publicada no clube.';
+
+  @override
+  String get gymRoutinePublishFailed => 'Não foi possível publicar a rotina.';
+
+  @override
+  String get gymRoutineClubTemplateBadge => 'Modelo do clube';
 
   @override
   String get gymRoutineDelete => 'Excluir';
@@ -11668,6 +11703,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get clubDetailSessionAdopted => 'Sessão adicionada aos seus planos.';
 
   @override
+  String get clubDetailGymRoutineTemplatesTitle =>
+      'Modelos de rotina de academia';
+
+  @override
+  String get clubDetailGymRoutineTemplatesHint =>
+      'Os membros podem adotar uma rotina de academia do clube nas próprias rotinas. As edições em uma cópia não se propagam para o modelo.';
+
+  @override
+  String get clubDetailGymRoutineAdopted =>
+      'Rotina adicionada às suas rotinas de academia.';
+
+  @override
+  String clubDetailRoutineExerciseCount(int n) {
+    return '$n exercícios';
+  }
+
+  @override
   String get eventNotFound => 'Evento não encontrado.';
 
   @override
@@ -15737,6 +15789,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymRoutineStart => 'Iniciar rotina';
+
+  @override
+  String get gymRoutinePublishLabel => 'Publicar em um clube';
+
+  @override
+  String get gymRoutinePublishPick => 'Escolha um clube…';
+
+  @override
+  String get gymRoutinePublish => 'Publicar';
+
+  @override
+  String get gymRoutinePublishSuccess => 'Rotina publicada no clube.';
+
+  @override
+  String get gymRoutinePublishFailed => 'Não foi possível publicar a rotina.';
+
+  @override
+  String get gymRoutineClubTemplateBadge => 'Modelo do clube';
 
   @override
   String get gymRoutineDelete => 'Excluir';
