@@ -1,0 +1,181 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import '../lib/gym_adherence.dart';
+
+PlannedSetRef planned(
+  String exerciseKey,
+  int setIndex, [
+  num? targetRepsMin,
+  num? targetWeightKg,
+  num? targetDurationS,
+  num? targetRepsMax,
+]) => PlannedSetRef(
+  exerciseKey: exerciseKey,
+  setIndex: setIndex,
+  targetRepsMin: targetRepsMin,
+  targetRepsMax: targetRepsMax,
+  targetWeightKg: targetWeightKg,
+  targetDurationS: targetDurationS,
+);
+
+ActualSetRef actual(
+  String exerciseKey,
+  int setIndex, [
+  num? reps,
+  num? weightKg,
+  num? durationS,
+]) => ActualSetRef(
+  exerciseKey: exerciseKey,
+  setIndex: setIndex,
+  reps: reps,
+  weightKg: weightKg,
+  durationS: durationS,
+);
+
+void main() {
+  test('all sets hit -> completed, pct 1.0', () {
+    final r = computeRoutineAdherence(
+      [planned('bench', 0, 5, 80), planned('bench', 1, 5, 80)],
+      [actual('bench', 0, 5, 80), actual('bench', 1, 6, 85)],
+    );
+    expect(r.plannedCount, 2);
+    expect(r.completedCount, 2);
+    expect(r.adherencePct, 1.0);
+    expect(r.verdict, RoutineVerdict.completed);
+    expect(r.sets.map((s) => s.status).toList(), [
+      SetAdherenceStatus.hit,
+      SetAdherenceStatus.hit,
+    ]);
+  });
+
+  test('zero completed -> abandoned', () {
+    final r = computeRoutineAdherence(
+      [planned('squat', 0, 5, 100), planned('squat', 1, 5, 100)],
+      [],
+    );
+    expect(r.completedCount, 0);
+    expect(r.adherencePct, 0);
+    expect(r.verdict, RoutineVerdict.abandoned);
+  });
+
+  test('80% boundary -> completed', () {
+    final plan = <PlannedSetRef>[];
+    final act = <ActualSetRef>[];
+    for (var i = 0; i < 10; i++) {
+      plan.add(planned('row', i, 5, 50));
+    }
+    for (var i = 0; i < 8; i++) {
+      act.add(actual('row', i, 5, 50));
+    }
+    final r = computeRoutineAdherence(plan, act);
+    expect(r.completedCount, 8);
+    expect(r.adherencePct, 0.8);
+    expect(r.verdict, RoutineVerdict.completed);
+  });
+
+  test('79% -> partial', () {
+    final plan = <PlannedSetRef>[];
+    final act = <ActualSetRef>[];
+    for (var i = 0; i < 100; i++) {
+      plan.add(planned('row', i, 5, 50));
+    }
+    for (var i = 0; i < 79; i++) {
+      act.add(actual('row', i, 5, 50));
+    }
+    final r = computeRoutineAdherence(plan, act);
+    expect(r.completedCount, 79);
+    expect(r.adherencePct, 0.79);
+    expect(r.verdict, RoutineVerdict.partial);
+  });
+
+  test('reps below min -> partial status', () {
+    final r = computeRoutineAdherence(
+      [planned('curl', 0, 10, 20)],
+      [actual('curl', 0, 7, 20)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.partial);
+    expect(r.completedCount, 0);
+  });
+
+  test('weight below target -> missed', () {
+    final r = computeRoutineAdherence(
+      [planned('press', 0, 5, 60)],
+      [actual('press', 0, 5, 50)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.missed);
+    expect(r.completedCount, 0);
+  });
+
+  test('extra unplanned set -> extra, not counted in plannedCount', () {
+    final r = computeRoutineAdherence(
+      [planned('bench', 0, 5, 80)],
+      [actual('bench', 0, 5, 80), actual('bench', 1, 5, 80)],
+    );
+    expect(r.plannedCount, 1);
+    expect(r.completedCount, 1);
+    final extra = r.sets.firstWhere(
+      (s) => s.status == SetAdherenceStatus.extra,
+    );
+    expect(extra.setIndex, 1);
+    expect(r.adherencePct, 1.0);
+  });
+
+  test('duration-set hit by durationS', () {
+    final r = computeRoutineAdherence(
+      [planned('plank', 0, null, null, 60), planned('plank', 1, null, null, 60)],
+      [actual('plank', 0, null, null, 75), actual('plank', 1, null, null, 45)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+    expect(r.sets[1].status, SetAdherenceStatus.partial);
+  });
+
+  test('deltas signed correctly', () {
+    final r = computeRoutineAdherence(
+      [planned('bench', 0, 5, 80), planned('bench', 1, 8, 100)],
+      [actual('bench', 0, 7, 85), actual('bench', 1, 6, 90)],
+    );
+    expect(r.sets[0].repsDelta, 2);
+    expect(r.sets[0].weightDeltaKg, 5);
+    expect(r.sets[1].repsDelta, -2);
+    expect(r.sets[1].weightDeltaKg, -10);
+  });
+
+  test('empty planned -> abandoned edge, pct 0', () {
+    final r = computeRoutineAdherence([], [actual('bench', 0, 5, 80)]);
+    expect(r.plannedCount, 0);
+    expect(r.completedCount, 0);
+    expect(r.adherencePct, 0);
+    expect(r.verdict, RoutineVerdict.abandoned);
+    expect(r.sets.length, 1);
+    expect(r.sets[0].status, SetAdherenceStatus.extra);
+  });
+
+  test('empty actual -> all missed', () {
+    final r = computeRoutineAdherence(
+      [
+        planned('squat', 0, 5, 100),
+        planned('squat', 1, 5, 100),
+        planned('squat', 2, 5, 100),
+      ],
+      [],
+    );
+    expect(r.sets.map((s) => s.status).toList(), [
+      SetAdherenceStatus.missed,
+      SetAdherenceStatus.missed,
+      SetAdherenceStatus.missed,
+    ]);
+    expect(r.verdict, RoutineVerdict.abandoned);
+  });
+
+  test('match by key+setIndex, not name spelling', () {
+    final r = computeRoutineAdherence(
+      [planned('bench-press', 0, 5, 80)],
+      [actual('bench-press', 0, 5, 80), actual('Bench Press', 0, 5, 80)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+    final extra = r.sets.firstWhere((s) => s.exerciseKey == 'Bench Press');
+    expect(extra.status, SetAdherenceStatus.extra);
+    expect(r.plannedCount, 1);
+    expect(r.completedCount, 1);
+  });
+}
