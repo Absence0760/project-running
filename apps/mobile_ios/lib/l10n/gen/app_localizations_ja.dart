@@ -6704,6 +6704,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTabGearSubtitle => 'シューズ・バイクとアイテムごとの走行距離を記録';
 
   @override
+  String get settingsTabCoachingSubtitle => 'アスリートを指導したり、自分のコーチをフォロー';
+
+  @override
   String get settingsTabProSubtitle => '登録、購入の復元、請求の管理';
 
   @override
@@ -7540,4 +7543,228 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get sessionRunSwitchSides => '反対側に切り替え';
+
+  @override
+  String get coachingTitle => 'コーチング';
+
+  @override
+  String get coachingLede =>
+      '招待リンクを共有してアスリートを指導し、トレーニングを確認できます。あるいは自分のコーチをここでフォローできます。';
+
+  @override
+  String get coachingCancel => 'キャンセル';
+
+  @override
+  String get coachingMyAthletes => '担当アスリート';
+
+  @override
+  String get coachingMyAthletesSub => '招待を承認したランナー';
+
+  @override
+  String get coachingInviteAnAthlete => 'アスリートを招待';
+
+  @override
+  String get coachingCreating => '作成中…';
+
+  @override
+  String get coachingPendingInvite => '保留中の招待';
+
+  @override
+  String coachingPendingInviteSub(String date) {
+    return '$date に作成 · 未承認';
+  }
+
+  @override
+  String get coachingCopyLink => 'リンクをコピー';
+
+  @override
+  String get coachingShareLink => 'リンクを共有';
+
+  @override
+  String get coachingRevoke => '取り消す';
+
+  @override
+  String get coachingNoAthletes => 'まだアスリートがいません。招待して始めましょう。';
+
+  @override
+  String get coachingRunner => 'ランナー';
+
+  @override
+  String coachingCoachingSince(String date) {
+    return '$date から指導';
+  }
+
+  @override
+  String get coachingReview => '確認';
+
+  @override
+  String get coachingRemove => '削除';
+
+  @override
+  String get coachingMyCoaches => '自分のコーチ';
+
+  @override
+  String get coachingMyCoachesSub => 'あなたのトレーニングを見られるコーチ';
+
+  @override
+  String get coachingNoCoaches => 'まだコーチの招待を承認していません。';
+
+  @override
+  String get coachingCoach => 'コーチ';
+
+  @override
+  String coachingLinkedSince(String date) {
+    return '$date から連携';
+  }
+
+  @override
+  String get coachingLeave => '解除';
+
+  @override
+  String get coachingInviteLinkCopied => '招待リンクをコピーしました';
+
+  @override
+  String get coachingThisAthlete => 'このアスリート';
+
+  @override
+  String get coachingThisCoach => 'このコーチ';
+
+  @override
+  String get coachingRevokeTitle => '招待を取り消しますか？';
+
+  @override
+  String get coachingRevokeBody => '招待リンクは使えなくなります。新しいリンクはいつでも作成できます。';
+
+  @override
+  String get coachingRemoveAthleteTitle => 'アスリートを削除しますか？';
+
+  @override
+  String coachingRemoveAthleteBody(String name) {
+    return '$name の指導を終了しますか？そのランやプランへのアクセスができなくなります。';
+  }
+
+  @override
+  String get coachingLeaveCoachTitle => 'コーチを解除しますか？';
+
+  @override
+  String coachingLeaveCoachBody(String name) {
+    return '$name とのトレーニング共有を停止しますか？';
+  }
+
+  @override
+  String coachingLoadError(String error) {
+    return 'コーチングを読み込めませんでした: $error';
+  }
+
+  @override
+  String coachingCreateInviteError(String error) {
+    return '招待を作成できませんでした: $error';
+  }
+
+  @override
+  String coachingRevokeInviteError(String error) {
+    return '招待を取り消せませんでした: $error';
+  }
+
+  @override
+  String coachingRemoveAthleteError(String error) {
+    return 'アスリートを削除できませんでした: $error';
+  }
+
+  @override
+  String coachingEndLinkError(String error) {
+    return '連携を終了できませんでした: $error';
+  }
+
+  @override
+  String get coachingAthleteAthleteFallback => 'アスリート';
+
+  @override
+  String get coachingAthleteRunnerFallback => 'ランナー';
+
+  @override
+  String coachingAthleteCoachingSince(String date) {
+    return '$date から指導';
+  }
+
+  @override
+  String get coachingAthletePlanCompliance => 'プランの達成状況';
+
+  @override
+  String get coachingAthleteNoActivePlan => 'アクティブなトレーニングプランはありません。';
+
+  @override
+  String get coachingAthleteAssignTitle => 'プランを割り当てる';
+
+  @override
+  String coachingAthleteAssignHint(String name) {
+    return 'あなたのプランから 1 つ選んで $name に割り当てます。';
+  }
+
+  @override
+  String get coachingAthleteAssignSelectLabel => 'プラン';
+
+  @override
+  String get coachingAthleteAssignSelectPlaceholder => 'プランを選択…';
+
+  @override
+  String get coachingAthleteAssignStartLabel => '開始日';
+
+  @override
+  String get coachingAthleteAssigning => '割り当て中…';
+
+  @override
+  String get coachingAthleteAssignButton => 'プランを割り当てる';
+
+  @override
+  String get coachingAthleteAssignNoPlans =>
+      '先にトレーニングプランを作成すると、アスリートに割り当てられます。';
+
+  @override
+  String get coachingAthleteAssignedByYou => 'あなたが割り当て';
+
+  @override
+  String get coachingAthleteCannotAssignHasPlan =>
+      'このアスリートには既にアクティブなプランがあります。新しいプランを割り当てる前に、完了または終了する必要があります。';
+
+  @override
+  String get coachingAthleteComplete => '完了';
+
+  @override
+  String coachingAthleteDoneCount(int done, int total) {
+    return '$total 件中 $done 件完了';
+  }
+
+  @override
+  String coachingAthleteMissedCount(int n) {
+    return '$n 件未実施';
+  }
+
+  @override
+  String get coachingAthleteStatusDone => '完了';
+
+  @override
+  String get coachingAthleteStatusMissed => '未実施';
+
+  @override
+  String get coachingAthleteStatusUpcoming => '予定';
+
+  @override
+  String get coachingAthleteRecentRuns => '最近のラン';
+
+  @override
+  String get coachingAthleteNoRunsYet => 'まだ記録されたランがありません。';
+
+  @override
+  String get coachingAthletePrivate => '非公開';
+
+  @override
+  String coachingAthleteAssignSuccess(String name) {
+    return '$name にプランを割り当てました';
+  }
+
+  @override
+  String coachingAthleteLoadError(String error) {
+    return 'アスリートを読み込めませんでした: $error';
+  }
 }
