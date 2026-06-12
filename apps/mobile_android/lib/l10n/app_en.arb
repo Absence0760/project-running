@@ -4745,6 +4745,47 @@
   "@planNewTemplatePickerCancel": {
     "description": "Plan-new club-template picker"
   },
+  "planNewStarterTitle": "Start from a built-in plan",
+  "@planNewStarterTitle": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterSubtitle": "Pick a proven training plan and we'll schedule it from your start date — you can tweak it after.",
+  "@planNewStarterSubtitle": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterButton": "Browse starter plans",
+  "@planNewStarterButton": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterCreating": "Creating…",
+  "@planNewStarterCreating": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterPickerTitle": "Choose a starter plan",
+  "@planNewStarterPickerTitle": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterPickerCancel": "Cancel",
+  "@planNewStarterPickerCancel": {
+    "description": "Plan-new built-in starter-plan picker"
+  },
+  "planNewStarterCreateFailed": "Couldn't create that plan: {error}",
+  "@planNewStarterCreateFailed": {
+    "description": "Toast when creating from a starter plan fails",
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "planNewStarterC25k": "Couch to 5K (beginner walk-run)",
+  "@planNewStarterC25k": {
+    "description": "Built-in starter plan name"
+  },
+  "planNewStarterHalf12": "Half Marathon — 12 weeks",
+  "@planNewStarterHalf12": {
+    "description": "Built-in starter plan name"
+  },
+  "planNewStarterMarathon16": "Marathon — 16 weeks",
+  "@planNewStarterMarathon16": {
+    "description": "Built-in starter plan name"
+  },
   "planDetailTimeoutError": "Connection timed out. Check your network and try again.",
   "@planDetailTimeoutError": {
     "description": "Plan-detail load timeout error"
@@ -4769,6 +4810,10 @@
         "type": "int"
       }
     }
+  },
+  "planDetailCurrentWeek": "This week",
+  "@planDetailCurrentWeek": {
+    "description": "Heading for the focused current-week 7-day strip on plan detail"
   },
   "planDetailToday": "TODAY",
   "@planDetailToday": {
@@ -4810,6 +4855,19 @@
     "description": "Plan-detail adherence/replan/duplicate"
   },
   "planDetailReplan": "Re-plan remaining weeks",
+  "planDetailAdaptiveReplan": "Adaptive re-plan",
+  "planDetailAdaptiveOnTrack": "Your recent weeks are on track — no adjustment needed.",
+  "planDetailAdaptiveNoSafeChange": "You've drifted from plan recently, but there's no safe adjustment to make right now.",
+  "planDetailAdaptiveFitnessHeld": "Held back — you're carrying fatigue right now, so adding volume isn't advised.",
+  "planDetailAdaptiveReasonUnder": "under your plan for multiple weeks",
+  "planDetailAdaptiveReasonOver": "over your plan for multiple weeks",
+  "planDetailAdaptiveConfidenceHigh": "high confidence",
+  "planDetailAdaptiveConfidenceMedium": "medium confidence",
+  "planDetailAdaptiveBadge": "Based on a trend — you've been {reason} ({confidence})",
+  "@planDetailAdaptiveBadge": {
+    "description": "Plan-detail adaptive re-plan trend badge",
+    "placeholders": { "reason": { "type": "String" }, "confidence": { "type": "String" } }
+  },
   "@planDetailReplan": {
     "description": "Plan-detail adherence/replan/duplicate"
   },
@@ -4944,6 +5002,34 @@
   "workoutUnlink": "Unlink",
   "@workoutUnlink": {
     "description": "Unlink-completed-run button"
+  },
+  "workoutRelink": "Re-link",
+  "@workoutRelink": {
+    "description": "Re-link-to-a-different-run button on workout detail"
+  },
+  "workoutRelinkTitle": "Link a different run",
+  "@workoutRelinkTitle": {
+    "description": "Title of the re-link picker dialog"
+  },
+  "workoutRelinkHint": "Pick a run near this workout's date to count it as this session. Runs already linked to another workout aren't shown.",
+  "@workoutRelinkHint": {
+    "description": "Explanatory hint in the re-link picker"
+  },
+  "workoutRelinkLoading": "Finding your runs…",
+  "@workoutRelinkLoading": {
+    "description": "Loading state in the re-link picker"
+  },
+  "workoutRelinkError": "Couldn't load your runs. Try again.",
+  "@workoutRelinkError": {
+    "description": "Error state in the re-link picker"
+  },
+  "workoutRelinkEmpty": "No eligible runs near this date.",
+  "@workoutRelinkEmpty": {
+    "description": "Empty state in the re-link picker"
+  },
+  "workoutRelinkCurrent": "Current",
+  "@workoutRelinkCurrent": {
+    "description": "Tag on the currently-linked run in the re-link picker"
   },
   "workoutStart": "Start workout",
   "@workoutStart": {
@@ -6677,6 +6763,14 @@
   "prefsEmailNotifOff": "Off",
   "@prefsEmailNotifOff": {
     "description": "Email-notification option: no emails (in-app bell still shows everything)"
+  },
+  "prefsEmailWeeklyDigest": "Weekly digest email",
+  "@prefsEmailWeeklyDigest": {
+    "description": "Toggle title for opting in to the weekly engagement digest email"
+  },
+  "prefsEmailWeeklyDigestHint": "Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.",
+  "@prefsEmailWeeklyDigestHint": {
+    "description": "Subtitle for the weekly-digest opt-in toggle"
   },
   "prefsWeekStart": "Week starts on",
   "@prefsWeekStart": {
@@ -9041,6 +9135,8 @@
   "@settingsTabDevicesSubtitle": {"description": "Settings landing: Devices tile subtitle when signed in"},
   "settingsTabGearSubtitle": "Track shoes + bikes and per-item mileage",
   "@settingsTabGearSubtitle": {"description": "Settings landing: Gear tile subtitle"},
+  "settingsTabCoachingSubtitle": "Coach athletes or follow your own coach",
+  "@settingsTabCoachingSubtitle": {"description": "Settings landing: Coaching tile subtitle"},
   "settingsTabProSubtitle": "Subscribe, restore purchases, manage billing",
   "@settingsTabProSubtitle": {"description": "Settings landing: Pro & support tile subtitle"},
   "settingsTabLicensesSubtitle": "App version and open-source notices",
@@ -9413,5 +9509,133 @@
   "sessionRunStepCount": "Step {index} of {total}",
   "@sessionRunStepCount": {"description": "Progress counter in the follow-along session player", "placeholders": {"index": {"type": "int"}, "total": {"type": "int"}}},
   "sessionRunSwitchSides": "Switch sides",
-  "@sessionRunSwitchSides": {"description": "Spoken cue when a per-side movement switches from left to right in the session player"}
+  "@sessionRunSwitchSides": {"description": "Spoken cue when a per-side movement switches from left to right in the session player"},
+
+  "coachingTitle": "Coaching",
+  "@coachingTitle": {"description": "Title of the coach-athlete roster screen"},
+  "coachingLede": "Coach athletes by sharing an invite link, then review their training. Or follow your own coach here.",
+  "@coachingLede": {"description": "Intro line on the coaching roster screen"},
+  "coachingCancel": "Cancel",
+  "@coachingCancel": {"description": "Cancel button in coaching confirmation dialogs"},
+  "coachingMyAthletes": "My athletes",
+  "@coachingMyAthletes": {"description": "Heading for the list of athletes a coach manages"},
+  "coachingMyAthletesSub": "Runners who accepted your invite",
+  "@coachingMyAthletesSub": {"description": "Subheading under My athletes"},
+  "coachingInviteAnAthlete": "Invite an athlete",
+  "@coachingInviteAnAthlete": {"description": "Button that mints + copies a coach invite link"},
+  "coachingCreating": "Creating…",
+  "@coachingCreating": {"description": "Label while a coach invite is being minted"},
+  "coachingPendingInvite": "Pending invite",
+  "@coachingPendingInvite": {"description": "Title of an unredeemed coach invite row"},
+  "coachingPendingInviteSub": "Created {date} · not yet accepted",
+  "@coachingPendingInviteSub": {"description": "Subtitle of a pending invite row", "placeholders": {"date": {"type": "String"}}},
+  "coachingCopyLink": "Copy link",
+  "@coachingCopyLink": {"description": "Copy the invite link to the clipboard"},
+  "coachingShareLink": "Share link",
+  "@coachingShareLink": {"description": "Share the invite link via the OS share sheet"},
+  "coachingRevoke": "Revoke",
+  "@coachingRevoke": {"description": "Revoke (delete) a pending coach invite"},
+  "coachingNoAthletes": "No athletes yet. Invite one to get started.",
+  "@coachingNoAthletes": {"description": "Empty state for the athletes list"},
+  "coachingRunner": "Runner",
+  "@coachingRunner": {"description": "Fallback name for an athlete with no display name"},
+  "coachingCoachingSince": "Coaching since {date}",
+  "@coachingCoachingSince": {"description": "When a coach-athlete link was accepted", "placeholders": {"date": {"type": "String"}}},
+  "coachingReview": "Review",
+  "@coachingReview": {"description": "Open the athlete review screen"},
+  "coachingRemove": "Remove",
+  "@coachingRemove": {"description": "Remove an athlete from the coach's roster"},
+  "coachingMyCoaches": "My coaches",
+  "@coachingMyCoaches": {"description": "Heading for the list of coaches an athlete is linked to"},
+  "coachingMyCoachesSub": "Coaches who can see your training",
+  "@coachingMyCoachesSub": {"description": "Subheading under My coaches"},
+  "coachingNoCoaches": "You haven't accepted a coach invite yet.",
+  "@coachingNoCoaches": {"description": "Empty state for the coaches list"},
+  "coachingCoach": "Coach",
+  "@coachingCoach": {"description": "Fallback name for a coach with no display name"},
+  "coachingLinkedSince": "Linked since {date}",
+  "@coachingLinkedSince": {"description": "When the athlete linked to this coach", "placeholders": {"date": {"type": "String"}}},
+  "coachingLeave": "Leave",
+  "@coachingLeave": {"description": "End the link with a coach"},
+  "coachingInviteLinkCopied": "Invite link copied",
+  "@coachingInviteLinkCopied": {"description": "Confirmation banner after copying an invite link"},
+  "coachingThisAthlete": "this athlete",
+  "@coachingThisAthlete": {"description": "Fallback name in the remove-athlete confirmation"},
+  "coachingThisCoach": "this coach",
+  "@coachingThisCoach": {"description": "Fallback name in the leave-coach confirmation"},
+  "coachingRevokeTitle": "Revoke invite?",
+  "@coachingRevokeTitle": {"description": "Title of the revoke-invite confirmation dialog"},
+  "coachingRevokeBody": "The invite link will stop working. You can always create a new one.",
+  "@coachingRevokeBody": {"description": "Body of the revoke-invite confirmation dialog"},
+  "coachingRemoveAthleteTitle": "Remove athlete?",
+  "@coachingRemoveAthleteTitle": {"description": "Title of the remove-athlete confirmation dialog"},
+  "coachingRemoveAthleteBody": "Stop coaching {name}? You'll lose access to their runs and plans.",
+  "@coachingRemoveAthleteBody": {"description": "Body of the remove-athlete confirmation dialog", "placeholders": {"name": {"type": "String"}}},
+  "coachingLeaveCoachTitle": "Leave coach?",
+  "@coachingLeaveCoachTitle": {"description": "Title of the leave-coach confirmation dialog"},
+  "coachingLeaveCoachBody": "Stop sharing your training with {name}?",
+  "@coachingLeaveCoachBody": {"description": "Body of the leave-coach confirmation dialog", "placeholders": {"name": {"type": "String"}}},
+  "coachingLoadError": "Couldn't load coaching: {error}",
+  "@coachingLoadError": {"description": "Error banner when the roster fails to load", "placeholders": {"error": {"type": "String"}}},
+  "coachingCreateInviteError": "Couldn't create invite: {error}",
+  "@coachingCreateInviteError": {"description": "Error banner when minting an invite fails", "placeholders": {"error": {"type": "String"}}},
+  "coachingRevokeInviteError": "Couldn't revoke invite: {error}",
+  "@coachingRevokeInviteError": {"description": "Error banner when revoking an invite fails", "placeholders": {"error": {"type": "String"}}},
+  "coachingRemoveAthleteError": "Couldn't remove athlete: {error}",
+  "@coachingRemoveAthleteError": {"description": "Error banner when removing an athlete fails", "placeholders": {"error": {"type": "String"}}},
+  "coachingEndLinkError": "Couldn't end the link: {error}",
+  "@coachingEndLinkError": {"description": "Error banner when leaving a coach fails", "placeholders": {"error": {"type": "String"}}},
+
+  "coachingAthleteAthleteFallback": "Athlete",
+  "@coachingAthleteAthleteFallback": {"description": "App-bar fallback title for an athlete with no display name"},
+  "coachingAthleteRunnerFallback": "Runner",
+  "@coachingAthleteRunnerFallback": {"description": "Header fallback name for an athlete with no display name"},
+  "coachingAthleteCoachingSince": "Coaching since {date}",
+  "@coachingAthleteCoachingSince": {"description": "When the coaching link started, shown in the athlete header", "placeholders": {"date": {"type": "String"}}},
+  "coachingAthletePlanCompliance": "Plan compliance",
+  "@coachingAthletePlanCompliance": {"description": "Heading of the plan-compliance card on the athlete review screen"},
+  "coachingAthleteNoActivePlan": "No active training plan.",
+  "@coachingAthleteNoActivePlan": {"description": "Shown when the athlete has no active plan"},
+  "coachingAthleteAssignTitle": "Assign a plan",
+  "@coachingAthleteAssignTitle": {"description": "Heading of the assign-a-plan control"},
+  "coachingAthleteAssignHint": "Pick one of your plans to assign to {name}.",
+  "@coachingAthleteAssignHint": {"description": "Hint above the assign-a-plan control", "placeholders": {"name": {"type": "String"}}},
+  "coachingAthleteAssignSelectLabel": "Plan",
+  "@coachingAthleteAssignSelectLabel": {"description": "Label for the plan dropdown in the assign control"},
+  "coachingAthleteAssignSelectPlaceholder": "Choose a plan…",
+  "@coachingAthleteAssignSelectPlaceholder": {"description": "Placeholder for the plan dropdown"},
+  "coachingAthleteAssignStartLabel": "Start date",
+  "@coachingAthleteAssignStartLabel": {"description": "Label for the start-date picker in the assign control"},
+  "coachingAthleteAssigning": "Assigning…",
+  "@coachingAthleteAssigning": {"description": "Label on the assign button while assignment is in flight"},
+  "coachingAthleteAssignButton": "Assign plan",
+  "@coachingAthleteAssignButton": {"description": "Button that assigns the selected plan to the athlete"},
+  "coachingAthleteAssignNoPlans": "Create a training plan first, then you can assign it to your athletes.",
+  "@coachingAthleteAssignNoPlans": {"description": "Shown when the coach has no plans to assign"},
+  "coachingAthleteAssignedByYou": "Assigned by you",
+  "@coachingAthleteAssignedByYou": {"description": "Badge when the active plan was assigned by the viewing coach"},
+  "coachingAthleteCannotAssignHasPlan": "This athlete already has an active plan. They'll need to finish or end it before you can assign a new one.",
+  "@coachingAthleteCannotAssignHasPlan": {"description": "Hint when the athlete has a plan not assigned by this coach"},
+  "coachingAthleteComplete": "complete",
+  "@coachingAthleteComplete": {"description": "Word following the completion percentage, e.g. '40% complete'"},
+  "coachingAthleteDoneCount": "{done} of {total} done",
+  "@coachingAthleteDoneCount": {"description": "Completed-vs-total workout count", "placeholders": {"done": {"type": "int"}, "total": {"type": "int"}}},
+  "coachingAthleteMissedCount": "{n} missed",
+  "@coachingAthleteMissedCount": {"description": "Count of missed workouts", "placeholders": {"n": {"type": "int"}}},
+  "coachingAthleteStatusDone": "Done",
+  "@coachingAthleteStatusDone": {"description": "Workout status pill: completed"},
+  "coachingAthleteStatusMissed": "Missed",
+  "@coachingAthleteStatusMissed": {"description": "Workout status pill: missed"},
+  "coachingAthleteStatusUpcoming": "Upcoming",
+  "@coachingAthleteStatusUpcoming": {"description": "Workout status pill: upcoming"},
+  "coachingAthleteRecentRuns": "Recent runs",
+  "@coachingAthleteRecentRuns": {"description": "Heading of the recent-runs card on the athlete review screen"},
+  "coachingAthleteNoRunsYet": "No runs logged yet.",
+  "@coachingAthleteNoRunsYet": {"description": "Empty state for the recent-runs list"},
+  "coachingAthletePrivate": "Private",
+  "@coachingAthletePrivate": {"description": "Badge marking a private run visible to the coach"},
+  "coachingAthleteAssignSuccess": "Plan assigned to {name}",
+  "@coachingAthleteAssignSuccess": {"description": "Success banner after assigning a plan", "placeholders": {"name": {"type": "String"}}},
+  "coachingAthleteLoadError": "Couldn't load athlete: {error}",
+  "@coachingAthleteLoadError": {"description": "Error banner when the athlete review screen fails to load", "placeholders": {"error": {"type": "String"}}}
 }

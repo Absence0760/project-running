@@ -40,6 +40,13 @@ class SettingsKeys {
   /// worker's `notification_email` handler (migration 20261130_001);
   /// the in-app bell is unaffected.
   static const emailNotifications = 'email_notifications';
+  /// Opt-IN consent for the weekly engagement digest — `'on'` | `'off'`
+  /// (default `'off'`). Deliberately separate from the transactional
+  /// [emailNotifications] key: marketing consent is never inferred from a
+  /// transactional setting. Read server-side by the Go worker's
+  /// `weekly_digest` handler; the send is gated separately (migration
+  /// 20270108_001).
+  static const emailWeeklyDigest = 'email_weekly_digest';
   /// The user's preferred language for server-sent email, as a BCP-47 tag
   /// (`en`/`de`/`fr`/`es`/`ja`/`pt-BR`). Written by the clients as a side
   /// effect of the language picker so the Go worker can localize email

@@ -127,6 +127,7 @@
 					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
 					: null;
 			case 'plan_update':
+			case 'plan_assigned':
 				return r.plan_id ? `/plans/${r.plan_id}` : null;
 			case 'message':
 				return r.actor_id ? `/messages/${r.actor_id}` : null;
@@ -161,6 +162,8 @@
 					: m('notificationBell.eventCancel');
 			case 'plan_update':
 				return m('notificationBell.planUpdate', { name });
+			case 'plan_assigned':
+				return m('notificationBell.planAssigned', { name });
 			case 'message':
 				return m('notificationBell.message', { name });
 			case 'club_post':

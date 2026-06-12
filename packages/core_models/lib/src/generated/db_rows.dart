@@ -2984,6 +2984,7 @@ class TrainingPlanRow {
   static const String colIsTemplate = 'is_template';
   static const String colParentTemplateId = 'parent_template_id';
   static const String colClubId = 'club_id';
+  static const String colAssignedByCoachId = 'assigned_by_coach_id';
 
   final String id;
   final String userId;
@@ -3005,6 +3006,7 @@ class TrainingPlanRow {
   final bool isTemplate;
   final String? parentTemplateId;
   final String? clubId;
+  final String? assignedByCoachId;
 
   const TrainingPlanRow({
     required this.id,
@@ -3027,6 +3029,7 @@ class TrainingPlanRow {
     required this.isTemplate,
     this.parentTemplateId,
     this.clubId,
+    this.assignedByCoachId,
   });
 
   factory TrainingPlanRow.fromJson(Map<String, dynamic> json) => TrainingPlanRow(
@@ -3050,6 +3053,7 @@ class TrainingPlanRow {
     isTemplate: (json['is_template'] as bool?) ?? false,
     parentTemplateId: json['parent_template_id'] as String?,
     clubId: json['club_id'] as String?,
+    assignedByCoachId: json['assigned_by_coach_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3073,6 +3077,7 @@ class TrainingPlanRow {
     colIsTemplate: isTemplate,
     colParentTemplateId: parentTemplateId,
     colClubId: clubId,
+    colAssignedByCoachId: assignedByCoachId,
   };
 }
 

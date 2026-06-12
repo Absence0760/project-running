@@ -109,8 +109,9 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
   `/unsubscribe/weekly-digest`, verifies the HMAC, flips the pref off + inserts
   a suppression row, fail-closed on a bad/missing token; keyed by
   `WEEKLY_DIGEST_UNSUB_SECRET`). **NOT enabled:** the builder is
-  **UNSCHEDULED** — no `pg_cron` ships (no marketing send fires); a per-category
-  preference-center UI. Enabling an actual send (wiring the builder's
+  **UNSCHEDULED** — no `pg_cron` ships (no marketing send fires). The **opt-in
+  preference toggle** ships on web `/settings/preferences` + mobile Settings →
+  Preferences (default off). Enabling an actual send (wiring the builder's
   `pg_cron`) is **gated on CISO + counsel sign-off** (bulk/promotional mail
   under CAN-SPAM + GDPR/ePrivacy, unlike the transactional kinds). Still
   outstanding for an enabled send: **bounce/complaint suppression** ingest (the

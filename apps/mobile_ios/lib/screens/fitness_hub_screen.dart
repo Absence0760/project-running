@@ -108,6 +108,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
       builder: (_) => PlansScreen(
         training: widget.training,
         apiClient: widget.apiClient,
+        runStore: widget.runStore,
       ),
     ));
   }

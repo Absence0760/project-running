@@ -623,6 +623,13 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  Future<void> _editEmailWeeklyDigest() async {
+    // Opt-IN consent stored as 'on'|'off' (default 'off'); deliberately a
+    // separate key from the transactional email_notifications.
+    final on = _bagValue<String>(SettingsKeys.emailWeeklyDigest) == 'on';
+    await _putUniversal(SettingsKeys.emailWeeklyDigest, on ? 'off' : 'on');
+  }
+
   Future<void> _editWeekStartDay() async {
     final l10n = AppLocalizations.of(context);
     const opts = ['monday', 'sunday'];
@@ -1143,6 +1150,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editEmailNotifications,
+            ),
+            SwitchListTile(
+              title: Text(l10n.prefsEmailWeeklyDigest),
+              subtitle: Text(l10n.prefsEmailWeeklyDigestHint),
+              value:
+                  _bagValue<String>(SettingsKeys.emailWeeklyDigest) == 'on',
+              onChanged:
+                  _bagReady ? (_) => _editEmailWeeklyDigest() : null,
             ),
           ],
         ),
