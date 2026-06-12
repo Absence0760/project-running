@@ -22,8 +22,11 @@
 				exercises: detail.exercises.map((e) => ({
 					exerciseName: e.exercise_name,
 					position: e.position,
+					supersetGroup: e.superset_group,
+					supersetOrder: e.superset_order,
 					sets: e.sets.map((s) => ({
 						setIndex: s.set_index,
+						setType: s.set_type,
 						targetRepsMin: s.target_reps_min,
 						targetRepsMax: s.target_reps_max,
 						targetWeightKg: s.target_weight_kg,

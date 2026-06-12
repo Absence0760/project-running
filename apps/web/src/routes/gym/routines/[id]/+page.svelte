@@ -8,7 +8,7 @@
 		deleteGymRoutine,
 		type GymRoutineDetail,
 	} from '$lib/core/data';
-	import { formatWeight, weightUnitLabel } from '$lib/format/units.svelte';
+	import { formatWeight } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -49,6 +49,30 @@
 			return `${s.target_reps_min}–${s.target_reps_max}`;
 		}
 		return String(s.target_reps_min);
+	}
+
+	function targetLabel(
+		modality: string,
+		s: {
+			target_reps_min: number | null;
+			target_reps_max: number | null;
+			target_weight_kg: number | null;
+			target_duration_s: number | null;
+			target_distance_m: number | null;
+		},
+	): string {
+		if (modality === 'time') {
+			return s.target_duration_s == null
+				? '—'
+				: t('gym.durationValue', { seconds: s.target_duration_s });
+		}
+		if (modality === 'distance') {
+			return s.target_distance_m == null ? '—' : `${s.target_distance_m} m`;
+		}
+		const reps = repLabel(s);
+		if (modality === 'bodyweight_reps') return reps;
+		const weight = s.target_weight_kg == null ? '—' : formatWeight(s.target_weight_kg);
+		return `${reps} × ${weight}`;
 	}
 </script>
 
@@ -96,22 +120,36 @@
 
 		<ul class="exercise-list" data-testid="routine-exercises">
 			{#each detail.exercises as ex (ex.id)}
-				<li class="card-elevated exercise-card">
-					<span class="exercise-name">{ex.exercise_name}</span>
+				<li class="card-elevated exercise-card" class:supersetted={ex.superset_group != null}>
+					<div class="exercise-head">
+						<span class="exercise-name">{ex.exercise_name}</span>
+						{#if ex.superset_group != null}
+							<span class="chip chip-superset" data-testid="routine-superset-badge">
+								<span class="material-symbols" aria-hidden="true">repeat</span>
+								{t('gym.routine.supersetBadge', { group: ex.superset_group })}
+							</span>
+						{/if}
+						{#if ex.progression !== 'none'}
+							<span class="chip chip-progression">
+								<span class="material-symbols" aria-hidden="true">trending_up</span>
+								{t(`gym.routine.progression.${ex.progression}`)}
+							</span>
+						{/if}
+					</div>
 					<table class="set-table">
 						<thead>
 							<tr>
+								<th class="section-label">{t('gym.routine.setType')}</th>
 								<th class="section-label">{t('gym.routine.targetReps')}</th>
-								<th class="section-label"
-									>{t('gym.routine.targetWeight', { unit: weightUnitLabel() })}</th
-								>
+								<th class="section-label">{t('gym.routine.restLabel')}</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each ex.sets as s (s.set_index)}
 								<tr>
-									<td>{repLabel(s)}</td>
-									<td>{s.target_weight_kg == null ? '—' : formatWeight(s.target_weight_kg)}</td>
+									<td>{t(`gym.routine.setType.${s.set_type}`)}</td>
+									<td>{targetLabel(ex.modality, s)}</td>
+									<td>{s.rest_s == null ? '—' : t('gym.durationValue', { seconds: s.rest_s })}</td>
 								</tr>
 							{/each}
 						</tbody>
@@ -176,13 +214,43 @@
 		flex-direction: column;
 		gap: var(--space-2xs);
 	}
+	.exercise-card.supersetted {
+		border-inline-start: 3px solid var(--color-primary);
+	}
+	.exercise-head {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
 	.exercise-name {
 		font-weight: 600;
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-sm);
+	}
+	.chip .material-symbols {
+		font-size: 0.85rem;
+	}
+	.chip-superset {
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.chip-progression {
+		color: var(--color-text-secondary);
+		background: var(--color-bg-secondary);
 	}
 	.set-table {
 		border-collapse: collapse;
 		width: 100%;
-		max-width: 20rem;
+		max-width: 24rem;
 	}
 	.set-table th {
 		text-align: left;
