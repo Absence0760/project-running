@@ -13,10 +13,16 @@
 	} from '$lib/core/data';
 	import { workoutPrs, normaliseExerciseName, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
 	import { previousExerciseSession, type ExerciseSession } from '$lib/gym/exercise_history';
+	import {
+		routineFromWorkout,
+		prefillFromRoutine,
+		type PrefillExercise,
+	} from '$lib/gym/gym_routine';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight, weightUnitLabel } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
+	import RoutineEditor from '$lib/components/RoutineEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -29,6 +35,64 @@
 	let notFound = $state(false);
 	let editing = $state(false);
 	let confirmingDelete = $state(false);
+	let savingAsRoutine = $state(false);
+	let repeating = $state(false);
+	let routineSeed = $state<PrefillExercise[] | null>(null);
+	let routineSeedTitle = $state('');
+	let repeatSeed = $state<GymWorkoutWithSets | null>(null);
+
+	// "Save as routine": promote this logged session's grouped sets into a
+	// routine draft (gym_routine.ts), then prefill the RoutineEditor with it.
+	function openSaveAsRoutine() {
+		if (!data) return;
+		const draft = routineFromWorkout(
+			data.workout.title,
+			data.sets.map((s) => ({
+				exercise_name: s.exercise_name,
+				reps: s.reps,
+				weight_kg: s.weight_kg,
+				rpe: s.rpe,
+			})),
+		);
+		routineSeed = prefillFromRoutine({
+			title: draft.title,
+			exercises: draft.exercises.map((e) => ({
+				exerciseName: e.exerciseName,
+				position: e.position,
+				sets: e.sets.map((st) => ({
+					setIndex: st.setIndex,
+					targetRepsMin: st.targetRepsMin,
+					targetRepsMax: st.targetRepsMax,
+					targetWeightKg: st.targetWeightKg,
+					targetRpe: st.targetRpe,
+				})),
+			})),
+		});
+		routineSeedTitle = draft.title;
+		savingAsRoutine = true;
+	}
+
+	// "Repeat last": instantiate this session's sets into a fresh GymEditor log
+	// (no saved routine required). The GymEditor groups by exercise_name on init.
+	function openRepeat() {
+		if (!data) return;
+		repeatSeed = {
+			workout: { ...data.workout, id: '', title: data.workout.title },
+			sets: data.sets.map((s, i) => ({ ...s, id: '', workout_id: '', set_index: i })),
+		};
+		repeating = true;
+	}
+
+	function onRepeated() {
+		repeating = false;
+		repeatSeed = null;
+		goto('/gym');
+	}
+
+	function onRoutineSaved() {
+		savingAsRoutine = false;
+		routineSeed = null;
+	}
 
 	const isOwner = $derived(!!data && data.workout.user_id === auth.user?.id);
 
@@ -207,6 +271,22 @@
 			</div>
 			{#if isOwner}
 				<div class="head-actions">
+					<button
+						class="btn btn-secondary btn-sm"
+						onclick={openRepeat}
+						data-testid="gym-repeat-last"
+					>
+						<span class="material-symbols" aria-hidden="true">replay</span>
+						{t('gym.routine.repeatLast')}
+					</button>
+					<button
+						class="btn btn-secondary btn-sm"
+						onclick={openSaveAsRoutine}
+						data-testid="gym-save-as-routine"
+					>
+						<span class="material-symbols" aria-hidden="true">list_alt</span>
+						{t('gym.routine.saveAsRoutine')}
+					</button>
 					<button class="btn btn-secondary btn-sm" onclick={() => (editing = true)}>
 						<span class="material-symbols" aria-hidden="true">edit</span>
 						{t('gym.edit')}
@@ -295,6 +375,23 @@
 		<GymEditor existing={data} onupdated={onUpdated} oncancel={() => (editing = false)} />
 	</Modal>
 {/if}
+
+<Modal
+	open={savingAsRoutine}
+	title={t('gym.routine.editor.newTitle')}
+	onclose={() => (savingAsRoutine = false)}
+>
+	<RoutineEditor
+		seedExercises={routineSeed}
+		seedTitle={routineSeedTitle}
+		oncreated={onRoutineSaved}
+		oncancel={() => (savingAsRoutine = false)}
+	/>
+</Modal>
+
+<Modal open={repeating} title={t('gym.routine.repeatLast')} onclose={() => (repeating = false)}>
+	<GymEditor seed={repeatSeed} oncreated={onRepeated} oncancel={() => (repeating = false)} />
+</Modal>
 
 <ConfirmDialog
 	open={confirmingDelete}

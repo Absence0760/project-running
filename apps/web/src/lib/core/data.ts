@@ -5817,6 +5817,196 @@ export async function deleteGymWorkout(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+// --- Gym routines (gym_programming.md slice P1) ---
+//
+// A reusable plan: gym_routines parent + gym_routine_exercises + their
+// gym_routine_sets. Author-only RLS (migration 20261230_001). last_modified_at
+// + exercise_count are client-stamped (newer-wins sync, non-authoritative
+// count — no server trigger), mirroring gym_workouts. The plan is NOT a dated
+// activity, so it does not feed the activities view. P1 leaves the superset /
+// progression / periodisation columns at their defaults.
+
+export interface GymRoutineSummary {
+	id: string;
+	author_id: string;
+	title: string;
+	notes: string | null;
+	exercise_count: number;
+	last_modified_at: string;
+	created_at: string;
+}
+
+export interface GymRoutineExercise {
+	id: string;
+	exercise_name: string;
+	exercise_key: string;
+	position: number;
+	sets: GymRoutineSet[];
+}
+
+export interface GymRoutineSet {
+	set_index: number;
+	target_reps_min: number | null;
+	target_reps_max: number | null;
+	target_weight_kg: number | null;
+	target_rpe: number | null;
+}
+
+export interface GymRoutineDetail {
+	routine: GymRoutineSummary;
+	exercises: GymRoutineExercise[];
+}
+
+/// The shape routineFromWorkout / the RoutineEditor produce. Mirrors the
+/// RoutineDraft from $lib/gym/gym_routine.ts.
+export interface GymRoutineInput {
+	title: string;
+	notes?: string | null;
+	exercises: Array<{
+		exercise_name: string;
+		exercise_key: string;
+		position: number;
+		sets: Array<{
+			set_index: number;
+			target_reps_min?: number | null;
+			target_reps_max?: number | null;
+			target_weight_kg?: number | null;
+			target_rpe?: number | null;
+		}>;
+	}>;
+}
+
+/// Authored routines for the signed-in user, most-recently-modified first.
+export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from(TABLES.gym_routines)
+		.select('id, author_id, title, notes, exercise_count, last_modified_at, created_at')
+		.eq('author_id', userId)
+		.order('last_modified_at', { ascending: false })
+		.limit(limit);
+	if (error) {
+		console.error('fetchGymRoutines failed', error);
+		return [];
+	}
+	return (data ?? []) as GymRoutineSummary[];
+}
+
+/// A single routine with its exercises (by position) + their planned sets (by
+/// set_index). Returns null when the id doesn't resolve (RLS hides others').
+export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetail | null> {
+	const { data: routine, error: rErr } = await supabase
+		.from(TABLES.gym_routines)
+		.select('id, author_id, title, notes, exercise_count, last_modified_at, created_at')
+		.eq('id', id)
+		.maybeSingle();
+	if (rErr || !routine) return null;
+	const { data: exRows, error: eErr } = await supabase
+		.from(TABLES.gym_routine_exercises)
+		.select('id, exercise_name, exercise_key, position')
+		.eq('routine_id', id)
+		.order('position', { ascending: true });
+	if (eErr) {
+		console.error('fetchGymRoutineDetail exercises failed', eErr);
+		return { routine: routine as GymRoutineSummary, exercises: [] };
+	}
+	const exercises = (exRows ?? []) as Array<{
+		id: string;
+		exercise_name: string;
+		exercise_key: string;
+		position: number;
+	}>;
+	if (exercises.length === 0) {
+		return { routine: routine as GymRoutineSummary, exercises: [] };
+	}
+	const { data: setRows, error: sErr } = await supabase
+		.from(TABLES.gym_routine_sets)
+		.select('routine_exercise_id, set_index, target_reps_min, target_reps_max, target_weight_kg, target_rpe')
+		.in('routine_exercise_id', exercises.map((e) => e.id))
+		.order('set_index', { ascending: true });
+	if (sErr) console.error('fetchGymRoutineDetail sets failed', sErr);
+	const setsByExercise = new Map<string, GymRoutineSet[]>();
+	for (const row of (setRows ?? []) as Array<{ routine_exercise_id: string } & GymRoutineSet>) {
+		const list = setsByExercise.get(row.routine_exercise_id) ?? [];
+		list.push({
+			set_index: row.set_index,
+			target_reps_min: row.target_reps_min,
+			target_reps_max: row.target_reps_max,
+			target_weight_kg: row.target_weight_kg,
+			target_rpe: row.target_rpe,
+		});
+		setsByExercise.set(row.routine_exercise_id, list);
+	}
+	return {
+		routine: routine as GymRoutineSummary,
+		exercises: exercises.map((e) => ({
+			id: e.id,
+			exercise_name: e.exercise_name,
+			exercise_key: e.exercise_key,
+			position: e.position,
+			sets: setsByExercise.get(e.id) ?? [],
+		})),
+	};
+}
+
+/// Insert a routine + its exercises + their planned sets. Blank-named
+/// exercises are dropped. exercise_count is stamped client-side from the
+/// surviving exercise list (non-authoritative cache).
+export async function createGymRoutine(input: GymRoutineInput): Promise<GymRoutineSummary> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const exercises = input.exercises.filter((e) => e.exercise_name.trim().length > 0);
+	const nowIso = new Date().toISOString();
+	const { data, error } = await supabase
+		.from(TABLES.gym_routines)
+		.insert({
+			author_id: userId,
+			title: input.title.trim(),
+			notes: input.notes ?? null,
+			exercise_count: exercises.length,
+			last_modified_at: nowIso,
+		})
+		.select('id, author_id, title, notes, exercise_count, last_modified_at, created_at')
+		.single();
+	if (error || !data) throw error ?? new Error('createGymRoutine failed');
+	const routine = data as GymRoutineSummary;
+	for (const ex of exercises) {
+		const { data: exRow, error: exErr } = await supabase
+			.from(TABLES.gym_routine_exercises)
+			.insert({
+				routine_id: routine.id,
+				exercise_name: ex.exercise_name.trim(),
+				exercise_key: ex.exercise_key,
+				position: ex.position,
+			})
+			.select('id')
+			.single();
+		if (exErr || !exRow) throw exErr ?? new Error('createGymRoutine exercise failed');
+		const setRows = ex.sets.map((s, i) => ({
+			routine_exercise_id: (exRow as { id: string }).id,
+			set_index: i,
+			target_reps_min: s.target_reps_min ?? null,
+			target_reps_max: s.target_reps_max ?? null,
+			target_weight_kg: s.target_weight_kg ?? null,
+			target_rpe: s.target_rpe ?? null,
+		}));
+		if (setRows.length > 0) {
+			const { error: sErr } = await supabase.from(TABLES.gym_routine_sets).insert(setRows);
+			if (sErr) throw sErr;
+		}
+	}
+	return routine;
+}
+
+/// Deletes a routine; exercises + sets cascade via FK (migration 20261230_001).
+/// Logged gym_workouts are untouched (the plan→log link is a metadata string,
+/// not an FK).
+export async function deleteGymRoutine(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.gym_routines).delete().eq('id', id);
+	if (error) throw error;
+}
+
 // --- Nutrition: food_log + body_metrics (Phase 4 multi-modal) ---
 //
 // A food_log row is one logged item against an optional meal slot, with

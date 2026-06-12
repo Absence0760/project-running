@@ -12,6 +12,10 @@
 
 	interface Props {
 		existing?: GymWorkoutWithSets | null;
+		/// Prefill the editor with these sets/title but save as a NEW workout
+		/// (the "Repeat last" / "Start routine" path) — distinct from `existing`,
+		/// which edits an existing row. Ignored when `existing` is set.
+		seed?: GymWorkoutWithSets | null;
 		/// Distinct exercise names from the user's history, for the datalist
 		/// autocomplete (multi_modal.md § Gym — "autocomplete from the
 		/// user's own history, not a database").
@@ -21,7 +25,8 @@
 		oncancel: () => void;
 	}
 
-	let { existing = null, suggestions = [], oncreated, onupdated, oncancel }: Props = $props();
+	let { existing = null, seed: seedWorkout = null, suggestions = [], oncreated, onupdated, oncancel }: Props =
+		$props();
 
 	type EditSet = { reps: string; weight: string; rpe: string };
 	type EditExercise = { name: string; sets: EditSet[] };
@@ -58,9 +63,11 @@
 	// The editor is mounted fresh each time the host modal opens, so the
 	// prop is read once at construction to seed local state. untrack keeps
 	// that one-time read from registering a (never-changing) dependency.
-	const seed = untrack(() => existing);
+	// `existing` (edit) takes precedence over `seed` (prefill-as-new) for the
+	// field initialisers; the save() branch keys off `existing` alone.
+	const seed = untrack(() => existing ?? seedWorkout);
 	let title = $state(seed?.workout.title ?? '');
-	let isPublic = $state(seed?.workout.is_public ?? false);
+	let isPublic = $state(untrack(() => existing?.workout.is_public ?? false));
 	let exercises = $state<EditExercise[]>(initExercises(seed));
 	let saving = $state(false);
 	let error = $state('');

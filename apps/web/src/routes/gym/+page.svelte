@@ -115,6 +115,12 @@
 			{/if}
 		</div>
 		<div class="head-actions">
+			{#if !loading && workouts.length > 0}
+				<a class="btn btn-secondary" href="/gym/routines" data-testid="gym-routines-link">
+					<span class="material-symbols" aria-hidden="true">list_alt</span>
+					{t('gym.routine.link')}
+				</a>
+			{/if}
 			{#if !loading && hasWeightedRecords}
 				<a class="btn btn-secondary" href="/gym/records" data-testid="gym-records-link">
 					<span class="material-symbols" aria-hidden="true">trophy</span>
