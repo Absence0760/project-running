@@ -7296,6 +7296,45 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get nutritionCancel => 'Cancelar';
+
+  @override
+  String get sessionTitle => 'Sessões';
+
+  @override
+  String get sessionEmpty => 'Ainda não há planos de sessão.';
+
+  @override
+  String get sessionEmptyHint =>
+      'Crie na web uma sequência reutilizável de yoga, pilates ou aula.';
+
+  @override
+  String get sessionUntitled => 'Sessão sem título';
+
+  @override
+  String get sessionNotFound => 'Plano de sessão não encontrado.';
+
+  @override
+  String get sessionSteps => 'Sequência';
+
+  @override
+  String sessionStepHold(Object name, Object seconds) {
+    return '$name · sustentar ${seconds}s';
+  }
+
+  @override
+  String sessionStepReps(Object name, Object reps) {
+    return '$name · $reps reps.';
+  }
+
+  @override
+  String sessionStepFlow(Object name, Object seconds) {
+    return '$name · flow ${seconds}s';
+  }
+
+  @override
+  String sessionEstDuration(Object minutes) {
+    return '~ $minutes min';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -14590,4 +14629,43 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionCancel => 'Cancelar';
+
+  @override
+  String get sessionTitle => 'Sessões';
+
+  @override
+  String get sessionEmpty => 'Ainda não há planos de sessão.';
+
+  @override
+  String get sessionEmptyHint =>
+      'Crie na web uma sequência reutilizável de yoga, pilates ou aula.';
+
+  @override
+  String get sessionUntitled => 'Sessão sem título';
+
+  @override
+  String get sessionNotFound => 'Plano de sessão não encontrado.';
+
+  @override
+  String get sessionSteps => 'Sequência';
+
+  @override
+  String sessionStepHold(Object name, Object seconds) {
+    return '$name · sustentar ${seconds}s';
+  }
+
+  @override
+  String sessionStepReps(Object name, Object reps) {
+    return '$name · $reps reps.';
+  }
+
+  @override
+  String sessionStepFlow(Object name, Object seconds) {
+    return '$name · flow ${seconds}s';
+  }
+
+  @override
+  String sessionEstDuration(Object minutes) {
+    return '~ $minutes min';
+  }
 }

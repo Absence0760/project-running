@@ -2007,5 +2007,15 @@
   "nutritionItemName": "Nombre del alimento",
   "nutritionPortionGrams": "Porción (g)",
   "nutritionAdd": "Añadir",
-  "nutritionCancel": "Cancelar"
+  "nutritionCancel": "Cancelar",
+  "sessionTitle": "Sesiones",
+  "sessionEmpty": "Aún no hay planes de sesión.",
+  "sessionEmptyHint": "Crea en la web una secuencia reutilizable de yoga, pilates o clase.",
+  "sessionUntitled": "Sesión sin título",
+  "sessionNotFound": "Plan de sesión no encontrado.",
+  "sessionSteps": "Secuencia",
+  "sessionStepHold": "{name} · mantener {seconds}s",
+  "sessionStepReps": "{name} · {reps} reps.",
+  "sessionStepFlow": "{name} · flujo {seconds}s",
+  "sessionEstDuration": "~ {minutes} min"
 }

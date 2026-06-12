@@ -7303,4 +7303,43 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get nutritionCancel => 'Abbrechen';
+
+  @override
+  String get sessionTitle => 'Sessions';
+
+  @override
+  String get sessionEmpty => 'Noch keine Session-Pläne.';
+
+  @override
+  String get sessionEmptyHint =>
+      'Erstelle im Web eine wiederverwendbare Yoga-, Pilates- oder Kurs-Abfolge.';
+
+  @override
+  String get sessionUntitled => 'Session ohne Titel';
+
+  @override
+  String get sessionNotFound => 'Session-Plan nicht gefunden.';
+
+  @override
+  String get sessionSteps => 'Abfolge';
+
+  @override
+  String sessionStepHold(Object name, Object seconds) {
+    return '$name · halten ${seconds}s';
+  }
+
+  @override
+  String sessionStepReps(Object name, Object reps) {
+    return '$name · $reps Wdh.';
+  }
+
+  @override
+  String sessionStepFlow(Object name, Object seconds) {
+    return '$name · Flow ${seconds}s';
+  }
+
+  @override
+  String sessionEstDuration(Object minutes) {
+    return 'ca. $minutes Min.';
+  }
 }

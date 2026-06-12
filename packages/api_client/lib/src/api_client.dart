@@ -4168,6 +4168,68 @@ class ApiClient {
     ];
   }
 
+  /// Session plans (session_planner.md P1) the caller can see: their own plans
+  /// plus any plan owned by a club they belong to (RLS owns the authority).
+  /// Read-only on mobile in P1 — the editor lives on web first.
+  Future<List<SessionPlanRow>> fetchSessionPlans() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    try {
+      final data = await _client
+          .from(SessionPlanRow.table)
+          .select()
+          .order(SessionPlanRow.colUpdatedAt, ascending: false);
+      return (data as List)
+          .map<SessionPlanRow>(
+              (row) => SessionPlanRow.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchSessionPlans failed: $e');
+      return const [];
+    }
+  }
+
+  /// A single session plan with its blocks + items, for the mobile read view.
+  /// Null when the plan is absent or not visible to the caller.
+  Future<({
+    SessionPlanRow plan,
+    List<SessionPlanBlockRow> blocks,
+    List<SessionPlanItemRow> items,
+  })?> fetchSessionPlan(String id) async {
+    try {
+      final planRow = await _client
+          .from(SessionPlanRow.table)
+          .select()
+          .eq(SessionPlanRow.colId, id)
+          .maybeSingle();
+      if (planRow == null) return null;
+      final blocksData = await _client
+          .from(SessionPlanBlockRow.table)
+          .select()
+          .eq(SessionPlanBlockRow.colPlanId, id)
+          .order(SessionPlanBlockRow.colPosition, ascending: true);
+      final itemsData = await _client
+          .from(SessionPlanItemRow.table)
+          .select()
+          .eq(SessionPlanItemRow.colPlanId, id)
+          .order(SessionPlanItemRow.colPosition, ascending: true);
+      return (
+        plan: SessionPlanRow.fromJson(planRow),
+        blocks: (blocksData as List)
+            .map<SessionPlanBlockRow>(
+                (r) => SessionPlanBlockRow.fromJson(r as Map<String, dynamic>))
+            .toList(),
+        items: (itemsData as List)
+            .map<SessionPlanItemRow>(
+                (r) => SessionPlanItemRow.fromJson(r as Map<String, dynamic>))
+            .toList(),
+      );
+    } catch (e) {
+      debugPrint('fetchSessionPlan failed: $e');
+      return null;
+    }
+  }
+
   /// Windowed, reverse-chronological feed across all logged modalities for
   /// the unified History timeline. RLS (`security_invoker` on the `activities`
   /// view) scopes it to the caller. Always bounded — the timeline paginates

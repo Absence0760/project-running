@@ -12086,6 +12086,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get nutritionCancel;
+
+  /// App bar title for the session-plans list (yoga/pilates/class sequences)
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get sessionTitle;
+
+  /// Empty-state line on the session-plans list
+  ///
+  /// In en, this message translates to:
+  /// **'No session plans yet.'**
+  String get sessionEmpty;
+
+  /// Empty-state hint pointing to the web editor (mobile is read-only in P1)
+  ///
+  /// In en, this message translates to:
+  /// **'Build a reusable yoga, pilates or class sequence on the web.'**
+  String get sessionEmptyHint;
+
+  /// Fallback title for a session plan with no title
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled session'**
+  String get sessionUntitled;
+
+  /// Shown when a session plan can't be loaded
+  ///
+  /// In en, this message translates to:
+  /// **'Session plan not found.'**
+  String get sessionNotFound;
+
+  /// Heading above the expanded list of movement steps
+  ///
+  /// In en, this message translates to:
+  /// **'Sequence'**
+  String get sessionSteps;
+
+  /// A timed hold step in the sequence
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · hold {seconds}s'**
+  String sessionStepHold(Object name, Object seconds);
+
+  /// A counted-reps step in the sequence
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {reps} reps'**
+  String sessionStepReps(Object name, Object reps);
+
+  /// A continuous flow step in the sequence
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · flow {seconds}s'**
+  String sessionStepFlow(Object name, Object seconds);
+
+  /// Estimated total duration of a session plan in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Est. {minutes} min'**
+  String sessionEstDuration(Object minutes);
 }
 
 class _AppLocalizationsDelegate
