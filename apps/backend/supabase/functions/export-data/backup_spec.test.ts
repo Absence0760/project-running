@@ -22,10 +22,11 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// addition: user_settings + the Phase 4 multi-modal gym/nutrition
 	// pair: gym_workouts, food_log + the nutrition body_metrics weight
 	// series + the safety_contacts finish-alert relationships in both
-	// directions: owned + as-contact); a regression that drops one of
+	// directions: owned + as-contact + the instructor_payout_accounts
+	// Stripe Connect payout metadata); a regression that drops one of
 	// these is a silent Art 20 completeness gap. Keep in lockstep with
 	// the Go worker's `FetchExportPersonalDataTables` spec list.
-	assertEquals(specs.length, 40, `expected 40 specs, got ${specs.length}`);
+	assertEquals(specs.length, 41, `expected 41 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -66,6 +67,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'gym_routines.json',
 		'food_log.json',
 		'body_metrics.json',
+		'instructor_payout_accounts.json',
 		'safety_contacts_owned.json',
 		'safety_contacts_as_contact.json',
 	]) {

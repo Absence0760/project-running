@@ -55,6 +55,14 @@ var exportGuardExclusions = map[string]string{
 	// deletion (Art 17) instead — see the delete-account EF.
 	"rate_limits":         "operational throttle counters; drained on deletion, not part of an Art 20 export",
 	"lifecycle_email_log": "internal send-once guard for transactional mail; operational, not Art 20 portable data",
+
+	// Internal access-control allow-list, not subject-provided personal data:
+	// admin status is controller-assigned (an org decision, not data the user
+	// gave us under Art 20), and the row's `granted_by` is ANOTHER admin's user
+	// id — exporting it to the subject would leak a third party. Admin rows are
+	// drained on account deletion (Art 17) via the delete-account path instead.
+	// CISO/counsel to confirm this exclusion stands (org SOC 2 / GovRAMP scope).
+	"app_admins": "internal access-control allow-list; controller-assigned (not Art-20 user-provided) and granted_by references another admin — drained on deletion, not exported",
 }
 
 func TestPersonalDataExport_EveryUserIdTableIsCoveredOrExcluded(t *testing.T) {

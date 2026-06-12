@@ -205,6 +205,16 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// 20261216_001). Special-category health data, owner-scoped, squarely
 		// within Art 20. height_cm ships in the user_profiles export entry.
 		{ entry: 'body_metrics.json', table: 'body_metrics', filter: uidEq, select: '*' },
+		// instructor_payout_accounts — the host's Stripe Connect payout-account
+		// metadata (club_events.md paid-registration rail). The subject's own
+		// data under Art 15: their connected-account reference
+		// (`stripe_connect_account_id`, an `acct_…` id — a reference, not a
+		// secret key) + the status flags Stripe mirrors back. No Stripe secret
+		// is stored on the row, so the select carries every column (`*`):
+		// status flags + country + default_currency + onboarded_at are all the
+		// subject's own data. Mirrors the Go worker's exportPersonalDataSpecs
+		// entry (the live export path).
+		{ entry: 'instructor_payout_accounts.json', table: 'instructor_payout_accounts', filter: uidEq, select: '*' },
 		// safety_contacts — opt-in finish-alert relationships (migration
 		// 20261218_001). The subject is on both legs: rows they own
 		// (owner_id) and rows where they are the confirmed contact

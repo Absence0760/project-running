@@ -1639,6 +1639,15 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// squarely within the Art 20 right to receive. height_cm lives on
 		// user_profiles and ships in that export entry.
 		{name: "body_metrics.json", table: schema.TableBodyMetrics, filter: uidEq, sel: "*"},
+		// instructor_payout_accounts — the host's Stripe Connect payout-account
+		// metadata (migration for the club_events.md paid-registration rail).
+		// The subject's own data under Art 15: their connected-account
+		// reference (`stripe_connect_account_id`, an `acct_…` id — a reference,
+		// not a secret key) + the onboarding/capability status flags Stripe
+		// mirrors back. There is no Stripe secret/API key stored on this row, so
+		// the select carries every column (`*`): status flags + country +
+		// default_currency + onboarded_at are all the subject's own data.
+		{name: "instructor_payout_accounts.json", table: schema.TableInstructorPayoutAccounts, filter: uidEq, sel: "*"},
 		// safety_contacts — the opt-in finish-alert relationships
 		// (migration 20261218_001). The subject is on BOTH legs: rows they
 		// OWN (owner_id — the contacts they designated) and rows where they

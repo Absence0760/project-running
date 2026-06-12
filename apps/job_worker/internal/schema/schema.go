@@ -69,6 +69,10 @@ const (
 	// explicit unsubscribe) the weekly-digest builder + handler MUST consult
 	// before any send. Migration 20270108_001. Fail-closed RLS — worker-only.
 	TableEmailSuppressions = "email_suppressions"
+	// TableInstructorPayoutAccounts holds the host's Stripe Connect payout-account
+	// metadata (status flags + the acct_ reference — no secret keys). User-scoped
+	// personal data under GDPR Art 15; exported by the DSAR spec.
+	TableInstructorPayoutAccounts = "instructor_payout_accounts"
 )
 
 // Bucket is a Supabase Storage bucket name — the `<bucket>` in
