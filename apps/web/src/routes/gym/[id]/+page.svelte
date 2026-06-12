@@ -7,6 +7,7 @@
 		fetchGymWorkoutWithSets,
 		fetchExerciseSetHistory,
 		deleteGymWorkout,
+		setGymWorkoutPublic,
 		type GymWorkoutWithSets,
 		type GymSet,
 		type GymSetWithDate,
@@ -43,6 +44,7 @@
 	let routineSeed = $state<PrefillExercise[] | null>(null);
 	let routineSeedTitle = $state('');
 	let repeatSeed = $state<GymWorkoutWithSets | null>(null);
+	let visibilityBusy = $state(false);
 
 	// "Save as routine": promote this logged session's grouped sets into a
 	// routine draft (gym_routine.ts), then prefill the RoutineEditor with it.
@@ -262,6 +264,38 @@
 		void load();
 	}
 
+	async function toggleVisibility() {
+		if (!data || visibilityBusy) return;
+		const next = !data.workout.is_public;
+		visibilityBusy = true;
+		try {
+			await setGymWorkoutPublic(id, next);
+			data = { ...data, workout: { ...data.workout, is_public: next } };
+		} catch (e) {
+			console.error('toggle gym visibility failed', e);
+			showToast(t('gym.visibilityError'));
+		} finally {
+			visibilityBusy = false;
+		}
+	}
+
+	async function copyShareLink() {
+		const url = `${location.origin}/share/workout/${id}`;
+		try {
+			// A non-public workout's share link 404s for everyone else, so make
+			// it public first — mirrors the run-detail share flow.
+			if (data && !data.workout.is_public) {
+				await setGymWorkoutPublic(id, true);
+				data = { ...data, workout: { ...data.workout, is_public: true } };
+			}
+			await navigator.clipboard.writeText(url);
+			showToast(t('gym.shareLinkCopied'));
+		} catch (e) {
+			console.error('copy gym share link failed', e);
+			showToast(t('gym.shareLinkError'));
+		}
+	}
+
 	async function doDelete() {
 		confirmingDelete = false;
 		try {
@@ -305,10 +339,37 @@
 		<header class="page-header">
 			<div class="head-text">
 				<h1>{data.workout.title || t('gym.untitled')}</h1>
-				<p class="head-date">{formatDate(data.workout.started_at)}</p>
+				<p class="head-date">
+					{formatDate(data.workout.started_at)}
+					<span class="visibility-chip" class:is-public={data.workout.is_public}>
+						<span class="material-symbols" aria-hidden="true">
+							{data.workout.is_public ? 'public' : 'lock'}
+						</span>
+						{data.workout.is_public ? t('gym.public') : t('gym.private')}
+					</span>
+				</p>
 			</div>
 			{#if isOwner}
 				<div class="head-actions">
+					<button
+						class="btn btn-secondary btn-sm"
+						onclick={toggleVisibility}
+						disabled={visibilityBusy}
+						data-testid="gym-toggle-public"
+					>
+						<span class="material-symbols" aria-hidden="true">
+							{data.workout.is_public ? 'lock' : 'public'}
+						</span>
+						{data.workout.is_public ? t('gym.makePrivate') : t('gym.makePublic')}
+					</button>
+					<button
+						class="btn btn-secondary btn-sm"
+						onclick={copyShareLink}
+						data-testid="gym-copy-share-link"
+					>
+						<span class="material-symbols" aria-hidden="true">share</span>
+						{t('gym.copyShareLink')}
+					</button>
 					<button
 						class="btn btn-secondary btn-sm"
 						onclick={openRepeat}
@@ -484,6 +545,30 @@
 		margin: 0;
 		font-size: 0.9rem;
 		color: var(--color-text-secondary);
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+	.visibility-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-tertiary);
+		background: var(--color-bg-secondary);
+		padding: 0.1rem var(--space-sm);
+		border-radius: var(--radius-sm);
+	}
+	.visibility-chip.is-public {
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.visibility-chip .material-symbols {
+		font-size: 0.85rem;
 	}
 	.head-actions {
 		display: flex;
