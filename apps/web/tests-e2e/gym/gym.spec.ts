@@ -90,6 +90,58 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		expect(afterDelete?.length ?? 0).toBe(0);
 	});
 
+	test('timed set: duration_s round-trips (plank hold)', async ({ page }) => {
+		// A timed hold (plank) carries duration_s with no weight (instructor M2).
+		// Log a 90 s plank, assert the stored row carries duration_s = 90, and
+		// the detail screen surfaces the hold time.
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E Core day ${stamp}`;
+		const exercise = `E2E Plank ${stamp}`;
+
+		await page.goto('/gym');
+		await page.getByTestId('gym-log').click();
+
+		await page.getByPlaceholder('e.g. Push day').fill(title);
+		await page.getByPlaceholder('Exercise name').first().fill(exercise);
+		const setRow = page.locator('.set-row').first();
+		// Columns are reps / weight / rpe / duration — fill only the duration.
+		await setRow.locator('input[type="number"]').nth(3).fill('90');
+
+		await page.getByRole('button', { name: 'Save workout' }).click();
+
+		const row = page.locator('.workout-row', { hasText: title });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		const { data: created } = await admin
+			.from('gym_workouts')
+			.select('id')
+			.eq('user_id', USER_A.id)
+			.eq('title', title);
+		expect(created?.length).toBe(1);
+		const workoutId = created![0].id as string;
+
+		try {
+			const { data: sets } = await admin
+				.from('gym_sets')
+				.select('duration_s, reps, weight_kg')
+				.eq('workout_id', workoutId);
+			expect(sets?.length).toBe(1);
+			expect(sets![0].duration_s).toBe(90);
+			expect(sets![0].reps).toBeNull();
+			expect(sets![0].weight_kg).toBeNull();
+
+			// Detail screen surfaces the hold time.
+			await row.click();
+			await expect(page).toHaveURL(new RegExp(`/gym/${workoutId}`));
+			const block = page.locator('.exercise-block', { hasText: exercise });
+			await expect(block).toBeVisible({ timeout: 10_000 });
+			await expect(block.locator('.sets li:not(.sets-head)').first()).toContainText('90s');
+		} finally {
+			await admin.from('gym_workouts').delete().eq('id', workoutId);
+		}
+	});
+
 	test('weight_unit=lbs: entry parses to canonical kg + display renders lbs (F19)', async ({
 		page,
 	}) => {

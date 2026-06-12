@@ -5546,6 +5546,9 @@ export interface GymSet {
 	reps: number | null;
 	weight_kg: number | null;
 	rpe: number | null;
+	/// Optional hold/interval time in seconds for timed work (planks, holds);
+	/// null for rep/load-only sets (migration 20261231_001).
+	duration_s: number | null;
 }
 
 export interface GymWorkoutWithSets {
@@ -5558,6 +5561,7 @@ export interface GymSetInput {
 	reps?: number | null;
 	weight_kg?: number | null;
 	rpe?: number | null;
+	duration_s?: number | null;
 }
 
 /// One row per historical set, joined to its workout's start time, for
@@ -5570,6 +5574,7 @@ export interface GymSetWithDate {
 	reps: number | null;
 	weight_kg: number | null;
 	rpe: number | null;
+	duration_s: number | null;
 }
 
 /// Recent gym workouts for the signed-in user, newest first.
@@ -5629,7 +5634,7 @@ export async function fetchGymSetHistory(opts?: {
 	if (!userId) return [];
 	let query = supabase
 		.from(TABLES.gym_sets)
-		.select('workout_id, exercise_name, reps, weight_kg, rpe, gym_workouts!inner(started_at, user_id)')
+		.select('workout_id, exercise_name, reps, weight_kg, rpe, duration_s, gym_workouts!inner(started_at, user_id)')
 		.eq('gym_workouts.user_id', userId);
 	if (opts?.sinceDays != null) {
 		const since = new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString();
@@ -5647,6 +5652,7 @@ export async function fetchGymSetHistory(opts?: {
 			reps: number | null;
 			weight_kg: number | null;
 			rpe: number | null;
+			duration_s: number | null;
 			gym_workouts: { started_at: string } | { started_at: string }[];
 		};
 		const w = Array.isArray(r.gym_workouts) ? r.gym_workouts[0] : r.gym_workouts;
@@ -5657,6 +5663,7 @@ export async function fetchGymSetHistory(opts?: {
 			reps: r.reps,
 			weight_kg: r.weight_kg,
 			rpe: r.rpe,
+			duration_s: r.duration_s,
 		};
 	});
 }
@@ -5731,6 +5738,7 @@ export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithD
 		reps: number | null;
 		weight_kg: number | string | null;
 		rpe: number | string | null;
+		duration_s: number | null;
 	}>).map((r) => ({
 		workout_id: r.workout_id,
 		started_at: r.started_at,
@@ -5738,6 +5746,7 @@ export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithD
 		reps: r.reps,
 		weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
 		rpe: r.rpe == null ? null : Number(r.rpe),
+		duration_s: r.duration_s,
 	}));
 }
 
@@ -5769,6 +5778,7 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 			reps: s.reps ?? null,
 			weight_kg: s.weight_kg ?? null,
 			rpe: s.rpe ?? null,
+			duration_s: s.duration_s ?? null,
 		}))
 		.filter((r) => r.exercise_name.length > 0);
 	if (rows.length === 0) return;

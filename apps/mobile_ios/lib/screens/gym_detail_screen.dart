@@ -203,7 +203,13 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     if (weight != null) {
       parts.add(WeightFormat.format(weight.toDouble(), activeWeightUnit));
     }
-    return parts.join(' × ');
+    final repWeight = parts.join(' × ');
+    final duration = s['duration_s'] as num?;
+    if (duration != null) {
+      final dur = l10n.gymDurationValue(_numStr(duration));
+      return repWeight.isEmpty ? dur : '$repWeight · $dur';
+    }
+    return repWeight;
   }
 
   String _prLabel(PrKind kind, AppLocalizations l10n) {

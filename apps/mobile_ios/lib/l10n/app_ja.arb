@@ -1916,6 +1916,8 @@
   "gymKg": "kg",
   "gymReps": "回数",
   "gymRpe": "RPE",
+  "gymDuration": "時間 (秒)",
+  "gymDurationValue": "{seconds}秒",
   "gymSetN": "セット {n}",
   "gymPrWeight": "最高重量",
   "gymPrVolume": "最高ボリューム",

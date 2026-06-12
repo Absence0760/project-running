@@ -7019,6 +7019,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymRpe => 'RPE';
 
   @override
+  String get gymDuration => 'Tempo (s)';
+
+  @override
+  String gymDurationValue(String seconds) {
+    return '${seconds}s';
+  }
+
+  @override
   String gymSetN(int n) {
     return 'Série $n';
   }
@@ -14337,6 +14345,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymRpe => 'RPE';
+
+  @override
+  String get gymDuration => 'Tempo (s)';
+
+  @override
+  String gymDurationValue(String seconds) {
+    return '${seconds}s';
+  }
 
   @override
   String gymSetN(int n) {

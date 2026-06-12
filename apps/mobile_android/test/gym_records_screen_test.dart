@@ -68,11 +68,11 @@ void main() {
     await tester.runAsync(() async {
       await store.createLocal(
         startedAt: DateTime.utc(2026, 2, 1),
-        sets: const [(exerciseName: 'Bench', reps: 5, weightKg: 100.0, rpe: null)],
+        sets: const [(exerciseName: 'Bench', reps: 5, weightKg: 100.0, rpe: null, durationS: null)],
       );
       await store.createLocal(
         startedAt: DateTime.utc(2026, 2, 8),
-        sets: const [(exerciseName: 'Bench', reps: 3, weightKg: 110.0, rpe: null)],
+        sets: const [(exerciseName: 'Bench', reps: 3, weightKg: 110.0, rpe: null, durationS: null)],
       );
     });
     try {

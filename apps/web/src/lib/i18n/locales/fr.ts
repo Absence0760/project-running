@@ -2944,6 +2944,8 @@ export const messages = {
 	"gym.reps": "Reps",
 	"gym.weightUnit": "Poids ({unit})",
 	"gym.rpe": "RPE",
+	"gym.duration": "Temps (s)",
+	"gym.durationValue": "{seconds}s",
 	"gym.setN": "Série {n}",
 	"gym.exercisesShort": "{count, plural, one {# exercice} other {# exercices}}",
 	"gym.volumeShort": "{volume}",

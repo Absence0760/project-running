@@ -1523,7 +1523,7 @@ Returns one row per exercise — `(exercise_name, heaviest_weight_kg, heaviest_w
 
 ### `gym_exercise_set_history(p_name text)`
 
-Returns one exercise's sets — `(workout_id, started_at, exercise_name, reps, weight_kg, rpe)` — matched on the **normalised** name (trim → lowercase → collapse whitespace, the same key `gym_prs.ts#normaliseExerciseName` uses), for the `/gym/exercise` progression view and `/gym/[id]`'s per-exercise PR badges + vs-last-time (migration `20261225_001`, perf-hunt follow-up). Bounds the read to one exercise instead of pulling the whole history; the normalised match picks up sessions logged under a different capitalisation (an exact `=` would drop them). SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_set_history_test.sql`.
+Returns one exercise's sets — `(workout_id, started_at, exercise_name, reps, weight_kg, rpe, duration_s)` — matched on the **normalised** name (trim → lowercase → collapse whitespace, the same key `gym_prs.ts#normaliseExerciseName` uses), for the `/gym/exercise` progression view and `/gym/[id]`'s per-exercise PR badges + vs-last-time (migration `20261225_001`, perf-hunt follow-up; `duration_s` added in `20261231_001` for timed work — planks/holds — instructor_business.md M2). Bounds the read to one exercise instead of pulling the whole history; the normalised match picks up sessions logged under a different capitalisation (an exact `=` would drop them). SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_set_history_test.sql`.
 
 ### `gym_exercise_names()`
 
