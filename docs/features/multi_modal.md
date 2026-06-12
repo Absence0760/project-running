@@ -337,7 +337,9 @@ redaction-boundary guarantees are pinned by
 > chips hidden); **every tab — including Runs — renders the same timeline-row
 > shape** (run rows look like lift/meal rows), so the top section is consistent
 > across tabs. Rows link to their own detail route (`/runs/[id]`, `/gym/[id]`);
-> meals render read-only until the nutrition detail route lands. **One header
+> meal rows in the timeline stay read-only — the per-meal detail surface is the
+> dedicated `/nutrition/[date]/[slot]` route reached from the nutrition day view
+> (shipped 2026-06-12; mobile `nutrition_meal_detail_screen.dart`). **One header
 > per tab** mirrors the /gym + /nutrition headers: the **All** view shows a
 > `Log` menu (Log run / Log workout / Log food); a single-modality tab
 > (**Runs** / **Lifts** / **Meals**) shows a `View all` link to that modality's
@@ -407,9 +409,11 @@ redaction-boundary guarantees are pinned by
 ```
 
 - **Each row is one tap to its own detail route** — run-detail,
-  lift-detail (`/gym/[id]`), meal-detail (`/nutrition/log/[id]`). We do
-  **not** build a unified mega-detail; each modality keeps its own
-  focused screen.
+  lift-detail (`/gym/[id]`), meal-detail. The shipped meal-detail surface is
+  the per-slot `/nutrition/[date]/[slot]` route (slot items + macro breakdown +
+  a 7-day calorie trend), reached from the nutrition day-view meal-group
+  headers rather than from a per-entry id. We do **not** build a unified
+  mega-detail; each modality keeps its own focused screen.
 - **A leading glyph per kind** (▷ run, ☰ lift, 🍴 meal) does the
   type-coding so the chips aren't load-bearing for scanning — colour is a
   secondary cue, never the only one (accessibility).
