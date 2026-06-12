@@ -570,10 +570,24 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   run readiness); fuelling adequacy is the AI Coach's soft-reasoning job via
   the 7-day rollup above, not a formula (decisions §134).
 - **Social feed** extends to **lift** cards gated on `is_public`, reusing
-  the existing follower/feed plumbing. **Meals are NOT feed-shareable in
-  v1** — broadcasting what you ate is a privacy footgun with little upside;
-  `food_log.is_public` stays in the schema (cheap) but no UI surfaces meal
-  sharing until there's a clear reason. Defaults are private regardless.
+  the existing follower/feed plumbing. **Shipped (2026-06-12) on web +
+  mobile.** Web `SocialFeed.svelte` reads `fetchFollowingActivityFeed` (runs
+  via the redacted `public_runs` view + public `gym_workouts` via their
+  owner-or-public RLS, merged into one cursor-paged window) and renders a
+  distinct lift card (title + set count + total volume + handle + date) with a
+  `Lift` filter chip; the public lift links to the new read-only
+  `/share/workout/[id]` page, and a public/private toggle + copy-share-link
+  action live on `/gym/[id]` (`setGymWorkoutPublic`). Mobile mirrors the lot:
+  `feed_screen.dart`'s `_LiftEntryCard` + `Lift` chip over the
+  `ActivityFeedEntry` union (`fetchFollowingActivityFeed` in `api_client`), and
+  the gym-detail visibility toggle (`gym_detail_screen.dart` →
+  `LocalGymStore.updateLocal`, offline-first). Only the headline columns are
+  projected into a lift card / share page — no notes / RPE / per-set data leak
+  past what the owner made public; engagement (kudos / comments) stays
+  run-only. **Meals are NOT feed-shareable in v1** — broadcasting what you ate
+  is a privacy footgun with little upside; `food_log.is_public` stays in the
+  schema (cheap) but no UI surfaces meal sharing until there's a clear reason.
+  Defaults are private regardless.
   > **Redaction boundary (decisions §33).** The `activities` view is
   > `security_invoker`, so base-table RLS decides cross-user visibility.
   > `gym_workouts` / `food_log` keep an "owner or public" read policy, so a
