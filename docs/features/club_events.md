@@ -90,9 +90,11 @@ This is why category names track `ActivityType` (`cycle`, not `ride`): an event'
 
 A paid pilates class the user attends **must be able to land in their Train → Gym history and feed the same recovery/load curve their runs do** — otherwise clubs are a bolt-on and the cross-modal-intelligence thesis ([multi_modal.md](multi_modal.md)) doesn't hold for the marketplace. So the connection is part of the contract, even though the *write* may ship after P1:
 
-- A `class` event carries an optional **`gym_template`** hint on the event (free-text discipline + a default duration), so "attended" can one-tap-create a `gym_workout` for the attendee (their own row, their own data — the event only *suggests* it, never writes to the attendee's log without consent).
-- Until that write ships, a `class` is attendance-only and **the seam is reserved, not faked** — no phantom `gym_workout`, no half-logged session. The contract names the integration so it's built deliberately, not discovered later.
-- This keeps the [§63 data-trust tiers](multi_modal.md#integration-model--inform-tier-1-vs-command-tier-2) intact: attending-logs-a-workout is *inform* (the user confirms); nothing auto-mutates a plan.
+- A `class` event carries an optional **`gym_template`** hint on the event — a typed `{discipline, duration_min}` jsonb shape (the free-text discipline doubles as the workout title; the default duration is its own field). The host sets it in the editor; an attendee one-tap-creates a `gym_workout` from it (their own row, their own data — the event only *suggests* it, never writes to the attendee's log without consent).
+- **This now ships (web + mobile).** The host write goes through `EventEditor` → `createEvent` (class-only; a class the host didn't template writes `gym_template = NULL`, not `{}`, so the attendee affordance self-hides). The attendee read goes through the event-detail "Log this as a workout" button (web `/clubs/[slug]/events/[id]`, mobile `event_detail_screen.dart`), gated on `category === 'class'` **AND** a non-null `gym_template` **AND** a signed-in viewer — a run/cycle/social event never shows it. The button **pre-fills the canonical composer** (web `GymEditor`, mobile `gym_compose_sheet`) from the template (`workoutDraftFromTemplate`: discipline||event-title → title, duration_min×60 → duration_s; sets stay empty); nothing writes until the user confirms inside the composer.
+- The typed contract lives in a parity-paired pure helper — web `social/event_gym_template.ts` ↔ mobile `event_gym_template.dart` (`parseGymTemplate` / `gymTemplateFromInputs` / `workoutDraftFromTemplate`) — so the host-write and attendee-read paths share one tolerant parser instead of poking raw jsonb at each call site.
+- The read path needs a column grant: `events` is column-SELECT-locked (`20260818_001`), and `20261228_001` left `gym_template` revoked ("reserved for slice P"). Migration **`20261230_001`** grants `SELECT (gym_template)` to `authenticated` + `anon` (mirrors the category/discipline grant); `host_user_id` stays revoked. Pinned by pgtap `event_gym_template_grants_test.sql`.
+- This keeps the [§63 data-trust tiers](multi_modal.md#integration-model--inform-tier-1-vs-command-tier-2) intact: attending-logs-a-workout is *inform* (the user confirms in the composer); nothing auto-mutates a plan or the attendee's log.
 
 ### Backfill
 
@@ -181,7 +183,7 @@ Additive columns on `events` (slice E):
 - `category` (`EventCategory`, NOT NULL, default `'run'`, CHECK-constrained).
 - `discipline` (text, nullable — free-text display label).
 - `host_user_id` (uuid FK → `auth.users`, default = creator; names the payout recipient).
-- `gym_template` (jsonb, nullable — only meaningful for `category = 'class'`; the optional default duration + discipline an attendee's one-tap "log this as a workout" pre-fills. Reserved by slice E; the attendee-side write ships with the class→gym seam, P3).
+- `gym_template` (jsonb, nullable — only meaningful for `category = 'class'`; the typed `{discipline, duration_min}` an attendee's one-tap "log this as a workout" pre-fills. **Shipped (web + mobile, inform-tier).** Cross-user `SELECT` granted by `20261230_001` (the column-locked `events` table left it deny-by-default); parsed through the `event_gym_template.ts` ↔ `.dart` parity pair).
 
 Additive column on `event_attendees` (slice P):
 
@@ -297,7 +299,7 @@ Slice P (web + backend):
 | **E** (proposed first) | Typed events (`category` + `discipline`), self-hiding athletic fields, data-layer race/result guards, backfill. **No money.** Web create + web/mobile read. A free yoga/pilates/social event works properly. | Owner sign-off (low-risk, additive) |
 | **P1** ✅ shipped on web (live charge path unverified — needs operator Stripe test keys) | Stripe Connect onboarding + destination-charge checkout + one webhook, **in-person only**, **host payouts**, web checkout only, manual refunds via Stripe dashboard. Migration `20261229_001` + the three Edge Functions + `/settings/payouts` + the EventEditor Charge toggle + the event-detail Register flow. | E shows non-`run` events get created; owner + CISO + counsel sign-off |
 | **P2** | Automated refund/cancel coupling, buyer self-cancel per policy, waitlist notify-to-pay, reconciliation sweep. | P1 conversion signal |
-| **P3** | Mobile register (web-checkout handoff), payout summary, receipt + refund emails (extend [email.md](email.md)), **the class→gym seam** (attended class → one-tap log a `gym_workout` from `gym_template`). | P2 stable |
+| **P3** | Mobile register (web-checkout handoff), payout summary, receipt + refund emails (extend [email.md](email.md)). **The class→gym seam (attended class → one-tap log a `gym_workout` from `gym_template`) has SHIPPED early** (web + mobile, inform-tier — it's orthogonal to the paid path, so it didn't wait on P2). | P2 stable |
 | **P4** | Class-pass / recurring memberships (re-opens the IAP subscription bucket), **virtual/livestream paid events** (digital-good IAP decision), discount codes, **club-level pooled payouts**. | Separate product + legal decision |
 
 ## Open questions
