@@ -5,12 +5,21 @@
 	import {
 		fetchSessionPlan,
 		deleteSessionPlan,
+		createGymWorkout,
 		type SessionPlanWithItems
 	} from '$lib/core/data';
-	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
+	import {
+		expandSessionSteps,
+		type SessionPlanInput,
+		type SessionStepResult,
+		type SessionAdherence
+	} from '$lib/social/session_steps';
+	import { workoutDraftFromSession } from '$lib/social/event_gym_template';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import SessionPlanEditor from '$lib/components/SessionPlanEditor.svelte';
+	import SessionRunner from '$lib/components/SessionRunner.svelte';
 	import { goto } from '$app/navigation';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -18,6 +27,7 @@
 	let loading = $state(true);
 	let showEdit = $state(false);
 	let confirmDelete = $state(false);
+	let running = $state(false);
 
 	const planId = $derived($page.params.id ?? '');
 	const isOwner = $derived(!!plan && !!auth.user && plan.author_id === auth.user.id);
@@ -81,6 +91,32 @@
 		showEdit = false;
 		load();
 	}
+
+	async function onSessionFinish(results: SessionStepResult[], adherence: SessionAdherence) {
+		running = false;
+		if (!plan) return;
+		const draft = workoutDraftFromSession(expanded, plan.title, plan.discipline);
+		try {
+			await createGymWorkout({
+				title: draft.title,
+				duration_s: draft.duration_s,
+				sets: draft.sets.map((s) => ({
+					exercise_name: s.exercise_name,
+					reps: s.reps,
+					duration_s: s.duration_s
+				})),
+				metadata: {
+					session_plan_id: plan.id,
+					session_step_results: results,
+					session_adherence: adherence.verdict
+				}
+			});
+			showToast(t('session.run.saved'), 'success');
+		} catch (e) {
+			console.error('session run save failed', e);
+			showToast(t('session.run.saveFailed'), 'error');
+		}
+	}
 </script>
 
 <svelte:head><title>{plan?.title ?? t('session.title')}</title></svelte:head>
@@ -104,16 +140,26 @@
 					{/if}
 				</p>
 			</div>
-			{#if isOwner}
-				<div class="head-actions">
+			<div class="head-actions">
+				{#if expanded.steps.length > 0}
+					<button
+						type="button"
+						class="btn btn-primary"
+						onclick={() => (running = true)}
+						data-testid="session-start"
+					>
+						{t('session.run.start')}
+					</button>
+				{/if}
+				{#if isOwner}
 					<button type="button" class="btn btn-secondary" onclick={() => (showEdit = true)}>
 						{t('session.save')}
 					</button>
 					<button type="button" class="btn btn-danger" onclick={() => (confirmDelete = true)}>
 						{t('session.delete')}
 					</button>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</header>
 
 		<section>
@@ -129,6 +175,15 @@
 		</section>
 	{/if}
 </div>
+
+{#if plan && running}
+	<SessionRunner
+		{plan}
+		steps={expanded.steps}
+		onfinish={onSessionFinish}
+		oncancel={() => (running = false)}
+	/>
+{/if}
 
 {#if plan}
 	<Modal open={showEdit} title={t('session.save')} onclose={() => (showEdit = false)}>

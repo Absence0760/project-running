@@ -6,8 +6,12 @@
 		fetchClubRoutes,
 		createEvent,
 		fetchPayoutAccount,
-		setEventPricing
+		setEventPricing,
+		fetchSessionPlans,
+		setEventSessionPlan,
+		type SessionPlan
 	} from '$lib/core/data';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
 	import { gymTemplateFromInputs } from '$lib/social/event_gym_template';
@@ -39,6 +43,9 @@
 	// Optional default workout length for the class -> gym seam. The discipline
 	// above doubles as the workout title source — no second discipline field.
 	let gymTemplateDurationMin = $state<number | null>(null);
+	// Optional follow-along session plan to attach to a class event (M5).
+	let sessionPlans = $state<SessionPlan[]>([]);
+	let sessionPlanId = $state<string>('');
 	let title = $state('');
 	let description = $state('');
 	let date = $state(defaultDate());
@@ -104,6 +111,7 @@
 		if (next !== 'class') {
 			discipline = '';
 			gymTemplateDurationMin = null;
+			sessionPlanId = '';
 		}
 	}
 
@@ -124,6 +132,11 @@
 		const clubIds = new Set(clubs.map((r) => r.id));
 		myRoutes = mine.filter((r) => !clubIds.has(r.id));
 		clubRoutes = clubs;
+		try {
+			sessionPlans = await fetchSessionPlans();
+		} catch (e) {
+			console.error('fetchSessionPlans failed', e);
+		}
 	});
 
 	$effect(() => {
@@ -199,6 +212,17 @@
 					return;
 				}
 			}
+			// Attach the follow-along session plan to a class event. The DB
+			// trigger enforces organiser-only, so a rejection surfaces as a
+			// toast (fail-closed) without losing the created event.
+			if (category === 'class' && sessionPlanId) {
+				try {
+					await setEventSessionPlan(event.id, sessionPlanId);
+				} catch (se) {
+					console.error('setEventSessionPlan failed', se);
+					showToast(m('session.event.planFailed'), 'error');
+				}
+			}
 			oncreated?.(event);
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : m('eventEditor.createFailed');
@@ -251,6 +275,15 @@
 				data-testid="gym-template-duration"
 			/>
 			<span class="hint">{m('eventEditor.gymTemplateHint')}</span>
+		</label>
+		<label>
+			<span>{m('session.event.planPicker')} <span class="optional">{m('eventEditor.optional')}</span></span>
+			<select bind:value={sessionPlanId} data-testid="session-plan-picker">
+				<option value="">{m('session.event.planNone')}</option>
+				{#each sessionPlans as sp (sp.id)}
+					<option value={sp.id}>{sp.title}</option>
+				{/each}
+			</select>
 		</label>
 	{/if}
 
