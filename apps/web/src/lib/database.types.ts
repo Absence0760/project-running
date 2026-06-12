@@ -398,6 +398,7 @@ export type Database = {
       }
       event_attendees: {
         Row: {
+          attendance: string | null
           event_id: string
           instance_start: string
           joined_at: string | null
@@ -406,6 +407,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attendance?: string | null
           event_id: string
           instance_start: string
           joined_at?: string | null
@@ -414,6 +416,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attendance?: string | null
           event_id?: string
           instance_start?: string
           joined_at?: string | null
@@ -3214,6 +3217,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mark_attendance: {
+        Args: { p_attendance: string; p_event_id: string; p_user_id: string }
+        Returns: undefined
       }
       my_pending_safety_requests: {
         Args: never
