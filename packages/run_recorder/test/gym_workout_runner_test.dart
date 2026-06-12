@@ -68,10 +68,10 @@ void main() {
       runner.dispose();
     });
 
-    test('emits a rest event when the next step has restS > 0', () async {
+    test('emits a rest event when the completed step has restS > 0', () async {
       final runner = GymWorkoutRunner(steps: [
-        _step(setIndex: 0),
-        _step(setIndex: 1, restS: 90),
+        _step(setIndex: 0, restS: 90),
+        _step(setIndex: 1),
       ]);
       final rests = <GymRestStartedEvent>[];
       runner.events.listen((e) {
@@ -335,15 +335,15 @@ void main() {
       final runner = GymWorkoutRunner(steps: [_step()]);
       runner.start();
       runner.completeSet(reps: 5, weightKg: 60);
-      expect(runner.reviewMetadata(routineId: null), isEmpty);
+      expect(runner.reviewMetadata(), isEmpty);
       runner.dispose();
     });
 
     test('emits the three keys when active', () {
-      final runner = GymWorkoutRunner(steps: [_step()]);
+      final runner = GymWorkoutRunner(steps: [_step()], routineId: 'routine-1');
       runner.start();
       runner.completeSet(reps: 5, weightKg: 60);
-      final meta = runner.reviewMetadata(routineId: 'routine-1');
+      final meta = runner.reviewMetadata();
       expect(meta, containsPair('routine_id', 'routine-1'));
       expect(meta['gym_step_results'], isA<List>());
       expect(meta, containsPair('gym_adherence', isA<String>()));
@@ -351,10 +351,10 @@ void main() {
     });
 
     test('an abandoned workout reads gym_adherence abandoned', () {
-      final runner = GymWorkoutRunner(steps: [_step()]);
+      final runner = GymWorkoutRunner(steps: [_step()], routineId: 'routine-1');
       runner.start();
       runner.abandon();
-      final meta = runner.reviewMetadata(routineId: 'routine-1');
+      final meta = runner.reviewMetadata();
       expect(meta['gym_adherence'], 'abandoned');
       runner.dispose();
     });

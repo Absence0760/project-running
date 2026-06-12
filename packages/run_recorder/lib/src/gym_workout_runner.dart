@@ -218,7 +218,7 @@ class GymWorkoutRunner {
     return GymRunnerAdherence.completed;
   }
 
-  Map<String, dynamic> reviewMetadata({required String? routineId}) {
+  Map<String, dynamic> reviewMetadata() {
     if (routineId == null) return const <String, dynamic>{};
     return <String, dynamic>{
       'routine_id': routineId,
@@ -237,13 +237,16 @@ class GymWorkoutRunner {
 
   void _advance() {
     final prev = _idx;
+    // rest_s is "rest after this set" (schema + web GymSessionRunner), so the
+    // pause is authored on the just-completed step, not the one we move to.
+    final completed = steps[prev];
     _idx += 1;
     if (_idx >= steps.length) {
       _events.add(const GymWorkoutCompleteEvent());
       return;
     }
     final next = steps[_idx];
-    final rest = next.restS;
+    final rest = completed.restS;
     if (rest != null && rest > 0) {
       _events.add(GymRestStartedEvent(restS: rest, nextStep: next));
     }
