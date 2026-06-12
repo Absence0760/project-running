@@ -45,6 +45,7 @@
 	let routineSeedTitle = $state('');
 	let repeatSeed = $state<GymWorkoutWithSets | null>(null);
 	let visibilityBusy = $state(false);
+	let shareBusy = $state(false);
 
 	// "Save as routine": promote this logged session's grouped sets into a
 	// routine draft (gym_routine.ts), then prefill the RoutineEditor with it.
@@ -280,6 +281,8 @@
 	}
 
 	async function copyShareLink() {
+		if (shareBusy) return;
+		shareBusy = true;
 		const url = `${location.origin}/share/workout/${id}`;
 		try {
 			// A non-public workout's share link 404s for everyone else, so make
@@ -293,6 +296,8 @@
 		} catch (e) {
 			console.error('copy gym share link failed', e);
 			showToast(t('gym.shareLinkError'));
+		} finally {
+			shareBusy = false;
 		}
 	}
 
@@ -365,6 +370,7 @@
 					<button
 						class="btn btn-secondary btn-sm"
 						onclick={copyShareLink}
+						disabled={shareBusy}
 						data-testid="gym-copy-share-link"
 					>
 						<span class="material-symbols" aria-hidden="true">share</span>

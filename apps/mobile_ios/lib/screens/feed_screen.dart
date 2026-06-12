@@ -548,17 +548,6 @@ class _EntryCard extends StatelessWidget {
     return '$m:${s.toString().padLeft(2, '0')} /km';
   }
 
-  static String _fmtRelative(DateTime started, String localeTag) {
-    final ms = DateTime.now().difference(started).inMilliseconds;
-    final mins = ms ~/ 60000;
-    if (mins < 1) return 'just now';
-    if (mins < 60) return '${mins}m ago';
-    final hrs = mins ~/ 60;
-    if (hrs < 24) return '${hrs}h ago';
-    final days = hrs ~/ 24;
-    if (days < 30) return '${days}d ago';
-    return formatDateMed(started, localeTag);
-  }
 }
 
 class _EngagementFooter extends StatefulWidget {
@@ -718,7 +707,7 @@ class _LiftEntryCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _FeedDates.relative(entry.startedAt,
+                    _fmtRelative(entry.startedAt,
                         localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -776,18 +765,16 @@ class _LiftEntryCard extends StatelessWidget {
   }
 }
 
-class _FeedDates {
-  static String relative(DateTime started, String localeTag) {
-    final ms = DateTime.now().difference(started).inMilliseconds;
-    final mins = ms ~/ 60000;
-    if (mins < 1) return 'just now';
-    if (mins < 60) return '${mins}m ago';
-    final hrs = mins ~/ 60;
-    if (hrs < 24) return '${hrs}h ago';
-    final days = hrs ~/ 24;
-    if (days < 30) return '${days}d ago';
-    return formatDateMed(started, localeTag);
-  }
+String _fmtRelative(DateTime started, String localeTag) {
+  final ms = DateTime.now().difference(started).inMilliseconds;
+  final mins = ms ~/ 60000;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return '${mins}m ago';
+  final hrs = mins ~/ 60;
+  if (hrs < 24) return '${hrs}h ago';
+  final days = hrs ~/ 24;
+  if (days < 30) return '${days}d ago';
+  return formatDateMed(started, localeTag);
 }
 
 class _Stat extends StatelessWidget {
