@@ -6617,6 +6617,34 @@ export async function setSessionPlanPublic(id: string, isPublic: boolean): Promi
 	if (error) throw error;
 }
 
+/** Distinct movement names the user has used across their own session plans,
+ *  most-used first, for the editor's movement-name autocomplete (mirrors
+ *  fetchGymExerciseNames). RLS on session_plan_items scopes the read to the
+ *  owner; a session plan carries dozens of items, not thousands, so a direct
+ *  distinct over the author's own plans is cheap — no RPC needed. Case is
+ *  preserved (trim only), matching the gym datalist behaviour. */
+export async function fetchSessionMovementNames(): Promise<string[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('session_plan_items')
+		.select('movement_name, session_plans!inner(author_id)')
+		.eq('session_plans.author_id', userId);
+	if (error) {
+		console.error('fetchSessionMovementNames failed', error);
+		return [];
+	}
+	const counts = new Map<string, number>();
+	for (const row of (data ?? []) as Array<{ movement_name: string | null }>) {
+		const name = (row.movement_name ?? '').trim();
+		if (name === '') continue;
+		counts.set(name, (counts.get(name) ?? 0) + 1);
+	}
+	return [...counts.entries()]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.map(([name]) => name);
+}
+
 /** Attach (or detach with null) a session plan to a class event. Organiser-only
  *  at the DB layer (the events_session_plan_organiser trigger). */
 export async function setEventSessionPlan(
