@@ -13,10 +13,10 @@
 //     routine" prefill path (prefill-only — no execution loop in P1).
 //
 // Binding plan ↔ log is by `normaliseExerciseName` + order, never by FK.
-// `normaliseExerciseName` + `estimatedOneRepMax` are imported from gym_prs so
-// the normalisation that stamps `exercise_key` can never drift from the PR
-// grouping that reads it. P1 builds NO expandRoutineSteps / superset handling /
-// progression prescriber — those are P2-P4.
+// `normaliseExerciseName` is imported from gym_prs so the normalisation that
+// stamps `exercise_key` can never drift from the PR grouping that reads it. P1
+// builds NO expandRoutineSteps / superset handling / progression prescriber —
+// those are P2-P4.
 
 import { normaliseExerciseName } from './gym_prs';
 

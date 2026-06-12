@@ -76,7 +76,6 @@
 		// initExercises rebuilds the same blocks (it groups by consecutive
 		// exercise_name). Weight is canonical kg.
 		const sets: GymSetInput[] = [];
-		let order = 0;
 		for (const b of blocks) {
 			if (b.name.trim() === '') continue;
 			for (const s of b.sets) {
@@ -86,7 +85,6 @@
 					weight_kg: s.weightKg ?? null,
 					rpe: s.rpe === '' ? null : parseFloat(s.rpe),
 				});
-				order++;
 			}
 		}
 		startSeed = {
@@ -112,7 +110,6 @@
 				rpe: s.rpe ?? null,
 			})),
 		};
-		void order;
 		showStart = true;
 	}
 

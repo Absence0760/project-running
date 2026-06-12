@@ -126,7 +126,7 @@ Deno.test('gym + nutrition logs exported for the subject (Phase 4 multi-modal, G
 
 Deno.test('gym_routines exported author-scoped with exercises + planned sets nested (GDPR Art 20)', () => {
 	// gym_programming.md § DSAR export. The P1 reusable plan (migration
-	// 20261230_001) is the subject's own authored content. It is keyed by
+	// 20261231_001) is the subject's own authored content. It is keyed by
 	// author_id (not user_id), and gym_routine_exercises / gym_routine_sets
 	// have no owner column of their own — they cascade from the parent
 	// routine — so the spec nests them two levels deep, mirroring the
