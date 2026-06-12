@@ -10,10 +10,14 @@
 --   4. session_plan_items.kind is CHECK-constrained to hold|reps|flow.
 --   5. events.session_plan_id may be set ONLY by an event organiser (the
 --      enforce_event_session_plan_organiser trigger) — a plain member is
---      rejected 42501.
+--      rejected 42501. The trigger fires (and raises 42501, not a silent
+--      RLS no-op) when a writer who CAN match the events UPDATE row still
+--      isn't an organiser of the row's resulting club: the events UPDATE
+--      policy is USING-only (no WITH CHECK), so an organiser of club X can
+--      match a row in X yet move it into club Y where they're a plain member.
 
 begin;
-select plan(13);
+select plan(14);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -22,15 +26,21 @@ values
   ('99999999-0000-0000-0000-00000000a003', 'authenticated', 'authenticated', 'admin@sp.local', '', now(), now()),
   ('99999999-0000-0000-0000-00000000a004', 'authenticated', 'authenticated', 'member@sp.local', '', now(), now());
 
--- Club owned by the admin (the enroll_club_owner trigger auto-adds the owner as
--- an active 'owner' member); the plain member joins it (superuser, RLS bypassed).
+-- Club X owned by the admin (the enroll_club_owner trigger auto-adds the owner
+-- as an active 'owner' member); the plain member joins it (superuser, RLS
+-- bypassed). Club Y is owned by the stranger; the admin (a003) is only a plain
+-- member of Y — i.e. a003 is an organiser of X but NOT of Y.
 insert into clubs (id, owner_id, name, slug)
-values ('cccccccc-0000-0000-0000-00000000c001',
-        '99999999-0000-0000-0000-00000000a003', 'Session Club', 'session-club');
+values
+  ('cccccccc-0000-0000-0000-00000000c001',
+   '99999999-0000-0000-0000-00000000a003', 'Session Club', 'session-club'),
+  ('cccccccc-0000-0000-0000-00000000c002',
+   '99999999-0000-0000-0000-00000000a002', 'Other Club', 'other-club');
 
 insert into club_members (club_id, user_id, role, status)
 values
-  ('cccccccc-0000-0000-0000-00000000c001', '99999999-0000-0000-0000-00000000a004', 'member', 'active');
+  ('cccccccc-0000-0000-0000-00000000c001', '99999999-0000-0000-0000-00000000a004', 'member', 'active'),
+  ('cccccccc-0000-0000-0000-00000000c002', '99999999-0000-0000-0000-00000000a003', 'member', 'active');
 
 -- A PRIVATE author-owned plan, a PUBLIC author-owned plan, and a CLUB-owned plan.
 insert into session_plans (id, author_id, club_id, title, is_public)
@@ -125,6 +135,22 @@ select is(
   null,
   'the event has no plan attached after the plain member''s write')
   from (select set_config('request.jwt.claims', '{"sub":"99999999-0000-0000-0000-00000000a003","role":"authenticated"}', true)) _;
+
+-- The BEFORE trigger fires for real (raises 42501, not a silent RLS no-op):
+-- a003 is an organiser of club X (so the USING-only events UPDATE policy matches
+-- the row in X) but only a plain member of club Y, so moving the event into Y
+-- while attaching a plan trips the trigger's is_event_organiser(new.club_id)
+-- gate. This exercises the trigger body itself, which assertion above (a plain
+-- member, RLS-filtered to zero rows) never reaches.
+set local "request.jwt.claims" = '{"sub":"99999999-0000-0000-0000-00000000a003","role":"authenticated"}';
+select throws_ok(
+  $$ update events
+       set session_plan_id = '11111111-0000-0000-0000-00000000af02',
+           club_id = 'cccccccc-0000-0000-0000-00000000c002'
+     where id = 'eeeeeeee-0000-0000-0000-00000000ee01' $$,
+  '42501',
+  null,
+  'the trigger rejects a non-organiser of the target club with 42501');
 
 -- The club owner (an organiser) can attach it.
 set local "request.jwt.claims" = '{"sub":"99999999-0000-0000-0000-00000000a003","role":"authenticated"}';
