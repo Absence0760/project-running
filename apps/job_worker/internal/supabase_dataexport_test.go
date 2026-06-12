@@ -1074,7 +1074,7 @@ func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing
 }
 
 // gym_programming.md § DSAR export: the gym-programming P1 reusable plan
-// (migration 20261231_001) keys on author_id, NOT user_id, so the
+// (migration 20270101_001) keys on author_id, NOT user_id, so the
 // export-completeness guard's user_id-column scan can't flag it — it is
 // wired into the spec explicitly, and this test is its guard. The routine
 // must ship author-scoped, embedding its child gym_routine_exercises and

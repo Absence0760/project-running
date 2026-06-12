@@ -1617,7 +1617,7 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			sel: "*,sets:gym_sets(*)",
 		},
 		// gym_routines (+ exercises + their planned sets via nested embeds).
-		// The gym-programming P1 reusable plan (migration 20261231_001).
+		// The gym-programming P1 reusable plan (migration 20270101_001).
 		// Author-scoped (NOT user_id), so the export-completeness guard's
 		// user_id-column scan can't flag it — it is wired in explicitly.
 		// gym_routine_exercises / gym_routine_sets have no user_id of their

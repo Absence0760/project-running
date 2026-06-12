@@ -141,7 +141,7 @@ export type RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted';
 // Attendance is orthogonal to RSVP status (instructor_business.md M6): a
 // host marks who actually showed up, NULL until then. Host-written via the
 // mark_attendance RPC, attendee-readable. Enforced by the
-// event_attendees_attendance_check CHECK (migration 20261231_006) — keep this
+// event_attendees_attendance_check CHECK (migration 20270102_001) — keep this
 // union in lockstep (check_constraint_unions.mjs PAIRS).
 export type EventAttendance = 'attended' | 'no_show';
 export type MembershipStatus = 'active' | 'pending';
@@ -176,7 +176,7 @@ export type EventModality = 'in_person';
 // CHECK constraint (migration 20270103_001) — keep this union in lockstep
 // (check_constraint_unions.mjs PAIRS). session_planner.md P1.
 export type SessionItemKind = 'hold' | 'reps' | 'flow';
-// Gym programming engine (gym_programming.md, migration 20261231_001). Four
+// Gym programming engine (gym_programming.md, migration 20270101_001). Four
 // narrow-union ↔ CHECK pairs; the Dart side treats all four as raw String.
 // Keep each in lockstep with the migration (check_constraint_unions.mjs PAIRS).
 // gym_routines.periodisation — routine-level periodisation model (P1 leaves

@@ -1,5 +1,5 @@
 -- Attendance, distinct from RSVP (instructor_business.md M6, migration
--- 20261231_006). A class host marks who actually showed up; the attendee's
+-- 20270102_001). A class host marks who actually showed up; the attendee's
 -- own RSVP status stays orthogonal and untouched.
 --
 -- Write model under test:

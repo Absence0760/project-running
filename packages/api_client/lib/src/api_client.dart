@@ -4342,7 +4342,7 @@ class ApiClient {
   // ─────────────────── Gym routines (gym_programming.md P1) ───────────────────
   //
   // A reusable plan: gym_routines parent + gym_routine_exercises + their
-  // gym_routine_sets (migration 20261231_001, author-only RLS). Mirrors web
+  // gym_routine_sets (migration 20270101_001, author-only RLS). Mirrors web
   // core/data.ts (createGymRoutine / fetchGymRoutines / fetchGymRoutineDetail /
   // deleteGymRoutine). last_modified_at + exercise_count are client-stamped
   // (newer-wins sync, non-authoritative count — no server trigger). The plan is
@@ -4481,7 +4481,7 @@ class ApiClient {
   }
 
   /// Delete a routine; exercises + sets cascade via FK (migration
-  /// 20261231_001). Logged gym_workouts are untouched (the plan→log link is a
+  /// 20270101_001). Logged gym_workouts are untouched (the plan→log link is a
   /// metadata string, not an FK).
   Future<void> deleteGymRoutine(String id) async {
     await _client.from(GymRoutineRow.table).delete().eq(GymRoutineRow.colId, id);
