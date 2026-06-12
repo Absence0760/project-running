@@ -8,6 +8,22 @@ export interface EnteredSet {
 	durationS: number | null;
 }
 
+// P4 "next target" hint shown on the workout review (gym_programming.md). Weights
+// canonical kg. Built by the page from nextPrescription + the routine's
+// per-exercise progression scheme; the review only renders it.
+export interface NextTargetHint {
+	exerciseKey: string;
+	exerciseName: string;
+	suggestedWeightKg: number | null;
+	suggestedRepsMin: number | null;
+	suggestedRepsMax: number | null;
+	/// Heaviest weighted set this exercise logged this session, for the +/- delta.
+	currentTopKg: number | null;
+	/// Reps at the heaviest logged set this session, for a rep-climb hint.
+	currentTopReps: number | null;
+	reason: 'increase_weight' | 'increase_reps' | 'hold' | 'deload';
+}
+
 // Weights canonical kg.
 export interface GymStepResult {
 	exercise_key: string;
