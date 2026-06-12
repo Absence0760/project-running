@@ -7,11 +7,13 @@ import 'package:run_recorder/run_recorder.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../gym_adherence.dart';
+import '../gym_progression.dart';
 import '../gym_routine.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
+import '../progression_prefill.dart';
 import '../widgets/gym_execution_band.dart';
 import '../widgets/top_banner.dart';
 
@@ -120,6 +122,8 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
           PlannedExercise(
             exerciseName: r.exercises[p].exerciseName,
             position: p,
+            supersetGroup: r.exercises[p].supersetGroup,
+            supersetOrder: r.exercises[p].supersetOrder,
             sets: [
               for (var i = 0; i < r.exercises[p].sets.length; i++)
                 PlannedSet(
@@ -128,27 +132,95 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
                   targetRepsMax: r.exercises[p].sets[i].targetRepsMax,
                   targetWeightKg: r.exercises[p].sets[i].targetWeightKg,
                   targetRpe: r.exercises[p].sets[i].targetRpe,
+                  setType: r.exercises[p].sets[i].setType,
+                  restS: r.exercises[p].sets[i].restS,
+                  targetDurationS: r.exercises[p].sets[i].targetDurationS,
                 ),
             ],
           ),
       ],
     );
+    final expanded = expandRoutineSteps(planned).steps;
+    final suggestions = _prefillSuggestions(r);
     return [
-      for (final s in expandRoutineSteps(planned).steps)
-        GymRunnerStep(
-          exerciseName: s.exerciseName,
-          exerciseKey: s.exerciseKey,
-          setIndex: s.setIndex,
-          setType: s.setType,
-          targetRepsMin: s.targetRepsMin?.toInt(),
-          targetRepsMax: s.targetRepsMax?.toInt(),
-          targetWeightKg: s.targetWeightKg?.toDouble(),
-          targetRpe: s.targetRpe?.toDouble(),
-          restS: s.restS?.toInt(),
-          targetDurationS: s.targetDurationS?.toInt(),
-          supersetGroup: s.supersetGroup,
-        ),
+      for (final s in expanded)
+        () {
+          final sug = suggestions[s.exerciseKey];
+          return GymRunnerStep(
+            exerciseName: s.exerciseName,
+            exerciseKey: s.exerciseKey,
+            setIndex: s.setIndex,
+            setType: s.setType,
+            targetRepsMin: (sug?.suggestedRepsMin ?? s.targetRepsMin)?.toInt(),
+            targetRepsMax: (sug?.suggestedRepsMax ?? s.targetRepsMax)?.toInt(),
+            targetWeightKg:
+                (sug?.suggestedWeightKg ?? s.targetWeightKg)?.toDouble(),
+            targetRpe: s.targetRpe?.toDouble(),
+            restS: s.restS?.toInt(),
+            targetDurationS: s.targetDurationS?.toInt(),
+            supersetGroup: s.supersetGroup,
+          );
+        }(),
     ];
+  }
+
+  static ProgressionScheme _schemeFromString(String s) {
+    switch (s) {
+      case 'linear':
+        return ProgressionScheme.linear;
+      case 'double_progression':
+        return ProgressionScheme.doubleProgression;
+      case 'five_by_five':
+        return ProgressionScheme.fiveByFive;
+      case 'percent_cycle':
+        return ProgressionScheme.percentCycle;
+      case 'rpe_autoreg':
+        return ProgressionScheme.rpeAutoreg;
+    }
+    return ProgressionScheme.none;
+  }
+
+  // P4: for each routine exercise carrying a progression scheme, suggest the
+  // next targets from its logged history (read from the local gym store) and
+  // prefill them onto the expanded steps — still editable in the band. The
+  // prescriber only suggests; the runner never auto-logs. Best-effort: a read
+  // failure leaves the routine's own targets in place.
+  Map<String, ProgressionSuggestion> _prefillSuggestions(StoredRoutine r) {
+    final out = <String, ProgressionSuggestion>{};
+    try {
+      final schemed =
+          r.exercises.where((e) => e.progression != 'none').toList();
+      if (schemed.isEmpty) return out;
+      final history = <DatedLoggedSet>[
+        for (final w in widget.gymStore.workouts)
+          for (final s in w.sets)
+            DatedLoggedSet(
+              workoutId: w.id,
+              startedAt: w.row['started_at'] as String? ?? '',
+              exerciseName: (s['exercise_name'] as String?) ?? '',
+              reps: s['reps'] as num?,
+              weightKg: s['weight_kg'] as num?,
+              rpe: s['rpe'] as num?,
+            ),
+      ];
+      for (final ex in schemed) {
+        final last = lastSessionSets(history, ex.exerciseName);
+        if (last == null) continue;
+        final firstSet = ex.sets.isNotEmpty ? ex.sets.first : null;
+        final sug = nextPrescription(ProgressionInput(
+          scheme: _schemeFromString(ex.progression),
+          lastSets: last,
+          targetRepsMin: firstSet?.targetRepsMin,
+          targetRepsMax: firstSet?.targetRepsMax,
+          params: ex.progressionParams,
+        ));
+        if (sug.reason == ProgressionReason.none) continue;
+        out[ex.exerciseKey] = sug;
+      }
+    } catch (e) {
+      debugPrint('gym session progression prefill failed: $e');
+    }
+    return out;
   }
 
   void _onEvent(GymExecEvent e) {
