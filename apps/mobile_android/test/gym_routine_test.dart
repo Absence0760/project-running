@@ -5,6 +5,9 @@ import '../lib/gym_routine.dart';
 LoggedSet lset(String name, num? reps, num? weightKg, [num? rpe]) =>
     LoggedSet(exerciseName: name, reps: reps, weightKg: weightKg, rpe: rpe);
 
+PlannedSet pset(int setIndex, num? reps, num? weightKg) =>
+    PlannedSet(setIndex: setIndex, targetRepsMin: reps, targetWeightKg: weightKg);
+
 void main() {
   test('routineFromWorkout: groups consecutive equal names into one block', () {
     final draft = routineFromWorkout('Push day', [
@@ -133,5 +136,131 @@ void main() {
     expect(blocks[0].name, 'Squat');
     expect(blocks[0].sets.length, 1);
     expect(blocks[0].sets[0].reps, '');
+  });
+
+  test('expandRoutineSteps: a single exercise with 3 sets expands to 3 steps in setIndex order',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(exerciseName: 'Squat', position: 0, sets: [
+        pset(2, 5, 100),
+        pset(0, 5, 100),
+        pset(1, 5, 100),
+      ]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.totalSets, 3);
+    expect(out.supersetGroups, 0);
+    expect(out.steps.map((s) => s.setIndex).toList(), [0, 1, 2]);
+    expect(out.steps[0].setType, 'working');
+  });
+
+  test('expandRoutineSteps: two sequential exercises expand all of ex1 then all of ex2',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(exerciseName: 'Bench', position: 0, sets: [
+        pset(0, 5, 80),
+        pset(1, 5, 80),
+      ]),
+      PlannedExercise(exerciseName: 'Row', position: 1, sets: [pset(0, 8, 60)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps.map((s) => s.exerciseName).toList(),
+        ['Bench', 'Bench', 'Row']);
+    expect(out.totalSets, 3);
+  });
+
+  test('expandRoutineSteps: a superset group of 2 x 3 sets interleaves A1,B1,A2,B2,A3,B3',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(
+          exerciseName: 'Curl',
+          position: 0,
+          supersetGroup: 1,
+          supersetOrder: 0,
+          sets: [pset(0, 10, 15), pset(1, 10, 15), pset(2, 10, 15)]),
+      PlannedExercise(
+          exerciseName: 'Pushdown',
+          position: 1,
+          supersetGroup: 1,
+          supersetOrder: 1,
+          sets: [pset(0, 12, 30), pset(1, 12, 30), pset(2, 12, 30)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps.map((s) => '${s.exerciseName}${s.setIndex}').toList(),
+        ['Curl0', 'Pushdown0', 'Curl1', 'Pushdown1', 'Curl2', 'Pushdown2']);
+    expect(out.supersetGroups, 1);
+    expect(out.totalSets, 6);
+  });
+
+  test('expandRoutineSteps: supersetOrder is honoured over position', () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(
+          exerciseName: 'A',
+          position: 0,
+          supersetGroup: 7,
+          supersetOrder: 1,
+          sets: [pset(0, 5, 10)]),
+      PlannedExercise(
+          exerciseName: 'B',
+          position: 1,
+          supersetGroup: 7,
+          supersetOrder: 0,
+          sets: [pset(0, 5, 10)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps.map((s) => s.exerciseName).toList(), ['B', 'A']);
+  });
+
+  test('expandRoutineSteps: a superset group followed by a standalone', () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(
+          exerciseName: 'A',
+          position: 0,
+          supersetGroup: 1,
+          supersetOrder: 0,
+          sets: [pset(0, 5, 10), pset(1, 5, 10)]),
+      PlannedExercise(
+          exerciseName: 'B',
+          position: 1,
+          supersetGroup: 1,
+          supersetOrder: 1,
+          sets: [pset(0, 5, 10), pset(1, 5, 10)]),
+      PlannedExercise(exerciseName: 'Finisher', position: 2, sets: [pset(0, 20, 0)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps.map((s) => '${s.exerciseName}${s.setIndex}').toList(),
+        ['A0', 'B0', 'A1', 'B1', 'Finisher0']);
+    expect(out.supersetGroups, 1);
+    expect(out.totalSets, 5);
+  });
+
+  test('expandRoutineSteps: a duration-based set is preserved (targetDurationS set, weight null)',
+      () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(exerciseName: 'Plank', position: 0, sets: [
+        const PlannedSet(setIndex: 0, targetDurationS: 60, setType: 'working'),
+      ]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps[0].targetDurationS, 60);
+    expect(out.steps[0].targetWeightKg, null);
+    expect(out.steps[0].targetRepsMin, null);
+  });
+
+  test('expandRoutineSteps: an empty routine yields no steps', () {
+    final out = expandRoutineSteps(const PlannedRoutine(title: 'P', exercises: []));
+    expect(out.steps, isEmpty);
+    expect(out.totalSets, 0);
+    expect(out.supersetGroups, 0);
+  });
+
+  test('expandRoutineSteps: exerciseKey is stamped via normaliseExerciseName', () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(
+          exerciseName: '  Bench   Press ', position: 0, sets: [pset(0, 5, 80)]),
+    ]);
+    final out = expandRoutineSteps(routine);
+    expect(out.steps[0].exerciseKey, 'bench press');
+    expect(out.steps[0].exerciseName, '  Bench   Press ');
   });
 }

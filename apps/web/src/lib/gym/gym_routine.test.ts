@@ -3,9 +3,21 @@ import { strict as assert } from 'node:assert';
 import {
 	routineFromWorkout,
 	prefillFromRoutine,
+	expandRoutineSteps,
 	type LoggedSet,
 	type PlannedRoutine,
+	type PlannedSet,
 } from './gym_routine';
+
+function pset(setIndex: number, reps: number | null, weightKg: number | null): PlannedSet {
+	return {
+		setIndex,
+		targetRepsMin: reps,
+		targetRepsMax: null,
+		targetWeightKg: weightKg,
+		targetRpe: null,
+	};
+}
 
 function lset(
 	exercise_name: string,
@@ -168,4 +180,169 @@ test('prefillFromRoutine: an exercise with no sets yields one empty set', () => 
 	assert.equal(blocks[0].name, 'Squat');
 	assert.equal(blocks[0].sets.length, 1);
 	assert.equal(blocks[0].sets[0].reps, '');
+});
+
+test('expandRoutineSteps: a single exercise with 3 sets expands to 3 steps in setIndex order', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'Squat',
+				position: 0,
+				sets: [pset(2, 5, 100), pset(0, 5, 100), pset(1, 5, 100)],
+			},
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.equal(out.totalSets, 3);
+	assert.equal(out.supersetGroups, 0);
+	assert.deepEqual(
+		out.steps.map((s) => s.setIndex),
+		[0, 1, 2],
+	);
+	assert.equal(out.steps[0].setType, 'working');
+});
+
+test('expandRoutineSteps: two sequential exercises expand all of ex1 then all of ex2', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{ exerciseName: 'Bench', position: 0, sets: [pset(0, 5, 80), pset(1, 5, 80)] },
+			{ exerciseName: 'Row', position: 1, sets: [pset(0, 8, 60)] },
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.deepEqual(
+		out.steps.map((s) => s.exerciseName),
+		['Bench', 'Bench', 'Row'],
+	);
+	assert.equal(out.totalSets, 3);
+});
+
+test('expandRoutineSteps: a superset group of 2 x 3 sets interleaves A1,B1,A2,B2,A3,B3', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'Curl',
+				position: 0,
+				supersetGroup: 1,
+				supersetOrder: 0,
+				sets: [pset(0, 10, 15), pset(1, 10, 15), pset(2, 10, 15)],
+			},
+			{
+				exerciseName: 'Pushdown',
+				position: 1,
+				supersetGroup: 1,
+				supersetOrder: 1,
+				sets: [pset(0, 12, 30), pset(1, 12, 30), pset(2, 12, 30)],
+			},
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.deepEqual(
+		out.steps.map((s) => `${s.exerciseName}${s.setIndex}`),
+		['Curl0', 'Pushdown0', 'Curl1', 'Pushdown1', 'Curl2', 'Pushdown2'],
+	);
+	assert.equal(out.supersetGroups, 1);
+	assert.equal(out.totalSets, 6);
+});
+
+test('expandRoutineSteps: supersetOrder is honoured over position', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'A',
+				position: 0,
+				supersetGroup: 7,
+				supersetOrder: 1,
+				sets: [pset(0, 5, 10)],
+			},
+			{
+				exerciseName: 'B',
+				position: 1,
+				supersetGroup: 7,
+				supersetOrder: 0,
+				sets: [pset(0, 5, 10)],
+			},
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.deepEqual(
+		out.steps.map((s) => s.exerciseName),
+		['B', 'A'],
+	);
+});
+
+test('expandRoutineSteps: a superset group followed by a standalone', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'A',
+				position: 0,
+				supersetGroup: 1,
+				supersetOrder: 0,
+				sets: [pset(0, 5, 10), pset(1, 5, 10)],
+			},
+			{
+				exerciseName: 'B',
+				position: 1,
+				supersetGroup: 1,
+				supersetOrder: 1,
+				sets: [pset(0, 5, 10), pset(1, 5, 10)],
+			},
+			{ exerciseName: 'Finisher', position: 2, sets: [pset(0, 20, 0)] },
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.deepEqual(
+		out.steps.map((s) => `${s.exerciseName}${s.setIndex}`),
+		['A0', 'B0', 'A1', 'B1', 'Finisher0'],
+	);
+	assert.equal(out.supersetGroups, 1);
+	assert.equal(out.totalSets, 5);
+});
+
+test('expandRoutineSteps: a duration-based set is preserved (targetDurationS set, weight null)', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'Plank',
+				position: 0,
+				sets: [
+					{
+						setIndex: 0,
+						targetRepsMin: null,
+						targetRepsMax: null,
+						targetWeightKg: null,
+						targetRpe: null,
+						targetDurationS: 60,
+						setType: 'working',
+					},
+				],
+			},
+		],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.equal(out.steps[0].targetDurationS, 60);
+	assert.equal(out.steps[0].targetWeightKg, null);
+	assert.equal(out.steps[0].targetRepsMin, null);
+});
+
+test('expandRoutineSteps: an empty routine yields no steps', () => {
+	const out = expandRoutineSteps({ title: 'P', exercises: [] });
+	assert.deepEqual(out, { steps: [], totalSets: 0, supersetGroups: 0 });
+});
+
+test('expandRoutineSteps: exerciseKey is stamped via normaliseExerciseName', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [{ exerciseName: '  Bench   Press ', position: 0, sets: [pset(0, 5, 80)] }],
+	};
+	const out = expandRoutineSteps(routine);
+	assert.equal(out.steps[0].exerciseKey, 'bench press');
+	assert.equal(out.steps[0].exerciseName, '  Bench   Press ');
 });

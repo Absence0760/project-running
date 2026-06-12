@@ -91,10 +91,14 @@ class PlannedExercise {
   final String exerciseName;
   final int position;
   final List<PlannedSet> sets;
+  final int? supersetGroup;
+  final int? supersetOrder;
   const PlannedExercise({
     required this.exerciseName,
     required this.position,
     required this.sets,
+    this.supersetGroup,
+    this.supersetOrder,
   });
 }
 
@@ -104,12 +108,63 @@ class PlannedSet {
   final num? targetRepsMax;
   final num? targetWeightKg;
   final num? targetRpe;
+  final String? setType;
+  final num? restS;
+  final num? targetDurationS;
   const PlannedSet({
     required this.setIndex,
     this.targetRepsMin,
     this.targetRepsMax,
     this.targetWeightKg,
     this.targetRpe,
+    this.setType,
+    this.restS,
+    this.targetDurationS,
+  });
+}
+
+/// One flattened per-set step of an expanded routine (gym_programming.md P2).
+/// Targets only — weight stays canonical kg. A superset member carries its
+/// group + intra-group order so the runner can interleave rounds.
+class RoutineStep {
+  final String exerciseName;
+  final String exerciseKey;
+  final int position;
+  final int? supersetGroup;
+  final int? supersetOrder;
+  final int setIndex;
+  final String setType;
+  final num? targetRepsMin;
+  final num? targetRepsMax;
+  final num? targetWeightKg;
+  final num? targetRpe;
+  final num? restS;
+  final num? targetDurationS;
+  const RoutineStep({
+    required this.exerciseName,
+    required this.exerciseKey,
+    required this.position,
+    required this.supersetGroup,
+    required this.supersetOrder,
+    required this.setIndex,
+    required this.setType,
+    required this.targetRepsMin,
+    required this.targetRepsMax,
+    required this.targetWeightKg,
+    required this.targetRpe,
+    required this.restS,
+    required this.targetDurationS,
+  });
+}
+
+class ExpandedRoutine {
+  final List<RoutineStep> steps;
+  final int totalSets;
+  final int supersetGroups;
+  const ExpandedRoutine({
+    required this.steps,
+    required this.totalSets,
+    required this.supersetGroups,
   });
 }
 
@@ -238,4 +293,69 @@ List<PrefillExercise> prefillFromRoutine(PlannedRoutine routine) {
     ];
   }
   return blocks;
+}
+
+RoutineStep _stepFor(PlannedExercise ex, PlannedSet s) {
+  return RoutineStep(
+    exerciseName: ex.exerciseName,
+    exerciseKey: normaliseExerciseName(ex.exerciseName),
+    position: ex.position,
+    supersetGroup: ex.supersetGroup,
+    supersetOrder: ex.supersetOrder,
+    setIndex: s.setIndex,
+    setType: s.setType ?? 'working',
+    targetRepsMin: s.targetRepsMin,
+    targetRepsMax: s.targetRepsMax,
+    targetWeightKg: s.targetWeightKg,
+    targetRpe: s.targetRpe,
+    restS: s.restS,
+    targetDurationS: s.targetDurationS,
+  );
+}
+
+/// Flatten a routine's exercises (ordered by `position`) × their sets (ordered
+/// by `setIndex`) into ordered per-set steps (gym_programming.md P2 — the
+/// expand-once helper the gym workout runner consumes). A standalone exercise
+/// (`supersetGroup == null`) emits its sets sequentially. Members of a superset
+/// group interleave round-robin by `setIndex` (A1, B1, A2, B2, …), the members
+/// ordered by `supersetOrder`; the group's block is emitted at the position
+/// where the group first appears in `position` order. `exerciseKey` is stamped
+/// via `normaliseExerciseName`.
+ExpandedRoutine expandRoutineSteps(PlannedRoutine routine) {
+  final ordered = [...routine.exercises]
+    ..sort((a, b) => a.position.compareTo(b.position));
+  final steps = <RoutineStep>[];
+  final seenGroups = <int>{};
+
+  for (final ex in ordered) {
+    final group = ex.supersetGroup;
+    if (group == null) {
+      final sets = [...ex.sets]..sort((a, b) => a.setIndex.compareTo(b.setIndex));
+      for (final s in sets) {
+        steps.add(_stepFor(ex, s));
+      }
+      continue;
+    }
+    if (seenGroups.contains(group)) continue;
+    seenGroups.add(group);
+
+    final members = ordered.where((e) => e.supersetGroup == group).toList()
+      ..sort((a, b) => (a.supersetOrder ?? 0).compareTo(b.supersetOrder ?? 0));
+    final rounds =
+        members.fold<int>(0, (max, m) => m.sets.length > max ? m.sets.length : max);
+    for (var round = 0; round < rounds; round++) {
+      for (final m in members) {
+        final sets = [...m.sets]..sort((a, b) => a.setIndex.compareTo(b.setIndex));
+        if (round < sets.length) {
+          steps.add(_stepFor(m, sets[round]));
+        }
+      }
+    }
+  }
+
+  return ExpandedRoutine(
+    steps: steps,
+    totalSets: steps.length,
+    supersetGroups: seenGroups.length,
+  );
 }

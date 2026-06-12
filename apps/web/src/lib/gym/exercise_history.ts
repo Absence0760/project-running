@@ -12,9 +12,9 @@
 // Pure functions — no Svelte / Supabase. Reuses the gym_prs primitives
 // (estimatedOneRepMax, normaliseExerciseName, computeExercisePrs) so the
 // numbers and the display spelling stay consistent with the records + badge
-// surfaces. Web-only for now (mobile has no equivalent surface yet — mirror
-// tracked in docs/product/followups.md); no Dart twin, so don't create a dead
-// one.
+// surfaces. The Dart twin is apps/mobile_android/lib/exercise_history.dart
+// (parity pair — keep algorithm, edge cases, outputs, and test counts in
+// lockstep).
 
 import {
 	computeExercisePrs,

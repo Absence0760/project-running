@@ -19,6 +19,7 @@
 // those are P2-P4.
 
 import { normaliseExerciseName } from './gym_prs';
+import type { GymSetType } from '../types';
 
 /// A logged gym set, as it arrives from `gym_sets` (free-text exercise name,
 /// nullable reps/weight). The minimal shape the promotion reads.
@@ -69,6 +70,8 @@ export interface PlannedExercise {
 	exerciseName: string;
 	position: number;
 	sets: PlannedSet[];
+	supersetGroup?: number | null;
+	supersetOrder?: number | null;
 }
 
 export interface PlannedSet {
@@ -77,6 +80,34 @@ export interface PlannedSet {
 	targetRepsMax: number | null;
 	targetWeightKg: number | null;
 	targetRpe: number | null;
+	setType?: GymSetType | null;
+	restS?: number | null;
+	targetDurationS?: number | null;
+}
+
+/// One flattened per-set step of an expanded routine (gym_programming.md P2).
+/// Targets only — weight stays canonical kg. A superset member carries its
+/// group + intra-group order so the runner can interleave rounds.
+export interface RoutineStep {
+	exerciseName: string;
+	exerciseKey: string;
+	position: number;
+	supersetGroup: number | null;
+	supersetOrder: number | null;
+	setIndex: number;
+	setType: GymSetType;
+	targetRepsMin: number | null;
+	targetRepsMax: number | null;
+	targetWeightKg: number | null;
+	targetRpe: number | null;
+	restS: number | null;
+	targetDurationS: number | null;
+}
+
+export interface ExpandedRoutine {
+	steps: RoutineStep[];
+	totalSets: number;
+	supersetGroups: number;
 }
 
 /// An editable set row for the GymEditor (strings, display-unit-agnostic —
@@ -181,4 +212,65 @@ export function prefillFromRoutine(routine: PlannedRoutine): PrefillExercise[] {
 		return [{ name: '', sets: [{ reps: '', weightKg: null, rpe: '' }] }];
 	}
 	return blocks;
+}
+
+function stepFor(ex: PlannedExercise, s: PlannedSet): RoutineStep {
+	return {
+		exerciseName: ex.exerciseName,
+		exerciseKey: normaliseExerciseName(ex.exerciseName),
+		position: ex.position,
+		supersetGroup: ex.supersetGroup ?? null,
+		supersetOrder: ex.supersetOrder ?? null,
+		setIndex: s.setIndex,
+		setType: s.setType ?? 'working',
+		targetRepsMin: s.targetRepsMin,
+		targetRepsMax: s.targetRepsMax,
+		targetWeightKg: s.targetWeightKg,
+		targetRpe: s.targetRpe,
+		restS: s.restS ?? null,
+		targetDurationS: s.targetDurationS ?? null,
+	};
+}
+
+/// Flatten a routine's exercises (ordered by `position`) × their sets (ordered
+/// by `setIndex`) into ordered per-set steps (gym_programming.md P2 — the
+/// expand-once helper the GymWorkoutRunner consumes). A standalone exercise
+/// (`supersetGroup == null`) emits its sets sequentially. Members of a superset
+/// group interleave round-robin by `setIndex` (A1, B1, A2, B2, …), the members
+/// ordered by `supersetOrder`; the group's block is emitted at the position
+/// where the group first appears in `position` order. `exerciseKey` is stamped
+/// via `normaliseExerciseName` (frozen plan↔log identity).
+export function expandRoutineSteps(routine: PlannedRoutine): ExpandedRoutine {
+	const ordered = [...routine.exercises].sort((a, b) => a.position - b.position);
+	const steps: RoutineStep[] = [];
+	const seenGroups = new Set<number>();
+
+	for (const ex of ordered) {
+		const group = ex.supersetGroup ?? null;
+		if (group == null) {
+			const sets = [...ex.sets].sort((a, b) => a.setIndex - b.setIndex);
+			for (const s of sets) steps.push(stepFor(ex, s));
+			continue;
+		}
+		if (seenGroups.has(group)) continue;
+		seenGroups.add(group);
+
+		const members = ordered
+			.filter((e) => (e.supersetGroup ?? null) === group)
+			.sort((a, b) => (a.supersetOrder ?? 0) - (b.supersetOrder ?? 0));
+		const rounds = members.reduce((max, m) => Math.max(max, m.sets.length), 0);
+		for (let round = 0; round < rounds; round++) {
+			for (const m of members) {
+				const sets = [...m.sets].sort((a, b) => a.setIndex - b.setIndex);
+				const s = sets[round];
+				if (s) steps.push(stepFor(m, s));
+			}
+		}
+	}
+
+	return {
+		steps,
+		totalSets: steps.length,
+		supersetGroups: seenGroups.size,
+	};
 }
