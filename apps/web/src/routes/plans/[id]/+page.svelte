@@ -33,6 +33,7 @@
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
+	import CurrentWeekStrip from '$lib/components/CurrentWeekStrip.svelte';
 	import RaceDayPanel from '$lib/components/RaceDayPanel.svelte';
 	import { daysUntilRace } from '$lib/runs/race_day';
 	import type { Run } from '$lib/types';
@@ -975,6 +976,15 @@
 				</button>
 			</section>
 		{/if}
+
+		<CurrentWeekStrip
+			startDate={plan.start_date}
+			{currentWeek}
+			weekWorkouts={currentWeek ? (workoutsByWeek.get(currentWeek.id) ?? []) : []}
+			{today}
+			{weekStart}
+			onSelect={(wo) => (editing = wo)}
+		/>
 
 		<section class="calendar-section">
 			<h2 class="section-title">{m('planDetail.calendar')}</h2>

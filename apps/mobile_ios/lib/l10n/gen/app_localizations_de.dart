@@ -3889,6 +3889,9 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get planDetailCurrentWeek => 'Diese Woche';
+
+  @override
   String get planDetailToday => 'HEUTE';
 
   @override
@@ -3934,6 +3937,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get planDetailAdaptiveNoSafeChange =>
       'Du bist zuletzt vom Plan abgewichen, aber es gibt gerade keine sichere Anpassung.';
+
+  @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Zurückgehalten – du trägst gerade Ermüdung, daher ist mehr Volumen nicht ratsam.';
 
   @override
   String get planDetailAdaptiveReasonUnder =>

@@ -6461,6 +6461,12 @@ abstract class AppLocalizations {
   /// **'{count} days/wk'**
   String planDetailDaysPerWeek(int count);
 
+  /// Heading for the focused current-week 7-day strip on plan detail
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get planDetailCurrentWeek;
+
   /// Today-card eyebrow label
   ///
   /// In en, this message translates to:
@@ -6532,6 +6538,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You\'ve drifted from plan recently, but there\'s no safe adjustment to make right now.'**
   String get planDetailAdaptiveNoSafeChange;
+
+  /// No description provided for @planDetailAdaptiveFitnessHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'Held back — you\'re carrying fatigue right now, so adding volume isn\'t advised.'**
+  String get planDetailAdaptiveFitnessHeld;
 
   /// No description provided for @planDetailAdaptiveReasonUnder.
   ///

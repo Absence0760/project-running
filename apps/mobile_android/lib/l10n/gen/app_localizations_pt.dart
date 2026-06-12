@@ -3882,6 +3882,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planDetailCurrentWeek => 'Esta semana';
+
+  @override
   String get planDetailToday => 'HOJE';
 
   @override
@@ -3927,6 +3930,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get planDetailAdaptiveNoSafeChange =>
       'Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.';
+
+  @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Pausado — você está acumulando fadiga agora, então aumentar o volume não é recomendado.';
 
   @override
   String get planDetailAdaptiveReasonUnder =>
@@ -12116,6 +12123,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get planDetailCurrentWeek => 'Esta semana';
+
+  @override
   String get planDetailToday => 'HOJE';
 
   @override
@@ -12161,6 +12171,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get planDetailAdaptiveNoSafeChange =>
       'Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.';
+
+  @override
+  String get planDetailAdaptiveFitnessHeld =>
+      'Pausado — você está acumulando fadiga agora, então aumentar o volume não é recomendado.';
 
   @override
   String get planDetailAdaptiveReasonUnder =>

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../local_run_store.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -17,7 +18,13 @@ import 'plan_new_screen.dart';
 class PlansScreen extends StatefulWidget {
   final TrainingService training;
   final ApiClient? apiClient;
-  const PlansScreen({super.key, required this.training, this.apiClient});
+
+  /// Threaded down to `PlanDetailScreen` for the P2 adaptive-replan fitness
+  /// gate (gated OFF by default). Null when no run store is in scope.
+  final LocalRunStore? runStore;
+
+  const PlansScreen(
+      {super.key, required this.training, this.apiClient, this.runStore});
 
   @override
   State<PlansScreen> createState() => _PlansScreenState();
@@ -135,6 +142,7 @@ class _PlansScreenState extends State<PlansScreen> {
                               builder: (_) => PlanDetailScreen(
                                 training: widget.training,
                                 planId: p.id,
+                                runStore: widget.runStore,
                               ),
                             ),
                           );

@@ -380,6 +380,7 @@ export const messages = {
 	"planDetail.dowThu": "Qui",
 	"planDetail.dowFri": "Sex",
 	"planDetail.dowSat": "Sáb",
+	"planDetail.currentWeek": "Esta semana",
 	"planDetail.ariaCompletedSuffix": ", concluído",
 	"planDetail.loadingPlan": "Carregando plano",
 	"planDetail.notFoundTitle": "Plano não encontrado",
