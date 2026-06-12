@@ -495,6 +495,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get fitnessRunsRoutes => 'Itinéraires';
 
   @override
+  String get fitnessRunsPlans => 'Plans d\'entraînement';
+
+  @override
   String get homeAskCoach => 'Demander au coach';
 
   @override
@@ -7087,6 +7090,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get gymDeleteConfirmBody =>
       'Cette action supprime définitivement la séance et ses séries.';
+
+  @override
+  String get clubEventLogAsWorkout => 'Enregistrer comme séance';
+
+  @override
+  String get clubEventLogAsWorkoutHint =>
+      'Ajoutez ce cours à votre propre journal de muscu — vous pouvez ajuster les détails avant d\'enregistrer.';
+
+  @override
+  String get clubEventLogAsWorkoutSaved => 'Ajouté à votre journal de muscu';
 
   @override
   String get gymEditorNewTitle => 'Nouvelle séance';

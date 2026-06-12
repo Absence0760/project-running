@@ -41,6 +41,10 @@ import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import type { CoachAthleteStatus } from '../types';
 import { nextInstanceAfter } from '../social/recurrence';
+import {
+	parseGymTemplate,
+	type EventGymTemplate
+} from '../social/event_gym_template';
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
 import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
@@ -1419,7 +1423,7 @@ const CLUB_SELECT_COLS =
 // enumerates these safe columns; the two coords are write-only
 // today (no UI consumer).
 const EVENT_SELECT_COLS =
-	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline' as const;
+	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template' as const;
 
 function slugify(name: string): string {
 	return name
@@ -1964,7 +1968,9 @@ function normaliseEvent(e: Event): Event {
 		recurrence_freq: (e.recurrence_freq ?? null) as RecurrenceFreq | null,
 		recurrence_byday: (e.recurrence_byday ?? null) as Weekday[] | null,
 		// Legacy rows predate the category column; treat them as athletic runs.
-		category: (e.category ?? 'run') as EventCategory
+		category: (e.category ?? 'run') as EventCategory,
+		// Raw jsonb on the row -> the typed seam shape (null for empty/malformed).
+		gym_template: parseGymTemplate(e.gym_template as unknown)
 	};
 }
 
@@ -1973,6 +1979,9 @@ export async function createEvent(input: {
 	title: string;
 	category: EventCategory;
 	discipline?: string | null;
+	// The class -> gym seam hint. Only persisted for category === 'class';
+	// null (no template) for every other category.
+	gym_template?: EventGymTemplate | null;
 	description?: string;
 	starts_at: string; // ISO
 	duration_min?: number;
@@ -1997,6 +2006,7 @@ export async function createEvent(input: {
 			title: input.title.trim(),
 			category: input.category,
 			discipline: input.discipline?.trim() || null,
+			gym_template: input.category === 'class' ? (input.gym_template ?? null) : null,
 			description: input.description?.trim() || null,
 			starts_at: input.starts_at,
 			duration_min: input.duration_min ?? null,

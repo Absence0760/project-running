@@ -496,6 +496,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get fitnessRunsRoutes => 'Rutas';
 
   @override
+  String get fitnessRunsPlans => 'Planes de entrenamiento';
+
+  @override
   String get homeAskCoach => 'Pregunta a tu entrenador';
 
   @override
@@ -7070,6 +7073,16 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get gymDeleteConfirmBody =>
       'Esto elimina permanentemente el entrenamiento y sus series.';
+
+  @override
+  String get clubEventLogAsWorkout => 'Registrar como entrenamiento';
+
+  @override
+  String get clubEventLogAsWorkoutHint =>
+      'Añade esta clase a tu propio registro de gimnasio — puedes ajustar los detalles antes de guardar.';
+
+  @override
+  String get clubEventLogAsWorkoutSaved => 'Añadido a tu registro de gimnasio';
 
   @override
   String get gymEditorNewTitle => 'Nuevo entrenamiento';

@@ -94,6 +94,28 @@ void main() {
     }
   });
 
+  testWidgets('prefillTitle seeds a NEW composer title (class -> gym seam)',
+      (tester) async {
+    final f = await _store('prefill_');
+    try {
+      // The class -> gym seam opens a NEW composer (existing == null) with the
+      // class discipline pre-filled as the title; sets stay empty.
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(store: f.store, prefillTitle: 'Vinyasa yoga'),
+        ),
+      ));
+      await tester.pump();
+      expect(find.text('Vinyasa yoga'), findsOneWidget);
+      // No exercise pre-filled — one blank exercise block awaits the user.
+      expect(find.text('Bench'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('editing pre-fills the title + set list from the stored workout',
       (tester) async {
     final f = await _store('edit_');

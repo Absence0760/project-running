@@ -484,6 +484,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get fitnessRunsRoutes => 'ルート';
 
   @override
+  String get fitnessRunsPlans => 'トレーニングプラン';
+
+  @override
   String get homeAskCoach => 'コーチに相談';
 
   @override
@@ -6679,6 +6682,16 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymDeleteConfirmBody => 'ワークアウトとそのセットが完全に削除されます。';
+
+  @override
+  String get clubEventLogAsWorkout => 'ワークアウトとして記録';
+
+  @override
+  String get clubEventLogAsWorkoutHint =>
+      'このクラスを自分のジムログに追加します — 保存前に詳細を調整できます。';
+
+  @override
+  String get clubEventLogAsWorkoutSaved => 'ジムログに追加しました';
 
   @override
   String get gymEditorNewTitle => '新しいワークアウト';

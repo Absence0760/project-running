@@ -182,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
           foodStore: widget.foodStore,
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
+          training: widget.training,
           onStartRun: _startRunWithRoute,
         ),
       ),

@@ -69,6 +69,11 @@ class RunsScreen extends StatefulWidget {
   /// surface (relocated out of Social). Null elsewhere — no Routes affordance.
   final VoidCallback? onOpenRoutes;
 
+  /// When set, the run-list AppBar surfaces a Training-plans action. The
+  /// Fitness hub's Runs sub-tab supplies this so Plans is co-located with the
+  /// run surface (relocated out of the Run-tab idle button). Null elsewhere.
+  final VoidCallback? onOpenPlans;
+
   const RunsScreen({
     super.key,
     this.apiClient,
@@ -80,6 +85,7 @@ class RunsScreen extends StatefulWidget {
     this.foodStore,
     this.showKindChips = true,
     this.onOpenRoutes,
+    this.onOpenPlans,
   });
 
   @override
@@ -1046,6 +1052,12 @@ class _RunsScreenState extends State<RunsScreen> {
             icon: const Icon(Icons.route),
             tooltip: l10n.fitnessRunsRoutes,
             onPressed: widget.onOpenRoutes,
+          ),
+        if (widget.onOpenPlans != null)
+          IconButton(
+            icon: const Icon(Icons.event_note),
+            tooltip: l10n.fitnessRunsPlans,
+            onPressed: widget.onOpenPlans,
           ),
         if (!_timelineMode)
         PopupMenuButton<_RunsRange>(

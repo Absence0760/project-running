@@ -302,6 +302,10 @@
   "@fitnessRunsRoutes": {
     "description": "Label for the Routes entry on the Fitness hub's Runs sub-tab"
   },
+  "fitnessRunsPlans": "Training plans",
+  "@fitnessRunsPlans": {
+    "description": "Label for the Training plans entry on the Fitness hub's Runs sub-tab"
+  },
   "homeAskCoach": "Ask your coach",
   "@homeAskCoach": {
     "description": "Title of the pinned coach entry at the top of the Home dashboard"
@@ -8919,6 +8923,18 @@
   "gymVolumeLabel": "Volume",
   "gymDeleteConfirmTitle": "Delete workout?",
   "gymDeleteConfirmBody": "This permanently removes the workout and its sets.",
+  "clubEventLogAsWorkout": "Log this as a workout",
+  "@clubEventLogAsWorkout": {
+    "description": "Button on a class event detail that opens the gym composer pre-filled from the class's gym_template."
+  },
+  "clubEventLogAsWorkoutHint": "Add this class to your own gym log — you can adjust the details before saving.",
+  "@clubEventLogAsWorkoutHint": {
+    "description": "Helper text under the log-as-workout button explaining the inform-tier behaviour."
+  },
+  "clubEventLogAsWorkoutSaved": "Added to your gym log",
+  "@clubEventLogAsWorkoutSaved": {
+    "description": "Confirmation banner shown after the user saves the class as a gym workout."
+  },
   "gymEditorNewTitle": "New workout",
   "gymEditorEditTitle": "Edit workout",
   "gymEditorTitleLabel": "Title (optional)",

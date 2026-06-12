@@ -72,6 +72,29 @@ test.describe('/plans', () => {
 		await page.locator('.modal-close').click();
 	});
 
+	test('Plans is reachable from the /runs run-surface tab strip', async ({
+		page
+	}) => {
+		// /plans is nested under the run surface (Runs · Routes · Plans),
+		// reached from the same RunSurfaceTabs strip /runs + /routes render.
+		// Pin (a) the strip shows all three links, (b) clicking Plans lands
+		// on /plans with the Plans tab marked aria-current=page.
+		await page.goto('/runs');
+
+		const strip = page.locator('.surface-tabs');
+		await expect(strip).toBeVisible({ timeout: 10_000 });
+		await expect(strip.getByRole('link', { name: 'Runs' })).toBeVisible();
+		await expect(strip.getByRole('link', { name: 'Routes' })).toBeVisible();
+		const plansLink = strip.getByRole('link', { name: 'Plans' });
+		await expect(plansLink).toBeVisible();
+
+		await plansLink.click();
+		await page.waitForURL(/\/plans$/, { timeout: 10_000 });
+		await expect(
+			page.locator('.surface-tabs').getByRole('link', { name: 'Plans' })
+		).toHaveAttribute('aria-current', 'page');
+	});
+
 	test('clicking the active plan card carries query state to /plans/[id]', async ({
 		page
 	}) => {

@@ -494,6 +494,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get fitnessRunsRoutes => 'Rotas';
 
   @override
+  String get fitnessRunsPlans => 'Planos de treino';
+
+  @override
   String get homeAskCoach => 'Pergunte ao seu treinador';
 
   @override
@@ -7068,6 +7071,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Isso remove permanentemente o treino e suas séries.';
 
   @override
+  String get clubEventLogAsWorkout => 'Registrar como treino';
+
+  @override
+  String get clubEventLogAsWorkoutHint =>
+      'Adicione esta aula ao seu próprio registro de academia — você pode ajustar os detalhes antes de salvar.';
+
+  @override
+  String get clubEventLogAsWorkoutSaved =>
+      'Adicionado ao seu registro de academia';
+
+  @override
   String get gymEditorNewTitle => 'Novo treino';
 
   @override
@@ -7772,6 +7786,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get fitnessRunsRoutes => 'Rotas';
+
+  @override
+  String get fitnessRunsPlans => 'Planos de treino';
 
   @override
   String get homeAskCoach => 'Pergunte ao seu treinador';
@@ -14346,6 +14363,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get gymDeleteConfirmBody =>
       'Isso remove permanentemente o treino e suas séries.';
+
+  @override
+  String get clubEventLogAsWorkout => 'Registrar como treino';
+
+  @override
+  String get clubEventLogAsWorkoutHint =>
+      'Adicione esta aula ao seu próprio registro de academia — você pode ajustar os detalhes antes de salvar.';
+
+  @override
+  String get clubEventLogAsWorkoutSaved =>
+      'Adicionado ao seu registro de academia';
 
   @override
   String get gymEditorNewTitle => 'Novo treino';

@@ -16,6 +16,7 @@ import '../lib/preferences.dart';
 import '../lib/screens/fitness_hub_screen.dart';
 import '../lib/screens/gym_screen.dart';
 import '../lib/screens/nutrition_screen.dart';
+import '../lib/training_service.dart';
 import '../lib/widgets/activity_timeline_list.dart';
 
 void main() {
@@ -100,6 +101,7 @@ void main() {
         gymStore: gymStore,
         foodStore: foodStore,
         preferences: prefs,
+        training: TrainingService(),
       ),
     ));
     await tester.pumpAndSettle();

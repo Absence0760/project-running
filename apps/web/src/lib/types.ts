@@ -2,6 +2,7 @@
 // `npm run gen:types` after every migration. The aliases below add the narrow
 // unions and lazy-loaded client-side fields that the schema alone can't express.
 import type { Database } from './database.types';
+import type { EventGymTemplate } from './social/event_gym_template';
 
 type RunRow = Database['public']['Tables']['runs']['Row'];
 type RouteRow = Database['public']['Tables']['routes']['Row'];
@@ -199,10 +200,17 @@ export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
 	role: ClubRole;
 	status: MembershipStatus;
 };
-export type Event = Omit<EventRow, 'recurrence_freq' | 'recurrence_byday' | 'category'> & {
+export type Event = Omit<
+	EventRow,
+	'recurrence_freq' | 'recurrence_byday' | 'category' | 'gym_template'
+> & {
 	recurrence_freq: RecurrenceFreq | null;
 	recurrence_byday: Weekday[] | null;
 	category: EventCategory;
+	// The class -> gym seam hint, parsed from the loose jsonb bag into the
+	// typed shape (event_gym_template.ts). Null for a non-class event or a
+	// class the host didn't template.
+	gym_template: EventGymTemplate | null;
 };
 export type EventAttendee = Omit<EventAttendeeRow, 'status'> & { status: RsvpStatus };
 export type ClubPost = Omit<ClubPostRow, never>;

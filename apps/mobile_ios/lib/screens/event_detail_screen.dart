@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../event_category.dart';
+import '../event_gym_template.dart';
+import '../local_gym_store.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -17,6 +19,7 @@ import '../recurrence.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/gym_compose_sheet.dart';
 import '../widgets/top_banner.dart';
 
 class EventDetailScreen extends StatefulWidget {
@@ -59,10 +62,47 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   RealtimeChannel? _channel;
   Timer? _debounce;
 
+  /// The class -> gym seam writes through this store (inform-tier: the composer
+  /// is what saves). Created + initialised lazily on first use so a run/social
+  /// event never touches the gym store; the write is offline-first and drains
+  /// the next time a gym surface hydrates — no need to thread a shared store
+  /// through every EventDetailScreen push site.
+  LocalGymStore? _gymStore;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  /// The class -> gym seam hint, parsed from the loose jsonb bag. Null for a
+  /// non-class event or a class the host didn't template.
+  EventGymTemplate? get _gymTemplate {
+    final e = _event;
+    if (e == null || e.row.category != 'class') return null;
+    return parseGymTemplate(e.row.gymTemplate);
+  }
+
+  bool get _canLogAsWorkout =>
+      _gymTemplate != null &&
+      Supabase.instance.client.auth.currentUser != null;
+
+  Future<void> _logAsWorkout() async {
+    final e = _event;
+    if (e == null) return;
+    final draft = workoutDraftFromTemplate(_gymTemplate, e.row.title);
+    final store = _gymStore ??= LocalGymStore();
+    await store.init();
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    final saved = await showGymComposeSheet(
+      context: context,
+      store: store,
+      prefillTitle: draft.title,
+    );
+    if (saved == true && mounted) {
+      showTopBanner(context, l10n.clubEventLogAsWorkoutSaved);
+    }
   }
 
   Future<void> _load() async {
@@ -454,6 +494,25 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               (e.row.discipline?.trim().isNotEmpty ?? false)) ...[
             const SizedBox(height: 12),
             EventDisciplineLabel(discipline: e.row.discipline!.trim()),
+          ],
+          if (_canLogAsWorkout) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton.icon(
+                key: const Key('log-as-workout'),
+                onPressed: _logAsWorkout,
+                icon: const Icon(Icons.fitness_center, size: 18),
+                label: Text(l10n.clubEventLogAsWorkout),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.clubEventLogAsWorkoutHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
           ],
           if (e.row.description != null && e.row.description!.isNotEmpty) ...[
             const SizedBox(height: 12),

@@ -267,6 +267,7 @@ export async function insertEvent(opts: {
 	pace_target_sec?: number | null;
 	category?: 'run' | 'cycle' | 'class' | 'social';
 	discipline?: string | null;
+	gym_template?: { discipline: string | null; duration_min: number | null } | null;
 }): Promise<string> {
 	const { data, error } = await getAdminClient()
 		.from('events')
@@ -286,7 +287,8 @@ export async function insertEvent(opts: {
 			recurrence_until: opts.recurrence_until ?? null,
 			capacity: opts.capacity ?? null,
 			distance_m: opts.distance_m ?? null,
-			pace_target_sec: opts.pace_target_sec ?? null
+			pace_target_sec: opts.pace_target_sec ?? null,
+			gym_template: opts.gym_template ?? null
 		})
 		.select('id')
 		.single();

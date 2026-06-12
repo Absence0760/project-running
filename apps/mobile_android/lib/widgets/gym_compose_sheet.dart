@@ -20,6 +20,7 @@ Future<bool?> showGymComposeSheet({
   required LocalGymStore store,
   StoredGymWorkout? existing,
   List<String> suggestions = const [],
+  String? prefillTitle,
 }) {
   final l10n = AppLocalizations.of(context);
   return showFullScreenForm<bool>(
@@ -29,6 +30,7 @@ Future<bool?> showGymComposeSheet({
       store: store,
       existing: existing,
       suggestions: suggestions,
+      prefillTitle: prefillTitle,
     ),
   );
 }
@@ -37,11 +39,16 @@ class GymComposeSheet extends StatefulWidget {
   final LocalGymStore store;
   final StoredGymWorkout? existing;
   final List<String> suggestions;
+
+  /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
+  /// stay empty for the user to fill. Ignored when [existing] is set.
+  final String? prefillTitle;
   const GymComposeSheet({
     super.key,
     required this.store,
     this.existing,
     this.suggestions = const [],
+    this.prefillTitle,
   });
 
   @override
@@ -59,8 +66,8 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   void initState() {
     super.initState();
     final existing = widget.existing;
-    _titleCtl =
-        TextEditingController(text: existing?.workout.title ?? '');
+    _titleCtl = TextEditingController(
+        text: existing?.workout.title ?? widget.prefillTitle ?? '');
     _isPublic = existing?.workout.isPublic ?? false;
     _exercises = _initExercises(existing);
   }

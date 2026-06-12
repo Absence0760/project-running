@@ -51,8 +51,10 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import GymEditor from '$lib/components/GymEditor.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
+	import { workoutDraftFromTemplate } from '$lib/social/event_gym_template';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { formatPrice } from '$lib/format/format_price';
 	import { registrationOpen } from '$lib/social/paid_registration';
@@ -203,6 +205,15 @@
 	// leaderboard; class / social are attendance-only. Default athletic until
 	// the event loads so a momentary null never flashes a class layout for a run.
 	let isAthletic = $derived(event ? isAthleticCategory(event.category) : true);
+
+	// The class -> gym seam (inform-tier): a signed-in attendee can one-tap-log
+	// a templated class as their own gym workout. Gated on category === 'class'
+	// AND a non-null gym_template AND a signed-in viewer — a run/cycle/social
+	// event never offers it.
+	let canLogAsWorkout = $derived(
+		!!event && event.category === 'class' && event.gym_template != null && auth.user != null
+	);
+	let showLogWorkout = $state(false);
 	let isPast = $derived(
 		!!event &&
 			(event.recurrence_freq
@@ -1685,6 +1696,20 @@
 		{:else}
 		<section class="card">
 			<p class="muted">{m('clubEvent.attendanceOnly')}</p>
+			{#if canLogAsWorkout}
+				<div class="log-workout">
+					<button
+						type="button"
+						class="btn btn-primary"
+						data-testid="log-as-workout"
+						onclick={() => (showLogWorkout = true)}
+					>
+						<span class="material-symbols" aria-hidden="true">fitness_center</span>
+						{m('clubEvent.logAsWorkout')}
+					</button>
+					<p class="muted log-workout-hint">{m('clubEvent.logAsWorkoutHint')}</p>
+				</div>
+			{/if}
 		</section>
 		{/if}
 
@@ -1859,6 +1884,23 @@
 		</div>
 	</div>
 </Modal>
+
+{#if event && canLogAsWorkout}
+	<Modal
+		open={showLogWorkout}
+		title={m('clubEvent.logAsWorkout')}
+		onclose={() => (showLogWorkout = false)}
+	>
+		<GymEditor
+			prefill={{ title: workoutDraftFromTemplate(event.gym_template, event.title).title }}
+			oncreated={() => {
+				showLogWorkout = false;
+				showToast(m('clubEvent.logAsWorkoutSaved'), 'success');
+			}}
+			oncancel={() => (showLogWorkout = false)}
+		/>
+	</Modal>
+{/if}
 {/if}
 
 <style>
@@ -2418,6 +2460,23 @@
 
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+
+	.log-workout {
+		margin-top: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		align-items: flex-start;
+	}
+	.log-workout .btn .material-symbols {
+		font-size: 1.1rem;
+		margin-inline-end: 0.25rem;
+		vertical-align: text-bottom;
+	}
+	.log-workout-hint {
+		font-size: 0.85rem;
+		margin: 0;
 	}
 
 	.empty-card {

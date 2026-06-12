@@ -2,11 +2,12 @@
 	import { onMount } from 'svelte';
 	import { formatDuration } from '$lib/format/time';
 	import { formatDateShort } from '$lib/format/time';
-	import { afterNavigate, goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/core/data';
 	import { m } from '$lib/i18n/store.svelte';
 
+	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -21,24 +22,6 @@
 
 	type StatusFilter = 'all' | PlanStatus;
 	let statusFilter = $state<StatusFilter>('all');
-
-	/// Mirror the /runs/[id] pattern so the back link can pop the history
-	/// entry when the user came from /dashboard — that restores the
-	/// dashboard's stat-card filter + scroll snapshot. Otherwise the link
-	/// falls through to a normal /dashboard soft-nav.
-	let cameFromDashboard = $state(false);
-	afterNavigate(({ from }) => {
-		if (from?.url.pathname === '/dashboard' && !cameFromDashboard) {
-			cameFromDashboard = true;
-		}
-	});
-
-	function handleBack(e: MouseEvent): void {
-		if (cameFromDashboard) {
-			e.preventDefault();
-			history.back();
-		}
-	}
 
 	async function load() {
 		loading = true;
@@ -228,9 +211,7 @@
 </svelte:head>
 
 <div class="page">
-	<a href="/dashboard" class="back-link" onclick={handleBack}>
-		<span class="material-symbols">arrow_back</span> {m('plansPage.backDashboard')}
-	</a>
+	<RunSurfaceTabs active="plans" />
 	<header class="page-header">
 		<div class="toolbar">
 			<div class="activity-group" role="group" aria-label={m('plansPage.filterGroupLabel')}>
@@ -417,20 +398,6 @@
 	.page-header {
 		margin-bottom: var(--space-xl);
 	}
-
-	.back-link {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-xs);
-		font-size: 0.85rem;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		text-decoration: none;
-		margin-bottom: var(--space-md);
-		transition: color var(--transition-fast);
-	}
-	.back-link:hover { color: var(--color-primary); }
-	.back-link .material-symbols { font-size: 1.05rem; }
 
 	.toolbar {
 		display: flex;

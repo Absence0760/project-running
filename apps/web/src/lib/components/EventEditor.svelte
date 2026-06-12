@@ -10,6 +10,7 @@
 	} from '$lib/core/data';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
+	import { gymTemplateFromInputs } from '$lib/social/event_gym_template';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Route, RecurrenceFreq, Weekday, EventCategory, RefundPolicy } from '$lib/types';
@@ -35,6 +36,9 @@
 
 	let category = $state<EventCategory>('run');
 	let discipline = $state('');
+	// Optional default workout length for the class -> gym seam. The discipline
+	// above doubles as the workout title source — no second discipline field.
+	let gymTemplateDurationMin = $state<number | null>(null);
 	let title = $state('');
 	let description = $state('');
 	let date = $state(defaultDate());
@@ -97,7 +101,10 @@
 			paceMin = null;
 			paceSec = null;
 		}
-		if (next !== 'class') discipline = '';
+		if (next !== 'class') {
+			discipline = '';
+			gymTemplateDurationMin = null;
+		}
 	}
 
 	function defaultDate(): string {
@@ -151,6 +158,10 @@
 				title: title.trim(),
 				category,
 				discipline: category === 'class' ? discipline.trim() || null : null,
+				gym_template:
+					category === 'class'
+						? gymTemplateFromInputs(discipline.trim(), gymTemplateDurationMin)
+						: null,
 				description: description.trim() || undefined,
 				starts_at: startsAt,
 				duration_min: durationMin ?? undefined,
@@ -228,6 +239,18 @@
 				maxlength="60"
 				placeholder={m('eventEditor.disciplinePlaceholder')}
 			/>
+		</label>
+		<label>
+			<span>{m('eventEditor.gymTemplateDuration')} <span class="optional">{m('eventEditor.optional')}</span></span>
+			<input
+				type="number"
+				min="5"
+				max="600"
+				bind:value={gymTemplateDurationMin}
+				placeholder={m('eventEditor.gymTemplateDurationPlaceholder')}
+				data-testid="gym-template-duration"
+			/>
+			<span class="hint">{m('eventEditor.gymTemplateHint')}</span>
 		</label>
 	{/if}
 

@@ -10,8 +10,10 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
+import '../training_service.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
+import 'plans_screen.dart';
 import 'routes_screen.dart';
 import 'runs_screen.dart';
 
@@ -40,6 +42,7 @@ class FitnessHubScreen extends StatefulWidget {
   final LocalFoodStore foodStore;
   final Preferences preferences;
   final SettingsSyncService? settingsSync;
+  final TrainingService training;
 
   /// Preselect-this-route handoff used by the Runs → Routes surface when a
   /// user picks "Start with this route"; plumbed up to the home shell so the
@@ -58,6 +61,7 @@ class FitnessHubScreen extends StatefulWidget {
     required this.gymStore,
     required this.foodStore,
     required this.preferences,
+    required this.training,
     this.settingsSync,
     this.onStartRun,
     this.initialTab = 0,
@@ -95,6 +99,15 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
         preferences: widget.preferences,
         onStartRun: widget.onStartRun,
         social: widget.social,
+      ),
+    ));
+  }
+
+  void _openPlans() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => PlansScreen(
+        training: widget.training,
+        apiClient: widget.apiClient,
       ),
     ));
   }
@@ -137,6 +150,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
             preferences: widget.preferences,
             settingsSync: widget.settingsSync,
             onOpenRoutes: _openRoutes,
+            onOpenPlans: _openPlans,
           ),
           GymScreen(
             key: const PageStorageKey('fitness-gym'),

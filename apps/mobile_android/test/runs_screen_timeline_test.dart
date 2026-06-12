@@ -279,4 +279,61 @@ void main() {
     expect(api.gymFetches, greaterThan(0),
         reason: 'History should hydrate the gym store on mount');
   });
+
+  /// Mount the run-list (Runs sub-tab) shape with the Routes + Plans AppBar
+  /// callbacks wired, the way the Fitness hub's Runs tab does.
+  Future<void> pumpRunList(
+    WidgetTester tester, {
+    VoidCallback? onOpenRoutes,
+    VoidCallback? onOpenPlans,
+  }) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = Preferences();
+    await prefs.init();
+    final runStore = LocalRunStore();
+    await runStore.init(overrideDirectory: tmp('runs_nav_'));
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: RunsScreen(
+        apiClient: _FakeApi(),
+        runStore: runStore,
+        routeStore: LocalRouteStore(),
+        preferences: prefs,
+        onOpenRoutes: onOpenRoutes,
+        onOpenPlans: onOpenPlans,
+      ),
+    ));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Runs sub-tab surfaces both Routes + Plans AppBar actions; Plans fires its callback',
+      (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    var routesTaps = 0;
+    var plansTaps = 0;
+    await pumpRunList(
+      tester,
+      onOpenRoutes: () => routesTaps++,
+      onOpenPlans: () => plansTaps++,
+    );
+
+    final routesBtn = find.byTooltip(l10n.fitnessRunsRoutes);
+    final plansBtn = find.byTooltip(l10n.fitnessRunsPlans);
+    expect(routesBtn, findsOneWidget);
+    expect(plansBtn, findsOneWidget);
+
+    await tester.tap(plansBtn);
+    await tester.pumpAndSettle();
+    expect(plansTaps, 1);
+    expect(routesTaps, 0);
+  });
+
+  testWidgets('no Plans action when onOpenPlans is null', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await pumpRunList(tester);
+    expect(find.byTooltip(l10n.fitnessRunsPlans), findsNothing);
+    expect(find.byTooltip(l10n.fitnessRunsRoutes), findsNothing);
+  });
 }

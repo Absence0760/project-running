@@ -881,6 +881,12 @@ abstract class AppLocalizations {
   /// **'Routes'**
   String get fitnessRunsRoutes;
 
+  /// Label for the Training plans entry on the Fitness hub's Runs sub-tab
+  ///
+  /// In en, this message translates to:
+  /// **'Training plans'**
+  String get fitnessRunsPlans;
+
   /// Title of the pinned coach entry at the top of the Home dashboard
   ///
   /// In en, this message translates to:
@@ -11684,6 +11690,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This permanently removes the workout and its sets.'**
   String get gymDeleteConfirmBody;
+
+  /// Button on a class event detail that opens the gym composer pre-filled from the class's gym_template.
+  ///
+  /// In en, this message translates to:
+  /// **'Log this as a workout'**
+  String get clubEventLogAsWorkout;
+
+  /// Helper text under the log-as-workout button explaining the inform-tier behaviour.
+  ///
+  /// In en, this message translates to:
+  /// **'Add this class to your own gym log — you can adjust the details before saving.'**
+  String get clubEventLogAsWorkoutHint;
+
+  /// Confirmation banner shown after the user saves the class as a gym workout.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to your gym log'**
+  String get clubEventLogAsWorkoutSaved;
 
   /// No description provided for @gymEditorNewTitle.
   ///

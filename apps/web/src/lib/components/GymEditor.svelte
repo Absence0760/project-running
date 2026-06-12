@@ -12,6 +12,10 @@
 
 	interface Props {
 		existing?: GymWorkoutWithSets | null;
+		/// Seed for a NEW workout (used by the class -> gym seam). Pre-fills the
+		/// title; sets stay empty for the user to fill. Ignored when `existing`
+		/// is set (an edit owns its own values).
+		prefill?: { title?: string | null } | null;
 		/// Distinct exercise names from the user's history, for the datalist
 		/// autocomplete (multi_modal.md § Gym — "autocomplete from the
 		/// user's own history, not a database").
@@ -21,7 +25,14 @@
 		oncancel: () => void;
 	}
 
-	let { existing = null, suggestions = [], oncreated, onupdated, oncancel }: Props = $props();
+	let {
+		existing = null,
+		prefill = null,
+		suggestions = [],
+		oncreated,
+		onupdated,
+		oncancel
+	}: Props = $props();
 
 	type EditSet = { reps: string; weight: string; rpe: string };
 	type EditExercise = { name: string; sets: EditSet[] };
@@ -59,7 +70,8 @@
 	// prop is read once at construction to seed local state. untrack keeps
 	// that one-time read from registering a (never-changing) dependency.
 	const seed = untrack(() => existing);
-	let title = $state(seed?.workout.title ?? '');
+	const seedPrefill = untrack(() => prefill);
+	let title = $state(seed?.workout.title ?? seedPrefill?.title ?? '');
 	let isPublic = $state(seed?.workout.is_public ?? false);
 	let exercises = $state<EditExercise[]>(initExercises(seed));
 	let saving = $state(false);
