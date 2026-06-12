@@ -39,7 +39,14 @@ export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
-import type { CoachAthleteStatus } from '../types';
+import type {
+	CoachAthleteStatus,
+	SessionPlan,
+	SessionPlanBlock,
+	SessionPlanItem,
+	SessionPlanWithItems,
+	SessionItemKind
+} from '../types';
 import { nextInstanceAfter } from '../social/recurrence';
 import {
 	parseGymTemplate,
@@ -6013,4 +6020,169 @@ export async function fetchActivities(limit = 100): Promise<ActivityRow[]> {
 			};
 		})
 		.filter((r) => r.id !== '' && r.started_at !== '');
+}
+
+// ───────────────────────── Session plans (session_planner.md P1) ─────────────
+// A reusable yoga/pilates session-content template: a plan head + optional
+// blocks + ordered items. P1 is build/save/reuse + read; no execution. RLS
+// owns authority (author / public / club). The editor supplies the full
+// blocks+items shape; createSessionPlan / updateSessionPlan persist the head
+// and replace the child rows (no diff — a plan is small and edited rarely, so a
+// delete-all + re-insert is simpler and correct than a per-row reconcile).
+
+export interface SessionPlanItemInput {
+	movement_name: string;
+	kind: SessionItemKind;
+	duration_s: number | null;
+	reps: number | null;
+	per_side: boolean;
+	tempo: string | null;
+	cue: string | null;
+	/// index into the editor's blocks array, or null for a flat (blockless) item.
+	block_index: number | null;
+}
+
+export interface SessionPlanInput {
+	title: string;
+	discipline: string | null;
+	equipment: string | null;
+	is_public: boolean;
+	club_id: string | null;
+	est_duration_min: number | null;
+	blocks: { name: string | null }[];
+	items: SessionPlanItemInput[];
+}
+
+/** The user's own plans + any plan owned by a club they belong to. List view. */
+export async function fetchSessionPlans(): Promise<SessionPlan[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('session_plans')
+		.select('*')
+		.order('updated_at', { ascending: false });
+	if (error) throw error;
+	return (data ?? []) as SessionPlan[];
+}
+
+/** A single plan with its blocks + items (read view + editor hydrate). */
+export async function fetchSessionPlan(id: string): Promise<SessionPlanWithItems | null> {
+	const { data: plan, error } = await supabase
+		.from('session_plans')
+		.select('*')
+		.eq('id', id)
+		.maybeSingle();
+	if (error) throw error;
+	if (!plan) return null;
+
+	const [{ data: blocks }, { data: items }] = await Promise.all([
+		supabase.from('session_plan_blocks').select('*').eq('plan_id', id).order('position'),
+		supabase.from('session_plan_items').select('*').eq('plan_id', id).order('position')
+	]);
+	return {
+		...(plan as SessionPlan),
+		blocks: (blocks ?? []) as SessionPlanBlock[],
+		items: ((items ?? []) as SessionPlanItem[])
+	};
+}
+
+async function replaceSessionPlanChildren(planId: string, input: SessionPlanInput): Promise<void> {
+	// Children cascade on plan delete; here we clear + re-insert to apply edits.
+	await supabase.from('session_plan_items').delete().eq('plan_id', planId);
+	await supabase.from('session_plan_blocks').delete().eq('plan_id', planId);
+
+	const blockIds: string[] = [];
+	if (input.blocks.length > 0) {
+		const { data, error } = await supabase
+			.from('session_plan_blocks')
+			.insert(
+				input.blocks.map((b, i) => ({
+					plan_id: planId,
+					position: i,
+					name: b.name?.trim() || null
+				}))
+			)
+			.select('id');
+		if (error) throw error;
+		// insert preserves input order, but sort defensively by nothing — map by index.
+		for (const row of (data ?? []) as { id: string }[]) blockIds.push(row.id);
+	}
+
+	if (input.items.length > 0) {
+		const { error } = await supabase.from('session_plan_items').insert(
+			input.items.map((it, i) => ({
+				plan_id: planId,
+				block_id:
+					it.block_index !== null && it.block_index < blockIds.length
+						? blockIds[it.block_index]
+						: null,
+				position: i,
+				movement_name: it.movement_name.trim(),
+				kind: it.kind,
+				duration_s: it.duration_s,
+				reps: it.reps,
+				per_side: it.per_side,
+				tempo: it.tempo?.trim() || null,
+				cue: it.cue?.trim() || null
+			}))
+		);
+		if (error) throw error;
+	}
+}
+
+export async function createSessionPlan(input: SessionPlanInput): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { data, error } = await supabase
+		.from('session_plans')
+		.insert({
+			author_id: userId,
+			club_id: input.club_id,
+			title: input.title.trim(),
+			discipline: input.discipline?.trim() || null,
+			equipment: input.equipment?.trim() || null,
+			est_duration_min: input.est_duration_min,
+			is_public: input.is_public
+		})
+		.select('id')
+		.single();
+	if (error) throw error;
+	const planId = (data as { id: string }).id;
+	await replaceSessionPlanChildren(planId, input);
+	return planId;
+}
+
+export async function updateSessionPlan(id: string, input: SessionPlanInput): Promise<void> {
+	const { error } = await supabase
+		.from('session_plans')
+		.update({
+			title: input.title.trim(),
+			discipline: input.discipline?.trim() || null,
+			equipment: input.equipment?.trim() || null,
+			est_duration_min: input.est_duration_min,
+			is_public: input.is_public,
+			club_id: input.club_id,
+			updated_at: new Date().toISOString()
+		})
+		.eq('id', id);
+	if (error) throw error;
+	await replaceSessionPlanChildren(id, input);
+}
+
+export async function deleteSessionPlan(id: string): Promise<void> {
+	const { error } = await supabase.from('session_plans').delete().eq('id', id);
+	if (error) throw error;
+}
+
+/** Attach (or detach with null) a session plan to a class event. Organiser-only
+ *  at the DB layer (the events_session_plan_organiser trigger). */
+export async function setEventSessionPlan(
+	eventId: string,
+	sessionPlanId: string | null
+): Promise<void> {
+	const { error } = await supabase
+		.from('events')
+		.update({ session_plan_id: sessionPlanId })
+		.eq('id', eventId);
+	if (error) throw error;
 }
