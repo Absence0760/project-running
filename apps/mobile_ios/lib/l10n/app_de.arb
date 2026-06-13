@@ -600,6 +600,8 @@
   "routeBuilderGenerateLoop": "Schleife erzeugen",
   "routeBuilderUndo": "Rückgängig",
   "routeBuilderClear": "Löschen",
+  "routeBuilderClearConfirmTitle": "Diese Route löschen?",
+  "routeBuilderClearConfirmBody": "Alle Wegpunkte werden entfernt. Das kann nicht rückgängig gemacht werden.",
   "routeBuilderSaving": "Wird gespeichert…",
   "routeBuilderSave": "Speichern",
   "routeBuilderLocateMe": "Mich orten",

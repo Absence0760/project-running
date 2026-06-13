@@ -600,6 +600,8 @@
   "routeBuilderGenerateLoop": "Gerar circuito",
   "routeBuilderUndo": "Desfazer",
   "routeBuilderClear": "Limpar",
+  "routeBuilderClearConfirmTitle": "Limpar esta rota?",
+  "routeBuilderClearConfirmBody": "Todos os pontos serão removidos. Isso não pode ser desfeito.",
   "routeBuilderSaving": "Salvando…",
   "routeBuilderSave": "Salvar",
   "routeBuilderLocateMe": "Localizar-me",

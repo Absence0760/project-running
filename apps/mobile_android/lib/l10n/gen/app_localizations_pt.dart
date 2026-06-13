@@ -2201,6 +2201,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeBuilderClear => 'Limpar';
 
   @override
+  String get routeBuilderClearConfirmTitle => 'Limpar esta rota?';
+
+  @override
+  String get routeBuilderClearConfirmBody =>
+      'Todos os pontos serão removidos. Isso não pode ser desfeito.';
+
+  @override
   String get routeBuilderSaving => 'Salvando…';
 
   @override
@@ -10818,6 +10825,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeBuilderClear => 'Limpar';
+
+  @override
+  String get routeBuilderClearConfirmTitle => 'Limpar esta rota?';
+
+  @override
+  String get routeBuilderClearConfirmBody =>
+      'Todos os pontos serão removidos. Isso não pode ser desfeito.';
 
   @override
   String get routeBuilderSaving => 'Salvando…';

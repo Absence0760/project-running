@@ -600,6 +600,8 @@
   "routeBuilderGenerateLoop": "ループを生成",
   "routeBuilderUndo": "元に戻す",
   "routeBuilderClear": "クリア",
+  "routeBuilderClearConfirmTitle": "このルートをクリアしますか？",
+  "routeBuilderClearConfirmBody": "すべてのウェイポイントが削除されます。元に戻せません。",
   "routeBuilderSaving": "保存中…",
   "routeBuilderSave": "保存",
   "routeBuilderLocateMe": "現在地を表示",

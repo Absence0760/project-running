@@ -2186,6 +2186,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeBuilderClear => 'Clear';
 
   @override
+  String get routeBuilderClearConfirmTitle => 'Clear this route?';
+
+  @override
+  String get routeBuilderClearConfirmBody =>
+      'All waypoints will be removed. This can\'t be undone.';
+
+  @override
   String get routeBuilderSaving => 'Saving…';
 
   @override

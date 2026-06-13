@@ -2203,6 +2203,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeBuilderClear => 'Borrar';
 
   @override
+  String get routeBuilderClearConfirmTitle => '¿Borrar esta ruta?';
+
+  @override
+  String get routeBuilderClearConfirmBody =>
+      'Se eliminarán todos los puntos. Esto no se puede deshacer.';
+
+  @override
   String get routeBuilderSaving => 'Guardando…';
 
   @override

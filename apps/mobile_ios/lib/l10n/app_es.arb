@@ -600,6 +600,8 @@
   "routeBuilderGenerateLoop": "Generar bucle",
   "routeBuilderUndo": "Deshacer",
   "routeBuilderClear": "Borrar",
+  "routeBuilderClearConfirmTitle": "¿Borrar esta ruta?",
+  "routeBuilderClearConfirmBody": "Se eliminarán todos los puntos. Esto no se puede deshacer.",
   "routeBuilderSaving": "Guardando…",
   "routeBuilderSave": "Guardar",
   "routeBuilderLocateMe": "Ubicarme",

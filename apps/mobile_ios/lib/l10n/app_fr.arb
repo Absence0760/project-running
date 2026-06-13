@@ -600,6 +600,8 @@
   "routeBuilderGenerateLoop": "Générer une boucle",
   "routeBuilderUndo": "Annuler",
   "routeBuilderClear": "Effacer",
+  "routeBuilderClearConfirmTitle": "Effacer cet itinéraire ?",
+  "routeBuilderClearConfirmBody": "Tous les points seront supprimés. Cette action est irréversible.",
   "routeBuilderSaving": "Enregistrement…",
   "routeBuilderSave": "Enregistrer",
   "routeBuilderLocateMe": "Me localiser",

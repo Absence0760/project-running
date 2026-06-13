@@ -2520,6 +2520,14 @@
   "@routeBuilderClear": {
     "description": "Clear action label in the route builder"
   },
+  "routeBuilderClearConfirmTitle": "Clear this route?",
+  "@routeBuilderClearConfirmTitle": {
+    "description": "Confirm-clear dialog title in the route builder"
+  },
+  "routeBuilderClearConfirmBody": "All waypoints will be removed. This can't be undone.",
+  "@routeBuilderClearConfirmBody": {
+    "description": "Confirm-clear dialog body in the route builder"
+  },
   "routeBuilderSaving": "Saving…",
   "@routeBuilderSaving": {
     "description": "Save button label while a save is in progress"

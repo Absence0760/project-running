@@ -2080,6 +2080,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeBuilderClear => 'クリア';
 
   @override
+  String get routeBuilderClearConfirmTitle => 'このルートをクリアしますか？';
+
+  @override
+  String get routeBuilderClearConfirmBody => 'すべてのウェイポイントが削除されます。元に戻せません。';
+
+  @override
   String get routeBuilderSaving => '保存中…';
 
   @override

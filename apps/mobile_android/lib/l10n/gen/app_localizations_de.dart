@@ -2209,6 +2209,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routeBuilderClear => 'Löschen';
 
   @override
+  String get routeBuilderClearConfirmTitle => 'Diese Route löschen?';
+
+  @override
+  String get routeBuilderClearConfirmBody =>
+      'Alle Wegpunkte werden entfernt. Das kann nicht rückgängig gemacht werden.';
+
+  @override
   String get routeBuilderSaving => 'Wird gespeichert…';
 
   @override

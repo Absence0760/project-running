@@ -2209,6 +2209,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeBuilderClear => 'Effacer';
 
   @override
+  String get routeBuilderClearConfirmTitle => 'Effacer cet itinéraire ?';
+
+  @override
+  String get routeBuilderClearConfirmBody =>
+      'Tous les points seront supprimés. Cette action est irréversible.';
+
+  @override
   String get routeBuilderSaving => 'Enregistrement…';
 
   @override

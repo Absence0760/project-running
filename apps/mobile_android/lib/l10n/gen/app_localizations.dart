@@ -3707,6 +3707,18 @@ abstract class AppLocalizations {
   /// **'Clear'**
   String get routeBuilderClear;
 
+  /// Confirm-clear dialog title in the route builder
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this route?'**
+  String get routeBuilderClearConfirmTitle;
+
+  /// Confirm-clear dialog body in the route builder
+  ///
+  /// In en, this message translates to:
+  /// **'All waypoints will be removed. This can\'t be undone.'**
+  String get routeBuilderClearConfirmBody;
+
   /// Save button label while a save is in progress
   ///
   /// In en, this message translates to:

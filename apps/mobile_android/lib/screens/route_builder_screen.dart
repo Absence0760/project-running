@@ -608,8 +608,34 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     );
   }
 
-  void _clear() {
+  Future<void> _clear() async {
     if (_routing || _saving) return;
+    // Confirm before discarding a route the user has actually started — Undo
+    // only steps back one waypoint, so a stray Clear tap is total work loss.
+    if (_waypoints.length >= 2) {
+      final ok = await showDialog<bool>(
+            context: context,
+            builder: (ctx) {
+              final l = AppLocalizations.of(ctx);
+              return AlertDialog(
+                title: Text(l.routeBuilderClearConfirmTitle),
+                content: Text(l.routeBuilderClearConfirmBody),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text(l.routeBuilderCancel),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text(l.routeBuilderClear),
+                  ),
+                ],
+              );
+            },
+          ) ??
+          false;
+      if (!ok) return;
+    }
     _segmentCache.clear();
     setState(() {
       _waypoints.clear();

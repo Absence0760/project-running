@@ -238,6 +238,37 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		}
 	});
 
+	test('Clear with 2+ waypoints confirms; cancel keeps them, confirm clears', async ({
+		page
+	}) => {
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: -0.05, dLng: 0.05 }
+		]);
+		const pointsValue = page.locator('.builder-stat-value').nth(2);
+		await expect(pointsValue).toHaveText('2', { timeout: 5_000 });
+
+		const clearBtn = page.locator('button[title="Clear all waypoints (Esc)"]');
+		await clearBtn.click();
+		const dialog = page.locator('.modal', { hasText: 'Clear this route?' });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+		// Cancel keeps the started route intact.
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(pointsValue).toHaveText('2');
+
+		// Confirm clears it.
+		await clearBtn.click();
+		await page
+			.locator('.modal', { hasText: 'Clear this route?' })
+			.getByRole('button', { name: 'Clear' })
+			.click();
+		await expect(pointsValue).toHaveText('0', { timeout: 5_000 });
+	});
+
 	test('distance-target panel toggles open + the four presets set the slider', async ({
 		page
 	}) => {

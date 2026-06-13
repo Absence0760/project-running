@@ -4,6 +4,7 @@
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
 	import { saveRoute } from '$lib/core/data';
@@ -178,7 +179,19 @@
 		routed = false;
 	}
 
+	let showClearConfirm = $state(false);
+
 	function handleClear() {
+		// Confirm before discarding a route the user has actually started —
+		// Undo only steps back one waypoint, so a stray Clear is total loss.
+		if (waypointCount >= 2) {
+			showClearConfirm = true;
+			return;
+		}
+		doClear();
+	}
+
+	function doClear() {
 		builder?.clearWaypoints();
 		routed = false;
 	}
@@ -849,6 +862,19 @@
 		</div>
 	</form>
 </Modal>
+
+<ConfirmDialog
+	open={showClearConfirm}
+	title={m('routeNew.clearConfirmTitle')}
+	message={m('routeNew.clearConfirmMessage')}
+	confirmLabel={m('routeNew.clearConfirmButton')}
+	danger
+	onconfirm={() => {
+		showClearConfirm = false;
+		doClear();
+	}}
+	oncancel={() => (showClearConfirm = false)}
+/>
 
 <style>
 	.builder-layout {
