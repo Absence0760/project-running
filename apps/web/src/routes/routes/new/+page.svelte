@@ -434,7 +434,7 @@
 			showToast(m('routeNew.savedToast'), 'success');
 			goto(`/routes/${saved.id}`);
 		} catch (err) {
-			saveError = err instanceof Error ? err.message : m('routeNew.saveFailedError');
+			showToast(err instanceof Error ? err.message : m('routeNew.saveFailedError'), 'error');
 		} finally {
 			saving = false;
 		}

@@ -4,6 +4,7 @@
 	import { formatDistance } from '$lib/core/mock-data';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import Modal from './Modal.svelte';
 
 	let {
@@ -100,7 +101,7 @@
 				onclose();
 			}
 		} catch (err) {
-			error = err instanceof Error ? err.message : m('importRoute.failedToSave');
+			showToast(err instanceof Error ? err.message : m('importRoute.failedToSave'), 'error');
 		} finally {
 			saving = false;
 		}

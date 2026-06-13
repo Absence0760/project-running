@@ -3,6 +3,7 @@
 	import { geocodePlace } from '$lib/routes/geocoding';
 	import type { JoinPolicy } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	interface Props {
 		oncreated?: (club: { slug: string; id: string }) => void;
@@ -17,7 +18,6 @@
 	let joinPolicy = $state<JoinPolicy>('open');
 	let requireWaiver = $state(false);
 	let busy = $state(false);
-	let error = $state<string | null>(null);
 
 	$effect(() => {
 		// Private clubs don't appear in Browse; 'request' makes no sense
@@ -34,7 +34,6 @@
 		e.preventDefault();
 		if (!name.trim() || busy) return;
 		busy = true;
-		error = null;
 		try {
 			// Geocode the location string so the new club is searchable
 			// by region (see `searchClubs` + migration 20260905_001).
@@ -58,7 +57,7 @@
 			});
 			oncreated?.(club);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : m('clubEditor.createFailed');
+			showToast(e instanceof Error ? e.message : m('clubEditor.createFailed'), 'error');
 		} finally {
 			busy = false;
 		}
@@ -160,10 +159,6 @@
 			{m('clubEditor.waiverLabel')}
 		</span>
 	</label>
-
-	{#if error}
-		<p class="error">{error}</p>
-	{/if}
 
 	<div class="actions">
 		{#if oncancel}

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { deleteRoute } from '../fixtures/simulate';
-import { getAdminClient } from '../fixtures/local-supabase';
+import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 const MULTI_ROUTE_GPX = `<?xml version="1.0" encoding="UTF-8"?>
@@ -399,6 +399,59 @@ test.describe('/routes — Import route modal', () => {
 		// No row was inserted.
 		const afterCount = await routesCountForUser(USER_A.id);
 		expect(afterCount).toBe(beforeCount);
+	});
+
+	test('hitting the 30/hour create_route cap on import surfaces the friendly "slow down" toast', async ({
+		page
+	}) => {
+		// The import modal shares saveRoute with the route builder, so the
+		// same create_route cap (migration 20260907_001) applies. Pre-plant
+		// the counter to 30 so the next saveRoute insert fires the BEFORE
+		// INSERT trigger; data.ts rewraps the P0001 via rateLimitErrorMessage
+		// and the ImportRoute handleSave catch now routes it through showToast
+		// instead of the inline .error banner. Pin the toast wording so a
+		// refactor can't silently revert to the generic "failed to save" copy.
+		const admin = getAdminClient();
+		const nowS = Math.floor(Date.now() / 1000);
+		const windowStartS = Math.floor(nowS / 3600) * 3600;
+		const windowStart = new Date(windowStartS * 1000).toISOString();
+		await admin.from('rate_limits').upsert({
+			user_id: USER_A.id,
+			bucket: 'create_route',
+			window_start: windowStart,
+			count: 30
+		});
+
+		try {
+			await page.goto('/routes');
+			await page.getByRole('button', { name: /Import/ }).first().click();
+			await expect(
+				page.locator('[aria-label="Route file drop zone"]')
+			).toBeVisible({ timeout: 5_000 });
+
+			await page.locator('input[type="file"]').setInputFiles({
+				name: 'e2e-import-ratelimited.gpx',
+				mimeType: 'application/gpx+xml',
+				buffer: Buffer.from(MINIMAL_GPX, 'utf-8')
+			});
+
+			const nameInput = page.locator('.preview input[type="text"]').first();
+			await expect(nameInput).toBeVisible({ timeout: 5_000 });
+			await nameInput.fill(`rate-limited import ${Date.now()}`);
+
+			await page.getByRole('button', { name: /^Save Route$/ }).click();
+
+			const errorToast = page.locator('.toast-error');
+			await expect(errorToast).toBeVisible({ timeout: 10_000 });
+			await expect(errorToast).toHaveText(/creating routes too quickly/i);
+			// Negative pin: generic fallback + raw exception must not leak.
+			await expect(page.getByText('Failed to save route')).toHaveCount(0);
+			await expect(
+				page.getByText(/rate limit exceeded for create_route/i)
+			).toHaveCount(0);
+		} finally {
+			await resetRateLimit(USER_A.id, 'create_route');
+		}
 	});
 
 	test('cancel the modal with X button: closes without import or error toast', async ({
