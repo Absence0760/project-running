@@ -408,6 +408,24 @@ void main() {
       expect(r.recording, isTrue);
     });
 
+    test('a bogus belt sample is not carried forward to poison the next interval',
+        () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // Good baseline, then a glitch, then a good reading. The glitch is
+      // rejected for its OWN interval — but it must also not become the
+      // integrand for the NEXT interval. With the bug the final good sample
+      // integrated the stored 999 m/s (≈ 999 × 0.05 s ≈ 50 m of phantom
+      // distance); fixed, it integrates the last GOOD 2.0 m/s (≈ 0.1 m).
+      r.setTreadmillSample(2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      r.setTreadmillSample(999);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      r.setTreadmillSample(2.0);
+      expect(r.debugReportedDistanceMetres, lessThan(2.0),
+          reason: 'a single glitch reading must not inject phantom distance');
+    });
+
     test('clearTreadmillMode reverts to the GPS distance', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();

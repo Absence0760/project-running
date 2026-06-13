@@ -192,6 +192,13 @@ class RunRecorder {
   double _treadmillLastSpeedMps = 0;
   DateTime? _treadmillLastSampleAt;
 
+  /// Plausibility ceiling for a treadmill belt speed (m/s) ≈ 43 km/h —
+  /// faster than any human belt speed, so a reading at/above it is a sensor
+  /// glitch. Used BOTH to gate distance accumulation AND to gate carrying
+  /// the speed forward as the next interval's integrand; the two MUST agree
+  /// or a rejected reading still poisons the next interval (phantom distance).
+  static const double _maxTreadmillSpeedMps = 12;
+
   /// Whether the recorder is currently sourcing distance from a treadmill
   /// rather than GPS.
   bool get treadmillMode => _treadmillMode;
@@ -593,12 +600,19 @@ class RunRecorder {
         final last = _treadmillLastSampleAt;
         if (last != null && !_paused) {
           final dtSec = now.difference(last).inMilliseconds / 1000.0;
-          if (dtSec > 0 && dtSec < 30 && speedMps >= 0 && speedMps < 12) {
+          if (dtSec > 0 && dtSec < 30 && speedMps >= 0 && speedMps < _maxTreadmillSpeedMps) {
             _treadmillDistanceMetres += _treadmillLastSpeedMps * dtSec;
           }
         }
       }
-      _treadmillLastSpeedMps = speedMps;
+      // Carry only a plausible speed forward. A bogus reading that just
+      // failed the clamp above must NOT become the integrand for the next
+      // interval — otherwise the next good sample integrates the glitch
+      // (e.g. 999 m/s × 1 s ≈ 999 m of phantom distance). Keep the last
+      // good speed instead.
+      if (speedMps >= 0 && speedMps < _maxTreadmillSpeedMps) {
+        _treadmillLastSpeedMps = speedMps;
+      }
       _treadmillLastSampleAt = now;
     } catch (e) {
       debugPrint('RunRecorder: treadmill sample dropped — $e');
