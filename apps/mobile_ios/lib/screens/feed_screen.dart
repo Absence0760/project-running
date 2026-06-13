@@ -544,10 +544,7 @@ class _EntryCard extends StatelessWidget {
 
   static String _fmtPace(double metres, int durationS) {
     if (metres <= 0 || durationS <= 0) return '—';
-    final secPerKm = durationS / (metres / 1000);
-    final m = secPerKm ~/ 60;
-    final s = (secPerKm % 60).round();
-    return '$m:${s.toString().padLeft(2, '0')} /km';
+    return formatPaceForPref(durationS / (metres / 1000));
   }
 
 }

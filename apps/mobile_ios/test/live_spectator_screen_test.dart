@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
 import '../lib/screens/live_spectator_screen.dart';
 import '../lib/widgets/error_state.dart';
 
@@ -174,20 +175,28 @@ void main() {
     test('sub-10s tail zero-pads on the right', () {
       expect(formatLivePace(305), '5:05 /km');
     });
-    test('rounds up on a half-second fraction', () {
-      // 5:30.5/km → "5:31 /km". A regression to `.floor()` would
-      // render "5:30 /km" for every spectator at this pace.
-      expect(formatLivePace(330.5), '5:31 /km');
+    test('truncates the fractional second (canonical UnitFormat shape)', () {
+      // Now delegates to formatPaceForPref → UnitFormat.pace, which
+      // truncates the fractional second rather than rounding. 330.5/km
+      // renders "5:30 /km" (was "5:31" under the old local rounder).
+      expect(formatLivePace(330.5), '5:30 /km');
     });
-    test('rolls over from 59 to next minute correctly', () {
-      // 359.9 seconds/km → round to 360 → "5:60 /km" or "6:00 /km"?
-      // The current shape is "5:60 /km" — pinning this so a future
-      // rounding refactor either keeps that or makes a deliberate
-      // call to roll over (which would then update this expectation).
-      expect(formatLivePace(359.9), '5:60 /km');
+    test('never emits an invalid 60th second', () {
+      // 359.9/km truncates to "5:59 /km" — the old local rounder
+      // produced the invalid "5:60 /km"; the canonical formatter can't.
+      expect(formatLivePace(359.9), '5:59 /km');
     });
     test('handles very slow paces (>10 min/km)', () {
       expect(formatLivePace(720), '12:00 /km');
+    });
+    test('mi mode: renders pace + label in the user unit', () async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      addTearDown(resetActivePreferencesForTest);
+      // 300 s/km → 300 * 1.609344 ≈ 482.8 s/mi → 8:02 /mi.
+      expect(formatLivePace(300), '8:02 /mi');
     });
   });
 }

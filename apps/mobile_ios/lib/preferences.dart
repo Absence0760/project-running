@@ -830,6 +830,14 @@ String formatDistanceForPref(double metres) =>
 String formatElevationForPref(double? metres) =>
     UnitFormat.elevation(metres, activeDistanceUnit);
 
+/// Format a pace (seconds per km) using the active user unit pref,
+/// including the unit label (`/km` or `/mi`). Drop-in for surfaces that
+/// don't carry a Preferences dep — fixes feed/spectator/profile cards
+/// hard-coding `/km` for mile-unit users. Non-positive → em-dash.
+String formatPaceForPref(double secPerKm) => secPerKm <= 0
+    ? '—'
+    : '${UnitFormat.pace(secPerKm, activeDistanceUnit)} ${UnitFormat.paceLabel(activeDistanceUnit)}';
+
 /// Current user weight-unit pref. Returns kg when no Preferences has
 /// been registered (host-test runner, very early app start). Used by
 /// gym surfaces that don't carry a Preferences dep (the compose sheet,

@@ -264,16 +264,12 @@ String formatLiveDuration(Duration d) {
   return '$m:${s.toString().padLeft(2, '0')}';
 }
 
-/// Live-spectator pace formatter — minutes:seconds per km. Same
-/// rationale as `formatLiveDuration`: this lights up on every ping
-/// payload, so the rounding shape ((seconds-fraction) → nearest int)
-/// is worth pinning.
+/// Live-spectator pace formatter — delegates to the canonical
+/// unit-aware `formatPaceForPref` so the spectator sees pace in their
+/// own unit (`/km` or `/mi`) and the seconds rounding matches every
+/// other pace surface (UnitFormat truncates the fractional second).
 @visibleForTesting
-String formatLivePace(double secPerKm) {
-  final m = secPerKm ~/ 60;
-  final s = (secPerKm % 60).round();
-  return '$m:${s.toString().padLeft(2, '0')} /km';
-}
+String formatLivePace(double secPerKm) => formatPaceForPref(secPerKm);
 
 String _freshnessLabel(AppLocalizations l10n, Freshness f) {
   switch (f.bucket) {
