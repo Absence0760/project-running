@@ -4162,6 +4162,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get workoutUnlink => 'Unlink';
 
   @override
+  String get workoutUnlinkTitle => 'Unlink run';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Unlink the matched run? The workout will show as not yet done.';
+
+  @override
+  String get workoutUnlinkError => 'Couldn\'t unlink the run. Try again.';
+
+  @override
   String get workoutRelink => 'Re-link';
 
   @override

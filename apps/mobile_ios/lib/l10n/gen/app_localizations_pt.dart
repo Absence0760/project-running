@@ -4196,6 +4196,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get workoutUnlink => 'Desvincular';
 
   @override
+  String get workoutUnlinkTitle => 'Desvincular corrida';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Desvincular a corrida associada? A sessão voltará a aparecer como não concluída.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Não foi possível desvincular a corrida. Tente novamente.';
+
+  @override
   String get workoutRelink => 'Revincular';
 
   @override
@@ -12622,6 +12633,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutUnlinkTitle => 'Desvincular corrida';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Desvincular a corrida associada? A sessão voltará a aparecer como não concluída.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Não foi possível desvincular a corrida. Tente novamente.';
 
   @override
   String get workoutRelink => 'Revincular';

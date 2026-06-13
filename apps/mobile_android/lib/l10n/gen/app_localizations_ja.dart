@@ -3944,6 +3944,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get workoutUnlink => 'リンク解除';
 
   @override
+  String get workoutUnlinkTitle => 'ランのリンクを解除';
+
+  @override
+  String get workoutUnlinkBody => '紐付いたランのリンクを解除しますか？このワークアウトは未完了に戻ります。';
+
+  @override
+  String get workoutUnlinkError => 'ランのリンクを解除できませんでした。もう一度お試しください。';
+
+  @override
   String get workoutRelink => 'リンクし直す';
 
   @override

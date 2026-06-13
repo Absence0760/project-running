@@ -4207,6 +4207,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get workoutUnlink => 'Dissocier';
 
   @override
+  String get workoutUnlinkTitle => 'Dissocier la course';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Dissocier la course associée ? La séance réapparaîtra comme non effectuée.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Impossible de dissocier la course. Réessayez.';
+
+  @override
   String get workoutRelink => 'Réassocier';
 
   @override

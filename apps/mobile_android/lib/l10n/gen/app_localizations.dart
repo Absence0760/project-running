@@ -6965,6 +6965,24 @@ abstract class AppLocalizations {
   /// **'Unlink'**
   String get workoutUnlink;
 
+  /// No description provided for @workoutUnlinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink run'**
+  String get workoutUnlinkTitle;
+
+  /// No description provided for @workoutUnlinkBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink the matched run? The workout will show as not yet done.'**
+  String get workoutUnlinkBody;
+
+  /// No description provided for @workoutUnlinkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t unlink the run. Try again.'**
+  String get workoutUnlinkError;
+
   /// Re-link-to-a-different-run button on workout detail
   ///
   /// In en, this message translates to:

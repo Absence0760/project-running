@@ -5148,6 +5148,9 @@
     "description": "Completed badge on workout detail"
   },
   "workoutUnlink": "Unlink",
+  "workoutUnlinkTitle": "Unlink run",
+  "workoutUnlinkBody": "Unlink the matched run? The workout will show as not yet done.",
+  "workoutUnlinkError": "Couldn't unlink the run. Try again.",
   "@workoutUnlink": {
     "description": "Unlink-completed-run button"
   },

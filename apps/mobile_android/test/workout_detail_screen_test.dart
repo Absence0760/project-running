@@ -169,4 +169,37 @@ void main() {
       expect(find.text('Re-link'), findsNothing);
     });
   });
+
+  group('WorkoutDetailScreen — unlink confirm', () {
+    testWidgets('Cancel does not unlink; confirm calls markCompleted(null)',
+        (tester) async {
+      final training = _FakeTraining(_completedWorkout(), const []);
+      await _pumpWith(tester, training);
+      await tester.pumpAndSettle();
+
+      // Tap Unlink → confirm dialog appears.
+      await tester.tap(find.text('Unlink'));
+      await tester.pumpAndSettle();
+      expect(find.text('Unlink run'), findsOneWidget);
+
+      // Cancel → no mutation.
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(training.markCalled, isFalse);
+
+      // Tap Unlink again → confirm via the dialog's Unlink button.
+      await tester.tap(find.text('Unlink'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextButton, 'Unlink'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(training.markCalled, isTrue);
+      expect(training.lastMarkRunId, isNull);
+    });
+  });
 }

@@ -4201,6 +4201,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get workoutUnlink => 'Verknüpfung lösen';
 
   @override
+  String get workoutUnlinkTitle => 'Lauf entkoppeln';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Den zugeordneten Lauf entkoppeln? Die Einheit gilt dann wieder als nicht erledigt.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Lauf konnte nicht entkoppelt werden. Versuche es erneut.';
+
+  @override
   String get workoutRelink => 'Neu verknüpfen';
 
   @override

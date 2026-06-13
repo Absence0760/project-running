@@ -4194,6 +4194,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get workoutUnlink => 'Desvincular';
 
   @override
+  String get workoutUnlinkTitle => 'Desvincular carrera';
+
+  @override
+  String get workoutUnlinkBody =>
+      '¿Desvincular la carrera asociada? La sesión volverá a aparecer como no realizada.';
+
+  @override
+  String get workoutUnlinkError =>
+      'No se pudo desvincular la carrera. Inténtalo de nuevo.';
+
+  @override
   String get workoutRelink => 'Revincular';
 
   @override
