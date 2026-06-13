@@ -172,8 +172,8 @@ apps/job_worker/
 │   │   └── webpush_test.go  # round-trip decrypt + VAPID-JWT verify + status classification
 │   ├── handler_weekly_digest.go # kind='weekly_digest' — opt-in + suppression gate, bounded summary render (GATED: no scheduled send)
 │   ├── handler_weekly_digest_test.go # 13 tests on opt-in / suppression hard-block / fail-closed / quiet-week / unsubscribe header
-│   ├── digest_builder.go    # EnqueueAllWeeklyDigests — selects opted-in recipients, enqueues jobs (UNSCHEDULED; pg_cron is the CISO/counsel-gated step)
-│   ├── digest_builder_test.go # 4 tests on enqueue / no-candidates / select-error / per-recipient skip
+│   ├── digest_builder.go    # EnqueueAllWeeklyDigests — selects opted-in recipients, chunked bulk-enqueues jobs (UNSCHEDULED; pg_cron is the CISO/counsel-gated step)
+│   ├── digest_builder_test.go # 5 tests on enqueue / no-candidates / select-error / chunking / failing-chunk skip
 │   ├── digesttoken/         # stateless keyed-HMAC RFC 8058 unsubscribe token (no PII, no table, constant-time verify)
 │   │   ├── token.go         # Mint / Verify over (user_id, 'weekly_digest')
 │   │   └── token_test.go    # 8 tests: round-trip / wrong-user / wrong-secret / tamper / fail-closed / no-PII

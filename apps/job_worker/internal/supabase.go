@@ -2134,14 +2134,23 @@ func (c *SupabaseClient) FetchDigestCandidates(ctx context.Context, limit int) (
 	return out, nil
 }
 
-// EnqueueWeeklyDigest inserts a `kind='weekly_digest'` job for one recipient.
-// Called by the digest builder. The CHECK on jobs.kind (migration
-// 20270108_001) gates the insert; an out-of-allowlist kind would 23514.
-func (c *SupabaseClient) EnqueueWeeklyDigest(ctx context.Context, userID string) error {
-	body, err := json.Marshal(map[string]any{
-		"kind":    "weekly_digest",
-		"payload": map[string]any{"user_id": userID},
-	})
+// EnqueueWeeklyDigests bulk-inserts `kind='weekly_digest'` jobs, one row
+// per recipient, in a single PostgREST request (a JSON-array body is a
+// bulk insert). Called by the digest builder in chunks. The CHECK on
+// jobs.kind (migration 20270108_001) gates the insert; an out-of-allowlist
+// kind would 23514. An empty slice is a no-op (no request issued).
+func (c *SupabaseClient) EnqueueWeeklyDigests(ctx context.Context, userIDs []string) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	rows := make([]map[string]any, len(userIDs))
+	for i, uid := range userIDs {
+		rows[i] = map[string]any{
+			"kind":    "weekly_digest",
+			"payload": map[string]any{"user_id": uid},
+		}
+	}
+	body, err := json.Marshal(rows)
 	if err != nil {
 		return err
 	}
