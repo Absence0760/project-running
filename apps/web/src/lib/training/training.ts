@@ -457,10 +457,18 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 			goalPaceSecPerKm: paces.marathon * (goalDistanceM >= 21_000 ? 1 : 0.95),
 			masters
 		});
+		// The stated weekly volume must equal what the week actually
+		// prescribes. The emitted workouts are rounded/floored per-day
+		// (easy filler clamps to >=3 km, intervals/tempo/long carry their
+		// own distances), so `weeklyKm * 1000` overstated the real ask by
+		// ~25-70% on small-volume (5k/half) plans. Sum the emitted
+		// distances so the headline number is honest. Quality + long run
+		// stay uncapped (that's training design); only the stated total
+		// is reconciled.
 		weeks.push({
 			week_index: i,
 			phase,
-			target_volume_m: weeklyKm * 1000,
+			target_volume_m: workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0),
 			notes: weekNote(phase, i, totalWeeks, masters),
 			workouts
 		});

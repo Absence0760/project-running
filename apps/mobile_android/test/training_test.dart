@@ -394,6 +394,32 @@ void main() {
       expect(peak.targetVolumeM > taper.targetVolumeM, isTrue);
     });
 
+    test('stated weekly volume equals the sum of emitted workout distances',
+        () {
+      // Headline targetVolumeM must match what the week prescribes. Pre-fix
+      // it was weeklyKm * 1000, overshooting the rounded/floored per-day
+      // distances by ~25-70% on small-volume plans. Mirrors training.test.ts.
+      for (final goalEvent in [GoalEvent.distance5k, GoalEvent.distanceHalf]) {
+        for (final daysPerWeek in [3, 4, 5]) {
+          final plan = generatePlan(GeneratePlanInput(
+            goalEvent: goalEvent,
+            startDate: DateTime(2026, 5, 3),
+            daysPerWeek: daysPerWeek,
+            goalTimeSec:
+                goalEvent == GoalEvent.distance5k ? 25 * 60 : 105 * 60,
+          ));
+          for (final week in plan.weeks) {
+            final emitted = week.workouts
+                .fold<double>(0, (s, w) => s + (w.targetDistanceM ?? 0));
+            expect(week.targetVolumeM, emitted,
+                reason:
+                    '$goalEvent ${daysPerWeek}d week ${week.weekIndex}: stated '
+                    '${week.targetVolumeM} should equal emitted $emitted');
+          }
+        }
+      }
+    });
+
     test('race week ends with a race-kind workout', () {
       final plan = generatePlan(GeneratePlanInput(
         goalEvent: GoalEvent.distance5k,

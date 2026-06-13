@@ -435,6 +435,34 @@ test('generatePlan: weekly volume steps back every 4th week', () => {
 	}
 });
 
+test('generatePlan: stated weekly volume equals the sum of emitted workout distances', () => {
+	// The headline `target_volume_m` must match what the week actually
+	// prescribes. Pre-fix it was `weeklyKm * 1000`, which overshot the
+	// rounded/floored per-day distances by ~25-70% on small-volume plans.
+	for (const goalEvent of ['distance_5k', 'distance_half'] as const) {
+		for (const daysPerWeek of [3, 4, 5]) {
+			const plan = generatePlan({
+				goalEvent,
+				startDate: '2026-05-03',
+				daysPerWeek,
+				goalTimeSec: goalEvent === 'distance_5k' ? 25 * 60 : 105 * 60
+			});
+			for (const week of plan.weeks) {
+				const emitted = week.workouts.reduce(
+					(s, w) => s + (w.target_distance_m ?? 0),
+					0
+				);
+				assert.equal(
+					week.target_volume_m,
+					emitted,
+					`${goalEvent} ${daysPerWeek}d week ${week.week_index}: stated ` +
+						`${week.target_volume_m} should equal emitted ${emitted}`
+				);
+			}
+		}
+	}
+});
+
 test('GOAL_DISTANCES_M: half marathon is within 1m of 21.0975km', () => {
 	assert.equal(GOAL_DISTANCES_M.distance_half, 21097.5);
 });
