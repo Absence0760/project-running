@@ -5266,6 +5266,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsEmailNotifOff => 'オフ';
 
   @override
+  String get prefsPushNotifications => 'プッシュ通知';
+
+  @override
+  String get prefsPushNotifAll => 'すべて';
+
+  @override
+  String get prefsPushNotifImportant => '重要なものだけ';
+
+  @override
+  String get prefsPushNotifOff => 'オフ';
+
+  @override
   String get prefsEmailWeeklyDigest => '週刊ダイジェストメール';
 
   @override

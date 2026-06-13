@@ -40,6 +40,11 @@ class SettingsKeys {
   /// worker's `notification_email` handler (migration 20261130_001);
   /// the in-app bell is unaffected.
   static const emailNotifications = 'email_notifications';
+  /// Which notification kinds are delivered by web push — `'all'` |
+  /// `'important'` (default) | `'off'`. Independent of [emailNotifications]
+  /// (muting email must not mute push). Read server-side by the Go worker's
+  /// `web_push` handler (migration 20261219_001).
+  static const pushNotifications = 'push_notifications';
   /// Opt-IN consent for the weekly engagement digest — `'on'` | `'off'`
   /// (default `'off'`). Deliberately separate from the transactional
   /// [emailNotifications] key: marketing consent is never inferred from a

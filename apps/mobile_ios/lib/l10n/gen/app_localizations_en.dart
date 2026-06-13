@@ -5534,6 +5534,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsEmailNotifOff => 'Off';
 
   @override
+  String get prefsPushNotifications => 'Push notifications';
+
+  @override
+  String get prefsPushNotifAll => 'Everything';
+
+  @override
+  String get prefsPushNotifImportant => 'Important only';
+
+  @override
+  String get prefsPushNotifOff => 'Off';
+
+  @override
   String get prefsEmailWeeklyDigest => 'Weekly digest email';
 
   @override

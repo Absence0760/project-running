@@ -9196,6 +9196,30 @@ abstract class AppLocalizations {
   /// **'Off'**
   String get prefsEmailNotifOff;
 
+  /// Tile and picker title for the push-notification preference
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications'**
+  String get prefsPushNotifications;
+
+  /// Push-notification option: send every kind of notification as a push alert
+  ///
+  /// In en, this message translates to:
+  /// **'Everything'**
+  String get prefsPushNotifAll;
+
+  /// Push-notification option: only important notifications (reminders, cancellations, messages, plan updates)
+  ///
+  /// In en, this message translates to:
+  /// **'Important only'**
+  String get prefsPushNotifImportant;
+
+  /// Push-notification option: no push alerts (in-app bell still shows everything)
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get prefsPushNotifOff;
+
   /// Toggle title for opting in to the weekly engagement digest email
   ///
   /// In en, this message translates to:
