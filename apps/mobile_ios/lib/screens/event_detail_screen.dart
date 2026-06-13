@@ -436,6 +436,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         await widget.social.rsvpEvent(e.row.id, status, inst);
       }
       await _load();
+    } catch (err) {
+      // RSVP is the primary action — surface a failure (network / RLS /
+      // event-full race) instead of letting it vanish as an uncaught
+      // async error with the chip just silently reverting.
+      if (mounted) {
+        showTopBanner(context, AppLocalizations.of(context).eventRsvpFailed);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

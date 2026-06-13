@@ -6071,6 +6071,12 @@ abstract class AppLocalizations {
   /// **'Could not update attendance. Please try again.'**
   String get eventAttendanceFailed;
 
+  /// Error banner when an RSVP write fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update your RSVP. Please try again.'**
+  String get eventRsvpFailed;
+
   /// RSVP chip — going
   ///
   /// In en, this message translates to:

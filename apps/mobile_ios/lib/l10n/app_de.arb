@@ -994,6 +994,7 @@
   "eventAttendanceAttended": "Teilgenommen",
   "eventAttendanceNoShow": "Nicht erschienen",
   "eventAttendanceFailed": "Teilnahme konnte nicht aktualisiert werden. Bitte erneut versuchen.",
+  "eventRsvpFailed": "Deine Zusage konnte nicht aktualisiert werden. Bitte erneut versuchen.",
   "eventRsvpGoing": "Bin dabei",
   "eventRsvpMaybe": "Vielleicht",
   "eventRsvpDeclined": "Kann nicht",

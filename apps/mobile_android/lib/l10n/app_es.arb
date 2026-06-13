@@ -994,6 +994,7 @@
   "eventAttendanceAttended": "Asistió",
   "eventAttendanceNoShow": "Ausente",
   "eventAttendanceFailed": "No se pudo actualizar la asistencia. Inténtalo de nuevo.",
+  "eventRsvpFailed": "No se pudo actualizar tu confirmación. Inténtalo de nuevo.",
   "eventRsvpGoing": "Voy",
   "eventRsvpMaybe": "Quizás",
   "eventRsvpDeclined": "No puedo",

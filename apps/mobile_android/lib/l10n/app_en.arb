@@ -4489,6 +4489,10 @@
   "@eventAttendanceFailed": {
     "description": "Error banner when marking attendance fails"
   },
+  "eventRsvpFailed": "Couldn't update your RSVP. Please try again.",
+  "@eventRsvpFailed": {
+    "description": "Error banner when an RSVP write fails"
+  },
   "eventRsvpGoing": "I'm in",
   "@eventRsvpGoing": {
     "description": "RSVP chip — going"

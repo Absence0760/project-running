@@ -994,6 +994,7 @@
   "eventAttendanceAttended": "Presente",
   "eventAttendanceNoShow": "Ausente",
   "eventAttendanceFailed": "Não foi possível atualizar a presença. Tente novamente.",
+  "eventRsvpFailed": "Não foi possível atualizar sua confirmação. Tente novamente.",
   "eventRsvpGoing": "Eu vou",
   "eventRsvpMaybe": "Talvez",
   "eventRsvpDeclined": "Não posso ir",

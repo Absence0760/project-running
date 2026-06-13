@@ -994,6 +994,7 @@
   "eventAttendanceAttended": "Présent",
   "eventAttendanceNoShow": "Absent",
   "eventAttendanceFailed": "Impossible de mettre à jour la présence. Veuillez réessayer.",
+  "eventRsvpFailed": "Impossible de mettre à jour ta réponse. Veuillez réessayer.",
   "eventRsvpGoing": "Je viens",
   "eventRsvpMaybe": "Peut-être",
   "eventRsvpDeclined": "Pas dispo",

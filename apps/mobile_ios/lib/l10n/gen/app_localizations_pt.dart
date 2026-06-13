@@ -3666,6 +3666,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível atualizar a presença. Tente novamente.';
 
   @override
+  String get eventRsvpFailed =>
+      'Não foi possível atualizar sua confirmação. Tente novamente.';
+
+  @override
   String get eventRsvpGoing => 'Eu vou';
 
   @override
@@ -12340,6 +12344,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get eventAttendanceFailed =>
       'Não foi possível atualizar a presença. Tente novamente.';
+
+  @override
+  String get eventRsvpFailed =>
+      'Não foi possível atualizar sua confirmação. Tente novamente.';
 
   @override
   String get eventRsvpGoing => 'Eu vou';

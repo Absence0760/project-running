@@ -29,6 +29,44 @@ ClubView _club(String? viewerRole) => ClubView(
       joinPolicy: 'open',
     );
 
+/// Renders one upcoming athletic event (so the RSVP row shows) and throws
+/// on the RSVP write to drive the swallowed-failure banner.
+class _RsvpFailSocial extends SocialService {
+  int rsvpCalls = 0;
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => null;
+  @override
+  Future<EventView?> fetchEventById(String eventId) async => EventView(
+        row: EventRow(
+          id: 'e1',
+          clubId: 'club-1',
+          title: 'Saturday Long Run',
+          startsAt: DateTime.utc(2026, 6, 20, 8),
+          authorId: 'host',
+          category: 'run',
+          isPublic: true,
+        ),
+        byday: null,
+        attendeeCount: 0,
+        viewerRsvp: null,
+        nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
+      );
+  @override
+  Future<List<AttendeeView>> fetchAttendees(String eventId, DateTime instance) async => const [];
+  @override
+  Future<List<EventResultView>> fetchEventResults(String eventId, DateTime instance) async =>
+      const [];
+  @override
+  Future<RaceSessionRow?> fetchRaceSession(String eventId, DateTime instance) async => null;
+  @override
+  Future<({double lat, double lng})?> fetchEventMeetPoint(String eventId) async => null;
+  @override
+  Future<void> rsvpEvent(String eventId, String status, DateTime instance) async {
+    rsvpCalls++;
+    throw Exception('network down');
+  }
+}
+
 bool _supabaseReady = false;
 
 Future<void> _ensureSupabase() async {
@@ -70,6 +108,37 @@ void main() {
     testWidgets('initial Scaffold has no AppBar yet', (tester) async {
       await _pump(tester);
       expect(find.byType(AppBar), findsNothing);
+    });
+  });
+
+  group('EventDetailScreen — RSVP failure', () {
+    testWidgets('a failed RSVP surfaces a banner instead of silently reverting',
+        (tester) async {
+      final social = _RsvpFailSocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: EventDetailScreen(
+            social: social,
+            clubSlug: 'club-1',
+            eventId: 'e1',
+          ),
+        ),
+      );
+      // Let _load resolve (two Future.wait batches).
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final going = find.widgetWithText(OutlinedButton, "I'm in");
+      expect(going, findsOneWidget);
+      await tester.tap(going);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(social.rsvpCalls, 1);
+      expect(find.textContaining("Couldn't update your RSVP"), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4)); // drain banner timer
     });
   });
 
