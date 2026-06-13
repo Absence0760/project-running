@@ -12,7 +12,6 @@
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
-	import RouteHeatmap from '$lib/components/RouteHeatmap.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { Route } from '$lib/types';
 	import type { Snapshot } from './$types';
