@@ -1410,6 +1410,7 @@ export type Database = {
         Row: {
           at: string
           bpm: number | null
+          coarse: boolean
           distance_m: number | null
           elapsed_s: number | null
           ele: number | null
@@ -1422,6 +1423,7 @@ export type Database = {
         Insert: {
           at?: string
           bpm?: number | null
+          coarse?: boolean
           distance_m?: number | null
           elapsed_s?: number | null
           ele?: number | null
@@ -1434,6 +1436,7 @@ export type Database = {
         Update: {
           at?: string
           bpm?: number | null
+          coarse?: boolean
           distance_m?: number | null
           elapsed_s?: number | null
           ele?: number | null
@@ -3481,6 +3484,13 @@ export type Database = {
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
       event_is_athletic: { Args: { target_event: string }; Returns: boolean }
+      event_next_instance_going_counts: {
+        Args: { p_event_ids: string[]; p_next_starts: string[] }
+        Returns: {
+          event_id: string
+          going_count: number
+        }[]
+      }
       fetch_pending_reports: {
         Args: never
         Returns: {
@@ -3746,6 +3756,7 @@ export type Database = {
         Args: { p_waypoints: Json; p_zones: Json }
         Returns: unknown
       }
+      privacy_coarsen_coord: { Args: { coord: number }; Returns: number }
       privacy_distance_m: {
         Args: { lat1: number; lat2: number; lng1: number; lng2: number }
         Returns: number
