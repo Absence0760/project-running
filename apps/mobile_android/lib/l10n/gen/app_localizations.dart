@@ -6365,6 +6365,18 @@ abstract class AppLocalizations {
   /// **'Delayed'**
   String get liveSpectatorBadgeStale;
 
+  /// Status badge — the run has finished (terminal state, distinct from a stale signal)
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get liveSpectatorBadgeFinished;
+
+  /// Status badge — the participant is race-marked Did Not Finish (terminal state)
+  ///
+  /// In en, this message translates to:
+  /// **'DNF'**
+  String get liveSpectatorBadgeDnf;
+
   /// Spectator freshness — last ping under 10s ago
   ///
   /// In en, this message translates to:

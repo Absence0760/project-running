@@ -1043,6 +1043,8 @@
   "liveSpectatorBadgeIdle": "Parado",
   "liveSpectatorBadgeConnecting": "Conectando",
   "liveSpectatorBadgeStale": "Atrasado",
+  "liveSpectatorBadgeFinished": "Concluído",
+  "liveSpectatorBadgeDnf": "DNF",
   "liveUpdatedNow": "Atualizado agora mesmo",
   "liveUpdatedSeconds": "Atualizado há {n}s",
   "liveUpdatedMinutes": "Atualizado há {n} min",

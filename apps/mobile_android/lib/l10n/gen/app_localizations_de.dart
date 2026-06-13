@@ -3836,6 +3836,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get liveSpectatorBadgeStale => 'Verzögert';
 
   @override
+  String get liveSpectatorBadgeFinished => 'Beendet';
+
+  @override
+  String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
   String get liveUpdatedNow => 'Gerade aktualisiert';
 
   @override

@@ -3591,6 +3591,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveSpectatorBadgeStale => '遅延';
 
   @override
+  String get liveSpectatorBadgeFinished => '終了';
+
+  @override
+  String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
   String get liveUpdatedNow => 'たった今更新';
 
   @override

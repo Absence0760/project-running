@@ -3830,6 +3830,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorBadgeStale => 'Atrasado';
 
   @override
+  String get liveSpectatorBadgeFinished => 'Concluído';
+
+  @override
+  String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
   String get liveUpdatedNow => 'Atualizado agora mesmo';
 
   @override
@@ -12508,6 +12514,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeStale => 'Atrasado';
+
+  @override
+  String get liveSpectatorBadgeFinished => 'Concluído';
+
+  @override
+  String get liveSpectatorBadgeDnf => 'DNF';
 
   @override
   String get liveUpdatedNow => 'Atualizado agora mesmo';

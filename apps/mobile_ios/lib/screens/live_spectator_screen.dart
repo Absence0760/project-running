@@ -84,10 +84,38 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
 
   Future<void> _hydrate() async {
     try {
+      // Resolve the run's terminal state first (mirror web's
+      // `ensureRunIsVisible` reading `public_runs` → `runIsFinished`). A
+      // race-marked DNF and a finished run are terminal: we freeze on the
+      // saved totals and never open the realtime subscription, so a stale
+      // share link to a completed run reads "Finished" / "DNF" instead of
+      // looping forever on "Connecting" / "Live". This is distinct from
+      // the freshness "Delayed" state, which is a *live* runner whose
+      // last ping went stale (signal loss), not a terminal outcome.
+      final run = await widget.api.fetchPublicRunById(widget.runId);
+      if (!mounted) return;
       final rows = await widget.api.fetchLiveRunPings(widget.runId);
       if (!mounted) return;
       for (final row in rows) {
         _ingest(row);
+      }
+      if (run != null && run.isDnf) {
+        setState(() {
+          _loading = false;
+          _status = 'dnf';
+          _distanceM = run.distanceM;
+          _elapsedS = run.durationS;
+        });
+        return;
+      }
+      if (run != null && runIsFinished(run)) {
+        setState(() {
+          _loading = false;
+          _status = 'finished';
+          _distanceM = run.distanceM;
+          _elapsedS = run.durationS;
+        });
+        return;
       }
       setState(() {
         _loading = false;
@@ -158,7 +186,14 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final fresh = _lastPingAtMs == null ? null : freshnessFor(_lastPingAtMs!, _nowMs);
+    // Freshness ("Updated N ago" + the stale flag) is a *live*-tracking
+    // signal; a terminal run is frozen on its saved totals, so we don't
+    // surface a ping age for it (it would read as a misleading "Updated
+    // 2h ago" under a "Finished"/"DNF" badge).
+    final terminal = _status == 'finished' || _status == 'dnf';
+    final fresh = (terminal || _lastPingAtMs == null)
+        ? null
+        : freshnessFor(_lastPingAtMs!, _nowMs);
     final stale = fresh?.stale ?? false;
     return Scaffold(
       appBar: AppBar(
@@ -271,6 +306,21 @@ String formatLiveDuration(Duration d) {
 @visibleForTesting
 String formatLivePace(double secPerKm) => formatPaceForPref(secPerKm);
 
+/// A run is treated as already finished when its saved duration places
+/// its end > 2 minutes in the past. Mirror of the web `/live/[id]`
+/// `runIsFinished` — the 2 min slack covers the gap between the last
+/// live ping and the recorder posting the final row, plus clock skew.
+/// `now` is injectable so the widget test can pin the boundary without
+/// depending on wall-clock time.
+@visibleForTesting
+bool runIsFinished(RunRow run, {DateTime? now}) {
+  if (run.durationS <= 0) return false;
+  final endedMs =
+      run.startedAt.millisecondsSinceEpoch + run.durationS * 1000;
+  final nowMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  return endedMs < nowMs - 2 * 60 * 1000;
+}
+
 String _freshnessLabel(AppLocalizations l10n, Freshness f) {
   switch (f.bucket) {
     case FreshnessBucket.now:
@@ -295,15 +345,20 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    // A stale last ping is shown as "Delayed" (amber), never as a fresh
-    // green "Live" — the position can no longer be trusted as current.
-    final (label, color) = status == 'live' && stale
-        ? (l10n.liveSpectatorBadgeStale, const Color(0xFFF59E0B))
-        : switch (status) {
-            'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),
-            'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
-            _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
-          };
+    // Terminal states win over the live/stale axis: a finished or
+    // race-marked-DNF run is over, so we never show "Live"/"Delayed" for
+    // it. "Delayed" (amber) is a *live* runner whose last ping went
+    // stale — distinct from "Finished" (neutral) and "DNF" (danger).
+    final (label, color) = switch (status) {
+      'dnf' => (l10n.liveSpectatorBadgeDnf, theme.colorScheme.error),
+      'finished' =>
+        (l10n.liveSpectatorBadgeFinished, theme.colorScheme.outline),
+      'live' when stale =>
+        (l10n.liveSpectatorBadgeStale, const Color(0xFFF59E0B)),
+      'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),
+      'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
+      _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

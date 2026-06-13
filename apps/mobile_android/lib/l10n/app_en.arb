@@ -4694,6 +4694,14 @@
   "@liveSpectatorBadgeStale": {
     "description": "Status badge — last ping is stale, position may not be current"
   },
+  "liveSpectatorBadgeFinished": "Finished",
+  "@liveSpectatorBadgeFinished": {
+    "description": "Status badge — the run has finished (terminal state, distinct from a stale signal)"
+  },
+  "liveSpectatorBadgeDnf": "DNF",
+  "@liveSpectatorBadgeDnf": {
+    "description": "Status badge — the participant is race-marked Did Not Finish (terminal state)"
+  },
   "liveUpdatedNow": "Updated just now",
   "@liveUpdatedNow": {
     "description": "Spectator freshness — last ping under 10s ago"

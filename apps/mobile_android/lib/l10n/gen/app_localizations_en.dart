@@ -3796,6 +3796,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveSpectatorBadgeStale => 'Delayed';
 
   @override
+  String get liveSpectatorBadgeFinished => 'Finished';
+
+  @override
+  String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
   String get liveUpdatedNow => 'Updated just now';
 
   @override

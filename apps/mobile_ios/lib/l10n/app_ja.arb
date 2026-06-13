@@ -1043,6 +1043,8 @@
   "liveSpectatorBadgeIdle": "停止中",
   "liveSpectatorBadgeConnecting": "接続中",
   "liveSpectatorBadgeStale": "遅延",
+  "liveSpectatorBadgeFinished": "終了",
+  "liveSpectatorBadgeDnf": "DNF",
   "liveUpdatedNow": "たった今更新",
   "liveUpdatedSeconds": "{n}秒前に更新",
   "liveUpdatedMinutes": "{n}分前に更新",
