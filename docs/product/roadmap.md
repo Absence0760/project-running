@@ -926,24 +926,28 @@ spam wave forces the prioritisation.
   Decisions to settle when building this: N (3? 5?), M (1? 5?),
   whether the target's owner gets a notification ("Your X is hidden
   pending review"), and the revert path on dismissal.
-- [ ] **Report buttons on more surfaces.** The MVP covers users,
-  clubs, routes. The natural extensions are: run comments (`comments`
-  table), club posts (`club_posts`), individual runs themselves
-  (`runs`). Each is a `target_kind` enum addition + a Report button
-  next to the existing affordances. Hold until the admin queue is
-  real — more surfaces means more queue noise to sift.
+- [x] **Report buttons on more surfaces** — shipped (backlog E2,
+  migration `20270115_001`). The MVP covered users / clubs / routes;
+  this finalized `comment` as a first-class `ReportTargetKind` and
+  added `club_post` + `run`. The `reports.target_kind` CHECK + the TS
+  union now cover {user, club, route, comment, club_post, run} and are
+  registered as a CHECK↔union guard pair; `submit_report` validates
+  the new targets and rejects self-reports. Web: Report on each
+  non-author club-feed post + on runs (run-detail + share-run).
+  Mobile: report affordance on club posts + the public-run screen
+  (byte-identical iOS twin). pgtap + e2e + widget tests.
 - [ ] **Reputation-weighted reports.** A bot reporting a real user
   from 5 puppet accounts shouldn't auto-hide them. When the auto-hide
   feature ships, gate it on reporters with ≥ M public runs (the same
   threshold the search People tab will use once the suggested-search
   merge in decisions.md § 54 lands) so reports from drive-by accounts
   count for less.
-- [ ] **Friendly "slow down" toasts** for the create-rate-limit P0001
-  errors. Today the trigger raises and PostgREST surfaces a 500 with
-  the raw error message. Map the SQLSTATE in `data.ts#createClub` and
-  `saveRoute` to a "You're creating these too quickly — try again in
-  a few minutes" toast. Same pattern the `submitReport` wrapper
-  already uses in [data.ts § User reports].
+- [x] **Friendly "slow down" toasts** for the create-rate-limit P0001
+  errors — shipped (backlog E4). `data.ts` (createClub / saveRoute /
+  importRoute) already rewraps the P0001 SQLSTATE into a friendly
+  Error; the web create flows (ClubEditor, route builder, ImportRoute)
+  now surface that via `showToast(..., 'error')` instead of an inline
+  banner — bringing web to parity with mobile's `showTopBanner`.
 
 ---
 
