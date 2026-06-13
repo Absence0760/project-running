@@ -1641,6 +1641,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailDeleteRun => 'Eliminar carrera';
 
   @override
+  String get runDetailReportRun => 'Denunciar carrera';
+
+  @override
   String get runDetailEditTitle => 'Editar carrera';
 
   @override
@@ -3279,6 +3282,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get clubDetailReportClub => 'Reportar club';
+
+  @override
+  String get clubDetailReportPost => 'Denunciar esta publicación';
 
   @override
   String get clubDetailLoadFailedTitle => 'No se pudo cargar este club.';
@@ -6660,6 +6666,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Denunciar ruta';
+
+  @override
+  String get reportTitlePost => 'Denunciar publicación';
+
+  @override
+  String get reportTitleRun => 'Denunciar carrera';
 
   @override
   String get reportTitleContent => 'Denunciar contenido';

@@ -231,6 +231,10 @@ class _ReportSheetState extends State<_ReportSheet> {
         return l10n.reportTitleClub;
       case 'route':
         return l10n.reportTitleRoute;
+      case 'club_post':
+        return l10n.reportTitlePost;
+      case 'run':
+        return l10n.reportTitleRun;
     }
     return l10n.reportTitleContent;
   }

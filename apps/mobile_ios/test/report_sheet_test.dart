@@ -96,6 +96,29 @@ void main() {
       expect(find.text('Report club'), findsOneWidget);
     });
 
+    testWidgets('club_post + run targets render their own titles (E2)',
+        (tester) async {
+      await _openSheet(tester, _FakeApiClient(), kind: 'club_post');
+      expect(find.text('Report post'), findsOneWidget);
+    });
+
+    testWidgets('run target renders its own title (E2)', (tester) async {
+      await _openSheet(tester, _FakeApiClient(), kind: 'run');
+      expect(find.text('Report run'), findsOneWidget);
+    });
+
+    testWidgets('Submit forwards a run targetKind to the RPC (E2)',
+        (tester) async {
+      final api = _FakeApiClient();
+      await _openSheet(tester, api, kind: 'run', id: 'run-9');
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit report'));
+      await tester.pump();
+      await tester.pump();
+      expect(api.capturedTargetKind, 'run');
+      expect(api.capturedTargetId, 'run-9');
+      await tester.pump(const Duration(seconds: 5));
+    });
+
     testWidgets('Submit calls api with the picked reason + notes',
         (tester) async {
       // Headline contract: the reason radio's current value AND any

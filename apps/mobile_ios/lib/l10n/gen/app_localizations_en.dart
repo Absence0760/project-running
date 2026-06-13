@@ -1628,6 +1628,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailDeleteRun => 'Delete run';
 
   @override
+  String get runDetailReportRun => 'Report run';
+
+  @override
   String get runDetailEditTitle => 'Edit run';
 
   @override
@@ -3256,6 +3259,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clubDetailReportClub => 'Report club';
+
+  @override
+  String get clubDetailReportPost => 'Report this post';
 
   @override
   String get clubDetailLoadFailedTitle => 'Couldn\'t load this club.';
@@ -6591,6 +6597,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Report route';
+
+  @override
+  String get reportTitlePost => 'Report post';
+
+  @override
+  String get reportTitleRun => 'Report run';
 
   @override
   String get reportTitleContent => 'Report content';

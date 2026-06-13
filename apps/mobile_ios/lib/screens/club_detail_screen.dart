@@ -699,6 +699,19 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                   ],
                 ),
               ),
+              if (Supabase.instance.client.auth.currentUser?.id !=
+                  p.row.authorId)
+                IconButton(
+                  tooltip: l10n.clubDetailReportPost,
+                  icon: const Icon(Icons.flag_outlined, size: 18),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => showReportSheet(
+                    context,
+                    api: ApiClient(),
+                    targetKind: 'club_post',
+                    targetId: p.row.id,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 8),

@@ -1646,6 +1646,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailDeleteRun => 'Supprimer la course';
 
   @override
+  String get runDetailReportRun => 'Signaler la course';
+
+  @override
   String get runDetailEditTitle => 'Modifier la course';
 
   @override
@@ -3293,6 +3296,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get clubDetailReportClub => 'Signaler le club';
+
+  @override
+  String get clubDetailReportPost => 'Signaler cette publication';
 
   @override
   String get clubDetailLoadFailedTitle => 'Impossible de charger ce club.';
@@ -6673,6 +6679,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Signaler l\'itinéraire';
+
+  @override
+  String get reportTitlePost => 'Signaler la publication';
+
+  @override
+  String get reportTitleRun => 'Signaler la course';
 
   @override
   String get reportTitleContent => 'Signaler le contenu';

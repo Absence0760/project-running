@@ -1643,6 +1643,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDetailDeleteRun => 'Lauf löschen';
 
   @override
+  String get runDetailReportRun => 'Lauf melden';
+
+  @override
   String get runDetailEditTitle => 'Lauf bearbeiten';
 
   @override
@@ -3290,6 +3293,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get clubDetailReportClub => 'Club melden';
+
+  @override
+  String get clubDetailReportPost => 'Diesen Beitrag melden';
 
   @override
   String get clubDetailLoadFailedTitle =>
@@ -6664,6 +6670,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Route melden';
+
+  @override
+  String get reportTitlePost => 'Beitrag melden';
+
+  @override
+  String get reportTitleRun => 'Lauf melden';
 
   @override
   String get reportTitleContent => 'Inhalt melden';

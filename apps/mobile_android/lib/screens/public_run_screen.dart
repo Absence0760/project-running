@@ -10,6 +10,7 @@ import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/run_gear_chips.dart';
 import '../widgets/run_photos.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_social_section.dart';
 
@@ -121,8 +122,26 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final row = _row;
+    final viewerId = widget.api.userId;
+    final canReport = row != null && viewerId != null && viewerId != row.userId;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.publicRunTitle)),
+      appBar: AppBar(
+        title: Text(l10n.publicRunTitle),
+        actions: [
+          if (canReport)
+            IconButton(
+              tooltip: l10n.runDetailReportRun,
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => showReportSheet(
+                context,
+                api: widget.api,
+                targetKind: 'run',
+                targetId: row.id,
+              ),
+            ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null

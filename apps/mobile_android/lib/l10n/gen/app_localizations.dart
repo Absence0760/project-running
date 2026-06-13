@@ -2795,6 +2795,12 @@ abstract class AppLocalizations {
   /// **'Delete run'**
   String get runDetailDeleteRun;
 
+  /// Tooltip on the report-run button shown to non-owner viewers
+  ///
+  /// In en, this message translates to:
+  /// **'Report run'**
+  String get runDetailReportRun;
+
   /// Title of the edit-run dialog
   ///
   /// In en, this message translates to:
@@ -5506,6 +5512,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report club'**
   String get clubDetailReportClub;
+
+  /// Tooltip on the report-post button on a club feed post
+  ///
+  /// In en, this message translates to:
+  /// **'Report this post'**
+  String get clubDetailReportPost;
 
   /// Title shown when the club fails to load
   ///
@@ -11078,6 +11090,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report route'**
   String get reportTitleRoute;
+
+  /// Report sheet title when reporting a club post
+  ///
+  /// In en, this message translates to:
+  /// **'Report post'**
+  String get reportTitlePost;
+
+  /// Report sheet title when reporting a run
+  ///
+  /// In en, this message translates to:
+  /// **'Report run'**
+  String get reportTitleRun;
 
   /// Report sheet title fallback for generic content
   ///

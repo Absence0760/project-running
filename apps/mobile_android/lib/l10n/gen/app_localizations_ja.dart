@@ -1562,6 +1562,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailDeleteRun => 'ランを削除';
 
   @override
+  String get runDetailReportRun => 'ランを報告';
+
+  @override
   String get runDetailEditTitle => 'ランを編集';
 
   @override
@@ -3085,6 +3088,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get clubDetailReportClub => 'クラブを報告';
+
+  @override
+  String get clubDetailReportPost => 'この投稿を報告';
 
   @override
   String get clubDetailLoadFailedTitle => 'このクラブを読み込めませんでした。';
@@ -6299,6 +6305,12 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'ルートを報告';
+
+  @override
+  String get reportTitlePost => '投稿を報告';
+
+  @override
+  String get reportTitleRun => 'ランを報告';
 
   @override
   String get reportTitleContent => 'コンテンツを報告';
