@@ -193,4 +193,55 @@ void main() {
       }
     });
   });
+
+  group('computePaceBuckets (live cache backing)', () {
+    Waypoint wp(double m, int s) => Waypoint(
+          lat: 47.37,
+          lng: 8.54 + m / (111320 * 0.6773),
+          timestamp: DateTime(2026, 4, 20, 10, 0, s),
+        );
+
+    test('one bucket per segment, empty for <2 points', () {
+      expect(computePaceBuckets(const [], ActivityType.run), isEmpty);
+      expect(computePaceBuckets([wp(0, 0)], ActivityType.run), isEmpty);
+      final track = [for (int i = 0; i <= 6; i++) wp(i * 3.3, i)];
+      expect(computePaceBuckets(track, ActivityType.run).length, 6);
+    });
+
+    test('passing precomputed buckets yields the identical polyline set', () {
+      final track = <Waypoint>[
+        for (int i = 1; i <= 5; i++) wp(i * 3.3, i),
+        for (int i = 1; i <= 5; i++) wp(5 * 3.3 + i * 5.0, 5 + i),
+      ];
+      final rendered = track.map((w) => LatLng(w.lat, w.lng)).toList();
+      final internal =
+          buildPaceSegments(track: track, rendered: rendered, activity: ActivityType.run);
+      final external = buildPaceSegments(
+        track: track,
+        rendered: rendered,
+        activity: ActivityType.run,
+        paceBuckets: computePaceBuckets(track, ActivityType.run),
+      );
+      expect(external.length, internal.length);
+      for (int i = 0; i < internal.length; i++) {
+        expect(external[i].color.value, internal[i].color.value);
+        expect(external[i].points, internal[i].points);
+      }
+    });
+
+    test('appending a point only adds tail buckets — existing ones are stable',
+        () {
+      final base = [for (int i = 0; i <= 8; i++) wp(i * 3.3, i)];
+      final grown = [...base, wp(9 * 3.3, 9), wp(10 * 3.3, 10)];
+      final baseBuckets = computePaceBuckets(base, ActivityType.run);
+      final grownBuckets = computePaceBuckets(grown, ActivityType.run);
+      // The grown buckets are a strict extension of the base buckets:
+      // every prior segment classifies identically (the live cache relies
+      // on this to extend by the tail instead of re-walking the track).
+      for (int i = 0; i < baseBuckets.length; i++) {
+        expect(grownBuckets[i], baseBuckets[i]);
+      }
+      expect(grownBuckets.length, baseBuckets.length + 2);
+    });
+  });
 }

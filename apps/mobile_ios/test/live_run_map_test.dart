@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/live_run_map.dart';
 
@@ -42,6 +43,71 @@ void main() {
   setUpAll(() {
     // Load an empty env so DotEnv.env accesses return '' for MAPTILER_KEY.
     dotenv.loadFromString(isOptional: true);
+  });
+
+  group('smoothTrackIncremental', () {
+    List<LatLng> jitterTrack(int n) => [
+          for (int i = 0; i < n; i++)
+            LatLng(
+              51.5 + i * 0.0003 + ((i * 37) % 7 - 3) * 0.00002,
+              -0.1 + i * 0.0002 + ((i * 53) % 5 - 2) * 0.00002,
+            ),
+        ];
+
+    void expectSame(List<LatLng> a, List<LatLng> b) {
+      expect(a.length, b.length);
+      for (int i = 0; i < a.length; i++) {
+        expect(a[i].latitude, b[i].latitude, reason: 'lat[$i]');
+        expect(a[i].longitude, b[i].longitude, reason: 'lng[$i]');
+      }
+    }
+
+    test('cold call (null prev) equals a full two-pass smooth', () {
+      final raw = jitterTrack(40);
+      expectSame(smoothTrackIncremental(raw, null, -1), smoothTrack(smoothTrack(raw)));
+    });
+
+    test('incremental append is byte-identical to a full rebuild, every step',
+        () {
+      // Simulate a recording: grow the track one fix at a time, extending the
+      // cache, and assert the result matches a from-scratch resmooth at each
+      // length. This is the regression guard for the O(n^2)→O(n) fix — if a
+      // refactor breaks the incremental math, the rendered line would silently
+      // diverge from the canonical smooth.
+      final full = jitterTrack(60);
+      List<LatLng>? prev;
+      var prevLen = -1;
+      for (int n = 1; n <= full.length; n++) {
+        final raw = full.sublist(0, n);
+        final inc = smoothTrackIncremental(raw, prev, prevLen);
+        expectSame(inc, smoothTrack(smoothTrack(raw)));
+        prev = inc;
+        prevLen = n;
+      }
+    });
+
+    test('multi-point append (batched fixes) still matches a full rebuild', () {
+      final full = jitterTrack(50);
+      // Jump 1 → 9 → 22 → 50 (variable batch sizes, as a sync flush might).
+      List<LatLng>? prev;
+      var prevLen = -1;
+      for (final n in [1, 9, 22, 50]) {
+        final raw = full.sublist(0, n);
+        final inc = smoothTrackIncremental(raw, prev, prevLen);
+        expectSame(inc, smoothTrack(smoothTrack(raw)));
+        prev = inc;
+        prevLen = n;
+      }
+    });
+
+    test('falls back to full rebuild when prev is shorter than 5', () {
+      final raw = jitterTrack(8);
+      final prev = smoothTrack(smoothTrack(raw.sublist(0, 4)));
+      expectSame(
+        smoothTrackIncremental(raw, prev, 4),
+        smoothTrack(smoothTrack(raw)),
+      );
+    });
   });
 
   group('LiveRunMap', () {

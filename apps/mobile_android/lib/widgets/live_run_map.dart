@@ -26,17 +26,68 @@ List<LatLng> smoothTrack(List<LatLng> points) {
   if (points.length < 5) return points;
   final out = List<LatLng>.from(points);
   for (int i = 2; i < points.length - 2; i++) {
-    final a = points[i - 2];
-    final b = points[i - 1];
-    final c = points[i];
-    final d = points[i + 1];
-    final e = points[i + 2];
-    out[i] = LatLng(
+    out[i] = _kernel(points, i);
+  }
+  return out;
+}
+
+/// One 1-2-3-2-1 weighted-average sample at index [i] of [p] — the body of
+/// [smoothTrack]'s interior loop, factored out so the incremental path can
+/// evaluate it at a single index. Callers guarantee `2 <= i < p.length - 2`.
+LatLng _kernel(List<LatLng> p, int i) {
+  final a = p[i - 2], b = p[i - 1], c = p[i], d = p[i + 1], e = p[i + 2];
+  return LatLng(
+    (a.latitude + b.latitude * 2 + c.latitude * 3 + d.latitude * 2 + e.latitude) / 9,
+    (a.longitude + b.longitude * 2 + c.longitude * 3 + d.longitude * 2 + e.longitude) / 9,
+  );
+}
+
+/// Two-pass smoothing of [raw] (== `smoothTrack(smoothTrack(raw))`) that
+/// reuses [prev] — the smoothed output for raw's first [prevLen] points —
+/// when the track has only grown by appended points.
+///
+/// Why this is exact: the kernel at index `i` reads `[i-2, i+2]`, so two
+/// passes make `s2[i]` depend on `raw[i-4 .. i+4]`. Appending tail points
+/// therefore cannot change `s2[i]` for `i < prevLen - 4`; that prefix is
+/// copied verbatim from [prev] and only the `[prevLen-4, len)` suffix is
+/// recomputed. Cost is O(appended) instead of O(n), turning the live map's
+/// per-GPS-fix resmooth from O(n) (→ O(n^2) over a multi-hour ultra) into a
+/// bounded tail update. Falls back to a full rebuild when [prev] can't serve
+/// as a prefix (cold start, reset, shrink, or sub-5-point tracks where
+/// `smoothTrack` is the identity).
+@visibleForTesting
+List<LatLng> smoothTrackIncremental(
+  List<LatLng> raw,
+  List<LatLng>? prev,
+  int prevLen,
+) {
+  final m = raw.length;
+  if (prev == null || prevLen < 5 || prev.length != prevLen || m <= prevLen) {
+    return smoothTrack(smoothTrack(raw));
+  }
+  final from = prevLen - 4; // prevLen >= 5 ⇒ from >= 1
+  final s1from = from - 2 < 0 ? 0 : from - 2;
+  // First pass over just the window the suffix needs: indices [s1from, m).
+  final s1 = List<LatLng>.generate(
+    m - s1from,
+    (k) {
+      final j = s1from + k;
+      return (j < 2 || j >= m - 2) ? raw[j] : _kernel(raw, j);
+    },
+  );
+  return List<LatLng>.generate(m, (i) {
+    if (i < from) return prev[i];
+    if (i < 2 || i >= m - 2) return s1[i - s1from];
+    final a = s1[i - 2 - s1from],
+        b = s1[i - 1 - s1from],
+        c = s1[i - s1from],
+        d = s1[i + 1 - s1from],
+        e = s1[i + 2 - s1from];
+    return LatLng(
       (a.latitude + b.latitude * 2 + c.latitude * 3 + d.latitude * 2 + e.latitude) / 9,
       (a.longitude + b.longitude * 2 + c.longitude * 3 + d.longitude * 2 + e.longitude) / 9,
     );
-  }
-  return out;
+  });
 }
 
 /// Live map shown during a run, displaying the GPS track and current position.
@@ -243,12 +294,21 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   LatLng? _tweenEnd;
 
   // Cached smoothed track polyline. The tween controller drives ~1 Hz
-  // rebuilds of LiveRunMap and each previously re-ran two O(n) smoothing
-  // passes over the full track. Recompute only when the length changes —
-  // the recorder only appends to the track, so a matching length means
-  // the points are identical and the smoothed view is still valid.
+  // rebuilds of LiveRunMap. A naive resmooth is two O(n) passes over the
+  // full track; during a recording the length grows every GPS fix, so a
+  // length-keyed cache misses every time → O(n^2) over a multi-hour run.
+  // `_smoothedTrackFor` therefore extends this cache incrementally
+  // (`smoothTrackIncremental`): equal length → reuse, longer → recompute
+  // only the suffix the kernel can reach.
   List<LatLng>? _cachedSmoothedTrack;
   int _cachedSmoothedForLength = -1;
+
+  // Cached per-segment pace buckets, keyed by activity. A segment's speed is
+  // fixed once both endpoints exist, so appending only adds tail segments —
+  // we extend this list rather than re-walk the whole track (O(n) haversine)
+  // every fix. Feeds `buildPaceSegments` so it skips its own classify pass.
+  List<int>? _cachedPaceBuckets;
+  ActivityType? _cachedPaceBucketsForActivity;
 
   // Cached pace-heatmap polylines. Keyed by (length, activity) so a
   // manual activity change during preload rebuilds the buckets.
@@ -363,21 +423,49 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     return null;
   }
 
-  /// Smoothed polyline for [widget.track], cached by length. The recorder
-  /// only appends, so equal lengths imply identical points — returning the
-  /// cached list saves two O(n) smoothing passes + the raw LatLng
-  /// conversion on every rebuild (~1 Hz from the position tween, higher
-  /// during a hold-to-stop).
+  /// Smoothed polyline for [widget.track]. Equal length → return the cache;
+  /// a grown track → extend it incrementally via [smoothTrackIncremental] so
+  /// the per-GPS-fix cost is O(appended) instead of O(n) (the recorder only
+  /// appends, so the prior smoothed prefix is still valid). Result is
+  /// byte-identical to `smoothTrack(smoothTrack(raw))`.
   List<LatLng> _smoothedTrackFor(List<Waypoint> track) {
     if (_cachedSmoothedTrack != null &&
         _cachedSmoothedForLength == track.length) {
       return _cachedSmoothedTrack!;
     }
     final raw = track.map((w) => LatLng(w.lat, w.lng)).toList();
-    final smoothed = smoothTrack(smoothTrack(raw));
+    final smoothed = smoothTrackIncremental(
+      raw,
+      _cachedSmoothedTrack,
+      _cachedSmoothedForLength,
+    );
     _cachedSmoothedTrack = smoothed;
     _cachedSmoothedForLength = track.length;
     return smoothed;
+  }
+
+  /// Per-segment pace buckets for [track], extended in place as the track
+  /// grows. Appending a point only adds new tail segments (existing segments'
+  /// endpoints don't move), so we classify just the tail rather than re-run
+  /// the full O(n) haversine pass every fix.
+  List<int> _paceBucketsFor(List<Waypoint> track, ActivityType activity) {
+    final segCount = track.length < 2 ? 0 : track.length - 1;
+    final cached = _cachedPaceBuckets;
+    if (cached != null &&
+        _cachedPaceBucketsForActivity == activity &&
+        segCount >= cached.length) {
+      if (segCount == cached.length) return cached;
+      final out = List<int>.from(cached);
+      for (int i = cached.length; i < segCount; i++) {
+        out.add(paceBucketForSegment(track[i], track[i + 1], activity));
+      }
+      _cachedPaceBuckets = out;
+      return out;
+    }
+    final buckets = computePaceBuckets(track, activity);
+    _cachedPaceBuckets = buckets;
+    _cachedPaceBucketsForActivity = activity;
+    return buckets;
   }
 
   /// Pace-coloured + age-faded polylines for [widget.track], cached by
@@ -398,6 +486,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       track: track,
       rendered: rendered,
       activity: activity,
+      paceBuckets: _paceBucketsFor(track, activity),
     );
     _cachedPaceSegments = segs;
     _cachedPaceSegmentsForLength = track.length;
@@ -499,6 +588,8 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       _userPanned = false;
       _cachedSmoothedTrack = null;
       _cachedSmoothedForLength = -1;
+      _cachedPaceBuckets = null;
+      _cachedPaceBucketsForActivity = null;
       _cachedPaceSegments = null;
       _cachedPaceSegmentsForLength = -1;
       _cachedPaceSegmentsForActivity = null;

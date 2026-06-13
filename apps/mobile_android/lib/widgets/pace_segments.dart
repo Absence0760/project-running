@@ -66,6 +66,28 @@ int ageBandFor(int segmentIndex, int segmentCount) {
   return 2;
 }
 
+/// Pace bucket for the single segment a→b under [activity]. A segment's
+/// endpoints never move once both exist (the recorder only appends), so a
+/// live caller can classify each segment exactly once and extend a cached
+/// bucket list by the tail instead of re-walking the whole track per fix.
+int paceBucketForSegment(Waypoint a, Waypoint b, ActivityType activity) {
+  final mps = _segmentSpeedMps(a, b);
+  return mps == null ? 0 : paceBucketForSpeed(mps, activity);
+}
+
+/// Per-segment pace buckets for [track] under [activity]. Segment i spans
+/// `track[i]`→`track[i+1]`. Returns an empty list for tracks shorter than two
+/// points. This is the O(n) haversine pass [buildPaceSegments] would otherwise
+/// run on every rebuild; cache it and extend only the tail during recording.
+List<int> computePaceBuckets(List<Waypoint> track, ActivityType activity) {
+  final segCount = track.length - 1;
+  if (segCount <= 0) return const [];
+  return List<int>.generate(
+    segCount,
+    (i) => paceBucketForSegment(track[i], track[i + 1], activity),
+  );
+}
+
 double? _segmentSpeedMps(Waypoint a, Waypoint b) {
   final ta = a.timestamp;
   final tb = b.timestamp;
@@ -102,6 +124,7 @@ List<Polyline> buildPaceSegments({
   required List<LatLng> rendered,
   required ActivityType activity,
   double strokeWidth = 6,
+  List<int>? paceBuckets,
 }) {
   assert(track.length == rendered.length,
       'track and rendered must have matching lengths');
@@ -109,11 +132,9 @@ List<Polyline> buildPaceSegments({
   if (n < 2) return const [];
 
   final segCount = n - 1;
-  final paceBucket = List<int>.filled(segCount, 0);
-  for (int i = 0; i < segCount; i++) {
-    final mps = _segmentSpeedMps(track[i], track[i + 1]);
-    paceBucket[i] = mps == null ? 0 : paceBucketForSpeed(mps, activity);
-  }
+  final paceBucket = paceBuckets ?? computePaceBuckets(track, activity);
+  assert(paceBucket.length == segCount,
+      'paceBuckets must have one entry per segment');
 
   final ageBand = List<int>.filled(segCount, 0);
   for (int i = 0; i < segCount; i++) {
