@@ -253,6 +253,34 @@
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
 	}
+	/* Without an explicit row layout the checkbox inherits the column
+	   `label` rule above and the flex cross-axis stretches it to full
+	   width (label text drops below). Lay it out inline as a bordered
+	   option card, matching the share-toggle pattern in GymEditor /
+	   SessionPlanEditor. */
+	.waiver-toggle {
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 0.6rem;
+		font-weight: 400;
+		padding: 0.8rem 1rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		cursor: pointer;
+	}
+	.waiver-toggle input[type='checkbox'] {
+		flex: 0 0 auto;
+		width: 1.05rem;
+		height: 1.05rem;
+		margin-top: 0.15rem;
+		cursor: pointer;
+	}
+	.waiver-toggle > span {
+		font-size: 0.9rem;
+		line-height: 1.45;
+		color: var(--color-text-secondary);
+	}
 	.actions {
 		display: flex;
 		gap: 0.6rem;

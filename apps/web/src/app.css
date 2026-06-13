@@ -307,6 +307,17 @@ input, select, textarea {
 	font: inherit;
 }
 
+/* Brand-consistent native controls. Checkboxes + radios render in the
+   browser-default blue otherwise, which clashes with the teal/terracotta
+   palette everywhere they appear (every create / edit modal, settings
+   toggles, filter chips). Setting accent-color globally fixes them all in
+   one place — several components used to set this locally; the global rule
+   makes those redundant (harmless) and covers the ones that didn't. */
+input[type='checkbox'],
+input[type='radio'] {
+	accent-color: var(--color-primary);
+}
+
 /* Smooth theme transition */
 body, .sidebar, .login-card {
 	transition: background-color 0.2s ease, color 0.2s ease;
