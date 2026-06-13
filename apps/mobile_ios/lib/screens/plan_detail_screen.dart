@@ -244,13 +244,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     ));
   }
 
-  /// Overall phase arc (base→build→peak→taper→race) the plan moves through,
-  /// de-duplicated into canonical order.
   List<String> _orderedPhases() =>
       orderedPlanPhases(_weeks.map((w) => PlanProgressWeek(w.phase)).toList());
 
-  /// Longest long run completed so far — actual recorded distance when the
-  /// linked run is in the recent-runs window, else the planned target.
   double? _longestLongRunMetres() {
     final actualById = <String, double>{};
     for (final r in _recentRuns) {

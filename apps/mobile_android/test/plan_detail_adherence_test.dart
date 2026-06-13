@@ -263,4 +263,36 @@ void main() {
       expect(find.byTooltip('Duplicate week'), findsNothing);
     });
   });
+
+  group('PlanDetailScreen — plan progress', () {
+    testWidgets('shows the longest completed long run', (tester) async {
+      final start = _mondayThisWeek();
+      final training = _FakeTraining(
+        _plan(start),
+        [_week('w0', 0, 'build', 40000)],
+        [
+          _wo('lr', 'w0', start.add(const Duration(days: 2)), 'long', 28000,
+              manuallyCompleted: true),
+          // An incomplete longer long run must NOT win.
+          _wo('lr2', 'w0', start.add(const Duration(days: 5)), 'long', 32000),
+        ],
+      );
+      final social = _FakeSocial(const []);
+      await _pump(tester, training: training, social: social);
+      expect(find.textContaining('Longest long run'), findsOneWidget);
+    });
+
+    testWidgets('hides the progress section with no completed long run',
+        (tester) async {
+      final start = _mondayThisWeek();
+      final training = _FakeTraining(
+        _plan(start),
+        [_week('w0', 0, 'build', 40000)],
+        [_wo('e', 'w0', start.add(const Duration(days: 1)), 'easy', 8000)],
+      );
+      final social = _FakeSocial(const []);
+      await _pump(tester, training: training, social: social);
+      expect(find.textContaining('Longest long run'), findsNothing);
+    });
+  });
 }
