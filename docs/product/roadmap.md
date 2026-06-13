@@ -923,9 +923,12 @@ spam wave forces the prioritisation.
   function that flips a `clubs.shadow_hidden` / `routes.shadow_hidden`
   / `user_profiles.shadow_hidden` boolean when ≥ N pending reports
   from distinct reporters with ≥ M public runs each accumulate.
-  Decisions to settle when building this: N (3? 5?), M (1? 5?),
-  whether the target's owner gets a notification ("Your X is hidden
-  pending review"), and the revert path on dismissal.
+  **Decisions settled (2026-06-12, backlog E1+E3 — build E1 & E3 together
+  since the reputation gate is the counting rule):** N = 3 distinct vetted
+  reports; M ≥ 5 public runs for a reporter to count; the owner IS notified
+  ("hidden pending review"); admin revert from `/admin/reports`. CISO review
+  was recommended (moderation surface) and the owner chose to proceed without
+  it — record that in the build PR. Not yet built.
 - [x] **Report buttons on more surfaces** — shipped (backlog E2,
   migration `20270115_001`). The MVP covered users / clubs / routes;
   this finalized `comment` as a first-class `ReportTargetKind` and
