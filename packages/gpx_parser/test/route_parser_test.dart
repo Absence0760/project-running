@@ -82,6 +82,36 @@ void main() {
       expect(r.name, 'Imported route');
     });
 
+    test('uses the track name, not a <wpt> label appearing earlier in the doc', () {
+      // The bug: the route name was the first <name> ANYWHERE, so a
+      // waypoint label that precedes the track shadowed the real name.
+      const gpx = '''<?xml version="1.0"?>
+<gpx>
+  <wpt lat="0.0" lon="0.0"><name>Start Flag</name></wpt>
+  <trk><name>Saturday Long Run</name><trkseg>
+    <trkpt lat="0.0" lon="0.0"/>
+    <trkpt lat="0.0" lon="0.001"/>
+  </trkseg></trk>
+</gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+
+      expect(r.name, 'Saturday Long Run');
+      expect(r.waypoints, hasLength(2));
+    });
+
+    test('ignores a per-trkpt <name> when the track itself has no name', () {
+      const gpx = '''<?xml version="1.0"?>
+<gpx><trk><trkseg>
+  <trkpt lat="0.0" lon="0.0"><name>Mile 1 marker</name></trkpt>
+  <trkpt lat="0.0" lon="0.001"/>
+</trkseg></trk></gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+
+      expect(r.name, 'Imported route');
+    });
+
     test('elevationGain ignores descents — only positive deltas counted', () {
       const gpx = '''<?xml version="1.0"?>
 <gpx><trk><trkseg>

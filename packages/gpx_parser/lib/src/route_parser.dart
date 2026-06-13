@@ -11,12 +11,11 @@ class RouteParser {
   static Route fromGpx(String xmlString) {
     final doc = XmlDocument.parse(xmlString);
 
-    final name = doc
-            .findAllElements('name')
-            .firstOrNull
-            ?.innerText
-            .trim() ??
-        'Imported route';
+    // Scope the route name to its container (trk / metadata / rte), not
+    // the first `<name>` anywhere in the document — a `<wpt>` or `<trkpt>`
+    // can carry its own `<name>` (a waypoint label) that would otherwise
+    // shadow the real track name. Matches the web import.ts scoping.
+    final name = _containerName(doc, const ['trk', 'metadata', 'rte']);
 
     final points = <Waypoint>[];
     // Track points
@@ -146,6 +145,23 @@ class RouteParser {
     }
 
     return _buildRoute(name, points);
+  }
+
+  /// First non-empty `<name>` that is a DIRECT child of one of the given
+  /// container elements, tried in priority order. Avoids picking up a
+  /// `<name>` nested inside an individual waypoint / point / style.
+  static String _containerName(XmlDocument doc, List<String> containers) {
+    for (final tag in containers) {
+      final n = doc
+          .findAllElements(tag)
+          .firstOrNull
+          ?.findElements('name')
+          .firstOrNull
+          ?.innerText
+          .trim();
+      if (n != null && n.isNotEmpty) return n;
+    }
+    return 'Imported route';
   }
 
   static Waypoint? _waypointFromGpxNode(XmlElement node) {
