@@ -2614,6 +2614,7 @@ export const messages = {
 	"workoutDetail.relinkHint": "Wähle einen Lauf in der Nähe des Workout-Datums, um ihn als diese Einheit zu zählen. Läufe, die bereits mit einem anderen Workout verknüpft sind, werden nicht angezeigt.",
 	"workoutDetail.relinkLoading": "Läufe werden gesucht…",
 	"workoutDetail.relinkError": "Läufe konnten nicht geladen werden. Versuche es erneut.",
+	"workoutDetail.unlinkFailed": "Lauf konnte nicht entkoppelt werden. Versuche es erneut.",
 	"workoutDetail.relinkEmpty": "Keine passenden Läufe in der Nähe dieses Datums.",
 	"workoutDetail.relinkCurrent": "Aktuell",
 	"workoutEditor.title": "Workout bearbeiten · {date}",

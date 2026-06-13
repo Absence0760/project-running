@@ -2610,6 +2610,7 @@ export const messages = {
 	"workoutDetail.relinkHint": "このワークアウトの日付に近いランを選んで、このセッションとして数えます。すでに別のワークアウトに紐づいているランは表示されません。",
 	"workoutDetail.relinkLoading": "ランを検索中…",
 	"workoutDetail.relinkError": "ランを読み込めませんでした。もう一度お試しください。",
+	"workoutDetail.unlinkFailed": "ランのリンクを解除できませんでした。もう一度お試しください。",
 	"workoutDetail.relinkEmpty": "この日付の近くに対象のランがありません。",
 	"workoutDetail.relinkCurrent": "現在",
 	"workoutEditor.title": "ワークアウトを編集 · {date}",

@@ -16,6 +16,7 @@
 	import { formatDateShort } from '$lib/format/time';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import type { WorkoutStructure } from '$lib/training/training';
@@ -67,11 +68,20 @@
 		showUnlinkConfirm = true;
 	}
 
+	let unlinking = $state(false);
 	async function confirmUnlink() {
-		if (!workout) return;
-		showUnlinkConfirm = false;
-		await markWorkoutCompleted(workout.id, null);
-		await load();
+		if (!workout || unlinking) return;
+		unlinking = true;
+		try {
+			await markWorkoutCompleted(workout.id, null);
+			showUnlinkConfirm = false;
+			await load();
+		} catch (e) {
+			console.error('markWorkoutCompleted(unlink) failed', e);
+			showToast(t('workoutDetail.unlinkFailed'), 'error');
+		} finally {
+			unlinking = false;
+		}
 	}
 
 	async function openRelink() {

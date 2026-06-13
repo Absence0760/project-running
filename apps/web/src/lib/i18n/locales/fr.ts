@@ -2614,6 +2614,7 @@ export const messages = {
 	"workoutDetail.relinkHint": "Choisissez une course proche de la date de cette séance pour la compter comme cette séance. Les courses déjà associées à une autre séance ne sont pas affichées.",
 	"workoutDetail.relinkLoading": "Recherche de vos courses…",
 	"workoutDetail.relinkError": "Impossible de charger vos courses. Réessayez.",
+	"workoutDetail.unlinkFailed": "Impossible de dissocier la course. Réessayez.",
 	"workoutDetail.relinkEmpty": "Aucune course éligible près de cette date.",
 	"workoutDetail.relinkCurrent": "Actuelle",
 	"workoutEditor.title": "Modifier la séance · {date}",

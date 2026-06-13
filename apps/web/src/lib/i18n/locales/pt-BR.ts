@@ -2613,6 +2613,7 @@ export const messages = {
 	"workoutDetail.relinkHint": "Escolha uma corrida próxima da data deste treino para contá-la como esta sessão. Corridas já vinculadas a outro treino não são exibidas.",
 	"workoutDetail.relinkLoading": "Procurando suas corridas…",
 	"workoutDetail.relinkError": "Não foi possível carregar suas corridas. Tente novamente.",
+	"workoutDetail.unlinkFailed": "Não foi possível desvincular a corrida. Tente novamente.",
 	"workoutDetail.relinkEmpty": "Nenhuma corrida elegível perto desta data.",
 	"workoutDetail.relinkCurrent": "Atual",
 	"workoutEditor.title": "Editar treino · {date}",

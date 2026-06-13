@@ -2614,6 +2614,7 @@ export const messages = {
 	"workoutDetail.relinkHint": "Elige una carrera cercana a la fecha de este entrenamiento para contarla como esta sesión. No se muestran las carreras ya vinculadas a otro entrenamiento.",
 	"workoutDetail.relinkLoading": "Buscando tus carreras…",
 	"workoutDetail.relinkError": "No se pudieron cargar tus carreras. Inténtalo de nuevo.",
+	"workoutDetail.unlinkFailed": "No se pudo desvincular la carrera. Inténtalo de nuevo.",
 	"workoutDetail.relinkEmpty": "No hay carreras válidas cerca de esta fecha.",
 	"workoutDetail.relinkCurrent": "Actual",
 	"workoutEditor.title": "Editar entrenamiento · {date}",

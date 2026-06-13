@@ -2623,6 +2623,7 @@ export const en = {
 	"workoutDetail.relinkHint": "Pick a run near this workout's date to count it as this session. Runs already linked to another workout aren't shown.",
 	"workoutDetail.relinkLoading": "Finding your runs…",
 	"workoutDetail.relinkError": "Couldn't load your runs. Try again.",
+	"workoutDetail.unlinkFailed": "Couldn't unlink the run. Try again.",
 	"workoutDetail.relinkEmpty": "No eligible runs near this date.",
 	"workoutDetail.relinkCurrent": "Current",
 	"workoutEditor.title": "Edit workout · {date}",
