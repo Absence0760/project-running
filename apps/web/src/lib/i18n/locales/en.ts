@@ -1606,6 +1606,7 @@ export const en = {
 	"coaching.copyFailed": "Could not copy — long-press the link to copy it manually",
 	"coaching.createInviteFailed": "Could not create invite",
 	"coaching.revokeInviteFailed": "Could not revoke invite",
+	"coaching.revokeInviteConfirm": "Revoke this pending invite? The link will stop working.",
 	"coaching.removeAthleteConfirm": "Remove {name} from your roster?",
 	"coaching.thisAthlete": "this athlete",
 	"coaching.removeAthleteFailed": "Could not remove athlete",

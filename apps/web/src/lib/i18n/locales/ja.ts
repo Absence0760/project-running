@@ -1593,6 +1593,7 @@ export const messages = {
 	"coaching.copyFailed": "コピーできませんでした — リンクを長押しして手動でコピーしてください",
 	"coaching.createInviteFailed": "招待を作成できませんでした",
 	"coaching.revokeInviteFailed": "招待を取り消せませんでした",
+	"coaching.revokeInviteConfirm": "この保留中の招待を取り消しますか？リンクは無効になります。",
 	"coaching.removeAthleteConfirm": "{name} を名簿から削除しますか？",
 	"coaching.thisAthlete": "このアスリート",
 	"coaching.removeAthleteFailed": "アスリートを削除できませんでした",

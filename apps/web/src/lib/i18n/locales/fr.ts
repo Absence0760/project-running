@@ -1597,6 +1597,7 @@ export const messages = {
 	"coaching.copyFailed": "Impossible de copier — appuyez longuement sur le lien pour le copier manuellement",
 	"coaching.createInviteFailed": "Impossible de créer l'invitation",
 	"coaching.revokeInviteFailed": "Impossible de révoquer l'invitation",
+	"coaching.revokeInviteConfirm": "Révoquer cette invitation en attente ? Le lien cessera de fonctionner.",
 	"coaching.removeAthleteConfirm": "Retirer {name} de votre liste ?",
 	"coaching.thisAthlete": "cet athlète",
 	"coaching.removeAthleteFailed": "Impossible de retirer l'athlète",

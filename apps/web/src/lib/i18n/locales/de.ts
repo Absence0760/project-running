@@ -1597,6 +1597,7 @@ export const messages = {
 	"coaching.copyFailed": "Kopieren fehlgeschlagen — halte den Link gedrückt, um ihn manuell zu kopieren",
 	"coaching.createInviteFailed": "Einladung konnte nicht erstellt werden",
 	"coaching.revokeInviteFailed": "Einladung konnte nicht widerrufen werden",
+	"coaching.revokeInviteConfirm": "Diese ausstehende Einladung widerrufen? Der Link funktioniert dann nicht mehr.",
 	"coaching.removeAthleteConfirm": "{name} aus deinem Kader entfernen?",
 	"coaching.thisAthlete": "diesen Athleten",
 	"coaching.removeAthleteFailed": "Athlet konnte nicht entfernt werden",

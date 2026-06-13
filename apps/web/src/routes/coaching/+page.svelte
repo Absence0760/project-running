@@ -15,12 +15,20 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	let athletes = $state<CoachAthleteLink[]>([]);
 	let pending = $state<PendingCoachInvite[]>([]);
 	let coaches = $state<CoachAthleteLink[]>([]);
 	let loading = $state(true);
 	let minting = $state(false);
+
+	type PendingConfirm =
+		| { kind: 'revoke'; id: string }
+		| { kind: 'remove'; link: CoachAthleteLink }
+		| { kind: 'leave'; link: CoachAthleteLink };
+	let confirmAction = $state<PendingConfirm | null>(null);
+	let acting = $state(false);
 
 	async function load() {
 		loading = true;
@@ -69,32 +77,62 @@
 		}
 	}
 
-	async function revoke(id: string) {
-		try {
-			await revokeCoachInvite(id);
-			pending = pending.filter((p) => p.id !== id);
-		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : m('coaching.revokeInviteFailed'), 'error');
-		}
-	}
+	// All three relationship-severing actions route through the shared
+	// ConfirmDialog (native confirm() looks like a phishing overlay on iOS
+	// Safari and breaks the project convention) and an `acting` in-flight
+	// guard so a double-click can't fire endCoachLink twice.
+	const confirmCopy = $derived.by(() => {
+		const a = confirmAction;
+		if (!a) return { title: '', message: '', label: '' };
+		if (a.kind === 'revoke')
+			return {
+				title: m('coaching.revoke'),
+				message: m('coaching.revokeInviteConfirm'),
+				label: m('coaching.revoke')
+			};
+		if (a.kind === 'remove')
+			return {
+				title: m('coaching.remove'),
+				message: m('coaching.removeAthleteConfirm', {
+					name: a.link.display_name ?? m('coaching.thisAthlete')
+				}),
+				label: m('coaching.remove')
+			};
+		return {
+			title: m('coaching.leave'),
+			message: m('coaching.leaveCoachConfirm', {
+				name: a.link.display_name ?? m('coaching.thisCoach')
+			}),
+			label: m('coaching.leave')
+		};
+	});
 
-	async function removeAthlete(link: CoachAthleteLink) {
-		if (!confirm(m('coaching.removeAthleteConfirm', { name: link.display_name ?? m('coaching.thisAthlete') }))) return;
+	async function runConfirmAction() {
+		const a = confirmAction;
+		if (!a || acting) return;
+		acting = true;
 		try {
-			await endCoachLink(link.id);
-			athletes = athletes.filter((a) => a.id !== link.id);
+			if (a.kind === 'revoke') {
+				await revokeCoachInvite(a.id);
+				pending = pending.filter((p) => p.id !== a.id);
+			} else if (a.kind === 'remove') {
+				await endCoachLink(a.link.id);
+				athletes = athletes.filter((x) => x.id !== a.link.id);
+			} else {
+				await endCoachLink(a.link.id);
+				coaches = coaches.filter((c) => c.id !== a.link.id);
+			}
+			confirmAction = null;
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : m('coaching.removeAthleteFailed'), 'error');
-		}
-	}
-
-	async function leaveCoach(link: CoachAthleteLink) {
-		if (!confirm(m('coaching.leaveCoachConfirm', { name: link.display_name ?? m('coaching.thisCoach') }))) return;
-		try {
-			await endCoachLink(link.id);
-			coaches = coaches.filter((c) => c.id !== link.id);
-		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : m('coaching.endLinkFailed'), 'error');
+			const fallback =
+				a.kind === 'revoke'
+					? m('coaching.revokeInviteFailed')
+					: a.kind === 'remove'
+						? m('coaching.removeAthleteFailed')
+						: m('coaching.endLinkFailed');
+			showToast(e instanceof Error ? e.message : fallback, 'error');
+		} finally {
+			acting = false;
 		}
 	}
 
@@ -146,7 +184,11 @@
 								<button class="btn btn-sm btn-outline" onclick={() => copyLink(inv.invite_token)}>
 									{m('coaching.copyLink')}
 								</button>
-								<button class="btn btn-sm btn-danger" onclick={() => revoke(inv.id)}>
+								<button
+									class="btn btn-sm btn-danger"
+									onclick={() => (confirmAction = { kind: 'revoke', id: inv.id })}
+									disabled={acting}
+								>
 									{m('coaching.revoke')}
 								</button>
 							</div>
@@ -168,7 +210,11 @@
 							</div>
 							<div class="link-actions">
 								<a class="btn btn-sm btn-primary" href="/coaching/athletes/{a.user_id}">{m('coaching.review')}</a>
-								<button class="btn btn-sm btn-outline" onclick={() => removeAthlete(a)}>{m('coaching.remove')}</button>
+								<button
+									class="btn btn-sm btn-outline"
+									onclick={() => (confirmAction = { kind: 'remove', link: a })}
+									disabled={acting}>{m('coaching.remove')}</button
+								>
 							</div>
 						</li>
 					{/each}
@@ -195,7 +241,11 @@
 								<span class="link-sub">{m('coaching.linkedSince', { date: sinceLabel(c.accepted_at) })}</span>
 							</div>
 							<div class="link-actions">
-								<button class="btn btn-sm btn-outline" onclick={() => leaveCoach(c)}>{m('coaching.leave')}</button>
+								<button
+									class="btn btn-sm btn-outline"
+									onclick={() => (confirmAction = { kind: 'leave', link: c })}
+									disabled={acting}>{m('coaching.leave')}</button
+								>
 							</div>
 						</li>
 					{/each}
@@ -204,6 +254,16 @@
 		</section>
 	{/if}
 </div>
+
+<ConfirmDialog
+	open={confirmAction !== null}
+	title={confirmCopy.title}
+	message={confirmCopy.message}
+	confirmLabel={confirmCopy.label}
+	onconfirm={runConfirmAction}
+	oncancel={() => (confirmAction = null)}
+	danger
+/>
 
 <style>
 	.page {

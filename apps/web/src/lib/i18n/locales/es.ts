@@ -1597,6 +1597,7 @@ export const messages = {
 	"coaching.copyFailed": "No se pudo copiar — mantén pulsado el enlace para copiarlo manualmente",
 	"coaching.createInviteFailed": "No se pudo crear la invitación",
 	"coaching.revokeInviteFailed": "No se pudo revocar la invitación",
+	"coaching.revokeInviteConfirm": "¿Revocar esta invitación pendiente? El enlace dejará de funcionar.",
 	"coaching.removeAthleteConfirm": "¿Quitar a {name} de tu lista?",
 	"coaching.thisAthlete": "este atleta",
 	"coaching.removeAthleteFailed": "No se pudo quitar al atleta",
