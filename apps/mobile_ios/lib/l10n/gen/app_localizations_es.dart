@@ -6546,6 +6546,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get goalEditorSave => 'Guardar';
 
   @override
+  String goalEditorSaveFailed(String error) {
+    return 'No se pudo guardar el objetivo: $error';
+  }
+
+  @override
   String get goalEditorErrDistance => 'Distancia: introduce un número positivo';
 
   @override

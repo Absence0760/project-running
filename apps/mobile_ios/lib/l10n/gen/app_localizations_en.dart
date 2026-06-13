@@ -6478,6 +6478,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goalEditorSave => 'Save';
 
   @override
+  String goalEditorSaveFailed(String error) {
+    return 'Couldn\'t save the goal: $error';
+  }
+
+  @override
   String get goalEditorErrDistance => 'Distance: enter a positive number';
 
   @override

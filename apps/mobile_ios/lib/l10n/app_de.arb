@@ -1788,6 +1788,7 @@
   "goalEditorDeleteMessage": "Dieses Ziel und seine Fortschrittsverfolgung werden entfernt. Du kannst jederzeit ein neues erstellen.",
   "goalEditorCancel": "Abbrechen",
   "goalEditorSave": "Speichern",
+  "goalEditorSaveFailed": "Ziel konnte nicht gespeichert werden: {error}",
   "goalEditorErrDistance": "Distanz: positive Zahl eingeben",
   "goalEditorErrTime": "Zeit: positive Minutenzahl eingeben",
   "goalEditorErrPace": "Pace: mm:ss verwenden (z. B. 5:00)",

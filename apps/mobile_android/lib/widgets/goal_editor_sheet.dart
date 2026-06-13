@@ -5,6 +5,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import 'full_screen_form.dart';
+import 'top_banner.dart';
 
 /// Open the goal editor as a full-screen modal dialog. Pass an
 /// existing goal to edit it in-place; omit for a new goal.
@@ -62,6 +63,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   late final TextEditingController _paceCtl;
   late final TextEditingController _countCtl;
   String? _error;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -206,19 +208,19 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               children: [
                 if (isEditing)
                   TextButton.icon(
-                    onPressed: _delete,
+                    onPressed: _saving ? null : _delete,
                     icon: const Icon(Icons.delete_outline),
                     label: Text(l10n.goalEditorDelete),
                     style: TextButton.styleFrom(foregroundColor: Colors.red),
                   ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: _saving ? null : () => Navigator.pop(context),
                   child: Text(l10n.goalEditorCancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: _save,
+                  onPressed: _saving ? null : _save,
                   child: Text(l10n.goalEditorSave),
                 ),
               ],
@@ -341,10 +343,26 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
       avgPaceSecPerKm: pace,
       runCount: count,
     );
-    await widget.preferences.upsertGoal(goal);
-    // Mirror the *single* weekly distance goal into the universal bag
-    // so it roams to web/iOS. Other shapes stay client-only.
-    await widget.settingsSync?.pushWeeklyDistanceGoal();
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await widget.preferences.upsertGoal(goal);
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.goalEditorSaveFailed('$e'));
+        setState(() => _saving = false);
+      }
+      return;
+    }
+    // Mirror the *single* weekly distance goal into the universal bag so
+    // it roams to web/iOS. Best-effort (L4): the goal is already saved
+    // locally, so a roam failure must not block the save or strand the
+    // sheet — surface it but still pop.
+    try {
+      await widget.settingsSync?.pushWeeklyDistanceGoal();
+    } catch (e) {
+      debugPrint('goal weekly-distance roam push failed: $e');
+    }
     if (mounted) Navigator.pop(context, l10n.goalEditorSavedAnnounce);
   }
 
@@ -372,9 +390,22 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
           ),
         ) ??
         false;
-    if (!ok) return;
-    await widget.preferences.removeGoal(id);
-    await widget.settingsSync?.pushWeeklyDistanceGoal();
+    if (!ok || _saving) return;
+    setState(() => _saving = true);
+    try {
+      await widget.preferences.removeGoal(id);
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.goalEditorSaveFailed('$e'));
+        setState(() => _saving = false);
+      }
+      return;
+    }
+    try {
+      await widget.settingsSync?.pushWeeklyDistanceGoal();
+    } catch (e) {
+      debugPrint('goal weekly-distance roam push failed: $e');
+    }
     if (mounted) Navigator.pop(context, l10n.goalEditorDeletedAnnounce);
   }
 

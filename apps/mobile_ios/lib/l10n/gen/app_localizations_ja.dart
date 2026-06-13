@@ -6186,6 +6186,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get goalEditorSave => '保存';
 
   @override
+  String goalEditorSaveFailed(String error) {
+    return '目標を保存できませんでした: $error';
+  }
+
+  @override
   String get goalEditorErrDistance => '距離：正の数を入力してください';
 
   @override

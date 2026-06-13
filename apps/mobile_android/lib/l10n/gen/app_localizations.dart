@@ -10845,6 +10845,12 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get goalEditorSave;
 
+  /// Banner shown when saving a goal fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the goal: {error}'**
+  String goalEditorSaveFailed(String error);
+
   /// Validation error for the distance target
   ///
   /// In en, this message translates to:

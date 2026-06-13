@@ -1788,6 +1788,7 @@
   "goalEditorDeleteMessage": "この目標と進捗の記録が削除されます。いつでも新しく作成できます。",
   "goalEditorCancel": "キャンセル",
   "goalEditorSave": "保存",
+  "goalEditorSaveFailed": "目標を保存できませんでした: {error}",
   "goalEditorErrDistance": "距離：正の数を入力してください",
   "goalEditorErrTime": "時間：正の分数を入力してください",
   "goalEditorErrPace": "ペース：mm:ss 形式で入力（例 5:00）",

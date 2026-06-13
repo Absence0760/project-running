@@ -6541,6 +6541,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get goalEditorSave => 'Salvar';
 
   @override
+  String goalEditorSaveFailed(String error) {
+    return 'Não foi possível salvar a meta: $error';
+  }
+
+  @override
   String get goalEditorErrDistance => 'Distância: insira um número positivo';
 
   @override
@@ -15147,6 +15152,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get goalEditorSave => 'Salvar';
+
+  @override
+  String goalEditorSaveFailed(String error) {
+    return 'Não foi possível salvar a meta: $error';
+  }
 
   @override
   String get goalEditorErrDistance => 'Distância: insira um número positivo';

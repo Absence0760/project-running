@@ -1788,6 +1788,7 @@
   "goalEditorDeleteMessage": "Cet objectif et son suivi de progression seront supprimés. Vous pouvez en créer un nouveau à tout moment.",
   "goalEditorCancel": "Annuler",
   "goalEditorSave": "Enregistrer",
+  "goalEditorSaveFailed": "Impossible d'enregistrer l'objectif : {error}",
   "goalEditorErrDistance": "Distance : saisissez un nombre positif",
   "goalEditorErrTime": "Temps : saisissez un nombre de minutes positif",
   "goalEditorErrPace": "Allure : utilisez mm:ss (ex. 5:00)",

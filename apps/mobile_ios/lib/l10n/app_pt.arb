@@ -1788,6 +1788,7 @@
   "goalEditorDeleteMessage": "Esta meta e o acompanhamento de progresso serão removidos. Você pode criar uma nova quando quiser.",
   "goalEditorCancel": "Cancelar",
   "goalEditorSave": "Salvar",
+  "goalEditorSaveFailed": "Não foi possível salvar a meta: {error}",
   "goalEditorErrDistance": "Distância: insira um número positivo",
   "goalEditorErrTime": "Tempo: insira um número positivo de minutos",
   "goalEditorErrPace": "Ritmo: use mm:ss (ex. 5:00)",

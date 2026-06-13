@@ -8239,6 +8239,15 @@
   "@goalEditorSave": {
     "description": "Button to save the goal"
   },
+  "goalEditorSaveFailed": "Couldn't save the goal: {error}",
+  "@goalEditorSaveFailed": {
+    "description": "Banner shown when saving a goal fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "goalEditorErrDistance": "Distance: enter a positive number",
   "@goalEditorErrDistance": {
     "description": "Validation error for the distance target"
