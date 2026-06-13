@@ -3454,6 +3454,16 @@ export type Database = {
           surface: string
         }[]
       }
+      dm_threads: {
+        Args: never
+        Returns: {
+          last_at: string
+          last_body: string
+          last_from_me: boolean
+          partner_id: string
+          unread: number
+        }[]
+      }
       duplicate_plan_week: {
         Args: { p_plan_id: string; p_week_index: number }
         Returns: string
