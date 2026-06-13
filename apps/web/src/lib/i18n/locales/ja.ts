@@ -3339,6 +3339,7 @@ export const messages = {
 	"session.save": "保存",
 	"session.cancel": "キャンセル",
 	"session.delete": "削除",
+	"session.deleteFailed": "セッションプランを削除できませんでした。もう一度お試しください。",
 	"session.deleteConfirm": "このセッションプランを削除しますか？",
 	"session.saved": "セッションを保存しました。",
 	"session.saveFailed": "セッションを保存できませんでした。",

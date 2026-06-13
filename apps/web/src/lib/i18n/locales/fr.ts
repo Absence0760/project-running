@@ -3343,6 +3343,7 @@ export const messages = {
 	"session.save": "Enregistrer",
 	"session.cancel": "Annuler",
 	"session.delete": "Supprimer",
+	"session.deleteFailed": "Impossible de supprimer le plan de séance. Réessayez.",
 	"session.deleteConfirm": "Supprimer ce plan de séance ?",
 	"session.saved": "Séance enregistrée.",
 	"session.saveFailed": "Impossible d’enregistrer la séance.",

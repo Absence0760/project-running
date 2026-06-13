@@ -3352,6 +3352,7 @@ export const en = {
 	"session.save": "Save",
 	"session.cancel": "Cancel",
 	"session.delete": "Delete",
+	"session.deleteFailed": "Couldn't delete the session plan. Try again.",
 	"session.deleteConfirm": "Delete this session plan?",
 	"session.saved": "Session saved.",
 	"session.saveFailed": "Could not save the session.",

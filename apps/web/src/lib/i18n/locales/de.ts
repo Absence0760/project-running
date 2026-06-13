@@ -3343,6 +3343,7 @@ export const messages = {
 	"session.save": "Speichern",
 	"session.cancel": "Abbrechen",
 	"session.delete": "Löschen",
+	"session.deleteFailed": "Sitzungsplan konnte nicht gelöscht werden. Versuche es erneut.",
 	"session.deleteConfirm": "Diesen Session-Plan löschen?",
 	"session.saved": "Session gespeichert.",
 	"session.saveFailed": "Session konnte nicht gespeichert werden.",

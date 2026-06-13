@@ -116,10 +116,20 @@
 		return t('session.stepHold', { name, seconds: step.durationS ?? 0 });
 	}
 
+	let deleting = $state(false);
 	async function doDelete() {
-		await deleteSessionPlan(planId);
-		confirmDelete = false;
-		goto('/sessions');
+		if (deleting) return;
+		deleting = true;
+		try {
+			await deleteSessionPlan(planId);
+			confirmDelete = false;
+			await goto('/sessions');
+		} catch (e) {
+			console.error('deleteSessionPlan failed', e);
+			showToast(t('session.deleteFailed'), 'error');
+		} finally {
+			deleting = false;
+		}
 	}
 
 	function onUpdated() {

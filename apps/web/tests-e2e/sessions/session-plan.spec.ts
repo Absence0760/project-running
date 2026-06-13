@@ -40,6 +40,51 @@ test.describe('/sessions — session plan build, read, attach', () => {
 		}
 	});
 
+	test('a failed delete surfaces an error toast and does NOT navigate away', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const title = `e2e-del-fail-${Date.now().toString().slice(-6)}`;
+		createdPlanTitles.push(title);
+		const { data: ins, error } = await admin
+			.from('session_plans')
+			.insert({ author_id: USER_A.id, title, discipline: 'Vinyasa' })
+			.select('id')
+			.single();
+		if (error) throw error;
+		const planId = (ins as { id: string }).id;
+
+		await page.goto(`/sessions/${planId}`);
+		await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible({
+			timeout: 10_000
+		});
+
+		// Force the DELETE to fail.
+		await page.route('**/rest/v1/session_plans*', async (route) => {
+			if (route.request().method() === 'DELETE') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated delete failure' })
+				});
+			} else {
+				await route.continue();
+			}
+		});
+
+		await page.getByRole('button', { name: 'Delete' }).click();
+		const dialog = page.locator('.modal', { hasText: 'Delete' });
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+		await dialog.getByRole('button', { name: 'Delete' }).click();
+
+		// Error toast surfaces; we stay on the session-detail page (not /sessions).
+		await expect(page.locator('.toast.toast-error')).toContainText("Couldn't delete", {
+			timeout: 10_000
+		});
+		await expect(page).toHaveURL(new RegExp(`/sessions/${planId}`));
+		await page.unroute('**/rest/v1/session_plans*');
+	});
+
 	test('build a 3-item plan with a per-side hold, reopen, attach to a class event', async ({
 		page
 	}) => {
