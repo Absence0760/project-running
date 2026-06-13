@@ -208,6 +208,53 @@ test.describe('/settings/devices', () => {
 		await expect(plantedRow.locator('.overrides code', { hasText: 'map_style' })).toBeVisible();
 	});
 
+	test('a failed add-override Save surfaces an error toast + keeps the dialog open', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const plantedDeviceId = `${PLANTED_DEVICE_PREFIX}add-fail-${Date.now()}`;
+
+		await admin.from('user_device_settings').insert({
+			user_id: USER_A.id,
+			device_id: plantedDeviceId,
+			platform: 'android',
+			label: 'Add-fail fixture',
+			prefs: { map_style: 'satellite' }
+		});
+
+		await page.goto('/settings/preferences');
+		await expect(page.getByRole('heading', { name: 'Units & Display' })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.goto('/settings/devices');
+		const plantedRow = rowByLabel(page, 'Add-fail fixture');
+		await expect(plantedRow).toBeVisible({ timeout: 10_000 });
+		await plantedRow.locator('.override-link').click();
+		await plantedRow.locator('button.override-add-btn').click();
+
+		const dialog = page.locator('.modal', { hasText: 'override' });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+		await page.route('**/rest/v1/user_device_settings**', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await dialog.getByRole('button', { name: 'Save' }).click();
+
+		await expect(page.locator('.toast-error')).toBeVisible({ timeout: 5_000 });
+		// Dialog stays open so the user can retry — the Save didn't silently no-op.
+		await expect(dialog).toBeVisible();
+	});
+
 	test('delete device confirmation removes the row', async ({ page }) => {
 		const admin = getAdminClient();
 		const plantedDeviceId = `${PLANTED_DEVICE_PREFIX}delete-${Date.now()}`;

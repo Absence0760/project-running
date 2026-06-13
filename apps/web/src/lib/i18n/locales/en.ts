@@ -1179,6 +1179,7 @@ export const en = {
 	"settingsDevices.pushDisabledToast": "Notifications disabled on this device.",
 	"settingsDevices.renameFailedToast": "Rename failed: {message}",
 	"settingsDevices.clearOverrideFailedToast": "Couldn't clear the override: {message}",
+	"settingsDevices.addOverrideFailedToast": "Couldn't save the override: {message}",
 	"settingsDevices.removeDeviceFailedToast": "Couldn't remove the device: {message}",
 	"settingsIntegrations.title": "Integrations",
 	"settingsIntegrations.tagline": "Pull your runs in from Strava, parkrun, Garmin, and Apple HealthKit — or drop in a bulk export zip if you'd rather not connect an account.",

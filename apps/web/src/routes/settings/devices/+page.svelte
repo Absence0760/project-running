@@ -313,6 +313,7 @@
 	]);
 
 	let addingForDevice = $state<string | null>(null);
+	let addBusy = $state(false);
 	let addKey = $state<string>('voice_feedback_enabled');
 	let addValueBool = $state<boolean>(false);
 	let addValueNumber = $state<string>('');
@@ -363,13 +364,19 @@
 			value = n;
 		} else if (ed.shape.kind === 'enum') value = addValueEnum;
 
+		if (addBusy) return;
+		addBusy = true;
 		const next = { ...device.prefs, [addKey]: value };
 		const { error } = await supabase
 			.from('user_device_settings')
 			.update({ prefs: next, updated_at: new Date().toISOString() })
 			.eq('user_id', auth.user.id)
 			.eq('device_id', addingForDevice);
-		if (error) return;
+		addBusy = false;
+		if (error) {
+			showToast(m('settingsDevices.addOverrideFailedToast', { message: error.message }), 'error');
+			return;
+		}
 		devices = devices.map((d) =>
 			d.device_id === addingForDevice ? { ...d, prefs: next } : d,
 		);
@@ -598,7 +605,7 @@
 				<button type="button" class="btn btn-outline btn-sm" onclick={() => (addingForDevice = null)}>
 					{m('settingsDevices.cancel')}
 				</button>
-				<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>{m('settingsDevices.save')}</button>
+				<button type="button" class="btn btn-primary btn-sm" disabled={addBusy} onclick={commitAddOverride}>{m('settingsDevices.save')}</button>
 			</div>
 	{/if}
 </Modal>

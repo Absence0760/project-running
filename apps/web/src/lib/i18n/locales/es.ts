@@ -1170,6 +1170,7 @@ export const messages = {
 	"settingsDevices.pushDisabledToast": "Notificaciones desactivadas en este dispositivo.",
 	"settingsDevices.renameFailedToast": "Error al renombrar: {message}",
 	"settingsDevices.clearOverrideFailedToast": "No se pudo borrar la anulación: {message}",
+	"settingsDevices.addOverrideFailedToast": "No se pudo guardar la anulación: {message}",
 	"settingsDevices.removeDeviceFailedToast": "No se pudo eliminar el dispositivo: {message}",
 	"settingsIntegrations.title": "Integraciones",
 	"settingsIntegrations.tagline": "Importa tus carreras desde Strava, parkrun, Garmin y Apple HealthKit, o sube un zip de exportación masiva si prefieres no conectar una cuenta.",
