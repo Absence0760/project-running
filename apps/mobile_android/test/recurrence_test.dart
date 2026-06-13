@@ -214,4 +214,98 @@ void main() {
       expect(instances, hasLength(3));
     });
   });
+
+  group('expandInstances — timezoned (viewer-independent instance_start)', () {
+    test('timezoned weekly anchors instance_start to UTC wall-clock', () {
+      // The capacity key + race-arm key for a recurring instance must be the
+      // same instant for every spectator. With a timezone present the
+      // expansion reads + stamps the fields in UTC, so the produced instants
+      // are fixed in absolute time and don't depend on the device's zone.
+      // Asserting the exact UTC ISO instants pins that under any test TZ.
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 4, 7, 13, 0, 0), // Tue 13:00 UTC
+        freq: RecurrenceFreq.weekly,
+        timezone: 'America/New_York',
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 4, 1),
+        DateTime.utc(2026, 4, 30, 23, 59, 59),
+      );
+      final iso = out.map((d) => d.toUtc().toIso8601String()).toList();
+      expect(iso, [
+        '2026-04-07T13:00:00.000Z',
+        '2026-04-14T13:00:00.000Z',
+        '2026-04-21T13:00:00.000Z',
+        '2026-04-28T13:00:00.000Z',
+      ]);
+    });
+
+    test('two cross-TZ viewers compute the SAME instance_start', () {
+      // The bug: the .toLocal() + local-field stamp built instants in the
+      // VIEWER's zone, so spectators in different zones RSVP'd against
+      // different capacity keys. For a timezoned event the expansion reads no
+      // ambient zone other than UTC, invariant across viewers. Re-running the
+      // same input twice (standing in for two viewers) yields identical
+      // instants; the absolute-time assertion guards the cross-device case
+      // (the suite is also run under multiple TZ values).
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 5, 2, 23, 30, 0), // Sat 23:30 UTC — a
+        freq: RecurrenceFreq.biweekly, // viewer-local stamp would roll the day.
+        byday: const [Weekday.sa],
+        timezone: 'Europe/London',
+      );
+      final from = DateTime.utc(2026, 5, 1);
+      final to = DateTime.utc(2026, 5, 31, 23, 59, 59);
+      final viewerA = expandInstances(e, from, to).map((d) => d.toUtc().toIso8601String()).toList();
+      final viewerB = expandInstances(e, from, to).map((d) => d.toUtc().toIso8601String()).toList();
+      expect(viewerA, viewerB);
+      expect(viewerA, [
+        '2026-05-02T23:30:00.000Z',
+        '2026-05-16T23:30:00.000Z',
+        '2026-05-30T23:30:00.000Z',
+      ]);
+    });
+
+    test('timezoned monthly anchors day-of-month + time in UTC', () {
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 1, 31, 22, 0, 0),
+        freq: RecurrenceFreq.monthly,
+        timezone: 'Australia/Sydney',
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 1, 1),
+        DateTime.utc(2026, 4, 30, 23, 59, 59),
+      );
+      final iso = out.map((d) => d.toUtc().toIso8601String()).toList();
+      // Jan-31, Feb-28 (clamp, 2026 non-leap), Mar-31, Apr-30 — all 22:00 UTC.
+      expect(iso, [
+        '2026-01-31T22:00:00.000Z',
+        '2026-02-28T22:00:00.000Z',
+        '2026-03-31T22:00:00.000Z',
+        '2026-04-30T22:00:00.000Z',
+      ]);
+    });
+
+    test('legacy event with no timezone keeps viewer-local behaviour', () {
+      // A row predating 20270111_001 has no timezone; expansion falls back to
+      // the original local-zone stamping so already-placed RSVPs don't shift.
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 4, 7, 13, 0, 0),
+        freq: RecurrenceFreq.weekly,
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 4, 1),
+        DateTime.utc(2026, 4, 30, 23, 59, 59),
+      );
+      expect(out, hasLength(4));
+      final localStart = e.startsAt.toLocal();
+      for (final inst in out) {
+        expect(inst.hour, localStart.hour);
+        expect(inst.isUtc, isFalse);
+      }
+    });
+  });
 }

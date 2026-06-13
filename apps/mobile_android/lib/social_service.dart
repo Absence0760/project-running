@@ -30,7 +30,7 @@ const String _clubSelectCols =
 // 20260806_001 + 20260818_001 redo). Same `select('*')` constraint
 // as clubs above; same arch-guard discipline.
 const String _eventSelectCols =
-    'id, club_id, title, description, starts_at, duration_min, '
+    'id, club_id, title, description, starts_at, timezone, duration_min, '
     'meet_label, route_id, distance_m, pace_target_sec, capacity, '
     'author_id, created_at, updated_at, recurrence_freq, '
     'recurrence_byday, recurrence_until, recurrence_count, '
@@ -99,6 +99,7 @@ class EventView {
         byday: byday,
         until: row.recurrenceUntil,
         count: row.recurrenceCount,
+        timezone: row.timezone,
       );
 }
 
@@ -837,6 +838,7 @@ class SocialService extends ChangeNotifier {
                   byday: byday,
                   until: er.recurrenceUntil,
                   count: er.recurrenceCount,
+                  timezone: er.timezone,
                 )) ??
               er.startsAt);
       nexts[er.id] = next;
