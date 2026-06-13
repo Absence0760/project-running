@@ -3033,6 +3033,8 @@ export const messages = {
 	"prefs.privacyZonesEmpty": "プライバシーゾーンはまだありません。自宅や職場の周囲に追加して、公開する共有から非表示にしましょう。",
 	"prefs.zoneRadius": "半径 {radius} m",
 	"prefs.removeZone": "削除",
+	"prefs.removeZoneTitle": "プライバシーゾーンを削除しますか？",
+	"prefs.removeZoneMessage": "このゾーンは公開共有でこの付近のトラックを隠します。削除するとこのエリアが再び公開されます。",
 	"prefs.addZone": "ゾーンを追加",
 	"prefs.addZoneModalTitle": "プライバシーゾーンを追加",
 	"prefs.telemetryHeading": "プライバシーとテレメトリー",

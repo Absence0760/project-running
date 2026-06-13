@@ -3037,6 +3037,8 @@ export const messages = {
 	"prefs.privacyZonesEmpty": "Noch keine Datenschutzzonen. Füge eine rund um dein Zuhause oder deinen Arbeitsplatz hinzu, um diesen vor öffentlich geteilten Inhalten zu verbergen.",
 	"prefs.zoneRadius": "Radius {radius} m",
 	"prefs.removeZone": "Entfernen",
+	"prefs.removeZoneTitle": "Datenschutzzone entfernen?",
+	"prefs.removeZoneMessage": "Diese Zone verbirgt deine Strecken in der Nähe bei öffentlichen Freigaben. Beim Entfernen wird dieser Bereich wieder sichtbar.",
 	"prefs.addZone": "Zone hinzufügen",
 	"prefs.addZoneModalTitle": "Datenschutzzone hinzufügen",
 	"prefs.telemetryHeading": "Datenschutz & Telemetrie",

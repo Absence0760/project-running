@@ -3036,6 +3036,8 @@ export const messages = {
 	"prefs.privacyZonesEmpty": "Ainda não há zonas de privacidade. Adicione uma ao redor de casa ou do trabalho para ocultá-la dos compartilhamentos públicos.",
 	"prefs.zoneRadius": "raio de {radius} m",
 	"prefs.removeZone": "Remover",
+	"prefs.removeZoneTitle": "Remover zona de privacidade?",
+	"prefs.removeZoneMessage": "Esta zona oculta seus trajetos por perto nos compartilhamentos públicos. Removê-la reexpõe esta área.",
 	"prefs.addZone": "Adicionar uma zona",
 	"prefs.addZoneModalTitle": "Adicionar uma zona de privacidade",
 	"prefs.telemetryHeading": "Privacidade e telemetria",

@@ -3037,6 +3037,8 @@ export const messages = {
 	"prefs.privacyZonesEmpty": "Aucune zone de confidentialité pour l'instant. Ajoutes-en une autour de chez toi ou de ton lieu de travail pour le masquer des partages publics.",
 	"prefs.zoneRadius": "rayon de {radius} m",
 	"prefs.removeZone": "Supprimer",
+	"prefs.removeZoneTitle": "Supprimer la zone de confidentialité ?",
+	"prefs.removeZoneMessage": "Cette zone masque vos parcours à proximité dans les partages publics. La supprimer réexpose cette zone.",
 	"prefs.addZone": "Ajouter une zone",
 	"prefs.addZoneModalTitle": "Ajouter une zone de confidentialité",
 	"prefs.telemetryHeading": "Confidentialité et télémétrie",

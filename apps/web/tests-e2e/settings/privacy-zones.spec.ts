@@ -81,11 +81,19 @@ test.describe('/settings/preferences — privacy zones', () => {
 			await expect(zoneRow).toContainText('-33.86880, 151.20930');
 			await expect(zoneRow).toContainText('250 m radius');
 
-			// Remove → preferences auto-save (no Save button since the
-			// auto-save pass; zone edits persist immediately via
-			// updateUniversal). Gate on the write actually landing in the DB
-			// before reloading, so the reload can't race the persist.
+			// Remove now routes through a ConfirmDialog (a zone deletion
+			// re-exposes the area on public shares). Confirm, then the write
+			// persists immediately via updateUniversal. Gate on the write
+			// actually landing in the DB before reloading so it can't race.
 			await zoneRow.getByRole('button', { name: 'Remove' }).click();
+			const dialog = page.locator('.modal', { hasText: 'Remove privacy zone?' });
+			await expect(dialog).toBeVisible({ timeout: 10_000 });
+			// Cancel keeps the zone.
+			await dialog.getByRole('button', { name: 'Cancel' }).click();
+			await expect(zoneRow).toBeVisible();
+			// Confirm removes it.
+			await zoneRow.getByRole('button', { name: 'Remove' }).click();
+			await dialog.getByRole('button', { name: 'Remove' }).click();
 			await expect(zoneRow).toHaveCount(0);
 			await expect
 				.poll(async () => (await getUserPrivacyZones()).length, { timeout: 5_000 })

@@ -344,6 +344,9 @@
 		await persistZones([...privacyZones, zone]);
 	}
 
+	// Removing a privacy zone re-exposes that area on every public share, so
+	// it confirms first (the write persists immediately via persistZones).
+	let removeZoneIdx = $state<number | null>(null);
 	async function removeZone(idx: number) {
 		await persistZones(privacyZones.filter((_, i) => i !== idx));
 	}
@@ -820,7 +823,7 @@
 								</div>
 								<div class="zone-radius">{m('prefs.zoneRadius', { radius: String(zone.radius_m) })}</div>
 							</div>
-							<button class="btn btn-outline btn-sm" type="button" onclick={() => removeZone(idx)}>
+							<button class="btn btn-outline btn-sm" type="button" onclick={() => (removeZoneIdx = idx)}>
 								{m('prefs.removeZone')}
 							</button>
 						</li>
@@ -937,6 +940,20 @@
 		saveDemographics();
 	}}
 	oncancel={() => (showWithdrawConfirm = false)}
+	danger
+/>
+
+<ConfirmDialog
+	open={removeZoneIdx !== null}
+	title={m('prefs.removeZoneTitle')}
+	message={m('prefs.removeZoneMessage')}
+	confirmLabel={m('prefs.removeZone')}
+	onconfirm={() => {
+		const idx = removeZoneIdx;
+		removeZoneIdx = null;
+		if (idx !== null) removeZone(idx);
+	}}
+	oncancel={() => (removeZoneIdx = null)}
 	danger
 />
 

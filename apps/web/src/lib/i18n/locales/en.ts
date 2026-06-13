@@ -3046,6 +3046,8 @@ export const en = {
 	"prefs.privacyZonesEmpty": "No privacy zones yet. Add one around your home or workplace to hide it from public shares.",
 	"prefs.zoneRadius": "{radius} m radius",
 	"prefs.removeZone": "Remove",
+	"prefs.removeZoneTitle": "Remove privacy zone?",
+	"prefs.removeZoneMessage": "This zone hides your tracks near here on public shares. Removing it re-exposes this area.",
 	"prefs.addZone": "Add a zone",
 	"prefs.addZoneModalTitle": "Add a privacy zone",
 	"prefs.telemetryHeading": "Privacy & telemetry",
