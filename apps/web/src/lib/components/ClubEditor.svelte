@@ -65,7 +65,7 @@
 	}
 </script>
 
-<form onsubmit={submit} class="club-editor">
+<form onsubmit={submit} class="editor-form">
 	<label>
 		<span>{m('clubEditor.name')}</span>
 		<input
@@ -154,7 +154,7 @@
 		</fieldset>
 	{/if}
 
-	<label class="waiver-toggle">
+	<label class="toggle-row">
 		<input type="checkbox" bind:checked={requireWaiver} />
 		<span>
 			{m('clubEditor.waiverLabel')}
@@ -175,123 +175,3 @@
 	</div>
 </form>
 
-<style>
-	.club-editor {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-md);
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-		font-size: 0.9rem;
-		font-weight: 600;
-		color: var(--color-text);
-	}
-	.optional {
-		font-weight: 400;
-		color: var(--color-text-tertiary);
-		font-size: 0.8rem;
-	}
-	input[type='text'],
-	textarea {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.6rem 0.8rem;
-		font: inherit;
-		color: inherit;
-		width: 100%;
-	}
-	input:focus,
-	textarea:focus {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
-	}
-	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: pair the
-	   :focus rule above with :focus-visible so keyboard users get a real
-	   outline. The :focus rule still removes the default ring on mouse
-	   focus (no visible outline on click); :focus-visible re-adds a
-	   proper one for keyboard / programmatic focus. */
-	input:focus-visible, textarea:focus-visible {
-		outline: 2px solid var(--color-primary);
-		outline-offset: 2px;
-	}
-
-	textarea {
-		resize: vertical;
-	}
-	fieldset {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.8rem 1rem;
-		background: var(--color-surface);
-	}
-	legend {
-		font-weight: 600;
-		font-size: 0.9rem;
-		padding: 0 0.4rem;
-	}
-	.radio {
-		flex-direction: row;
-		align-items: flex-start;
-		gap: 0.6rem;
-		font-weight: 500;
-		padding: 0.4rem 0;
-	}
-	.radio input {
-		margin-top: 0.3rem;
-	}
-	.radio span {
-		display: flex;
-		flex-direction: column;
-	}
-	.radio .hint {
-		font-weight: 400;
-		color: var(--color-text-secondary);
-		font-size: 0.85rem;
-	}
-	/* Without an explicit row layout the checkbox inherits the column
-	   `label` rule above and the flex cross-axis stretches it to full
-	   width (label text drops below). Lay it out inline as a bordered
-	   option card, matching the share-toggle pattern in GymEditor /
-	   SessionPlanEditor. */
-	.waiver-toggle {
-		flex-direction: row;
-		align-items: flex-start;
-		gap: 0.6rem;
-		font-weight: 400;
-		padding: 0.8rem 1rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		cursor: pointer;
-	}
-	.waiver-toggle input[type='checkbox'] {
-		flex: 0 0 auto;
-		width: 1.05rem;
-		height: 1.05rem;
-		margin-top: 0.15rem;
-		cursor: pointer;
-	}
-	.waiver-toggle > span {
-		font-size: 0.9rem;
-		line-height: 1.45;
-		color: var(--color-text-secondary);
-	}
-	.actions {
-		display: flex;
-		gap: 0.6rem;
-		justify-content: flex-end;
-		margin-top: var(--space-md);
-	}
-	.error {
-		color: var(--color-danger);
-		font-size: 0.9rem;
-		background: var(--color-danger-light);
-		padding: 0.5rem 0.8rem;
-		border-radius: var(--radius-md);
-	}
-</style>

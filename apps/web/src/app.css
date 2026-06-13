@@ -607,6 +607,186 @@ img {
 }
 
 /*
+ * Shared form-field layer. Every create / edit editor (ClubEditor,
+ * EventEditor, RunEditor, GymEditor, PlanMetaEditor, RoutineEditor,
+ * SessionPlanEditor, WorkoutEditor) used to roll its own copy of the
+ * field primitives — input / textarea / select chrome, labels, fieldsets,
+ * radio rows, the checkbox option-card, the actions row, the error banner
+ * — which drifted apart (three input backgrounds, two label cases, two
+ * markup conventions). They're consolidated here so the look is identical
+ * everywhere and stops diverging.
+ *
+ * Opt-in via `class="editor-form"` on the form / container root so the
+ * styles don't leak app-wide. Editors keep ONLY their bespoke layout
+ * (multi-column rows, chips, exercise blocks, search panels) scoped.
+ *
+ * Two markup conventions are supported so editors need no restructuring:
+ *   A) <label><span>Label</span><input/></label>          (label is the container)
+ *   B) <div class="field"><span class="field-label">Label</span><input/></div>
+ *
+ * Native control colour is the global accent-color rule above; checkbox /
+ * radio width is reset here so the column-flex container can't stretch them
+ * (the bug that rendered ClubEditor's waiver checkbox full-width).
+ */
+.editor-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-md);
+}
+/* Convention A: the <label> element is both container and label text. */
+.editor-form label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--color-text);
+}
+/* Convention B: a .field wrapper with a separate .field-label text node. */
+.editor-form .field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+.editor-form .field-label {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--color-text);
+	text-transform: none;
+	letter-spacing: 0;
+}
+.editor-form .optional {
+	font-weight: 400;
+	color: var(--color-text-tertiary);
+	font-size: 0.8rem;
+	text-transform: none;
+	letter-spacing: 0;
+}
+.editor-form .field-hint,
+.editor-form .hint {
+	font-weight: 400;
+	color: var(--color-text-secondary);
+	font-size: 0.85rem;
+}
+.editor-form input[type='text'],
+.editor-form input[type='number'],
+.editor-form input[type='date'],
+.editor-form input[type='time'],
+.editor-form input[type='search'],
+.editor-form input[type='url'],
+.editor-form input[type='email'],
+.editor-form input[type='tel'],
+.editor-form input:not([type]),
+.editor-form textarea,
+.editor-form select {
+	width: 100%;
+	padding: 0.55rem 0.75rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface);
+	color: inherit;
+	font: inherit;
+	/* The container label is 600; reset so field text isn't bold. */
+	font-weight: 400;
+}
+.editor-form textarea {
+	resize: vertical;
+}
+.editor-form input:focus,
+.editor-form textarea:focus,
+.editor-form select:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+/* audit/accessibility WCAG 2.4.7 + 2.4.11: keyboard / programmatic focus
+   still gets a real outline (the :focus rule above only drops the ring on
+   mouse focus). */
+.editor-form input:focus-visible,
+.editor-form textarea:focus-visible,
+.editor-form select:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}
+.editor-form input[type='checkbox'],
+.editor-form input[type='radio'] {
+	width: auto;
+	padding: 0;
+}
+.editor-form fieldset {
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	padding: 0.8rem 1rem;
+	background: var(--color-surface);
+	margin: 0;
+}
+.editor-form legend {
+	font-weight: 600;
+	font-size: 0.9rem;
+	padding: 0 0.4rem;
+}
+/* A radio / checkbox option laid out inline with a title + hint stacked
+   beside the control. */
+.editor-form .radio {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 0.6rem;
+	font-weight: 500;
+	padding: 0.4rem 0;
+}
+.editor-form .radio input {
+	margin-top: 0.25rem;
+	flex: 0 0 auto;
+}
+.editor-form .radio > span {
+	display: flex;
+	flex-direction: column;
+}
+/* The checkbox option-card (activity waiver, charge toggle, share-to-feed,
+   make-public): an inline checkbox + descriptive label inside a bordered
+   card. Replaces the per-editor .waiver-toggle / .charge-toggle / .share-row
+   / .checkbox-card copies. */
+.editor-form .toggle-row {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 0.6rem;
+	font-weight: 400;
+	padding: 0.8rem 1rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface);
+	cursor: pointer;
+}
+.editor-form .toggle-row input[type='checkbox'] {
+	flex: 0 0 auto;
+	width: 1.05rem;
+	height: 1.05rem;
+	margin-top: 0.15rem;
+	cursor: pointer;
+}
+.editor-form .toggle-row > span {
+	font-weight: 400;
+	font-size: 0.9rem;
+	line-height: 1.45;
+	color: var(--color-text-secondary);
+}
+.editor-form .actions,
+.editor-form .form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.6rem;
+	margin-top: var(--space-md);
+}
+.editor-form .error {
+	color: var(--color-danger);
+	background: var(--color-danger-light);
+	padding: 0.5rem 0.8rem;
+	border-radius: var(--radius-md);
+	font-size: 0.9rem;
+	margin: 0;
+}
+
+/*
  * Canonical small uppercase-tracked label used above stat values,
  * inside section headers, and on metric grids. Pages used to roll
  * their own copy with slight font-size / colour drift — pin it here
