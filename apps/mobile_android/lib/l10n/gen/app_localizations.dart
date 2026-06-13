@@ -8944,6 +8944,36 @@ abstract class AppLocalizations {
   /// **'Clear all'**
   String get privacyZonesClearAll;
 
+  /// No description provided for @privacyZonesRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove privacy zone?'**
+  String get privacyZonesRemoveTitle;
+
+  /// No description provided for @privacyZonesRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This zone hides your tracks near here on public shares. Removing it re-exposes this area.'**
+  String get privacyZonesRemoveBody;
+
+  /// No description provided for @privacyZonesRemoveSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove privacy zone'**
+  String get privacyZonesRemoveSemantics;
+
+  /// No description provided for @privacyZonesClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all privacy zones?'**
+  String get privacyZonesClearAllTitle;
+
+  /// No description provided for @privacyZonesClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes every zone, re-exposing all of these areas on public shares.'**
+  String get privacyZonesClearAllBody;
+
   /// AppBar title for the Settings > Preferences screen
   ///
   /// In en, this message translates to:

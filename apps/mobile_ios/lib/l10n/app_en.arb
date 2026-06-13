@@ -6764,6 +6764,11 @@
     }
   },
   "privacyZonesClearAll": "Clear all",
+  "privacyZonesRemoveTitle": "Remove privacy zone?",
+  "privacyZonesRemoveBody": "This zone hides your tracks near here on public shares. Removing it re-exposes this area.",
+  "privacyZonesRemoveSemantics": "Remove privacy zone",
+  "privacyZonesClearAllTitle": "Clear all privacy zones?",
+  "privacyZonesClearAllBody": "This removes every zone, re-exposing all of these areas on public shares.",
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },

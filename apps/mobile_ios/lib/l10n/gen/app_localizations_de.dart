@@ -5461,6 +5461,23 @@ class AppLocalizationsDe extends AppLocalizations {
   String get privacyZonesClearAll => 'Alle löschen';
 
   @override
+  String get privacyZonesRemoveTitle => 'Datenschutzzone entfernen?';
+
+  @override
+  String get privacyZonesRemoveBody =>
+      'Diese Zone verbirgt deine Strecken in der Nähe bei öffentlichen Freigaben. Beim Entfernen wird dieser Bereich wieder sichtbar.';
+
+  @override
+  String get privacyZonesRemoveSemantics => 'Datenschutzzone entfernen';
+
+  @override
+  String get privacyZonesClearAllTitle => 'Alle Datenschutzzonen löschen?';
+
+  @override
+  String get privacyZonesClearAllBody =>
+      'Dadurch werden alle Zonen entfernt und alle diese Bereiche bei öffentlichen Freigaben wieder sichtbar.';
+
+  @override
   String get prefsTitle => 'Einstellungen';
 
   @override

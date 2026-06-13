@@ -5132,6 +5132,22 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privacyZonesClearAll => 'すべて消去';
 
   @override
+  String get privacyZonesRemoveTitle => 'プライバシーゾーンを削除しますか？';
+
+  @override
+  String get privacyZonesRemoveBody =>
+      'このゾーンは公開共有でこの付近のトラックを隠します。削除するとこのエリアが再び公開されます。';
+
+  @override
+  String get privacyZonesRemoveSemantics => 'プライバシーゾーンを削除';
+
+  @override
+  String get privacyZonesClearAllTitle => 'すべてのプライバシーゾーンを消去しますか？';
+
+  @override
+  String get privacyZonesClearAllBody => 'すべてのゾーンが削除され、これらのエリアが公開共有で再び公開されます。';
+
+  @override
   String get prefsTitle => '環境設定';
 
   @override

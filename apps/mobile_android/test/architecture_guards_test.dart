@@ -705,6 +705,33 @@ void main() {
     });
   });
 
+  group('privacy-zone removal confirms before erasing', () {
+    test('privacy_zones_screen gates remove + clear-all behind a confirm', () {
+      // Reason: a privacy zone hides the user's tracks near a sensitive
+      // place (home/work) on public shares. The remove-marker tap and the
+      // Clear-all button used to drop zones with no confirmation; web
+      // confirms the equivalent removeZone. The fix requires both to route
+      // through a showDialog<bool> confirm, and the marker to carry a
+      // Semantics label (it was a bare GestureDetector under 48dp).
+      final source =
+          File('lib/screens/privacy_zones_screen.dart').readAsStringSync();
+      expect(source, contains('_confirmRemoveZone'),
+          reason: 'the zone marker tap must go through _confirmRemoveZone');
+      expect(source, contains('_confirmClearAll'),
+          reason: 'Clear-all must go through _confirmClearAll');
+      expect(source, contains('showDialog<bool>'),
+          reason: 'both confirms present an AlertDialog');
+      expect(source, contains('privacyZonesRemoveSemantics'),
+          reason: 'the remove marker must carry a Semantics label');
+      // The Clear-all button must not wipe zones directly from onPressed.
+      expect(
+        source.contains('onPressed: () => setState(() => _zones = [])'),
+        isFalse,
+        reason: 'Clear-all must confirm first, not setState(_zones=[]) inline',
+      );
+    });
+  });
+
   group('race End / Cancel confirm before mutating', () {
     test('event_detail End/Cancel route through _confirmRaceAction', () {
       // Reason: ending or cancelling a live race is irreversible and

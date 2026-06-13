@@ -5399,6 +5399,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get privacyZonesClearAll => 'Clear all';
 
   @override
+  String get privacyZonesRemoveTitle => 'Remove privacy zone?';
+
+  @override
+  String get privacyZonesRemoveBody =>
+      'This zone hides your tracks near here on public shares. Removing it re-exposes this area.';
+
+  @override
+  String get privacyZonesRemoveSemantics => 'Remove privacy zone';
+
+  @override
+  String get privacyZonesClearAllTitle => 'Clear all privacy zones?';
+
+  @override
+  String get privacyZonesClearAllBody =>
+      'This removes every zone, re-exposing all of these areas on public shares.';
+
+  @override
   String get prefsTitle => 'Preferences';
 
   @override
