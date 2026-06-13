@@ -349,4 +349,98 @@ void main() {
               'last known good value');
     });
   });
+
+  group('treadmill distance source (additive, opt-in seam)', () {
+    test('off by default — distance comes from GPS untouched', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      expect(r.debugTreadmillMode, isFalse);
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 10, secondsFromStart: 5));
+      expect(r.debugReportedDistanceMetres, closeTo(10, 0.5),
+          reason: 'GPS distance is reported when treadmill mode is off');
+    });
+
+    test('belt total distance is rebased to 0 on the first sample', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // Belt was already showing 200 m when the run started.
+      r.setTreadmillSample(2.5, totalDistanceMetres: 200);
+      r.setTreadmillSample(2.5, totalDistanceMetres: 350);
+      expect(r.debugTreadmillMode, isTrue);
+      expect(r.debugReportedDistanceMetres, 150.0,
+          reason: 'pre-run belt distance must not be credited');
+    });
+
+    test('belt distance overrides GPS distance once in treadmill mode', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 30, secondsFromStart: 10));
+      // A spurious GPS fix exists, but the belt is authoritative now.
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1500);
+      expect(r.debugReportedDistanceMetres, 500.0);
+      expect(r.debugDistanceMetres, greaterThan(0),
+          reason: 'GPS accumulator keeps running underneath, untouched');
+    });
+
+    test('speed integration when the belt reports no total distance', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // First sample sets the baseline timestamp; no distance yet.
+      r.setTreadmillSample(2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      r.setTreadmillSample(2.0);
+      // ~0.1s at the previous 2.0 m/s ≈ 0.2 m. Allow generous slop for the
+      // wall-clock delay under test load.
+      expect(r.debugReportedDistanceMetres, greaterThan(0));
+      expect(r.debugReportedDistanceMetres, lessThan(2.0));
+    });
+
+    test('an extreme belt sample never breaks recording (layered resilience)',
+        () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // 999 m/s is rejected by the integration clamp; recording stays alive.
+      r.setTreadmillSample(999);
+      r.setTreadmillSample(999);
+      expect(r.recording, isTrue);
+    });
+
+    test('clearTreadmillMode reverts to the GPS distance', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 8));
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1200);
+      expect(r.debugReportedDistanceMetres, 200.0);
+      r.clearTreadmillMode();
+      expect(r.debugTreadmillMode, isFalse);
+      expect(r.debugReportedDistanceMetres, closeTo(20, 0.5));
+    });
+
+    test('stop() tags an indoor treadmill run in metadata', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setTreadmillSample(2.5, totalDistanceMetres: 100);
+      r.setTreadmillSample(2.5, totalDistanceMetres: 600);
+      final run = await r.stop();
+      expect(run.distanceMetres, 500.0);
+      expect(run.metadata?['indoor'], isTrue);
+      expect(run.metadata?['indoor_source'], 'treadmill');
+      expect(run.metadata?['distance_source'], 'treadmill');
+    });
+
+    test('stop() on a normal GPS run carries no indoor metadata', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 10, secondsFromStart: 4));
+      final run = await r.stop();
+      expect(run.metadata?['indoor'], isNull);
+      expect(run.metadata?['indoor_source'], isNull);
+    });
+  });
 }
