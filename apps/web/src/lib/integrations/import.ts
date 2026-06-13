@@ -179,11 +179,27 @@ function toWaypoints(points: Element[]): TrackPoint[] {
 		return {
 			lat: parseFloat(pt.getAttribute('lat') ?? '0'),
 			lng: parseFloat(pt.getAttribute('lon') ?? '0'),
-			ele: parseFloat(pt.querySelector('ele')?.textContent ?? '0') || undefined,
+			ele: parseEle(pt.querySelector('ele')?.textContent),
 			ts,
 			bpm,
 		};
 	});
+}
+
+/**
+ * Parse an elevation string, preserving a genuine sea-level `0` while
+ * mapping a missing / non-numeric value to `undefined`. The naive
+ * `parseFloat(x) || undefined` dropped a real `0 m` reading (sea-level
+ * waypoint) because `0` is falsy — that conflates "at sea level" with
+ * "no elevation recorded", which then fabricates phantom climb in
+ * `buildRoute` (it had to coerce the missing value back to 0).
+ */
+export function parseEle(text: string | null | undefined): number | undefined {
+	if (text == null) return undefined;
+	const trimmed = text.trim();
+	if (trimmed === '') return undefined;
+	const v = parseFloat(trimmed);
+	return Number.isFinite(v) ? v : undefined;
 }
 
 // --- KML ---
@@ -241,7 +257,7 @@ function parseKmlCoordinates(text: string): TrackPoint[] {
 		const lng = parseFloat(parts[0]);
 		const lat = parseFloat(parts[1]);
 		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-		const ele = parts[2] ? parseFloat(parts[2]) || undefined : undefined;
+		const ele = parts.length >= 3 ? parseEle(parts[2]) : undefined;
 		out.push({ lat, lng, ele });
 	}
 	return out;
@@ -273,7 +289,8 @@ function parseGeoJson(text: string): ImportedRoute[] {
 		const out: TrackPoint[] = [];
 		for (const c of coords) {
 			if (!Array.isArray(c) || c.length < 2) continue;
-			out.push({ lng: c[0], lat: c[1], ele: c[2] || undefined });
+			const ele = typeof c[2] === 'number' && Number.isFinite(c[2]) ? c[2] : undefined;
+			out.push({ lng: c[0], lat: c[1], ele });
 		}
 		return out;
 	}
@@ -327,8 +344,16 @@ function buildRoute(name: string, waypoints: TrackPoint[]): ImportedRoute {
 
 	for (let i = 1; i < waypoints.length; i++) {
 		distance += haversine(waypoints[i - 1], waypoints[i]);
-		const diff = (waypoints[i].ele ?? 0) - (waypoints[i - 1].ele ?? 0);
-		if (diff > 0) elevGain += diff;
+		// Only count climb between two points that BOTH carry a real
+		// elevation. Coercing a missing reading to 0 (the old behaviour)
+		// fabricated a full descent-then-climb every time a single point
+		// lacked `<ele>`, inflating total gain. Mirrors the Dart twin's
+		// `prev != null && curr != null && curr > prev` guard.
+		const prevEle = waypoints[i - 1].ele;
+		const currEle = waypoints[i].ele;
+		if (typeof prevEle === 'number' && typeof currEle === 'number' && currEle > prevEle) {
+			elevGain += currEle - prevEle;
+		}
 	}
 
 	return {
