@@ -12405,6 +12405,12 @@ abstract class AppLocalizations {
   /// **'This permanently removes the workout and its sets.'**
   String get gymDeleteConfirmBody;
 
+  /// Badge on an event detail page shown when the event is members-only (events.is_public = false).
+  ///
+  /// In en, this message translates to:
+  /// **'Members only'**
+  String get clubEventMembersOnly;
+
   /// Button on a class event detail that opens the gym composer pre-filled from the class's gym_template.
   ///
   /// In en, this message translates to:

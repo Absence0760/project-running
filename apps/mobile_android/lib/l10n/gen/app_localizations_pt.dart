@@ -7491,6 +7491,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Isso remove permanentemente o treino e suas séries.';
 
   @override
+  String get clubEventMembersOnly => 'Somente membros';
+
+  @override
   String get clubEventLogAsWorkout => 'Registrar como treino';
 
   @override
@@ -15890,6 +15893,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get gymDeleteConfirmBody =>
       'Isso remove permanentemente o treino e suas séries.';
+
+  @override
+  String get clubEventMembersOnly => 'Somente membros';
 
   @override
   String get clubEventLogAsWorkout => 'Registrar como treino';

@@ -7495,6 +7495,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esto elimina permanentemente el entrenamiento y sus series.';
 
   @override
+  String get clubEventMembersOnly => 'Solo miembros';
+
+  @override
   String get clubEventLogAsWorkout => 'Registrar como entrenamiento';
 
   @override

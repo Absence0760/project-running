@@ -7419,6 +7419,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'This permanently removes the workout and its sets.';
 
   @override
+  String get clubEventMembersOnly => 'Members only';
+
+  @override
   String get clubEventLogAsWorkout => 'Log this as a workout';
 
   @override

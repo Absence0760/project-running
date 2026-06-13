@@ -7511,6 +7511,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Cette action supprime définitivement la séance et ses séries.';
 
   @override
+  String get clubEventMembersOnly => 'Membres uniquement';
+
+  @override
   String get clubEventLogAsWorkout => 'Enregistrer comme séance';
 
   @override

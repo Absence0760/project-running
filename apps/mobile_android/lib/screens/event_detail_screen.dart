@@ -502,6 +502,36 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 ],
               ),
             ),
+          if (e.row.isPublic == false)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock, size: 14,
+                          color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        l10n.clubEventMembersOnly,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Row(
             children: [
               Icon(Icons.calendar_today, size: 16,

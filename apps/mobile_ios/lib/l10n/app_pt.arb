@@ -2053,6 +2053,7 @@
   "gymVolumeLabel": "Volume",
   "gymDeleteConfirmTitle": "Excluir treino?",
   "gymDeleteConfirmBody": "Isso remove permanentemente o treino e suas séries.",
+  "clubEventMembersOnly": "Somente membros",
   "clubEventLogAsWorkout": "Registrar como treino",
   "clubEventLogAsWorkoutHint": "Adicione esta aula ao seu próprio registro de academia — você pode ajustar os detalhes antes de salvar.",
   "clubEventLogAsWorkoutSaved": "Adicionado ao seu registro de academia",

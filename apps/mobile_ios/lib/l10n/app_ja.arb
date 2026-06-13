@@ -2053,6 +2053,7 @@
   "gymVolumeLabel": "ボリューム",
   "gymDeleteConfirmTitle": "ワークアウトを削除しますか？",
   "gymDeleteConfirmBody": "ワークアウトとそのセットが完全に削除されます。",
+  "clubEventMembersOnly": "メンバー限定",
   "clubEventLogAsWorkout": "ワークアウトとして記録",
   "clubEventLogAsWorkoutHint": "このクラスを自分のジムログに追加します — 保存前に詳細を調整できます。",
   "clubEventLogAsWorkoutSaved": "ジムログに追加しました",

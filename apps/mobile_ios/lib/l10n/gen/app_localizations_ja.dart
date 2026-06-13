@@ -7091,6 +7091,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymDeleteConfirmBody => 'ワークアウトとそのセットが完全に削除されます。';
 
   @override
+  String get clubEventMembersOnly => 'メンバー限定';
+
+  @override
   String get clubEventLogAsWorkout => 'ワークアウトとして記録';
 
   @override

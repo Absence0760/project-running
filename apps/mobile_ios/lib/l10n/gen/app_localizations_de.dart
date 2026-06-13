@@ -7499,6 +7499,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dadurch werden das Training und seine Sätze dauerhaft entfernt.';
 
   @override
+  String get clubEventMembersOnly => 'Nur für Mitglieder';
+
+  @override
   String get clubEventLogAsWorkout => 'Als Training erfassen';
 
   @override

@@ -2053,6 +2053,7 @@
   "gymVolumeLabel": "Volume",
   "gymDeleteConfirmTitle": "Supprimer la séance ?",
   "gymDeleteConfirmBody": "Cette action supprime définitivement la séance et ses séries.",
+  "clubEventMembersOnly": "Membres uniquement",
   "clubEventLogAsWorkout": "Enregistrer comme séance",
   "clubEventLogAsWorkoutHint": "Ajoutez ce cours à votre propre journal de muscu — vous pouvez ajuster les détails avant d'enregistrer.",
   "clubEventLogAsWorkoutSaved": "Ajouté à votre journal de muscu",

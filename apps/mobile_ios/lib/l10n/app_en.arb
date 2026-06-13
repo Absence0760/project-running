@@ -9373,6 +9373,10 @@
   "gymVolumeLabel": "Volume",
   "gymDeleteConfirmTitle": "Delete workout?",
   "gymDeleteConfirmBody": "This permanently removes the workout and its sets.",
+  "clubEventMembersOnly": "Members only",
+  "@clubEventMembersOnly": {
+    "description": "Badge on an event detail page shown when the event is members-only (events.is_public = false)."
+  },
   "clubEventLogAsWorkout": "Log this as a workout",
   "@clubEventLogAsWorkout": {
     "description": "Button on a class event detail that opens the gym composer pre-filled from the class's gym_template."

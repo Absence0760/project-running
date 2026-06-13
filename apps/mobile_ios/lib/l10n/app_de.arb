@@ -2053,6 +2053,7 @@
   "gymVolumeLabel": "Volumen",
   "gymDeleteConfirmTitle": "Training löschen?",
   "gymDeleteConfirmBody": "Dadurch werden das Training und seine Sätze dauerhaft entfernt.",
+  "clubEventMembersOnly": "Nur für Mitglieder",
   "clubEventLogAsWorkout": "Als Training erfassen",
   "clubEventLogAsWorkoutHint": "Füge diesen Kurs deinem eigenen Gym-Log hinzu — du kannst die Details vor dem Speichern anpassen.",
   "clubEventLogAsWorkoutSaved": "Zu deinem Gym-Log hinzugefügt",
