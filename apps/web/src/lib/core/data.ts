@@ -1475,7 +1475,7 @@ const CLUB_SELECT_COLS =
 // enumerates these safe columns; the two coords are write-only
 // today (no UI consumer).
 const EVENT_SELECT_COLS =
-	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template, session_plan_id, is_public' as const;
+	'id, club_id, title, description, starts_at, timezone, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template, session_plan_id, is_public' as const;
 
 function slugify(name: string): string {
 	return name

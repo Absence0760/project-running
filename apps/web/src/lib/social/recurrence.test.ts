@@ -241,6 +241,94 @@ test('nextInstanceAfter — returns null past recurrence_until', () => {
 	assert.equal(next, null);
 });
 
+test('expandInstances — timezoned weekly anchors instance_start to UTC wall-clock, viewer-independent', () => {
+	// The capacity key + race-arm key for a recurring instance must be the same
+	// instant for every spectator. With a timezone present the expansion reads +
+	// stamps the recurrence fields in UTC, so the produced instants are fixed in
+	// absolute time and do not depend on the running process's TZ. Asserting the
+	// exact ISO instants pins that: under any host TZ these literals must match.
+	const e = ev({
+		starts_at: '2026-04-07T13:00:00Z', // Tue 13:00 UTC
+		timezone: 'America/New_York',
+		recurrence_freq: 'weekly',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-04-01T00:00:00Z'),
+		new Date('2026-04-30T23:59:59Z'),
+	);
+	const iso = out.map((d) => d.toISOString());
+	assert.deepEqual(iso, [
+		'2026-04-07T13:00:00.000Z',
+		'2026-04-14T13:00:00.000Z',
+		'2026-04-21T13:00:00.000Z',
+		'2026-04-28T13:00:00.000Z',
+	]);
+});
+
+test('expandInstances — two cross-TZ viewers compute the SAME instance_start (timezoned event)', () => {
+	// The bug: startOfWeek / setHours built instants in the VIEWER's local zone,
+	// so a spectator in Tokyo and one in New York produced different
+	// instance_starts and RSVP'd against different capacity keys. expandInstances
+	// now reads no ambient zone other than via the Date accessors the WallClock
+	// selects — for a timezoned event that is UTC only, invariant across viewers.
+	// Re-running the same input twice (standing in for two viewers) must yield
+	// identical instants; the absolute-time assertion is what guards the
+	// cross-process case (the suite is also run under two TZ values in CI/local).
+	const e = ev({
+		starts_at: '2026-05-02T23:30:00Z', // Sat 23:30 UTC — late enough that a
+		timezone: 'Europe/London', // viewer-local stamp would roll the weekday.
+		recurrence_freq: 'biweekly',
+		recurrence_byday: ['SA'],
+	});
+	const from = new Date('2026-05-01T00:00:00Z');
+	const to = new Date('2026-05-31T23:59:59Z');
+	const viewerA = expandInstances(e, from, to).map((d) => d.toISOString());
+	const viewerB = expandInstances(e, from, to).map((d) => d.toISOString());
+	assert.deepEqual(viewerA, viewerB);
+	assert.deepEqual(viewerA, [
+		'2026-05-02T23:30:00.000Z',
+		'2026-05-16T23:30:00.000Z',
+		'2026-05-30T23:30:00.000Z',
+	]);
+});
+
+test('expandInstances — timezoned monthly anchors day-of-month + time in UTC', () => {
+	const e = ev({
+		starts_at: '2026-01-31T22:00:00Z',
+		timezone: 'Australia/Sydney',
+		recurrence_freq: 'monthly',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-01-01T00:00:00Z'),
+		new Date('2026-04-30T23:59:59Z'),
+	);
+	const iso = out.map((d) => d.toISOString());
+	// Jan-31, Feb-28 (clamp, 2026 non-leap), Mar-31, Apr-30 — all at 22:00 UTC.
+	assert.deepEqual(iso, [
+		'2026-01-31T22:00:00.000Z',
+		'2026-02-28T22:00:00.000Z',
+		'2026-03-31T22:00:00.000Z',
+		'2026-04-30T22:00:00.000Z',
+	]);
+});
+
+test('expandInstances — legacy event with no timezone keeps viewer-local behaviour', () => {
+	// A row predating 20270111_001 has no timezone; expansion must fall back to
+	// the original local-zone stamping so its already-placed RSVPs don't shift.
+	const e = ev({
+		starts_at: '2026-04-07T13:00:00Z',
+		recurrence_freq: 'weekly',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-04-01T00:00:00Z'),
+		new Date('2026-04-30T23:59:59Z'),
+	);
+	assert.equal(out.length, 4);
+});
+
 test('describeRecurrence — null freq is "One-off event"', () => {
 	assert.equal(describeRecurrence(null, []), 'One-off event');
 	assert.equal(describeRecurrence(null, null), 'One-off event');
