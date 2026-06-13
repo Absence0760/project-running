@@ -241,7 +241,7 @@
 	</label>
 
 	{#each exercises as ex, ei (ei)}
-		<div class="exercise-block card">
+		<div class="exercise-block item-card">
 			<div class="exercise-head">
 				<input
 					class="text-input"
@@ -390,14 +390,14 @@
 				{t('gym.editor.addSet')}
 			</button>
 
-			<label class="superset-toggle">
+			<label class="checkbox-card" class:disabled={ei === exercises.length - 1}>
 				<input
 					type="checkbox"
 					bind:checked={exercises[ei].supersetWithNext}
 					disabled={ei === exercises.length - 1}
 					data-testid="routine-superset-toggle"
 				/>
-				<span>{t('gym.routine.supersetToggle')}</span>
+				<span class="checkbox-text">{t('gym.routine.supersetToggle')}</span>
 			</label>
 
 			<details bind:open={exercises[ei].advancedOpen} class="advanced">
@@ -520,63 +520,130 @@
 	.routine-editor {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-md);
+		gap: var(--space-lg);
 	}
+
+	input[type='text'],
+	input[type='number'],
+	select,
+	textarea {
+		padding: var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.9rem;
+		width: 100%;
+		min-width: 0;
+		transition: border-color var(--transition-fast);
+	}
+	input[type='text'],
+	input[type='number'],
+	select {
+		height: 2.4rem;
+	}
+	input[type='number'] {
+		font-variant-numeric: tabular-nums;
+	}
+	textarea {
+		resize: vertical;
+	}
+	input[type='text']:focus-visible,
+	input[type='number']:focus-visible,
+	select:focus-visible,
+	textarea:focus-visible {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px var(--color-primary-light);
+	}
+
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2xs);
+		gap: var(--space-xs);
+		flex: 1;
+		min-width: 0;
 	}
 	.inline-field {
 		max-width: 16rem;
+		flex: none;
 	}
+
 	.exercise-block {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2xs);
-		padding: var(--space-sm);
+		gap: var(--space-md);
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-bg-secondary);
 	}
 	.exercise-head {
 		display: flex;
-		gap: var(--space-2xs);
+		gap: var(--space-sm);
 		align-items: center;
 	}
-	.exercise-head .text-input {
+	.exercise-head input[type='text'] {
 		flex: 1;
 	}
+
+	/* Set type / reps / weight / rest share one grid so the columns line up
+	   across every set in an exercise; the header row uses the same template. */
 	.set-head,
 	.set-row {
 		display: grid;
-		grid-template-columns: 7rem 1fr 5rem auto;
-		gap: var(--space-2xs);
+		grid-template-columns: 8rem 1fr 6rem 2.25rem;
+		gap: var(--space-sm);
 		align-items: center;
 	}
 	.set-head.wr,
 	.set-row.wr {
-		grid-template-columns: 7rem 1fr 5rem 5rem auto;
+		grid-template-columns: 8rem 1fr 6rem 6rem 2.25rem;
+	}
+	.set-head {
+		gap: var(--space-sm);
+	}
+	.set-cap {
+		margin: 0;
 	}
 	.rep-range {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2xs);
-	}
-	.rep-range .text-input {
-		min-width: 0;
+		gap: var(--space-xs);
 	}
 	.range-sep {
-		font-size: 0.8rem;
-		color: var(--color-text-tertiary);
-	}
-	.superset-toggle {
-		display: flex;
-		align-items: center;
-		gap: var(--space-xs);
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
-		margin-top: var(--space-2xs);
+		flex-shrink: 0;
 	}
+
+	.checkbox-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		cursor: pointer;
+	}
+	.checkbox-card.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.checkbox-card input {
+		width: auto;
+		accent-color: var(--color-primary);
+	}
+	.checkbox-text {
+		font-size: 0.9rem;
+		color: var(--color-text);
+	}
+
 	.advanced {
-		margin-top: var(--space-2xs);
+		border-top: 1px solid var(--color-border);
+		padding-top: var(--space-sm);
 	}
 	.advanced summary {
 		cursor: pointer;
@@ -587,23 +654,40 @@
 	.advanced-body {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-sm);
-		padding-top: var(--space-sm);
+		gap: var(--space-md);
+		padding-top: var(--space-md);
 	}
 	.advanced-body .field {
 		max-width: 16rem;
 	}
+
 	.icon-btn {
 		background: none;
 		border: none;
 		cursor: pointer;
 		color: var(--color-text-tertiary);
 		padding: var(--space-2xs);
+		border-radius: var(--radius-sm);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
 	}
+	.icon-btn:hover {
+		color: var(--color-danger);
+		background: var(--color-danger-light);
+	}
+	.icon-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
 	.actions {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-sm);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
 	}
 	.form-error {
 		color: var(--color-danger);
