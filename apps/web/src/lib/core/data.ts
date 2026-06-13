@@ -5758,39 +5758,33 @@ export interface DmThread {
 }
 
 /// Conversation list: the latest message per partner + an unread count.
-/// Aggregated client-side from a recent window of the viewer's messages
-/// — fine at MVP volume; a per-thread RPC can replace it if a power
-/// user's inbox outgrows the window.
+/// Aggregated server-side by the dm_threads() RPC (DISTINCT ON partner +
+/// unread COUNT over the viewer's ENTIRE message set) — one preview row per
+/// conversation instead of pulling the newest 500 full message bodies and
+/// folding them in JS (which over-fetched AND silently dropped older partners
+/// once a heavy inbox's newest 500 messages spanned fewer conversations than
+/// it had). Partner name/avatar stays a single .in() profile lookup.
 export async function fetchDmThreads(): Promise<DmThread[]> {
 	const me = auth.user?.id;
 	if (!me) return [];
-	const { data, error } = await supabase
-		.from(TABLES.direct_messages)
-		.select('*')
-		.or(`sender_id.eq.${me},recipient_id.eq.${me}`)
-		.order('created_at', { ascending: false })
-		.limit(500);
+	const { data, error } = await supabase.rpc('dm_threads');
 	if (error || !data) return [];
-	const rows = data as DirectMessage[];
-	const byPartner = new Map<string, DmThread>();
-	for (const m of rows) {
-		const partner = m.sender_id === me ? m.recipient_id : m.sender_id;
-		let t = byPartner.get(partner);
-		if (!t) {
-			t = {
-				partnerId: partner,
-				partnerName: null,
-				partnerAvatar: null,
-				lastBody: m.body,
-				lastAt: m.created_at,
-				lastFromMe: m.sender_id === me,
-				unread: 0,
-			};
-			byPartner.set(partner, t);
-		}
-		// Unread = messages TO me from this partner that I haven't read.
-		if (m.recipient_id === me && m.read_at === null) t.unread += 1;
-	}
+	const threads: DmThread[] = (data as {
+		partner_id: string;
+		last_body: string;
+		last_at: string;
+		last_from_me: boolean;
+		unread: number;
+	}[]).map((r) => ({
+		partnerId: r.partner_id,
+		partnerName: null,
+		partnerAvatar: null,
+		lastBody: r.last_body,
+		lastAt: r.last_at,
+		lastFromMe: r.last_from_me,
+		unread: Number(r.unread) || 0,
+	}));
+	const byPartner = new Map(threads.map((t) => [t.partnerId, t]));
 	const partnerIds = [...byPartner.keys()];
 	if (partnerIds.length > 0) {
 		const { data: profiles } = await supabase
@@ -5805,7 +5799,9 @@ export async function fetchDmThreads(): Promise<DmThread[]> {
 			}
 		}
 	}
-	return [...byPartner.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+	// The RPC already orders newest-conversation-first; the profile merge
+	// preserves it (Map iteration is insertion order).
+	return [...byPartner.values()];
 }
 
 /// Full message history with one partner, oldest-first for rendering.
