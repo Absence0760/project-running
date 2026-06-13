@@ -110,6 +110,33 @@ truly round loop there needs ~12.8 km — exactly the data the deferred loop-poo
 probe wanted, surfaced for free as `largestClean`. Per-request latency (82–537 ms
 on a 14 M-node graph) sits comfortably inside the few-seconds budget.
 
+### Loop-poor 3-way choice — BUILT (2026-06-13)
+
+The largest-achievable-loop probe + the explicit 3-way choice (the original v2
+deferral, then "subsumed" by graph-cycle's `largestClean`) is now wired
+end-to-end. `largestClean.distanceM` from the sidecar is threaded through
+`parseLargestCleanM` → `fetchGraphCycle` (now returns `{ loop, largestCleanM }`)
+→ `handleGenerate` → the 200 body as `largestLoopM` — attached **only** when the
+served loop is a round_trip out-and-back fallback AND the largest clean loop is
+>5% larger than what was served (so we never offer a "better" loop the same size
+as the fallback). The `+server.ts` / Lambda pass the body through verbatim.
+`RouteBuilder` reads `largestLoopM` and emits it via `ongeneratemismatch`;
+`/routes/new` replaces the single "use X instead" affordance with the three
+honest choices: **(a)** generate the largest real loop nearby ("best loop near
+you is ~X km" — re-runs generation at that distance), **(b)** accept the
+achievable out-and-back distance, **(c)** try a different start (clears the route
+and drops into start-picking). When the graph search reports no `largestClean`,
+choice (a) is hidden and the user still gets (b) + (c). Unit-pinned in
+`graph_cycle.test.ts` (threading + the >5% gate) and `generate-loop.spec.ts`
+(the 3-way surfacing + best-loop re-generate).
+
+In the same change, the round_trip-fallback **in-band selection** was tightened
+toward target: `select.ts` now scores in-band candidates by roundness *discounted
+by distance-from-target* (`inBandScore`) instead of pure "roundest wins", which
+had surfaced a +8–11% loop in dense grids when a near-target in-band loop existed.
+The graph-cycle multi-distance radius race is the sidecar's own selection; the
+web-side fix is the round_trip fallback's selection contract.
+
 ## Deploy handoff (operator-gated)
 
 Everything up to the Fly deploy is shipped. To go live (needs Fly + sops access):
@@ -132,7 +159,8 @@ full recipe.
   efficiency), **including on irregular grids** where v2 returns nothing.
 - Adapt per-location (the loop's shape is whatever the streets allow).
 - Latency: a few seconds (user-initiated). Falls back gracefully where no cycle
-  near target exists (genuinely loop-poor → existing shortfall UX).
+  near target exists (genuinely loop-poor → round_trip out-and-back + the
+  loop-poor 3-way choice, see § Loop-poor 3-way choice).
 - Server-side + transport-agnostic (decisions §53), same as the existing handler.
 
 ## Approach: direction-sampled disjoint-path cycles on a local foot graph
