@@ -4035,34 +4035,45 @@ export interface FeedEntry extends Run {
 /// pass null for the first page.
 export const FEED_WINDOW_DAYS = 14;
 
-export async function fetchFollowingFeed(opts?: {
-	limit?: number;
-	cursor?: { started_at: string; id: string } | null;
-	/** Restrict to a single followee. Pass `null` / omit for "everyone you follow". */
-	authorId?: string | null;
-	/** Restrict by `runs.activity_type`. Pass 'all' / omit for any activity. */
-	activityType?: string | null;
-}): Promise<FeedEntry[]> {
-	const limit = opts?.limit ?? 20;
+/// Resolve the viewer's followed-author id set for a feed query: the ids the
+/// caller follows, narrowed to a single author when `authorId` is supplied
+/// (validated against the follow set so the URL can't enumerate strangers).
+/// Returns [] when not signed in, the viewer follows nobody, or the requested
+/// author isn't followed — every caller treats an empty set as "show nothing".
+/// Resolved ONCE by `fetchFollowingActivityFeed` and threaded into both the
+/// runs + lifts branches so a default feed page issues one user_follows read,
+/// not two, and the two branches can't derive a divergent followee set.
+async function resolveFollowedAuthorIds(authorId?: string | null): Promise<string[]> {
 	const { data: sessionData } = await supabase.auth.getSession();
 	const userId = sessionData.session?.user?.id;
 	if (!userId) return [];
-
-	// Resolve the followed set once; the runs query will filter on it.
 	const { data: edges } = await supabase
 		.from('user_follows')
 		.select('followee_id')
 		.eq('follower_id', userId);
 	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
 	if (followeeIds.length === 0) return [];
+	const wantedAuthor = authorId ?? null;
+	return wantedAuthor ? followeeIds.filter((id) => id === wantedAuthor) : followeeIds;
+}
 
-	// Author filter narrows the followee set to a single person; we
-	// validate it's actually someone the viewer follows so the UI
-	// can't enumerate strangers' activity by editing the URL.
-	const wantedAuthor = opts?.authorId ?? null;
-	const filteredAuthors = wantedAuthor
-		? followeeIds.filter((id) => id === wantedAuthor)
-		: followeeIds;
+export async function fetchFollowingFeed(
+	opts?: {
+		limit?: number;
+		cursor?: { started_at: string; id: string } | null;
+		/** Restrict to a single followee. Pass `null` / omit for "everyone you follow". */
+		authorId?: string | null;
+		/** Restrict by `runs.activity_type`. Pass 'all' / omit for any activity. */
+		activityType?: string | null;
+	},
+	/** Pre-resolved followee set (from `resolveFollowedAuthorIds`); when the
+	 * cross-modal orchestrator threads it in, this skips the redundant
+	 * getSession + user_follows round-trip. Standalone callers omit it. */
+	preresolvedAuthors?: string[]
+): Promise<FeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const filteredAuthors =
+		preresolvedAuthors ?? (await resolveFollowedAuthorIds(opts?.authorId));
 	if (filteredAuthors.length === 0) return [];
 
 	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -4168,41 +4179,37 @@ export async function fetchFollowingActivityFeed(opts?: {
 	const wantsLifts = activityType === 'all' || activityType === 'lift' || activityType === 'gym';
 	const wantsRuns = activityType !== 'lift' && activityType !== 'gym';
 
+	// Resolve the followee set ONCE and thread it into both branches so the
+	// default ('all') feed issues a single user_follows read instead of two,
+	// and the runs + lifts branches can't derive a divergent followee set.
+	const authors = await resolveFollowedAuthorIds(opts?.authorId);
+	if (authors.length === 0) return [];
+
 	const runsPromise: Promise<RunFeedEntry[]> = wantsRuns
-		? fetchFollowingFeed(opts).then((rows) =>
+		? fetchFollowingFeed(opts, authors).then((rows) =>
 				rows.map((r) => ({ ...r, kind: 'run' as const }))
 			)
 		: Promise.resolve([]);
 
 	const liftsPromise: Promise<LiftFeedEntry[]> = wantsLifts
-		? fetchFollowingLifts(opts)
+		? fetchFollowingLifts(opts, authors)
 		: Promise.resolve([]);
 
 	const [runs, lifts] = await Promise.all([runsPromise, liftsPromise]);
 	return mergeFeedPages<ActivityFeedEntry>([runs, lifts], limit);
 }
 
-async function fetchFollowingLifts(opts?: {
-	limit?: number;
-	cursor?: { started_at: string; id: string } | null;
-	authorId?: string | null;
-}): Promise<LiftFeedEntry[]> {
+async function fetchFollowingLifts(
+	opts?: {
+		limit?: number;
+		cursor?: { started_at: string; id: string } | null;
+		authorId?: string | null;
+	},
+	preresolvedAuthors?: string[]
+): Promise<LiftFeedEntry[]> {
 	const limit = opts?.limit ?? 20;
-	const { data: sessionData } = await supabase.auth.getSession();
-	const userId = sessionData.session?.user?.id;
-	if (!userId) return [];
-
-	const { data: edges } = await supabase
-		.from('user_follows')
-		.select('followee_id')
-		.eq('follower_id', userId);
-	const followeeIds = (edges ?? []).map((e) => e.followee_id as string);
-	if (followeeIds.length === 0) return [];
-
-	const wantedAuthor = opts?.authorId ?? null;
-	const filteredAuthors = wantedAuthor
-		? followeeIds.filter((id) => id === wantedAuthor)
-		: followeeIds;
+	const filteredAuthors =
+		preresolvedAuthors ?? (await resolveFollowedAuthorIds(opts?.authorId));
 	if (filteredAuthors.length === 0) return [];
 
 	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
