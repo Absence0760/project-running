@@ -422,5 +422,79 @@ void main() {
       expect(r.distanceMetres, 0.0);
       expect(r.name, 'FIT activity');
     });
+
+    test('decodes lat/lng from compressed-timestamp record messages', () {
+      // Synthetic FIT file: one record definition (lat field 0 + lng field 1,
+      // both sint32, no timestamp field) followed by two data records that use
+      // the *compressed-timestamp* record header (bit 7 set). Before this fix
+      // these records were skipped, so the file parsed to zero waypoints.
+      const semicirclesPerDegree = (1 << 31) / 180.0;
+      int sc(double deg) => (deg * semicirclesPerDegree).round();
+
+      int4le(int v) {
+        final u = v < 0 ? v + 0x100000000 : v;
+        return u;
+      }
+
+      void addSint32LE(List<int> out, double deg) {
+        final u = int4le(sc(deg));
+        out.add(u & 0xFF);
+        out.add((u >> 8) & 0xFF);
+        out.add((u >> 16) & 0xFF);
+        out.add((u >> 24) & 0xFF);
+      }
+
+      final body = <int>[];
+
+      // Definition message, local type 0:
+      //   header 0x40, reserved, arch (0 = LE), global mesg num 20 (record),
+      //   2 fields: (num 0, size 4, baseType 0x85=sint32), (num 1, size 4, 0x85)
+      body.addAll([
+        0x40, // definition message, local type 0
+        0x00, // reserved
+        0x00, // little-endian
+        20, 0, // global mesg num = 20 (record), LE
+        2, // num fields
+        0, 4, 0x85, // field 0 (lat), 4 bytes, sint32
+        1, 4, 0x85, // field 1 (lng), 4 bytes, sint32
+      ]);
+
+      // Compressed-timestamp data record, local type 0, time offset 5.
+      //   header = 0x80 | (localType << 5) | timeOffset = 0x80 | 0x00 | 0x05.
+      body.add(0x85);
+      addSint32LE(body, 51.5);
+      addSint32LE(body, -0.12);
+
+      // A second compressed-timestamp record with a later time offset.
+      body.add(0x87);
+      addSint32LE(body, 51.6);
+      addSint32LE(body, -0.13);
+
+      final dataSize = body.length;
+      final bytes = Uint8List(14 + dataSize);
+      bytes[0] = 14; // header size
+      bytes[1] = 0x10; // protocol version
+      bytes[2] = 0x00; // profile version LE
+      bytes[3] = 0x00;
+      bytes[4] = dataSize & 0xFF;
+      bytes[5] = (dataSize >> 8) & 0xFF;
+      bytes[6] = (dataSize >> 16) & 0xFF;
+      bytes[7] = (dataSize >> 24) & 0xFF;
+      bytes[8] = 0x2E; // '.'
+      bytes[9] = 0x46; // 'F'
+      bytes[10] = 0x49; // 'I'
+      bytes[11] = 0x54; // 'T'
+      // bytes 12-13 = header CRC, left zero (parser doesn't verify it).
+      for (var i = 0; i < dataSize; i++) {
+        bytes[14 + i] = body[i];
+      }
+
+      final r = FitParser.parse(bytes);
+      expect(r.waypoints, hasLength(2));
+      expect(r.waypoints[0].lat, closeTo(51.5, 1e-4));
+      expect(r.waypoints[0].lng, closeTo(-0.12, 1e-4));
+      expect(r.waypoints[1].lat, closeTo(51.6, 1e-4));
+      expect(r.waypoints[1].lng, closeTo(-0.13, 1e-4));
+    });
   });
 }

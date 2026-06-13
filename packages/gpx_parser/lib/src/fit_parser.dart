@@ -69,13 +69,18 @@ class FitParser {
 
       if (isCompressedTimestamp) {
         // Compressed timestamp header: bits 5-6 = local message type,
-        // bits 0-4 = time offset.
+        // bits 0-4 = time offset. The data body is laid out exactly as a
+        // normal data message for the same local type; the only difference
+        // is the timestamp comes from the header offset rather than a field.
         final localType = (recordHeader >> 5) & 0x03;
         final def = definitions[localType];
         if (def == null) {
           break; // can't decode without a definition
         }
-        // Skip the data fields — we only care about normal record messages.
+        if (def.globalMesgNum == _recordMesgNum) {
+          final wp = _parseRecordMessage(bytes, offset, def);
+          if (wp != null) waypoints.add(wp);
+        }
         offset += def.totalFieldSize;
         continue;
       }
