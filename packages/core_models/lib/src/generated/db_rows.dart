@@ -2090,6 +2090,62 @@ class RaceSessionRow {
   };
 }
 
+/// Row shape for the `route_photos` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RoutePhotoRow {
+  static const String table = 'route_photos';
+  static const String colId = 'id';
+  static const String colRouteId = 'route_id';
+  static const String colOwnerId = 'owner_id';
+  static const String colStoragePath = 'storage_path';
+  static const String colThumb512Path = 'thumb_512_path';
+  static const String colCaption = 'caption';
+  static const String colPositionIdx = 'position_idx';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String routeId;
+  final String ownerId;
+  final String storagePath;
+  final String? thumb512Path;
+  final String? caption;
+  final int positionIdx;
+  final DateTime createdAt;
+
+  const RoutePhotoRow({
+    required this.id,
+    required this.routeId,
+    required this.ownerId,
+    required this.storagePath,
+    this.thumb512Path,
+    this.caption,
+    required this.positionIdx,
+    required this.createdAt,
+  });
+
+  factory RoutePhotoRow.fromJson(Map<String, dynamic> json) => RoutePhotoRow(
+    id: json['id'] as String,
+    routeId: json['route_id'] as String,
+    ownerId: json['owner_id'] as String,
+    storagePath: json['storage_path'] as String,
+    thumb512Path: json['thumb_512_path'] as String?,
+    caption: json['caption'] as String?,
+    positionIdx: (json['position_idx'] as num).toInt(),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRouteId: routeId,
+    colOwnerId: ownerId,
+    colStoragePath: storagePath,
+    colThumb512Path: thumb512Path,
+    colCaption: caption,
+    colPositionIdx: positionIdx,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `route_reviews` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RouteReviewRow {

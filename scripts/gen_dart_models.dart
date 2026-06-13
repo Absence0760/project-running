@@ -68,6 +68,7 @@ const _tables = <String>{
   'integrations',
   'user_profiles',
   'route_reviews',
+  'route_photos',
   'clubs',
   'club_members',
   'events',

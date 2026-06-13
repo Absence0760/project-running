@@ -1894,6 +1894,54 @@ export type Database = {
         }
         Relationships: []
       }
+      route_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          owner_id: string
+          position_idx: number
+          route_id: string
+          storage_path: string
+          thumb_512_path: string | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          owner_id: string
+          position_idx?: number
+          route_id: string
+          storage_path: string
+          thumb_512_path?: string | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string
+          position_idx?: number
+          route_id?: string
+          storage_path?: string
+          thumb_512_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_photos_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_photos_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_reviews: {
         Row: {
           comment: string | null
