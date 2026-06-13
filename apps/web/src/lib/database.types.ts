@@ -3741,6 +3741,13 @@ export type Database = {
           id: string
         }[]
       }
+      public_run_counts: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          public_run_count: number
+          user_id: string
+        }[]
+      }
       public_run_gear: {
         Args: { p_run_id: string }
         Returns: {
