@@ -140,6 +140,9 @@ test.describe('/settings/preferences — PrivacyZonePicker (MapLibre modal)', ()
 		await expect(page.locator('.zone-list .zone-row').first()).toBeVisible({ timeout: 10_000 });
 
 		await page.locator('.zone-list .zone-row').first().getByRole('button', { name: 'Remove' }).click();
+		// Removal is confirm-gated — step through the dialog (its confirm
+		// button shares the "Remove" label, so scope to the modal).
+		await page.locator('.modal').getByRole('button', { name: 'Remove' }).click();
 		await expect(page.locator('.zone-list .zone-row')).toHaveCount(0);
 
 		const cleared = await getUserPrivacyZones();

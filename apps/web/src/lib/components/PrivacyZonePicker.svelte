@@ -6,6 +6,7 @@
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import type { PrivacyZone } from '$lib/routes/privacy';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		oncreated: (zone: PrivacyZone) => void;
@@ -130,7 +131,7 @@
 
 	async function useCurrentLocation() {
 		if (!navigator.geolocation) {
-			geoError = 'Geolocation is not available in this browser.';
+			geoError = m('privacyZonePicker.geoUnavailable');
 			return;
 		}
 		geoBusy = true;
@@ -147,8 +148,8 @@
 		} catch (e) {
 			geoError =
 				e instanceof GeolocationPositionError
-					? 'Location access denied — enable it in your browser settings.'
-					: `Could not get location: ${e}`;
+					? m('privacyZonePicker.geoDenied')
+					: m('privacyZonePicker.geoError', { error: String(e) });
 		} finally {
 			geoBusy = false;
 		}
@@ -161,21 +162,18 @@
 </script>
 
 <div class="picker">
-	<p class="hint">
-		Click anywhere on the map (or use your current location) to set the centre, then drag the
-		marker to fine-tune. Anything within the red circle will be hidden from public shares.
-	</p>
+	<p class="hint">{m('privacyZonePicker.hint')}</p>
 
 	<div class="map" bind:this={mapEl}></div>
 
 	<div class="controls">
 		<button type="button" class="btn btn-outline" onclick={useCurrentLocation} disabled={geoBusy}>
-			<span class="material-symbols">my_location</span>
-			{geoBusy ? 'Locating…' : 'Use current location'}
+			<span class="material-symbols" aria-hidden="true">my_location</span>
+			{geoBusy ? m('privacyZonePicker.locating') : m('privacyZonePicker.useCurrentLocation')}
 		</button>
 
 		<label class="radius">
-			<span>Radius: <strong>{radius} m</strong></span>
+			<span>{m('privacyZonePicker.radiusLabel')}: <strong>{radius} m</strong></span>
 			<input type="range" min="100" max="1000" step="50" bind:value={radius} />
 		</label>
 	</div>
@@ -185,9 +183,9 @@
 	{/if}
 
 	<div class="actions">
-		<button type="button" class="btn btn-outline" onclick={oncancel}>Cancel</button>
+		<button type="button" class="btn btn-outline" onclick={oncancel}>{m('privacyZonePicker.cancel')}</button>
 		<button type="button" class="btn btn-primary" onclick={save} disabled={lat == null}>
-			Add zone
+			{m('privacyZonePicker.addZone')}
 		</button>
 	</div>
 </div>
