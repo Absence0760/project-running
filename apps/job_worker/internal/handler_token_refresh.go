@@ -4,8 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
+
+// refreshConcurrency bounds how many per-user Strava refreshes run at once.
+// Each refreshOne is ~3 Supabase RPCs + one ~1s Strava /oauth/token call, all
+// network-bound and independent (distinct user_ids, CAS-guarded writes), so
+// fanning them out lets the ~1s Strava latency overlap instead of summing.
+// Serial, a 500-row sweep (the FetchExpiringStravaIntegrations cap) took ~10
+// min and blew past the 5-min HandleTimeout — deferring the back half so those
+// users' tokens expired. At 12-wide it lands in ~tens of seconds. The
+// per-call TryConsumeStravaQuota gate already bounds aggregate Strava volume,
+// so concurrency here stays inside Strava's published rate limits.
+const refreshConcurrency = 12
 
 // handleTokenRefresh sweeps Strava integrations whose access token
 // expires within the next hour and rotates each via Strava's
@@ -60,36 +72,62 @@ func (w *Worker) handleTokenRefresh(ctx context.Context, _ *Job) error {
 		return nil
 	}
 
-	refreshed, skipped, disconnected := 0, 0, 0
+	// Fan the independent per-user refreshes across a bounded pool so their
+	// ~1s Strava latency overlaps instead of summing (see refreshConcurrency).
+	var (
+		mu                               sync.Mutex
+		refreshed, skipped, disconnected int
+		wg                               sync.WaitGroup
+	)
+	sem := make(chan struct{}, refreshConcurrency)
 	for _, row := range rows {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			break // stop launching; in-flight goroutines drain below
 		}
-		if err := w.refreshOne(ctx, row.UserID); err != nil {
-			// audit/strava High #2: branch on 4xx (permanent) vs
-			// 5xx + network (transient). 4xx → mark disconnected
-			// so the next sweep doesn't pick this row up forever.
-			// Use a typed HTTPError check (mirrors isTransient in
-			// worker.go) so a wrapped error still routes correctly.
-			var httpErr *HTTPError
-			if errors.As(err, &httpErr) && httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
-				reason := classifyStravaRefreshFailure(httpErr)
-				if dErr := w.Backend.MarkIntegrationDisconnected(ctx, row.UserID, "strava", reason); dErr != nil {
-					w.Log.Warn("token_refresh: mark-disconnected failed",
-						"user_id", row.UserID, "err", dErr)
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(userID string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if err := w.refreshOne(ctx, userID); err != nil {
+				// audit/strava High #2: branch on 4xx (permanent) vs
+				// 5xx + network (transient). 4xx → mark disconnected
+				// so the next sweep doesn't pick this row up forever.
+				// Use a typed HTTPError check (mirrors isTransient in
+				// worker.go) so a wrapped error still routes correctly.
+				var httpErr *HTTPError
+				if errors.As(err, &httpErr) && httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
+					reason := classifyStravaRefreshFailure(httpErr)
+					if dErr := w.Backend.MarkIntegrationDisconnected(ctx, userID, "strava", reason); dErr != nil {
+						w.Log.Warn("token_refresh: mark-disconnected failed",
+							"user_id", userID, "err", dErr)
+					}
+					mu.Lock()
+					disconnected++
+					mu.Unlock()
+					w.Log.Info("token_refresh: marked disconnected",
+						"user_id", userID, "reason", reason, "status", httpErr.StatusCode)
+					return
 				}
-				disconnected++
-				w.Log.Info("token_refresh: marked disconnected",
-					"user_id", row.UserID, "reason", reason, "status", httpErr.StatusCode)
-				continue
+				// 5xx / network / wrapped non-HTTP error: transient.
+				// Log + leave the row alone; next sweep retries.
+				mu.Lock()
+				skipped++
+				mu.Unlock()
+				w.Log.Warn("token_refresh: skip user (transient)", "user_id", userID, "err", err)
+				return
 			}
-			// 5xx / network / wrapped non-HTTP error: transient.
-			// Log + leave the row alone; next sweep retries.
-			skipped++
-			w.Log.Warn("token_refresh: skip user (transient)", "user_id", row.UserID, "err", err)
-			continue
-		}
-		refreshed++
+			mu.Lock()
+			refreshed++
+			mu.Unlock()
+		}(row.UserID)
+	}
+	wg.Wait()
+	// A genuinely cancelled context (SIGTERM, or a sweep so large it still
+	// outran the deadline) is transient — defer so the next tick retries the
+	// rows we didn't reach, rather than marking the job done.
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	w.Log.Info("token_refresh: done",
 		"candidates", len(rows),

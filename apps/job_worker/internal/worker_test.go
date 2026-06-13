@@ -45,14 +45,14 @@ type fakeBackend struct {
 	casExpected string
 
 	// Errors to inject — return on the next call to that method.
-	claimErr      error
-	downloadErr   error
-	uploadErr     error
-	updateRowErr  error
-	readURLErr    error
-	matcherErr    error // not on the backend, but threaded through
-	finishErr     error
-	deferErr      error
+	claimErr     error
+	downloadErr  error
+	uploadErr    error
+	updateRowErr error
+	readURLErr   error
+	matcherErr   error // not on the backend, but threaded through
+	finishErr    error
+	deferErr     error
 	// deferStatus is the status DeferJob reports back (mirrors the
 	// defer_job RPC return). Empty → "queued"; set to "failed" to
 	// simulate the worker deferring a job whose retry budget is spent.
@@ -102,7 +102,7 @@ type fakeBackend struct {
 	clearedSubs     []string // "user_id|device_id" pruned this run
 
 	// weekly_digest inputs.
-	suppressed     map[string]bool          // keyed by email → on the hard-block list
+	suppressed     map[string]bool // keyed by email → on the hard-block list
 	suppressErr    error
 	digestByUser   map[string]DigestSummary // keyed by user_id → the weekly summary
 	buildDigestErr error
@@ -121,7 +121,7 @@ type fakeBackend struct {
 	getTokenErrs         map[string]error
 	setTokenErrs         map[string]error
 	// token_refresh outputs
-	getTokenCalls []string
+	getTokenCalls         []string
 	setTokenCalls         []setTokenCall
 	markDisconnectedCalls []markDisconnectedCall
 	// quotaAllowOverride: nil → always allow. Pointer-to-false →
@@ -148,9 +148,9 @@ type finishCall struct {
 }
 
 type deferCall struct {
-	JobID   int64
-	DelayS  int
-	ErrMsg  *string
+	JobID  int64
+	DelayS int
+	ErrMsg *string
 }
 
 type rowSet struct {
@@ -759,16 +759,23 @@ type fakeStrava struct {
 	byToken     map[string]StravaTokenResponse
 	errsByToken map[string]error
 	calls       []string // refresh tokens seen, in order
+	// Optional probe invoked at the top of Refresh, OUTSIDE the mutex, so a
+	// test can observe how many refreshes overlap (the bounded-concurrency
+	// guard). Set once before the worker runs; never mutated concurrently.
+	refreshHook func()
 	// strava_event ingest stubs
-	byActivity         map[int64]StravaActivityResult
-	activityErrs       map[int64]error
-	activityCalls      []int64
-	streamsByActivity  map[int64]map[string]StravaStream
-	streamsErrs        map[int64]error
-	streamsCalls       []int64
+	byActivity        map[int64]StravaActivityResult
+	activityErrs      map[int64]error
+	activityCalls     []int64
+	streamsByActivity map[int64]map[string]StravaStream
+	streamsErrs       map[int64]error
+	streamsCalls      []int64
 }
 
 func (s *fakeStrava) Refresh(_ context.Context, refreshToken string) (*StravaTokenResponse, error) {
+	if s.refreshHook != nil {
+		s.refreshHook()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls = append(s.calls, refreshToken)
@@ -931,8 +938,8 @@ func TestWorker_SkipsTooFewPoints(t *testing.T) {
 func TestWorker_ReuploadDuringMatchDiscardsResult(t *testing.T) {
 	be := newFakeBackend()
 	be.trackURLs = []string{
-		"user-1/run-1.json.gz",      // first read (download)
-		"user-1/run-1.v2.json.gz",   // second read (recheck): re-upload landed
+		"user-1/run-1.json.gz",    // first read (download)
+		"user-1/run-1.v2.json.gz", // second read (recheck): re-upload landed
 	}
 	be.trackByPath["user-1/run-1.json.gz"] = []TrackPoint{
 		{Lat: 1, Lng: 2}, {Lat: 1.001, Lng: 2.001}, {Lat: 1.002, Lng: 2.002},
@@ -1583,6 +1590,82 @@ func TestTokenRefresh_StravaErrorOnOneRowSkipsButContinues(t *testing.T) {
 	}
 	if be.markDisconnectedCalls[0].Reason != "invalid_grant" {
 		t.Errorf("reason=%q, want invalid_grant", be.markDisconnectedCalls[0].Reason)
+	}
+}
+
+func TestTokenRefresh_RefreshesConcurrently(t *testing.T) {
+	// Guard for the bounded-concurrency fix: the per-user refreshes must run in
+	// parallel (up to refreshConcurrency) so a large sweep's ~1s-each Strava
+	// latency overlaps instead of summing past the HandleTimeout. A regression
+	// to a serial loop maxes in-flight at 1 and fails the `== refreshConcurrency`
+	// assertion (the watcher's deadline still releases the goroutines so the
+	// test fails cleanly rather than hanging).
+	be := newFakeBackend()
+	const n = refreshConcurrency + 5
+	rows := make([]IntegrationRow, n)
+	tokensByUser := map[string]TokenPair{}
+	byToken := map[string]StravaTokenResponse{}
+	exp := time.Now().Add(6 * time.Hour).Unix()
+	for i := 0; i < n; i++ {
+		uid := fmt.Sprintf("u%d", i)
+		rt := fmt.Sprintf("rt-%d", i)
+		rows[i] = IntegrationRow{ID: int64(i + 1), UserID: uid}
+		tokensByUser[uid] = TokenPair{RefreshToken: rt}
+		byToken[rt] = StravaTokenResponse{AccessToken: "a", RefreshToken: rt + "2", ExpiresAt: exp}
+	}
+	be.expiring = rows
+	be.tokensByUser = tokensByUser
+
+	var mu sync.Mutex
+	inFlight, maxInFlight := 0, 0
+	release := make(chan struct{})
+	st := &fakeStrava{byToken: byToken}
+	st.refreshHook = func() {
+		mu.Lock()
+		inFlight++
+		if inFlight > maxInFlight {
+			maxInFlight = inFlight
+		}
+		mu.Unlock()
+		<-release // hold the goroutine so overlap is observable
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+	}
+
+	// Release the held goroutines once the pool saturates at the cap, or after
+	// a deadline (so a serial regression completes + fails instead of hanging).
+	go func() {
+		deadline := time.After(3 * time.Second)
+		for {
+			mu.Lock()
+			cur := maxInFlight
+			mu.Unlock()
+			if cur >= refreshConcurrency {
+				close(release)
+				return
+			}
+			select {
+			case <-deadline:
+				close(release)
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+	}()
+
+	be.jobs = []*Job{{ID: 1, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if maxInFlight != refreshConcurrency {
+		t.Fatalf("max concurrent refreshes=%d, want %d (sweep must fan out, bounded by the pool)",
+			maxInFlight, refreshConcurrency)
+	}
+	if got := len(be.setTokenCalls); got != n {
+		t.Fatalf("rotated %d rows, want all %d", got, n)
 	}
 }
 
