@@ -750,6 +750,73 @@ test.describe('/coach', () => {
 		await closeToggle.click();
 		await expect(sidebar).toHaveClass(/collapsed/);
 	});
+
+	test('a zero-token stream failure does not lock the composer for the session', async ({
+		page
+	}) => {
+		// The client bumps usedToday optimistically the instant a 200 stream
+		// begins. When the provider then fails before emitting any token, the
+		// server refunds the cap slot (decrement_coach_usage) and reports the
+		// corrected count only on the `error` SSE event — never via `done`. If
+		// the client doesn't roll its optimistic ++ back, a single transient
+		// failure at the cap boundary wrongly replaces the composer with the
+		// "limit reached" empty-state for the rest of the session (until a
+		// reload). Force the boundary deterministically — usage = limit - 1
+		// (free dailyLimit is 2) — fail the stream with zero tokens, and assert
+		// the composer survives.
+		await page.route('**/rest/v1/rpc/get_coach_usage*', async (route) => {
+			await route.fulfill({
+				status: 200,
+				headers: { 'content-type': 'application/json' },
+				body: '1'
+			});
+		});
+		await page.route('**/rest/v1/rpc/is_pro*', async (route) => {
+			await route.fulfill({
+				status: 200,
+				headers: { 'content-type': 'application/json' },
+				body: 'false'
+			});
+		});
+		await page.route('**/api/coach', async (route) => {
+			const body = [
+				'event: meta',
+				`data: ${JSON.stringify({
+					user_message_id: 'zt-user',
+					tier: 'free',
+					limits: { daily_limit: 2 }
+				})}`,
+				'',
+				'event: error',
+				`data: ${JSON.stringify({ message: 'The coach is unavailable right now.' })}`,
+				'',
+				''
+			].join('\n');
+			await route.fulfill({
+				status: 200,
+				headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+				body
+			});
+		});
+
+		await page.goto('/coach');
+		const composer = page.getByPlaceholder(/Ask about today/);
+		await expect(composer).toBeVisible({ timeout: 10_000 });
+
+		await composer.fill('What pace today?');
+		await page.locator('form.composer button[type="submit"]').click();
+
+		// The stream-failure message surfaces...
+		await expect(
+			page.getByText('The coach is unavailable right now.')
+		).toBeVisible({ timeout: 10_000 });
+		// ...and because usedToday rolled back from 2 to 1, limitReached
+		// (>= daily_limit 2) is false: the composer is still there. Before the
+		// fix it stuck at 2 and the composer was replaced by the limit
+		// empty-state.
+		await expect(composer).toBeVisible();
+		await expect(composer).toBeEnabled();
+	});
 });
 
 test.describe('/coach — anon', () => {

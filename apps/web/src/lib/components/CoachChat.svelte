@@ -613,6 +613,16 @@
 			}
 		} else if (event === 'error') {
 			error = (parsed.message as string) ?? t('coachChat.errorStreamFailed');
+			// The server refunds the cap slot (decrement_coach_usage) when a
+			// stream fails before any token is produced, but that corrected
+			// count only reaches us on this `error` event — never via `done`.
+			// Roll back the optimistic usedToday++ when no tokens streamed, so
+			// a transient provider failure can't falsely lock the composer for
+			// the rest of the session. (A page reload re-syncs the true count
+			// regardless; a partial reply keeps the slot, matching the server.)
+			if (!messages[assistantIdx]?.content) {
+				usedToday = Math.max(0, usedToday - 1);
+			}
 		}
 	}
 
