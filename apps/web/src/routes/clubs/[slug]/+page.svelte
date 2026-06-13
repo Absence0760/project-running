@@ -1500,6 +1500,7 @@
 		<EventEditor
 			clubId={club.id}
 			clubName={club.name}
+			clubIsPublic={club.is_public}
 			oncreated={handleEventCreated}
 			oncancel={() => (showEventModal = false)}
 		/>

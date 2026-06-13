@@ -97,6 +97,7 @@
 		<EventEditor
 			clubId={club.id}
 			clubName={club.name}
+			clubIsPublic={club.is_public}
 			oncreated={(event) => goto(`/clubs/${slug}/events/${event.id}`)}
 			oncancel={() => history.back()}
 		/>

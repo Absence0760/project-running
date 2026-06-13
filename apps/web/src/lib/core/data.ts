@@ -1442,7 +1442,7 @@ const CLUB_SELECT_COLS =
 // enumerates these safe columns; the two coords are write-only
 // today (no UI consumer).
 const EVENT_SELECT_COLS =
-	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template, session_plan_id' as const;
+	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template, session_plan_id, is_public' as const;
 
 function slugify(name: string): string {
 	return name
@@ -2107,6 +2107,10 @@ export async function createEvent(input: {
 	recurrence_byday?: Weekday[] | null;
 	recurrence_until?: string | null;
 	recurrence_count?: number | null;
+	// When false, the event is members-only: hidden from non-members + discovery.
+	// Defaults to public. Only meaningful in a public club (a private club's
+	// events are already members-only via the club gate).
+	is_public?: boolean;
 }): Promise<Event> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
@@ -2116,6 +2120,7 @@ export async function createEvent(input: {
 			club_id: input.club_id,
 			title: input.title.trim(),
 			category: input.category,
+			is_public: input.is_public ?? true,
 			discipline: input.discipline?.trim() || null,
 			gym_template: input.category === 'class' ? (input.gym_template ?? null) : null,
 			description: input.description?.trim() || null,

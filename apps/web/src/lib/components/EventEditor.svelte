@@ -28,12 +28,21 @@
 	interface Props {
 		clubId: string;
 		clubName: string;
+		// Whether the parent club is public. The members-only toggle is only
+		// meaningful in a public club — a private club's events are already
+		// members-only via the club gate, so we hide the toggle there. Defaults
+		// to true (show the toggle) when the caller doesn't know.
+		clubIsPublic?: boolean | null;
 		// Fired with the newly created event so the host can either close
 		// the modal + refresh, or navigate to the event detail page.
 		oncreated?: (event: { id: string }) => void;
 		oncancel?: () => void;
 	}
-	let { clubId, clubName, oncreated, oncancel }: Props = $props();
+	let { clubId, clubName, clubIsPublic = true, oncreated, oncancel }: Props = $props();
+	// Show the members-only toggle unless the club is explicitly private (a
+	// private club's events are already members-only; null/legacy → treat as
+	// public, matching the clubs.is_public default).
+	let showVisibilityToggle = $derived(clubIsPublic !== false);
 
 	let myRoutes = $state<Route[]>([]);
 	let clubRoutes = $state<Route[]>([]);
@@ -78,6 +87,10 @@
 	let currency = $state('usd');
 	let refundPolicy = $state<RefundPolicy>('full_until_24h');
 	let salesCloseOffset = $state<number | null>(0);
+
+	// Members-only events (is_public = false) are hidden from non-members +
+	// discovery. Default public.
+	let isPublic = $state(true);
 
 	let recurrence = $state<'none' | RecurrenceFreq>('none');
 	let byday = $state<Weekday[]>([]);
@@ -189,7 +202,11 @@
 					recurrenceFreq && recurrenceFreq !== 'monthly' && byday.length > 0 ? byday : null,
 				recurrence_until: recurrenceFreq && until ? new Date(until).toISOString() : null,
 				recurrence_count:
-					recurrenceFreq && count && count > 0 ? Math.floor(count) : null
+					recurrenceFreq && count && count > 0 ? Math.floor(count) : null,
+				// In a private club every event is members-only regardless, so the
+				// toggle is hidden and we leave this public (the column is moot —
+				// the club gate already restricts read + discovery skips the club).
+				is_public: showVisibilityToggle ? isPublic : true
 			});
 			// Pricing is a separate, charges_enabled-gated write (its own RLS
 			// surface + trigger). Only attempt it when the host turned charging
@@ -430,6 +447,21 @@
 		</label>
 	</div>
 
+	{#if showVisibilityToggle}
+		<fieldset class="visibility-field">
+			<label class="visibility-toggle">
+				<input
+					type="checkbox"
+					checked={!isPublic}
+					onchange={(e) => (isPublic = !(e.currentTarget as HTMLInputElement).checked)}
+					data-testid="members-only-toggle"
+				/>
+				<span>{m('eventEditor.membersOnlyToggle')}</span>
+			</label>
+			<p class="visibility-explainer">{m('eventEditor.membersOnlyHint')}</p>
+		</fieldset>
+	{/if}
+
 	<fieldset class="charge-field">
 		<label class="charge-toggle">
 			<input
@@ -604,5 +636,17 @@
 	.charge-explainer a {
 		color: var(--color-primary);
 		font-weight: 600;
+	}
+	.editor-form .visibility-toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.visibility-explainer {
+		margin: 0.4rem 0 0;
+		font-size: 0.82rem;
+		font-weight: 400;
+		color: var(--color-text-secondary);
+		line-height: 1.45;
 	}
 </style>

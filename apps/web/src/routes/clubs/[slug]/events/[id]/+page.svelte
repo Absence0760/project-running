@@ -1236,6 +1236,12 @@
 					{/if}
 				</span>
 				<h1>{event.title}</h1>
+				{#if event.is_public === false}
+					<p class="members-only-badge" data-testid="members-only-badge">
+						<span class="material-symbols" aria-hidden="true">lock</span>
+						<span>{m('clubEvent.membersOnly')}</span>
+					</p>
+				{/if}
 				{#if !isAthletic && event.discipline}
 					<p class="discipline-chip">
 						<span class="discipline-eyebrow">{m('clubEvent.disciplineLabel')}</span>
@@ -2186,6 +2192,21 @@
 		align-items: baseline;
 		gap: 0.5rem;
 		margin: var(--space-xs) 0 0 0;
+	}
+	.members-only-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin: var(--space-xs) 0 0 0;
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--color-text) 8%, transparent);
+		color: var(--color-text-secondary);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.members-only-badge .material-symbols {
+		font-size: 1rem;
 	}
 	.discipline-eyebrow {
 		text-transform: uppercase;
