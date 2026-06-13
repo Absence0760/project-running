@@ -727,3 +727,36 @@ mutator, so latent; `LoadZones` already returns a defensive copy); a zero-radius
 only the exact centroid (UI likely enforces a minimum, but the hub accepts whatever it fetches);
 `worker_test.go`'s `nopMatcher` doesn't implement the `Matcher` interface (missing the `ctx` param) so
 it's dead/misleading test cruft, not a prod bug.
+
+## run_recorder package hunt (2026-06-13) — verified findings deferred
+
+A bug-hunt on `packages/run_recorder/` (the live GPS recording state machine, the structured-workout
+runner, the gym runner). The package is exceptionally well-tested — most candidates were already pinned,
+not-bugs, or design changes. One bounded bug was fixed + pinned: a treadmill belt speed that fails the
+plausibility clamp is no longer carried forward as the next interval's integrand (`run_recorder.dart` —
+it injected phantom distance the moment a good sample followed a glitch). The two below are real but
+need a design decision, not a rushed edit:
+
+- [ ] **[medium, design change] `_routeRemaining` over-counts on a loop / out-and-back route.**
+  `run_recorder.dart` `_routeRemaining` picks the closest route segment purely by minimum perpendicular
+  distance, then sums that segment's tail + all later segments. On a route that revisits its own corridor
+  (out-and-back, lollipop, figure-eight — common for real runs), the geometrically-closest segment can be
+  one the runner already passed, so "distance remaining" jumps UP to re-include covered ground. The route
+  tests only use monotonic, non-self-intersecting straight lines, so it's uncovered. The fix is a design
+  change (track progress monotonically — never let the matched segment index move backward — rather than
+  nearest-segment-per-tick), so **route via `/safe-edit`**.
+- [ ] **[low, sentinel trade-off] A GPS fix with altitude exactly `0.0` is stored as null elevation.**
+  `run_recorder.dart` `elevationMetres: pos.altitude != 0 ? pos.altitude : null` treats `0` as the
+  "no altitude fix" sentinel — which drops a legitimate sea-level reading (coastal run) and leaves a gap
+  in the elevation/grade profile. But many devices DO report `0.0` when they have no vertical fix, so
+  naively keeping `0` would fabricate sea-level points for the majority. The durable fix is to gate on
+  `pos.altitudeAccuracy` (a real fix vs. a default) rather than the value — a larger change. Documented
+  here as a known sentinel-vs-real-zero trade-off, not rushed.
+
+Minor / not fixed (recorded for completeness): `workout_runner.dart` `rewindStep` re-anchors a duration
+step's elapsed clock to "now", stretching a rewound duration step (matches the distance-axis rewind
+design intent, untested for duration); `gym_workout_runner.dart` `adherence()` returns `abandoned` for a
+*completed* zero-step workout (degenerate empty-routine edge). Dismissed (not bugs): gym `_withinTarget`
+returning true for a no-rep-target step is correct vacuous-satisfaction (the duration branch only fails on
+a null actual when there IS a target); `RunSnapshot.track` is handed out as an `UnmodifiableListView`, so
+the "unmodifiable" doc IS enforced at runtime despite the loose field type.
