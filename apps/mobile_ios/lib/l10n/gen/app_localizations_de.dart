@@ -2893,6 +2893,51 @@ class AppLocalizationsDe extends AppLocalizations {
   String get feedRunnerFallback => 'Läufer';
 
   @override
+  String get relativeJustNow => 'Gerade eben';
+
+  @override
+  String relativeMinutesAgo(int count) {
+    return 'vor $count Min.';
+  }
+
+  @override
+  String relativeHoursAgo(int count) {
+    return 'vor $count Std.';
+  }
+
+  @override
+  String get relativeYesterday => 'Gestern';
+
+  @override
+  String relativeDaysAgo(int count) {
+    return 'vor $count T.';
+  }
+
+  @override
+  String relativeWeeksAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'vor $count Wochen',
+      one: 'vor 1 Woche',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachArchiveToday => 'Heute';
+
+  @override
+  String coachArchiveDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'vor $count Tagen',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get feedLast14Days => 'Letzte 14 Tage';
 
   @override

@@ -3425,6 +3425,43 @@
   "@feedRunnerFallback": {
     "description": "Fallback name shown in the feed when an author has no display name"
   },
+  "relativeJustNow": "Just now",
+  "@relativeJustNow": {
+    "description": "Relative-time label for under a minute ago"
+  },
+  "relativeMinutesAgo": "{count}m ago",
+  "@relativeMinutesAgo": {
+    "description": "Compact relative-time label, minutes",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "relativeHoursAgo": "{count}h ago",
+  "@relativeHoursAgo": {
+    "description": "Compact relative-time label, hours",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "relativeYesterday": "Yesterday",
+  "@relativeYesterday": {
+    "description": "Relative-time label for one day ago"
+  },
+  "relativeDaysAgo": "{count}d ago",
+  "@relativeDaysAgo": {
+    "description": "Compact relative-time label, days",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "relativeWeeksAgo": "{count, plural, =1{1 week ago} other{{count} weeks ago}}",
+  "@relativeWeeksAgo": {
+    "description": "Relative-time label, weeks",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "coachArchiveToday": "Today",
+  "@coachArchiveToday": {
+    "description": "Coach archive label for today"
+  },
+  "coachArchiveDaysAgo": "{count, plural, other{{count} days ago}}",
+  "@coachArchiveDaysAgo": {
+    "description": "Coach archive label, days ago (full word)",
+    "placeholders": { "count": { "type": "int" } }
+  },
   "feedLast14Days": "Last 14 days",
   "@feedLast14Days": {
     "description": "Label noting the feed only shows the last 14 days of activity"

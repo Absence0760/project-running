@@ -2882,6 +2882,51 @@ class AppLocalizationsEs extends AppLocalizations {
   String get feedRunnerFallback => 'Corredor';
 
   @override
+  String get relativeJustNow => 'Ahora mismo';
+
+  @override
+  String relativeMinutesAgo(int count) {
+    return 'hace $count min';
+  }
+
+  @override
+  String relativeHoursAgo(int count) {
+    return 'hace $count h';
+  }
+
+  @override
+  String get relativeYesterday => 'Ayer';
+
+  @override
+  String relativeDaysAgo(int count) {
+    return 'hace $count d';
+  }
+
+  @override
+  String relativeWeeksAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'hace $count semanas',
+      one: 'hace 1 semana',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachArchiveToday => 'Hoy';
+
+  @override
+  String coachArchiveDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'hace $count días',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get feedLast14Days => 'Últimos 14 días';
 
   @override

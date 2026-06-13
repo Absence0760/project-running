@@ -33,11 +33,12 @@ String coachTitleFromMessage(String content) {
 /// or a locale-formatted absolute date beyond a week). The optional [now]
 /// is for tests; in production the call site uses `DateTime.now()`.
 String coachArchiveLabel(DateTime t, String localeTag, {DateTime? now}) {
+  final l10n = lookupAppLocalizations(localeFromTag(localeTag) ?? defaultLocale);
   final reference = now ?? DateTime.now();
   final diff = reference.difference(t);
-  if (diff.inDays <= 0) return 'Today';
-  if (diff.inDays == 1) return 'Yesterday';
-  if (diff.inDays < 7) return '${diff.inDays} days ago';
+  if (diff.inDays <= 0) return l10n.coachArchiveToday;
+  if (diff.inDays == 1) return l10n.relativeYesterday;
+  if (diff.inDays < 7) return l10n.coachArchiveDaysAgo(diff.inDays);
   return formatDateMed(t, localeTag);
 }
 

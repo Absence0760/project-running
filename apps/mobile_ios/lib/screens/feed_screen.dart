@@ -2,10 +2,10 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
-import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
+import '../social_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
 import 'people_screen.dart';
@@ -463,7 +463,7 @@ class _EntryCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _fmtRelative(entry.run.startedAt,
+                    fmtRelative(entry.run.startedAt,
                         localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -708,7 +708,7 @@ class _LiftEntryCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _fmtRelative(entry.startedAt,
+                    fmtRelative(entry.startedAt,
                         localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -764,18 +764,6 @@ class _LiftEntryCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _fmtRelative(DateTime started, String localeTag) {
-  final ms = DateTime.now().difference(started).inMilliseconds;
-  final mins = ms ~/ 60000;
-  if (mins < 1) return 'just now';
-  if (mins < 60) return '${mins}m ago';
-  final hrs = mins ~/ 60;
-  if (hrs < 24) return '${hrs}h ago';
-  final days = hrs ~/ 24;
-  if (days < 30) return '${days}d ago';
-  return formatDateMed(started, localeTag);
 }
 
 class _Stat extends StatelessWidget {

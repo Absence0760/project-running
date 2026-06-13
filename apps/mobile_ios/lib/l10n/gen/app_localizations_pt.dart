@@ -2882,6 +2882,51 @@ class AppLocalizationsPt extends AppLocalizations {
   String get feedRunnerFallback => 'Corredor';
 
   @override
+  String get relativeJustNow => 'Agora mesmo';
+
+  @override
+  String relativeMinutesAgo(int count) {
+    return 'há $count min';
+  }
+
+  @override
+  String relativeHoursAgo(int count) {
+    return 'há $count h';
+  }
+
+  @override
+  String get relativeYesterday => 'Ontem';
+
+  @override
+  String relativeDaysAgo(int count) {
+    return 'há $count d';
+  }
+
+  @override
+  String relativeWeeksAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'há $count semanas',
+      one: 'há 1 semana',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachArchiveToday => 'Hoje';
+
+  @override
+  String coachArchiveDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'há $count dias',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get feedLast14Days => 'Últimos 14 dias';
 
   @override
@@ -11506,6 +11551,51 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get feedRunnerFallback => 'Corredor';
+
+  @override
+  String get relativeJustNow => 'Agora mesmo';
+
+  @override
+  String relativeMinutesAgo(int count) {
+    return 'há $count min';
+  }
+
+  @override
+  String relativeHoursAgo(int count) {
+    return 'há $count h';
+  }
+
+  @override
+  String get relativeYesterday => 'Ontem';
+
+  @override
+  String relativeDaysAgo(int count) {
+    return 'há $count d';
+  }
+
+  @override
+  String relativeWeeksAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'há $count semanas',
+      one: 'há 1 semana',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachArchiveToday => 'Hoje';
+
+  @override
+  String coachArchiveDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'há $count dias',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get feedLast14Days => 'Últimos 14 dias';

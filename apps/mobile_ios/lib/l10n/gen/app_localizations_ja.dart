@@ -2706,6 +2706,50 @@ class AppLocalizationsJa extends AppLocalizations {
   String get feedRunnerFallback => 'ランナー';
 
   @override
+  String get relativeJustNow => 'たった今';
+
+  @override
+  String relativeMinutesAgo(int count) {
+    return '$count分前';
+  }
+
+  @override
+  String relativeHoursAgo(int count) {
+    return '$count時間前';
+  }
+
+  @override
+  String get relativeYesterday => '昨日';
+
+  @override
+  String relativeDaysAgo(int count) {
+    return '$count日前';
+  }
+
+  @override
+  String relativeWeeksAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count週間前',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachArchiveToday => '今日';
+
+  @override
+  String coachArchiveDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count日前',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get feedLast14Days => '過去14日間';
 
   @override

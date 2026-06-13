@@ -4847,6 +4847,54 @@ abstract class AppLocalizations {
   /// **'Runner'**
   String get feedRunnerFallback;
 
+  /// Relative-time label for under a minute ago
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get relativeJustNow;
+
+  /// Compact relative-time label, minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count}m ago'**
+  String relativeMinutesAgo(int count);
+
+  /// Compact relative-time label, hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count}h ago'**
+  String relativeHoursAgo(int count);
+
+  /// Relative-time label for one day ago
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get relativeYesterday;
+
+  /// Compact relative-time label, days
+  ///
+  /// In en, this message translates to:
+  /// **'{count}d ago'**
+  String relativeDaysAgo(int count);
+
+  /// Relative-time label, weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 week ago} other{{count} weeks ago}}'**
+  String relativeWeeksAgo(int count);
+
+  /// Coach archive label for today
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get coachArchiveToday;
+
+  /// Coach archive label, days ago (full word)
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{{count} days ago}}'**
+  String coachArchiveDaysAgo(int count);
+
   /// Label noting the feed only shows the last 14 days of activity
   ///
   /// In en, this message translates to:
