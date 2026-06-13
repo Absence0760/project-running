@@ -561,6 +561,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Activez le stockage des données de santé pour enregistrer la taille et le poids.';
 
   @override
+  String get bodyMetricsWithdrawTitle =>
+      'Retirer le consentement aux données de santé ?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Cela efface définitivement votre taille enregistrée et tout votre historique de poids. C\'est irréversible.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Retirer et effacer';
+
+  @override
   String get bodyMetricsSaved => 'Enregistré';
 
   @override

@@ -560,6 +560,17 @@ class AppLocalizationsDe extends AppLocalizations {
       'Aktiviere die Speicherung von Gesundheitsdaten, um Größe und Gewicht zu sichern.';
 
   @override
+  String get bodyMetricsWithdrawTitle =>
+      'Einwilligung zu Gesundheitsdaten widerrufen?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Dadurch werden deine gespeicherte Größe und dein gesamter Gewichtsverlauf dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Widerrufen & löschen';
+
+  @override
   String get bodyMetricsSaved => 'Gespeichert';
 
   @override

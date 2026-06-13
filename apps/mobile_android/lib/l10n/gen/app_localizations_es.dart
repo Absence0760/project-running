@@ -561,6 +561,17 @@ class AppLocalizationsEs extends AppLocalizations {
       'Activa el almacenamiento de datos de salud para guardar altura y peso.';
 
   @override
+  String get bodyMetricsWithdrawTitle =>
+      '¿Retirar el consentimiento de datos de salud?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Esto borra permanentemente tu altura guardada y todo tu historial de peso. No se puede deshacer.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Retirar y borrar';
+
+  @override
   String get bodyMetricsSaved => 'Guardado';
 
   @override

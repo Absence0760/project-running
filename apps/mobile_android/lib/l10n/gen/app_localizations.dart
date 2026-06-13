@@ -1001,6 +1001,24 @@ abstract class AppLocalizations {
   /// **'Turn on health-data storage to save height and weight.'**
   String get bodyMetricsConsentRequired;
 
+  /// No description provided for @bodyMetricsWithdrawTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw health-data consent?'**
+  String get bodyMetricsWithdrawTitle;
+
+  /// No description provided for @bodyMetricsWithdrawBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently erases your saved height and your entire weight history. This can\'t be undone.'**
+  String get bodyMetricsWithdrawBody;
+
+  /// No description provided for @bodyMetricsWithdrawConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw & erase'**
+  String get bodyMetricsWithdrawConfirm;
+
   /// Confirmation toast after saving body metrics
   ///
   /// In en, this message translates to:

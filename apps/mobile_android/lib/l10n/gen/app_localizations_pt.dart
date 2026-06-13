@@ -559,6 +559,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ative o armazenamento de dados de saúde para salvar altura e peso.';
 
   @override
+  String get bodyMetricsWithdrawTitle =>
+      'Retirar o consentimento de dados de saúde?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Isso apaga permanentemente sua altura salva e todo o seu histórico de peso. Não pode ser desfeito.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Retirar e apagar';
+
+  @override
   String get bodyMetricsSaved => 'Salvo';
 
   @override
@@ -9099,6 +9110,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get bodyMetricsConsentRequired =>
       'Ative o armazenamento de dados de saúde para salvar altura e peso.';
+
+  @override
+  String get bodyMetricsWithdrawTitle =>
+      'Retirar o consentimento de dados de saúde?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Isso apaga permanentemente sua altura salva e todo o seu histórico de peso. Não pode ser desfeito.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Retirar e apagar';
 
   @override
   String get bodyMetricsSaved => 'Salvo';

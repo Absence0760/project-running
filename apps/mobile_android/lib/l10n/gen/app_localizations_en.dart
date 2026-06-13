@@ -557,6 +557,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Turn on health-data storage to save height and weight.';
 
   @override
+  String get bodyMetricsWithdrawTitle => 'Withdraw health-data consent?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'This permanently erases your saved height and your entire weight history. This can\'t be undone.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Withdraw & erase';
+
+  @override
   String get bodyMetricsSaved => 'Saved';
 
   @override

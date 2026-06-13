@@ -544,6 +544,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get bodyMetricsConsentRequired => '健康データの保存をオンにすると身長と体重を保存できます。';
 
   @override
+  String get bodyMetricsWithdrawTitle => '健康データの同意を撤回しますか？';
+
+  @override
+  String get bodyMetricsWithdrawBody => '保存された身長と体重の履歴がすべて完全に削除されます。元に戻せません。';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => '撤回して削除';
+
+  @override
   String get bodyMetricsSaved => '保存しました';
 
   @override
