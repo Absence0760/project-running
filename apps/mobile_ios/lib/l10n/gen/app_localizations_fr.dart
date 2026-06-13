@@ -5640,6 +5640,18 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prefsEmailNotifOff => 'Désactivées';
 
   @override
+  String get prefsPushNotifications => 'Notifications push';
+
+  @override
+  String get prefsPushNotifAll => 'Toutes';
+
+  @override
+  String get prefsPushNotifImportant => 'Importantes uniquement';
+
+  @override
+  String get prefsPushNotifOff => 'Désactivées';
+
+  @override
   String get prefsEmailWeeklyDigest => 'E-mail récapitulatif hebdomadaire';
 
   @override

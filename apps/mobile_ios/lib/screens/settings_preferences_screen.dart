@@ -270,6 +270,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  static String _pushNotifLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case 'all':
+        return l10n.prefsPushNotifAll;
+      case 'important':
+        return l10n.prefsPushNotifImportant;
+      case 'off':
+        return l10n.prefsPushNotifOff;
+      default:
+        return _toTitle(raw);
+    }
+  }
+
   String _hrZonesSummary() {
     final l10n = AppLocalizations.of(context);
     final raw = _bagValue<Map>(SettingsKeys.hrZones);
@@ -620,6 +633,26 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.emailNotifications, picked);
+    }
+  }
+
+  Future<void> _editPushNotifications() async {
+    final l10n = AppLocalizations.of(context);
+    const opts = ['important', 'all', 'off'];
+    final labels = [
+      l10n.prefsPushNotifImportant,
+      l10n.prefsPushNotifAll,
+      l10n.prefsPushNotifOff,
+    ];
+    final picked = await _pickRadio<String>(
+      title: l10n.prefsPushNotifications,
+      options: opts,
+      labels: labels,
+      current:
+          _bagValue<String>(SettingsKeys.pushNotifications) ?? 'important',
+    );
+    if (picked != null) {
+      await _putUniversal(SettingsKeys.pushNotifications, picked);
     }
   }
 
@@ -1150,6 +1183,17 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editEmailNotifications,
+            ),
+            ListTile(
+              title: Text(l10n.prefsPushNotifications),
+              subtitle: Text(_pushNotifLabel(
+                l10n,
+                _bagValue<String>(SettingsKeys.pushNotifications) ??
+                    'important',
+              )),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: _editPushNotifications,
             ),
             SwitchListTile(
               title: Text(l10n.prefsEmailWeeklyDigest),

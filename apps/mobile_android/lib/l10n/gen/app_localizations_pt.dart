@@ -5622,6 +5622,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsEmailNotifOff => 'Desativadas';
 
   @override
+  String get prefsPushNotifications => 'Notificações push';
+
+  @override
+  String get prefsPushNotifAll => 'Todas';
+
+  @override
+  String get prefsPushNotifImportant => 'Apenas importantes';
+
+  @override
+  String get prefsPushNotifOff => 'Desativadas';
+
+  @override
   String get prefsEmailWeeklyDigest => 'E-mail de resumo semanal';
 
   @override
@@ -14203,6 +14215,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsEmailNotifOff => 'Desativadas';
+
+  @override
+  String get prefsPushNotifications => 'Notificações push';
+
+  @override
+  String get prefsPushNotifAll => 'Todas';
+
+  @override
+  String get prefsPushNotifImportant => 'Apenas importantes';
+
+  @override
+  String get prefsPushNotifOff => 'Desativadas';
 
   @override
   String get prefsEmailWeeklyDigest => 'E-mail de resumo semanal';

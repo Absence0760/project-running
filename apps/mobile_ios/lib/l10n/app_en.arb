@@ -6986,6 +6986,22 @@
   "@prefsEmailNotifOff": {
     "description": "Email-notification option: no emails (in-app bell still shows everything)"
   },
+  "prefsPushNotifications": "Push notifications",
+  "@prefsPushNotifications": {
+    "description": "Tile and picker title for the push-notification preference"
+  },
+  "prefsPushNotifAll": "Everything",
+  "@prefsPushNotifAll": {
+    "description": "Push-notification option: send every kind of notification as a push alert"
+  },
+  "prefsPushNotifImportant": "Important only",
+  "@prefsPushNotifImportant": {
+    "description": "Push-notification option: only important notifications (reminders, cancellations, messages, plan updates)"
+  },
+  "prefsPushNotifOff": "Off",
+  "@prefsPushNotifOff": {
+    "description": "Push-notification option: no push alerts (in-app bell still shows everything)"
+  },
   "prefsEmailWeeklyDigest": "Weekly digest email",
   "@prefsEmailWeeklyDigest": {
     "description": "Toggle title for opting in to the weekly engagement digest email"

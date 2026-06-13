@@ -5629,6 +5629,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get prefsEmailNotifOff => 'Aus';
 
   @override
+  String get prefsPushNotifications => 'Push-Benachrichtigungen';
+
+  @override
+  String get prefsPushNotifAll => 'Alle';
+
+  @override
+  String get prefsPushNotifImportant => 'Nur wichtige';
+
+  @override
+  String get prefsPushNotifOff => 'Aus';
+
+  @override
   String get prefsEmailWeeklyDigest =>
       'Wöchentliche Zusammenfassung per E-Mail';
 

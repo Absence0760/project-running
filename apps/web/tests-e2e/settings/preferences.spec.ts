@@ -225,6 +225,42 @@ test.describe('/settings/preferences', () => {
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
+	test('Push notifications <select> save round-trip persists across reload', async ({
+		page
+	}) => {
+		// push_notifications gates the Go worker's web_push channel
+		// (all | important | off, default important). The handler reads
+		// user_settings.prefs.push_notifications server-side; it's an
+		// independent key from email_notifications (muting email must not
+		// mute push). The load-bearing assertion is the picker writes the
+		// bag and the value survives a reload.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const sel = page
+			.locator('label', { has: page.getByText('Push notifications', { exact: true }) })
+			.locator('select');
+		// Default when the key is absent.
+		await expect(sel).toHaveValue('important');
+		const before = await sel.inputValue();
+
+		await sel.selectOption('all');
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+
+		await page.reload();
+		await expect(sel).toHaveValue('all');
+
+		// The full kill-switch value also round-trips.
+		await sel.selectOption('off');
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+		await page.reload();
+		await expect(sel).toHaveValue('off');
+
+		// Restore so later specs see the default.
+		await sel.selectOption(before);
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+	});
+
 	test('Weekly digest opt-in toggle save round-trip persists across reload', async ({
 		page
 	}) => {

@@ -57,40 +57,40 @@ void main() {
     await initializeDateFormatting();
   });
 
-  testWidgets('email-notifications tile shows the default (Important only)',
+  testWidgets('push-notifications tile shows the default (Important only)',
       (tester) async {
     final s = await _setUp();
     await _pump(tester, prefs: s.prefs, sync: s.sync);
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Email notifications'),
+      find.text('Push notifications'),
       250,
       scrollable: find.byType(Scrollable).first,
     );
     // With no stored value, the subtitle reflects the 'important' default.
-    // Scope to this tile — the push-notifications tile shares the subtitle.
+    // Scope to this tile — the email-notifications tile shares the subtitle.
     expect(
       find.descendant(
-        of: find.widgetWithText(ListTile, 'Email notifications'),
+        of: find.widgetWithText(ListTile, 'Push notifications'),
         matching: find.text('Important only'),
       ),
       findsOneWidget,
     );
   });
 
-  testWidgets('picking Everything writes email_notifications=all to the bag',
+  testWidgets('picking Everything writes push_notifications=all to the bag',
       (tester) async {
     final s = await _setUp();
     await _pump(tester, prefs: s.prefs, sync: s.sync);
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Email notifications'),
+      find.text('Push notifications'),
       250,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.widgetWithText(ListTile, 'Email notifications'));
+    await tester.tap(find.widgetWithText(ListTile, 'Push notifications'));
     await tester.pumpAndSettle();
 
     // The radio dialog is open; pick the "Everything" option.
@@ -98,29 +98,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(s.sync.universalWrites, [
-      {'email_notifications': 'all'},
+      {'push_notifications': 'all'},
     ]);
   });
 
-  testWidgets('picking Off writes email_notifications=off (full kill-switch)',
+  testWidgets('picking Off writes push_notifications=off (full kill-switch)',
       (tester) async {
     final s = await _setUp();
     await _pump(tester, prefs: s.prefs, sync: s.sync);
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Email notifications'),
+      find.text('Push notifications'),
       250,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.widgetWithText(ListTile, 'Email notifications'));
+    await tester.tap(find.widgetWithText(ListTile, 'Push notifications'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Off'));
     await tester.pumpAndSettle();
 
     expect(s.sync.universalWrites, [
-      {'email_notifications': 'off'},
+      {'push_notifications': 'off'},
     ]);
   });
 }
