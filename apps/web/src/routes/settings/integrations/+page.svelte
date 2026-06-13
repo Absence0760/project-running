@@ -123,7 +123,12 @@
 			await connectIntegration(item.provider);
 			item.connected = true;
 		} catch (err) {
-			console.error('Integration connect failed:', err);
+			showToast(
+				m('settingsIntegrations.connectFailed', {
+					error: err instanceof Error ? err.message : String(err)
+				}),
+				'error'
+			);
 		} finally {
 			item.loading = false;
 		}
@@ -143,7 +148,12 @@
 				showToast(m('settingsIntegrations.stravaDisconnected'), 'success');
 			}
 		} catch (err) {
-			console.error('Integration disconnect failed:', err);
+			showToast(
+				m('settingsIntegrations.disconnectFailed', {
+					error: err instanceof Error ? err.message : String(err)
+				}),
+				'error'
+			);
 		} finally {
 			item.loading = false;
 		}

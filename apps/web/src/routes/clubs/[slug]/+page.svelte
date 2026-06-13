@@ -548,8 +548,15 @@
 	async function confirmRegenerate() {
 		if (!club) return;
 		showRegenConfirm = false;
-		const token = await regenerateInviteToken(club.id);
-		club = { ...club, invite_token: token };
+		try {
+			const token = await regenerateInviteToken(club.id);
+			club = { ...club, invite_token: token };
+		} catch (e) {
+			showToast(
+				tr('clubHome.regenerateFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		}
 	}
 
 	async function toggleReplies(postId: string) {
@@ -602,8 +609,15 @@
 		if (!club || !showDeletePostConfirm) return;
 		const id = showDeletePostConfirm;
 		showDeletePostConfirm = null;
-		await deleteClubPost(id);
-		posts = await fetchClubPosts(club.id, 20);
+		try {
+			await deleteClubPost(id);
+			posts = await fetchClubPosts(club.id, 20);
+		} catch (e) {
+			showToast(
+				tr('clubHome.deletePostFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		}
 	}
 
 	function handleDeleteClub() {
@@ -614,7 +628,15 @@
 	async function confirmDeleteClub() {
 		if (!club) return;
 		showDeleteClubConfirm = false;
-		await deleteClub(club.id);
+		try {
+			await deleteClub(club.id);
+		} catch (e) {
+			showToast(
+				tr('clubHome.deleteClubFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+			return;
+		}
 		goto('/clubs');
 	}
 

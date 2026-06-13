@@ -112,6 +112,59 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		expect(data![0].refresh_token_secret_id).toBeNull();
 	});
 
+	test('Disconnect failure surfaces an error toast + keeps the card connected', async ({
+		page,
+	}) => {
+		await plantIntegration({ provider: 'strava', lastSyncAt: '2026-05-10T08:00:00Z' });
+
+		// Force the disconnect Edge Function to fail.
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'simulated failure' }),
+			});
+		});
+
+		await page.goto('/settings/integrations');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+
+		await stravaCard.getByRole('button', { name: 'Disconnect' }).click();
+		await page
+			.locator('.modal', { hasText: 'Disconnect integration?' })
+			.getByRole('button', { name: 'Disconnect' })
+			.click();
+
+		// Failure is surfaced, and the card stays connected (not a silent no-op).
+		await expect(page.locator('.toast-error')).toBeVisible({ timeout: 5_000 });
+		await expect(stravaCard).toHaveClass(/connected/);
+	});
+
+	test('Connect failure surfaces an error toast', async ({ page }) => {
+		// Non-Strava providers use the placeholder upsert-connect path.
+		await page.route('**/rest/v1/integrations**', async (route) => {
+			const m = route.request().method();
+			if (m === 'POST' || m === 'PATCH') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/settings/integrations');
+		const garminCard = page.locator('.integration-card', { hasText: 'Garmin' });
+		await expect(garminCard).toBeVisible({ timeout: 10_000 });
+		await garminCard.getByRole('button', { name: 'Connect' }).click();
+
+		await expect(page.locator('.toast-error')).toBeVisible({ timeout: 5_000 });
+		await expect(garminCard).not.toHaveClass(/connected/);
+	});
+
 	test('Disconnect cancel keeps the integration connected', async ({ page }) => {
 		await plantIntegration({
 			provider: 'strava',

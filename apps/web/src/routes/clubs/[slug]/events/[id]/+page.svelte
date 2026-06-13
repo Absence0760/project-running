@@ -1092,7 +1092,15 @@
 	async function confirmDeleteEvent() {
 		if (!event) return;
 		showDeleteEventConfirm = false;
-		await deleteEvent(event.id);
+		try {
+			await deleteEvent(event.id);
+		} catch (e) {
+			showToast(
+				m('clubHome.deleteEventFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+			return;
+		}
 		goto(`/clubs/${slug}`);
 	}
 
