@@ -46,6 +46,10 @@ class SettingsAccountScreen extends StatefulWidget {
 class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   DateTime? _coachConsentAt;
   bool _coachConsentWithdrawing = false;
+  // In-flight guard for the multi-second account actions (full backup,
+  // restore, CSV export, sign-out) so a double-tap can't fire two backup
+  // builds / two share sheets / two restore loops.
+  bool _accountBusy = false;
 
   @override
   void initState() {
@@ -110,17 +114,19 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
 
   Future<void> _signOut() async {
     final api = widget.apiClient;
-    if (api == null) return;
+    if (api == null || _accountBusy) return;
+    setState(() => _accountBusy = true);
     try {
       await api.signOut();
+      if (mounted) setState(() {});
     } catch (e) {
       if (mounted) {
         showTopBanner(
             context, AppLocalizations.of(context).settingsAccountSignOutFailed);
-        return;
       }
+    } finally {
+      if (mounted) setState(() => _accountBusy = false);
     }
-    if (mounted) setState(() {});
   }
 
   Future<void> _changePassword() async {
@@ -275,6 +281,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       showTopBanner(context, l10n.settingsAccountNoRunsToExport);
       return;
     }
+    if (_accountBusy) return;
+    setState(() => _accountBusy = true);
     try {
       final buf =
           StringBuffer('date,distance_m,duration_s,pace_s_per_km,source\n');
@@ -300,8 +308,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
         text: l10n.settingsAccountCsvShareText,
       );
     } catch (e) {
-      if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountCsvExportFailed(e));
+      if (mounted) showTopBanner(context, l10n.settingsAccountCsvExportFailed(e));
+    } finally {
+      if (mounted) setState(() => _accountBusy = false);
     }
   }
 
@@ -312,6 +321,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       showTopBanner(context, l10n.settingsAccountBackupSignInFirst);
       return;
     }
+    if (_accountBusy) return;
+    setState(() => _accountBusy = true);
     showTopBanner(context, l10n.settingsAccountBackupPreparing);
     try {
       final tmp = await getTemporaryDirectory();
@@ -330,8 +341,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
         text: l10n.settingsAccountBackupShareText,
       );
     } catch (e) {
-      if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountBackupFailed(e));
+      if (mounted) showTopBanner(context, l10n.settingsAccountBackupFailed(e));
+    } finally {
+      if (mounted) setState(() => _accountBusy = false);
     }
   }
 
@@ -373,7 +385,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       ),
     );
     if (ok != true) return;
-    if (!mounted) return;
+    if (!mounted || _accountBusy) return;
+    setState(() => _accountBusy = true);
     showTopBanner(context, l10n.settingsAccountRestoring);
     try {
       final res = await BackupService(api: api).restore(
@@ -394,8 +407,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      showTopBanner(context, l10n.settingsAccountRestoreFailed(e));
+      if (mounted) showTopBanner(context, l10n.settingsAccountRestoreFailed(e));
+    } finally {
+      if (mounted) setState(() => _accountBusy = false);
     }
   }
 
@@ -428,7 +442,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                   ? IconButton(
                       icon: const Icon(Icons.logout),
                       tooltip: l10n.settingsAccountSignOut,
-                      onPressed: _signOut,
+                      onPressed: _accountBusy ? null : _signOut,
                     )
                   : FilledButton.tonal(
                       onPressed: _signIn,
@@ -560,6 +574,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 title: Text(l10n.settingsAccountFullBackup),
                 subtitle: Text(l10n.settingsAccountFullBackupSubtitle),
                 trailing: const Icon(Icons.chevron_right),
+                enabled: !_accountBusy,
                 onTap: _exportBackup,
               ),
               ListTile(
@@ -567,6 +582,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 title: Text(l10n.settingsAccountExportCsv),
                 subtitle: Text(l10n.settingsAccountExportCsvSubtitle),
                 trailing: const Icon(Icons.chevron_right),
+                enabled: !_accountBusy,
                 onTap: _exportRunsCsv,
               ),
               ListTile(
@@ -574,6 +590,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 title: Text(l10n.settingsAccountRestoreTile),
                 subtitle: Text(l10n.settingsAccountRestoreTileSubtitle),
                 trailing: const Icon(Icons.chevron_right),
+                enabled: !_accountBusy,
                 onTap: _restoreBackup,
               ),
             ],
