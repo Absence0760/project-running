@@ -26,6 +26,11 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
   // null until then (and on unconfigured builds).
   String? _storePrice;
 
+  // In-flight guard for the IAP actions (checkout / restore / manage). A
+  // double-tap on a payment tile must not open two checkout sheets or fire
+  // two restore round-trips. Web guards its CTA with `disabled={purchasing}`.
+  bool _proBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,66 +68,85 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
   }
 
   Future<void> _startProCheckout(BuildContext context) async {
-    final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
-    if (!isRevenueCatConfigured() || userId == null) {
-      await _openExternal(context, 'https://threkir.com/settings/upgrade');
-      return;
-    }
-    final r = await startProCheckout(userId);
-    if (!context.mounted) return;
-    final l10n = AppLocalizations.of(context);
-    switch (r) {
-      case PurchaseResult.purchased:
-        showTopBanner(context, l10n.proWelcome);
-        break;
-      case PurchaseResult.cancelled:
-        break;
-      case PurchaseResult.failed:
-        showTopBanner(context, l10n.proPurchaseFailed);
-        break;
-      case PurchaseResult.notConfigured:
+    if (_proBusy) return;
+    setState(() => _proBusy = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (!isRevenueCatConfigured() || userId == null) {
         await _openExternal(context, 'https://threkir.com/settings/upgrade');
-        break;
+        return;
+      }
+      final r = await startProCheckout(userId);
+      if (!context.mounted) return;
+      final l10n = AppLocalizations.of(context);
+      switch (r) {
+        case PurchaseResult.purchased:
+          showTopBanner(context, l10n.proWelcome);
+          break;
+        case PurchaseResult.cancelled:
+          break;
+        case PurchaseResult.failed:
+          showTopBanner(context, l10n.proPurchaseFailed);
+          break;
+        case PurchaseResult.notConfigured:
+          await _openExternal(context, 'https://threkir.com/settings/upgrade');
+          break;
+      }
+    } finally {
+      if (mounted) setState(() => _proBusy = false);
     }
   }
 
   Future<void> _restorePurchases(BuildContext context) async {
-    final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
-    if (!isRevenueCatConfigured() || userId == null) {
+    if (_proBusy) return;
+    setState(() => _proBusy = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (!isRevenueCatConfigured() || userId == null) {
+        if (!context.mounted) return;
+        showTopBanner(
+            context, AppLocalizations.of(context).proRestoreNeedsSignIn);
+        return;
+      }
+      final r = await restorePurchases(userId);
       if (!context.mounted) return;
-      showTopBanner(context, AppLocalizations.of(context).proRestoreNeedsSignIn);
-      return;
-    }
-    final r = await restorePurchases(userId);
-    if (!context.mounted) return;
-    final l10n = AppLocalizations.of(context);
-    switch (r) {
-      case PurchaseResult.purchased:
-        showTopBanner(context, l10n.proRestored);
-        break;
-      case PurchaseResult.cancelled:
-        showTopBanner(context, l10n.proRestoreNone);
-        break;
-      case PurchaseResult.failed:
-        showTopBanner(context, l10n.proRestoreFailed);
-        break;
-      case PurchaseResult.notConfigured:
-        showTopBanner(context, l10n.proRestoreUnavailable);
-        break;
+      final l10n = AppLocalizations.of(context);
+      switch (r) {
+        case PurchaseResult.purchased:
+          showTopBanner(context, l10n.proRestored);
+          break;
+        case PurchaseResult.cancelled:
+          showTopBanner(context, l10n.proRestoreNone);
+          break;
+        case PurchaseResult.failed:
+          showTopBanner(context, l10n.proRestoreFailed);
+          break;
+        case PurchaseResult.notConfigured:
+          showTopBanner(context, l10n.proRestoreUnavailable);
+          break;
+      }
+    } finally {
+      if (mounted) setState(() => _proBusy = false);
     }
   }
 
   Future<void> _openManageSubscription(BuildContext context) async {
-    final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
-    String? url;
-    if (isRevenueCatConfigured() && userId != null) {
-      url = await managementUrl(userId);
+    if (_proBusy) return;
+    setState(() => _proBusy = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      String? url;
+      if (isRevenueCatConfigured() && userId != null) {
+        url = await managementUrl(userId);
+      }
+      final target = url ?? 'https://threkir.com/settings/upgrade';
+      await _openExternal(context, target);
+    } finally {
+      if (mounted) setState(() => _proBusy = false);
     }
-    final target = url ?? 'https://threkir.com/settings/upgrade';
-    await _openExternal(context, target);
   }
 
   @override
@@ -152,6 +176,7 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
                 rcConfigured ? Icons.chevron_right : Icons.open_in_new,
                 size: 18,
               ),
+              enabled: !_proBusy,
               onTap: () => _startProCheckout(context),
             ),
             // Honesty note mirroring web /settings/upgrade (audit-findings
@@ -174,6 +199,7 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
               title: Text(l10n.proRestorePurchases),
               subtitle: Text(l10n.proRestorePurchasesSubtitle),
               trailing: const Icon(Icons.chevron_right, size: 18),
+              enabled: !_proBusy,
               onTap: () => _restorePurchases(context),
             ),
             ListTile(
@@ -181,6 +207,7 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
               title: Text(l10n.proManageSubscription),
               subtitle: Text(l10n.proManageSubscriptionSubtitle),
               trailing: const Icon(Icons.open_in_new, size: 18),
+              enabled: !_proBusy,
               onTap: () => _openManageSubscription(context),
             ),
             ListTile(
