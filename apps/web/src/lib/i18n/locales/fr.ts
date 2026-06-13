@@ -3051,6 +3051,11 @@ export const messages = {
 	"prefs.emailNotifAll": "Toutes",
 	"prefs.emailNotifOff": "Désactivées",
 	"prefs.emailNotifHint": "Choisissez les notifications également envoyées par e-mail. La cloche dans l'application affiche toujours tout.",
+	"prefs.pushNotifications": "Notifications push",
+	"prefs.pushNotifImportant": "Importantes uniquement",
+	"prefs.pushNotifAll": "Toutes",
+	"prefs.pushNotifOff": "Désactivées",
+	"prefs.pushNotifHint": "Choisissez les notifications envoyées en alertes push vers vos navigateurs abonnés. La cloche dans l'application affiche toujours tout.",
 	"prefs.emailWeeklyDigest": "E-mail récapitulatif hebdomadaire",
 	"prefs.emailWeeklyDigestHint": "Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.",
 	// Gym (Phase 4 multi-modal, decisions §63)

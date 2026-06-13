@@ -3047,6 +3047,11 @@ export const messages = {
 	"prefs.emailNotifAll": "すべて",
 	"prefs.emailNotifOff": "オフ",
 	"prefs.emailNotifHint": "メールでも送信する通知を選びます。アプリのベルには常にすべて表示されます。",
+	"prefs.pushNotifications": "プッシュ通知",
+	"prefs.pushNotifImportant": "重要なものだけ",
+	"prefs.pushNotifAll": "すべて",
+	"prefs.pushNotifOff": "オフ",
+	"prefs.pushNotifHint": "登録したブラウザにプッシュ通知として送る通知を選びます。アプリのベルには常にすべて表示されます。",
 	"prefs.emailWeeklyDigest": "週刊ダイジェストメール",
 	"prefs.emailWeeklyDigestHint": "トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。",
 	// Gym (Phase 4 multi-modal, decisions §63)

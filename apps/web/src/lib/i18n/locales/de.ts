@@ -3051,6 +3051,11 @@ export const messages = {
 	"prefs.emailNotifAll": "Alle",
 	"prefs.emailNotifOff": "Aus",
 	"prefs.emailNotifHint": "Wähle, welche Benachrichtigungen zusätzlich per E-Mail gesendet werden. Die App-Glocke zeigt immer alles.",
+	"prefs.pushNotifications": "Push-Benachrichtigungen",
+	"prefs.pushNotifImportant": "Nur wichtige",
+	"prefs.pushNotifAll": "Alle",
+	"prefs.pushNotifOff": "Aus",
+	"prefs.pushNotifHint": "Wähle, welche Benachrichtigungen als Push-Hinweise an deine abonnierten Browser gesendet werden. Die App-Glocke zeigt immer alles.",
 	"prefs.emailWeeklyDigest": "Wöchentliche Zusammenfassung per E-Mail",
 	"prefs.emailWeeklyDigestHint": "Abonniere eine wöchentliche Übersicht über dein Training und Community-Highlights. Standardmäßig aus; getrennt von deinen Benachrichtigungs-E-Mails.",
 	// Gym (Phase 4 multi-modal, decisions §63)
