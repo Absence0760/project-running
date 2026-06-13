@@ -35,10 +35,16 @@ const int kDefaultRelinkWindowDays = 7;
 /// Calendar-day distance between a run's start and the scheduled date.
 int _dayGap(DateTime runStart, DateTime scheduledDate) {
   final local = runStart.isUtc ? runStart.toLocal() : runStart;
-  final runDay = DateTime(local.year, local.month, local.day);
+  // Anchor both calendar days in UTC so a DST transition between them cannot
+  // perturb the span. Local-midnight spans drift to 23 h / 25 h across a DST
+  // boundary; Duration.inDays then truncated that toward zero where web rounds
+  // it, so the ±window gate included/excluded a candidate the other platform
+  // didn't. UTC-anchored, the gap is the exact calendar-day difference on both
+  // platforms. Mirrors web's relink dayGap.
+  final runDay = DateTime.utc(local.year, local.month, local.day);
   final scheduled =
-      DateTime(scheduledDate.year, scheduledDate.month, scheduledDate.day);
-  return (runDay.difference(scheduled).inDays).abs();
+      DateTime.utc(scheduledDate.year, scheduledDate.month, scheduledDate.day);
+  return runDay.difference(scheduled).inDays.abs();
 }
 
 /// Eligible re-link candidates for a workout, newest-first.

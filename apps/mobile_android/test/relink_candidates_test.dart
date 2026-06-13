@@ -133,4 +133,22 @@ void main() {
     );
     expect(out.map((r) => r.id).toList(), ['d7']);
   });
+
+  // A window that straddles a DST transition (spring-forward 2024-03-10): the
+  // run on 03-04 is exactly 8 calendar days before a workout scheduled 03-12,
+  // so it is OUT of a ±7-day window. UTC-anchoring the day gap keeps this exact;
+  // the previous local-midnight span drifted to 7 d 23 h, which Duration.inDays
+  // truncated to 7 (wrongly INCLUDING it). Mirrors web's DST relink test.
+  test('DST-straddling window counts exact calendar days (8 d excluded at 7)', () {
+    final out = filterRelinkCandidates(
+      runs: [
+        _run('dst-edge', '2024-03-04T12:00:00Z'),
+        _run('inside', '2024-03-06T12:00:00Z'),
+      ],
+      linkedRunIds: const [],
+      currentRunId: null,
+      scheduledDate: _date('2024-03-12'),
+    );
+    expect(out.map((r) => r.id).toList(), ['inside']);
+  });
 }

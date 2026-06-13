@@ -53,11 +53,16 @@ export const DEFAULT_RELINK_WINDOW_DAYS = 7;
 /** Calendar-day distance between a run's start and the scheduled date. */
 function dayGap(runStartIso: string, scheduledDate: string): number {
 	const a = new Date(runStartIso);
-	// Compare against the scheduled calendar date at local midnight.
+	// Anchor both calendar days in UTC so a DST transition between them cannot
+	// perturb the span: local-midnight spans drift to 23 h / 25 h across a DST
+	// boundary, and the gap is then no longer an exact multiple of a day. The
+	// run's LOCAL calendar day (getFullYear/Month/Date) and the scheduled date
+	// are anchored at UTC midnight, so the difference is the exact calendar-day
+	// count — keeping the mobile Dart twin in lockstep across DST windows.
 	const [y, m, d] = scheduledDate.split('-').map(Number);
-	const scheduled = new Date(y, (m ?? 1) - 1, d ?? 1);
-	const runDay = new Date(a.getFullYear(), a.getMonth(), a.getDate());
-	return Math.abs(Math.round((runDay.getTime() - scheduled.getTime()) / MS_PER_DAY));
+	const scheduled = Date.UTC(y, (m ?? 1) - 1, d ?? 1);
+	const runDay = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+	return Math.abs(Math.round((runDay - scheduled) / MS_PER_DAY));
 }
 
 /**

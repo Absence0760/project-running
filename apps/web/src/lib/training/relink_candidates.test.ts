@@ -116,3 +116,21 @@ test('default window is 7 days', () => {
 	});
 	assert.deepEqual(out.map((r) => r.id), ['d7']);
 });
+
+// A window that straddles a DST transition (spring-forward 2024-03-10): the
+// run on 03-04 is exactly 8 calendar days before a workout scheduled 03-12, so
+// it is OUT of a ±7-day window. UTC-anchoring the day gap keeps this exact on
+// both platforms; the previous local-midnight span drifted to 7 d 23 h, which
+// the Dart twin's Duration.inDays truncated to 7 (wrongly INCLUDING it).
+test('DST-straddling window counts exact calendar days (8 d → excluded at 7)', () => {
+	const out = filterRelinkCandidates({
+		runs: [
+			run('dst-edge', '2024-03-04T12:00:00Z'),
+			run('inside', '2024-03-06T12:00:00Z'),
+		],
+		linkedRunIds: [],
+		currentRunId: null,
+		scheduledDate: '2024-03-12',
+	});
+	assert.deepEqual(out.map((r) => r.id), ['inside']);
+});
