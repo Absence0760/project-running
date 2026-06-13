@@ -46,9 +46,11 @@
 	let routingError = $state<string | null>(null);
 	let routingErrorSeverity = $state<'error' | 'warning'>('error');
 	// Set when a generated loop lands outside the accept band because the road
-	// network can't form a loop at that distance here. Drives the one-click
-	// "use the achievable distance" action in the warning banner.
-	let generateShortfall = $state<{ achievedM: number } | null>(null);
+	// network can't form a clean loop at that distance here. Drives the explicit
+	// 3-way choice in the warning banner: generate the largest real loop nearby
+	// (when `largestLoopM` is present), accept this achievable out-and-back
+	// distance, or try a different start.
+	let generateShortfall = $state<{ achievedM: number; largestLoopM?: number } | null>(null);
 	let showSaveModal = $state(false);
 	let showHelp = $state(false);
 	// Mirrors the builder's internal isRouting so the Generate button
@@ -395,6 +397,31 @@
 		targetKm = Math.round(generateShortfall.achievedM / 100) / 10;
 		generateShortfall = null;
 		routingError = null;
+	}
+
+	// Choice (a): generate the largest genuinely clean loop the graph search found
+	// near this start. Re-runs generation at that distance, so the user gets a real
+	// loop instead of the out-and-back fallback. Aligns the target to it too.
+	async function generateLargestLoop() {
+		const largest = generateShortfall?.largestLoopM;
+		if (!largest) return;
+		generateShortfall = null;
+		routingError = null;
+		targetKm = Math.round(largest / 100) / 10;
+		const start = startPoint ?? undefined;
+		const end = endPoint ?? undefined;
+		const ok = await builder?.generateLoop(largest, start, end);
+		routed = !!ok;
+	}
+
+	// Choice (c): try a different start. Clear the failed route + the shortfall and
+	// drop into start-picking so the user can choose a loop-richer location.
+	function tryDifferentStart() {
+		generateShortfall = null;
+		routingError = null;
+		builder?.clearWaypoints();
+		routed = false;
+		pickingPoint = 'start';
 	}
 
 	// Mirror the picked start / end into the map as a transient marker
@@ -744,7 +771,8 @@
 			onmapclick={handleMapPick}
 			onerror={handleRoutingError}
 			onbusy={(b) => (builderBusy = b)}
-			ongeneratemismatch={(achievedM) => (generateShortfall = { achievedM })}
+			ongeneratemismatch={(achievedM, _targetM, largestLoopM) =>
+				(generateShortfall = { achievedM, largestLoopM })}
 		/>
 
 		{#if waypointCount === 0 && !pickingPoint}
@@ -759,6 +787,7 @@
 			<div
 				class="routing-error"
 				class:routing-warning={routingErrorSeverity === 'warning'}
+				class:routing-error-wide={!!generateShortfall}
 				role={routingErrorSeverity === 'warning' ? 'status' : 'alert'}
 			>
 				<span class="material-symbols">
@@ -774,10 +803,22 @@
 				</button>
 				{#if generateShortfall}
 					{@const sd = distanceInPreferred(generateShortfall.achievedM)}
-					<div class="routing-error-action">
-						<button class="btn btn-secondary btn-sm" onclick={useAchievedDistance}>
-							{m('routeNew.useThisDistance', { distance: `${sd.value.toFixed(1)} ${sd.unit}` })}
-						</button>
+					<div class="routing-error-choices">
+						<p class="routing-error-choices-prompt">{m('routeNew.loopPoorPrompt')}</p>
+						<div class="routing-error-action">
+							{#if generateShortfall.largestLoopM}
+								{@const ld = distanceInPreferred(generateShortfall.largestLoopM)}
+								<button class="btn btn-primary btn-sm" onclick={generateLargestLoop}>
+									{m('routeNew.generateLargestLoop', { distance: `${ld.value.toFixed(1)} ${ld.unit}` })}
+								</button>
+							{/if}
+							<button class="btn btn-secondary btn-sm" onclick={useAchievedDistance}>
+								{m('routeNew.useThisDistance', { distance: `${sd.value.toFixed(1)} ${sd.unit}` })}
+							</button>
+							<button class="btn btn-outline btn-sm" onclick={tryDifferentStart}>
+								{m('routeNew.tryDifferentStart')}
+							</button>
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -1507,13 +1548,27 @@
 		/* WCAG AA: white on --color-warning was 2.05:1; -strong is 5.42:1. */
 		background: var(--color-warning-strong, #9A5B0A);
 	}
+	/* The 3-way loop-poor choice needs room for up to three action buttons. */
+	.routing-error-wide {
+		max-width: 34rem;
+	}
 	.routing-error-text {
 		flex: 1;
 		line-height: 1.35;
 	}
-	/* Drops to its own row under the message (the banner is flex-wrap). */
-	.routing-error-action {
+	/* The loop-poor 3-way choice drops to its own full-width row under the
+	   message (the banner is flex-wrap). */
+	.routing-error-choices {
 		flex: 0 0 100%;
+	}
+	.routing-error-choices-prompt {
+		margin: 0 0 var(--space-sm);
+		line-height: 1.35;
+	}
+	.routing-error-action {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
 	}
 	.routing-error-dismiss {
 		background: transparent;

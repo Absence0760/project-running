@@ -60,7 +60,7 @@
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
 		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
 		onbusy = (_busy: boolean) => {},
-		ongeneratemismatch = (_achievedM: number, _targetM: number) => {}
+		ongeneratemismatch = (_achievedM: number, _targetM: number, _largestLoopM?: number) => {}
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -98,8 +98,12 @@
 		 * accept band — the road network couldn't form a loop at the target.
 		 * Carries the achieved + target distances (metres) so the parent can
 		 * offer to accept the achievable distance instead of a dead-end warning.
+		 * `largestLoopM`, when present, is the largest genuinely clean loop the
+		 * graph-cycle search found near the start (often far from `achievedM`,
+		 * which is the out-and-back fallback) — the parent uses it to offer the
+		 * explicit "generate that real loop" choice.
 		 */
-		ongeneratemismatch?: (achievedM: number, targetM: number) => void;
+		ongeneratemismatch?: (achievedM: number, targetM: number, largestLoopM?: number) => void;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -1292,7 +1296,7 @@
 			return false;
 		}
 		if (routeVersion !== startVersion || !res.ok) return false;
-		let data: { coordinates?: unknown; distanceM?: unknown };
+		let data: { coordinates?: unknown; distanceM?: unknown; largestLoopM?: unknown };
 		try {
 			data = await res.json();
 		} catch {
@@ -1302,6 +1306,13 @@
 		const coords = data?.coordinates;
 		if (!Array.isArray(coords) || coords.length < 2) return false;
 		const polyline = coords as [number, number][];
+		// Largest genuinely clean loop the graph search found near this start (only
+		// present when the served loop is an out-and-back fallback). Powers the
+		// "best loop near you is ~X km" choice below.
+		const largestLoopM =
+			typeof data.largestLoopM === 'number' && Number.isFinite(data.largestLoopM) && data.largestLoopM > 0
+				? data.largestLoopM
+				: undefined;
 
 		// Render the finished server polyline directly — no OSRM re-route.
 		markers.forEach((mk) => mk.remove());
@@ -1345,10 +1356,11 @@
 				}),
 				'warning',
 			);
-			// Hand the parent the structured shortfall so it can offer to accept
-			// the achievable distance — the road network here can't form a loop
-			// at the target, and a one-click "use X" beats a dead-end warning.
-			ongeneratemismatch(actualDistance, targetDistanceM);
+			// Hand the parent the structured shortfall so it can offer the explicit
+			// 3-way choice — generate the largest real loop nearby (largestLoopM),
+			// accept this achievable out-and-back distance, or try a different start.
+			// The road network here can't form a clean loop at the target.
+			ongeneratemismatch(actualDistance, targetDistanceM, largestLoopM);
 		} else {
 			onerror(null);
 		}

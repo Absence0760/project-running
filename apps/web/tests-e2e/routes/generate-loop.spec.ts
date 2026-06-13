@@ -563,6 +563,70 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await expect(genBtn).not.toHaveText(targetBefore);
 	});
 
+	test('loop-poor 3-way choice: surfaces the best-loop-near-you option + generates it on click', async ({
+		page,
+	}) => {
+		// The durable loop-poor UX: when the server can only manage an out-and-back
+		// at the target but the graph search found a larger genuinely clean loop
+		// nearby, the response carries `largestLoopM`. The banner must offer all
+		// three choices — generate that real loop, accept the achievable distance,
+		// or try a different start — and clicking the first must re-run generation
+		// at the largest-loop distance.
+		const LARGEST_M = 8000;
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+			};
+			// The first (5 km) request is loop-poor → a 22%-short out-and-back +
+			// the 8 km largest-clean. The re-run at 8 km returns a clean loop AT
+			// target (no largestLoopM), so the banner clears.
+			const isLargestRun = Math.abs(body.targetDistanceM - LARGEST_M) < 1;
+			const drawnM = isLargestRun ? body.targetDistanceM : body.targetDistanceM * 0.78;
+			const coordinates = loopPolyline(body.start, drawnM);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			const payload: Record<string, unknown> = { coordinates, distanceM };
+			if (!isLargestRun) payload.largestLoopM = LARGEST_M;
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(payload),
+			});
+		});
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		const result = await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		expect(result.ok).toBe(true);
+
+		const banner = page.locator('.routing-error.routing-warning').first();
+		await expect(banner).toBeVisible({ timeout: 5_000 });
+		// All three choices present.
+		const bestLoopBtn = page.getByRole('button', { name: /Best loop near you/i });
+		await expect(bestLoopBtn).toBeVisible();
+		await expect(page.getByRole('button', { name: /instead/i })).toBeVisible();
+		await expect(page.getByRole('button', { name: /different start/i })).toBeVisible();
+
+		// Clicking "Best loop near you" re-generates at the largest-loop distance.
+		await bestLoopBtn.click();
+		// The re-run lands in-band (8 km loop at 8 km), so the shortfall banner clears.
+		await expect(banner).toBeHidden({ timeout: 5_000 });
+		// The Generate button now carries the retargeted ~8 km distance.
+		const genBtn = page.getByRole('button', { name: /Generate .* (loop|route)/i });
+		const label = (await genBtn.textContent()) ?? '';
+		const mm = label.match(/([\d.]+)\s*(mi|km)/);
+		expect(mm, `Generate label "${label}" should carry a distance`).not.toBeNull();
+		const retargeted = parseFloat(mm![1]);
+		const expectedDisplay = mm![2] === 'mi' ? LARGEST_M / 1609.344 : LARGEST_M / 1000;
+		expect(Math.abs(retargeted - expectedDisplay)).toBeLessThan(0.3);
+	});
+
 	test('over-target shortfall: warns "longer than" + the action retargets upward', async ({
 		page,
 	}) => {
