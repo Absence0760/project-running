@@ -773,6 +773,7 @@ export type Database = {
           route_id: string | null
           session_plan_id: string | null
           starts_at: string
+          timezone: string | null
           title: string
           updated_at: string | null
         }
@@ -800,6 +801,7 @@ export type Database = {
           route_id?: string | null
           session_plan_id?: string | null
           starts_at: string
+          timezone?: string | null
           title: string
           updated_at?: string | null
         }
@@ -827,6 +829,7 @@ export type Database = {
           route_id?: string | null
           session_plan_id?: string | null
           starts_at?: string
+          timezone?: string | null
           title?: string
           updated_at?: string | null
         }
@@ -3802,6 +3805,7 @@ export type Database = {
           p_limit?: number
           p_paid?: string
           p_query?: string
+          p_time?: string
         }
         Returns: {
           capacity: number
@@ -3817,6 +3821,7 @@ export type Database = {
           recurrence_byday: string[]
           recurrence_freq: string
           starts_at: string
+          timezone: string
           title: string
         }[]
       }

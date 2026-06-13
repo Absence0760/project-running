@@ -5,7 +5,7 @@
 -- category / weekday / paid filters that back the /social Discover tab.
 
 begin;
-select plan(8);
+select plan(10);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values ('aaaaaaaa-0000-0000-0000-0000000000d1', 'authenticated', 'authenticated', 'spe@disc.local', '', now(), now());
@@ -28,6 +28,13 @@ values
   ('eeeeeeee-0000-0000-0000-0000000000a3', 'cccccccc-0000-0000-0000-0000000000f2',
    'aaaaaaaa-0000-0000-0000-0000000000d1', 'Secret Class', 'class', 'Secret',
    now() + interval '2 days', 'weekly', array['SU']);
+
+-- Public, timezone-anchored: 23:00 UTC = 19:00 America/New_York (EDT) -> evening.
+insert into events (id, club_id, author_id, title, category, discipline, starts_at, timezone, recurrence_freq, recurrence_byday)
+values
+  ('eeeeeeee-0000-0000-0000-0000000000a4', 'cccccccc-0000-0000-0000-0000000000f1',
+   'aaaaaaaa-0000-0000-0000-0000000000d1', 'Evening Pilates', 'class', 'Evening Pilates',
+   timestamptz '2026-07-05 23:00:00+00', 'America/New_York', 'weekly', array['SU']);
 
 -- Price the public pilates class (bypass the charges_enabled trigger for the fixture).
 set session_replication_role = replica;
@@ -74,6 +81,17 @@ select is(
   (select count(*)::int from search_public_events(p_paid := 'free')
      where id = 'eeeeeeee-0000-0000-0000-0000000000a2'),
   0, 'free filter excludes the priced class');
+
+-- Time-of-day is the event's LOCAL hour (19:00 New York), not the 23:00 UTC instant.
+select is(
+  (select count(*)::int from search_public_events(p_time := 'evening')
+     where id = 'eeeeeeee-0000-0000-0000-0000000000a4'),
+  1, 'evening filter matches a 19:00-local (23:00 UTC) event');
+
+select is(
+  (select count(*)::int from search_public_events(p_time := 'morning')
+     where id = 'eeeeeeee-0000-0000-0000-0000000000a4'),
+  0, 'morning filter excludes the 19:00-local event (not its 23:00 UTC hour)');
 
 select * from finish();
 rollback;
