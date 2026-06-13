@@ -3075,6 +3075,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 147. Cross-club activity discovery is one `security invoker` RPC scoped to public clubs, surfaced as a `/social` Discover tab
+
+**Decided (2026-06-12, migration `20270110_001`).** Until now events were reachable only inside a club you already knew or belonged to (`fetchUpcomingEvents` is club-scoped) — there was no way to find "a paid pilates class on Sundays" or "a weekly group run" across clubs. Rather than a class-only search, discovery is **unified over the typed-events model**: one `search_public_events(query, category, cadence, byday, paid, limit)` RPC filters every `category` (run/cycle/class/social) by discipline (pg_trgm index on `events.discipline`), recurrence cadence, weekday (`recurrence_byday @> array[?]` for recurring, `starts_at` weekday for one-offs), and free/paid (presence of an `event_pricing` row). It surfaces as a 4th tab on `/social` (Feed · People · Clubs · **Discover**), mirroring where clubs + people discovery already live (anti-clutter: no new global nav item).
+
+**Why `security invoker`, not `SECURITY DEFINER`.** Mirrors `search_clubs`: the RPC filters `clubs.is_public = true`, and the events RLS (`20260416_001`) already lets anyone read a public club's events, so the function can only ever return rows the caller could already see — no privileged path, works logged-out. A private club's events are structurally undiscoverable.
+
+**Scope / deferred.** Slice 1 ships category + discipline + cadence + weekday + free/paid. **Time-of-day filtering is deferred** (events store `starts_at` as `timestamptz` with no per-club timezone, so an hour-of-day filter is ambiguous — weekday on an explicit `recurrence_byday` is timezone-safe, hour is not). **Geo/location filtering is deferred** (reuse the `search_clubs` geocode + `ST_DWithin` pattern in a follow-up). Web-only; a mobile discovery surface is deferred. Pinned by `search_public_events_test.sql` (pgtap, public-vs-private + each filter) + `tests-e2e/social/discover.spec.ts`.
+
+**Don't re-litigate** by adding an hour-of-day filter without a per-club/event timezone to anchor it, or by switching the RPC to `SECURITY DEFINER` (it would have to re-implement the public-club gate the RLS already enforces, for no gain).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
