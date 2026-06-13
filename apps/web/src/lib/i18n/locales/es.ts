@@ -1530,6 +1530,8 @@ export const messages = {
 	"clubHome.elevation": "{n} m desn.",
 	"clubHome.publicTag": "Pública",
 	"clubHome.removeRouteTitle": "Quitar del club (vuelve a la biblioteca de quien la subió)",
+	"clubHome.removeRouteConfirmTitle": "¿Quitar la ruta del club?",
+	"clubHome.removeRouteConfirmMessage": "Vuelve a la biblioteca de quien la subió. Puedes transferirla de nuevo más tarde.",
 	"clubHome.removeRouteAria": "Quitar ruta del club",
 	"clubHome.addTemplate": "Añadir plantilla",
 	"clubHome.trainingTemplatesTitle": "Plantillas de plan de entrenamiento",

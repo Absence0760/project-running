@@ -1530,6 +1530,8 @@ export const messages = {
 	"clubHome.elevation": "{n} m dén.",
 	"clubHome.publicTag": "Public",
 	"clubHome.removeRouteTitle": "Retirer du club (revient dans la bibliothèque de l'auteur)",
+	"clubHome.removeRouteConfirmTitle": "Retirer l'itinéraire du club ?",
+	"clubHome.removeRouteConfirmMessage": "Il revient dans la bibliothèque de l'auteur. Tu pourras le transférer à nouveau plus tard.",
 	"clubHome.removeRouteAria": "Retirer l'itinéraire du club",
 	"clubHome.addTemplate": "Ajouter un modèle",
 	"clubHome.trainingTemplatesTitle": "Modèles de plan d'entraînement",

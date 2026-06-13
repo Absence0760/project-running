@@ -123,6 +123,7 @@
 	let showRegenConfirm = $state(false);
 	let showDeleteClubConfirm = $state(false);
 	let showDeletePostConfirm = $state<string | null>(null);
+	let showRemoveRouteId = $state<string | null>(null);
 	/** When non-null, the user_id of the member the admin is about to
 	 *  remove. Drives the kick ConfirmDialog. */
 	let removingMemberId = $state<string | null>(null);
@@ -234,6 +235,12 @@
 		} catch (e) {
 			showToast(tr('clubHome.toastRouteTransferFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
+	}
+
+	async function confirmRemoveRoute() {
+		const id = showRemoveRouteId;
+		showRemoveRouteId = null;
+		if (id) await removeRouteFromClub(id);
 	}
 
 	async function removeRouteFromClub(routeId: string) {
@@ -1283,7 +1290,7 @@
 									type="button"
 									title={tr('clubHome.removeRouteTitle')}
 									aria-label={tr('clubHome.removeRouteAria')}
-									onclick={() => removeRouteFromClub(route.id)}
+									onclick={() => (showRemoveRouteId = route.id)}
 								>
 									<span class="material-symbols" aria-hidden="true">link_off</span>
 								</button>
@@ -1506,6 +1513,16 @@
 	confirmLabel={tr('clubHome.delete')}
 	onconfirm={confirmDeletePost}
 	oncancel={() => showDeletePostConfirm = null}
+	danger
+/>
+
+<ConfirmDialog
+	open={showRemoveRouteId !== null}
+	title={tr('clubHome.removeRouteConfirmTitle')}
+	message={tr('clubHome.removeRouteConfirmMessage')}
+	confirmLabel={tr('clubHome.remove')}
+	onconfirm={confirmRemoveRoute}
+	oncancel={() => showRemoveRouteId = null}
 	danger
 />
 

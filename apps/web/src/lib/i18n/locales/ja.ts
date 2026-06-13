@@ -1526,6 +1526,8 @@ export const messages = {
 	"clubHome.elevation": "標高 {n} m",
 	"clubHome.publicTag": "公開",
 	"clubHome.removeRouteTitle": "クラブから削除（アップロード者のライブラリに戻ります）",
+	"clubHome.removeRouteConfirmTitle": "ルートをクラブから削除しますか？",
+	"clubHome.removeRouteConfirmMessage": "アップロード者のライブラリに戻ります。後で再び移すことができます。",
 	"clubHome.removeRouteAria": "ルートをクラブから削除",
 	"clubHome.addTemplate": "テンプレートを追加",
 	"clubHome.trainingTemplatesTitle": "トレーニングプランのテンプレート",

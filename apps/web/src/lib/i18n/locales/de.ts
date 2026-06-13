@@ -1530,6 +1530,8 @@ export const messages = {
 	"clubHome.elevation": "{n} m Höhe",
 	"clubHome.publicTag": "Öffentlich",
 	"clubHome.removeRouteTitle": "Aus dem Club entfernen (zurück in die Bibliothek des Hochladers)",
+	"clubHome.removeRouteConfirmTitle": "Route aus dem Club entfernen?",
+	"clubHome.removeRouteConfirmMessage": "Sie kehrt in die Bibliothek des Hochladers zurück. Du kannst sie später wieder übertragen.",
 	"clubHome.removeRouteAria": "Route aus dem Club entfernen",
 	"clubHome.addTemplate": "Vorlage hinzufügen",
 	"clubHome.trainingTemplatesTitle": "Trainingsplan-Vorlagen",

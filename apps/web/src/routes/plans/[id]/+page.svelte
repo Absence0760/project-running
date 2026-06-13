@@ -445,8 +445,10 @@
 		}
 	});
 
+	let publishingBusy = $state(false);
 	async function publishAsTemplate() {
-		if (!plan || !publishingTo) return;
+		if (!plan || !publishingTo || publishingBusy) return;
+		publishingBusy = true;
 		try {
 			await publishPlanAsTemplate(plan.id, publishingTo);
 			showToast(m('planDetail.publishSuccess'));
@@ -455,6 +457,8 @@
 			// template lives on the club's Templates tab.
 		} catch (e) {
 			showToast(m('planDetail.publishFailed', { error: String(e) }), 'error');
+		} finally {
+			publishingBusy = false;
 		}
 	}
 
@@ -969,7 +973,7 @@
 				<button
 					class="btn btn-outline"
 					type="button"
-					disabled={!publishingTo}
+					disabled={!publishingTo || publishingBusy}
 					onclick={publishAsTemplate}
 				>
 					{m('planDetail.publish')}

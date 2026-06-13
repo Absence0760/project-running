@@ -1539,6 +1539,8 @@ export const en = {
 	"clubHome.elevation": "{n} m elev",
 	"clubHome.publicTag": "Public",
 	"clubHome.removeRouteTitle": "Remove from club (returns to uploader's library)",
+	"clubHome.removeRouteConfirmTitle": "Remove route from club?",
+	"clubHome.removeRouteConfirmMessage": "It returns to the uploader's library. You can transfer it back later.",
 	"clubHome.removeRouteAria": "Remove route from club",
 	"clubHome.addTemplate": "Add template",
 	"clubHome.trainingTemplatesTitle": "Training plan templates",
