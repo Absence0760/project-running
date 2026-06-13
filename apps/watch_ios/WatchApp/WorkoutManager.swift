@@ -44,6 +44,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     let paceToleranceSeconds: Double = 15
 
     private let locationManager = CLLocationManager()
+    // Reused across every GPS fix — ISO8601DateFormatter is expensive to
+    // construct (backing NSDateFormatter + ICU state), so allocating one per
+    // point in the ~1 Hz didUpdateLocations callback churned the allocator on
+    // the recording hot path over a long run. Mirrors CheckpointStore's static
+    // encoder/decoder reuse; the serial CoreLocation delegate makes it safe.
+    private let iso8601 = ISO8601DateFormatter()
     private var timer: Timer?
     private var checkpointTimer: Timer?
     private var startDate: Date?
@@ -283,7 +289,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 lat: location.coordinate.latitude,
                 lng: location.coordinate.longitude,
                 ele: location.altitude > -999 ? location.altitude : nil,
-                ts: ISO8601DateFormatter().string(from: location.timestamp)
+                ts: iso8601.string(from: location.timestamp)
             ))
         }
 
