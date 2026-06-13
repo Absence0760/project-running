@@ -3663,6 +3663,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      latest_race_pings: {
+        Args: { p_event_id: string; p_instance_start: string }
+        Returns: {
+          at: string
+          bpm: number | null
+          distance_m: number | null
+          elapsed_s: number | null
+          event_id: string
+          id: number
+          instance_start: string
+          lat: number
+          lng: number
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "race_pings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       mark_attendance: {
         Args: { p_attendance: string; p_event_id: string; p_user_id: string }
         Returns: undefined
