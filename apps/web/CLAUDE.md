@@ -32,6 +32,7 @@ src/
                     # RunSocial (kudos + comments on a run — mounted on /share/run/[id], /runs/[id]; feed uses fetchEngagementSummaries chips instead),
                     # RunShareView (the public run share body — extracted so /share/run/[id] (standalone page) and the /feed modal can both render it without duplicating layout),
                     # RunPhotos (gallery for run_photos — mounted on /runs/[id] and /share/run/[id]; owner gates upload + delete; decisions §36),
+                    # RoutePhotos (gallery for route_photos — same shape as RunPhotos, mounted on /routes/[id] and /share/route/[id]; owner gates upload/caption/delete; backlog C1),
                     # SegmentsPanel + RunSegmentEfforts (segment leaderboards on /routes/[id] + per-run effort chips on /runs/[id]; decisions §37),
                     # NotificationBell (compact bell icon next to the profile button in the sidebar footer — unread badge + popover for kudos/comments/follows; full inbox lives on /u/[me]?tab=notifications; decisions §38).
                     # NotificationsList (the inbox body — All / Unread tabs, per-row dismiss, bulk Mark-all-read; mounted under the Notifications tab on /u/[id] when isSelf).

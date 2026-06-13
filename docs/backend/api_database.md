@@ -288,6 +288,25 @@ create table run_photos (
 
 In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies gate SELECT on `is_run_visible_to(rp.run_id, auth.uid())` (joining through `run_photos`) and INSERT/DELETE on the per-user folder. The bucket is private; clients use signed URLs with a 1 h TTL. **EXIF stripping** is two-layered: the `job_worker` `photo_process` handler re-encodes uploads server-side to drop metadata, and the mobile clients additionally strip the EXIF/XMP APP1 segment *before* upload (`apps/mobile_android/lib/exif_strip.dart`, persona family-club #52) so a geotagged original never sits in the bucket during the async-worker window. Web still relies on the server worker alone. **Event gallery (#49, migration `20261025_001`):** `event_id` + `event_instance_start` tag a photo to an event occurrence; a `for select` policy makes event-tagged photos readable by anyone who can read the event (the `exists (… from events …)` subquery inherits the events RLS), so the gallery aggregates attendees' photos even across private runs. The INSERT policy additionally requires the uploader can see the tagged event.
 
+#### `route_photos`
+
+Photos attached to a route (backlog C1 — the `run_photos` capability applied to routes; migration `20270114_001`). Metadata in Postgres, bytes in the **private** `route-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}`. The bucket is private from the start (no public flag to flip) so RLS on `storage.objects` is always enforced; clients access bytes via `createSignedUrl(s)` with a 15-min TTL.
+
+```sql
+create table route_photos (
+  id              uuid primary key default gen_random_uuid(),
+  route_id        uuid references routes(id) on delete cascade not null,
+  owner_id        uuid references auth.users(id) on delete cascade not null,
+  storage_path    text not null,            -- {owner_id}/{photo_id}.{ext}
+  thumb_512_path  text,                      -- service-role-only 512w thumb
+  caption         text check (caption is null or length(caption) <= 280),
+  position_idx    smallint not null default 0,
+  created_at      timestamptz not null default now()
+);
+```
+
+The owner of the parent route attaches photos (INSERT policy: `auth.uid() = owner_id AND owns the route`). Photo owner OR route owner can DELETE (moderation). SELECT gates on `private.is_route_visible_to(route_id, auth.uid())` (own / public / club-member) on both the table and the Storage bytes (joining through `route_photos.storage_path` OR `thumb_512_path`), so a route flipping public→private propagates within the signed-URL TTL. `storage_path` + `thumb_512_path` carry owner-prefix-shape CHECKs; a BEFORE-UPDATE trigger blocks clearing `storage_path` (use DELETE) and another blocks user-side `thumb_512_path` writes (service-role only). **EXIF stripping** is client-side before upload (web `stripExifFromFile`, mobile `stripJpegExif`); there is **no `photo_process` enqueue trigger** because the Go worker has no route-photo handler yet — `thumb_512_path` is carried for forward parity. Pinned by `rls_route_photos_test.sql` (13 assertions).
+
 #### `notifications`
 
 Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows / club posts / completed runs) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, `event_attendees`, `club_posts`, and `runs` so the notification lands in the same transaction as the source write.
@@ -1592,12 +1611,13 @@ Returns `(exercise_name, uses)` — distinct trimmed exercise names + use counts
 
 ## Supabase Storage
 
-Two buckets in the live schema:
+Three buckets in the live schema:
 
 | Bucket | Access | Purpose |
 |---|---|---|
 | `runs` | Private (RLS, owner-scoped) | **Two content classes** under different path prefixes — see below. The bare-table public-read RLS that used to gate this on `runs.is_public` was dropped in `20260619_001_drop_public_runs_storage_policy.sql`; non-owner reads now go through the `clip-public-track` Edge Function. Owner SELECT on the `exports/` subprefix was removed in `20260816_001_runs_bucket_exports_signed_url_only.sql` — exports are reachable through the EF-issued 10-min signed URL only, never via direct REST GET. |
 | `run-photos` | Private (RLS, parent-run-visibility join) | Photos attached to runs at `{owner_id}/{photo_id}.{ext}`. Per-user-folder INSERT/DELETE; storage SELECT joins through `run_photos` → `is_run_visible_to`. Bucket is private (migration `20260712_001`); clients use signed URLs with 1 h TTL. See `decisions.md § 36`. |
+| `route-photos` | Private (RLS, parent-route-visibility join) | Photos attached to routes at `{owner_id}/{photo_id}.{ext}` (backlog C1, migration `20270114_001`). Per-user-folder INSERT/DELETE; storage SELECT joins through `route_photos` → `private.is_route_visible_to`. Private from creation; clients use signed URLs with 15-min TTL. `file_size_limit` 10 MB + image-only `allowed_mime_types`, matching `run-photos`. |
 
 The `routes`, `exports`, `avatars` buckets shown in older revisions of this doc were never created — `routes.waypoints` is stored inline (jsonb on the `routes` table), exports live under the `runs` bucket's `exports/` prefix, and avatar URLs are free-text columns sourced from OAuth providers or pasted URLs (no upload helper).
 
