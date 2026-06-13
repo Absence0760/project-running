@@ -2481,6 +2481,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Tag konnte nicht entfernt werden: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return '$format konnte nicht geteilt werden: $error';
   }
@@ -3644,6 +3649,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventRaceCancelRace => 'Rennen abbrechen';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'Rennen beenden? Damit wird das Event für alle Läufer abgeschlossen und kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Rennen abbrechen? Damit wird das Event für alle Läufer abgebrochen und kann nicht rückgängig gemacht werden.';
+
+  @override
   String get eventUpdatePosted => 'Update im Club-Feed veröffentlicht.';
 
   @override
@@ -4186,6 +4199,17 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get workoutUnlink => 'Verknüpfung lösen';
+
+  @override
+  String get workoutUnlinkTitle => 'Lauf entkoppeln';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Den zugeordneten Lauf entkoppeln? Die Einheit gilt dann wieder als nicht erledigt.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Lauf konnte nicht entkoppelt werden. Versuche es erneut.';
 
   @override
   String get workoutRelink => 'Neu verknüpfen';
@@ -6514,6 +6538,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Wähle die Art der Veranstaltung – ein Kurs oder Treffen lässt Strecke, Distanz, Tempo und Rennergebnisse weg.';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'Nur für Mitglieder';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Nur Vereinsmitglieder können dieses Event sehen; es erscheint nicht in der öffentlichen Suche.';
+
+  @override
   String get eventEditorDiscipline => 'Disziplin';
 
   @override
@@ -8022,6 +8053,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get nutritionNoResults =>
       'Keine Treffer. Versuche einen anderen Begriff oder gib es unten manuell ein.';
+
+  @override
+  String get nutritionSaveFailed =>
+      'Essen konnte nicht protokolliert werden. Versuche es erneut.';
 
   @override
   String get nutritionMealSlot => 'Mahlzeit';

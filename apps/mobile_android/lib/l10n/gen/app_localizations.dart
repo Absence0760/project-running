@@ -4145,6 +4145,12 @@ abstract class AppLocalizations {
   /// **'Could not save tag: {error}'**
   String routeDetailTagSaveFailed(String error);
 
+  /// Banner shown when removing a route tag fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove tag: {error}'**
+  String routeDetailTagRemoveFailed(String error);
+
   /// Banner shown when sharing a route as a file fails
   ///
   /// In en, this message translates to:
@@ -6059,6 +6065,18 @@ abstract class AppLocalizations {
   /// **'Cancel race'**
   String get eventRaceCancelRace;
 
+  /// No description provided for @eventRaceEndConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'End the race? This finalizes the event for every runner and can\'t be undone.'**
+  String get eventRaceEndConfirmBody;
+
+  /// No description provided for @eventRaceCancelConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel the race? This aborts the event for every runner and can\'t be undone.'**
+  String get eventRaceCancelConfirmBody;
+
   /// Banner shown after posting an admin update
   ///
   /// In en, this message translates to:
@@ -6946,6 +6964,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unlink'**
   String get workoutUnlink;
+
+  /// No description provided for @workoutUnlinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink run'**
+  String get workoutUnlinkTitle;
+
+  /// No description provided for @workoutUnlinkBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink the matched run? The workout will show as not yet done.'**
+  String get workoutUnlinkBody;
+
+  /// No description provided for @workoutUnlinkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t unlink the run. Try again.'**
+  String get workoutUnlinkError;
 
   /// Re-link-to-a-different-run button on workout detail
   ///
@@ -10815,6 +10851,18 @@ abstract class AppLocalizations {
   /// **'Pick the kind of event — a class or social meetup skips route, distance, pace and race results.'**
   String get eventEditorCategoryHint;
 
+  /// Toggle in the event editor (public clubs only) that makes the event members-only (events.is_public = false).
+  ///
+  /// In en, this message translates to:
+  /// **'Members only'**
+  String get eventEditorMembersOnlyToggle;
+
+  /// Helper text under the members-only toggle in the event editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Only club members can see this event, and it won\'t appear in public discovery.'**
+  String get eventEditorMembersOnlyHint;
+
   /// Label for the free-text class-discipline field
   ///
   /// In en, this message translates to:
@@ -13328,6 +13376,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No matches. Try another term or enter it manually below.'**
   String get nutritionNoResults;
+
+  /// No description provided for @nutritionSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t log food. Try again.'**
+  String get nutritionSaveFailed;
 
   /// No description provided for @nutritionMealSlot.
   ///

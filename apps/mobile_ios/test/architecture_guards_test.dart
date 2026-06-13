@@ -705,6 +705,50 @@ void main() {
     });
   });
 
+  group('race End / Cancel confirm before mutating', () {
+    test('event_detail End/Cancel route through _confirmRaceAction', () {
+      // Reason: ending or cancelling a live race is irreversible and
+      // affects every participant. Web gates both behind a ConfirmDialog;
+      // the mobile race-control card used to fire _raceMutation(end) /
+      // _raceMutation(cancel) on a single tap. The fix requires both
+      // destructive arms to route through a _confirmRaceAction dialog;
+      // Arm / Fire Go stay one-tap. Catches a regression that drops the
+      // confirm or wires a button straight to _raceMutation.
+      final source =
+          File('lib/screens/event_detail_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('_confirmRaceAction'),
+        reason: 'The End/Cancel race buttons must route through a '
+            '_confirmRaceAction dialog before calling _raceMutation.',
+      );
+      expect(
+        source,
+        contains('showDialog<bool>'),
+        reason: '_confirmRaceAction must present an AlertDialog confirm '
+            '(showDialog<bool>) before the mutation.',
+      );
+      // Neither destructive arm may be invoked directly from an onPressed.
+      expect(
+        source,
+        isNot(contains('_raceMutation(_RaceAction.end)')),
+        reason: 'End must go through _confirmRaceAction, not call '
+            '_raceMutation(_RaceAction.end) directly from a button.',
+      );
+      expect(
+        source,
+        isNot(contains('_raceMutation(_RaceAction.cancel)')),
+        reason: 'Cancel must go through _confirmRaceAction, not call '
+            '_raceMutation(_RaceAction.cancel) directly from a button.',
+      );
+      // Arm / Fire Go remain one-tap (non-destructive) — guard that the
+      // confirm wrapper is reserved for the destructive arms by pinning
+      // the localized confirm-body keys.
+      expect(source, contains('eventRaceEndConfirmBody'));
+      expect(source, contains('eventRaceCancelConfirmBody'));
+    });
+  });
+
   group('privacy_default → run-save wiring', () {
     test('run_screen._stop reads newRunsArePublic when calling saveRun', () {
       // Reason: the user-flagged gap — the `privacy_default` setting

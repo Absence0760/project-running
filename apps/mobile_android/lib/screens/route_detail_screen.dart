@@ -1405,6 +1405,10 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     } catch (e) {
       debugPrint('updateRouteTags (remove) failed for ${widget.route.id}: $e');
       setState(() => _saving = false);
+      if (mounted) {
+        showTopBanner(
+            context, AppLocalizations.of(context).routeDetailTagRemoveFailed('$e'));
+      }
     }
   }
 

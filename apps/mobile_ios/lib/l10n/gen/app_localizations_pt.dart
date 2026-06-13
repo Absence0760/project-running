@@ -2471,6 +2471,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Não foi possível remover a etiqueta: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'Não foi possível compartilhar $format: $error';
   }
@@ -3636,6 +3641,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get eventRaceCancelRace => 'Cancelar corrida';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'Encerrar a corrida? Isso finaliza o evento para todos os corredores e não pode ser desfeito.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Cancelar a corrida? Isso aborta o evento para todos os corredores e não pode ser desfeito.';
+
+  @override
   String get eventUpdatePosted => 'Novidade publicada no feed do clube.';
 
   @override
@@ -4181,6 +4194,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutUnlinkTitle => 'Desvincular corrida';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Desvincular a corrida associada? A sessão voltará a aparecer como não concluída.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Não foi possível desvincular a corrida. Tente novamente.';
 
   @override
   String get workoutRelink => 'Revincular';
@@ -6503,6 +6527,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Escolha o tipo de evento — uma aula ou encontro social ignora rota, distância, ritmo e resultados de corrida.';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'Somente para membros';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Apenas membros do clube podem ver este evento, e ele não aparecerá na busca pública.';
+
+  @override
   String get eventEditorDiscipline => 'Modalidade';
 
   @override
@@ -8012,6 +8043,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get nutritionNoResults =>
       'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionSaveFailed =>
+      'Não foi possível registrar o alimento. Tente novamente.';
 
   @override
   String get nutritionMealSlot => 'Refeição';
@@ -10939,6 +10974,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Não foi possível remover a etiqueta: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'Não foi possível compartilhar $format: $error';
   }
@@ -12104,6 +12144,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get eventRaceCancelRace => 'Cancelar corrida';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'Encerrar a corrida? Isso finaliza o evento para todos os corredores e não pode ser desfeito.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Cancelar a corrida? Isso aborta o evento para todos os corredores e não pode ser desfeito.';
+
+  @override
   String get eventUpdatePosted => 'Novidade publicada no feed do clube.';
 
   @override
@@ -12649,6 +12697,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutUnlinkTitle => 'Desvincular corrida';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Desvincular a corrida associada? A sessão voltará a aparecer como não concluída.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Não foi possível desvincular a corrida. Tente novamente.';
 
   @override
   String get workoutRelink => 'Revincular';
@@ -14971,6 +15030,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Escolha o tipo de evento — uma aula ou encontro social ignora rota, distância, ritmo e resultados de corrida.';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'Somente para membros';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Apenas membros do clube podem ver este evento, e ele não aparecerá na busca pública.';
+
+  @override
   String get eventEditorDiscipline => 'Modalidade';
 
   @override
@@ -16480,6 +16546,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get nutritionNoResults =>
       'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionSaveFailed =>
+      'Não foi possível registrar o alimento. Tente novamente.';
 
   @override
   String get nutritionMealSlot => 'Refeição';

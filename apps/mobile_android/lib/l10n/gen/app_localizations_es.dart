@@ -2473,6 +2473,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'No se pudo quitar la etiqueta: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'No se pudo compartir $format: $error';
   }
@@ -3633,6 +3638,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get eventRaceCancelRace => 'Cancelar carrera';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      '¿Finalizar la carrera? Esto cierra el evento para todos los corredores y no se puede deshacer.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      '¿Cancelar la carrera? Esto cancela el evento para todos los corredores y no se puede deshacer.';
+
+  @override
   String get eventUpdatePosted => 'Novedad publicada en el feed del club.';
 
   @override
@@ -4179,6 +4192,17 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutUnlinkTitle => 'Desvincular carrera';
+
+  @override
+  String get workoutUnlinkBody =>
+      '¿Desvincular la carrera asociada? La sesión volverá a aparecer como no realizada.';
+
+  @override
+  String get workoutUnlinkError =>
+      'No se pudo desvincular la carrera. Inténtalo de nuevo.';
 
   @override
   String get workoutRelink => 'Revincular';
@@ -6510,6 +6534,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Elige el tipo de evento — una clase o un encuentro social omite ruta, distancia, ritmo y resultados de carrera.';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'Solo para miembros';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Solo los miembros del club pueden ver este evento y no aparecerá en la búsqueda pública.';
+
+  @override
   String get eventEditorDiscipline => 'Disciplina';
 
   @override
@@ -8016,6 +8047,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get nutritionNoResults =>
       'Sin coincidencias. Prueba otro término o introdúcelo manualmente abajo.';
+
+  @override
+  String get nutritionSaveFailed =>
+      'No se pudo registrar la comida. Inténtalo de nuevo.';
 
   @override
   String get nutritionMealSlot => 'Comida';

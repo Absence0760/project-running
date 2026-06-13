@@ -67,9 +67,16 @@ test.describe('/coaching — coach side', () => {
 		const athleteLink = page.locator(`a[href="/coaching/athletes/${USER_C_PRO.id}"]`);
 		await expect(athleteLink.first()).toBeVisible({ timeout: 10_000 });
 
-		// removeAthlete() goes through a window.confirm() — accept it.
-		page.on('dialog', (d) => d.accept());
+		// Remove now routes through the shared ConfirmDialog (was a native
+		// confirm()). Cancel keeps the athlete; confirming removes them.
 		await page.getByRole('button', { name: 'Remove' }).first().click();
+		const dialog = page.locator('.modal', { hasText: 'Remove' });
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(athleteLink.first()).toBeVisible();
+
+		await page.getByRole('button', { name: 'Remove' }).first().click();
+		await dialog.getByRole('button', { name: 'Remove' }).click();
 		await expect(athleteLink).toHaveCount(0, { timeout: 10_000 });
 	});
 
@@ -136,7 +143,11 @@ test.describe('/coaching — coach side', () => {
 		await page.getByRole('button', { name: 'Invite an athlete' }).click();
 		await expect(page.getByText('Pending invite')).toBeVisible({ timeout: 10_000 });
 
+		// Revoke now routes through the shared ConfirmDialog.
 		await page.getByRole('button', { name: 'Revoke' }).first().click();
+		const dialog = page.locator('.modal', { hasText: 'Revoke' });
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+		await dialog.getByRole('button', { name: 'Revoke' }).click();
 		await expect(page.getByText('Pending invite')).toHaveCount(0, { timeout: 10_000 });
 	});
 });

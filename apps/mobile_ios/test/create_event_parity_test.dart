@@ -197,6 +197,7 @@ void main() {
         'club_id',
         'title',
         'category',
+        'is_public',
         'discipline',
         'gym_template',
         'description',
@@ -309,6 +310,29 @@ void main() {
       expect(body['route_id'], 'route-1');
       expect(body['distance_m'], 5000);
       expect(body['pace_target_sec'], 300);
+    });
+  });
+
+  group('buildCreateEventBody — event-level visibility (§148)', () {
+    test('is_public defaults to true', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'T',
+        startsAt: startsAt,
+      );
+      expect(body['is_public'], true);
+    });
+
+    test('is_public false marks the event members-only', () {
+      final body = SocialService.buildCreateEventBody(
+        authorId: userId,
+        clubId: clubId,
+        title: 'Committee meeting',
+        startsAt: startsAt,
+        isPublic: false,
+      );
+      expect(body['is_public'], false);
     });
   });
 }

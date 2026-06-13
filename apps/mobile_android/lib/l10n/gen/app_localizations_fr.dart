@@ -2483,6 +2483,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Impossible de supprimer l\'étiquette : $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'Impossible de partager $format : $error';
   }
@@ -3646,6 +3651,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get eventRaceCancelRace => 'Annuler la course';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'Terminer la course ? Cela finalise l\'épreuve pour tous les coureurs et est irréversible.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Annuler la course ? Cela interrompt l\'épreuve pour tous les coureurs et est irréversible.';
+
+  @override
   String get eventUpdatePosted => 'Mise à jour publiée dans le fil du club.';
 
   @override
@@ -4192,6 +4205,17 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get workoutUnlink => 'Dissocier';
+
+  @override
+  String get workoutUnlinkTitle => 'Dissocier la course';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Dissocier la course associée ? La séance réapparaîtra comme non effectuée.';
+
+  @override
+  String get workoutUnlinkError =>
+      'Impossible de dissocier la course. Réessayez.';
 
   @override
   String get workoutRelink => 'Réassocier';
@@ -6523,6 +6547,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Choisissez le type d\'événement — un cours ou une rencontre ignore l\'itinéraire, la distance, l\'allure et les résultats de course.';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'Réservé aux membres';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Seuls les membres du club peuvent voir cet événement ; il n\'apparaîtra pas dans la découverte publique.';
+
+  @override
   String get eventEditorDiscipline => 'Discipline';
 
   @override
@@ -8034,6 +8065,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get nutritionNoResults =>
       'Aucun résultat. Essaie un autre terme ou saisis-le manuellement ci-dessous.';
+
+  @override
+  String get nutritionSaveFailed =>
+      'Impossible d\'enregistrer l\'aliment. Réessaie.';
 
   @override
   String get nutritionMealSlot => 'Repas';

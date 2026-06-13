@@ -644,6 +644,7 @@ class SocialService extends ChangeNotifier {
     List<String>? recurrenceByDay,
     DateTime? recurrenceUntil,
     int? recurrenceCount,
+    bool isPublic = true,
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
@@ -668,6 +669,7 @@ class SocialService extends ChangeNotifier {
       recurrenceByDay: recurrenceByDay,
       recurrenceUntil: recurrenceUntil,
       recurrenceCount: recurrenceCount,
+      isPublic: isPublic,
     );
     final inserted = await _c
         .from('events')
@@ -703,6 +705,7 @@ class SocialService extends ChangeNotifier {
     List<String>? recurrenceByDay,
     DateTime? recurrenceUntil,
     int? recurrenceCount,
+    bool isPublic = true,
   }) {
     String? trimToNull(String? s) {
       final t = s?.trim();
@@ -714,6 +717,7 @@ class SocialService extends ChangeNotifier {
       'club_id': clubId,
       'title': title.trim(),
       'category': category,
+      'is_public': isPublic,
       'discipline': isClass ? trimToNull(discipline) : null,
       'gym_template': isClass && gymTemplate != null
           ? <String, dynamic>{

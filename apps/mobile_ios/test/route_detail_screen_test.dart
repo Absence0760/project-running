@@ -1,3 +1,4 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart' show ClubRow;
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ cm.Route _route({
   String name = 'River Loop',
   bool isPublic = false,
   String? description,
+  List<String> tags = const [],
 }) =>
     cm.Route(
       id: 'r1',
@@ -24,7 +26,18 @@ cm.Route _route({
       elevationGainMetres: 45,
       isPublic: isPublic,
       description: description,
+      tags: tags,
     );
+
+/// Owner ApiClient whose tag write fails — drives the remove-failure banner.
+class _ThrowingTagsApi extends ApiClient {
+  @override
+  String? get userId => 'test-user';
+  @override
+  Future<void> updateRouteTags(String routeId, List<String> tags) async {
+    throw StateError('network down');
+  }
+}
 
 ClubView _club({
   required String id,
@@ -368,6 +381,48 @@ void main() {
       await tester.pump();
       // Sheet remains open — assert the header is still on-screen.
       expect(find.text('Manage club ownership'), findsOneWidget);
+    });
+  });
+
+  group('RouteDetailScreen — tag remove failure', () {
+    testWidgets('a failed tag remove surfaces a banner and keeps the chip',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RouteDetailScreen(
+            route: _route(tags: const ['hillsprint']),
+            routeStore: LocalRouteStore(),
+            preferences: prefs,
+            isOwner: true,
+            apiClient: _ThrowingTagsApi(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      // The tags row sits below the map/stats; scroll it into view (the
+      // ListView lazily builds only visible children).
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pump();
+
+      expect(find.text('hillsprint'), findsOneWidget);
+      // The Chip's delete (×) icon — owner + not-saving renders onDeleted.
+      await tester.runAsync(() => tester.tap(find.byIcon(Icons.cancel)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.textContaining('Could not remove tag'), findsOneWidget);
+      // The chip stays (the remove didn't persist).
+      expect(find.text('hillsprint'), findsOneWidget);
+
+      // Drain the showTopBanner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 }

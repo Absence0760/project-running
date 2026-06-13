@@ -173,8 +173,21 @@ test.describe('/routes/[id]', () => {
 			timeout: 10_000
 		});
 
+		// Delay the remove PATCH so the in-flight window is observable —
+		// the × button must disable while saving (double-submit guard).
+		await page.route('**/rest/v1/routes*', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				await new Promise((r) => setTimeout(r, 600));
+			}
+			await route.continue();
+		});
+
 		// Remove via the per-chip × button (aria-label "Remove tag <name>").
-		await page.getByRole('button', { name: `Remove tag ${tag}` }).click();
+		const removeBtn = page.getByRole('button', { name: `Remove tag ${tag}` });
+		await removeBtn.click();
+		// While the PATCH is in flight the button is disabled (no double-fire).
+		await expect(removeBtn).toBeDisabled();
+		await page.unroute('**/rest/v1/routes*');
 		await expect(page.locator('.tag-chip', { hasText: tag })).toHaveCount(0, {
 			timeout: 5_000
 		});

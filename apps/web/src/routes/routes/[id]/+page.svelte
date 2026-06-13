@@ -120,7 +120,7 @@
 	}
 
 	async function removeTag(tag: string) {
-		if (!route) return;
+		if (!route || tagsSaving) return;
 		const updated = (route.tags ?? []).filter((t) => t !== tag);
 		tagsSaving = true;
 		try {
@@ -406,7 +406,7 @@
 								<span class="tag-chip">
 									{t}
 									{#if isOwner}
-										<button type="button" class="tag-x" aria-label={m('routeDetail.removeTag', { tag: t })} onclick={() => removeTag(t)}>×</button>
+										<button type="button" class="tag-x" aria-label={m('routeDetail.removeTag', { tag: t })} onclick={() => removeTag(t)} disabled={tagsSaving}>×</button>
 									{/if}
 								</span>
 							{/each}

@@ -2455,6 +2455,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Could not remove tag: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'Could not share $format: $error';
   }
@@ -3605,6 +3610,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get eventRaceCancelRace => 'Cancel race';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'End the race? This finalizes the event for every runner and can\'t be undone.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Cancel the race? This aborts the event for every runner and can\'t be undone.';
+
+  @override
   String get eventUpdatePosted => 'Update posted to the club feed.';
 
   @override
@@ -4147,6 +4160,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get workoutUnlink => 'Unlink';
+
+  @override
+  String get workoutUnlinkTitle => 'Unlink run';
+
+  @override
+  String get workoutUnlinkBody =>
+      'Unlink the matched run? The workout will show as not yet done.';
+
+  @override
+  String get workoutUnlinkError => 'Couldn\'t unlink the run. Try again.';
 
   @override
   String get workoutRelink => 'Re-link';
@@ -6443,6 +6466,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Pick the kind of event — a class or social meetup skips route, distance, pace and race results.';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'Members only';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Only club members can see this event, and it won\'t appear in public discovery.';
+
+  @override
   String get eventEditorDiscipline => 'Discipline';
 
   @override
@@ -7936,6 +7966,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get nutritionNoResults =>
       'No matches. Try another term or enter it manually below.';
+
+  @override
+  String get nutritionSaveFailed => 'Couldn\'t log food. Try again.';
 
   @override
   String get nutritionMealSlot => 'Meal';

@@ -798,6 +798,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       context,
       social: widget.social,
       clubId: c.row.id,
+      clubIsPublic: c.row.isPublic ?? true,
     );
     if (ok != null) _load();
   }

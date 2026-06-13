@@ -32,6 +32,7 @@ class WorkoutDetailScreen extends StatefulWidget {
 class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   PlanWorkoutRow? _workout;
   bool _loading = true;
+  bool _unlinking = false;
   _WorkoutLoadError? _error;
 
   @override
@@ -89,6 +90,45 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     } catch (e, s) {
       debugPrint('WorkoutDetailScreen._openRelinkPicker re-link failed: $e\n$s');
       if (mounted) showTopBanner(context, l10n.workoutRelinkError);
+    }
+  }
+
+  // Unlinking the matched run resets the plan's progress for this workout,
+  // so it confirms first (parity with web's ConfirmDialog) and surfaces a
+  // failure instead of swallowing it. Guarded against a double-tap.
+  Future<void> _confirmUnlink() async {
+    if (_unlinking) return;
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.workoutUnlinkTitle),
+            content: Text(l10n.workoutUnlinkBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.workoutEditCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.workoutUnlink),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok || !mounted) return;
+    setState(() => _unlinking = true);
+    try {
+      await widget.training.markCompleted(widget.workoutId, null);
+      await _load();
+    } catch (e, s) {
+      debugPrint('WorkoutDetailScreen._confirmUnlink failed: $e\n$s');
+      if (mounted) showTopBanner(context, l10n.workoutUnlinkError);
+    } finally {
+      if (mounted) setState(() => _unlinking = false);
     }
   }
 
@@ -185,11 +225,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     child: Text(l10n.workoutRelink),
                   ),
                   TextButton(
-                    onPressed: () async {
-                      await widget.training
-                          .markCompleted(widget.workoutId, null);
-                      _load();
-                    },
+                    onPressed: _unlinking ? null : _confirmUnlink,
                     child: Text(l10n.workoutUnlink),
                   ),
                 ],

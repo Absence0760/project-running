@@ -2899,6 +2899,15 @@
       }
     }
   },
+  "routeDetailTagRemoveFailed": "Could not remove tag: {error}",
+  "@routeDetailTagRemoveFailed": {
+    "description": "Banner shown when removing a route tag fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeDetailShareFailed": "Could not share {format}: {error}",
   "@routeDetailShareFailed": {
     "description": "Banner shown when sharing a route as a file fails",
@@ -4485,6 +4494,8 @@
     "description": "Button to end a running race"
   },
   "eventRaceCancelRace": "Cancel race",
+  "eventRaceEndConfirmBody": "End the race? This finalizes the event for every runner and can't be undone.",
+  "eventRaceCancelConfirmBody": "Cancel the race? This aborts the event for every runner and can't be undone.",
   "@eventRaceCancelRace": {
     "description": "Button to cancel a running race"
   },
@@ -5137,6 +5148,9 @@
     "description": "Completed badge on workout detail"
   },
   "workoutUnlink": "Unlink",
+  "workoutUnlinkTitle": "Unlink run",
+  "workoutUnlinkBody": "Unlink the matched run? The workout will show as not yet done.",
+  "workoutUnlinkError": "Couldn't unlink the run. Try again.",
   "@workoutUnlink": {
     "description": "Unlink-completed-run button"
   },
@@ -8228,6 +8242,14 @@
   "@eventEditorCategoryHint": {
     "description": "Helper text under the event-category picker"
   },
+  "eventEditorMembersOnlyToggle": "Members only",
+  "@eventEditorMembersOnlyToggle": {
+    "description": "Toggle in the event editor (public clubs only) that makes the event members-only (events.is_public = false)."
+  },
+  "eventEditorMembersOnlyHint": "Only club members can see this event, and it won't appear in public discovery.",
+  "@eventEditorMembersOnlyHint": {
+    "description": "Helper text under the members-only toggle in the event editor."
+  },
   "eventEditorDiscipline": "Discipline",
   "@eventEditorDiscipline": {
     "description": "Label for the free-text class-discipline field"
@@ -9671,6 +9693,7 @@
   "nutritionSearchHint": "Search for a food",
   "nutritionSearching": "Searching…",
   "nutritionNoResults": "No matches. Try another term or enter it manually below.",
+  "nutritionSaveFailed": "Couldn't log food. Try again.",
   "nutritionMealSlot": "Meal",
   "nutritionManualEntry": "Enter manually",
   "nutritionItemName": "Item name",

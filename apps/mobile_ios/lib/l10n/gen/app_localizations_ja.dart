@@ -2326,6 +2326,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'タグを削除できませんでした: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return '$format を共有できませんでした: $error';
   }
@@ -3408,6 +3413,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventRaceCancelRace => 'レースを中止';
 
   @override
+  String get eventRaceEndConfirmBody => 'レースを終了しますか？全ランナーのイベントが確定され、元に戻せません。';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'レースを中止しますか？全ランナーのイベントが中止され、元に戻せません。';
+
+  @override
   String get eventUpdatePosted => 'クラブフィードに更新を投稿しました。';
 
   @override
@@ -3930,6 +3942,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get workoutUnlink => 'リンク解除';
+
+  @override
+  String get workoutUnlinkTitle => 'ランのリンクを解除';
+
+  @override
+  String get workoutUnlinkBody => '紐付いたランのリンクを解除しますか？このワークアウトは未完了に戻ります。';
+
+  @override
+  String get workoutUnlinkError => 'ランのリンクを解除できませんでした。もう一度お試しください。';
 
   @override
   String get workoutRelink => 'リンクし直す';
@@ -6156,6 +6177,13 @@ class AppLocalizationsJa extends AppLocalizations {
       'イベントの種類を選びます。クラスやソーシャルの集まりではルート、距離、ペース、レース結果は省略されます。';
 
   @override
+  String get eventEditorMembersOnlyToggle => 'メンバー限定';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'クラブのメンバーだけがこのイベントを見ることができ、公開検索には表示されません。';
+
+  @override
   String get eventEditorDiscipline => '種目';
 
   @override
@@ -7598,6 +7626,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get nutritionNoResults => '一致する項目がありません。別の語で検索するか、下から手動で入力してください。';
+
+  @override
+  String get nutritionSaveFailed => '食事を記録できませんでした。もう一度お試しください。';
 
   @override
   String get nutritionMealSlot => '食事区分';

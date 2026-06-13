@@ -171,6 +171,70 @@ test.describe('Workout re-link picker', () => {
 		}
 	});
 
+	test('a failed unlink surfaces an error toast and keeps the link', async ({ page }) => {
+		const admin = getAdminClient();
+		const today = new Date().toISOString().slice(0, 10);
+		const { workoutId, prevDate } = await plantTodayWorkout();
+		const { data: w1Row } = await admin
+			.from('plan_workouts')
+			.select('target_distance_m')
+			.eq('id', workoutId)
+			.maybeSingle();
+		const target = (w1Row as { target_distance_m: number }).target_distance_m;
+
+		let runA: string | null = null;
+		try {
+			runA = await insertRun({
+				user_id: USER_A.id,
+				started_at: `${today}T07:00:00Z`,
+				duration_s: Math.round(target * 0.33),
+				distance_m: target,
+				source: 'app',
+				metadata: { activity_type: 'run' }
+			});
+			await admin
+				.from('plan_workouts')
+				.update({ completed_run_id: runA, completed_at: new Date().toISOString() })
+				.eq('id', workoutId);
+
+			await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}/workouts/${workoutId}`);
+			await expect(page.locator('.completed-card')).toBeVisible({ timeout: 10_000 });
+
+			// Force the unlink PATCH to fail.
+			await page.route('**/rest/v1/plan_workouts*', async (route) => {
+				if (route.request().method() === 'PATCH') {
+					await route.fulfill({
+						status: 500,
+						contentType: 'application/json',
+						body: JSON.stringify({ message: 'simulated unlink failure' })
+					});
+				} else {
+					await route.continue();
+				}
+			});
+
+			await page.getByRole('button', { name: 'Unlink' }).click();
+			const dialog = page.locator('.modal', { hasText: 'Unlink run' });
+			await expect(dialog).toBeVisible({ timeout: 10_000 });
+			await dialog.getByRole('button', { name: 'Unlink' }).click();
+
+			// Error toast surfaces; the completed card stays (link not removed).
+			await expect(page.locator('.toast.toast-error')).toContainText(
+				"Couldn't unlink the run",
+				{ timeout: 10_000 }
+			);
+			await page.unroute('**/rest/v1/plan_workouts*');
+			await expect(page.locator('.completed-card')).toBeVisible();
+		} finally {
+			await admin
+				.from('plan_workouts')
+				.update({ completed_run_id: null, completed_at: null, manually_completed: false })
+				.eq('id', workoutId);
+			if (runA) await deleteRun(runA).catch(() => {});
+			await admin.from('plan_workouts').update({ scheduled_date: prevDate }).eq('id', workoutId);
+		}
+	});
+
 	test('picker excludes a run already linked to another workout', async ({ page }) => {
 		const admin = getAdminClient();
 		const today = new Date().toISOString().slice(0, 10);

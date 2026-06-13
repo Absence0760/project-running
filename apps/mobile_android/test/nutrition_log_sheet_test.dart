@@ -16,6 +16,23 @@ Future<({LocalFoodStore store, Directory dir})> _store(String tag) async {
   return (store: store, dir: dir);
 }
 
+/// A store whose create throws, to drive the save-failure path.
+class _ThrowingFoodStore extends LocalFoodStore {
+  @override
+  Future<StoredFood> createLocal({
+    required DateTime startedAt,
+    required String itemName,
+    String? mealSlot,
+    double? calories,
+    double? proteinG,
+    double? carbsG,
+    double? fatG,
+    bool isPublic = false,
+  }) async {
+    throw StateError('disk write failed');
+  }
+}
+
 Widget _host(LocalFoodStore store, {FoodFetcher? fetcher}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -83,5 +100,23 @@ void main() {
     } finally {
       f.dir.deleteSync(recursive: true);
     }
+  });
+
+  testWidgets('a failed save surfaces an error and keeps the sheet open',
+      (tester) async {
+    await tester.pumpWidget(_host(_ThrowingFoodStore()));
+    await tester.pump();
+    await tester.tap(find.text('Enter manually'));
+    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, 'Item name'), 'Banana');
+    await tester.enterText(find.widgetWithText(TextField, 'Calories'), '105');
+    await tester.pump();
+    await tester.runAsync(
+        () => tester.tap(find.widgetWithText(FilledButton, 'Add')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    // Error banner shows; the sheet stays open (still find the form fields).
+    expect(find.text("Couldn't log food. Try again."), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Item name'), findsOneWidget);
   });
 }
