@@ -51,3 +51,123 @@ export function buildSubscribeUrl(
 export function nextBackoff(prevMs: number): number {
 	return Math.min(prevMs * 2, 30_000);
 }
+
+export type LiveHubStatus = 'connecting' | 'open' | 'closed';
+
+/// Minimal WebSocket surface the reconnect loop drives. Lets the loop
+/// be unit-tested with a fake socket — the real `WebSocket` global
+/// satisfies it structurally.
+export interface SocketLike {
+	onopen: ((ev: unknown) => void) | null;
+	onmessage: ((ev: { data: unknown }) => void) | null;
+	onerror: ((ev: unknown) => void) | null;
+	onclose: ((ev: unknown) => void) | null;
+	close(): void;
+}
+
+export interface ReconnectingSocketOpts {
+	baseUrl: string;
+	runId: string;
+	/// Re-read on EVERY (re)connect so a reconnect after the access
+	/// token has rotated authorizes with the current JWT, not the one
+	/// captured when the page first loaded. A static string would 403
+	/// on a private run after the original token expires (~1 h) and
+	/// then spin in the backoff loop forever. /audit/livehub May 2026 C1.
+	getToken: () => string | null | undefined;
+	/// Builds the platform socket. Injected so the loop is testable
+	/// without a real `WebSocket`; production passes
+	/// `(url) => new WebSocket(url)`.
+	createSocket: (url: string) => SocketLike;
+	onPing: (p: LivePing) => void;
+	onStatus?: (s: LiveHubStatus) => void;
+	setTimer?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+	clearTimer?: (h: ReturnType<typeof setTimeout>) => void;
+}
+
+/// Open a self-reconnecting WebSocket subscription with exponential
+/// backoff. The auth token is re-read from `getToken` on each connect
+/// — including reconnects — so a long-lived spectator tab recovers
+/// after the original JWT expires instead of looping on a stale 403.
+/// Returns a `close()` that tears down the socket and suppresses the
+/// reconnect loop. Env-free + injectable so the loop is unit-testable.
+export function createReconnectingSocket(opts: ReconnectingSocketOpts): { close: () => void } {
+	const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+	const clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h));
+
+	let closed = false;
+	let ws: SocketLike | null = null;
+	let retryMs = 500;
+	let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function emitStatus(s: LiveHubStatus) {
+		try {
+			opts.onStatus?.(s);
+		} catch {
+			// Status callbacks are advisory — don't let a buggy handler
+			// take down the connection.
+		}
+	}
+
+	function connect() {
+		if (closed) return;
+		emitStatus('connecting');
+		const url = buildSubscribeUrl(opts.baseUrl, opts.runId, opts.getToken());
+		try {
+			ws = opts.createSocket(url);
+		} catch {
+			scheduleRetry();
+			return;
+		}
+		ws.onopen = () => {
+			retryMs = 500; // reset backoff on a clean open
+			emitStatus('open');
+		};
+		ws.onmessage = (ev) => {
+			try {
+				const p = JSON.parse(ev.data as string) as LivePing;
+				opts.onPing(p);
+			} catch {
+				// Drop malformed frames — server sends JSON only, but
+				// be defensive: a corrupt frame must not kill the loop.
+			}
+		};
+		ws.onerror = () => {
+			// `onclose` fires next; defer the reconnect there so we
+			// don't double-schedule.
+		};
+		ws.onclose = () => {
+			emitStatus('closed');
+			ws = null;
+			if (!closed) scheduleRetry();
+		};
+	}
+
+	function scheduleRetry() {
+		if (closed) return;
+		retryTimer = setTimer(() => {
+			retryTimer = null;
+			retryMs = nextBackoff(retryMs);
+			connect();
+		}, retryMs);
+	}
+
+	connect();
+
+	return {
+		close: () => {
+			closed = true;
+			if (retryTimer) {
+				clearTimer(retryTimer);
+				retryTimer = null;
+			}
+			if (ws) {
+				try {
+					ws.close();
+				} catch {
+					// best-effort
+				}
+				ws = null;
+			}
+		},
+	};
+}

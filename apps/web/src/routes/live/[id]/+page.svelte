@@ -41,6 +41,14 @@
 	type Status = 'connecting' | 'live' | 'finished' | 'demo' | 'error' | 'not-found';
 	let status = $state<Status>('connecting');
 	let demoTicker: ReturnType<typeof setInterval> | null = null;
+	// Demo-mode animation state. `demoActive` gates the Page Visibility
+	// pause: once the demo is running, we stop the interval while the
+	// tab is backgrounded and restart it on return so a multi-day
+	// spectator tab doesn't animate (and re-render the map) every 3 s
+	// off-screen. `demoAngle` is module-scope so it survives a pause.
+	let demoActive = false;
+	let demoAngle = 0;
+	let onVisibilityChange: (() => void) | null = null;
 	// Freshness: the ms timestamp of the last ping we rendered, plus a
 	// once-a-second clock so "updated N ago" / the stale badge recompute
 	// even while no new ping arrives. Without this a runner who lost
@@ -56,6 +64,14 @@
 	// because exactly one of the two transports is active per session
 	// — `subscribeLive` picks based on `isLiveHubConfigured()`.
 	let liveHubHandle: { close: () => void } | null = null;
+	// Synchronously-readable mirror of the viewer's current Supabase
+	// access token. Seeded from `getSession()` and refreshed by
+	// `onAuthStateChange` (which fires on `TOKEN_REFRESHED`), so the
+	// live-hub reconnect loop — which needs a token synchronously on
+	// each attempt — always sees the live JWT rather than a stale one.
+	// /audit/livehub May 2026 C1.
+	let currentAccessToken: string | null = null;
+	let authSub: { unsubscribe: () => void } | null = null;
 
 	// Runner position + completed trace. Held as mutable module-scope
 	// state rather than `$state` because MapLibre mutates the GeoJSON
@@ -188,12 +204,13 @@
 		if (isLiveHubConfigured()) {
 			// JWT goes on the WS upgrade URL as `?token=…`; browsers can't
 			// set Authorization headers on a WS upgrade. /audit/livehub C1.
-			(async () => {
-				const sess = (await supabase.auth.getSession()).data.session;
-				const token = sess?.access_token ?? null;
-				liveHubHandle = openLiveWebSocket(data.id, {
-					accessToken: token,
-					onPing: (p: LivePing) => {
+			// `getToken` re-reads `currentAccessToken` on every (re)connect,
+			// so a reconnect after the original token expires (~1 h)
+			// authorizes with the refreshed JWT instead of looping on a
+			// stale 403.
+			liveHubHandle = openLiveWebSocket(data.id, {
+				getToken: () => currentAccessToken,
+				onPing: (p: LivePing) => {
 					pushPing({
 						lat: p.lat,
 						lng: p.lng,
@@ -209,7 +226,6 @@
 					}
 				},
 			});
-			})();
 			return;
 		}
 		realtimeChannel = supabase
@@ -237,21 +253,46 @@
 			.subscribe();
 	}
 
+	function startDemoTicker() {
+		if (demoTicker) return;
+		demoTicker = setInterval(() => {
+			demoAngle += 0.02;
+			elapsed += 3;
+			distance += 12 + Math.random() * 5;
+			const lng = fallbackLng + Math.cos(demoAngle) * 0.005;
+			const lat = fallbackLat + Math.sin(demoAngle) * 0.003;
+			pushPing({ lat, lng, distance_m: distance, elapsed_s: elapsed, sent_at_ms: Date.now() });
+		}, 3000);
+	}
+
+	function stopDemoTicker() {
+		if (demoTicker) {
+			clearInterval(demoTicker);
+			demoTicker = null;
+		}
+	}
+
 	function startDemo() {
 		status = 'demo';
 		if (map) {
 			ensureMarker(fallbackLat, fallbackLng);
 			map.jumpTo({ center: [fallbackLng, fallbackLat], zoom: 15 });
 		}
-		let angle = 0;
-		demoTicker = setInterval(() => {
-			angle += 0.02;
-			elapsed += 3;
-			distance += 12 + Math.random() * 5;
-			const lng = fallbackLng + Math.cos(angle) * 0.005;
-			const lat = fallbackLat + Math.sin(angle) * 0.003;
-			pushPing({ lat, lng, distance_m: distance, elapsed_s: elapsed, sent_at_ms: Date.now() });
-		}, 3000);
+		demoActive = true;
+		demoAngle = 0;
+		// Pause the animation while the tab is hidden — a backgrounded
+		// multi-day spectator tab shouldn't burn CPU + re-render the map
+		// every 3 s with no one watching. Resume on return.
+		if (typeof document !== 'undefined' && !onVisibilityChange) {
+			onVisibilityChange = () => {
+				if (!demoActive) return;
+				if (document.hidden) stopDemoTicker();
+				else startDemoTicker();
+			};
+			document.addEventListener('visibilitychange', onVisibilityChange);
+		}
+		if (typeof document !== 'undefined' && document.hidden) return;
+		startDemoTicker();
 	}
 
 	type VisibleRun = {
@@ -358,7 +399,15 @@
 		freshnessTicker = setInterval(() => {
 			nowMs = Date.now();
 		}, 1000);
+		// Seed + keep the synchronous token mirror current. The auth
+		// listener fires on TOKEN_REFRESHED, so the next reconnect picks
+		// up the rotated JWT. /audit/livehub May 2026 C1.
+		authSub = supabase.auth.onAuthStateChange((_event, session) => {
+			currentAccessToken = session?.access_token ?? null;
+		}).data.subscription;
 		(async () => {
+			currentAccessToken =
+				(await supabase.auth.getSession()).data.session?.access_token ?? null;
 			if (!(await ensureRunIsVisible())) return;
 			if (visibleRun && runIsFinished(visibleRun)) {
 				distance = visibleRun.distance_m;
@@ -441,10 +490,16 @@
 	}
 
 	onDestroy(() => {
-		if (demoTicker) clearInterval(demoTicker);
+		demoActive = false;
+		stopDemoTicker();
+		if (onVisibilityChange && typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', onVisibilityChange);
+			onVisibilityChange = null;
+		}
 		if (freshnessTicker) clearInterval(freshnessTicker);
 		if (realtimeChannel) supabase.removeChannel(realtimeChannel);
 		liveHubHandle?.close();
+		authSub?.unsubscribe();
 		stopResizeWatch?.();
 		map?.remove();
 	});

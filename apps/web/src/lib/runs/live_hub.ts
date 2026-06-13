@@ -24,15 +24,14 @@
 import { env } from '$env/dynamic/public';
 import {
 	type LivePing,
+	type LiveHubStatus,
 	buildSnapshotUrl,
-	buildSubscribeUrl,
+	createReconnectingSocket,
 } from './live_hub_helpers';
 
-export type { LivePing } from './live_hub_helpers';
+export type { LivePing, LiveHubStatus } from './live_hub_helpers';
 
 const PUBLIC_LIVE_HUB_URL = env.PUBLIC_LIVE_HUB_URL ?? '';
-
-export type LiveHubStatus = 'connecting' | 'open' | 'closed';
 
 export function isLiveHubConfigured(): boolean {
 	return PUBLIC_LIVE_HUB_URL !== '';
@@ -70,17 +69,21 @@ export async function fetchLiveSnapshot(
 interface OpenOpts {
 	onPing: (p: LivePing) => void;
 	onStatus?: (s: LiveHubStatus) => void;
-	/// Caller's Supabase JWT, appended to the WS URL as `?token=...`
-	/// so the Go authorizer can verify it on the upgrade request.
-	/// Browser WebSocket can't set Authorization headers — the
-	/// querystring fallback is the only available channel.
+	/// Re-reads the caller's current Supabase JWT, appended to the WS
+	/// URL as `?token=...` so the Go authorizer can verify it on the
+	/// upgrade request. Browser WebSocket can't set Authorization
+	/// headers — the querystring fallback is the only available channel.
+	/// Passed as a PROVIDER (not a captured string) so each reconnect
+	/// authorizes with the live token: a long-lived spectator tab would
+	/// otherwise 403 forever once the original token expires (~1 h).
 	/// /audit/livehub May 2026 C1.
-	accessToken?: string | null;
+	getToken: () => string | null | undefined;
 }
 
 /// Open a WebSocket subscription to `/v1/live/{run_id}/subscribe`.
 /// The returned `close()` function tears the connection down and
-/// suppresses the reconnect loop.
+/// suppresses the reconnect loop. Reconnect + token-refresh behaviour
+/// lives in `createReconnectingSocket` (env-free + unit-tested).
 export function openLiveWebSocket(runId: string, opts: OpenOpts): { close: () => void } {
 	if (!isLiveHubConfigured()) {
 		// Caller is expected to gate on `isLiveHubConfigured()` first,
@@ -88,83 +91,12 @@ export function openLiveWebSocket(runId: string, opts: OpenOpts): { close: () =>
 		// throw.
 		return { close: () => undefined };
 	}
-	const url = buildSubscribeUrl(PUBLIC_LIVE_HUB_URL, runId, opts.accessToken);
-
-	let closed = false;
-	let ws: WebSocket | null = null;
-	let retryMs = 500;
-	let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-	function emitStatus(s: LiveHubStatus) {
-		try {
-			opts.onStatus?.(s);
-		} catch {
-			// Status callbacks are advisory — don't let a buggy handler
-			// take down the connection.
-		}
-	}
-
-	function connect() {
-		if (closed) return;
-		emitStatus('connecting');
-		try {
-			ws = new WebSocket(url);
-		} catch {
-			scheduleRetry();
-			return;
-		}
-		ws.onopen = () => {
-			retryMs = 500; // reset backoff on a clean open
-			emitStatus('open');
-		};
-		ws.onmessage = (ev) => {
-			try {
-				const p = JSON.parse(ev.data as string) as LivePing;
-				opts.onPing(p);
-			} catch {
-				// Drop malformed frames — server sends JSON only, but
-				// be defensive: a corrupt frame must not kill the loop.
-			}
-		};
-		ws.onerror = () => {
-			// `onclose` fires next; defer the reconnect there so we
-			// don't double-schedule.
-		};
-		ws.onclose = () => {
-			emitStatus('closed');
-			ws = null;
-			if (!closed) scheduleRetry();
-		};
-	}
-
-	function scheduleRetry() {
-		if (closed) return;
-		retryTimer = setTimeout(() => {
-			retryTimer = null;
-			// Exponential backoff, capped at 30 s. A flaky bridge or a
-			// brief Fly.io restart shouldn't blast the hub with reconnects.
-			retryMs = Math.min(retryMs * 2, 30_000);
-			connect();
-		}, retryMs);
-	}
-
-	connect();
-
-	return {
-		close: () => {
-			closed = true;
-			if (retryTimer) {
-				clearTimeout(retryTimer);
-				retryTimer = null;
-			}
-			if (ws) {
-				try {
-					ws.close();
-				} catch {
-					// best-effort
-				}
-				ws = null;
-			}
-		},
-	};
+	return createReconnectingSocket({
+		baseUrl: PUBLIC_LIVE_HUB_URL,
+		runId,
+		getToken: opts.getToken,
+		createSocket: (url) => new WebSocket(url),
+		onPing: opts.onPing,
+		onStatus: opts.onStatus,
+	});
 }

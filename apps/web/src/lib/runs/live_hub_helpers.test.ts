@@ -10,6 +10,8 @@ import {
 	buildSnapshotUrl,
 	buildSubscribeUrl,
 	nextBackoff,
+	createReconnectingSocket,
+	type SocketLike,
 } from './live_hub_helpers';
 
 test('trimTrailingSlash — strips one trailing slash', () => {
@@ -77,4 +79,95 @@ test('buildSubscribeUrl — null / undefined / empty token skips the querystring
 		buildSubscribeUrl('https://x', 'r', ''),
 		'wss://x/v1/live/r/subscribe',
 	);
+});
+
+// A fake socket the reconnect loop can drive without a real WebSocket.
+// Records the URL it was opened with so the test can assert which token
+// each (re)connect authorized with.
+class FakeSocket implements SocketLike {
+	onopen: ((ev: unknown) => void) | null = null;
+	onmessage: ((ev: { data: unknown }) => void) | null = null;
+	onerror: ((ev: unknown) => void) | null = null;
+	onclose: ((ev: unknown) => void) | null = null;
+	closed = false;
+	constructor(readonly url: string) {}
+	close() {
+		this.closed = true;
+	}
+}
+
+test('createReconnectingSocket — reconnect re-reads the token (audit/livehub C1)', () => {
+	const opened: FakeSocket[] = [];
+	// Token rotates between the first connect and the reconnect — the
+	// reconnect MUST authorize with the fresh value, not the captured one.
+	const tokens = ['stale.jwt', 'fresh.jwt'];
+	let tokenIdx = 0;
+	const pendingTimers: Array<() => void> = [];
+
+	const handle = createReconnectingSocket({
+		baseUrl: 'https://live.threkir.com',
+		runId: 'run-1',
+		getToken: () => tokens[Math.min(tokenIdx, tokens.length - 1)],
+		createSocket: (url) => {
+			const s = new FakeSocket(url);
+			opened.push(s);
+			return s;
+		},
+		onPing: () => undefined,
+		setTimer: (fn) => {
+			pendingTimers.push(fn);
+			return 0 as unknown as ReturnType<typeof setTimeout>;
+		},
+		clearTimer: () => undefined,
+	});
+
+	assert.equal(opened.length, 1);
+	assert.equal(
+		opened[0].url,
+		'wss://live.threkir.com/v1/live/run-1/subscribe?token=stale.jwt',
+	);
+
+	// The server drops the connection (e.g. the stale token 403s); the
+	// session has since refreshed, so the next connect should use it.
+	tokenIdx = 1;
+	opened[0].onclose?.(null);
+	assert.equal(pendingTimers.length, 1, 'an unexpected close schedules a retry');
+	pendingTimers[0]();
+
+	assert.equal(opened.length, 2);
+	assert.equal(
+		opened[1].url,
+		'wss://live.threkir.com/v1/live/run-1/subscribe?token=fresh.jwt',
+		'the reconnect must rebuild the URL with the current token, not the captured one',
+	);
+
+	handle.close();
+});
+
+test('createReconnectingSocket — close() suppresses the reconnect loop', () => {
+	const opened: FakeSocket[] = [];
+	let scheduled = 0;
+	const handle = createReconnectingSocket({
+		baseUrl: 'https://x',
+		runId: 'r',
+		getToken: () => 't',
+		createSocket: (url) => {
+			const s = new FakeSocket(url);
+			opened.push(s);
+			return s;
+		},
+		onPing: () => undefined,
+		setTimer: (fn) => {
+			scheduled += 1;
+			void fn;
+			return 0 as unknown as ReturnType<typeof setTimeout>;
+		},
+		clearTimer: () => undefined,
+	});
+
+	handle.close();
+	assert.equal(opened[0].closed, true);
+	// A close that arrives after teardown must not schedule a retry.
+	opened[0].onclose?.(null);
+	assert.equal(scheduled, 0);
 });
