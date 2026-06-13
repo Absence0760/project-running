@@ -493,6 +493,7 @@ export const messages = {
 	"plansPage.deleteTitle": "プランを削除",
 	"plansPage.abandonMessage": "「{name}」を中止しますか？その後、新しいプランを作成できます。",
 	"plansPage.deleteMessage": "「{name}」を削除しますか？すべての週とワークアウトが削除されます。",
+	"plansPage.actionFailed": "プランを更新できませんでした: {error}",
 	"profile.runnerFallback": "ランナー",
 	"profile.runnerLower": "ランナー",
 	"profile.thisRunner": "このランナー",

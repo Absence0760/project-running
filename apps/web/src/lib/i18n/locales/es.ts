@@ -497,6 +497,7 @@ export const messages = {
 	"plansPage.deleteTitle": "Eliminar plan",
 	"plansPage.abandonMessage": "¿Abandonar «{name}»? Después podrás crear un nuevo plan.",
 	"plansPage.deleteMessage": "¿Eliminar «{name}»? Se eliminarán todas las semanas y entrenamientos.",
+	"plansPage.actionFailed": "No se pudo actualizar el plan: {error}",
 	"profile.runnerFallback": "Corredor",
 	"profile.runnerLower": "corredor",
 	"profile.thisRunner": "este corredor",

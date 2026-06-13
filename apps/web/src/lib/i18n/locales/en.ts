@@ -506,6 +506,7 @@ export const en = {
 	"plansPage.deleteTitle": "Delete plan",
 	"plansPage.abandonMessage": "Abandon \"{name}\"? You can create a new plan after.",
 	"plansPage.deleteMessage": "Delete \"{name}\"? All weeks and workouts will be removed.",
+	"plansPage.actionFailed": "Couldn't update the plan: {error}",
 	"profile.runnerFallback": "Runner",
 	"profile.runnerLower": "runner",
 	"profile.thisRunner": "this runner",

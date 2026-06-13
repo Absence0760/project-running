@@ -8,7 +8,7 @@
 		confirmLabel?: string;
 		cancelLabel?: string;
 		danger?: boolean;
-		onconfirm: () => void;
+		onconfirm: () => void | Promise<void>;
 		oncancel: () => void;
 		/// When set, the confirm button stays disabled until the user types
 		/// this exact string (case-insensitive, trimmed) into a challenge
@@ -40,22 +40,43 @@
 	}: Props = $props();
 
 	let challenge = $state('');
+	// While the async `onconfirm` is in flight, both buttons disable so a
+	// fast double-click can't fire the (often destructive, non-idempotent)
+	// action twice, and the dialog can't be dismissed out from under it.
+	let busy = $state(false);
 	// Reset the challenge whenever the dialog reopens so a prior entry
 	// can't carry over.
 	$effect(() => {
-		if (!open) challenge = '';
+		if (!open) {
+			challenge = '';
+			busy = false;
+		}
 	});
 	const challengeMet = $derived(
 		!requireText || challenge.trim().toLowerCase() === requireText.trim().toLowerCase(),
 	);
 
-	function handleConfirm() {
-		if (!challengeMet) return;
-		onconfirm();
+	async function handleConfirm() {
+		if (!challengeMet || busy) return;
+		busy = true;
+		try {
+			await onconfirm();
+		} finally {
+			busy = false;
+		}
 	}
 </script>
 
-<Modal {open} {title} narrow onclose={oncancel} bodyClass="confirm-body" data-testid={testId}>
+<Modal
+	{open}
+	{title}
+	narrow
+	onclose={() => {
+		if (!busy) oncancel();
+	}}
+	bodyClass="confirm-body"
+	data-testid={testId}
+>
 	<p>{message}</p>
 	{#if requireText}
 		<label class="challenge">
@@ -74,7 +95,7 @@
 		</label>
 	{/if}
 	<div class="actions">
-		<button type="button" class="btn btn-secondary" onclick={oncancel}>
+		<button type="button" class="btn btn-secondary" onclick={oncancel} disabled={busy}>
 			{cancelLabel}
 		</button>
 		<button
@@ -82,9 +103,11 @@
 			class="btn"
 			class:btn-primary={!danger}
 			class:btn-danger={danger}
-			disabled={!challengeMet}
+			disabled={!challengeMet || busy}
+			aria-busy={busy}
 			onclick={handleConfirm}
 		>
+			{#if busy}<span class="confirm-spinner" aria-hidden="true"></span>{/if}
 			{confirmLabel}
 		</button>
 	</div>
@@ -124,5 +147,26 @@
 		border-radius: var(--radius-sm);
 		background: var(--color-bg);
 		color: var(--color-text);
+	}
+	.confirm-spinner {
+		display: inline-block;
+		width: 0.85em;
+		height: 0.85em;
+		margin-right: 0.4rem;
+		vertical-align: -0.1em;
+		border: 2px solid currentColor;
+		border-right-color: transparent;
+		border-radius: 50%;
+		animation: confirm-spin 0.6s linear infinite;
+	}
+	@keyframes confirm-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.confirm-spinner {
+			animation: none;
+		}
 	}
 </style>

@@ -6,6 +6,7 @@
 	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/core/data';
 	import { m } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -183,10 +184,22 @@
 
 	async function handleConfirmAction() {
 		if (!confirmTarget || !confirmAction) return;
-		if (confirmAction === 'abandon') {
-			await updatePlanStatus(confirmTarget.id, 'abandoned');
-		} else {
-			await deletePlan(confirmTarget.id);
+		const target = confirmTarget;
+		const action = confirmAction;
+		try {
+			if (action === 'abandon') {
+				await updatePlanStatus(target.id, 'abandoned');
+			} else {
+				await deletePlan(target.id);
+			}
+		} catch (e) {
+			// Keep the dialog open so the user can retry or cancel — the
+			// plan still exists, so silently closing would be a lie.
+			showToast(
+				m('plansPage.actionFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+			return;
 		}
 		confirmTarget = null;
 		confirmAction = null;
