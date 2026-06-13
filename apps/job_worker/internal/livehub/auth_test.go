@@ -166,6 +166,23 @@ func TestJWTAuthorizer_ExpiredTokenDenied(t *testing.T) {
 	}
 }
 
+func TestJWTAuthorizer_TokenWithoutExpDenied(t *testing.T) {
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "user-A", IsPublic: false},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	// A correctly-signed token with the right `sub` but NO `exp` claim
+	// (signTestToken omits exp when expSecsFromNow == 0). Without
+	// WithExpirationRequired such a token is valid forever — it must be
+	// denied on this security boundary.
+	token := signTestToken(t, "user-A", 0)
+
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionPush); err == nil {
+		t.Fatal("token without exp must be denied (no immortal tokens)")
+	}
+}
+
 func TestJWTAuthorizer_TamperedSignatureDenied(t *testing.T) {
 	hub := NewHub()
 	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{

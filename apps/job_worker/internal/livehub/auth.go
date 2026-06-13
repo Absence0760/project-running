@@ -104,8 +104,11 @@ func (a *JWTAuthorizer) Authorize(r *http.Request, runID string, action AuthActi
 }
 
 // extractSub parses the Authorization header, verifies the HS256
-// signature with [JWTSecret], checks expiry, and returns the `sub`
-// claim (the Supabase user_id).
+// signature with [JWTSecret], and returns the `sub` claim (the
+// Supabase user_id). An `exp` claim is REQUIRED (WithExpirationRequired):
+// Supabase always issues short-lived tokens with `exp`, so a token that
+// omits it is anomalous — without this guard golang-jwt validates `exp`
+// only when present, leaving a no-`exp` token valid forever.
 func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 	raw := bearerToken(r)
 	if raw == "" {
@@ -120,7 +123,7 @@ func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return a.JWTSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 	if err != nil {
 		return "", fmt.Errorf("auth: invalid token")
 	}
