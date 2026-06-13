@@ -2930,6 +2930,93 @@ class AppLocalizationsJa extends AppLocalizations {
   String get socialTabRoutes => 'ルート';
 
   @override
+  String get socialTabDiscover => '見つける';
+
+  @override
+  String get discoverSearchPlaceholder => 'ヨガ、ピラティス、HIIT、ランクラブを検索…';
+
+  @override
+  String get discoverActivityAll => 'すべてのアクティビティ';
+
+  @override
+  String get discoverCadenceLabel => '頻度';
+
+  @override
+  String get discoverCadenceAny => '頻度を問わない';
+
+  @override
+  String get discoverOneOff => '単発';
+
+  @override
+  String get discoverWeekly => '毎週';
+
+  @override
+  String get discoverBiweekly => '隔週';
+
+  @override
+  String get discoverMonthly => '毎月';
+
+  @override
+  String get discoverDayLabel => '曜日';
+
+  @override
+  String get discoverDayAny => '曜日を問わない';
+
+  @override
+  String get discoverDayMon => '月';
+
+  @override
+  String get discoverDayTue => '火';
+
+  @override
+  String get discoverDayWed => '水';
+
+  @override
+  String get discoverDayThu => '木';
+
+  @override
+  String get discoverDayFri => '金';
+
+  @override
+  String get discoverDaySat => '土';
+
+  @override
+  String get discoverDaySun => '日';
+
+  @override
+  String get discoverTimeLabel => '時間帯';
+
+  @override
+  String get discoverTimeAny => '時間を問わない';
+
+  @override
+  String get discoverMorning => '朝';
+
+  @override
+  String get discoverAfternoon => '昼';
+
+  @override
+  String get discoverEvening => '夜';
+
+  @override
+  String get discoverPriceLabel => '料金';
+
+  @override
+  String get discoverPriceAny => '料金を問わない';
+
+  @override
+  String get discoverFree => '無料';
+
+  @override
+  String get discoverPaid => '有料';
+
+  @override
+  String get discoverLoading => '検索中…';
+
+  @override
+  String get discoverEmpty => 'この条件に一致する公開アクティビティはまだありません。';
+
+  @override
   String get clubsTitle => 'クラブ';
 
   @override

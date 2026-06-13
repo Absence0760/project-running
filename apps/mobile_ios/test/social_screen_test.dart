@@ -1,18 +1,19 @@
 // Widget tests for SocialScreen — the top-level "Social" hub that
 // replaced the old Clubs tab on the bottom nav. Mirrors the web
-// `/social` route's three-tab shape (Feed / People / Clubs).
+// `/social` route's four-tab shape (Feed / People / Clubs / Discover).
 //
-// Routes used to live here as a 4th sub-tab; the Fitness-hub redesign
+// Routes used to live here as a sub-tab; the Fitness-hub redesign
 // relocated it to Fitness → Runs (a run-modality surface). This file
-// pins that relocation: Social hosts exactly Feed / People / Clubs and
-// has no Routes tab or route FAB.
+// pins that relocation: Social hosts Feed / People / Clubs / Discover
+// and has no Routes tab or route FAB.
 //
 // The full content of each sub-tab is exercised by the per-screen
-// widget tests (feed_screen_test, people_screen_test, clubs_screen).
-// This file pins the SocialScreen-specific contract: the AppBar TabBar
-// mounts with the right 3 tabs, the initialTab routing works, and the
-// FAB visibility tracks the active tab (Clubs gets "New club"; Feed and
-// People have no create surface).
+// widget tests (feed_screen_test, people_screen_test, clubs_screen,
+// discover_screen_test). This file pins the SocialScreen-specific
+// contract: the AppBar TabBar mounts with the right 4 tabs, the
+// initialTab routing works, and the FAB visibility tracks the active
+// tab (Clubs gets "New club"; Feed / People / Discover have no create
+// surface).
 
 import 'dart:io';
 
@@ -77,20 +78,30 @@ void main() {
     if (_tmpDir.existsSync()) _tmpDir.deleteSync(recursive: true);
   });
 
-  testWidgets('SocialScreen mounts exactly Feed / People / Clubs — no Routes',
+  testWidgets(
+      'SocialScreen mounts Feed / People / Clubs / Discover — no Routes',
       (tester) async {
     await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
 
     expect(find.byType(TabBar), findsOneWidget);
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.tabs.length, 3);
+    expect(tabBar.tabs.length, 4);
     expect(find.text('Feed'), findsOneWidget);
     expect(find.text('People'), findsOneWidget);
     expect(find.text('Clubs'), findsOneWidget);
+    expect(find.text('Discover'), findsOneWidget);
     // Routes relocated to Fitness → Runs; it must not reappear here.
     expect(find.descendant(of: find.byType(TabBar), matching: find.text('Routes')),
         findsNothing);
+  });
+
+  testWidgets('initialTab=3 selects the Discover tab on first frame',
+      (tester) async {
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 3)));
+    await tester.pump();
+    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.controller!.index, 3);
   });
 
   testWidgets('initialTab=0 (default) selects the Feed tab',
@@ -123,11 +134,11 @@ void main() {
       (tester) async {
     // Defensive: a future deep link that points at an unknown tab
     // (e.g. ?tab=99 after a tab is added then removed) must NOT
-    // crash. Pin the clamp behaviour. Upper bound is now 2 (Clubs).
+    // crash. Pin the clamp behaviour. Upper bound is now 3 (Discover).
     await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 99)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.controller!.index, lessThanOrEqualTo(2));
+    expect(tabBar.controller!.index, lessThanOrEqualTo(3));
     expect(tabBar.controller!.index, greaterThanOrEqualTo(0));
   });
 

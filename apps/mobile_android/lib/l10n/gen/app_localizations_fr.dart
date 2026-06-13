@@ -3127,6 +3127,95 @@ class AppLocalizationsFr extends AppLocalizations {
   String get socialTabRoutes => 'Itinéraires';
 
   @override
+  String get socialTabDiscover => 'Découvrir';
+
+  @override
+  String get discoverSearchPlaceholder =>
+      'Rechercher yoga, pilates, HIIT, clubs de course…';
+
+  @override
+  String get discoverActivityAll => 'Toutes les activités';
+
+  @override
+  String get discoverCadenceLabel => 'Fréquence';
+
+  @override
+  String get discoverCadenceAny => 'Toute fréquence';
+
+  @override
+  String get discoverOneOff => 'Ponctuel';
+
+  @override
+  String get discoverWeekly => 'Hebdomadaire';
+
+  @override
+  String get discoverBiweekly => 'Toutes les 2 semaines';
+
+  @override
+  String get discoverMonthly => 'Mensuel';
+
+  @override
+  String get discoverDayLabel => 'Jour';
+
+  @override
+  String get discoverDayAny => 'N\'importe quel jour';
+
+  @override
+  String get discoverDayMon => 'Lun';
+
+  @override
+  String get discoverDayTue => 'Mar';
+
+  @override
+  String get discoverDayWed => 'Mer';
+
+  @override
+  String get discoverDayThu => 'Jeu';
+
+  @override
+  String get discoverDayFri => 'Ven';
+
+  @override
+  String get discoverDaySat => 'Sam';
+
+  @override
+  String get discoverDaySun => 'Dim';
+
+  @override
+  String get discoverTimeLabel => 'Moment de la journée';
+
+  @override
+  String get discoverTimeAny => 'N\'importe quand';
+
+  @override
+  String get discoverMorning => 'Matin';
+
+  @override
+  String get discoverAfternoon => 'Après-midi';
+
+  @override
+  String get discoverEvening => 'Soir';
+
+  @override
+  String get discoverPriceLabel => 'Prix';
+
+  @override
+  String get discoverPriceAny => 'Tout prix';
+
+  @override
+  String get discoverFree => 'Gratuit';
+
+  @override
+  String get discoverPaid => 'Payant';
+
+  @override
+  String get discoverLoading => 'Recherche…';
+
+  @override
+  String get discoverEmpty =>
+      'Aucune activité publique ne correspond à ces filtres pour l\'instant.';
+
+  @override
   String get clubsTitle => 'Clubs';
 
   @override

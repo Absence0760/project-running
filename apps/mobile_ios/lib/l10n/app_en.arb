@@ -3807,6 +3807,122 @@
   "@socialTabRoutes": {
     "description": "Social hub sub-tab label — routes"
   },
+  "socialTabDiscover": "Discover",
+  "@socialTabDiscover": {
+    "description": "Social hub sub-tab label — cross-club activity discovery"
+  },
+  "discoverSearchPlaceholder": "Search yoga, pilates, HIIT, run clubs…",
+  "@discoverSearchPlaceholder": {
+    "description": "Discover tab search field placeholder"
+  },
+  "discoverActivityAll": "All activities",
+  "@discoverActivityAll": {
+    "description": "Discover tab — category filter chip that clears the category filter"
+  },
+  "discoverCadenceLabel": "Cadence",
+  "@discoverCadenceLabel": {
+    "description": "Discover tab — label for the recurrence/cadence filter"
+  },
+  "discoverCadenceAny": "Any cadence",
+  "@discoverCadenceAny": {
+    "description": "Discover tab — cadence filter option that matches any cadence"
+  },
+  "discoverOneOff": "One-off",
+  "@discoverOneOff": {
+    "description": "Discover tab — a non-recurring (single) event"
+  },
+  "discoverWeekly": "Weekly",
+  "@discoverWeekly": {
+    "description": "Discover tab — a weekly recurring event"
+  },
+  "discoverBiweekly": "Every 2 weeks",
+  "@discoverBiweekly": {
+    "description": "Discover tab — a fortnightly recurring event"
+  },
+  "discoverMonthly": "Monthly",
+  "@discoverMonthly": {
+    "description": "Discover tab — a monthly recurring event"
+  },
+  "discoverDayLabel": "Day",
+  "@discoverDayLabel": {
+    "description": "Discover tab — label for the weekday filter"
+  },
+  "discoverDayAny": "Any day",
+  "@discoverDayAny": {
+    "description": "Discover tab — weekday filter option that matches any day"
+  },
+  "discoverDayMon": "Mon",
+  "@discoverDayMon": {
+    "description": "Discover tab — abbreviated Monday weekday label"
+  },
+  "discoverDayTue": "Tue",
+  "@discoverDayTue": {
+    "description": "Discover tab — abbreviated Tuesday weekday label"
+  },
+  "discoverDayWed": "Wed",
+  "@discoverDayWed": {
+    "description": "Discover tab — abbreviated Wednesday weekday label"
+  },
+  "discoverDayThu": "Thu",
+  "@discoverDayThu": {
+    "description": "Discover tab — abbreviated Thursday weekday label"
+  },
+  "discoverDayFri": "Fri",
+  "@discoverDayFri": {
+    "description": "Discover tab — abbreviated Friday weekday label"
+  },
+  "discoverDaySat": "Sat",
+  "@discoverDaySat": {
+    "description": "Discover tab — abbreviated Saturday weekday label"
+  },
+  "discoverDaySun": "Sun",
+  "@discoverDaySun": {
+    "description": "Discover tab — abbreviated Sunday weekday label"
+  },
+  "discoverTimeLabel": "Time of day",
+  "@discoverTimeLabel": {
+    "description": "Discover tab — label for the time-of-day filter"
+  },
+  "discoverTimeAny": "Any time",
+  "@discoverTimeAny": {
+    "description": "Discover tab — time-of-day filter option that matches any time"
+  },
+  "discoverMorning": "Morning",
+  "@discoverMorning": {
+    "description": "Discover tab — morning time-of-day bucket (05:00–11:59 local)"
+  },
+  "discoverAfternoon": "Afternoon",
+  "@discoverAfternoon": {
+    "description": "Discover tab — afternoon time-of-day bucket (12:00–16:59 local)"
+  },
+  "discoverEvening": "Evening",
+  "@discoverEvening": {
+    "description": "Discover tab — evening time-of-day bucket (17:00–04:59 local)"
+  },
+  "discoverPriceLabel": "Price",
+  "@discoverPriceLabel": {
+    "description": "Discover tab — label for the price (free/paid) filter"
+  },
+  "discoverPriceAny": "Any price",
+  "@discoverPriceAny": {
+    "description": "Discover tab — price filter option that matches free or paid"
+  },
+  "discoverFree": "Free",
+  "@discoverFree": {
+    "description": "Discover tab — a free (no-cost) event"
+  },
+  "discoverPaid": "Paid",
+  "@discoverPaid": {
+    "description": "Discover tab — a paid (ticketed) event"
+  },
+  "discoverLoading": "Searching…",
+  "@discoverLoading": {
+    "description": "Discover tab — loading state while results are fetched"
+  },
+  "discoverEmpty": "No public activities match these filters yet.",
+  "@discoverEmpty": {
+    "description": "Discover tab — empty state when no events match the filters"
+  },
   "clubsTitle": "Clubs",
   "@clubsTitle": {
     "description": "AppBar title for the standalone clubs screen"

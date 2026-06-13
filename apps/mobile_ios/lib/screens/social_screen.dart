@@ -6,14 +6,18 @@ import '../local_route_store.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import 'clubs_screen.dart';
+import 'discover_screen.dart';
 import 'feed_screen.dart';
 import 'people_screen.dart';
 
-/// The Social tab — mirrors the web `/social` hub (decisions §54). Three
+/// The Social tab — mirrors the web `/social` hub (decisions §54). Four
 /// sub-tabs:
 ///   - Feed: 14-day activity feed of public runs from people you follow.
 ///   - People: name search + suggested-from-clubs discovery.
 ///   - Clubs: browse public clubs + the user's own memberships.
+///   - Discover: cross-club activity search over `search_public_events`
+///     (public clubs only; category/cadence/weekday/time/price filters,
+///     decisions §147).
 ///
 /// Routes used to live here as a fourth sub-tab; the Fitness-hub redesign
 /// relocated it to Fitness → Runs (a run-modality surface, not a
@@ -29,10 +33,10 @@ class SocialScreen extends StatefulWidget {
   final TrainingService training;
   /// Still required — `ClubsScreen` takes it to surface club-owned routes.
   final LocalRouteStore routeStore;
-  /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs.
-  /// Defaults to Feed (0) so a tap on the bottom-nav lands on fresh
-  /// follower activity — that's the highest-value default for most
-  /// sessions; users heading to a club still get there in one tap.
+  /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs,
+  /// 3 = Discover. Defaults to Feed (0) so a tap on the bottom-nav lands
+  /// on fresh follower activity — that's the highest-value default for
+  /// most sessions; users heading to a club still get there in one tap.
   final int initialTab;
 
   const SocialScreen({
@@ -57,9 +61,9 @@ class _SocialScreenState extends State<SocialScreen>
   void initState() {
     super.initState();
     _controller = TabController(
-      length: 3,
+      length: 4,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 2),
+      initialIndex: widget.initialTab.clamp(0, 3),
     );
     _controller.addListener(() {
       // Repaint so the FAB visibility tracks the active tab.
@@ -91,6 +95,9 @@ class _SocialScreenState extends State<SocialScreen>
                 text: l10n.socialTabPeople,
                 icon: const Icon(Icons.person_search)),
             Tab(text: l10n.socialTabClubs, icon: const Icon(Icons.groups)),
+            Tab(
+                text: l10n.socialTabDiscover,
+                icon: const Icon(Icons.event_available)),
           ],
         ),
       ),
@@ -105,6 +112,11 @@ class _SocialScreenState extends State<SocialScreen>
             training: widget.training,
             apiClient: widget.api,
             routeStore: widget.routeStore,
+            embedded: true,
+          ),
+          DiscoverScreen(
+            api: widget.api,
+            social: widget.social,
             embedded: true,
           ),
         ],

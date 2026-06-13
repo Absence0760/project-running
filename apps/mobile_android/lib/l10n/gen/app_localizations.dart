@@ -5201,6 +5201,180 @@ abstract class AppLocalizations {
   /// **'Routes'**
   String get socialTabRoutes;
 
+  /// Social hub sub-tab label — cross-club activity discovery
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get socialTabDiscover;
+
+  /// Discover tab search field placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'Search yoga, pilates, HIIT, run clubs…'**
+  String get discoverSearchPlaceholder;
+
+  /// Discover tab — category filter chip that clears the category filter
+  ///
+  /// In en, this message translates to:
+  /// **'All activities'**
+  String get discoverActivityAll;
+
+  /// Discover tab — label for the recurrence/cadence filter
+  ///
+  /// In en, this message translates to:
+  /// **'Cadence'**
+  String get discoverCadenceLabel;
+
+  /// Discover tab — cadence filter option that matches any cadence
+  ///
+  /// In en, this message translates to:
+  /// **'Any cadence'**
+  String get discoverCadenceAny;
+
+  /// Discover tab — a non-recurring (single) event
+  ///
+  /// In en, this message translates to:
+  /// **'One-off'**
+  String get discoverOneOff;
+
+  /// Discover tab — a weekly recurring event
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get discoverWeekly;
+
+  /// Discover tab — a fortnightly recurring event
+  ///
+  /// In en, this message translates to:
+  /// **'Every 2 weeks'**
+  String get discoverBiweekly;
+
+  /// Discover tab — a monthly recurring event
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get discoverMonthly;
+
+  /// Discover tab — label for the weekday filter
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get discoverDayLabel;
+
+  /// Discover tab — weekday filter option that matches any day
+  ///
+  /// In en, this message translates to:
+  /// **'Any day'**
+  String get discoverDayAny;
+
+  /// Discover tab — abbreviated Monday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Mon'**
+  String get discoverDayMon;
+
+  /// Discover tab — abbreviated Tuesday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Tue'**
+  String get discoverDayTue;
+
+  /// Discover tab — abbreviated Wednesday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Wed'**
+  String get discoverDayWed;
+
+  /// Discover tab — abbreviated Thursday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Thu'**
+  String get discoverDayThu;
+
+  /// Discover tab — abbreviated Friday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Fri'**
+  String get discoverDayFri;
+
+  /// Discover tab — abbreviated Saturday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Sat'**
+  String get discoverDaySat;
+
+  /// Discover tab — abbreviated Sunday weekday label
+  ///
+  /// In en, this message translates to:
+  /// **'Sun'**
+  String get discoverDaySun;
+
+  /// Discover tab — label for the time-of-day filter
+  ///
+  /// In en, this message translates to:
+  /// **'Time of day'**
+  String get discoverTimeLabel;
+
+  /// Discover tab — time-of-day filter option that matches any time
+  ///
+  /// In en, this message translates to:
+  /// **'Any time'**
+  String get discoverTimeAny;
+
+  /// Discover tab — morning time-of-day bucket (05:00–11:59 local)
+  ///
+  /// In en, this message translates to:
+  /// **'Morning'**
+  String get discoverMorning;
+
+  /// Discover tab — afternoon time-of-day bucket (12:00–16:59 local)
+  ///
+  /// In en, this message translates to:
+  /// **'Afternoon'**
+  String get discoverAfternoon;
+
+  /// Discover tab — evening time-of-day bucket (17:00–04:59 local)
+  ///
+  /// In en, this message translates to:
+  /// **'Evening'**
+  String get discoverEvening;
+
+  /// Discover tab — label for the price (free/paid) filter
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get discoverPriceLabel;
+
+  /// Discover tab — price filter option that matches free or paid
+  ///
+  /// In en, this message translates to:
+  /// **'Any price'**
+  String get discoverPriceAny;
+
+  /// Discover tab — a free (no-cost) event
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get discoverFree;
+
+  /// Discover tab — a paid (ticketed) event
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get discoverPaid;
+
+  /// Discover tab — loading state while results are fetched
+  ///
+  /// In en, this message translates to:
+  /// **'Searching…'**
+  String get discoverLoading;
+
+  /// Discover tab — empty state when no events match the filters
+  ///
+  /// In en, this message translates to:
+  /// **'No public activities match these filters yet.'**
+  String get discoverEmpty;
+
   /// AppBar title for the standalone clubs screen
   ///
   /// In en, this message translates to:

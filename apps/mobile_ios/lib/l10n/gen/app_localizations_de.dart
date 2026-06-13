@@ -3125,6 +3125,95 @@ class AppLocalizationsDe extends AppLocalizations {
   String get socialTabRoutes => 'Routen';
 
   @override
+  String get socialTabDiscover => 'Entdecken';
+
+  @override
+  String get discoverSearchPlaceholder =>
+      'Yoga, Pilates, HIIT, Laufgruppen suchen…';
+
+  @override
+  String get discoverActivityAll => 'Alle Aktivitäten';
+
+  @override
+  String get discoverCadenceLabel => 'Rhythmus';
+
+  @override
+  String get discoverCadenceAny => 'Beliebiger Rhythmus';
+
+  @override
+  String get discoverOneOff => 'Einmalig';
+
+  @override
+  String get discoverWeekly => 'Wöchentlich';
+
+  @override
+  String get discoverBiweekly => 'Alle 2 Wochen';
+
+  @override
+  String get discoverMonthly => 'Monatlich';
+
+  @override
+  String get discoverDayLabel => 'Tag';
+
+  @override
+  String get discoverDayAny => 'Beliebiger Tag';
+
+  @override
+  String get discoverDayMon => 'Mo';
+
+  @override
+  String get discoverDayTue => 'Di';
+
+  @override
+  String get discoverDayWed => 'Mi';
+
+  @override
+  String get discoverDayThu => 'Do';
+
+  @override
+  String get discoverDayFri => 'Fr';
+
+  @override
+  String get discoverDaySat => 'Sa';
+
+  @override
+  String get discoverDaySun => 'So';
+
+  @override
+  String get discoverTimeLabel => 'Tageszeit';
+
+  @override
+  String get discoverTimeAny => 'Beliebige Zeit';
+
+  @override
+  String get discoverMorning => 'Morgens';
+
+  @override
+  String get discoverAfternoon => 'Nachmittags';
+
+  @override
+  String get discoverEvening => 'Abends';
+
+  @override
+  String get discoverPriceLabel => 'Preis';
+
+  @override
+  String get discoverPriceAny => 'Beliebiger Preis';
+
+  @override
+  String get discoverFree => 'Kostenlos';
+
+  @override
+  String get discoverPaid => 'Kostenpflichtig';
+
+  @override
+  String get discoverLoading => 'Suche läuft…';
+
+  @override
+  String get discoverEmpty =>
+      'Keine öffentlichen Aktivitäten passen zu diesen Filtern.';
+
+  @override
   String get clubsTitle => 'Clubs';
 
   @override
