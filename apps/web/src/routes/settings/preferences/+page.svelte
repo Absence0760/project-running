@@ -23,7 +23,6 @@
 		type WeightGoal,
 	} from '$lib/nutrition/nutrition_targets';
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
-	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -234,6 +233,16 @@
 	// Privacy zones — geofences clipped from public track renders.
 	let privacyZones = $state<PrivacyZone[]>([]);
 	let showZonePicker = $state(false);
+	// PrivacyZonePicker pulls in maplibre-gl (~250KB gz). Lazy-load it the first
+	// time the user opens the picker so the common Preferences visit (units /
+	// theme / HR zones) doesn't ship the map engine in its initial chunk.
+	let PrivacyZonePicker = $state<typeof import('$lib/components/PrivacyZonePicker.svelte').default | null>(null);
+	async function openZonePicker() {
+		if (!PrivacyZonePicker) {
+			PrivacyZonePicker = (await import('$lib/components/PrivacyZonePicker.svelte')).default;
+		}
+		showZonePicker = true;
+	}
 
 	onMount(async () => {
 		// Theme is local-only so it's available even before the bag loads.
@@ -835,7 +844,7 @@
 			{/if}
 
 			<div>
-				<button class="btn btn-primary" type="button" onclick={() => (showZonePicker = true)}>
+				<button class="btn btn-primary" type="button" onclick={openZonePicker}>
 					<span class="material-symbols">add</span>
 					{m('prefs.addZone')}
 				</button>
@@ -942,7 +951,9 @@
 	onclose={() => (showZonePicker = false)}
 	wide
 >
-	<PrivacyZonePicker oncreated={addZone} oncancel={() => (showZonePicker = false)} />
+	{#if PrivacyZonePicker}
+		<PrivacyZonePicker oncreated={addZone} oncancel={() => (showZonePicker = false)} />
+	{/if}
 </Modal>
 
 <ConfirmDialog
