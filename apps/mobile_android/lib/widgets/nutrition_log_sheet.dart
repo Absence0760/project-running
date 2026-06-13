@@ -47,6 +47,7 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
   Timer? _debounce;
   bool _manualOpen = false;
   bool _saving = false;
+  String? _error;
 
   final _manualName = TextEditingController();
   final _manualKcal = TextEditingController();
@@ -126,7 +127,10 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
     double? carbsG,
     double? fatG,
   }) async {
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       await widget.store.createLocal(
         startedAt: DateTime.now(),
@@ -138,8 +142,16 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
         fatG: fatG,
       );
       if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      debugPrint('nutrition_log_sheet: save failed: $e');
+      if (mounted) {
+        setState(() {
+          _error = AppLocalizations.of(context).nutritionSaveFailed;
+          _saving = false;
+        });
+      }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && _saving) setState(() => _saving = false);
     }
   }
 
@@ -157,6 +169,16 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
           ],
           onChanged: (v) => setState(() => _mealSlot = v ?? 'breakfast'),
         ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
         const SizedBox(height: 12),
         TextField(
           controller: _queryCtl,

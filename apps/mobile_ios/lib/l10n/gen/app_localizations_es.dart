@@ -7954,6 +7954,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Sin coincidencias. Prueba otro término o introdúcelo manualmente abajo.';
 
   @override
+  String get nutritionSaveFailed =>
+      'No se pudo registrar la comida. Inténtalo de nuevo.';
+
+  @override
   String get nutritionMealSlot => 'Comida';
 
   @override

@@ -7950,6 +7950,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
 
   @override
+  String get nutritionSaveFailed =>
+      'Não foi possível registrar o alimento. Tente novamente.';
+
+  @override
   String get nutritionMealSlot => 'Refeição';
 
   @override
@@ -16352,6 +16356,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get nutritionNoResults =>
       'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionSaveFailed =>
+      'Não foi possível registrar o alimento. Tente novamente.';
 
   @override
   String get nutritionMealSlot => 'Refeição';

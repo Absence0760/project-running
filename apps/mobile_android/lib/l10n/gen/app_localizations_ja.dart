@@ -7538,6 +7538,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionNoResults => '一致する項目がありません。別の語で検索するか、下から手動で入力してください。';
 
   @override
+  String get nutritionSaveFailed => '食事を記録できませんでした。もう一度お試しください。';
+
+  @override
   String get nutritionMealSlot => '食事区分';
 
   @override

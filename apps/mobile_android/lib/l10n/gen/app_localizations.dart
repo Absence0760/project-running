@@ -13221,6 +13221,12 @@ abstract class AppLocalizations {
   /// **'No matches. Try another term or enter it manually below.'**
   String get nutritionNoResults;
 
+  /// No description provided for @nutritionSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t log food. Try again.'**
+  String get nutritionSaveFailed;
+
   /// No description provided for @nutritionMealSlot.
   ///
   /// In en, this message translates to:

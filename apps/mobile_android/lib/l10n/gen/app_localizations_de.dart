@@ -7960,6 +7960,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Keine Treffer. Versuche einen anderen Begriff oder gib es unten manuell ein.';
 
   @override
+  String get nutritionSaveFailed =>
+      'Essen konnte nicht protokolliert werden. Versuche es erneut.';
+
+  @override
   String get nutritionMealSlot => 'Mahlzeit';
 
   @override

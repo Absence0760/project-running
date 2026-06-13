@@ -7972,6 +7972,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun résultat. Essaie un autre terme ou saisis-le manuellement ci-dessous.';
 
   @override
+  String get nutritionSaveFailed =>
+      'Impossible d\'enregistrer l\'aliment. Réessaie.';
+
+  @override
   String get nutritionMealSlot => 'Repas';
 
   @override

@@ -7875,6 +7875,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'No matches. Try another term or enter it manually below.';
 
   @override
+  String get nutritionSaveFailed => 'Couldn\'t log food. Try again.';
+
+  @override
   String get nutritionMealSlot => 'Meal';
 
   @override
