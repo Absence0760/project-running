@@ -58,10 +58,10 @@ export type LiveHubStatus = 'connecting' | 'open' | 'closed';
 /// be unit-tested with a fake socket — the real `WebSocket` global
 /// satisfies it structurally.
 export interface SocketLike {
-	onopen: ((ev: unknown) => void) | null;
-	onmessage: ((ev: { data: unknown }) => void) | null;
-	onerror: ((ev: unknown) => void) | null;
-	onclose: ((ev: unknown) => void) | null;
+	onopen: ((ev: Event) => void) | null;
+	onmessage: ((ev: MessageEvent) => void) | null;
+	onerror: ((ev: Event) => void) | null;
+	onclose: ((ev: CloseEvent) => void) | null;
 	close(): void;
 }
 
