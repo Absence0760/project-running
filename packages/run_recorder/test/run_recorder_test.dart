@@ -539,5 +539,26 @@ void main() {
       expect(r.debugReportedDistanceMetres, 400.0,
           reason: 'distance resumes from the frozen pre-pause value');
     });
+
+    test('speed-only belt does not credit the pause gap after resume',
+        () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // Speed-only belt (no totalDistanceMetres): establish a moving anchor.
+      r.setTreadmillSample(3.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      r.setTreadmillSample(3.0);
+      final beforePause = r.debugReportedDistanceMetres;
+      r.pause();
+      // A real-world short pause (tie a shoe) shorter than the 30 s dtSec
+      // clamp. With the bug the first post-resume sample integrated 3 m/s
+      // back across this whole gap (~0.6 m of phantom distance here, and a
+      // jog × a 20 s pause would be tens of metres).
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      r.resume();
+      r.setTreadmillSample(3.0);
+      expect(r.debugReportedDistanceMetres, closeTo(beforePause, 0.01),
+          reason: 'the paused interval must not be credited as belt distance');
+    });
   });
 }

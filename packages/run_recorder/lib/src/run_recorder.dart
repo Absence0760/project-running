@@ -566,6 +566,14 @@ class RunRecorder {
     _stopwatch.start();
     _lastTrackedPosition = null; // avoid a big jump after resume
     _lastTrackedPositionAt = null;
+    // Drop the speed-integration anchor too. Without this, the first
+    // post-resume belt sample integrates dt back to a timestamp written
+    // during/before the pause, crediting the paused gap as distance for any
+    // pause shorter than the 30 s dtSec clamp (the GPS path is reset just
+    // above for the same reason; the totalDistanceMetres branch rebaselines
+    // on the _paused edge). Reset both so the next sample is a fresh anchor.
+    _treadmillLastSampleAt = null;
+    _treadmillLastSpeedMps = 0;
   }
 
   /// Update the latest heart-rate reading the recorder stamps onto new
