@@ -43,6 +43,7 @@ export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
 import {
 	filterRelinkCandidates,
+	DEFAULT_RELINK_WINDOW_DAYS,
 	type RelinkCandidateRun
 } from '../training/relink_candidates';
 import type { GeneratedPlan, GoalEvent } from '../training/training';
@@ -3602,12 +3603,31 @@ export async function fetchRelinkCandidateRuns(
 		}
 	}
 
-	// Owner's runs, explicitly scoped (RLS + user_id). Pull scalars only.
-	const { data: runRows } = await supabase
+	// Owner's runs, explicitly scoped (RLS + user_id), scalars only — bounded
+	// to a date window around the workout instead of the whole run history.
+	// filterRelinkCandidates keeps only runs within ±DEFAULT_RELINK_WINDOW_DAYS
+	// calendar days of scheduled_date (plus the current pick regardless), so a
+	// generous ±(window+2)-day UTC pre-filter — wide enough to cover ±window
+	// LOCAL calendar days across any timezone — returns a handful of rows
+	// instead of every run a heavy-history user ever logged. The current
+	// completed_run_id is OR-ed in so a re-link pick outside the window still
+	// surfaces (filterRelinkCandidates always keeps it). Backed by the
+	// (user_id, started_at desc) index.
+	const currentRunId = workout.completed_run_id ?? null;
+	const schedMs = Date.parse(`${workout.scheduled_date}T00:00:00Z`);
+	const bufferMs = (DEFAULT_RELINK_WINDOW_DAYS + 2) * 86_400_000;
+	const loIso = new Date(schedMs - bufferMs).toISOString();
+	const hiIso = new Date(schedMs + bufferMs).toISOString();
+	let runQuery = supabase
 		.from('runs')
 		.select('id, started_at, distance_m, duration_s')
-		.eq('user_id', userId)
-		.order('started_at', { ascending: false });
+		.eq('user_id', userId);
+	runQuery = currentRunId
+		? runQuery.or(
+				`and(started_at.gte.${loIso},started_at.lte.${hiIso}),id.eq.${currentRunId}`
+			)
+		: runQuery.gte('started_at', loIso).lte('started_at', hiIso);
+	const { data: runRows } = await runQuery.order('started_at', { ascending: false });
 
 	const runs: RelinkCandidateRun[] = (runRows ?? []).map((r) => ({
 		id: (r as { id: string }).id,
@@ -3619,7 +3639,7 @@ export async function fetchRelinkCandidateRuns(
 	return filterRelinkCandidates({
 		runs,
 		linkedRunIds,
-		currentRunId: workout.completed_run_id ?? null,
+		currentRunId,
 		scheduledDate: workout.scheduled_date
 	});
 }
