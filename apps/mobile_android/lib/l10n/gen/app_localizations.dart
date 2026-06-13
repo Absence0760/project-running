@@ -10125,6 +10125,114 @@ abstract class AppLocalizations {
   /// **'Could not update caption: {error}'**
   String runPhotosCaptionError(String error);
 
+  /// Loading state for the route photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Loading photos…'**
+  String get routePhotosLoading;
+
+  /// Header for the route photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get routePhotosTitle;
+
+  /// Button to add a photo to a route
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get routePhotosAdd;
+
+  /// Hint in the caption field for a route photo about to be uploaded
+  ///
+  /// In en, this message translates to:
+  /// **'Caption (optional, 280 chars)'**
+  String get routePhotosCaptionPendingHint;
+
+  /// Hint in the inline caption-edit field for a route photo
+  ///
+  /// In en, this message translates to:
+  /// **'Caption…'**
+  String get routePhotosCaptionHint;
+
+  /// Cancel button in the route photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get routePhotosCancel;
+
+  /// Save button for an edited route-photo caption
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get routePhotosSave;
+
+  /// Button to upload the pending route photo
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get routePhotosUpload;
+
+  /// Button label while a route photo is uploading
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get routePhotosUploading;
+
+  /// Tooltip on the edit-caption button for a route photo
+  ///
+  /// In en, this message translates to:
+  /// **'Edit caption'**
+  String get routePhotosEditCaption;
+
+  /// Tooltip on the delete-photo button for a route photo
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo'**
+  String get routePhotosDeleteTooltip;
+
+  /// Title of the route delete-photo confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo?'**
+  String get routePhotosDeleteTitle;
+
+  /// Body of the route delete-photo confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the photo from the route permanently.'**
+  String get routePhotosDeleteBody;
+
+  /// Confirm button in the route delete-photo dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get routePhotosDeleteConfirm;
+
+  /// Banner when the image picker can't be opened for a route photo
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open picker: {error}'**
+  String routePhotosPickerError(String error);
+
+  /// Banner when a route photo upload fails
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed: {error}'**
+  String routePhotosUploadError(String error);
+
+  /// Banner when deleting a route photo fails
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failed: {error}'**
+  String routePhotosDeleteError(String error);
+
+  /// Banner when updating a route-photo caption fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update caption: {error}'**
+  String routePhotosCaptionError(String error);
+
   /// Loading state while segment efforts are computed
   ///
   /// In en, this message translates to:

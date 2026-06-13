@@ -5784,6 +5784,68 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get routePhotosLoading => '写真を読み込み中…';
+
+  @override
+  String get routePhotosTitle => '写真';
+
+  @override
+  String get routePhotosAdd => '写真を追加';
+
+  @override
+  String get routePhotosCaptionPendingHint => 'キャプション（任意、280文字）';
+
+  @override
+  String get routePhotosCaptionHint => 'キャプション…';
+
+  @override
+  String get routePhotosCancel => 'キャンセル';
+
+  @override
+  String get routePhotosSave => '保存';
+
+  @override
+  String get routePhotosUpload => 'アップロード';
+
+  @override
+  String get routePhotosUploading => 'アップロード中…';
+
+  @override
+  String get routePhotosEditCaption => 'キャプションを編集';
+
+  @override
+  String get routePhotosDeleteTooltip => '写真を削除';
+
+  @override
+  String get routePhotosDeleteTitle => '写真を削除しますか？';
+
+  @override
+  String get routePhotosDeleteBody => 'この操作で写真はルートから完全に削除されます。';
+
+  @override
+  String get routePhotosDeleteConfirm => '削除';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'ピッカーを開けませんでした: $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'アップロードに失敗しました: $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return '削除に失敗しました: $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
+    return 'キャプションを更新できませんでした: $error';
+  }
+
+  @override
   String get runSegEffortsChecking => 'セグメントを確認中…';
 
   @override

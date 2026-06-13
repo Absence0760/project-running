@@ -6067,6 +6067,69 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get routePhotosLoading => 'Loading photos…';
+
+  @override
+  String get routePhotosTitle => 'Photos';
+
+  @override
+  String get routePhotosAdd => 'Add photo';
+
+  @override
+  String get routePhotosCaptionPendingHint => 'Caption (optional, 280 chars)';
+
+  @override
+  String get routePhotosCaptionHint => 'Caption…';
+
+  @override
+  String get routePhotosCancel => 'Cancel';
+
+  @override
+  String get routePhotosSave => 'Save';
+
+  @override
+  String get routePhotosUpload => 'Upload';
+
+  @override
+  String get routePhotosUploading => 'Uploading…';
+
+  @override
+  String get routePhotosEditCaption => 'Edit caption';
+
+  @override
+  String get routePhotosDeleteTooltip => 'Delete photo';
+
+  @override
+  String get routePhotosDeleteTitle => 'Delete photo?';
+
+  @override
+  String get routePhotosDeleteBody =>
+      'This removes the photo from the route permanently.';
+
+  @override
+  String get routePhotosDeleteConfirm => 'Delete';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'Could not open picker: $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'Upload failed: $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return 'Delete failed: $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
+    return 'Could not update caption: $error';
+  }
+
+  @override
   String get runSegEffortsChecking => 'Checking segments…';
 
   @override

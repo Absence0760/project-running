@@ -7699,6 +7699,98 @@
       }
     }
   },
+  "routePhotosLoading": "Loading photos…",
+  "@routePhotosLoading": {
+    "description": "Loading state for the route photo gallery"
+  },
+  "routePhotosTitle": "Photos",
+  "@routePhotosTitle": {
+    "description": "Header for the route photo gallery"
+  },
+  "routePhotosAdd": "Add photo",
+  "@routePhotosAdd": {
+    "description": "Button to add a photo to a route"
+  },
+  "routePhotosCaptionPendingHint": "Caption (optional, 280 chars)",
+  "@routePhotosCaptionPendingHint": {
+    "description": "Hint in the caption field for a route photo about to be uploaded"
+  },
+  "routePhotosCaptionHint": "Caption…",
+  "@routePhotosCaptionHint": {
+    "description": "Hint in the inline caption-edit field for a route photo"
+  },
+  "routePhotosCancel": "Cancel",
+  "@routePhotosCancel": {
+    "description": "Cancel button in the route photo gallery"
+  },
+  "routePhotosSave": "Save",
+  "@routePhotosSave": {
+    "description": "Save button for an edited route-photo caption"
+  },
+  "routePhotosUpload": "Upload",
+  "@routePhotosUpload": {
+    "description": "Button to upload the pending route photo"
+  },
+  "routePhotosUploading": "Uploading…",
+  "@routePhotosUploading": {
+    "description": "Button label while a route photo is uploading"
+  },
+  "routePhotosEditCaption": "Edit caption",
+  "@routePhotosEditCaption": {
+    "description": "Tooltip on the edit-caption button for a route photo"
+  },
+  "routePhotosDeleteTooltip": "Delete photo",
+  "@routePhotosDeleteTooltip": {
+    "description": "Tooltip on the delete-photo button for a route photo"
+  },
+  "routePhotosDeleteTitle": "Delete photo?",
+  "@routePhotosDeleteTitle": {
+    "description": "Title of the route delete-photo confirmation dialog"
+  },
+  "routePhotosDeleteBody": "This removes the photo from the route permanently.",
+  "@routePhotosDeleteBody": {
+    "description": "Body of the route delete-photo confirmation dialog"
+  },
+  "routePhotosDeleteConfirm": "Delete",
+  "@routePhotosDeleteConfirm": {
+    "description": "Confirm button in the route delete-photo dialog"
+  },
+  "routePhotosPickerError": "Could not open picker: {error}",
+  "@routePhotosPickerError": {
+    "description": "Banner when the image picker can't be opened for a route photo",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routePhotosUploadError": "Upload failed: {error}",
+  "@routePhotosUploadError": {
+    "description": "Banner when a route photo upload fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routePhotosDeleteError": "Delete failed: {error}",
+  "@routePhotosDeleteError": {
+    "description": "Banner when deleting a route photo fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routePhotosCaptionError": "Could not update caption: {error}",
+  "@routePhotosCaptionError": {
+    "description": "Banner when updating a route-photo caption fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "runSegEffortsChecking": "Checking segments…",
   "@runSegEffortsChecking": {
     "description": "Loading state while segment efforts are computed"

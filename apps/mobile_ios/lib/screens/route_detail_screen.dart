@@ -20,6 +20,7 @@ import '../social_service.dart' show ClubView, SocialService;
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
 import '../widgets/report_sheet.dart';
+import '../widgets/route_photos.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
 import '../widgets/top_banner.dart';
@@ -875,6 +876,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ),
                     ),
                   )),
+
+            if (widget.apiClient != null) ...[
+              const SizedBox(height: 8),
+              RoutePhotos(
+                api: widget.apiClient!,
+                routeId: widget.route.id,
+                routeOwnerId: widget.route.userId,
+              ),
+            ],
 
             // Trailing bottom-of-scroll padding so the FAB doesn't
             // sit on top of the last review card.

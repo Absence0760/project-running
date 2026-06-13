@@ -6142,6 +6142,70 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get routePhotosLoading => 'Chargement des photos…';
+
+  @override
+  String get routePhotosTitle => 'Photos';
+
+  @override
+  String get routePhotosAdd => 'Ajouter une photo';
+
+  @override
+  String get routePhotosCaptionPendingHint =>
+      'Légende (facultatif, 280 caractères)';
+
+  @override
+  String get routePhotosCaptionHint => 'Légende…';
+
+  @override
+  String get routePhotosCancel => 'Annuler';
+
+  @override
+  String get routePhotosSave => 'Enregistrer';
+
+  @override
+  String get routePhotosUpload => 'Téléverser';
+
+  @override
+  String get routePhotosUploading => 'Téléversement…';
+
+  @override
+  String get routePhotosEditCaption => 'Modifier la légende';
+
+  @override
+  String get routePhotosDeleteTooltip => 'Supprimer la photo';
+
+  @override
+  String get routePhotosDeleteTitle => 'Supprimer la photo ?';
+
+  @override
+  String get routePhotosDeleteBody =>
+      'La photo sera définitivement retirée de l\'itinéraire.';
+
+  @override
+  String get routePhotosDeleteConfirm => 'Supprimer';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'Impossible d\'ouvrir le sélecteur : $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'Échec du téléversement : $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return 'Échec de la suppression : $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
+    return 'Impossible de mettre à jour la légende : $error';
+  }
+
+  @override
   String get runSegEffortsChecking => 'Vérification des segments…';
 
   @override

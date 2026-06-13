@@ -6136,6 +6136,70 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get routePhotosLoading => 'Fotos werden geladen…';
+
+  @override
+  String get routePhotosTitle => 'Fotos';
+
+  @override
+  String get routePhotosAdd => 'Foto hinzufügen';
+
+  @override
+  String get routePhotosCaptionPendingHint =>
+      'Bildunterschrift (optional, 280 Zeichen)';
+
+  @override
+  String get routePhotosCaptionHint => 'Bildunterschrift…';
+
+  @override
+  String get routePhotosCancel => 'Abbrechen';
+
+  @override
+  String get routePhotosSave => 'Speichern';
+
+  @override
+  String get routePhotosUpload => 'Hochladen';
+
+  @override
+  String get routePhotosUploading => 'Wird hochgeladen…';
+
+  @override
+  String get routePhotosEditCaption => 'Bildunterschrift bearbeiten';
+
+  @override
+  String get routePhotosDeleteTooltip => 'Foto löschen';
+
+  @override
+  String get routePhotosDeleteTitle => 'Foto löschen?';
+
+  @override
+  String get routePhotosDeleteBody =>
+      'Dies entfernt das Foto dauerhaft von der Route.';
+
+  @override
+  String get routePhotosDeleteConfirm => 'Löschen';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'Auswahl konnte nicht geöffnet werden: $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'Hochladen fehlgeschlagen: $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return 'Löschen fehlgeschlagen: $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
+    return 'Bildunterschrift konnte nicht aktualisiert werden: $error';
+  }
+
+  @override
   String get runSegEffortsChecking => 'Segmente werden geprüft…';
 
   @override

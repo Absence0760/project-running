@@ -6128,6 +6128,70 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get routePhotosLoading => 'Cargando fotos…';
+
+  @override
+  String get routePhotosTitle => 'Fotos';
+
+  @override
+  String get routePhotosAdd => 'Añadir foto';
+
+  @override
+  String get routePhotosCaptionPendingHint =>
+      'Pie de foto (opcional, 280 caracteres)';
+
+  @override
+  String get routePhotosCaptionHint => 'Pie de foto…';
+
+  @override
+  String get routePhotosCancel => 'Cancelar';
+
+  @override
+  String get routePhotosSave => 'Guardar';
+
+  @override
+  String get routePhotosUpload => 'Subir';
+
+  @override
+  String get routePhotosUploading => 'Subiendo…';
+
+  @override
+  String get routePhotosEditCaption => 'Editar pie de foto';
+
+  @override
+  String get routePhotosDeleteTooltip => 'Eliminar foto';
+
+  @override
+  String get routePhotosDeleteTitle => '¿Eliminar foto?';
+
+  @override
+  String get routePhotosDeleteBody =>
+      'Esto elimina la foto de la ruta de forma permanente.';
+
+  @override
+  String get routePhotosDeleteConfirm => 'Eliminar';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'No se pudo abrir el selector: $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'Error al subir: $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return 'Error al eliminar: $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
+    return 'No se pudo actualizar el pie de foto: $error';
+  }
+
+  @override
   String get runSegEffortsChecking => 'Comprobando segmentos…';
 
   @override

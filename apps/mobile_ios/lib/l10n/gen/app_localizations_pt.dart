@@ -6124,6 +6124,70 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get routePhotosLoading => 'Carregando fotos…';
+
+  @override
+  String get routePhotosTitle => 'Fotos';
+
+  @override
+  String get routePhotosAdd => 'Adicionar foto';
+
+  @override
+  String get routePhotosCaptionPendingHint =>
+      'Legenda (opcional, 280 caracteres)';
+
+  @override
+  String get routePhotosCaptionHint => 'Legenda…';
+
+  @override
+  String get routePhotosCancel => 'Cancelar';
+
+  @override
+  String get routePhotosSave => 'Salvar';
+
+  @override
+  String get routePhotosUpload => 'Enviar';
+
+  @override
+  String get routePhotosUploading => 'Enviando…';
+
+  @override
+  String get routePhotosEditCaption => 'Editar legenda';
+
+  @override
+  String get routePhotosDeleteTooltip => 'Excluir foto';
+
+  @override
+  String get routePhotosDeleteTitle => 'Excluir foto?';
+
+  @override
+  String get routePhotosDeleteBody =>
+      'Isto remove a foto do percurso permanentemente.';
+
+  @override
+  String get routePhotosDeleteConfirm => 'Excluir';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'Não foi possível abrir o seletor: $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'Falha no envio: $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
+    return 'Não foi possível atualizar a legenda: $error';
+  }
+
+  @override
   String get runSegEffortsChecking => 'Verificando segmentos…';
 
   @override
@@ -14524,6 +14588,70 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String runPhotosCaptionError(String error) {
+    return 'Não foi possível atualizar a legenda: $error';
+  }
+
+  @override
+  String get routePhotosLoading => 'Carregando fotos…';
+
+  @override
+  String get routePhotosTitle => 'Fotos';
+
+  @override
+  String get routePhotosAdd => 'Adicionar foto';
+
+  @override
+  String get routePhotosCaptionPendingHint =>
+      'Legenda (opcional, 280 caracteres)';
+
+  @override
+  String get routePhotosCaptionHint => 'Legenda…';
+
+  @override
+  String get routePhotosCancel => 'Cancelar';
+
+  @override
+  String get routePhotosSave => 'Salvar';
+
+  @override
+  String get routePhotosUpload => 'Enviar';
+
+  @override
+  String get routePhotosUploading => 'Enviando…';
+
+  @override
+  String get routePhotosEditCaption => 'Editar legenda';
+
+  @override
+  String get routePhotosDeleteTooltip => 'Excluir foto';
+
+  @override
+  String get routePhotosDeleteTitle => 'Excluir foto?';
+
+  @override
+  String get routePhotosDeleteBody =>
+      'Isto remove a foto do percurso permanentemente.';
+
+  @override
+  String get routePhotosDeleteConfirm => 'Excluir';
+
+  @override
+  String routePhotosPickerError(String error) {
+    return 'Não foi possível abrir o seletor: $error';
+  }
+
+  @override
+  String routePhotosUploadError(String error) {
+    return 'Falha no envio: $error';
+  }
+
+  @override
+  String routePhotosDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String routePhotosCaptionError(String error) {
     return 'Não foi possível atualizar a legenda: $error';
   }
 
