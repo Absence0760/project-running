@@ -87,10 +87,33 @@ func (s *Server) pushLimiter() *pushRateLimiter {
 	return s.pushLimitImpl
 }
 
+// StartLimiterGC sweeps idle push-rate-limiter buckets on a ticker
+// until [ctx] is done. Returns immediately. Mirrors [Hub.StartGC];
+// main.go starts it alongside the room GC so the per-run buckets are
+// reaped "alongside their rooms" (at the same IdleRoomTTL) instead of
+// leaking for the process lifetime.
+func (s *Server) StartLimiterGC(ctx context.Context, interval, maxIdle time.Duration) {
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				s.pushLimiter().reap(time.Now(), maxIdle)
+			}
+		}
+	}()
+}
+
 // pushRateLimiter is a per-key token-bucket with a sync.Map of
 // `*roomBucket` for the in-process Hub. Each bucket regenerates one
 // token per `interval/rate` seconds and caps at [rate]. Concurrent-
-// safe. Stale buckets are reaped during GC alongside their rooms.
+// safe. Idle buckets are reaped by [Server.StartLimiterGC] (the map is
+// keyed by runID and otherwise grows by one entry per distinct run that
+// ever pushes — a process-lifetime leak, since the room GC only reaps
+// rooms, not these sibling buckets).
 type pushRateLimiter struct {
 	rate     int
 	interval time.Duration
@@ -105,6 +128,27 @@ type roomBucket struct {
 
 func newPushRateLimiter(rate int, interval time.Duration) *pushRateLimiter {
 	return &pushRateLimiter{rate: rate, interval: interval}
+}
+
+// reap deletes buckets whose last refill is older than maxIdle, judged
+// at `now`, and returns the count dropped. A bucket idle longer than
+// `interval` has already refilled to the full token cap, so dropping it
+// loses no state — a later push just re-creates it at the same value.
+// Safe for concurrent callers.
+func (p *pushRateLimiter) reap(now time.Time, maxIdle time.Duration) int {
+	dropped := 0
+	p.buckets.Range(func(k, v any) bool {
+		b := v.(*roomBucket)
+		b.mu.Lock()
+		idle := now.Sub(b.lastFill)
+		b.mu.Unlock()
+		if idle > maxIdle {
+			p.buckets.Delete(k)
+			dropped++
+		}
+		return true
+	})
+	return dropped
 }
 
 func (p *pushRateLimiter) allow(runID string) bool {

@@ -482,6 +482,10 @@ func main() {
 	// every publish. /audit/livehub C2 + M4.
 	if inProc, ok := hub.(*livehub.Hub); ok {
 		inProc.StartGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
+		// Reap idle push-rate-limiter buckets on the same cadence — they
+		// live on the Server, not the Hub, so the room GC above doesn't
+		// touch them (they would otherwise leak one entry per distinct run).
+		hubSrv.StartLimiterGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
 	}
 	if authorizer != nil {
 		hubSrv.Authorizer = authorizer.Authorize
