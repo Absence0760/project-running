@@ -430,11 +430,19 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	// meantime — which the cleanup test pins in place.
 	ctx := c.CloseRead(r.Context())
 
-	// SubscribeNoReplay so we can re-evaluate the cached lastPing
-	// against CURRENT privacy zones before the WS sees it — a zone
-	// added mid-broadcast must be honoured by the late-joiner replay,
-	// not just by future /push calls. Persona-hunt Pro-Round2 #1.
-	ch, unsub, subErr := s.Hub.SubscribeNoReplay(ctx, runID)
+	// SubscribeWithHistory atomically snapshots the late-joiner history
+	// AND registers the (no-replay) subscriber under one lock, so the
+	// replay slice and the live `ch` partition the ping stream with no
+	// gap and no overlap. The earlier SubscribeNoReplay + separate
+	// History pair left a window: a ping landing between the register
+	// and the snapshot was either replayed AND streamed (a duplicate
+	// dot) or, if a long replay let the 8-slot live buffer fill, dropped
+	// from the live stream. No-replay (not the auto-lastPing replay) so
+	// server.go can still re-evaluate each replayed ping against CURRENT
+	// privacy zones — a zone added mid-broadcast must be honoured by the
+	// late-joiner replay, not just by future /push calls. Persona-hunt
+	// Pro-Round2 #1 + the dedup race.
+	history, ch, unsub, subErr := s.Hub.SubscribeWithHistory(ctx, runID, 0)
 	if subErr != nil {
 		// Per-room subscriber cap reached. Audit/livehub M3. Close
 		// with `1013 Try Again Later` (StatusTryAgainLater) so well-
@@ -450,10 +458,10 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	// Late-joiner replay. Persona-hunt Round 3 finding Ultra #1 —
 	// pre-fix we only sent the last ping, so a crew rolling up at
 	// mile 60 of a 100-mile race saw a single dot with no historical
-	// course. Now we replay up to HistoryRingSize recent pings,
-	// re-evaluating each against current privacy zones. The live
-	// stream then picks up from the next Publish via `ch`.
-	history := s.Hub.History(runID, 0)
+	// course. We replay up to HistoryRingSize recent pings (snapshotted
+	// atomically above), re-evaluating each against current privacy
+	// zones. The live stream then picks up from the next Publish via
+	// `ch`.
 	if len(history) == 0 {
 		// Backstop: pre-rollout rooms (or RedisHub instances without
 		// a history list) still expose LastKnown. Use it so a

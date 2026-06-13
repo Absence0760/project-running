@@ -383,3 +383,77 @@ func TestRedisHub_HistoryRollsOffPastCap(t *testing.T) {
 		t.Fatalf("newest DistanceM = %v, want %d", got[len(got)-1].DistanceM, HistoryRingSize+extra-1)
 	}
 }
+
+// SubscribeWithHistory returns the recent history snapshot AND a live
+// channel that streams subsequent publishes — the Redis transport's
+// half of the no-drop/no-duplicate late-joiner contract.
+func TestRedisHub_SubscribeWithHistoryReplaysThenStreams(t *testing.T) {
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+
+	for i := 0; i < 3; i++ {
+		hub.Publish("run-A", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	history, ch, unsub, err := hub.SubscribeWithHistory(ctx, "run-A", 0)
+	if err != nil {
+		t.Fatalf("SubscribeWithHistory err = %v", err)
+	}
+	defer unsub()
+
+	if len(history) != 3 {
+		t.Fatalf("history len = %d, want 3", len(history))
+	}
+	for i, p := range history {
+		if p.DistanceM != float64(i) {
+			t.Fatalf("history[%d].DistanceM = %v, want %d", i, p.DistanceM, i)
+		}
+	}
+
+	// A publish after the subscribe streams live and is not duplicated
+	// into the already-returned history snapshot.
+	hub.Publish("run-A", Ping{Lat: 1, Lng: 1, DistanceM: 3})
+	select {
+	case got := <-ch:
+		if got.DistanceM != 3 {
+			t.Fatalf("live ping DistanceM = %v, want 3", got.DistanceM)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the live ping")
+	}
+	for _, p := range history {
+		if p.DistanceM == 3 {
+			t.Fatal("ping #3 appeared in both history and the live channel (duplicate)")
+		}
+	}
+}
+
+// dedupHistoryTail trims the boundary overlap so a ping straddling the
+// subscribe/snapshot window (present in both the history snapshot and
+// the live buffer) is replayed once, not twice. pingEqual compares by
+// value so the dedup survives the pointer-field round-trip through JSON.
+func TestRedisHub_DedupHistoryTail(t *testing.T) {
+	bpm := func(v int) *int { return &v }
+	mk := func(d float64, b *int) Ping { return Ping{DistanceM: d, BPM: b} }
+
+	hist := []Ping{mk(0, nil), mk(1, bpm(120)), mk(2, bpm(130))}
+	// The live buffer caught the last two history pings (boundary
+	// overlap) plus a genuinely-new one. Distinct pointers, equal values.
+	live := []Ping{mk(1, bpm(120)), mk(2, bpm(130)), mk(3, bpm(140))}
+
+	got := dedupHistoryTail(hist, live)
+	if len(got) != 1 || got[0].DistanceM != 0 {
+		t.Fatalf("dedupHistoryTail = %v, want only the non-overlapping head [0]", distances(got))
+	}
+
+	// No overlap → history returned untouched.
+	if got := dedupHistoryTail(hist, []Ping{mk(9, nil)}); len(got) != len(hist) {
+		t.Fatalf("dedupHistoryTail with no overlap len = %d, want %d", len(got), len(hist))
+	}
+	// Differing BPM at the same distance is NOT an overlap.
+	if got := dedupHistoryTail([]Ping{mk(2, bpm(130))}, []Ping{mk(2, bpm(131))}); len(got) != 1 {
+		t.Fatalf("dedupHistoryTail must compare BPM by value; trimmed a non-matching ping")
+	}
+}

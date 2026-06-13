@@ -244,21 +244,6 @@ func (h *Hub) Publish(runID string, p Ping) int {
 // ping (if any) so a late joiner sees the runner immediately
 // instead of waiting up to 5 s for the next [Publish].
 func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
-	return h.subscribe(ctx, runID, true)
-}
-
-// SubscribeNoReplay is identical to Subscribe but skips the late-
-// joiner replay of `r.lastPing`. The HTTP /subscribe route uses this
-// so server.go can re-run shouldDrop against the *current* privacy
-// zones before manually pushing the cached ping to the WS — a zone
-// added mid-broadcast would otherwise leak through the auto-replay
-// because the cached lastPing was published before the zone existed.
-// Persona-hunt finding Pro-Round2 #1.
-func (h *Hub) SubscribeNoReplay(ctx context.Context, runID string) (<-chan Ping, func(), error) {
-	return h.subscribe(ctx, runID, false)
-}
-
-func (h *Hub) subscribe(ctx context.Context, runID string, replay bool) (<-chan Ping, func(), error) {
 	r := h.roomFor(runID, true)
 	s := &subscriber{ch: make(chan Ping, subBufferSize)}
 
@@ -270,7 +255,7 @@ func (h *Hub) subscribe(ctx context.Context, runID string, replay bool) (<-chan 
 		h.metrics.subscribeRejectCap.Add(1)
 		return nil, nil, ErrSubscriberCapReached
 	}
-	if replay && r.lastPing != nil {
+	if r.lastPing != nil {
 		// Pre-load the buffer with the last known ping. Capacity is
 		// >0, so this never blocks. If the caller drains slowly the
 		// next Publish may drop, which is fine.
@@ -285,18 +270,59 @@ func (h *Hub) subscribe(ctx context.Context, runID string, replay bool) (<-chan 
 	unsub := func() {
 		h.removeSubscriber(runID, s)
 	}
+	h.bindCancel(ctx, unsub)
+	return s.ch, unsub, nil
+}
 
-	// Best-effort cleanup if the caller's context is cancelled before
-	// they get a chance to call unsub. The caller still SHOULD call
-	// it explicitly via defer — this is a belt-and-suspenders.
+// SubscribeWithHistory atomically snapshots the room's recent history
+// and registers a no-replay subscriber under the same room lock, so the
+// returned history and the channel partition the ping stream with no
+// gap and no overlap. See the [LivePubSub] interface doc for the
+// contract this closes. maxHistory=0 → the per-room ceiling.
+func (h *Hub) SubscribeWithHistory(ctx context.Context, runID string, maxHistory int) ([]Ping, <-chan Ping, func(), error) {
+	r := h.roomFor(runID, true)
+	s := &subscriber{ch: make(chan Ping, subBufferSize)}
+
+	r.mu.Lock()
+	if len(r.subs) >= MaxSubsPerRoom {
+		r.mu.Unlock()
+		h.metrics.subscribeRejectCap.Add(1)
+		return nil, nil, nil, ErrSubscriberCapReached
+	}
+	// Snapshot history and register the subscriber under the SAME lock
+	// hold. Publish takes r.mu before it appends to history AND before
+	// it snapshots the subscriber set, so a ping cannot slip between
+	// these two reads: it is either already in `history` (published
+	// before we locked) or it will be delivered on `s.ch` (published
+	// after we registered). That partition is what makes the
+	// late-joiner replay exactly-once and stops a slow replay from
+	// dropping live pings — they queue on the channel instead of
+	// racing the History read.
+	history := r.historyLocked(maxHistory)
+	if r.subs == nil {
+		r.subs = make(map[*subscriber]struct{})
+	}
+	r.subs[s] = struct{}{}
+	r.mu.Unlock()
+
+	unsub := func() {
+		h.removeSubscriber(runID, s)
+	}
+	h.bindCancel(ctx, unsub)
+	return history, s.ch, unsub, nil
+}
+
+// bindCancel wires a best-effort cleanup so a caller whose context is
+// cancelled before it calls unsub still releases the subscriber. The
+// caller still SHOULD call unsub explicitly via defer — this is a
+// belt-and-suspenders.
+func (h *Hub) bindCancel(ctx context.Context, unsub func()) {
 	if ctx != nil && ctx.Done() != nil {
 		go func() {
 			<-ctx.Done()
 			unsub()
 		}()
 	}
-
-	return s.ch, unsub, nil
 }
 
 // RunGC walks the rooms map and drops any room whose subscriber count
@@ -452,6 +478,16 @@ func (h *Hub) History(runID string, max int) []Ping {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.historyLocked(max)
+}
+
+// historyLocked is the body of [Hub.History]; the caller MUST hold
+// r.mu. Split out so [Hub.SubscribeWithHistory] can read the snapshot
+// in the same critical section it registers the subscriber, closing
+// the register-then-snapshot race that let a ping be replayed and
+// streamed (duplicate) or dropped when the live channel filled during
+// a long replay.
+func (r *room) historyLocked(max int) []Ping {
 	if r.historyCount == 0 || len(r.history) == 0 {
 		return nil
 	}

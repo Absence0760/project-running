@@ -37,14 +37,23 @@ type LivePubSub interface {
 	// 503 so spectators back off without DoSing the server.
 	Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error)
 
-	// SubscribeNoReplay is identical to Subscribe but does NOT
-	// pre-load the room's last-known ping into the new subscriber's
-	// channel. Used by the HTTP `/subscribe` route so the server can
-	// re-evaluate the cached ping against the *current* privacy
-	// zones (cached zones may be older than a zone added mid-
-	// broadcast) before manually pushing it to the WS as the first
-	// message. Persona-hunt finding Pro-Round2 #1.
-	SubscribeNoReplay(ctx context.Context, runID string) (<-chan Ping, func(), error)
+	// SubscribeWithHistory atomically registers a no-replay subscriber
+	// AND snapshots the room's recent history (up to [maxHistory]; 0 →
+	// the implementation default cap) at the same instant. The contract
+	// is a clean partition: every ping in the returned `history` slice
+	// was recorded strictly before the subscriber was registered, and
+	// every ping the returned channel will deliver was published
+	// strictly after — so replaying `history` then streaming `ch`
+	// reconstructs the full ordered sequence with no ping seen twice
+	// and none dropped in the registration window.
+	//
+	// The HTTP `/subscribe` route uses this instead of a separate
+	// SubscribeNoReplay + History pair, which left a window where a
+	// ping landing between the register and the snapshot was either
+	// delivered on both paths (a duplicate dot on the spectator's map)
+	// or, when a slow replay let the live channel fill, dropped from
+	// the live stream by trySend's buffer-full path.
+	SubscribeWithHistory(ctx context.Context, runID string, maxHistory int) (history []Ping, ch <-chan Ping, unsub func(), err error)
 
 	// LastKnown returns the most recent ping or nil. Used by the
 	// HTTP `/snapshot` route.

@@ -340,3 +340,137 @@ func TestHub_RunGCKeepsRoomsWithSubscribers(t *testing.T) {
 		t.Fatalf("RoomCount = %d, want 1", c)
 	}
 }
+
+// SubscribeWithHistory must partition the ping stream: everything
+// published before the subscribe is in the history snapshot, everything
+// after is on the channel, with no ping appearing on both. This pins
+// the late-joiner replay against the register-then-snapshot race that
+// otherwise duplicated a ping landing in the window. The followup:
+// "Live pings during a late-joiner's history replay can be dropped or
+// duplicated."
+func TestHub_SubscribeWithHistoryPartitionsStream(t *testing.T) {
+	h := NewHub()
+	for i := 0; i < 5; i++ {
+		h.Publish("run-1", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+	}
+
+	history, ch, unsub, err := h.SubscribeWithHistory(context.Background(), "run-1", 0)
+	if err != nil {
+		t.Fatalf("SubscribeWithHistory err = %v", err)
+	}
+	defer unsub()
+
+	if len(history) != 5 {
+		t.Fatalf("history len = %d, want 5 (the pre-subscribe pings)", len(history))
+	}
+	for i, p := range history {
+		if p.DistanceM != float64(i) {
+			t.Fatalf("history[%d].DistanceM = %v, want %d", i, p.DistanceM, i)
+		}
+	}
+
+	// A ping published AFTER the atomic subscribe lands on the live
+	// channel and must NOT also be in the history snapshot we already
+	// hold (it isn't — that slice was captured under the same lock the
+	// register took, so the publish below could only have come after).
+	h.Publish("run-1", Ping{Lat: 1, Lng: 1, DistanceM: 5})
+	select {
+	case got := <-ch:
+		if got.DistanceM != 5 {
+			t.Fatalf("live ping DistanceM = %v, want 5", got.DistanceM)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the live ping")
+	}
+	for _, p := range history {
+		if p.DistanceM == 5 {
+			t.Fatal("ping #5 appeared in BOTH history and the live channel (duplicate)")
+		}
+	}
+}
+
+// A ping that arrives concurrently with the subscribe is delivered
+// EXACTLY ONCE — either replayed via history or streamed on the
+// channel, never both, never neither — and the reconstructed sequence
+// (history ++ channel) stays strictly ordered. Run many iterations so
+// the race detector exercises the publish/subscribe interleave at the
+// boundary the lock now guards.
+func TestHub_SubscribeWithHistoryExactlyOnceDuringReplay(t *testing.T) {
+	for iter := 0; iter < 500; iter++ {
+		h := NewHub()
+		const pre = 4
+		for i := 0; i < pre; i++ {
+			h.Publish("run-x", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+		}
+
+		// Fire a publish concurrently with the subscribe so the ping
+		// races the register/snapshot boundary.
+		const racer = float64(pre)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		started := make(chan struct{})
+		go func() {
+			defer wg.Done()
+			<-started
+			h.Publish("run-x", Ping{Lat: 1, Lng: 1, DistanceM: racer})
+		}()
+
+		close(started)
+		history, ch, unsub, err := h.SubscribeWithHistory(context.Background(), "run-x", 0)
+		if err != nil {
+			unsubIf(unsub)
+			t.Fatalf("iter %d: SubscribeWithHistory err = %v", iter, err)
+		}
+		wg.Wait()
+
+		// The racing publish has returned, so its trySend (if the ping
+		// went live rather than into history) has already landed in the
+		// channel buffer. Drain non-blockingly.
+		var live []Ping
+	drain:
+		for {
+			select {
+			case p := <-ch:
+				live = append(live, p)
+			default:
+				break drain
+			}
+		}
+		unsub()
+
+		// Reconstruct the full ordered sequence the spectator saw.
+		seen := make(map[float64]int)
+		seq := append(append([]Ping{}, history...), live...)
+		last := -1.0
+		for _, p := range seq {
+			seen[p.DistanceM]++
+			if p.DistanceM < last {
+				t.Fatalf("iter %d: out-of-order: %v after %v in %v",
+					iter, p.DistanceM, last, distances(seq))
+			}
+			last = p.DistanceM
+		}
+		// Every pre-subscribe ping plus the racer must appear exactly
+		// once across history+live — no drop, no duplicate.
+		for i := 0; i <= pre; i++ {
+			if seen[float64(i)] != 1 {
+				t.Fatalf("iter %d: ping %d seen %d times, want exactly 1 (seq=%v)",
+					iter, i, seen[float64(i)], distances(seq))
+			}
+		}
+	}
+}
+
+func unsubIf(unsub func()) {
+	if unsub != nil {
+		unsub()
+	}
+}
+
+func distances(ps []Ping) []float64 {
+	out := make([]float64, len(ps))
+	for i, p := range ps {
+		out[i] = p.DistanceM
+	}
+	return out
+}

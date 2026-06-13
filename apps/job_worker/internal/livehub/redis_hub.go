@@ -139,28 +139,57 @@ func (h *RedisHub) Publish(runID string, p Ping) int {
 // the `:last` key if one is present (matches the in-process Hub's
 // late-joiner behaviour).
 func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
-	return h.subscribe(ctx, runID, true)
-}
-
-// SubscribeNoReplay is identical to Subscribe but skips the
-// `:last` key preload. See the in-process Hub.SubscribeNoReplay for
-// the rationale (privacy-zone re-eval at request time).
-// Persona-hunt finding Pro-Round2 #1.
-func (h *RedisHub) SubscribeNoReplay(ctx context.Context, runID string) (<-chan Ping, func(), error) {
-	return h.subscribe(ctx, runID, false)
-}
-
-func (h *RedisHub) subscribe(ctx context.Context, runID string, replay bool) (<-chan Ping, func(), error) {
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
 	out := make(chan Ping, subBufferSize)
 
-	// Pre-load last-known if present (unless caller opted out).
-	if replay {
-		if last := h.LastKnown(runID); last != nil {
-			out <- *last
-		}
+	// Pre-load last-known so a late joiner sees the runner immediately.
+	if last := h.LastKnown(runID); last != nil {
+		out <- *last
 	}
 
+	closeFn := h.startForwarder(ctx, pubsub, out)
+	return out, closeFn, nil
+}
+
+// SubscribeWithHistory opens the pub/sub subscription FIRST, then
+// snapshots the `:hist` list. go-redis's Subscribe confirms the
+// SUBSCRIBE before returning, so any ping PUBLISHed after this point is
+// guaranteed to be delivered on the live channel — it cannot be lost in
+// the window the in-process Hub closes with a single lock. The boundary
+// overlap (a ping PUBLISHed after our SUBSCRIBE confirmed but RPUSHed
+// into history before our LRANGE) would otherwise appear on both paths,
+// so we de-dup the history tail against the pings the forwarder already
+// buffered, by value. Unlike the in-process Hub there is no shared lock
+// across processes, so the dedup narrows the duplicate window to the
+// brief drain interval rather than closing it absolutely — acceptable
+// because a stray duplicate dot is a cosmetic blip, not a correctness
+// failure, and the in-process Hub (the single-replica default) is
+// exactly-once.
+func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHistory int) ([]Ping, <-chan Ping, func(), error) {
+	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
+	out := make(chan Ping, subBufferSize)
+	closeFn := h.startForwarder(ctx, pubsub, out)
+
+	history := h.History(runID, maxHistory)
+	// A ping PUBLISHed in the SUBSCRIBE→LRANGE window lands in BOTH the
+	// live channel buffer and the history snapshot. Drain what the
+	// forwarder buffered, trim the duplicated history tail, and FOLD the
+	// drained pings onto the END of the replay slice rather than pushing
+	// them back onto the channel. Folding (vs re-push) keeps strict
+	// order: the drained pings are the newest, so they sit after the
+	// deduped history and before any future ping the channel still
+	// carries — and we never race the forwarder by writing back into
+	// `out`. The channel from here on carries only pings PUBLISHed after
+	// the drain, which are strictly newer again.
+	if buffered := drainBuffered(out); len(buffered) > 0 {
+		history = append(dedupHistoryTail(history, buffered), buffered...)
+	}
+	return history, out, closeFn, nil
+}
+
+// startForwarder wires the cancel-driven close + the Redis-message
+// forwarding goroutine shared by both subscribe paths.
+func (h *RedisHub) startForwarder(ctx context.Context, pubsub *redis.PubSub, out chan Ping) func() {
 	closeOnce := &sync.Once{}
 	closeFn := func() {
 		closeOnce.Do(func() {
@@ -199,7 +228,78 @@ func (h *RedisHub) subscribe(ctx context.Context, runID string, replay bool) (<-
 		}
 	}()
 
-	return out, closeFn, nil
+	return closeFn
+}
+
+// drainBuffered non-blockingly removes every ping currently sitting in
+// the channel buffer and returns them in order. Used to peek the live
+// pings that arrived during the SUBSCRIBE→history-read window.
+func drainBuffered(out chan Ping) []Ping {
+	var buffered []Ping
+	for {
+		select {
+		case p := <-out:
+			buffered = append(buffered, p)
+		default:
+			return buffered
+		}
+	}
+}
+
+// dedupHistoryTail trims any suffix of `history` that is exactly the
+// prefix of `live` (matched by value), so a ping straddling the
+// subscribe/snapshot boundary is not replayed by both paths. The
+// overlap can only be at the boundary: the newest history entries are
+// the same pings as the oldest live ones.
+func dedupHistoryTail(history, live []Ping) []Ping {
+	maxOverlap := len(history)
+	if len(live) < maxOverlap {
+		maxOverlap = len(live)
+	}
+	for n := maxOverlap; n >= 1; n-- {
+		if pingsEqual(history[len(history)-n:], live[:n]) {
+			return history[:len(history)-n]
+		}
+	}
+	return history
+}
+
+func pingsEqual(a, b []Ping) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !pingEqual(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// pingEqual compares two pings by value. Direct struct `==` is wrong
+// here because Ping carries pointer fields (BPM / Elevation) — two
+// independently unmarshalled copies of the same wire ping hold distinct
+// pointers, so they must be compared by the pointed-at values.
+func pingEqual(a, b Ping) bool {
+	if a.Lat != b.Lat || a.Lng != b.Lng || a.DistanceM != b.DistanceM ||
+		a.ElapsedS != b.ElapsedS || a.SentAtMs != b.SentAtMs {
+		return false
+	}
+	return intPtrEqual(a.BPM, b.BPM) && floatPtrEqual(a.Elevation, b.Elevation)
+}
+
+func intPtrEqual(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func floatPtrEqual(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // LastKnown reads the `:last` key. Returns nil when there is no
