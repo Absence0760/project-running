@@ -550,5 +550,52 @@ void main() {
         expect(find.text('Ask your coach'), findsNothing);
       });
     });
+
+    group('heatmapDayCounts (window guard)', () {
+      Run runAt(String id, DateTime started) => Run(
+            id: id,
+            startedAt: started,
+            duration: const Duration(minutes: 25),
+            distanceMetres: 5000,
+            source: RunSource.app,
+          );
+
+      test('counts only runs on/after gridStart; ignores older history', () {
+        final gridStart = DateTime(2026, 1, 1);
+        final counts = heatmapDayCounts([
+          runAt('old', DateTime(2025, 6, 1)), // long before the window
+          runAt('edge', DateTime(2026, 1, 1, 9)), // on gridStart day
+          runAt('in1', DateTime(2026, 1, 10, 7)),
+          runAt('in2', DateTime(2026, 1, 10, 19)), // same day as in1
+        ], gridStart);
+        // The pre-window run contributes nothing; in-window runs are counted,
+        // same-day runs accumulate.
+        expect(counts.values.fold<int>(0, (a, b) => a + b), 3);
+        expect(counts[_epochDayForTest(DateTime(2026, 1, 10))], 2);
+        expect(counts[_epochDayForTest(DateTime(2026, 1, 1))], 1);
+        expect(counts.containsKey(_epochDayForTest(DateTime(2025, 6, 1))), isFalse);
+      });
+
+      test('in-window counts match an unguarded all-time count', () {
+        final gridStart = DateTime(2026, 1, 1);
+        final all = [
+          for (int i = 0; i < 30; i++) runAt('r$i', DateTime(2026, 1, 1 + i, 8)),
+          runAt('older', DateTime(2024, 1, 1)),
+        ];
+        final guarded = heatmapDayCounts(all, gridStart);
+        // Recompute the in-window total the naive way (no guard) and compare.
+        var naiveInWindow = 0;
+        for (final r in all) {
+          if (!r.startedAt.toLocal().isBefore(gridStart)) naiveInWindow++;
+        }
+        expect(guarded.values.fold<int>(0, (a, b) => a + b), naiveInWindow);
+      });
+    });
   });
+}
+
+// Mirror of dashboard_screen's private _epochDay for assertions.
+int _epochDayForTest(DateTime d) {
+  final local = DateTime(d.year, d.month, d.day);
+  return local.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
 }
