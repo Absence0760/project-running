@@ -37,11 +37,8 @@
 		// Wait for the auth store to hydrate before fetching — the roster
 		// fetchers bail to [] when auth.user is null, and on a hard load
 		// (or under CI load) onMount can fire before fetchUser resolves,
-		// leaving an empty roster that never refills. Same poll the
-		// /coaching/accept landing uses.
-		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		// leaving an empty roster that never refills.
+		await auth.ready();
 		const [athletesResult, p, c] = await Promise.all([
 			fetchMyAthletesWithError(),
 			fetchPendingCoachInvites(),

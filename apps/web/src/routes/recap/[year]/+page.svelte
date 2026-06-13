@@ -22,9 +22,7 @@
 	let valid = $derived(!Number.isNaN(year) && year >= 2010 && year <= 2100);
 
 	onMount(async () => {
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		if (!auth.user) {
 			loading = false;
 			return;

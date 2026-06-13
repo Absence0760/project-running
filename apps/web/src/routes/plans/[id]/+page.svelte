@@ -430,14 +430,11 @@
 	}
 
 	onMount(async () => {
-		// Same poll-for-auth shape as /runs/[id], /routes/[id], etc.
 		// auth-store flips loading=false before fetchUser resolves, so
 		// the publish-as-template gate below must wait for `auth.user`
 		// to actually be set or the admin-clubs fetch silently no-ops
 		// for the plan owner.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		await load();
 		// Calendar week-start follows the user's preference (W-5/W-14).
 		if (auth.user?.id) {

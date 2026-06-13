@@ -82,14 +82,9 @@
 	onMount(async () => {
 		// `auth.svelte.ts` flips loading=false before the async
 		// fetchUser resolves, so a hard reload onto /onboarding can
-		// mount with `auth.user` still null. Poll briefly so the
-		// pre-fill below sees the real row. Same canonical pattern
-		// as /runs/[id], /settings/account, /settings/preferences —
-		// pinned by tests-e2e/cross-cutting/architecture-guards.spec.ts
-		// because the auth-race has caused multiple production bugs.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		// mount with `auth.user` still null. Wait for the gate so the
+		// pre-fill below sees the real row.
+		await auth.ready();
 		// Pre-fill display name from the auth row if the OAuth provider
 		// returned one — the user can edit before continuing.
 		if (auth.user?.display_name) displayName = auth.user.display_name;
@@ -136,9 +131,7 @@
 	/// rely on `auth.user.id`. Returns false when the hydration
 	/// never lands — caller bails out.
 	async function ensureAuthUser(): Promise<boolean> {
-		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		return auth.user != null;
 	}
 

@@ -12,11 +12,8 @@
 
 	onMount(async () => {
 		// Auth-race shape: a hard reload onto the invite URL races
-		// auth.loading -> false vs auth.user populating. Same poll
-		// pattern as the club-invite landing.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		// auth.loading -> false vs auth.user populating.
+		await auth.ready();
 		if (!auth.loggedIn) {
 			status = 'not-authed';
 			return;

@@ -805,9 +805,7 @@
 		// load() fires, viewer_role can come back null even for the
 		// real owner, which collapses every admin affordance.
 		// Same shape we patch on every authed page.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		await load();
 		// Returned from Stripe Checkout: reconcile the order (?paid=1).
 		if ($page.url.searchParams.get('paid') === '1') {

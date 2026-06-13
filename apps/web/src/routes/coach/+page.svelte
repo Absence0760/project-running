@@ -36,9 +36,7 @@
 
 	onMount(async () => {
 		// Wait for auth so the RLS-scoped fetches return the right rows.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		// Read the consent timestamp BEFORE anything that could fan out
 		// to Anthropic. The chat component is render-gated on
 		// `coachConsentDecided`, so a missing row keeps the disclosure

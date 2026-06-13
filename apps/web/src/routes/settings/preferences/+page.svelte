@@ -253,12 +253,9 @@
 
 		// `auth.svelte.ts` flips loading=false before the async fetchUser
 		// resolves, so a hard reload lands here with auth.user still
-		// null. Poll briefly so the form actually renders — without
-		// this the user sees "Loading..." forever and the entire
-		// preferences page silently fails.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		// null — without the gate the form never renders and the user
+		// sees "Loading..." forever.
+		await auth.ready();
 		if (!auth.user) return;
 		try {
 			settings = await loadSettings(auth.user.id);

@@ -148,9 +148,7 @@
 		// auth.loading has flipped false (session check done) but
 		// `user` is still null (fetchUser is in flight) — gating only
 		// on auth.loading misses it.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		run = await fetchRunById(pageData.id);
 		loading = false;
 		// Best-effort matched-track fetch in the background. The map

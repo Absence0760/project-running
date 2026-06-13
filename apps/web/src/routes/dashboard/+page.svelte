@@ -356,9 +356,7 @@
 		// goals out of localStorage — otherwise auth.user.id is null on
 		// first paint and `loadGoals` returns []. The /coach route uses
 		// the same pattern.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		goals = loadGoals(auth.user?.id);
 		// Anchor the weekly-mileage chart on the user's week_start_day. The
 		// authoritative settings load happens after this fetch (below), so

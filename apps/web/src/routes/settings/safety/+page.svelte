@@ -37,9 +37,7 @@
 	}
 
 	onMount(async () => {
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		if (!auth.user) return;
 		await reload();
 		loading = false;

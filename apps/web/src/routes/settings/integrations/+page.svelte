@@ -60,11 +60,8 @@
 		// fetchIntegrations returns [] silently when auth.user is null,
 		// so a hard reload during the auth race rendered every row as
 		// "Connect" (unconnected) even for runner who has parkrun +
-		// strava connected per seed. Same poll pattern as /settings/
-		// preferences + /settings/devices + /settings/account.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		// strava connected per seed.
+		await auth.ready();
 		await refreshIntegrations();
 
 		// OAuth callback: Strava redirects back to this page with a

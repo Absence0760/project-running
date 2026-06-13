@@ -28,9 +28,7 @@
 	let activeThread = $derived(threads.find((t) => t.partnerId === activeId) ?? null);
 
 	onMount(async () => {
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		ready = true;
 		if (auth.user) threads = await fetchDmThreads();
 	});

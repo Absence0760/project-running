@@ -52,14 +52,10 @@
 		// Wait for auth to resolve before fetching the row. Without
 		// this, `isOwner` (a $derived from auth.user) starts false and
 		// owner-only affordances (toggleStar, togglePublic, tag editor)
-		// silently no-op on early clicks. Same poll-for-auth shape as
-		// /runs/[id]; auth-store flips loading=false before fetchUser
-		// resolves, so we have to wait for both. The 1s budget falls
-		// through to the fetch regardless so anon visitors aren't
-		// stalled when they hit a public route.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		// silently no-op on early clicks. ready() falls through to the
+		// fetch on its timeout regardless, so anon visitors hitting a
+		// public route aren't stalled.
+		await auth.ready();
 		route = await fetchRouteById(data.id);
 		loading = false;
 		if (route) {

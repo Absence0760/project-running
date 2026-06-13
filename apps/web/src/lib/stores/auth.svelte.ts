@@ -2,6 +2,13 @@ import { browser } from '$app/environment';
 import { supabase } from '$lib/core/supabase';
 import { dropUserCache } from '$lib/settings/settings';
 import { setUnit } from '$lib/format/units.svelte';
+import { createReadyGate, isAuthSettled } from './auth_ready';
+
+/// Upper bound a `ready()` waiter will block before resolving anyway,
+/// matching the longest of the old per-page poll loops (~1–3 s). It is a
+/// safety net for a wedged initial session check — settlement normally
+/// flushes waiters far sooner.
+const AUTH_READY_TIMEOUT_MS = 3000;
 
 interface User {
 	id: string;
@@ -32,6 +39,11 @@ function createAuthStore() {
 	let user = $state<User | null>(null);
 	let loggedIn = $state(false);
 	let loading = $state(true);
+
+	const gate = createReadyGate({
+		isSettled: () => isAuthSettled({ loading, user, loggedIn }),
+		timeoutMs: AUTH_READY_TIMEOUT_MS,
+	});
 
 	async function signInWithGoogle() {
 		const { error } = await supabase.auth.signInWithOAuth({
@@ -65,6 +77,7 @@ function createAuthStore() {
 			user = null;
 			loading = false;
 		}
+		gate.markSettled();
 	}
 
 	async function fetchUser(userId?: string, email?: string) {
@@ -116,6 +129,7 @@ function createAuthStore() {
 			};
 			setUnit('km');
 		}
+		gate.markSettled();
 	}
 
 	async function logout() {
@@ -147,6 +161,7 @@ function createAuthStore() {
 				user = null;
 			}
 			loading = false;
+			gate.markSettled();
 		});
 
 		// Initial session check
@@ -156,6 +171,7 @@ function createAuthStore() {
 				fetchUser(session.user.id, session.user.email ?? '').catch(console.error);
 			}
 			loading = false;
+			gate.markSettled();
 		});
 	}
 
@@ -164,6 +180,11 @@ function createAuthStore() {
 		get loggedIn() { return loggedIn; },
 		get loading() { return loading; },
 		get isPro() { return user?.subscription_tier === 'pro' || user?.subscription_tier === 'lifetime'; },
+		/// Resolves once auth has settled — a user row has hydrated, or
+		/// the session is definitively anon. Replaces the open-coded
+		/// `for (i<N) await sleep(50)` poll that pages used to guard their
+		/// onMount fetch against the auth race. See auth_ready.ts.
+		ready: gate.ready,
 		signInWithGoogle,
 		signInWithApple,
 		fetchUser,

@@ -270,11 +270,7 @@
 		// reload during the auth race would resolve the club row without
 		// a viewer_role, hiding the post composer + admin affordances
 		// indefinitely (no reactive re-fetch when auth lifts later).
-		// Poll briefly before kicking off load(). Same shape as /clubs,
-		// /dashboard, /coach, /runs/[id], /settings/*.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		await load();
 		// Guard each side-effect: if subscribeRealtime throws (the
 		// `.on('postgres_changes', ...) after subscribe()` bug that

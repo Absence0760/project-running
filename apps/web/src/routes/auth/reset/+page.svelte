@@ -19,9 +19,7 @@
 	let passwordChanged = $state(false);
 
 	onMount(async () => {
-		for (let i = 0; i < 30 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 100));
-		}
+		await auth.ready();
 		ready = true;
 	});
 

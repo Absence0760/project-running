@@ -48,9 +48,7 @@
 		// Same auth-hydration poll the /coaching landing uses — the
 		// fetchers bail to []/null when auth.user is null, and onMount can
 		// fire before fetchUser resolves on a hard load.
-		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		try {
 			// Confirm the coaching relationship (and get the display name) from
 			// the roster. RLS already gates the run/plan reads, but resolving

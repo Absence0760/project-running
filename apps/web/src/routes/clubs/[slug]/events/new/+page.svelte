@@ -32,9 +32,7 @@
 		// still hydrating, viewer_role comes back null even for the
 		// real owner, and the admin-gate goto kicks them back to the
 		// club page.
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
+		await auth.ready();
 		club = await fetchClubBySlug(slug);
 		// owner / admin / event_organiser may create events — the latter is a
 		// delegated role the DB RLS (is_event_organiser) already permits. Gating
