@@ -6314,13 +6314,17 @@ export interface ExerciseRecord {
 
 /// Per-exercise all-time records for the signed-in user, most-recently-
 /// performed first. One round-trip; the SQL does the aggregation.
-export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
-	if (!auth.user?.id) return [];
+/// Same as `fetchExerciseRecords` but surfaces the RPC error so the
+/// records page can show a "couldn't load — retry" state instead of the
+/// empty "no records yet" card (a real failure otherwise reads as a
+/// brand-new lifter). Mirrors the `fetchMyPlansWithError` convention.
+export async function fetchExerciseRecordsWithError(): Promise<{
+	records: ExerciseRecord[];
+	error: string | null;
+}> {
+	if (!auth.user?.id) return { records: [], error: null };
 	const { data, error } = await supabase.rpc('gym_exercise_records');
-	if (error) {
-		console.error('fetchExerciseRecords failed', error);
-		return [];
-	}
+	if (error) return { records: [], error: error.message };
 	type Row = {
 		exercise_name: string;
 		heaviest_weight_kg: number | string;
@@ -6332,15 +6336,22 @@ export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
 	};
 	const num = (v: number | string | null): number | null =>
 		v == null ? null : Number(v);
-	return ((data ?? []) as Row[]).map((r) => ({
-		exerciseName: r.exercise_name,
-		heaviestWeightKg: Number(r.heaviest_weight_kg),
-		heaviestWeightReps: r.heaviest_weight_reps,
-		bestVolumeKg: num(r.best_volume_kg),
-		bestEst1RmKg: num(r.best_est_1rm_kg),
-		lastPerformedAt: r.last_performed_at,
-		sessionCount: r.session_count,
-	}));
+	return {
+		records: ((data ?? []) as Row[]).map((r) => ({
+			exerciseName: r.exercise_name,
+			heaviestWeightKg: Number(r.heaviest_weight_kg),
+			heaviestWeightReps: r.heaviest_weight_reps,
+			bestVolumeKg: num(r.best_volume_kg),
+			bestEst1RmKg: num(r.best_est_1rm_kg),
+			lastPerformedAt: r.last_performed_at,
+			sessionCount: r.session_count,
+		})),
+		error: null
+	};
+}
+
+export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
+	return (await fetchExerciseRecordsWithError()).records;
 }
 
 /// Every logged set of ONE exercise (normalised-name matched server-side),
@@ -6349,30 +6360,39 @@ export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
 /// whole history and filtering in JS. The RPC normalises the name the same way
 /// gym_prs.ts#normaliseExerciseName does, so it picks up sessions logged under
 /// a different capitalisation. perf-hunt follow-up 2026-06-10.
-export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithDate[]> {
-	if (!auth.user?.id || !name.trim()) return [];
+/// Same as `fetchExerciseSetHistory` but surfaces the RPC error so the
+/// single-exercise progression page can show a "couldn't load — retry"
+/// state instead of an empty "no progression data" card.
+export async function fetchExerciseSetHistoryWithError(
+	name: string
+): Promise<{ sets: GymSetWithDate[]; error: string | null }> {
+	if (!auth.user?.id || !name.trim()) return { sets: [], error: null };
 	const { data, error } = await supabase.rpc('gym_exercise_set_history', { p_name: name });
-	if (error) {
-		console.error('fetchExerciseSetHistory failed', error);
-		return [];
-	}
-	return ((data ?? []) as Array<{
-		workout_id: string;
-		started_at: string;
-		exercise_name: string;
-		reps: number | null;
-		weight_kg: number | string | null;
-		rpe: number | string | null;
-		duration_s: number | null;
-	}>).map((r) => ({
-		workout_id: r.workout_id,
-		started_at: r.started_at,
-		exercise_name: r.exercise_name,
-		reps: r.reps,
-		weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
-		rpe: r.rpe == null ? null : Number(r.rpe),
-		duration_s: r.duration_s,
-	}));
+	if (error) return { sets: [], error: error.message };
+	return {
+		sets: ((data ?? []) as Array<{
+			workout_id: string;
+			started_at: string;
+			exercise_name: string;
+			reps: number | null;
+			weight_kg: number | string | null;
+			rpe: number | string | null;
+			duration_s: number | null;
+		}>).map((r) => ({
+			workout_id: r.workout_id,
+			started_at: r.started_at,
+			exercise_name: r.exercise_name,
+			reps: r.reps,
+			weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
+			rpe: r.rpe == null ? null : Number(r.rpe),
+			duration_s: r.duration_s,
+		})),
+		error: null
+	};
+}
+
+export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithDate[]> {
+	return (await fetchExerciseSetHistoryWithError(name)).sets;
 }
 
 /// Distinct exercise names the user has logged, most-used first — for the gym

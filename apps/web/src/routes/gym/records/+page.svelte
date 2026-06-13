@@ -1,16 +1,20 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchExerciseRecords, type ExerciseRecord } from '$lib/core/data';
+	import { fetchExerciseRecordsWithError, type ExerciseRecord } from '$lib/core/data';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	let records = $state<ExerciseRecord[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 
 	async function load() {
-		records = await fetchExerciseRecords();
+		loading = true;
+		const res = await fetchExerciseRecordsWithError();
+		records = res.records;
+		loadError = res.error;
 		loading = false;
 	}
 
@@ -57,6 +61,15 @@
 			{/each}
 		</ul>
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{t('gym.records.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{t('gym.routine.retry')}</button>
+		</div>
 	{:else if records.length === 0}
 		<div class="empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">trophy</span>
@@ -292,5 +305,29 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>

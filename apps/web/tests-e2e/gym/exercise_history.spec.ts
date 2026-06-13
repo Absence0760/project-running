@@ -75,4 +75,28 @@ test.describe('/gym/exercise — per-exercise progression', () => {
 			for (const id of workoutIds) await admin.from('gym_workouts').delete().eq('id', id);
 		}
 	});
+
+	test('a failed history load shows an error + retry, and retry recovers', async ({ page }) => {
+		let failNext = true;
+		await page.route('**/rest/v1/rpc/gym_exercise_set_history**', async (route) => {
+			if (failNext) {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/gym/exercise?name=E2E%20Nonexistent%20Lift');
+		// Error state, not the empty "no history" card masquerading as a failure.
+		await expect(page.locator('.error-banner')).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: 'Retry' }).click();
+		// Retry re-fetches (now unblocked) → the real empty-or-progression state renders.
+		await expect(page.locator('.error-banner')).toHaveCount(0, { timeout: 10_000 });
+	});
 });

@@ -63,4 +63,28 @@ test.describe('/gym/records — per-exercise current bests', () => {
 			await admin.from('gym_workouts').delete().eq('id', workoutId);
 		}
 	});
+
+	test('a failed records load shows an error + retry, and retry recovers', async ({ page }) => {
+		let failNext = true;
+		await page.route('**/rest/v1/rpc/gym_exercise_records**', async (route) => {
+			if (failNext) {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/gym/records');
+		// Error state, not an empty card masquerading as "no records".
+		await expect(page.locator('.error-banner')).toBeVisible({ timeout: 10_000 });
+
+		await page.getByRole('button', { name: 'Retry' }).click();
+		// Retry re-fetches (now unblocked) → the real empty-or-list state renders.
+		await expect(page.locator('.error-banner')).toHaveCount(0, { timeout: 10_000 });
+	});
 });
