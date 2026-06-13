@@ -4485,6 +4485,8 @@
     "description": "Button to end a running race"
   },
   "eventRaceCancelRace": "Cancel race",
+  "eventRaceEndConfirmBody": "End the race? This finalizes the event for every runner and can't be undone.",
+  "eventRaceCancelConfirmBody": "Cancel the race? This aborts the event for every runner and can't be undone.",
   "@eventRaceCancelRace": {
     "description": "Button to cancel a running race"
   },
@@ -8135,6 +8137,14 @@
   "eventEditorCategoryHint": "Pick the kind of event — a class or social meetup skips route, distance, pace and race results.",
   "@eventEditorCategoryHint": {
     "description": "Helper text under the event-category picker"
+  },
+  "eventEditorMembersOnlyToggle": "Members only",
+  "@eventEditorMembersOnlyToggle": {
+    "description": "Toggle in the event editor (public clubs only) that makes the event members-only (events.is_public = false)."
+  },
+  "eventEditorMembersOnlyHint": "Only club members can see this event, and it won't appear in public discovery.",
+  "@eventEditorMembersOnlyHint": {
+    "description": "Helper text under the members-only toggle in the event editor."
   },
   "eventEditorDiscipline": "Discipline",
   "@eventEditorDiscipline": {

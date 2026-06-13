@@ -3646,6 +3646,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get eventRaceCancelRace => 'Annuler la course';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'Terminer la course ? Cela finalise l\'épreuve pour tous les coureurs et est irréversible.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Annuler la course ? Cela interrompt l\'épreuve pour tous les coureurs et est irréversible.';
+
+  @override
   String get eventUpdatePosted => 'Mise à jour publiée dans le fil du club.';
 
   @override
@@ -6457,6 +6465,13 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get eventEditorCategoryHint =>
       'Choisissez le type d\'événement — un cours ou une rencontre ignore l\'itinéraire, la distance, l\'allure et les résultats de course.';
+
+  @override
+  String get eventEditorMembersOnlyToggle => 'Réservé aux membres';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Seuls les membres du club peuvent voir cet événement ; il n\'apparaîtra pas dans la découverte publique.';
 
   @override
   String get eventEditorDiscipline => 'Discipline';

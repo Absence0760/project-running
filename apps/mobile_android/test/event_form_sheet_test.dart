@@ -6,7 +6,8 @@ import '../lib/widgets/event_form_sheet.dart';
 
 class _Launcher extends StatefulWidget {
   final SocialService social;
-  const _Launcher({required this.social});
+  final bool clubIsPublic;
+  const _Launcher({required this.social, this.clubIsPublic = true});
 
   @override
   State<_Launcher> createState() => _LauncherState();
@@ -28,6 +29,7 @@ class _LauncherState extends State<_Launcher> {
                   context,
                   social: widget.social,
                   clubId: 'club-1',
+                  clubIsPublic: widget.clubIsPublic,
                 );
                 setState(() => _result = r ?? '<cancelled>');
               },
@@ -41,14 +43,14 @@ class _LauncherState extends State<_Launcher> {
   }
 }
 
-Future<void> _openSheet(WidgetTester tester) async {
+Future<void> _openSheet(WidgetTester tester, {bool clubIsPublic = true}) async {
   // Larger viewport so the scrollable form actually paints all rows.
   await tester.binding.setSurfaceSize(const Size(600, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: _Launcher(social: SocialService())));
+        home: _Launcher(social: SocialService(), clubIsPublic: clubIsPublic)));
   await tester.tap(find.text('Open'));
   await tester.pumpAndSettle();
 }
@@ -105,6 +107,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Discipline'), findsNothing);
       expect(find.widgetWithText(TextField, 'Distance (km)'), findsNothing);
+    });
+
+    testWidgets('a public club shows the members-only toggle, defaulting off',
+        (tester) async {
+      await _openSheet(tester);
+      final toggle = find.widgetWithText(SwitchListTile, 'Members only');
+      expect(toggle, findsOneWidget);
+      // Default is public → the members-only switch is off.
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      // It's interactive.
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    });
+
+    testWidgets('a private club hides the members-only toggle', (tester) async {
+      // A private club's events are already members-only via the club gate,
+      // so the toggle is hidden there.
+      await _openSheet(tester, clubIsPublic: false);
+      expect(find.widgetWithText(SwitchListTile, 'Members only'), findsNothing);
     });
   });
 }

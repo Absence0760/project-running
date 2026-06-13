@@ -3408,6 +3408,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get eventRaceCancelRace => 'レースを中止';
 
   @override
+  String get eventRaceEndConfirmBody => 'レースを終了しますか？全ランナーのイベントが確定され、元に戻せません。';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'レースを中止しますか？全ランナーのイベントが中止され、元に戻せません。';
+
+  @override
   String get eventUpdatePosted => 'クラブフィードに更新を投稿しました。';
 
   @override
@@ -6092,6 +6099,13 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get eventEditorCategoryHint =>
       'イベントの種類を選びます。クラスやソーシャルの集まりではルート、距離、ペース、レース結果は省略されます。';
+
+  @override
+  String get eventEditorMembersOnlyToggle => 'メンバー限定';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'クラブのメンバーだけがこのイベントを見ることができ、公開検索には表示されません。';
 
   @override
   String get eventEditorDiscipline => '種目';

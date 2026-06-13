@@ -3644,6 +3644,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get eventRaceCancelRace => 'Rennen abbrechen';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'Rennen beenden? Damit wird das Event für alle Läufer abgeschlossen und kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Rennen abbrechen? Damit wird das Event für alle Läufer abgebrochen und kann nicht rückgängig gemacht werden.';
+
+  @override
   String get eventUpdatePosted => 'Update im Club-Feed veröffentlicht.';
 
   @override
@@ -6448,6 +6456,13 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get eventEditorCategoryHint =>
       'Wähle die Art der Veranstaltung – ein Kurs oder Treffen lässt Strecke, Distanz, Tempo und Rennergebnisse weg.';
+
+  @override
+  String get eventEditorMembersOnlyToggle => 'Nur für Mitglieder';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Nur Vereinsmitglieder können dieses Event sehen; es erscheint nicht in der öffentlichen Suche.';
 
   @override
   String get eventEditorDiscipline => 'Disziplin';

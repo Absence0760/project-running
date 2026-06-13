@@ -16,18 +16,28 @@ Future<String?> showEventFormSheet(
   BuildContext context, {
   required SocialService social,
   required String clubId,
+  bool clubIsPublic = true,
 }) {
   return showFullScreenForm<String>(
     context,
     title: AppLocalizations.of(context).eventFormTitle,
-    builder: (_) => _EventForm(social: social, clubId: clubId),
+    builder: (_) =>
+        _EventForm(social: social, clubId: clubId, clubIsPublic: clubIsPublic),
   );
 }
 
 class _EventForm extends StatefulWidget {
   final SocialService social;
   final String clubId;
-  const _EventForm({required this.social, required this.clubId});
+  // The members-only toggle is only meaningful in a public club (a private
+  // club's events are already members-only via the club gate), so it's hidden
+  // for a private club.
+  final bool clubIsPublic;
+  const _EventForm({
+    required this.social,
+    required this.clubId,
+    this.clubIsPublic = true,
+  });
 
   @override
   State<_EventForm> createState() => _EventFormState();
@@ -43,6 +53,7 @@ class _EventFormState extends State<_EventForm> {
   String _category = 'run';
   DateTime _starts = DateTime.now().add(const Duration(days: 1, hours: 1));
   String _recurrence = 'none'; // none | weekly | biweekly | monthly
+  bool _isPublic = true;
   bool _busy = false;
   String? _error;
 
@@ -152,6 +163,10 @@ class _EventFormState extends State<_EventForm> {
         // weekday code in a one-element list so postgrest receives a
         // JSON array, not a bare string.
         recurrenceByDay: byday == null ? null : [byday],
+        // In a private club every event is members-only regardless; the toggle
+        // is hidden there and we leave this public (the column is moot — the
+        // club gate already restricts read + discovery skips the club).
+        isPublic: widget.clubIsPublic ? _isPublic : true,
       );
       if (!mounted) return;
       Navigator.of(context).pop<String?>('ok');
@@ -300,6 +315,16 @@ class _EventFormState extends State<_EventForm> {
                   ),
               ],
             ),
+            if (widget.clubIsPublic) ...[
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: !_isPublic,
+                onChanged: (v) => setState(() => _isPublic = !v),
+                title: Text(l10n.eventEditorMembersOnlyToggle),
+                subtitle: Text(l10n.eventEditorMembersOnlyHint),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(

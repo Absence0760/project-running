@@ -3605,6 +3605,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get eventRaceCancelRace => 'Cancel race';
 
   @override
+  String get eventRaceEndConfirmBody =>
+      'End the race? This finalizes the event for every runner and can\'t be undone.';
+
+  @override
+  String get eventRaceCancelConfirmBody =>
+      'Cancel the race? This aborts the event for every runner and can\'t be undone.';
+
+  @override
   String get eventUpdatePosted => 'Update posted to the club feed.';
 
   @override
@@ -6378,6 +6386,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get eventEditorCategoryHint =>
       'Pick the kind of event — a class or social meetup skips route, distance, pace and race results.';
+
+  @override
+  String get eventEditorMembersOnlyToggle => 'Members only';
+
+  @override
+  String get eventEditorMembersOnlyHint =>
+      'Only club members can see this event, and it won\'t appear in public discovery.';
 
   @override
   String get eventEditorDiscipline => 'Discipline';

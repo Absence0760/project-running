@@ -6059,6 +6059,18 @@ abstract class AppLocalizations {
   /// **'Cancel race'**
   String get eventRaceCancelRace;
 
+  /// No description provided for @eventRaceEndConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'End the race? This finalizes the event for every runner and can\'t be undone.'**
+  String get eventRaceEndConfirmBody;
+
+  /// No description provided for @eventRaceCancelConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel the race? This aborts the event for every runner and can\'t be undone.'**
+  String get eventRaceCancelConfirmBody;
+
   /// Banner shown after posting an admin update
   ///
   /// In en, this message translates to:
@@ -10706,6 +10718,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick the kind of event — a class or social meetup skips route, distance, pace and race results.'**
   String get eventEditorCategoryHint;
+
+  /// Toggle in the event editor (public clubs only) that makes the event members-only (events.is_public = false).
+  ///
+  /// In en, this message translates to:
+  /// **'Members only'**
+  String get eventEditorMembersOnlyToggle;
+
+  /// Helper text under the members-only toggle in the event editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Only club members can see this event, and it won\'t appear in public discovery.'**
+  String get eventEditorMembersOnlyHint;
 
   /// Label for the free-text class-discipline field
   ///
