@@ -4674,6 +4674,161 @@ export async function updateRunPhotoCaption(
 	if (error) throw error;
 }
 
+// --- Route photos (backlog C1) ---
+//
+// The run_photos capability applied to routes. Metadata in `route_photos`;
+// bytes in the private `route-photos` bucket at `{owner_id}/{photo_id}.{ext}`.
+// The Storage SELECT policy joins through `route_photos` →
+// `private.is_route_visible_to(route_id, auth.uid())`, so a route flipping
+// from public to private propagates within the signed-URL TTL. Owner gates
+// upload + caption + delete.
+
+export interface RoutePhoto {
+	id: string;
+	route_id: string;
+	owner_id: string;
+	storage_path: string;
+	thumb_512_path: string | null;
+	caption: string | null;
+	position_idx: number;
+	created_at: string;
+	url: string;
+	thumbUrl: string | null;
+}
+
+async function signRoutePhotoPaths(paths: string[]): Promise<Record<string, string>> {
+	if (paths.length === 0) return {};
+	const { data, error } = await supabase.storage
+		.from(BUCKETS.route_photos)
+		.createSignedUrls(paths, PHOTO_SIGNED_URL_TTL_S);
+	if (error || !data) {
+		console.error('signRoutePhotoPaths failed', error);
+		return {};
+	}
+	const out: Record<string, string> = {};
+	for (const row of data) {
+		if (row.path && row.signedUrl) out[row.path] = row.signedUrl;
+	}
+	return out;
+}
+
+export async function fetchRoutePhotos(routeId: string, limit = 50): Promise<RoutePhoto[]> {
+	const { data, error } = await supabase
+		.from(TABLES.route_photos)
+		.select('*')
+		.eq('route_id', routeId)
+		.order('position_idx', { ascending: true })
+		.order('created_at', { ascending: true })
+		.limit(limit);
+	if (error) {
+		console.error('fetchRoutePhotos failed', error);
+		return [];
+	}
+	const rows = data ?? [];
+	const paths: string[] = [];
+	for (const r of rows) {
+		paths.push(r.storage_path);
+		if (r.thumb_512_path) paths.push(r.thumb_512_path);
+	}
+	const signed = await signRoutePhotoPaths(paths);
+	return rows.map((r) => ({
+		...r,
+		url: signed[r.storage_path] ?? '',
+		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
+	}));
+}
+
+export async function addRoutePhoto(input: {
+	route_id: string;
+	file: File;
+	caption?: string | null;
+}): Promise<RoutePhoto> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const ext = PHOTO_MIME_TO_EXT[input.file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
+	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
+
+	const file = await stripExifFromFile(input.file);
+
+	const photoId = crypto.randomUUID();
+	const storagePath = `${userId}/${photoId}.${ext}`;
+
+	const { error: upErr } = await supabase.storage
+		.from(BUCKETS.route_photos)
+		.upload(storagePath, file, {
+			contentType: file.type,
+			upsert: false,
+		});
+	if (upErr) throw upErr;
+
+	const { data: posData } = await supabase
+		.from(TABLES.route_photos)
+		.select('position_idx')
+		.eq('route_id', input.route_id)
+		.order('position_idx', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	const nextIdx = (posData?.position_idx ?? -1) + 1;
+
+	const { data, error } = await supabase
+		.from(TABLES.route_photos)
+		.insert({
+			id: photoId,
+			route_id: input.route_id,
+			owner_id: userId,
+			storage_path: storagePath,
+			caption: input.caption?.trim() || null,
+			position_idx: nextIdx,
+		})
+		.select('*')
+		.single();
+	if (error || !data) {
+		await supabase.storage.from(BUCKETS.route_photos).remove([storagePath]);
+		throw error ?? new Error('Insert failed');
+	}
+	const { data: signed } = await supabase.storage
+		.from(BUCKETS.route_photos)
+		.createSignedUrl(storagePath, PHOTO_SIGNED_URL_TTL_S);
+	return {
+		...data,
+		url: signed?.signedUrl ?? '',
+		thumbUrl: null,
+	};
+}
+
+export async function deleteRoutePhoto(photoId: string): Promise<void> {
+	const { data: row, error: fetchErr } = await supabase
+		.from(TABLES.route_photos)
+		.select('storage_path, thumb_512_path')
+		.eq('id', photoId)
+		.maybeSingle();
+	if (fetchErr) throw fetchErr;
+
+	const { error } = await supabase.from(TABLES.route_photos).delete().eq('id', photoId);
+	if (error) throw error;
+
+	const paths = [row?.storage_path, row?.thumb_512_path].filter(
+		(p: string | null | undefined): p is string => !!p,
+	);
+	if (paths.length > 0) {
+		await supabase.storage.from(BUCKETS.route_photos).remove(paths);
+	}
+}
+
+export async function updateRoutePhotoCaption(
+	photoId: string,
+	caption: string | null,
+): Promise<void> {
+	const trimmed = caption?.trim() || null;
+	const { error } = await supabase
+		.from(TABLES.route_photos)
+		.update({ caption: trimmed })
+		.eq('id', photoId);
+	if (error) throw error;
+}
+
 // --- Heatmap / popular-route discovery (decisions backlog item #4) ---
 
 export interface HeatmapPoint {

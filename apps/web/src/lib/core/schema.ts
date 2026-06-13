@@ -41,6 +41,7 @@ export const TABLES = {
 	event_attendees: 'event_attendees',
 	event_results: 'event_results',
 	route_reviews: 'route_reviews',
+	route_photos: 'route_photos',
 	run_kudos: 'run_kudos',
 	run_comments: 'run_comments',
 	run_photos: 'run_photos',
@@ -62,6 +63,7 @@ export const TABLES = {
 export const BUCKETS = {
 	runs: 'runs',
 	run_photos: 'run-photos',
+	route_photos: 'route-photos',
 } as const;
 
 /// Keys on the schema-less `runs.metadata` jsonb bag that the web client

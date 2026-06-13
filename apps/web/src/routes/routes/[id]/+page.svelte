@@ -9,6 +9,7 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
+	import RoutePhotos from '$lib/components/RoutePhotos.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
@@ -604,6 +605,8 @@
 					{/each}
 				{/if}
 			</section>
+
+			<RoutePhotos routeId={route.id} routeOwnerId={route.user_id} wrapperClass="section" />
 		</aside>
 		{/if}
 		{/snippet}
