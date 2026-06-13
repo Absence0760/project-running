@@ -99,7 +99,7 @@ test.describe('/routes/new — save round-trip', () => {
 		expect(row!.user_id).toBe(USER_A.id);
 	});
 
-	test('hitting the 30/hour create_route cap surfaces the friendly "slow down" message', async ({
+	test('hitting the 30/hour create_route cap surfaces the friendly "slow down" toast', async ({
 		page,
 	}) => {
 		// Mirror of the clubs/new rate-limit pin (clubs/new.spec.ts) on
@@ -107,9 +107,9 @@ test.describe('/routes/new — save round-trip', () => {
 		// cap from migration 20260907_001) so the next saveRoute insert
 		// fires the BEFORE INSERT trigger. data.ts → rateLimitErrorMessage
 		// rewraps the P0001 as a friendly "creating routes too quickly"
-		// Error, the save modal renders e.message, and the user gets a
-		// readable banner instead of either the raw exception or the
-		// generic "Failed to save route" fallback.
+		// Error, the save handler now routes e.message through showToast
+		// (E4), and the user gets a readable error toast instead of either
+		// the raw exception or the generic "Failed to save route" fallback.
 		const admin = getAdminClient();
 		const nowS = Math.floor(Date.now() / 1000);
 		const windowStartS = Math.floor(nowS / 3600) * 3600;
@@ -141,15 +141,16 @@ test.describe('/routes/new — save round-trip', () => {
 			await submit.evaluate((el: HTMLButtonElement) => (el.disabled = false));
 			await submit.click();
 
-			// Friendly wording lands in the modal's .save-error banner.
-			await expect(
-				modal.locator('.save-error').filter({ hasText: /creating routes too quickly/i }),
-			).toBeVisible({ timeout: 10_000 });
+			// Friendly wording lands in a page-level error toast (E4),
+			// not the modal's inline .save-error banner.
+			const errorToast = page.locator('.toast-error');
+			await expect(errorToast).toBeVisible({ timeout: 10_000 });
+			await expect(errorToast).toHaveText(/creating routes too quickly/i);
 			// Negative pin: the generic "Failed to save route" fallback
 			// (and the raw "rate limit exceeded for create_route" leak)
 			// must NOT appear.
-			await expect(modal.getByText('Failed to save route')).toHaveCount(0);
-			await expect(modal.getByText(/rate limit exceeded for create_route/i))
+			await expect(page.getByText('Failed to save route')).toHaveCount(0);
+			await expect(page.getByText(/rate limit exceeded for create_route/i))
 				.toHaveCount(0);
 		} finally {
 			await resetRateLimit(USER_A.id, 'create_route');

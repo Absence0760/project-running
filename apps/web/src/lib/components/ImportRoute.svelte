@@ -4,6 +4,8 @@
 	import { formatDistance } from '$lib/core/mock-data';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import { rateLimitErrorMessage } from '$lib/util/rate_limit_errors';
 	import Modal from './Modal.svelte';
 
 	let {
@@ -100,7 +102,10 @@
 				onclose();
 			}
 		} catch (err) {
-			error = err instanceof Error ? err.message : m('importRoute.failedToSave');
+			const friendly =
+				rateLimitErrorMessage(err as { code?: string; message?: string }) ??
+				(err instanceof Error ? err.message : m('importRoute.failedToSave'));
+			showToast(friendly, 'error');
 		} finally {
 			saving = false;
 		}

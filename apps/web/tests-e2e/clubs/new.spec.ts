@@ -278,7 +278,7 @@ test.describe('/clubs/new', () => {
 		expect(after.count).toBe(before.count);
 	});
 
-	test('hitting the 5/hour create_club cap surfaces a "slow down" message, not the raw 500', async ({
+	test('hitting the 5/hour create_club cap surfaces a "slow down" toast, not the raw 500', async ({
 		page,
 	}) => {
 		// Pre-populate the rate_limits counter to 5 (the cap) under
@@ -286,9 +286,11 @@ test.describe('/clubs/new', () => {
 		// will trigger the BEFORE INSERT cap check (migration
 		// 20260907_001) and raise P0001 before the row lands. The
 		// data.ts catch path converts that into a friendly "you're
-		// creating clubs too quickly" message; pin that wording here
-		// so a future refactor can't silently revert to the generic
-		// "Failed to create club" fallback.
+		// creating clubs too quickly" message, which the editor now
+		// routes through showToast (E4) rather than an inline <p>; pin
+		// both the wording AND that it lands in an error toast so a
+		// future refactor can't silently revert to the generic
+		// "Failed to create club" fallback or to inline text.
 		const admin = getAdminClient();
 		// floor(epoch / 3600) * 3600 matches the trigger's bucketing.
 		const nowS = Math.floor(Date.now() / 1000);
@@ -306,9 +308,9 @@ test.describe('/clubs/new', () => {
 			await page.locator('input[type="text"]').first().fill(uniqueName('e2e-cap'));
 			await page.getByRole('button', { name: 'Create club' }).click();
 
-			await expect(
-				page.getByText(/creating clubs too quickly/i),
-			).toBeVisible({ timeout: 10_000 });
+			const errorToast = page.locator('.toast-error');
+			await expect(errorToast).toBeVisible({ timeout: 10_000 });
+			await expect(errorToast).toHaveText(/creating clubs too quickly/i);
 			// Negative pin: the old fallback wording must not appear.
 			await expect(page.getByText('Failed to create club')).toHaveCount(0);
 		} finally {

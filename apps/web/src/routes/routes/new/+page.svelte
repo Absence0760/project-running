@@ -9,6 +9,7 @@
 	import { saveRoute } from '$lib/core/data';
 	import { pickSavePolyline } from '$lib/routes/route_save_polyline';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { rateLimitErrorMessage } from '$lib/util/rate_limit_errors';
 	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { env } from '$env/dynamic/public';
@@ -434,7 +435,10 @@
 			showToast(m('routeNew.savedToast'), 'success');
 			goto(`/routes/${saved.id}`);
 		} catch (err) {
-			saveError = err instanceof Error ? err.message : m('routeNew.saveFailedError');
+			const friendly =
+				rateLimitErrorMessage(err as { code?: string; message?: string }) ??
+				(err instanceof Error ? err.message : m('routeNew.saveFailedError'));
+			showToast(friendly, 'error');
 		} finally {
 			saving = false;
 		}
