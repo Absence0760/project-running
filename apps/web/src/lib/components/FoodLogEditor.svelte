@@ -287,7 +287,7 @@
 		box-shadow: var(--shadow-sm);
 	}
 	.result-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
-	.result-name { font-size: 0.95rem; color: var(--color-text); }
+	.result-name { font-size: 0.95rem; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 	.brand { color: var(--color-text-secondary); font-size: 0.8rem; }
 	.result-kcal {
 		font-size: 0.95rem;

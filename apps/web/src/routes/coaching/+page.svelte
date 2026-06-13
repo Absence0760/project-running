@@ -396,6 +396,10 @@
 		font-weight: 600;
 		color: var(--color-text);
 		text-decoration: none;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
 	}
 	a.link-name:hover {
 		text-decoration: underline;

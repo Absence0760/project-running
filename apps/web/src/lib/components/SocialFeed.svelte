@@ -412,10 +412,15 @@
 		gap: 0.4rem;
 		text-decoration: none;
 		color: inherit;
+		min-width: 0;
 	}
 	.author-name {
 		font-weight: 600;
 		font-size: 0.9rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
 	}
 	.when {
 		font-size: 0.78rem;

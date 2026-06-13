@@ -1861,6 +1861,9 @@
 		font-weight: 700;
 		color: var(--color-text);
 		line-height: 1.15;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.plan-hero-goal {
 		display: flex;
@@ -2169,6 +2172,9 @@
 		font-size: 1rem;
 		font-weight: 600;
 		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.event-when {
 		font-size: 0.85rem;
@@ -2215,6 +2221,9 @@
 		font-size: 1rem;
 		font-weight: 600;
 		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.today-lift-meta {
 		font-size: 0.85rem;

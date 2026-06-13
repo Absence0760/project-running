@@ -183,14 +183,22 @@
 	.item-list li {
 		display: flex;
 		justify-content: space-between;
+		gap: var(--space-md);
 		padding: 0.5rem 0;
 		border-bottom: 1px solid var(--color-border);
 	}
 	.item-list li:last-child {
 		border-bottom: none;
 	}
+	.item-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+	}
 	.item-kcal {
 		color: var(--color-text-secondary);
+		flex-shrink: 0;
 	}
 	.trend-bars {
 		display: flex;

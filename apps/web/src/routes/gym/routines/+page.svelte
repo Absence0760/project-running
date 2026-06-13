@@ -120,9 +120,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3xs);
+		min-width: 0;
 	}
 	.row-title {
 		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.row-date {
 		color: var(--text-muted);

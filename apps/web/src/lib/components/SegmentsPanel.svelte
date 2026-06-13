@@ -462,6 +462,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
+		min-width: 0;
+	}
+	.seg-name strong {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 100%;
 	}
 	.seg-meta {
 		font-size: 0.78rem;

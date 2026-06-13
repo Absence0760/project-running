@@ -400,6 +400,13 @@
 	.comment-author-link {
 		text-decoration: none;
 		color: inherit;
+		min-width: 0;
+	}
+	.comment-author-link strong {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.comment-author-link:hover strong {
@@ -411,6 +418,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		margin-bottom: 0.2rem;
+		min-width: 0;
 	}
 
 	.when {
