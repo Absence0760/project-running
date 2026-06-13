@@ -334,18 +334,29 @@
 		oncancel={handleCancel}
 	/>
 	{:else if kind === 'session'}
-		{#if clubId}
-			<p class="picker-hint club-target-note">{m('plansNew.sessionForClub')}</p>
-		{/if}
-		<SessionPlanEditor {clubId} oncreated={onSessionCreated} oncancel={handleCancel} />
+		<div class="form-branch">
+			{#if clubId}
+				<p class="picker-hint club-target-note">{m('plansNew.sessionForClub')}</p>
+			{/if}
+			<SessionPlanEditor {clubId} oncreated={onSessionCreated} oncancel={handleCancel} />
+		</div>
 	{:else}
-		<RoutineEditor suggestions={gymSuggestions} oncreated={onGymCreated} oncancel={handleCancel} />
+		<div class="form-branch">
+			<RoutineEditor suggestions={gymSuggestions} oncreated={onGymCreated} oncancel={handleCancel} />
+		</div>
 	{/if}
 </div>
 
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
+	}
+	/* The session + gym branches are focused single-form editors — cap their
+	   content so fields don't stretch the full viewport on a wide screen
+	   (conventions § Web page padding). The training branch is a two-column
+	   wizard (PlanEditor) and stays uncapped so its calendar pane keeps room. */
+	.form-branch {
+		max-width: 48rem;
 	}
 	.back-link {
 		display: inline-flex;
@@ -464,11 +475,18 @@
 	.picker-field select,
 	.picker-field input {
 		padding: 0.45rem 0.75rem;
-		border: 1.5px solid var(--color-border);
+		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
 		color: var(--color-text);
 		font-size: 0.9rem;
+		transition: border-color var(--transition-fast);
+	}
+	.picker-field select:focus-visible,
+	.picker-field input:focus-visible {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px var(--color-primary-light);
 	}
 
 	.or-rule {

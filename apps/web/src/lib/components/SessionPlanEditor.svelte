@@ -203,24 +203,24 @@
 	</datalist>
 
 	<label class="field">
-		<span>{t('session.titleLabel')}</span>
+		<span class="section-label">{t('session.titleLabel')}</span>
 		<input type="text" bind:value={title} maxlength="120" />
 	</label>
 
 	<div class="row">
 		<label class="field">
-			<span>{t('session.discipline')}</span>
+			<span class="section-label">{t('session.discipline')}</span>
 			<input type="text" bind:value={discipline} placeholder={t('session.disciplinePlaceholder')} />
 		</label>
 		<label class="field">
-			<span>{t('session.equipment')}</span>
+			<span class="section-label">{t('session.equipment')}</span>
 			<input type="text" bind:value={equipment} placeholder={t('session.equipmentPlaceholder')} />
 		</label>
 	</div>
 
-	<label class="checkbox">
+	<label class="checkbox-card">
 		<input type="checkbox" bind:checked={isPublic} />
-		<span>{t('session.makePublic')}</span>
+		<span class="checkbox-text">{t('session.makePublic')}</span>
 	</label>
 
 	<section>
@@ -231,7 +231,7 @@
 			</button>
 		</header>
 		{#each blocks as block, bi (bi)}
-			<div class="row block-row">
+			<div class="block-row">
 				<input
 					type="text"
 					bind:value={block.name}
@@ -239,12 +239,12 @@
 					aria-label={t('session.blockName')}
 				/>
 				<button
+					class="icon-btn"
 					type="button"
-					class="btn btn-sm btn-danger"
 					onclick={() => removeBlock(bi)}
 					aria-label={t('session.removeBlock')}
 				>
-					&times;
+					<span class="material-symbols" aria-hidden="true">close</span>
 				</button>
 			</div>
 		{/each}
@@ -259,7 +259,7 @@
 		</header>
 		{#each items as item, ii (ii)}
 			<div class="item-card">
-				<div class="row">
+				<div class="item-head">
 					<input
 						class="grow"
 						type="text"
@@ -269,17 +269,17 @@
 						aria-label={t('session.movementName')}
 					/>
 					<button
+						class="icon-btn"
 						type="button"
-						class="btn btn-sm btn-danger"
 						onclick={() => removeItem(ii)}
 						aria-label={t('session.removeItem')}
 					>
-						&times;
+						<span class="material-symbols" aria-hidden="true">close</span>
 					</button>
 				</div>
-				<div class="row">
-					<label class="field small">
-						<span>{t('session.kind')}</span>
+				<div class="item-grid">
+					<label class="field">
+						<span class="section-label">{t('session.kind')}</span>
 						<select bind:value={item.kind}>
 							<option value="hold">{t('session.kindHold')}</option>
 							<option value="reps">{t('session.kindReps')}</option>
@@ -287,18 +287,18 @@
 						</select>
 					</label>
 					{#if item.kind === 'reps'}
-						<label class="field small">
-							<span>{t('session.reps')}</span>
+						<label class="field">
+							<span class="section-label">{t('session.reps')}</span>
 							<input type="number" min="0" bind:value={item.reps} />
 						</label>
 					{:else}
-						<label class="field small">
-							<span>{t('session.durationSec')}</span>
+						<label class="field">
+							<span class="section-label">{t('session.durationSec')}</span>
 							<input type="number" min="0" bind:value={item.duration_s} />
 						</label>
 					{/if}
-					<label class="field small">
-						<span>{t('session.inBlock')}</span>
+					<label class="field">
+						<span class="section-label">{t('session.inBlock')}</span>
 						<select bind:value={item.block_index}>
 							<option value={null}>{t('session.noBlock')}</option>
 							{#each blocks as block, bi (bi)}
@@ -307,7 +307,7 @@
 						</select>
 					</label>
 				</div>
-				<div class="row">
+				<div class="item-row">
 					<label class="checkbox">
 						<input type="checkbox" bind:checked={item.per_side} />
 						<span>{t('session.perSide')}</span>
@@ -333,7 +333,7 @@
 	<p class="est">{t('session.estDuration', { minutes: estMinutes })}</p>
 
 	<div class="actions">
-		<button type="button" class="btn btn-secondary" onclick={oncancel} disabled={saving}>
+		<button type="button" class="btn btn-outline" onclick={oncancel} disabled={saving}>
 			{t('session.cancel')}
 		</button>
 		<button type="button" class="btn btn-primary" onclick={save} disabled={saving}>
@@ -346,63 +346,176 @@
 	.session-editor {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-md);
+		gap: var(--space-lg);
 	}
+
+	input[type='text'],
+	input[type='number'],
+	select {
+		padding: var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.9rem;
+		width: 100%;
+		min-width: 0;
+		height: 2.4rem;
+		transition: border-color var(--transition-fast);
+	}
+	input[type='text']:focus-visible,
+	input[type='number']:focus-visible,
+	select:focus-visible {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px var(--color-primary-light);
+	}
+	input[type='number'] {
+		font-variant-numeric: tabular-nums;
+	}
+
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2xs);
+		gap: var(--space-xs);
 		flex: 1;
+		min-width: 0;
 	}
-	.field span {
-		font-size: 0.85rem;
-		color: var(--text-muted);
-	}
-	.field.small {
-		flex: 0 0 8rem;
-	}
+
+	/* Title / discipline / equipment cap so a single field doesn't stretch
+	   the full editor width on a wide viewport. */
 	.row {
 		display: flex;
-		gap: var(--space-sm);
-		align-items: flex-end;
+		gap: var(--space-md);
 		flex-wrap: wrap;
 	}
+
 	.grow {
 		flex: 1;
 	}
+
+	.checkbox-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		cursor: pointer;
+	}
+	.checkbox-card input {
+		width: auto;
+		accent-color: var(--color-primary);
+	}
+	.checkbox-text {
+		font-size: 0.9rem;
+		color: var(--color-text);
+	}
+
 	.checkbox {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2xs);
+		gap: var(--space-xs);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		cursor: pointer;
 	}
+	.checkbox input {
+		width: auto;
+		accent-color: var(--color-primary);
+	}
+
 	.section-head {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		margin-bottom: var(--space-sm);
 	}
 	.section-head h3 {
 		margin: 0;
-		font-size: 0.95rem;
+		font-size: 1rem;
+		font-weight: 700;
 	}
+
+	.block-row {
+		display: flex;
+		gap: var(--space-sm);
+		align-items: center;
+		margin-bottom: var(--space-sm);
+	}
+
 	.item-card {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-xs);
-		padding: var(--space-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
+		gap: var(--space-md);
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-bg-secondary);
+		margin-bottom: var(--space-md);
 	}
-	.block-row {
+	.item-head {
+		display: flex;
+		gap: var(--space-sm);
 		align-items: center;
 	}
+	/* Type / Seconds / Block share one row and line up across movement cards. */
+	.item-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-md);
+	}
+	.item-row {
+		display: flex;
+		gap: var(--space-md);
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.icon-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--color-text-tertiary);
+		padding: var(--space-2xs);
+		border-radius: var(--radius-sm);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	.icon-btn:hover {
+		color: var(--color-danger);
+		background: var(--color-danger-light);
+	}
+	.icon-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+
 	.est {
-		color: var(--text-muted);
+		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		margin: 0;
 	}
+
 	.actions {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-sm);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+	}
+
+	@media (max-width: 560px) {
+		.item-grid {
+			grid-template-columns: 1fr 1fr;
+		}
+		.row {
+			flex-direction: column;
+		}
 	}
 </style>
