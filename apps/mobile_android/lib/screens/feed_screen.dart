@@ -458,6 +458,8 @@ class _EntryCard extends StatelessWidget {
                       entry.author.displayName ??
                           AppLocalizations.of(context).feedRunnerFallback,
                       style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Text(
@@ -704,6 +706,8 @@ class _LiftEntryCard extends StatelessWidget {
                     child: Text(
                       entry.author.displayName ?? l10n.feedRunnerFallback,
                       style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Text(

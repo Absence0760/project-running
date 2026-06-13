@@ -417,7 +417,10 @@ class _SegmentTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(seg.name, style: theme.textTheme.titleSmall),
+                        Text(seg.name,
+                            style: theme.textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
                         Text(
                           '${_fmt(length)}  ·  ${_fmt(seg.startDistanceM)}–${_fmt(seg.endDistanceM)}',

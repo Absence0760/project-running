@@ -310,7 +310,8 @@ class _CoachingScreenState extends State<CoachingScreen> {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: CircleAvatar(child: Text(_initial(a.displayName))),
-      title: Text(a.displayName ?? l10n.coachingRunner),
+      title: Text(a.displayName ?? l10n.coachingRunner,
+          maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(l10n.coachingCoachingSince(_sinceLabel(a.acceptedAt))),
       trailing: PopupMenuButton<String>(
         onSelected: (v) {
@@ -373,7 +374,8 @@ class _CoachingScreenState extends State<CoachingScreen> {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                   leading: CircleAvatar(child: Text(_initial(c.displayName))),
-                  title: Text(c.displayName ?? l10n.coachingCoach),
+                  title: Text(c.displayName ?? l10n.coachingCoach,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle:
                       Text(l10n.coachingLinkedSince(_sinceLabel(c.acceptedAt))),
                   trailing: OutlinedButton(
