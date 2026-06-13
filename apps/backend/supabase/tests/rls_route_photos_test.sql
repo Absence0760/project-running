@@ -19,7 +19,7 @@
 
 begin;
 
-select plan(13);
+select plan(14);
 
 -- ── Fixture ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -170,6 +170,15 @@ select is_empty(
   $$ select id from route_photos
      where id = '33333333-3333-3333-3333-3333000bb002' $$,
   'anon cannot SELECT a photo on a private route'
+);
+
+-- 14. Anon CAN read a photo on a public route (the positive path the
+--     share page + logged-out viewers depend on; mirrors test 4 from anon).
+select results_eq(
+  $$ select caption from route_photos
+     where id = '33333333-3333-3333-3333-3333000bb001' $$,
+  $$ values ('on the public loop'::text) $$,
+  'anon can SELECT a photo on a public route'
 );
 
 select * from finish();
