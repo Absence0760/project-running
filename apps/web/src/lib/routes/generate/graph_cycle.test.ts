@@ -6,6 +6,7 @@ import {
 	fetchGraphCycle,
 	GraphCycleError,
 	parseGraphCycle,
+	parseLargestCleanM,
 } from './graph_cycle';
 import { handleGenerate } from './handler';
 import type { Fetcher } from './graphhopper';
@@ -24,16 +25,20 @@ function squareLoop(cx: number, cy: number, half: number): [number, number][] {
 }
 
 /// A sidecar /cycle response. found=true carries the loop; found=false is the
-/// loop-poor signal.
+/// loop-poor signal. `largestCleanM` (when given) sets the largestClean.distanceM
+/// the sidecar reports in both cases.
 function gcResponse(
 	found: boolean,
 	coords?: [number, number][],
 	distanceM?: number,
 	areaEfficiency = 0.6,
+	largestCleanM?: number,
 ): Response {
+	const largestClean =
+		largestCleanM === undefined ? null : { distanceM: largestCleanM, areaEfficiency: 0.3 };
 	const body = found
-		? { found: true, coordinates: coords, distanceM, areaEfficiency, largestClean: null }
-		: { found: false, largestClean: null };
+		? { found: true, coordinates: coords, distanceM, areaEfficiency, largestClean }
+		: { found: false, largestClean };
 	return new Response(JSON.stringify(body), {
 		status: 200,
 		headers: { 'content-type': 'application/json' },
@@ -85,6 +90,17 @@ test('parseGraphCycle drops non-finite coordinate pairs', () => {
 	assert.equal(got.coordinates.length, 2);
 });
 
+test('parseLargestCleanM extracts the largest clean loop length, else null', () => {
+	assert.equal(parseLargestCleanM({ largestClean: { distanceM: 12822 } }), 12822);
+	// Reported even on a loop-poor (found:false) payload.
+	assert.equal(parseLargestCleanM({ found: false, largestClean: { distanceM: 4500 } }), 4500);
+	assert.equal(parseLargestCleanM({ largestClean: null }), null);
+	assert.equal(parseLargestCleanM({}), null);
+	assert.equal(parseLargestCleanM(null), null);
+	assert.equal(parseLargestCleanM({ largestClean: { distanceM: 0 } }), null);
+	assert.equal(parseLargestCleanM({ largestClean: { distanceM: 'x' } }), null);
+});
+
 test('fetchGraphCycle throws unconfigured when the base URL is empty', async () => {
 	await assert.rejects(
 		() => fetchGraphCycle({ baseUrl: undefined, start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }),
@@ -110,17 +126,25 @@ test('fetchGraphCycle throws upstream when the fetch itself rejects', async () =
 	);
 });
 
-test('fetchGraphCycle returns null on a loop-poor result', async () => {
+test('fetchGraphCycle returns a null loop on a loop-poor result', async () => {
 	const fetcher: Fetcher = async () => gcResponse(false);
 	const got = await fetchGraphCycle({ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, fetcher);
-	assert.equal(got, null);
+	assert.equal(got.loop, null);
+	assert.equal(got.largestCleanM, null);
 });
 
 test('fetchGraphCycle returns the loop on success', async () => {
 	const fetcher: Fetcher = async () => gcResponse(true, squareLoop(0, 0, 0.01), 4980);
 	const got = await fetchGraphCycle({ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, fetcher);
-	assert.ok(got);
-	assert.equal(got.distanceM, 4980);
+	assert.ok(got.loop);
+	assert.equal(got.loop.distanceM, 4980);
+});
+
+test('fetchGraphCycle surfaces largestCleanM even when loop-poor', async () => {
+	const fetcher: Fetcher = async () => gcResponse(false, undefined, undefined, 0.6, 12822);
+	const got = await fetchGraphCycle({ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, fetcher);
+	assert.equal(got.loop, null);
+	assert.equal(got.largestCleanM, 12822);
 });
 
 test('fetchGraphCycle POSTs a JSON body with the start + target and the key header', async () => {
@@ -190,6 +214,57 @@ test('handleGenerate falls back to round_trip when graph-cycle is loop-poor', as
 	);
 	assert.equal(res.status, 200);
 	assert.equal(rtCalled, true, 'round_trip must run when graph-cycle is loop-poor');
+});
+
+test('handleGenerate threads largestLoopM into the round_trip fallback body', async () => {
+	// graph-cycle is loop-poor near 5 km but reports a 12.8 km clean loop nearby;
+	// round_trip then serves a ~5 km out-and-back. The handler must surface the
+	// 12.8 km largest-clean so the client can offer the 3-way choice.
+	const fetcher = byEngine(
+		async () => gcResponse(false, undefined, undefined, 0.6, 12822),
+		async () => ghResponse(squareLoop(0, 0, 0.0056), 5000),
+	);
+	const res = await handleGenerate(
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
+		{ graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher },
+	);
+	assert.equal(res.status, 200);
+	if (res.status === 200) assert.equal(res.body.largestLoopM, 12822);
+});
+
+test('handleGenerate omits largestLoopM when it is not meaningfully larger than served', async () => {
+	// The reported largest-clean (5100 m) is within 5% of the served 5000 m loop —
+	// offering it as a "better" loop would be noise, so the body must omit it.
+	const fetcher = byEngine(
+		async () => gcResponse(false, undefined, undefined, 0.6, 5100),
+		async () => ghResponse(squareLoop(0, 0, 0.0056), 5000),
+	);
+	const res = await handleGenerate(
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
+		{ graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher },
+	);
+	assert.equal(res.status, 200);
+	if (res.status === 200) assert.equal(res.body.largestLoopM, undefined);
+});
+
+test('handleGenerate omits largestLoopM when graph-cycle serves a clean loop directly', async () => {
+	const fetcher = byEngine(
+		async () => gcResponse(true, squareLoop(0, 0, 0.0056), 5050, 0.6, 12822),
+		async () => ghResponse(squareLoop(0, 0, 0.0056), 5000),
+	);
+	const res = await handleGenerate(
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
+		{ graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher },
+	);
+	assert.equal(res.status, 200);
+	// graph-cycle's own in-band loop is served — no fallback, no shortfall choice.
+	if (res.status === 200) {
+		assert.equal(res.body.distanceM, 5050);
+		assert.equal(res.body.largestLoopM, undefined);
+	}
 });
 
 test('handleGenerate falls back to round_trip when the sidecar errors', async () => {

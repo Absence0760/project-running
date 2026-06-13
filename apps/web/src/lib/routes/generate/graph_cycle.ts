@@ -48,6 +48,17 @@ export interface GraphCycleRequest {
 	timeoutMs?: number;
 }
 
+/// Richer result than a bare loop: the sidecar reports the largest CLEAN loop it
+/// found even when no in-band loop near target exists (loop-poor), so a caller
+/// can offer "the best loop near you is ~X km" instead of a generic shortfall.
+/// `loop` is the in-band loop (null when loop-poor); `largestCleanM` is the
+/// largest achievable clean-loop length (null when even that is absent — a
+/// genuinely loop-poor start, or `loop` itself is already the largest).
+export interface GraphCycleResult {
+	loop: LoopCandidate | null;
+	largestCleanM: number | null;
+}
+
 const DEFAULT_TIMEOUT_MS = 8000;
 
 /// Build the sidecar `/cycle` URL. The request is a POST with a JSON body (see
@@ -60,7 +71,8 @@ export function buildGraphCycleUrl(baseUrl: string): string {
 /// when the sidecar reports `found: false` (a genuinely loop-poor start) or the
 /// payload is malformed — both cases the handler turns into a round_trip
 /// fallback. The wire shape matches LoopCandidate (`coordinates` [lng,lat],
-/// `distanceM`) plus a `found` flag and an unused-here `largestClean`.
+/// `distanceM`) plus a `found` flag and a separately-parsed `largestClean` (see
+/// `parseLargestCleanM`).
 export function parseGraphCycle(json: unknown): LoopCandidate | null {
 	const j = json as
 		| { found?: unknown; coordinates?: unknown; distanceM?: unknown }
@@ -81,16 +93,29 @@ export function parseGraphCycle(json: unknown): LoopCandidate | null {
 	return { coordinates, distanceM };
 }
 
-/// Fetch the best loop near `targetDistanceM` from the sidecar. Returns the loop
-/// on success, or null when the sidecar reports loop-poor. Throws
-/// `GraphCycleError` on an unconfigured URL or any transport failure (non-2xx,
-/// network, timeout, bad JSON) so the handler can fall back to round_trip with
-/// the reason intact. Applies a request timeout via `AbortController` so a hung
-/// sidecar can't stall the Lambda.
+/// Parse the sidecar's `largestClean` distance. Pure. The sidecar reports
+/// `largestClean: { distanceM, ... } | null` in BOTH the found and loop-poor
+/// cases — the largest genuinely clean loop near the start regardless of target.
+/// Returns its length in metres, or null when absent/malformed. Used to power the
+/// loop-poor "best loop near you is ~X km" choice.
+export function parseLargestCleanM(json: unknown): number | null {
+	const j = json as { largestClean?: { distanceM?: unknown } | null } | null;
+	const d = j?.largestClean?.distanceM;
+	return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : null;
+}
+
+/// Fetch the best loop near `targetDistanceM` from the sidecar plus the largest
+/// achievable clean loop. `loop` is the in-band loop, or null when the sidecar
+/// reports loop-poor; `largestCleanM` is the largest clean-loop length the search
+/// found (present even when loop-poor) so the caller can offer it explicitly.
+/// Throws `GraphCycleError` on an unconfigured URL or any transport failure
+/// (non-2xx, network, timeout, bad JSON) so the handler can fall back to
+/// round_trip with the reason intact. Applies a request timeout via
+/// `AbortController` so a hung sidecar can't stall the Lambda.
 export async function fetchGraphCycle(
 	req: GraphCycleRequest,
 	fetcher: Fetcher = (u, i) => fetch(u, i),
-): Promise<LoopCandidate | null> {
+): Promise<GraphCycleResult> {
 	const base = (req.baseUrl ?? '').replace(/\/+$/, '');
 	if (!base) {
 		throw new GraphCycleError('unconfigured', 'GRAPH_CYCLE_URL is not set');
@@ -128,5 +153,5 @@ export async function fetchGraphCycle(
 			`graph_cycle returned non-JSON: ${e instanceof Error ? e.message : String(e)}`,
 		);
 	}
-	return parseGraphCycle(json);
+	return { loop: parseGraphCycle(json), largestCleanM: parseLargestCleanM(json) };
 }

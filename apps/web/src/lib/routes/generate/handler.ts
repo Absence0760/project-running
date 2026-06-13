@@ -57,7 +57,19 @@ export interface GenerateDeps {
 }
 
 export type GenerateResult =
-	| { status: 200; body: { coordinates: [number, number][]; distanceM: number } }
+	| {
+			status: 200;
+			body: {
+				coordinates: [number, number][];
+				distanceM: number;
+				/// Present only when the served loop is a round_trip fallback (the
+				/// graph-cycle search was loop-poor near target) AND that search
+				/// reported a larger genuinely clean loop achievable near the start.
+				/// Lets the client offer the "best loop near you is ~X km" choice
+				/// instead of a generic shortfall banner.
+				largestLoopM?: number;
+			};
+	  }
 	| { status: 400 | 501 | 502; body: { error: string } };
 
 /// Seeds raced at EACH request multiplier (so total round_trip calls is
@@ -124,13 +136,19 @@ export async function handleGenerate(
 
 	const fetcher: Fetcher = deps.fetcher ?? ((u, i) => fetch(u, i));
 
+	// Largest genuinely clean loop the graph-cycle search reported near the start.
+	// Surfaced even on a loop-poor (no in-band loop) result so the round_trip
+	// fallback below can offer the client an explicit "best loop near you is ~X km"
+	// choice instead of a silent out-and-back + a generic shortfall banner.
+	let largestCleanM: number | null = null;
+
 	// graph-cycle FIRST: search the real foot graph. A real loop wins; null means
 	// loop-poor (or the sidecar is unreachable) and we fall through to round_trip.
 	// A sidecar error is never fatal — graph-cycle is a quality upgrade, not a
 	// hard dependency — so we swallow the throw and let round_trip serve.
 	if (config.graphCycleUrl) {
 		try {
-			const loop = await fetchGraphCycle(
+			const result = await fetchGraphCycle(
 				{
 					baseUrl: config.graphCycleUrl,
 					start: req.start,
@@ -139,8 +157,12 @@ export async function handleGenerate(
 				},
 				fetcher,
 			);
-			if (loop) {
-				return { status: 200, body: { coordinates: loop.coordinates, distanceM: loop.distanceM } };
+			largestCleanM = result.largestCleanM;
+			if (result.loop) {
+				return {
+					status: 200,
+					body: { coordinates: result.loop.coordinates, distanceM: result.loop.distanceM },
+				};
 			}
 		} catch (e) {
 			// Unconfigured/unreachable sidecar → fall through to round_trip (or 502
@@ -194,5 +216,18 @@ export async function handleGenerate(
 
 	const best = pickBestLoop(candidates, req.targetDistanceM);
 	if (!best) return { status: 502, body: { error: 'no usable route' } };
-	return { status: 200, body: { coordinates: best.coordinates, distanceM: best.distanceM } };
+
+	// This loop is a round_trip fallback — graph-cycle found no clean in-band loop
+	// near target. If the graph search nonetheless reported a larger genuinely
+	// clean loop, surface it so the client can offer "best loop near you is ~X km".
+	// Only attach when it's meaningfully (>5%) larger than what we're serving, so
+	// we never offer a "better" loop that's the same size as the out-and-back.
+	const body: { coordinates: [number, number][]; distanceM: number; largestLoopM?: number } = {
+		coordinates: best.coordinates,
+		distanceM: best.distanceM,
+	};
+	if (largestCleanM !== null && largestCleanM > best.distanceM * 1.05) {
+		body.largestLoopM = largestCleanM;
+	}
+	return { status: 200, body };
 }
