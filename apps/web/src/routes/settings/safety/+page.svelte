@@ -175,7 +175,9 @@
 	message={m('safety.removeConfirm')}
 	confirmLabel={m('safety.remove')}
 	danger
-	onconfirm={() => confirmingRemove && handleRemove(confirmingRemove)}
+	onconfirm={() => {
+		if (confirmingRemove) handleRemove(confirmingRemove);
+	}}
 	oncancel={() => (confirmingRemove = null)}
 />
 
