@@ -20,6 +20,30 @@ import { USER_A, USER_B } from '../fixtures/users';
 test.describe('/u/[id] — viewing another user', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('a failed profile load shows an error + retry, and retry recovers', async ({ page }) => {
+		// Abort (not 500) so the supabase call rejects → the page would
+		// otherwise hang on its skeleton forever. Pins the loadError + retry.
+		// Abort every user_profiles read while `block` is true so the page's
+		// fetchPublicProfile fails (a 500 would just return null → not-found;
+		// an abort surfaces the error). Flip block off before the retry.
+		let block = true;
+		await page.route('**/rest/v1/user_profiles**', async (route) => {
+			if (route.request().method() === 'GET' && block) {
+				await route.abort();
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto(`/u/${USER_B.id}`);
+		await expect(page.locator('.error-banner')).toBeVisible({ timeout: 10_000 });
+
+		block = false;
+		await page.getByRole('button', { name: 'Retry' }).click();
+		await expect(page.getByRole('heading', { name: 'Alex Chen' })).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.error-banner')).toHaveCount(0);
+	});
+
 	test('runner views alex profile: display_name + Follow button visible', async ({
 		page
 	}) => {

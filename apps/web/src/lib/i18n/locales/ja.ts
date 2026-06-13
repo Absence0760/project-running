@@ -502,6 +502,8 @@ export const messages = {
 	"profile.thisRunnerCap": "このランナー",
 	"profile.back": "戻る",
 	"profile.loadingProfile": "プロフィールを読み込み中…",
+	"profile.loadError": "このプロフィールを読み込めませんでした。",
+	"profile.retry": "再試行",
 	"profile.notFoundTitle": "プロフィールが見つかりません",
 	"profile.notFoundText": "このランナーは存在しないか、プロフィールが非公開です。アカウントが削除された可能性があります。",
 	"profile.backToDashboard": "ダッシュボードに戻る",

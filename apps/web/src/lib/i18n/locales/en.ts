@@ -515,6 +515,8 @@ export const en = {
 	"profile.thisRunnerCap": "This runner",
 	"profile.back": "Back",
 	"profile.loadingProfile": "Loading profile…",
+	"profile.loadError": "Couldn't load this profile.",
+	"profile.retry": "Retry",
 	"profile.notFoundTitle": "Profile not found",
 	"profile.notFoundText": "This runner doesn't exist or their profile isn't visible. They may have deleted their account.",
 	"profile.backToDashboard": "Back to dashboard",

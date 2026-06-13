@@ -3754,7 +3754,9 @@ export interface ProfileSummary extends PublicProfile {
 /// doesn't exist or RLS hides the row (shouldn't happen now that
 /// user_profiles has a public-read policy, but a defensive null is
 /// cheap insurance).
-export async function fetchPublicProfile(userId: string): Promise<ProfileSummary | null> {
+export async function fetchPublicProfile(
+	userId: string
+): Promise<{ profile: ProfileSummary | null; error: string | null }> {
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id;
 
@@ -3782,15 +3784,22 @@ export async function fetchPublicProfile(userId: string): Promise<ProfileSummary
 			: Promise.resolve({ data: null }),
 	]);
 
-	if (!profileRes.data) return null;
+	// Surface a query error so the profile page can show a "couldn't load —
+	// retry" state instead of the not-found page (a real error otherwise
+	// reads as a missing user when the row just comes back null).
+	const error = (profileRes as { error?: { message?: string } | null }).error?.message ?? null;
+	if (!profileRes.data) return { profile: null, error };
 
 	return {
-		id: profileRes.data.id,
-		display_name: profileRes.data.display_name,
-		avatar_url: profileRes.data.avatar_url,
-		follower_count: followerRes.count ?? 0,
-		following_count: followingRes.count ?? 0,
-		viewer_follows: viewerRes.data != null,
+		profile: {
+			id: profileRes.data.id,
+			display_name: profileRes.data.display_name,
+			avatar_url: profileRes.data.avatar_url,
+			follower_count: followerRes.count ?? 0,
+			following_count: followingRes.count ?? 0,
+			viewer_follows: viewerRes.data != null,
+		},
+		error: null
 	};
 }
 

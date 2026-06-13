@@ -41,6 +41,7 @@
 
 	let userId = $derived($page.params.id as string);
 	let profile = $state<ProfileSummary | null>(null);
+	let loadError = $state<string | null>(null);
 	let runs = $state<Run[]>([]);
 	let followers = $state<PublicProfile[]>([]);
 	let following = $state<PublicProfile[]>([]);
@@ -98,22 +99,32 @@
 
 	async function load() {
 		loading = true;
-		const [p, r, fr, fg, blocked] = await Promise.all([
-			fetchPublicProfile(userId),
-			fetchPublicRunsByUser(userId, 20),
-			fetchFollowers(userId, { limit: FOLLOW_PAGE_SIZE }),
-			fetchFollowing(userId, { limit: FOLLOW_PAGE_SIZE }),
-			auth.loggedIn && auth.user?.id !== userId
-				? isBlockedByViewer(userId)
-				: Promise.resolve(false),
-		]);
-		profile = p;
-		runs = r;
-		followers = fr;
-		following = fg;
-		followersHasMore = fr.length === FOLLOW_PAGE_SIZE;
-		followingHasMore = fg.length === FOLLOW_PAGE_SIZE;
-		viewerHasBlocked = blocked;
+		loadError = null;
+		try {
+			const [p, r, fr, fg, blocked] = await Promise.all([
+				fetchPublicProfile(userId),
+				fetchPublicRunsByUser(userId, 20),
+				fetchFollowers(userId, { limit: FOLLOW_PAGE_SIZE }),
+				fetchFollowing(userId, { limit: FOLLOW_PAGE_SIZE }),
+				auth.loggedIn && auth.user?.id !== userId
+					? isBlockedByViewer(userId)
+					: Promise.resolve(false),
+			]);
+			profile = p.profile;
+			loadError = p.error;
+			runs = r;
+			followers = fr;
+			following = fg;
+			followersHasMore = fr.length === FOLLOW_PAGE_SIZE;
+			followingHasMore = fg.length === FOLLOW_PAGE_SIZE;
+			viewerHasBlocked = blocked;
+		} catch (e) {
+			// A rejected fetch would otherwise leave the profile stuck on its
+			// loading skeleton forever — surface it with a retry instead.
+			loadError = e instanceof Error ? e.message : String(e);
+			loading = false;
+			return;
+		}
 		loading = false;
 		hydrateViewerFollows();
 	}
@@ -445,6 +456,15 @@
 			</div>
 		</div>
 		<p class="sr-only" role="status">{m('profile.loadingProfile')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('profile.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{m('profile.retry')}</button>
+		</div>
 	{:else if !profile}
 		<div class="empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">person_off</span>
@@ -1734,5 +1754,29 @@
 			flex: 1;
 			justify-content: center;
 		}
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>

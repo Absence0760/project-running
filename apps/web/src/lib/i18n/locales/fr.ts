@@ -506,6 +506,8 @@ export const messages = {
 	"profile.thisRunnerCap": "Ce coureur",
 	"profile.back": "Retour",
 	"profile.loadingProfile": "Chargement du profil…",
+	"profile.loadError": "Impossible de charger ce profil.",
+	"profile.retry": "Réessayer",
 	"profile.notFoundTitle": "Profil introuvable",
 	"profile.notFoundText": "Ce coureur n'existe pas ou son profil n'est pas visible. Il a peut-être supprimé son compte.",
 	"profile.backToDashboard": "Retour au tableau de bord",

@@ -506,6 +506,8 @@ export const messages = {
 	"profile.thisRunnerCap": "Este corredor",
 	"profile.back": "Atrás",
 	"profile.loadingProfile": "Cargando perfil…",
+	"profile.loadError": "No se pudo cargar este perfil.",
+	"profile.retry": "Reintentar",
 	"profile.notFoundTitle": "Perfil no encontrado",
 	"profile.notFoundText": "Este corredor no existe o su perfil no es visible. Es posible que haya eliminado su cuenta.",
 	"profile.backToDashboard": "Volver al panel",
