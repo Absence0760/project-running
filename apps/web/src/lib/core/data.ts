@@ -6605,28 +6605,45 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 		.single();
 	if (error || !data) throw error ?? new Error('createGymRoutine failed');
 	const routine = data as GymRoutineSummary;
-	for (const ex of exercises) {
+	if (exercises.length === 0) return routine;
+
+	// Batch-insert all exercises in one round-trip, then all their planned sets
+	// in a second — collapsing the previous N+1 serial loop (one INSERT…select
+	// per exercise, each blocking the next, plus a per-exercise sets insert)
+	// into 2 round-trips regardless of routine size. `position` is
+	// client-supplied and unique per routine, and there's no insert trigger
+	// reading prior rows, so the rows have no inter-row dependency and the
+	// returned ids map back by position. Mirrors createTrainingPlan's shape.
+	const exerciseRows = exercises.map((ex) => {
 		// gym_routine_exercises_superset_chk requires the group + order to be
 		// both null or both set, so a standalone exercise clears both.
 		const supersetGroup = ex.superset_group ?? null;
-		const { data: exRow, error: exErr } = await supabase
-			.from(TABLES.gym_routine_exercises)
-			.insert({
-				routine_id: routine.id,
-				exercise_name: ex.exercise_name.trim(),
-				exercise_key: ex.exercise_key,
-				position: ex.position,
-				superset_group: supersetGroup,
-				superset_order: supersetGroup == null ? null : ex.superset_order ?? 0,
-				modality: ex.modality ?? 'weight_reps',
-				progression: ex.progression ?? 'none',
-				progression_params: ex.progression_params ?? {},
-			})
-			.select('id')
-			.single();
-		if (exErr || !exRow) throw exErr ?? new Error('createGymRoutine exercise failed');
-		const setRows = ex.sets.map((s, i) => ({
-			routine_exercise_id: (exRow as { id: string }).id,
+		return {
+			routine_id: routine.id,
+			exercise_name: ex.exercise_name.trim(),
+			exercise_key: ex.exercise_key,
+			position: ex.position,
+			superset_group: supersetGroup,
+			superset_order: supersetGroup == null ? null : ex.superset_order ?? 0,
+			modality: ex.modality ?? 'weight_reps',
+			progression: ex.progression ?? 'none',
+			progression_params: ex.progression_params ?? {},
+		};
+	});
+	const { data: exRows, error: exErr } = await supabase
+		.from(TABLES.gym_routine_exercises)
+		.insert(exerciseRows)
+		.select('id, position');
+	if (exErr || !exRows) throw exErr ?? new Error('createGymRoutine exercises failed');
+	const idByPosition = new Map<number, string>();
+	for (const r of exRows as { id: string; position: number }[]) {
+		idByPosition.set(r.position, r.id);
+	}
+	const allSetRows = exercises.flatMap((ex) => {
+		const exId = idByPosition.get(ex.position);
+		if (!exId) return [];
+		return ex.sets.map((s, i) => ({
+			routine_exercise_id: exId,
 			set_index: i,
 			set_type: s.set_type ?? 'working',
 			target_reps_min: s.target_reps_min ?? null,
@@ -6637,10 +6654,10 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 			target_duration_s: s.target_duration_s ?? null,
 			target_distance_m: s.target_distance_m ?? null,
 		}));
-		if (setRows.length > 0) {
-			const { error: sErr } = await supabase.from(TABLES.gym_routine_sets).insert(setRows);
-			if (sErr) throw sErr;
-		}
+	});
+	if (allSetRows.length > 0) {
+		const { error: sErr } = await supabase.from(TABLES.gym_routine_sets).insert(allSetRows);
+		if (sErr) throw sErr;
 	}
 	return routine;
 }
