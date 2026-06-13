@@ -772,6 +772,7 @@ class EventRow {
   static const String colGymTemplate = 'gym_template';
   static const String colSessionPlanId = 'session_plan_id';
   static const String colTimezone = 'timezone';
+  static const String colIsPublic = 'is_public';
 
   final String id;
   final String clubId;
@@ -799,6 +800,7 @@ class EventRow {
   final dynamic gymTemplate;
   final String? sessionPlanId;
   final String? timezone;
+  final bool isPublic;
 
   const EventRow({
     required this.id,
@@ -827,6 +829,7 @@ class EventRow {
     this.gymTemplate,
     this.sessionPlanId,
     this.timezone,
+    required this.isPublic,
   });
 
   factory EventRow.fromJson(Map<String, dynamic> json) => EventRow(
@@ -856,6 +859,7 @@ class EventRow {
     gymTemplate: json['gym_template'],
     sessionPlanId: json['session_plan_id'] as String?,
     timezone: json['timezone'] as String?,
+    isPublic: (json['is_public'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -885,6 +889,7 @@ class EventRow {
     colGymTemplate: gymTemplate,
     colSessionPlanId: sessionPlanId,
     colTimezone: timezone,
+    colIsPublic: isPublic,
   };
 }
 

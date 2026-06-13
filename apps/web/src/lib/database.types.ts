@@ -762,6 +762,7 @@ export type Database = {
           gym_template: Json | null
           host_user_id: string | null
           id: string
+          is_public: boolean
           meet_label: string | null
           meet_lat: number | null
           meet_lng: number | null
@@ -790,6 +791,7 @@ export type Database = {
           gym_template?: Json | null
           host_user_id?: string | null
           id?: string
+          is_public?: boolean
           meet_label?: string | null
           meet_lat?: number | null
           meet_lng?: number | null
@@ -818,6 +820,7 @@ export type Database = {
           gym_template?: Json | null
           host_user_id?: string | null
           id?: string
+          is_public?: boolean
           meet_label?: string | null
           meet_lat?: number | null
           meet_lng?: number | null
