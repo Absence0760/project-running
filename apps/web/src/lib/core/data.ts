@@ -3950,16 +3950,17 @@ async function hydratePeopleSuggestions(
 	viewerId: string | null
 ): Promise<PeopleSuggestion[]> {
 	if (ids.length === 0) return [];
-	const [profilesRes, runsRes, followsRes] = await Promise.all([
+	const [profilesRes, countsRes, followsRes] = await Promise.all([
 		supabase
 			.from('user_profiles')
 			.select('id, display_name, avatar_url')
 			.in('id', ids),
-		supabase
-			.from(TABLES.runs)
-			.select('user_id')
-			.in('user_id', ids)
-			.eq('is_public', true),
+		// Public-run counts via a SECURITY DEFINER GROUP BY RPC — one small row
+		// per candidate, not one row per public run (which also can't be read
+		// off the base runs table by a non-owner since 20260701_001 dropped the
+		// public-anyone SELECT policy, so the old client tally returned ~0 for
+		// everyone but the viewer). See public_run_counts (migration 20270118_001).
+		supabase.rpc('public_run_counts', { p_user_ids: ids }),
 		viewerId
 			? supabase
 					.from('user_follows')
@@ -3969,8 +3970,11 @@ async function hydratePeopleSuggestions(
 			: Promise.resolve({ data: [] as { followee_id: string }[] } as { data: { followee_id: string }[] }),
 	]);
 	const counts = new Map<string, number>();
-	for (const row of (runsRes.data ?? []) as { user_id: string }[]) {
-		counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
+	for (const row of (countsRes.data ?? []) as {
+		user_id: string;
+		public_run_count: number;
+	}[]) {
+		counts.set(row.user_id, Number(row.public_run_count) || 0);
 	}
 	const follows = new Set<string>(
 		((followsRes.data ?? []) as { followee_id: string }[]).map((r) => r.followee_id)
