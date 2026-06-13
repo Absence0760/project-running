@@ -464,6 +464,20 @@ The app has **two** card flavours, and the distinction is load-bearing — don't
 
 When you need an elevated panel: `class="card-elevated"` (+ a layout modifier). When you need a flat panel: keep the existing page-scoped `.card`. Never give the global an unqualified `.card` rule.
 
+## Web forms — `.editor-form` is the shared field layer
+
+Every create / edit editor (`ClubEditor`, `EventEditor`, `RunEditor`, `GymEditor`, `PlanMetaEditor`, `RoutineEditor`, `SessionPlanEditor`, `WorkoutEditor`) shares one field-styling layer in `apps/web/src/app.css`, opted into with `class="editor-form"` on the form / container root. It used to be duplicated per-editor and had drifted into three input backgrounds, two label cases, and two markup conventions; the 2026-06-12 consolidation collapsed ~440 lines of copy into one ~180-line layer.
+
+`.editor-form` styles the **field primitives**: the column container, labels (`<label>` or `.field` + `.field-label`), `.optional` / `.hint` / `.field-hint`, text/number/date/time/search/url/email/tel/datetime-local inputs + textarea + select (surface bg, border, radius, focus ring + `:focus-visible`), the checkbox/radio width reset, `fieldset` + `legend`, the inline `.radio` option row, the bordered `.toggle-row` checkbox option-card, the `.actions` / `.form-actions` row, and the `.error` banner. Canonical label look is **sentence-case bold** (`<label><span>Name</span><input></label>`). Two markup conventions are supported so editors need no restructuring — convention A (the `<label>` is the container) and convention B (`<div class="field"><span class="field-label">…</span><input></div>`).
+
+**Rules:**
+- **Don't re-declare field chrome in an editor.** Add `class="editor-form"` and let the layer style inputs / labels / fieldsets / radios / actions / errors. Keep **only** bespoke layout scoped (multi-column `.row` grids, chips, exercise / set grids, search / portion panels).
+- **Svelte-scoping gotcha:** an element selector in a component (`label`, `input`) is scoped to `selector.svelte-hash`, which *out-specifies* a bare global class — so the layer only governs once the editor's duplicated scoped rules are **deleted**. When you migrate or add an editor, remove the local copies; don't leave them to "win" by specificity.
+- An inline `<label>` override (a radio/checkbox that must sit on one row) needs `.editor-form .my-inline { flex-direction: row }` — the bare `.my-inline { flex-direction: row }` (specificity 0,1,0) loses to the layer's `.editor-form label { flex-direction: column }` (0,1,1) and the control stacks. Prefix inline-label overrides with `.editor-form`.
+- The bordered checkbox option-card (activity waiver, charge toggle, share-to-feed, make-public) is `.toggle-row` — don't roll a new `.waiver-toggle` / `.share-row` / `.checkbox-card`.
+- Native checkbox / radio colour is the global `accent-color: var(--color-primary)` rule (also in `app.css`), not a per-editor declaration.
+- Dense builders (`RoutineEditor`, `SessionPlanEditor`) intentionally use the shared global `.section-label` (uppercase micro-label) for labels that double as set-grid column headers — that's a shared primitive, not duplication, and is left uppercase by design.
+
 ## Web list pages — preserve scroll on back-navigation
 
 Any list page that links into a detail page (`/history`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
