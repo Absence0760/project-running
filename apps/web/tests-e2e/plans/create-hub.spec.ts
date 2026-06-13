@@ -32,9 +32,13 @@ test.describe('/plans/new — unified create hub', () => {
 		await expect(page.locator('.starter-picker')).toHaveCount(0);
 	});
 
-	test('?type=session deep-links straight to the session branch', async ({ page }) => {
+	test('?type=session deep-links straight to the session branch, no redundant chooser', async ({
+		page
+	}) => {
 		await page.goto('/plans/new?type=session');
-		await expect(page.getByTestId('kind-session')).toHaveAttribute('aria-pressed', 'true');
+		// An explicit ?type means the caller already chose — the chooser is hidden
+		// so the user isn't asked the same 3-way question twice.
+		await expect(page.locator('.kind-chooser')).toHaveCount(0);
 		await expect(page.locator('.session-editor')).toBeVisible();
 	});
 });

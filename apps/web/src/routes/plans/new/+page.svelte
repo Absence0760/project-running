@@ -36,6 +36,14 @@
 	// build-then-publish, so the club param is informational there.
 	const clubId = $page.url.searchParams.get('club');
 
+	// An explicit `?type=` means the caller already chose the kind (a club's
+	// contextual "New …" link) — skip the chooser so we don't ask twice. The
+	// bare /plans/new entry (no type) shows the chooser to disambiguate.
+	const explicitType = $page.url.searchParams.get('type');
+	const showChooser = !(
+		explicitType === 'training' || explicitType === 'session' || explicitType === 'gym'
+	);
+
 	let kind = $state<PlanKind>(initialKind());
 
 	let templates = $state<TemplateOption[]>([]);
@@ -214,38 +222,40 @@
 
 	<p class="kicker">{m('plansNew.kicker')}</p>
 
-	<div class="kind-chooser" role="group" aria-label={m('plansNew.chooserLabel')}>
-		<button
-			type="button"
-			class="kind-tab"
-			class:active={kind === 'training'}
-			aria-pressed={kind === 'training'}
-			onclick={() => (kind = 'training')}
-			data-testid="kind-training"
-		>
-			{m('plansNew.kindTraining')}
-		</button>
-		<button
-			type="button"
-			class="kind-tab"
-			class:active={kind === 'session'}
-			aria-pressed={kind === 'session'}
-			onclick={() => (kind = 'session')}
-			data-testid="kind-session"
-		>
-			{m('plansNew.kindSession')}
-		</button>
-		<button
-			type="button"
-			class="kind-tab"
-			class:active={kind === 'gym'}
-			aria-pressed={kind === 'gym'}
-			onclick={() => (kind = 'gym')}
-			data-testid="kind-gym"
-		>
-			{m('plansNew.kindGym')}
-		</button>
-	</div>
+	{#if showChooser}
+		<div class="kind-chooser" role="group" aria-label={m('plansNew.chooserLabel')}>
+			<button
+				type="button"
+				class="kind-tab"
+				class:active={kind === 'training'}
+				aria-pressed={kind === 'training'}
+				onclick={() => (kind = 'training')}
+				data-testid="kind-training"
+			>
+				{m('plansNew.kindTraining')}
+			</button>
+			<button
+				type="button"
+				class="kind-tab"
+				class:active={kind === 'session'}
+				aria-pressed={kind === 'session'}
+				onclick={() => (kind = 'session')}
+				data-testid="kind-session"
+			>
+				{m('plansNew.kindSession')}
+			</button>
+			<button
+				type="button"
+				class="kind-tab"
+				class:active={kind === 'gym'}
+				aria-pressed={kind === 'gym'}
+				onclick={() => (kind = 'gym')}
+				data-testid="kind-gym"
+			>
+				{m('plansNew.kindGym')}
+			</button>
+		</div>
+	{/if}
 
 	<header class="page-header">
 		<h1>{m(headingKey)}</h1>
