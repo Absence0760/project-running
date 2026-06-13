@@ -77,7 +77,7 @@
 
 <Modal open title={m('planMeta.title')} onclose={onClose} bodyClass="plan-meta-body">
 	<form
-		class="form"
+		class="editor-form"
 		onsubmit={(e) => {
 			e.preventDefault();
 			save();
@@ -146,48 +146,6 @@
 </Modal>
 
 <style>
-	.form {
-		display: grid;
-		gap: var(--space-md);
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-	}
-	.field-label {
-		font-size: 0.78rem;
-		font-weight: 600;
-		color: var(--color-text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-	.optional {
-		font-weight: 400;
-		text-transform: none;
-		letter-spacing: 0;
-		color: var(--color-text-tertiary);
-		font-size: 0.78rem;
-	}
-	.field-hint {
-		font-size: 0.78rem;
-		color: var(--color-text-tertiary);
-	}
-	input[type='text'],
-	input[type='number'],
-	select,
-	textarea {
-		padding: 0.5rem 0.7rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-bg);
-		color: var(--color-text);
-		font: inherit;
-	}
-	textarea {
-		resize: vertical;
-		font-family: inherit;
-	}
 	.time-row {
 		display: flex;
 		align-items: center;
@@ -199,18 +157,5 @@
 	}
 	.time-row span {
 		font-weight: 700;
-	}
-	.error {
-		color: var(--color-danger);
-		background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
-		padding: 0.5rem 0.8rem;
-		border-radius: var(--radius-md);
-		font-size: 0.85rem;
-		margin: 0;
-	}
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
 	}
 </style>

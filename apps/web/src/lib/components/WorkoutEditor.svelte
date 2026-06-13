@@ -287,6 +287,7 @@
 	title={t('workoutEditor.title', { date: workout.scheduled_date ?? '' })}
 	onclose={onClose}
 >
+	<div class="editor-form">
 		<label>
 			<span>{t('workoutEditor.kind')}</span>
 			<select bind:value={kind}>
@@ -511,54 +512,18 @@
 				{busy ? t('workoutEditor.saving') : t('workoutEditor.save')}
 			</button>
 		</div>
+	</div>
 </Modal>
 
 <style>
-	/* Canonical .modal-backdrop / .modal / .modal-header / .modal-close /
-	   .modal-body live in app.css; only field-level styling stays
-	   here. */
-	.modal-body {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-	}
-	.date {
-		color: var(--color-primary);
-		font-weight: 700;
-	}
-	label,
-	fieldset {
+	/* The shared .editor-form layer (app.css) supplies the field chrome,
+	   label / legend text, fieldset card, focus ring, actions row and error
+	   banner. The layer styles fieldsets as cards but not as flex columns,
+	   so the column layout for the bare fieldsets stays here. */
+	.editor-form fieldset {
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
-		font-size: 0.88rem;
-		font-weight: 600;
-		border: none;
-		padding: 0;
-	}
-	fieldset {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.7rem 0.85rem;
-		background: var(--color-surface);
-	}
-	legend {
-		padding: 0 0.4rem;
-	}
-	.hint {
-		font-weight: 400;
-		color: var(--color-text-tertiary);
-		font-size: 0.8rem;
-	}
-	input,
-	select,
-	textarea {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.45rem 0.65rem;
-		color: inherit;
-		font: inherit;
 	}
 	.pace-row {
 		display: flex;
@@ -592,22 +557,10 @@
 	}
 	.mode-opt {
 		display: inline-flex;
+		flex-direction: row;
 		align-items: center;
 		gap: 0.3rem;
 		font-weight: 500;
-		font-size: 0.88rem;
-	}
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: var(--space-sm);
-	}
-	.error {
-		color: var(--color-danger);
-		background: var(--color-danger-light);
-		padding: 0.5rem 0.8rem;
-		border-radius: var(--radius-md);
 		font-size: 0.88rem;
 	}
 </style>

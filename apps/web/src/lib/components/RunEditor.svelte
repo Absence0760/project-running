@@ -100,7 +100,7 @@
 	}
 </script>
 
-<form class="run-editor" onsubmit={handleSubmit}>
+<form class="editor-form run-editor" onsubmit={handleSubmit}>
 	<label class="field">
 		<span class="field-label">{m('runEditor.startedAt')}</span>
 		<input type="datetime-local" bind:value={startedAt} required class="input" />
@@ -196,40 +196,21 @@
 
 <style>
 	.run-editor {
-		display: grid;
 		gap: 1.1rem;
 	}
-	.field { display: grid; gap: 0.35rem; }
-	.toggle-field {
-		grid-template-columns: auto 1fr;
+	.editor-form .toggle-field {
+		flex-direction: row;
 		align-items: start;
 		gap: 0.6rem;
 	}
+	.toggle-field > span {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
 	.toggle-input { margin-top: 0.2rem; }
-	.toggle-label { text-transform: none; letter-spacing: 0; }
 	.activity-field { border: 0; padding: 0; margin: 0; }
 	.activity-field .field-label { padding: 0; }
-	.field-label {
-		font-size: 0.78rem;
-		font-weight: 600;
-		color: var(--color-text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-	.field-hint {
-		font-size: 0.75rem;
-		color: var(--color-text-tertiary);
-	}
-	.input {
-		padding: 0.55rem 0.7rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-bg);
-		color: var(--color-text);
-		font-size: 0.95rem;
-		font-family: inherit;
-		width: 100%;
-	}
 	.row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; }
 	@media (max-width: 30rem) {
 		.row { grid-template-columns: 1fr 1fr; }
@@ -248,11 +229,5 @@
 		background: var(--color-primary);
 		color: white;
 		border-color: var(--color-primary);
-	}
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.6rem;
-		margin-top: 0.3rem;
 	}
 </style>

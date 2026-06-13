@@ -195,7 +195,7 @@
 	}
 </script>
 
-<div class="session-editor">
+<div class="editor-form session-editor">
 	<datalist id="session-movement-suggestions">
 		{#each movementSuggestions as s (s)}
 			<option value={s}></option>
@@ -218,9 +218,9 @@
 		</label>
 	</div>
 
-	<label class="checkbox-card">
+	<label class="toggle-row">
 		<input type="checkbox" bind:checked={isPublic} />
-		<span class="checkbox-text">{t('session.makePublic')}</span>
+		<span>{t('session.makePublic')}</span>
 	</label>
 
 	<section>
@@ -344,41 +344,22 @@
 
 <style>
 	.session-editor {
-		display: flex;
-		flex-direction: column;
 		gap: var(--space-lg);
 	}
 
-	input[type='text'],
-	input[type='number'],
-	select {
-		padding: var(--space-sm);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		color: var(--color-text);
-		font: inherit;
-		font-size: 0.9rem;
-		width: 100%;
-		min-width: 0;
+	/* The shared layer supplies field chrome; movement cards need a fixed
+	   control height + tabular numerals on top. */
+	.session-editor input[type='text'],
+	.session-editor input[type='number'],
+	.session-editor select {
 		height: 2.4rem;
 		transition: border-color var(--transition-fast);
 	}
-	input[type='text']:focus-visible,
-	input[type='number']:focus-visible,
-	select:focus-visible {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
-	}
-	input[type='number'] {
+	.session-editor input[type='number'] {
 		font-variant-numeric: tabular-nums;
 	}
 
 	.field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-xs);
 		flex: 1;
 		min-width: 0;
 	}
@@ -395,30 +376,12 @@
 		flex: 1;
 	}
 
-	.checkbox-card {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-md);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		cursor: pointer;
-	}
-	.checkbox-card input {
-		width: auto;
-		accent-color: var(--color-primary);
-	}
-	.checkbox-text {
-		font-size: 0.9rem;
-		color: var(--color-text);
-	}
-
-	.checkbox {
-		display: flex;
+	.editor-form .checkbox {
+		flex-direction: row;
 		align-items: center;
 		gap: var(--space-xs);
 		font-size: 0.85rem;
+		font-weight: 400;
 		color: var(--color-text-secondary);
 		white-space: nowrap;
 		cursor: pointer;
@@ -503,9 +466,6 @@
 	}
 
 	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
 		padding-top: var(--space-md);
 		border-top: 1px solid var(--color-border);
 	}

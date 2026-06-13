@@ -676,6 +676,7 @@ img {
 .editor-form input[type='url'],
 .editor-form input[type='email'],
 .editor-form input[type='tel'],
+.editor-form input[type='datetime-local'],
 .editor-form input:not([type]),
 .editor-form textarea,
 .editor-form select {

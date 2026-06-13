@@ -228,7 +228,7 @@
 	{/each}
 </datalist>
 
-<div class="routine-editor">
+<div class="editor-form routine-editor">
 	<label class="field">
 		<span class="section-label">{t('gym.routine.editor.titleLabel')}</span>
 		<input
@@ -518,50 +518,22 @@
 
 <style>
 	.routine-editor {
-		display: flex;
-		flex-direction: column;
 		gap: var(--space-lg);
 	}
 
-	input[type='text'],
-	input[type='number'],
-	select,
-	textarea {
-		padding: var(--space-sm);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		color: var(--color-text);
-		font: inherit;
-		font-size: 0.9rem;
-		width: 100%;
-		min-width: 0;
+	/* The shared layer supplies field chrome; the set grid needs a fixed
+	   control height + tabular numerals on top. */
+	.routine-editor input[type='text'],
+	.routine-editor input[type='number'],
+	.routine-editor select {
+		height: 2.4rem;
 		transition: border-color var(--transition-fast);
 	}
-	input[type='text'],
-	input[type='number'],
-	select {
-		height: 2.4rem;
-	}
-	input[type='number'] {
+	.routine-editor input[type='number'] {
 		font-variant-numeric: tabular-nums;
-	}
-	textarea {
-		resize: vertical;
-	}
-	input[type='text']:focus-visible,
-	input[type='number']:focus-visible,
-	select:focus-visible,
-	textarea:focus-visible {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
 	}
 
 	.field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-xs);
 		flex: 1;
 		min-width: 0;
 	}
@@ -618,8 +590,8 @@
 		flex-shrink: 0;
 	}
 
-	.checkbox-card {
-		display: flex;
+	.editor-form .checkbox-card {
+		flex-direction: row;
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
@@ -683,9 +655,6 @@
 	}
 
 	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
 		padding-top: var(--space-md);
 		border-top: 1px solid var(--color-border);
 	}

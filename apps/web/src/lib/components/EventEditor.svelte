@@ -232,7 +232,7 @@
 	}
 </script>
 
-<form onsubmit={submit} class="event-editor">
+<form onsubmit={submit} class="editor-form event-editor">
 	<p class="sub">{m('eventEditor.sub', { clubName })}</p>
 
 	<div class="cat-field">
@@ -493,63 +493,11 @@
 </form>
 
 <style>
-	.event-editor {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-md);
-	}
 	.sub {
 		color: var(--color-text-secondary);
 		font-size: 0.88rem;
 		margin: 0;
 	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-		font-size: 0.9rem;
-		font-weight: 600;
-	}
-	.optional {
-		font-weight: 400;
-		color: var(--color-text-tertiary);
-		font-size: 0.8rem;
-	}
-	input,
-	textarea,
-	select {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.55rem 0.75rem;
-		font: inherit;
-		color: inherit;
-		width: 100%;
-	}
-	input[type='radio'],
-	input[type='checkbox'] {
-		width: auto;
-		padding: 0;
-		background: transparent;
-		border: none;
-	}
-	input:focus,
-	textarea:focus,
-	select:focus {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
-	}
-	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: pair the
-	   :focus rule above with :focus-visible so keyboard users get a real
-	   outline. The :focus rule still removes the default ring on mouse
-	   focus (no visible outline on click); :focus-visible re-adds a
-	   proper one for keyboard / programmatic focus. */
-	input:focus-visible, textarea:focus-visible, select:focus-visible {
-		outline: 2px solid var(--color-primary);
-		outline-offset: 2px;
-	}
-
 	.row {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
@@ -589,23 +537,12 @@
 		font-size: 0.82rem;
 		font-weight: 400;
 	}
-	fieldset {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		padding: 0.8rem 1rem;
-		background: var(--color-surface);
-	}
-	legend {
-		font-weight: 600;
-		font-size: 0.9rem;
-		padding: 0 0.4rem;
-	}
 	.freq-row {
 		display: flex;
 		gap: 1rem;
 		flex-wrap: wrap;
 	}
-	.radio-inline {
+	.editor-form .radio-inline {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
@@ -652,7 +589,7 @@
 	.pace-sep {
 		font-weight: 700;
 	}
-	.charge-toggle {
+	.editor-form .charge-toggle {
 		flex-direction: row;
 		align-items: center;
 		gap: 0.5rem;
@@ -667,16 +604,5 @@
 	.charge-explainer a {
 		color: var(--color-primary);
 		font-weight: 600;
-	}
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.6rem;
-	}
-	.error {
-		color: var(--color-danger);
-		background: var(--color-danger-light);
-		padding: 0.5rem 0.8rem;
-		border-radius: var(--radius-md);
 	}
 </style>

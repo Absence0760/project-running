@@ -163,7 +163,7 @@
 	}
 </script>
 
-<div class="gym-editor">
+<div class="editor-form gym-editor">
 	<label class="field">
 		<span class="section-label">{t('gym.editor.titleLabel')}</span>
 		<input type="text" bind:value={title} placeholder={t('gym.editor.titlePlaceholder')} />
@@ -275,7 +275,7 @@
 		{t('gym.editor.addExercise')}
 	</button>
 
-	<label class="share-row">
+	<label class="toggle-row">
 		<input type="checkbox" bind:checked={isPublic} />
 		<span class="share-text">
 			<span class="share-title">{t('gym.editor.share')}</span>
@@ -299,36 +299,16 @@
 
 <style>
 	.gym-editor {
-		display: flex;
-		flex-direction: column;
 		gap: var(--space-lg);
 	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-xs);
-	}
-	input[type='text'],
-	input[type='number'] {
-		padding: var(--space-sm);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		color: var(--color-text);
-		font: inherit;
-		font-size: 0.9rem;
-		width: 100%;
-		min-width: 0;
+	/* The shared layer supplies the field chrome; the set-grid spreadsheet
+	   needs a fixed control height + centred tabular numerals on top. */
+	.gym-editor input[type='text'],
+	.gym-editor input[type='number'] {
 		height: 2.4rem;
 		transition: border-color var(--transition-fast);
 	}
-	input[type='text']:focus-visible,
-	input[type='number']:focus-visible {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
-	}
-	input[type='number'] {
+	.gym-editor input[type='number'] {
 		font-variant-numeric: tabular-nums;
 		text-align: center;
 	}
@@ -423,21 +403,6 @@
 		font-size: 1.05rem;
 	}
 
-	.share-row {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-sm);
-		padding: var(--space-md);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		cursor: pointer;
-	}
-	.share-row input {
-		width: auto;
-		margin-top: 0.15rem;
-		accent-color: var(--color-primary);
-	}
 	.share-text {
 		display: flex;
 		flex-direction: column;
@@ -451,18 +416,6 @@
 	.share-hint {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
-	}
-
-	.error {
-		color: var(--color-danger);
-		font-size: 0.85rem;
-		margin: 0;
-	}
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
-		padding-top: var(--space-xs);
 	}
 
 	@media (max-width: 480px) {
