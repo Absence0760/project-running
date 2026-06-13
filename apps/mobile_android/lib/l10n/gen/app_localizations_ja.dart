@@ -120,6 +120,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recapShareTooltip => '振り返りを共有';
 
   @override
+  String get recapPrevYear => '前の年';
+
+  @override
+  String get recapNextYear => '次の年';
+
+  @override
   String recapNoRunsForYear(Object year) {
     return '$year年は振り返るランがありません。';
   }

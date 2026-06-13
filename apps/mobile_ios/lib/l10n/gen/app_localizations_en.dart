@@ -123,6 +123,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recapShareTooltip => 'Share recap';
 
   @override
+  String get recapPrevYear => 'Previous year';
+
+  @override
+  String get recapNextYear => 'Next year';
+
+  @override
   String recapNoRunsForYear(Object year) {
     return 'No runs to recap for $year.';
   }

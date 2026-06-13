@@ -125,6 +125,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recapShareTooltip => 'Compartir resumen';
 
   @override
+  String get recapPrevYear => 'Año anterior';
+
+  @override
+  String get recapNextYear => 'Año siguiente';
+
+  @override
   String recapNoRunsForYear(Object year) {
     return 'No hay carreras para resumir en $year.';
   }

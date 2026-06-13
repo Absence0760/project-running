@@ -124,6 +124,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recapShareTooltip => 'Compartilhar retrospectiva';
 
   @override
+  String get recapPrevYear => 'Ano anterior';
+
+  @override
+  String get recapNextYear => 'Próximo ano';
+
+  @override
   String recapNoRunsForYear(Object year) {
     return 'Nenhuma corrida para a retrospectiva de $year.';
   }
@@ -8735,6 +8741,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get recapShareTooltip => 'Compartilhar retrospectiva';
+
+  @override
+  String get recapPrevYear => 'Ano anterior';
+
+  @override
+  String get recapNextYear => 'Próximo ano';
 
   @override
   String recapNoRunsForYear(Object year) {

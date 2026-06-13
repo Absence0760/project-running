@@ -287,6 +287,18 @@ abstract class AppLocalizations {
   /// **'Share recap'**
   String get recapShareTooltip;
 
+  /// Tooltip for the previous-year chevron on the recap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Previous year'**
+  String get recapPrevYear;
+
+  /// Tooltip for the next-year chevron on the recap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Next year'**
+  String get recapNextYear;
+
   /// Empty-state shown for a year outside the valid range
   ///
   /// In en, this message translates to:

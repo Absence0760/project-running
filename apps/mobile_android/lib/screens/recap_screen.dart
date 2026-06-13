@@ -89,11 +89,13 @@ class _RecapScreenState extends State<RecapScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
+                  tooltip: l10n.recapPrevYear,
                   onPressed: () => _shiftYear(-1),
                   icon: const Icon(Icons.chevron_left),
                 ),
                 Text('$_year', style: theme.textTheme.headlineMedium),
                 IconButton(
+                  tooltip: l10n.recapNextYear,
                   onPressed: _year >= DateTime.now().year
                       ? null
                       : () => _shiftYear(1),

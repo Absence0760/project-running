@@ -30,6 +30,8 @@
   "recapShareSubject": "Rückblick {year}",
   "recapTitle": "Laufjahr",
   "recapShareTooltip": "Rückblick teilen",
+  "recapPrevYear": "Vorheriges Jahr",
+  "recapNextYear": "Nächstes Jahr",
   "recapNoRunsForYear": "Keine Läufe für den Rückblick {year}.",
   "recapNoRunsYet": "Noch keine Läufe in {year}. Zeichne einen auf, um deinen Rückblick zu sehen.",
   "recapAcrossRuns": "über {count} {runWord}",

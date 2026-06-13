@@ -30,6 +30,8 @@
   "recapShareSubject": "Bilan {year}",
   "recapTitle": "Année en course",
   "recapShareTooltip": "Partager le bilan",
+  "recapPrevYear": "Année précédente",
+  "recapNextYear": "Année suivante",
   "recapNoRunsForYear": "Aucune course à récapituler pour {year}.",
   "recapNoRunsYet": "Aucune course en {year} pour l'instant. Enregistrez-en une pour voir votre bilan.",
   "recapAcrossRuns": "sur {count} {runWord}",

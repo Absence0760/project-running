@@ -30,6 +30,8 @@
   "recapShareSubject": "{year}年の振り返り",
   "recapTitle": "ランニングの1年",
   "recapShareTooltip": "振り返りを共有",
+  "recapPrevYear": "前の年",
+  "recapNextYear": "次の年",
   "recapNoRunsForYear": "{year}年は振り返るランがありません。",
   "recapNoRunsYet": "{year}年はまだランがありません。記録すると振り返りが表示されます。",
   "recapAcrossRuns": "{count}件の{runWord}",

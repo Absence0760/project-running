@@ -30,6 +30,8 @@
   "recapShareSubject": "Resumen de {year}",
   "recapTitle": "Resumen del año",
   "recapShareTooltip": "Compartir resumen",
+  "recapPrevYear": "Año anterior",
+  "recapNextYear": "Año siguiente",
   "recapNoRunsForYear": "No hay carreras para resumir en {year}.",
   "recapNoRunsYet": "Aún no hay carreras en {year}. Registra una para ver tu resumen.",
   "recapAcrossRuns": "en {count} {runWord}",

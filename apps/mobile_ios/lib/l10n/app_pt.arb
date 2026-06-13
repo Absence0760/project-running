@@ -30,6 +30,8 @@
   "recapShareSubject": "Retrospectiva {year}",
   "recapTitle": "Ano na corrida",
   "recapShareTooltip": "Compartilhar retrospectiva",
+  "recapPrevYear": "Ano anterior",
+  "recapNextYear": "Próximo ano",
   "recapNoRunsForYear": "Nenhuma corrida para a retrospectiva de {year}.",
   "recapNoRunsYet": "Ainda não há corridas em {year}. Registre uma para ver sua retrospectiva.",
   "recapAcrossRuns": "em {count} {runWord}",

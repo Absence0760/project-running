@@ -124,6 +124,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get recapShareTooltip => 'Partager le bilan';
 
   @override
+  String get recapPrevYear => 'Année précédente';
+
+  @override
+  String get recapNextYear => 'Année suivante';
+
+  @override
   String recapNoRunsForYear(Object year) {
     return 'Aucune course à récapituler pour $year.';
   }
