@@ -157,6 +157,78 @@ test.describe('/live/event/[id]/[instance]', () => {
 	});
 });
 
+// CRITICAL privacy: the event live-leaderboard is anon-accessible and the
+// URL is shareable, so an anonymous worldwide viewer must NOT see any
+// runner's real display_name — only the anonymous `Runner #XXXX` handle,
+// mirroring the /live/[id] solo-page contract. Run as an anon visitor.
+test.describe('/live/event/[id]/[instance] — anon leaderboard privacy', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon viewer sees Runner #XXXX handles on the leaderboard, never a real display_name', async ({
+		page
+	}) => {
+		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+		const eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title: `e2e live-event anon-privacy ${Date.now()}`,
+			starts_at: startsAt
+		});
+
+		try {
+			await insertRaceSession({
+				event_id: eventId,
+				instance_start: startsAt,
+				status: 'running',
+				started_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+				started_by: USER_A.id
+			});
+			await insertRacePings({
+				event_id: eventId,
+				instance_start: startsAt,
+				runners: [
+					{
+						user_id: USER_B.id,
+						points: [
+							{ lat: OUT_OF_ZONE_LAT, lng: OUT_OF_ZONE_LNG, distance_m: 3_500, elapsed_s: 600 }
+						]
+					},
+					{
+						user_id: USER_C_PRO.id,
+						points: [
+							{
+								lat: OUT_OF_ZONE_LAT + 0.001,
+								lng: OUT_OF_ZONE_LNG + 0.001,
+								distance_m: 5_200,
+								elapsed_s: 580
+							}
+						]
+					}
+				]
+			});
+
+			await page.goto(`/live/event/${eventId}/${encodeURIComponent(startsAt)}`);
+
+			const runners = page.locator('.leaderboard .runner');
+			await expect(runners).toHaveCount(2, { timeout: 10_000 });
+
+			// USER_C (morgan, b…→ uuid c3d4…) leads at 5.20 km, USER_B
+			// (alex, uuid b2c3…) second at 3.50 km. The anon viewer follows
+			// no one, so each row must read its `Runner #XXXX` handle (first
+			// 4 hex chars of the uuid, upper-cased), NOT the seeded name.
+			await expect(runners.nth(0).locator('.name')).toContainText('Runner #C3D4');
+			await expect(runners.nth(1).locator('.name')).toContainText('Runner #B2C3');
+
+			// The negative pins are the actual leak guard: a regression that
+			// surfaced the real names to anon would re-open the critical bug.
+			await expect(page.locator('.leaderboard')).not.toContainText('Morgan Lee');
+			await expect(page.locator('.leaderboard')).not.toContainText('Alex Chen');
+		} finally {
+			await deleteRaceState(eventId, startsAt);
+		}
+	});
+});
+
 // audit-findings 2026-05-30 High [cookie-consent]: this event spectator
 // page is anon-accessible and MapTiler logs the requester IP per tile
 // fetch, so the map must NOT mount before consent — mirroring the

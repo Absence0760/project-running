@@ -48,6 +48,7 @@ import {
 } from '../training/relink_candidates';
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
+import { compareLeaderboard } from '../runs/race_leaderboard';
 import type {
 	CoachAthleteStatus,
 	SessionPlan,
@@ -2962,20 +2963,27 @@ export async function fetchRecentRacePings(
 	return (data as RacePingRow[]) ?? [];
 }
 
-/// Latest ping per runner, sorted by distance descending so the lead
-/// runner is first. Convenience wrapper over `fetchRecentRacePings`.
+/// Latest ping per runner for the live leaderboard, ordered furthest-
+/// first with a deterministic tie-break (see `compareLeaderboard`).
+///
+/// Backed by the `latest_race_pings` RPC (DISTINCT ON (user_id)) rather
+/// than a flat newest-N fetch: a flat cap is spent on the high-cadence
+/// front-of-pack pings, so a slow back-of-pack runner whose newest ping
+/// has aged past the window would silently drop off the board. The RPC
+/// returns exactly one row per runner, so every runner who has pinged
+/// is always represented regardless of total ping volume. It is
+/// SECURITY INVOKER, so the same race_pings RLS that gated the bare-
+/// table read still applies.
 export async function fetchLatestRacePings(
 	eventId: string,
 	instanceStart: string
 ): Promise<RacePingRow[]> {
-	const pings = await fetchRecentRacePings(eventId, instanceStart, 500);
-	const byUser = new Map<string, RacePingRow>();
-	for (const p of pings) {
-		if (!byUser.has(p.user_id)) byUser.set(p.user_id, p);
-	}
-	return [...byUser.values()].sort(
-		(a, b) => (b.distance_m ?? 0) - (a.distance_m ?? 0)
-	);
+	const { data } = await supabase.rpc('latest_race_pings', {
+		p_event_id: eventId,
+		p_instance_start: instanceStart
+	});
+	const rows = (data as RacePingRow[]) ?? [];
+	return rows.sort(compareLeaderboard);
 }
 
 export async function postRacePing(params: {

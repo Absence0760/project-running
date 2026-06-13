@@ -11,6 +11,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import {
 		fetchRecentRacePings,
+		fetchLatestRacePings,
 		fetchRaceSession,
 		fetchEventById,
 		fetchEventResults,
@@ -22,6 +23,7 @@
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { formatDistance, fmtPace } from '$lib/format/units.svelte';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
+	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let eventId = $derived($page.params.id as string);
@@ -30,6 +32,7 @@
 	let event = $state<EventWithMeta | null>(null);
 	let race = $state<RaceSessionRow | null>(null);
 	let recentPings = $state<RacePingRow[]>([]);
+	let leaderPings = $state<RacePingRow[]>([]);
 	let results = $state<EventResultWithUser[]>([]);
 	let profiles = $state<Map<string, { display_name: string | null }>>(new Map());
 	let nowTick = $state(Date.now());
@@ -39,14 +42,12 @@
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-	// Latest ping per user (the leaderboard view), sorted by distance desc.
-	let pings = $derived.by(() => {
-		const byUser = new Map<string, RacePingRow>();
-		for (const p of recentPings) {
-			if (!byUser.has(p.user_id)) byUser.set(p.user_id, p);
-		}
-		return [...byUser.values()].sort((a, b) => (b.distance_m ?? 0) - (a.distance_m ?? 0));
-	});
+	// Latest ping per user (the leaderboard view). Fetched via the
+	// `latest_race_pings` RPC (one row per runner) rather than folded from
+	// the capped `recentPings` window, so a back-of-pack runner whose newest
+	// ping aged past that window is never dropped from the board. Already
+	// ordered furthest-first with a deterministic tie-break by the data layer.
+	let pings = $derived(leaderPings);
 
 	// Per-user trail (chronological, oldest -> newest). Capped to keep
 	// long races bounded; 30 samples ≈ 5 minutes at 10 s cadence.
@@ -99,33 +100,100 @@
 	}
 
 	async function load() {
-		const [e, rs, ps, rr] = await Promise.all([
+		const [e, rs, ps, lp, rr] = await Promise.all([
 			fetchEventById(eventId),
 			fetchRaceSession(eventId, instance),
 			fetchRecentRacePings(eventId, instance),
+			fetchLatestRacePings(eventId, instance),
 			fetchEventResults(eventId, instance)
 		]);
 		event = e;
 		race = rs;
 		recentPings = ps;
+		leaderPings = lp;
 		results = rr;
-		const ids = new Set<string>();
-		for (const p of ps) ids.add(p.user_id);
-		for (const r of rr) if (r.user_id) ids.add(r.user_id);
+		profiles = await buildProfiles(lp, rr);
+		loading = false;
+	}
+
+	// Privacy gate (mirrors the /live/[id] solo-page contract): a public
+	// race leaderboard is anon-accessible and the URL is shareable, so a
+	// runner's real `display_name` must only surface to a friend (a
+	// one-way follow edge in either direction, or the runner viewing their
+	// own broadcast). Everyone else — anon worldwide viewers and signed-in
+	// non-followers — sees the anonymous `Runner #XXXX` handle. Fails
+	// closed: if the viewer is anon or the follow state can't be read, the
+	// handle is shown, never the name.
+	async function buildProfiles(
+		ps: RacePingRow[],
+		rr: EventResultWithUser[]
+	): Promise<Map<string, { display_name: string | null }>> {
 		const map = new Map<string, { display_name: string | null }>();
-		if (ids.size > 0) {
+
+		// Account-bound runner ids (a bib-only imported finisher has no
+		// user_id and no profile — it keys on its bib and is handled below).
+		const runnerIds = new Set<string>();
+		for (const p of ps) runnerIds.add(p.user_id);
+		for (const r of rr) if (r.user_id) runnerIds.add(r.user_id);
+
+		const viewerId = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+
+		// One bulk probe per direction over the viewer's follow edges
+		// against this race's runners, so the reveal decision is a set
+		// membership check rather than two queries per runner.
+		const viewerFollows = new Set<string>();
+		const followsViewer = new Set<string>();
+		if (viewerId && runnerIds.size > 0) {
+			const ids = [...runnerIds];
+			const [vfr, rfv] = await Promise.all([
+				supabase
+					.from('user_follows')
+					.select('followee_id')
+					.eq('follower_id', viewerId)
+					.in('followee_id', ids),
+				supabase
+					.from('user_follows')
+					.select('follower_id')
+					.eq('followee_id', viewerId)
+					.in('follower_id', ids)
+			]);
+			for (const row of vfr.data ?? []) viewerFollows.add(row.followee_id);
+			for (const row of rfv.data ?? []) followsViewer.add(row.follower_id);
+		}
+
+		// Pull display_names only for runners the gate will actually reveal,
+		// so a name we won't show never even leaves the server.
+		const revealIds = [...runnerIds].filter((id) =>
+			shouldRevealDisplayName({
+				viewerUserId: viewerId,
+				runnerUserId: id,
+				viewerFollowsRunner: viewerFollows.has(id),
+				runnerFollowsViewer: followsViewer.has(id)
+			})
+		);
+		const realNames = new Map<string, string | null>();
+		if (revealIds.length > 0) {
 			const { data } = await supabase
 				.from('user_profiles')
 				.select('id, display_name')
-				.in('id', [...ids]);
-			for (const p of data ?? []) map.set(p.id, { display_name: p.display_name });
+				.in('id', revealIds);
+			for (const p of data ?? []) realNames.set(p.id, p.display_name);
 		}
-		// Seed every result under its row key (user_id, or bib for the
-		// account-less imported finishers) so the helpers resolve a name —
-		// fetchEventResults already falls back to finisher_name.
-		for (const r of rr) map.set(keyOf(r), { display_name: r.display_name });
-		profiles = map;
-		loading = false;
+		for (const id of runnerIds) {
+			map.set(id, {
+				display_name: realNames.has(id) ? realNames.get(id)! : runnerHandle(id)
+			});
+		}
+
+		// Bib-only imported finishers (persona #43) have no account, so the
+		// follow gate doesn't apply — they carry the name printed on the
+		// results sheet (already on `display_name` from fetchEventResults).
+		// Their leaderboard row keys on bib, not user_id, so seeding here
+		// doesn't override an account runner's gated entry above.
+		for (const r of rr) {
+			if (!r.user_id) map.set(keyOf(r), { display_name: r.display_name });
+		}
+		return map;
 	}
 
 	function subscribe() {
@@ -145,7 +213,13 @@
 					filter: `event_id=eq.${eventId}&instance_start=eq.${instance}`
 				},
 				async () => {
-					recentPings = await fetchRecentRacePings(eventId, instance);
+					const [ps, lp] = await Promise.all([
+						fetchRecentRacePings(eventId, instance),
+						fetchLatestRacePings(eventId, instance)
+					]);
+					recentPings = ps;
+					leaderPings = lp;
+					profiles = await buildProfiles(lp, results);
 				}
 			)
 			.on(
@@ -170,6 +244,7 @@
 				},
 				async () => {
 					results = await fetchEventResults(eventId, instance);
+					profiles = await buildProfiles(leaderPings, results);
 				}
 			)
 			.subscribe();
