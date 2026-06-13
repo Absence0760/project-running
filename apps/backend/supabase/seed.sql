@@ -1800,9 +1800,13 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
--- ───────── live_run_pings privacy clipping (migration 20260618_001) ─────────
--- Verifies the BEFORE INSERT trigger drops pings inside any of the
--- runner's privacy zones — the surface that Realtime broadcasts to
+-- ───────── live_run_pings privacy clipping (migrations 20260618_001 + 20270121_001) ─────────
+-- Verifies the BEFORE INSERT trigger's privacy-vs-safety carve-out: an
+-- out-of-zone ping lands precise, and an in-zone ping is no longer
+-- dropped outright but COARSENED-AND-KEPT as a single `coarse=true`
+-- last-seen point (migration 20270121_001) — so a runner who stops
+-- inside their own zone still shows a ~1 km last-known position to the
+-- spectator / SAR feed. This is the surface Realtime broadcasts to
 -- /live/{run_id} subscribers.
 DO $$
 DECLARE
@@ -1810,6 +1814,8 @@ DECLARE
   test_run_id uuid;
   v_count_before int;
   v_count_after int;
+  v_coarse_count int;
+  v_coarse_lat double precision;
   v_zones_before jsonb;
 BEGIN
   SELECT prefs->'privacy_zones' INTO v_zones_before
@@ -1836,17 +1842,31 @@ BEGIN
 
   SELECT count(*) INTO v_count_before FROM live_run_pings WHERE run_id = test_run_id;
 
-  -- Out-of-zone ping (~5km north): should land.
+  -- Out-of-zone ping (~5km north): should land precise.
   INSERT INTO live_run_pings (run_id, user_id, lat, lng)
     VALUES (test_run_id, test_user, 40.045, -74.0);
 
-  -- In-zone ping (~55m offset): should be silently dropped by the trigger.
+  -- In-zone ping (~55m offset): the carve-out keeps it as a single
+  -- coarsened (2-dp, ~1km) last-seen point rather than dropping it.
   INSERT INTO live_run_pings (run_id, user_id, lat, lng)
     VALUES (test_run_id, test_user, 40.0005, -74.0);
 
   SELECT count(*) INTO v_count_after FROM live_run_pings WHERE run_id = test_run_id;
-  IF v_count_after - v_count_before <> 1 THEN
-    RAISE EXCEPTION 'live_run_pings privacy trigger: expected exactly 1 ping to land (out-of-zone only), got delta=%', v_count_after - v_count_before;
+  IF v_count_after - v_count_before <> 2 THEN
+    RAISE EXCEPTION 'live_run_pings privacy carve-out: expected 2 pings to land (precise out-of-zone + coarsened in-zone), got delta=%', v_count_after - v_count_before;
+  END IF;
+
+  -- Exactly one of them is the coarsened in-zone last-seen point, and it
+  -- is rounded to the 2-dp grid (never the exact 40.0005 zone-edge point).
+  SELECT count(*) INTO v_coarse_count
+    FROM live_run_pings WHERE run_id = test_run_id AND coarse = true;
+  IF v_coarse_count <> 1 THEN
+    RAISE EXCEPTION 'live_run_pings privacy carve-out: expected exactly 1 coarse last-seen ping, got %', v_coarse_count;
+  END IF;
+  SELECT lat INTO v_coarse_lat
+    FROM live_run_pings WHERE run_id = test_run_id AND coarse = true;
+  IF v_coarse_lat <> 40.0 THEN
+    RAISE EXCEPTION 'live_run_pings privacy carve-out: coarse ping lat should be 2-dp (40.0), got %', v_coarse_lat;
   END IF;
 
   DELETE FROM live_run_pings WHERE run_id = test_run_id;
