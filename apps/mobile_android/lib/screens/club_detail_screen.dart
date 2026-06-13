@@ -60,6 +60,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<EventView> _upcoming = const [];
   List<ClubPostView> _posts = const [];
   List<ClubMemberRow> _pending = const [];
+  final Set<String> _pendingBusy = {};
   List<TrainingPlanRow> _templates = const [];
   List<SessionPlanRow> _sessionTemplates = const [];
   String? _adoptingSessionId;
@@ -965,7 +966,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Future<void> _approve(String userId) async {
     final c = _club;
-    if (c == null) return;
+    if (c == null || _pendingBusy.contains(userId)) return;
+    setState(() => _pendingBusy.add(userId));
     try {
       await widget.social.approveJoinRequest(
         clubId: c.row.id,
@@ -979,12 +981,15 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       if (!mounted) return;
       showTopBanner(
           context, AppLocalizations.of(context).clubDetailApproveFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _pendingBusy.remove(userId));
     }
   }
 
   Future<void> _deny(String userId) async {
     final c = _club;
-    if (c == null) return;
+    if (c == null || _pendingBusy.contains(userId)) return;
+    setState(() => _pendingBusy.add(userId));
     try {
       await widget.social.denyJoinRequest(
         clubId: c.row.id,
@@ -998,6 +1003,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       if (!mounted) return;
       showTopBanner(
           context, AppLocalizations.of(context).clubDetailDenyFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _pendingBusy.remove(userId));
     }
   }
 
@@ -1029,12 +1036,16 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                         ),
                       ),
                       TextButton(
-                        onPressed: () => _deny(m.userId),
+                        onPressed: _pendingBusy.contains(m.userId)
+                            ? null
+                            : () => _deny(m.userId),
                         child: Text(l10n.clubDetailDeny),
                       ),
                       const SizedBox(width: 4),
                       FilledButton(
-                        onPressed: () => _approve(m.userId),
+                        onPressed: _pendingBusy.contains(m.userId)
+                            ? null
+                            : () => _approve(m.userId),
                         child: Text(l10n.clubDetailApprove),
                       ),
                     ],

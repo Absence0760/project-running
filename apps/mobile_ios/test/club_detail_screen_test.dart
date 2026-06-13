@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
@@ -85,6 +87,60 @@ class _FakeTraining extends TrainingService {
   Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async => const [];
 }
 
+ClubView _adminClub() => ClubView(
+      row: ClubRow(
+        id: 'club-1',
+        ownerId: 'owner',
+        name: 'Track Club',
+        slug: 'track-club',
+        isPublic: true,
+        joinPolicy: 'request',
+        memberCount: 5,
+        isVerified: false,
+        requiresActivityWaiver: false,
+      ),
+      memberCount: 5,
+      viewerRole: 'admin',
+      viewerStatus: 'active',
+      joinPolicy: 'request',
+    );
+
+/// Admin club with one pending request and a gated approve so the in-flight
+/// window stays open while the test taps a second time.
+class _PendingSocial extends SocialService {
+  int approveCalls = 0;
+  final Completer<void> approveGate = Completer<void>();
+
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _adminClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [
+        ClubMemberRow(
+          clubId: 'club-1',
+          userId: 'pendinguser-0001',
+          role: 'member',
+          status: 'pending',
+        ),
+      ];
+  @override
+  Future<void> approveJoinRequest({
+    required String clubId,
+    required String userId,
+  }) async {
+    approveCalls++;
+    await approveGate.future;
+  }
+
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
 GymRoutineRow _routine(String id, String title, int count) => GymRoutineRow(
       id: id,
       authorId: 'author',
@@ -143,6 +199,46 @@ void main() {
       expect(find.text('Club push day'), findsOneWidget);
       expect(find.text('3 exercises'), findsOneWidget);
       expect(find.text('Adopt'), findsWidgets);
+    });
+  });
+
+  group('ClubDetailScreen — pending approve double-submit guard', () {
+    testWidgets('rapid double-tap of Approve only fires the RPC once',
+        (tester) async {
+      final social = _PendingSocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: social,
+            training: _FakeTraining(),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      // Switch to the Members tab (index 2) where the pending panel renders.
+      await tester.tap(find.text('Members'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final approveBtn = find.widgetWithText(FilledButton, 'Approve');
+      expect(approveBtn, findsOneWidget);
+
+      await tester.tap(approveBtn);
+      await tester.pump();
+      // Second tap while the first is still in flight (gate not completed).
+      await tester.tap(approveBtn);
+      await tester.pump();
+
+      expect(social.approveCalls, 1);
+
+      // Let the gated approve finish so no timer/future leaks.
+      social.approveGate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
     });
   });
 }
