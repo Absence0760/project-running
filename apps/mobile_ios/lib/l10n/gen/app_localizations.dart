@@ -1001,6 +1001,24 @@ abstract class AppLocalizations {
   /// **'Turn on health-data storage to save height and weight.'**
   String get bodyMetricsConsentRequired;
 
+  /// No description provided for @bodyMetricsWithdrawTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw health-data consent?'**
+  String get bodyMetricsWithdrawTitle;
+
+  /// No description provided for @bodyMetricsWithdrawBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently erases your saved height and your entire weight history. This can\'t be undone.'**
+  String get bodyMetricsWithdrawBody;
+
+  /// No description provided for @bodyMetricsWithdrawConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw & erase'**
+  String get bodyMetricsWithdrawConfirm;
+
   /// Confirmation toast after saving body metrics
   ///
   /// In en, this message translates to:
@@ -8937,6 +8955,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear all'**
   String get privacyZonesClearAll;
+
+  /// No description provided for @privacyZonesRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove privacy zone?'**
+  String get privacyZonesRemoveTitle;
+
+  /// No description provided for @privacyZonesRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This zone hides your tracks near here on public shares. Removing it re-exposes this area.'**
+  String get privacyZonesRemoveBody;
+
+  /// No description provided for @privacyZonesRemoveSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove privacy zone'**
+  String get privacyZonesRemoveSemantics;
+
+  /// No description provided for @privacyZonesClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all privacy zones?'**
+  String get privacyZonesClearAllTitle;
+
+  /// No description provided for @privacyZonesClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes every zone, re-exposing all of these areas on public shares.'**
+  String get privacyZonesClearAllBody;
 
   /// AppBar title for the Settings > Preferences screen
   ///

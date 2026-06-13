@@ -557,6 +557,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Turn on health-data storage to save height and weight.';
 
   @override
+  String get bodyMetricsWithdrawTitle => 'Withdraw health-data consent?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'This permanently erases your saved height and your entire weight history. This can\'t be undone.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Withdraw & erase';
+
+  @override
   String get bodyMetricsSaved => 'Saved';
 
   @override
@@ -5393,6 +5403,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyZonesClearAll => 'Clear all';
+
+  @override
+  String get privacyZonesRemoveTitle => 'Remove privacy zone?';
+
+  @override
+  String get privacyZonesRemoveBody =>
+      'This zone hides your tracks near here on public shares. Removing it re-exposes this area.';
+
+  @override
+  String get privacyZonesRemoveSemantics => 'Remove privacy zone';
+
+  @override
+  String get privacyZonesClearAllTitle => 'Clear all privacy zones?';
+
+  @override
+  String get privacyZonesClearAllBody =>
+      'This removes every zone, re-exposing all of these areas on public shares.';
 
   @override
   String get prefsTitle => 'Preferences';

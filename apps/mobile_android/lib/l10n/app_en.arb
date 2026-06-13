@@ -379,6 +379,9 @@
     "description": "Helper text explaining what body metrics are used for"
   },
   "bodyMetricsConsentRequired": "Turn on health-data storage to save height and weight.",
+  "bodyMetricsWithdrawTitle": "Withdraw health-data consent?",
+  "bodyMetricsWithdrawBody": "This permanently erases your saved height and your entire weight history. This can't be undone.",
+  "bodyMetricsWithdrawConfirm": "Withdraw & erase",
   "@bodyMetricsConsentRequired": {
     "description": "Error shown when saving body data without consent"
   },
@@ -6769,6 +6772,11 @@
     }
   },
   "privacyZonesClearAll": "Clear all",
+  "privacyZonesRemoveTitle": "Remove privacy zone?",
+  "privacyZonesRemoveBody": "This zone hides your tracks near here on public shares. Removing it re-exposes this area.",
+  "privacyZonesRemoveSemantics": "Remove privacy zone",
+  "privacyZonesClearAllTitle": "Clear all privacy zones?",
+  "privacyZonesClearAllBody": "This removes every zone, re-exposing all of these areas on public shares.",
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },

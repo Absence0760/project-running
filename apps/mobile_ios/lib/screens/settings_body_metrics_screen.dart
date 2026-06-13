@@ -103,6 +103,32 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
       _snack(l10n.bodyMetricsConsentRequired);
       return;
     }
+    // Withdrawing consent erases the saved height + the entire weight
+    // time-series (Art 7(3)) — irreversible, so confirm first.
+    final withdrawing = !_consent && (_consentAt != null || _loadedWeightKg != null);
+    if (withdrawing) {
+      final ok = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: Text(l10n.bodyMetricsWithdrawTitle),
+              content: Text(l10n.bodyMetricsWithdrawBody),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(l10n.prefsCancel),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error),
+                  child: Text(l10n.bodyMetricsWithdrawConfirm),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!ok || !mounted) return;
+    }
     setState(() => _saving = true);
     try {
       if (_consent) {

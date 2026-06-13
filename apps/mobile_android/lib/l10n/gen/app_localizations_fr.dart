@@ -561,6 +561,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Activez le stockage des données de santé pour enregistrer la taille et le poids.';
 
   @override
+  String get bodyMetricsWithdrawTitle =>
+      'Retirer le consentement aux données de santé ?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Cela efface définitivement votre taille enregistrée et tout votre historique de poids. C\'est irréversible.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Retirer et effacer';
+
+  @override
   String get bodyMetricsSaved => 'Enregistré';
 
   @override
@@ -5462,6 +5473,26 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get privacyZonesClearAll => 'Tout effacer';
+
+  @override
+  String get privacyZonesRemoveTitle =>
+      'Supprimer la zone de confidentialité ?';
+
+  @override
+  String get privacyZonesRemoveBody =>
+      'Cette zone masque vos parcours à proximité dans les partages publics. La supprimer réexpose cette zone.';
+
+  @override
+  String get privacyZonesRemoveSemantics =>
+      'Supprimer la zone de confidentialité';
+
+  @override
+  String get privacyZonesClearAllTitle =>
+      'Effacer toutes les zones de confidentialité ?';
+
+  @override
+  String get privacyZonesClearAllBody =>
+      'Cela supprime toutes les zones et réexpose toutes ces zones dans les partages publics.';
 
   @override
   String get prefsTitle => 'Préférences';

@@ -25,6 +25,7 @@
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
 
@@ -343,6 +344,9 @@
 		await persistZones([...privacyZones, zone]);
 	}
 
+	// Removing a privacy zone re-exposes that area on every public share, so
+	// it confirms first (the write persists immediately via persistZones).
+	let removeZoneIdx = $state<number | null>(null);
 	async function removeZone(idx: number) {
 		await persistZones(privacyZones.filter((_, i) => i !== idx));
 	}
@@ -371,6 +375,17 @@
 	// the user must deliberately confirm. Grant stamps the consent timestamp
 	// via a SECURITY DEFINER RPC (first-stamp-wins, lock-trigger enforced);
 	// withdrawal nulls gender + DOB + the timestamp atomically per Art 7(3).
+	// Withdrawing consent (Art 7(3)) erases the saved height + the entire
+	// weight time-series — irreversible, so confirm before running the save.
+	let showWithdrawConfirm = $state(false);
+	function requestSaveDemographics() {
+		if (!healthDataConsent && healthDataConsentAt != null) {
+			showWithdrawConfirm = true;
+			return;
+		}
+		saveDemographics();
+	}
+
 	async function saveDemographics() {
 		if (!auth.user) return;
 		const heightVal = heightCm != null && heightCm > 0 ? heightCm : null;
@@ -747,7 +762,7 @@
 			<button
 				class="btn btn-primary btn-save"
 				type="button"
-				onclick={saveDemographics}
+				onclick={requestSaveDemographics}
 				disabled={savingDemographics}
 				data-testid="save-demographics"
 			>
@@ -808,7 +823,7 @@
 								</div>
 								<div class="zone-radius">{m('prefs.zoneRadius', { radius: String(zone.radius_m) })}</div>
 							</div>
-							<button class="btn btn-outline btn-sm" type="button" onclick={() => removeZone(idx)}>
+							<button class="btn btn-outline btn-sm" type="button" onclick={() => (removeZoneIdx = idx)}>
 								{m('prefs.removeZone')}
 							</button>
 						</li>
@@ -914,6 +929,33 @@
 >
 	<PrivacyZonePicker oncreated={addZone} oncancel={() => (showZonePicker = false)} />
 </Modal>
+
+<ConfirmDialog
+	open={showWithdrawConfirm}
+	title={m('prefs.withdrawConsentTitle')}
+	message={m('prefs.withdrawConsentMessage')}
+	confirmLabel={m('prefs.withdrawConsentConfirm')}
+	onconfirm={() => {
+		showWithdrawConfirm = false;
+		saveDemographics();
+	}}
+	oncancel={() => (showWithdrawConfirm = false)}
+	danger
+/>
+
+<ConfirmDialog
+	open={removeZoneIdx !== null}
+	title={m('prefs.removeZoneTitle')}
+	message={m('prefs.removeZoneMessage')}
+	confirmLabel={m('prefs.removeZone')}
+	onconfirm={() => {
+		const idx = removeZoneIdx;
+		removeZoneIdx = null;
+		if (idx !== null) removeZone(idx);
+	}}
+	oncancel={() => (removeZoneIdx = null)}
+	danger
+/>
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }

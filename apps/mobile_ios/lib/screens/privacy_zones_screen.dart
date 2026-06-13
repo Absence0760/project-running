@@ -130,8 +130,56 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     });
   }
 
-  void _removeZone(int index) {
-    setState(() => _zones = [..._zones]..removeAt(index));
+  // A privacy zone hides tracks near a sensitive place (home/work) on public
+  // shares, so removing one — or clearing all — confirms first.
+  Future<void> _confirmRemoveZone(int index) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.privacyZonesRemoveTitle),
+            content: Text(l10n.privacyZonesRemoveBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.prefsCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.privacyZonesRemoveSemantics),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok && mounted) setState(() => _zones = [..._zones]..removeAt(index));
+  }
+
+  Future<void> _confirmClearAll() async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.privacyZonesClearAllTitle),
+            content: Text(l10n.privacyZonesClearAllBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.prefsCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.privacyZonesClearAll),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok && mounted) setState(() => _zones = []);
   }
 
   // ── Location ─────────────────────────────────────────────────────────
@@ -383,13 +431,20 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                         for (var i = 0; i < _zones.length; i++)
                           Marker(
                             point: LatLng(_zones[i].lat, _zones[i].lng),
-                            width: 32,
-                            height: 32,
-                            child: GestureDetector(
-                              onTap: () => _removeZone(i),
-                              child: Icon(
-                                Icons.cancel,
-                                color: theme.colorScheme.primary,
+                            width: 48,
+                            height: 48,
+                            child: Semantics(
+                              button: true,
+                              label: AppLocalizations.of(context)
+                                  .privacyZonesRemoveSemantics,
+                              child: GestureDetector(
+                                onTap: () => _confirmRemoveZone(i),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.cancel,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -439,7 +494,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                     ),
                   ),
                   TextButton.icon(
-                    onPressed: () => setState(() => _zones = []),
+                    onPressed: _confirmClearAll,
                     icon: const Icon(Icons.delete_outline, size: 18),
                     label: Text(l10n.privacyZonesClearAll),
                   ),

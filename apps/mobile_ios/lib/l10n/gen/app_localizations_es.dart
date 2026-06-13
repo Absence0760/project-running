@@ -561,6 +561,17 @@ class AppLocalizationsEs extends AppLocalizations {
       'Activa el almacenamiento de datos de salud para guardar altura y peso.';
 
   @override
+  String get bodyMetricsWithdrawTitle =>
+      '¿Retirar el consentimiento de datos de salud?';
+
+  @override
+  String get bodyMetricsWithdrawBody =>
+      'Esto borra permanentemente tu altura guardada y todo tu historial de peso. No se puede deshacer.';
+
+  @override
+  String get bodyMetricsWithdrawConfirm => 'Retirar y borrar';
+
+  @override
   String get bodyMetricsSaved => 'Guardado';
 
   @override
@@ -5447,6 +5458,24 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get privacyZonesClearAll => 'Borrar todo';
+
+  @override
+  String get privacyZonesRemoveTitle => '¿Eliminar la zona de privacidad?';
+
+  @override
+  String get privacyZonesRemoveBody =>
+      'Esta zona oculta tus recorridos cercanos en las publicaciones públicas. Eliminarla vuelve a exponer esta área.';
+
+  @override
+  String get privacyZonesRemoveSemantics => 'Eliminar zona de privacidad';
+
+  @override
+  String get privacyZonesClearAllTitle =>
+      '¿Borrar todas las zonas de privacidad?';
+
+  @override
+  String get privacyZonesClearAllBody =>
+      'Esto elimina todas las zonas y vuelve a exponer todas estas áreas en las publicaciones públicas.';
 
   @override
   String get prefsTitle => 'Preferencias';
