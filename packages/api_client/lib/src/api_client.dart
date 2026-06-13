@@ -2426,6 +2426,103 @@ class ApiClient {
     }
   }
 
+  // ──────────────────── Route photos (backlog C1) ────────────────────
+  //
+  // The run_photos capability applied to routes. Metadata in
+  // `route_photos`; bytes in the private `route-photos` Storage bucket at
+  // `{owner_id}/{photo_id}.{ext}`. Owner gates upload + delete; the
+  // Storage SELECT policy joins through `route_photos.storage_path` →
+  // `private.is_route_visible_to(rp.route_id, auth.uid())` so a route flip
+  // from public to private propagates within signed-URL TTL.
+
+  /// Photos for a route, ordered by position then created_at. Capped.
+  Future<List<RoutePhotoRow>> fetchRoutePhotos(
+    String routeId, {
+    int limit = 50,
+  }) async {
+    final data = await _client
+        .from(RoutePhotoRow.table)
+        .select()
+        .eq(RoutePhotoRow.colRouteId, routeId)
+        .order(RoutePhotoRow.colPositionIdx, ascending: true)
+        .order(RoutePhotoRow.colCreatedAt, ascending: true)
+        .limit(limit);
+    return data.map<RoutePhotoRow>((r) => RoutePhotoRow.fromJson(r)).toList();
+  }
+
+  /// Trim a caption and collapse whitespace-only / empty to null, matching
+  /// web's `input.caption?.trim() || null` so captions stored from either
+  /// platform read back identically.
+  @visibleForTesting
+  static String? normaliseRoutePhotoCaption(String? caption) {
+    final t = caption?.trim();
+    return (t == null || t.isEmpty) ? null : t;
+  }
+
+  Future<RoutePhotoRow> addRoutePhoto({
+    required String routeId,
+    required Uint8List bytes,
+    required String contentType,
+    required String extension,
+    String? caption,
+    int positionIdx = 0,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final id = _client.auth.currentUser!.id;
+    final inserted = await _client
+        .from(RoutePhotoRow.table)
+        .insert({
+          RoutePhotoRow.colRouteId: routeId,
+          RoutePhotoRow.colOwnerId: viewerId,
+          RoutePhotoRow.colStoragePath: '', // placeholder; updated below
+          RoutePhotoRow.colCaption: normaliseRoutePhotoCaption(caption),
+          RoutePhotoRow.colPositionIdx: positionIdx,
+        })
+        .select()
+        .single();
+    final photoId = inserted[RoutePhotoRow.colId] as String;
+    final path = '$id/$photoId.$extension';
+    await _client.storage.from(StorageBuckets.routePhotos).uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
+    await _client
+        .from(RoutePhotoRow.table)
+        .update({RoutePhotoRow.colStoragePath: path})
+        .eq(RoutePhotoRow.colId, photoId);
+    return RoutePhotoRow.fromJson(
+        {...inserted, RoutePhotoRow.colStoragePath: path});
+  }
+
+  Future<void> updateRoutePhotoCaption({
+    required String photoId,
+    String? caption,
+  }) async {
+    await _client
+        .from(RoutePhotoRow.table)
+        .update({RoutePhotoRow.colCaption: normaliseRoutePhotoCaption(caption)})
+        .eq(RoutePhotoRow.colId, photoId);
+  }
+
+  /// Delete a photo. Removes the metadata row (RLS gates owner / route-owner
+  /// permissions) and the underlying Storage objects — the original upload
+  /// AND the worker-generated 512-wide thumbnail.
+  Future<void> deleteRoutePhoto(RoutePhotoRow photo) async {
+    await _client
+        .from(RoutePhotoRow.table)
+        .delete()
+        .eq(RoutePhotoRow.colId, photo.id);
+    final paths = <String>[];
+    if (photo.storagePath.isNotEmpty) paths.add(photo.storagePath);
+    final thumb = photo.thumb512Path;
+    if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
+    if (paths.isNotEmpty) {
+      await _client.storage.from(StorageBuckets.routePhotos).remove(paths);
+    }
+  }
+
   // ──────────────────── Segments (P1.B) ────────────────────
   //
   // Route-anchored segments + per-run efforts. Auto-effort generation

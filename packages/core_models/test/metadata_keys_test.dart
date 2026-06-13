@@ -87,6 +87,7 @@ void main() {
     test('bucket names match the Supabase buckets', () {
       expect(StorageBuckets.runs, 'runs');
       expect(StorageBuckets.runPhotos, 'run-photos');
+      expect(StorageBuckets.routePhotos, 'route-photos');
     });
   });
 }
