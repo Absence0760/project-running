@@ -1526,6 +1526,13 @@ export interface PublicEventFilters {
 	/// Local time-of-day bucket — resolved against each event's timezone
 	/// (UTC fallback for legacy rows). morning 05–11, afternoon 12–16, evening 17–04.
 	time?: 'morning' | 'afternoon' | 'evening';
+	/// "Near me / near a place" centroid. Filters by the CLUB's geocoded
+	/// location_point (never the event's revoked precise meet point), so clubs
+	/// without a geocoded point are excluded when this is set. See migration
+	/// 20270112_001 + decisions §147.
+	center?: { lng: number; lat: number };
+	/// Radius in metres around `center`. Defaults to 50km server-side.
+	radiusM?: number;
 	limit?: number;
 }
 
@@ -1549,6 +1556,10 @@ export interface PublicEventResult {
 	capacity: number | null;
 	price_cents: number | null;
 	currency: string | null;
+	/// Metres from the search center to the event's club, when a `center` was
+	/// supplied — else null. Derived from the already-public club point, so
+	/// surfacing it as a "2.3 km away" label leaks nothing.
+	distance_m: number | null;
 }
 
 /// Cross-club activity discovery (migration 20270110_001). Searches PUBLIC
@@ -1564,6 +1575,9 @@ export async function searchPublicEvents(
 		p_byday: f.byday ?? undefined,
 		p_paid: f.paid ?? undefined,
 		p_time: f.time ?? undefined,
+		p_center_lng: f.center?.lng ?? undefined,
+		p_center_lat: f.center?.lat ?? undefined,
+		p_radius_m: f.radiusM ?? undefined,
 		p_limit: f.limit ?? 60,
 	});
 	if (error) {

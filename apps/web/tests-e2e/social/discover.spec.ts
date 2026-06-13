@@ -81,3 +81,93 @@ test.describe('/social — activity discovery', () => {
 		await expect(row).toBeHidden({ timeout: 10_000 });
 	});
 });
+
+/**
+ * Proximity ("near me") filter (migration 20270112_001). Seeds a public club
+ * anchored at a geocoded point (NYC) + an event in it, then drives the filter
+ * via the browser geolocation override + the "Use my location" button (no live
+ * geocoder needed): a near fix surfaces the event with a distance label, a far
+ * fix hides it. Filters by the CLUB location, never the event's meet point.
+ */
+const NYC = { longitude: -73.9857, latitude: 40.7484 };
+const LONDON = { longitude: -0.1276, latitude: 51.5072 };
+
+test.describe('/social — proximity discovery', () => {
+	test.use({
+		storageState: USER_A.storageStatePath,
+		permissions: ['geolocation'],
+		geolocation: NYC,
+	});
+
+	let clubId: string | null = null;
+	let eventId: string | null = null;
+	const stamp = Date.now();
+	const discipline = `E2E Near Run ${stamp}`;
+
+	test.beforeAll(async () => {
+		const admin = getAdminClient();
+		const { data: club } = await admin
+			.from('clubs')
+			.insert({
+				owner_id: USER_A.id,
+				name: `E2E Geo Club ${stamp}`,
+				slug: `e2e-geo-club-${stamp}`,
+				is_public: true,
+				location_point: `SRID=4326;POINT(${NYC.longitude} ${NYC.latitude})`,
+			})
+			.select('id')
+			.single();
+		clubId = (club as { id: string }).id;
+
+		const { data: event } = await admin
+			.from('events')
+			.insert({
+				club_id: clubId,
+				author_id: USER_A.id,
+				title: 'E2E Near Event',
+				category: 'run',
+				discipline,
+				starts_at: new Date(stamp + 2 * 86_400_000).toISOString(),
+				recurrence_freq: 'weekly',
+				recurrence_byday: ['SU'],
+			})
+			.select('id')
+			.single();
+		eventId = (event as { id: string }).id;
+	});
+
+	test.afterAll(async () => {
+		const admin = getAdminClient();
+		if (eventId) await admin.from('events').delete().eq('id', eventId);
+		if (clubId) await admin.from('clubs').delete().eq('id', clubId);
+	});
+
+	test('"Use my location" surfaces a nearby club event and hides a far one', async ({
+		page,
+		context,
+	}) => {
+		await page.goto('/social?tab=discover');
+
+		// Narrow to the seeded event by discipline so other public events near
+		// the fix don't interfere with the visibility assertions.
+		await page.getByTestId('discover-search').fill(discipline);
+		const results = page.getByTestId('discover-results');
+		const row = results.getByRole('link', { name: new RegExp(discipline) });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		// Near fix (NYC) → still visible, now with a distance label.
+		await page.getByTestId('discover-use-location').click();
+		await expect(row).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('discover-distance').first()).toBeVisible();
+
+		// Far fix (London, well outside the default 50km radius) → hidden.
+		// Reload first: the code caches a fix up to 60s (maximumAge) for fast
+		// repeat clicks, so a fresh document is needed to pick up the new fix.
+		await context.setGeolocation(LONDON);
+		await page.reload();
+		await page.getByTestId('discover-search').fill(discipline);
+		await expect(row).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('discover-use-location').click();
+		await expect(row).toBeHidden({ timeout: 10_000 });
+	});
+});

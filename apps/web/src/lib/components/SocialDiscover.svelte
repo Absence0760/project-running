@@ -7,6 +7,7 @@
 		type PublicEventFilters,
 		type EventWeekday,
 	} from '$lib/core/data';
+	import { formatDistance } from '$lib/format/units.svelte';
 
 	let query = $state('');
 	let category = $state<'' | 'run' | 'cycle' | 'class' | 'social'>('');
@@ -14,6 +15,15 @@
 	let byday = $state<'' | EventWeekday>('');
 	let time = $state<'' | 'morning' | 'afternoon' | 'evening'>('');
 	let paid = $state<'' | 'free' | 'paid'>('');
+
+	// "Near me / near a place": resolved to a club-location centroid (never the
+	// event's revoked precise meet point). `center` is what reaches the RPC;
+	// `nearPlace` is the typed text, `nearLabel` the active-filter chip caption.
+	let nearPlace = $state('');
+	let center = $state<{ lng: number; lat: number } | null>(null);
+	let radiusM = $state<number | undefined>(undefined);
+	let nearLabel = $state('');
+	let geoError = $state('');
 
 	let results = $state<PublicEventResult[]>([]);
 	let loading = $state(true);
@@ -46,6 +56,10 @@
 		if (byday) f.byday = byday;
 		if (time) f.time = time;
 		if (paid) f.paid = paid;
+		if (center) {
+			f.center = center;
+			if (radiusM != null) f.radiusM = radiusM;
+		}
 		results = await searchPublicEvents(f);
 		loading = false;
 	}
@@ -60,10 +74,82 @@
 		byday;
 		paid;
 		time;
+		center;
+		radiusM;
 		clearTimeout(timer);
 		timer = setTimeout(run, 250);
 		return () => clearTimeout(timer);
 	});
+
+	// Geocode the typed place on its own debounce (mirrors searchClubs): a
+	// resolved centroid sets `center`, which the search effect above picks up.
+	// Driven by oninput, not a reactive effect, so the geolocation path can set
+	// `center` without an empty `nearPlace` clobbering it.
+	let placeTimer: ReturnType<typeof setTimeout> | undefined;
+	function onNearPlaceInput() {
+		clearTimeout(placeTimer);
+		const term = nearPlace.trim();
+		if (!term) {
+			center = null;
+			radiusM = undefined;
+			nearLabel = '';
+			geoError = '';
+			return;
+		}
+		placeTimer = setTimeout(async () => {
+			const { geocodePlace } = await import('$lib/routes/geocoding');
+			const place = await geocodePlace(term);
+			if (place) {
+				center = place.center;
+				radiusM = place.radiusM;
+				nearLabel = term;
+				geoError = '';
+			} else {
+				center = null;
+				radiusM = undefined;
+				nearLabel = '';
+				geoError = m('discover.nearNoMatch');
+			}
+		}, 350);
+	}
+
+	function useMyLocation() {
+		geoError = '';
+		// navigator.geolocation is gated to secure contexts (localhost counts);
+		// on plain http over a LAN it's undefined — surface that explicitly
+		// rather than leaving a dead button.
+		if (typeof navigator === 'undefined' || !navigator.geolocation) {
+			geoError = m('discover.geoNeedsHttps');
+			return;
+		}
+		navigator.geolocation.getCurrentPosition(
+			(pos) => {
+				center = { lng: pos.coords.longitude, lat: pos.coords.latitude };
+				radiusM = undefined;
+				nearPlace = '';
+				nearLabel = m('discover.nearMe');
+				geoError = '';
+			},
+			() => {
+				geoError = m('discover.geoFailed');
+			},
+			{ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
+		);
+	}
+
+	function clearNear() {
+		clearTimeout(placeTimer);
+		nearPlace = '';
+		center = null;
+		radiusM = undefined;
+		nearLabel = '';
+		geoError = '';
+	}
+
+	function distanceLabel(r: PublicEventResult): string | null {
+		if (r.distance_m == null) return null;
+		return m('discover.distanceAway', { distance: formatDistance(r.distance_m) });
+	}
 
 	function categoryLabel(c: string): string {
 		const hit = CATEGORIES.find((x) => x.v === c);
@@ -107,6 +193,43 @@
 			aria-label={m('discover.searchPlaceholder')}
 			data-testid="discover-search"
 		/>
+
+		<div class="near-row">
+			<input
+				type="search"
+				class="search near-input"
+				bind:value={nearPlace}
+				oninput={onNearPlaceInput}
+				placeholder={m('discover.nearPlaceholder')}
+				aria-label={m('discover.nearLabel')}
+				data-testid="discover-near"
+			/>
+			<button
+				type="button"
+				class="chip near-locate"
+				onclick={useMyLocation}
+				data-testid="discover-use-location"
+			>
+				{m('discover.useMyLocation')}
+			</button>
+		</div>
+
+		{#if nearLabel}
+			<button
+				type="button"
+				class="near-active"
+				onclick={clearNear}
+				aria-label={m('discover.clearNear')}
+				data-testid="discover-near-clear"
+			>
+				<span>{m('discover.nearLabel')}: {nearLabel}</span>
+				<span aria-hidden="true">×</span>
+			</button>
+		{/if}
+
+		{#if geoError}
+			<p class="near-error" role="status" data-testid="discover-near-error">{geoError}</p>
+		{/if}
 
 		<div class="chip-row" role="group" aria-label={m('eventEditor.category')}>
 			{#each CATEGORIES as c (c.v)}
@@ -195,6 +318,11 @@
 							<span class="result-club">{r.club_name}</span>
 							<span class="result-meta">
 								{categoryLabel(r.category)} · {cadenceLabel(r)}
+								{#if distanceLabel(r)}
+									· <span class="result-distance" data-testid="discover-distance"
+										>{distanceLabel(r)}</span
+									>
+								{/if}
 							</span>
 						</div>
 						<span class="price-chip" class:free={r.price_cents == null}>{priceLabel(r)}</span>
@@ -229,6 +357,42 @@
 		outline: none;
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px var(--color-primary-light);
+	}
+	.near-row {
+		display: flex;
+		gap: 0.4rem;
+		align-items: stretch;
+	}
+	.near-input {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.near-locate {
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+	.near-active {
+		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.7rem;
+		border: 1.5px solid var(--color-primary);
+		border-radius: 999px;
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.near-error {
+		color: var(--color-danger, #c0392b);
+		font-size: 0.85rem;
+		margin: 0;
+	}
+	.result-distance {
+		font-weight: 600;
+		color: var(--color-text);
 	}
 	.chip-row {
 		display: flex;
