@@ -12,6 +12,7 @@ import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
 import 'plan_new_screen.dart';
 
@@ -50,6 +51,22 @@ class _PlansScreenState extends State<PlansScreen> {
 
   void _onChange() {
     if (mounted) _load();
+  }
+
+  /// Runs a plan mutation (abandon / delete), surfacing a failure as a
+  /// banner instead of letting it vanish silently — the plan still
+  /// exists, so a swallowed error would leave the list looking unchanged
+  /// with no explanation. On success the list reloads.
+  Future<void> _runPlanAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, AppLocalizations.of(context).plansActionFailed('$e'));
+      }
+      return;
+    }
+    _load();
   }
 
   Future<void> _load() async {
@@ -150,9 +167,17 @@ class _PlansScreenState extends State<PlansScreen> {
                         },
                         onAbandon: p.status == 'active'
                             ? () async {
-                                await widget.training
-                                    .updateStatus(p.id, 'abandoned');
-                                _load();
+                                final ok = await _confirm(
+                                  context,
+                                  l10n.plansAbandonTitle(p.name),
+                                  l10n.plansAbandonBody,
+                                  confirmLabel: l10n.plansAbandon,
+                                );
+                                if (ok) {
+                                  await _runPlanAction(() =>
+                                      widget.training
+                                          .updateStatus(p.id, 'abandoned'));
+                                }
                               }
                             : null,
                         onDelete: () async {
@@ -162,8 +187,8 @@ class _PlansScreenState extends State<PlansScreen> {
                             l10n.plansDeleteBody,
                           );
                           if (ok) {
-                            await widget.training.deletePlan(p.id);
-                            _load();
+                            await _runPlanAction(
+                                () => widget.training.deletePlan(p.id));
                           }
                         },
                       );
@@ -174,7 +199,8 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 }
 
-Future<bool> _confirm(BuildContext context, String title, String body) async {
+Future<bool> _confirm(BuildContext context, String title, String body,
+    {String? confirmLabel}) async {
   final res = await showDialog<bool>(
     context: context,
     builder: (ctx) {
@@ -189,7 +215,7 @@ Future<bool> _confirm(BuildContext context, String title, String body) async {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.plansDelete),
+            child: Text(confirmLabel ?? l10n.plansDelete),
           ),
         ],
       );

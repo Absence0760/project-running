@@ -3809,6 +3809,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get plansAbandon => 'Abandonar';
 
   @override
+  String plansAbandonTitle(String name) {
+    return 'Abandonar \"$name\"?';
+  }
+
+  @override
+  String get plansAbandonBody => 'Depois você pode criar um novo plano.';
+
+  @override
+  String plansActionFailed(String error) {
+    return 'Não foi possível atualizar o plano: $error';
+  }
+
+  @override
   String plansDaysPerWeek(int count) {
     return '$count dias/sem.';
   }
@@ -12402,6 +12415,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get plansAbandon => 'Abandonar';
+
+  @override
+  String plansAbandonTitle(String name) {
+    return 'Abandonar \"$name\"?';
+  }
+
+  @override
+  String get plansAbandonBody => 'Depois você pode criar um novo plano.';
+
+  @override
+  String plansActionFailed(String error) {
+    return 'Não foi possível atualizar o plano: $error';
+  }
 
   @override
   String plansDaysPerWeek(int count) {

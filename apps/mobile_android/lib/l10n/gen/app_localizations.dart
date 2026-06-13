@@ -6353,6 +6353,24 @@ abstract class AppLocalizations {
   /// **'Abandon'**
   String get plansAbandon;
 
+  /// Confirm-abandon dialog title for an active plan
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon \"{name}\"?'**
+  String plansAbandonTitle(String name);
+
+  /// Confirm-abandon dialog body for an active plan
+  ///
+  /// In en, this message translates to:
+  /// **'You can create a new plan after.'**
+  String get plansAbandonBody;
+
+  /// Banner shown when abandoning or deleting a plan fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update the plan: {error}'**
+  String plansActionFailed(String error);
+
   /// Days-per-week meta chip on a plan tile
   ///
   /// In en, this message translates to:

@@ -3573,6 +3573,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get plansAbandon => '中止';
 
   @override
+  String plansAbandonTitle(String name) {
+    return '「$name」を中止しますか？';
+  }
+
+  @override
+  String get plansAbandonBody => 'その後、新しいプランを作成できます。';
+
+  @override
+  String plansActionFailed(String error) {
+    return 'プランを更新できませんでした: $error';
+  }
+
+  @override
   String plansDaysPerWeek(int count) {
     return '週$count日';
   }

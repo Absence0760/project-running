@@ -4693,6 +4693,28 @@
   "@plansAbandon": {
     "description": "Abandon button on an active plan tile"
   },
+  "plansAbandonTitle": "Abandon \"{name}\"?",
+  "@plansAbandonTitle": {
+    "description": "Confirm-abandon dialog title for an active plan",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "plansAbandonBody": "You can create a new plan after.",
+  "@plansAbandonBody": {
+    "description": "Confirm-abandon dialog body for an active plan"
+  },
+  "plansActionFailed": "Couldn't update the plan: {error}",
+  "@plansActionFailed": {
+    "description": "Banner shown when abandoning or deleting a plan fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "plansDaysPerWeek": "{count} days/wk",
   "@plansDaysPerWeek": {
     "description": "Days-per-week meta chip on a plan tile",

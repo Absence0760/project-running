@@ -3819,6 +3819,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get plansAbandon => 'Abandonner';
 
   @override
+  String plansAbandonTitle(String name) {
+    return 'Abandonner « $name » ?';
+  }
+
+  @override
+  String get plansAbandonBody => 'Tu pourras créer un nouveau plan ensuite.';
+
+  @override
+  String plansActionFailed(String error) {
+    return 'Impossible de mettre à jour le plan : $error';
+  }
+
+  @override
   String plansDaysPerWeek(int count) {
     return '$count jours/sem.';
   }
