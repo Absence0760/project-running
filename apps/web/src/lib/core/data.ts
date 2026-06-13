@@ -1515,6 +1515,59 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 	return enrichClubs(rows);
 }
 
+export type EventWeekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+
+export interface PublicEventFilters {
+	query?: string;
+	category?: 'run' | 'cycle' | 'class' | 'social';
+	cadence?: 'one_off' | 'weekly' | 'biweekly' | 'monthly';
+	byday?: EventWeekday;
+	paid?: 'free' | 'paid';
+	limit?: number;
+}
+
+/// A discoverable public-club event (the `search_public_events` row shape:
+/// event + its club's name/slug + cheapest price, if any). Distinct from
+/// EventWithMeta — this is the cross-club discovery projection, not a
+/// club-scoped detail row.
+export interface PublicEventResult {
+	id: string;
+	club_id: string;
+	club_name: string;
+	club_slug: string;
+	title: string;
+	category: string;
+	discipline: string | null;
+	starts_at: string;
+	duration_min: number | null;
+	recurrence_freq: string | null;
+	recurrence_byday: string[] | null;
+	capacity: number | null;
+	price_cents: number | null;
+	currency: string | null;
+}
+
+/// Cross-club activity discovery (migration 20270110_001). Searches PUBLIC
+/// clubs' events across the typed-events model by category / discipline /
+/// cadence / weekday / paid-or-free. Backs the /social Discover tab.
+export async function searchPublicEvents(
+	f: PublicEventFilters = {}
+): Promise<PublicEventResult[]> {
+	const { data, error } = await supabase.rpc('search_public_events', {
+		p_query: f.query?.trim() || undefined,
+		p_category: f.category ?? undefined,
+		p_cadence: f.cadence ?? undefined,
+		p_byday: f.byday ?? undefined,
+		p_paid: f.paid ?? undefined,
+		p_limit: f.limit ?? 60,
+	});
+	if (error) {
+		console.warn('search_public_events RPC failed', error);
+		return [];
+	}
+	return (data ?? []) as PublicEventResult[];
+}
+
 /** Clubs the current user belongs to (owner or member). */
 export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 	// Fall back to the session when the JS auth store hasn't hydrated yet —

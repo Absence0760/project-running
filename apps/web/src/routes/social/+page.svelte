@@ -4,21 +4,23 @@
 	import SocialFeed from '$lib/components/SocialFeed.svelte';
 	import SocialPeople from '$lib/components/SocialPeople.svelte';
 	import SocialClubs from '$lib/components/SocialClubs.svelte';
+	import SocialDiscover from '$lib/components/SocialDiscover.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 
-	type Tab = 'feed' | 'people' | 'clubs';
+	type Tab = 'feed' | 'people' | 'clubs' | 'discover';
 	const TABS: { id: Tab; labelKey: MessageKey; icon: string }[] = [
 		{ id: 'feed', labelKey: 'socialHub.tabFeed', icon: 'dynamic_feed' },
 		{ id: 'people', labelKey: 'socialHub.tabPeople', icon: 'person_search' },
 		{ id: 'clubs', labelKey: 'socialHub.tabClubs', icon: 'groups' },
+		{ id: 'discover', labelKey: 'socialHub.tabDiscover', icon: 'event_available' },
 	];
 
 	let tab = $state<Tab>('feed');
 
 	$effect(() => {
 		const t = $page.url.searchParams.get('tab');
-		if (t === 'people' || t === 'clubs' || t === 'feed') tab = t;
+		if (t === 'people' || t === 'clubs' || t === 'discover' || t === 'feed') tab = t;
 		else tab = 'feed';
 	});
 
@@ -75,8 +77,10 @@
 			<SocialFeed />
 		{:else if tab === 'people'}
 			<SocialPeople />
-		{:else}
+		{:else if tab === 'clubs'}
 			<SocialClubs />
+		{:else}
+			<SocialDiscover />
 		{/if}
 	</div>
 </div>
