@@ -39,6 +39,16 @@ void main() {
       // VDOT for 3:30 marathon sits in the mid-40s.
       expect(v!, inInclusiveRange(42, 48));
     });
+
+    test('rejects a distance-glitch run (impossible speed)', () {
+      // 5km in 10 min = 30 km/h → VDOT ~111 raw; a GPS spike / bad import
+      // must not set the fitness ceiling.
+      expect(vdotFromRun(5000, 600), isNull);
+      // A world-class but real 5k (14:00) stays under the ceiling.
+      final elite = vdotFromRun(5000, 14 * 60);
+      expect(elite, isNotNull);
+      expect(elite!, lessThan(90));
+    });
   });
 
   group('qualifyingRuns', () {
@@ -91,6 +101,17 @@ void main() {
       expect(currentVdot(const []), isNull);
       expect(
           currentVdot([_r(distance: 100, durationS: 60)]), isNull); // too short
+    });
+
+    test('a glitch run does not poison the 90-day ceiling', () {
+      final now = DateTime.utc(2026, 5, 10);
+      final runs = [
+        _r(distance: 5000, durationS: 1200, startedAt: now.subtract(const Duration(days: 5))),
+        _r(distance: 5000, durationS: 600, startedAt: now.subtract(const Duration(days: 4))), // glitch
+      ];
+      final v = currentVdot(runs, now: now);
+      expect(v, isNotNull);
+      expect(v!, lessThan(90)); // the real 20-min 5k, not the glitch
     });
 
     test('excludes parkrun and race sources from VDOT qualifying set', () {

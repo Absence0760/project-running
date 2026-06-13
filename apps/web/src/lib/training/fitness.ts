@@ -126,6 +126,14 @@ export function vdotFromRun(distanceM: number, durationS: number): number | null
 	if (pctVo2Max <= 0) return null;
 	const vdot = vo2Demand / pctVo2Max;
 	if (!Number.isFinite(vdot) || vdot <= 0) return null;
+	// Reject a physiologically impossible VDOT. The human ceiling is ~85
+	// (elite marathoners sit around there); a value above this means corrupt
+	// input — a GPS distance spike or a bad import. Since `currentVdot` takes
+	// the MAX over a 90-day window, one such run would otherwise poison
+	// threshold pace and every TSS for three months. Drop it rather than let
+	// it set the ceiling. (The duration/distance floors guard the short-sprint
+	// inflation case; this guards the fast-distance-glitch case.)
+	if (vdot > 90) return null;
 	return vdot;
 }
 

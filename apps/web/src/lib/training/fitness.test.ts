@@ -116,6 +116,28 @@ test('vdotFromRun — 3-hour marathon yields a VDOT around 53-55', () => {
 	assert.ok(v! > 52 && v! < 56, `expected ~54, got ${v}`);
 });
 
+test('vdotFromRun — a distance-glitch run (impossible speed) is rejected, not used as the ceiling', () => {
+	// 5 km logged in 10 min = 30 km/h → VDOT ~111 on the raw formula. A GPS
+	// spike or bad import must not set the fitness ceiling.
+	assert.equal(vdotFromRun(5000, 10 * 60), null);
+	// A world-class but real 5k (14:00) stays under the ceiling and qualifies.
+	const elite = vdotFromRun(5000, 14 * 60);
+	assert.ok(elite != null && elite! < 90, `elite 5k should qualify, got ${elite}`);
+});
+
+test('currentVdot — a glitch run does not poison the 90-day ceiling', () => {
+	const base = '2026-05-01T10:00:00Z';
+	const now = new Date('2026-05-10T10:00:00Z').getTime();
+	const runs = [
+		// A legit 5k at ~20:00 → VDOT ~50.
+		{ started_at: base, distance_m: 5000, duration_s: 1200, source: 'app', metadata: {} },
+		// A glitch: 5 km in 10 min → VDOT ~111, must be dropped.
+		{ started_at: base, distance_m: 5000, duration_s: 600, source: 'app', metadata: {} },
+	] as unknown as Parameters<typeof currentVdot>[0];
+	const v = currentVdot(runs, now);
+	assert.ok(v != null && v! < 90, `ceiling should be the real run, got ${v}`);
+});
+
 test('vdotFromRun — faster pace yields a higher VDOT', () => {
 	const fast = vdotFromRun(5000, 18 * 60)!;
 	const slow = vdotFromRun(5000, 25 * 60)!;
