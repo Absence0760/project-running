@@ -191,11 +191,18 @@ double computeStress(
   final max = _numericOrNull(prefs.maxHrBpm);
 
   if (cal.mode == 'trimp') {
-    if (avgBpm != null && rest != null && max != null && max > rest) {
-      return _banisterTrimp(run.duration.inSeconds, avgBpm, rest, max);
-    }
     final km = run.distanceMetres / 1000.0;
     final rate = cal.trimpPerKmFallback ?? 7;
+    if (avgBpm != null && rest != null && max != null && max > rest) {
+      final trimp = _banisterTrimp(run.duration.inSeconds, avgBpm, rest, max);
+      // A run whose avg_bpm <= resting_hr (misconfigured resting HR, strap
+      // dropout, a genuine recovery shuffle) computes hrr=0 → trimp=0, and
+      // the stress<=0 skip in aggregateDailyStress would silently drop a real
+      // logged run off the fatigue/form curve. Fall back to the same distance
+      // proxy an HR-less run uses so a real effort always counts.
+      if (trimp > 0) return trimp;
+      return km * rate;
+    }
     return km * rate;
   }
 
@@ -235,7 +242,7 @@ Map<DateTime, double> aggregateDailyStress(
 
 /// EWMA trio over a fixed-length daily window ending today (local tz).
 /// Days with no stress still tick the decay — that's the whole point.
-/// alpha = 1 - exp(-1/halflife). ATL halflife = 7, CTL halflife = 42.
+/// alpha = 1 - exp(-1/tau). ATL time constant = 7 days, CTL = 42 days.
 ///
 /// Persona-hunt Round 2 finding Pro #2: a pro with years of history
 /// has been at CTL ≈ 80 for ages; initialising atl=0, ctl=0 and

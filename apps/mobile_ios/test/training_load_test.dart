@@ -283,6 +283,55 @@ void main() {
       final key = DateTime(local.year, local.month, local.day);
       expect(daily[key], 50);
     });
+
+    test('a low-HR run in TRIMP mode still contributes load, not zero', () {
+      // A run whose avg_bpm <= resting_hr (misconfigured resting HR, strap
+      // dropout, a true recovery shuffle) computes hrr=0 → trimp=0. Pre-fix,
+      // the stress<=0 skip dropped it from the fatigue/form curve. Post-fix it
+      // falls back to the distance proxy an HR-less run uses, so it counts.
+      const prefs = HrPrefs(restingHrBpm: 55, maxHrBpm: 190);
+      final normalHr = _run(
+        distanceM: 12000,
+        durationS: 3600,
+        startedAt: DateTime.utc(2026, 4, 1, 7),
+        metadata: {'avg_bpm': 150},
+      );
+      final lowHr = _run(
+        distanceM: 10000,
+        durationS: 3000,
+        startedAt: DateTime.utc(2026, 4, 2, 7),
+        metadata: {'avg_bpm': 50}, // below resting → hrr clamps to 0 → trimp 0
+      );
+      final daily = aggregateDailyStress([normalHr, lowHr], prefs);
+      final local = lowHr.startedAt.toLocal();
+      final key = DateTime(local.year, local.month, local.day);
+      final lowHrStress = daily[key] ?? 0;
+      expect(lowHrStress > 0, isTrue,
+          reason: 'a low-HR run must still contribute load via the distance '
+              'proxy; got $lowHrStress');
+      final cal = computeCalibration([normalHr, lowHr], prefs);
+      expect(lowHrStress, 10 * (cal.trimpPerKmFallback ?? 7));
+    });
+
+    test('a single low-HR run still builds fitness in TRIMP mode', () {
+      final ref = DateTime.utc(2026, 5, 1, 12);
+      final day = ref.subtract(const Duration(days: 1));
+      const prefs = HrPrefs(restingHrBpm: 55, maxHrBpm: 190);
+      final runs = [
+        _run(
+          distanceM: 10000,
+          durationS: 3000,
+          startedAt: day,
+          metadata: {'avg_bpm': 50},
+        ),
+      ];
+      final series =
+          computeTrainingLoadSeries(runs, prefs: prefs, endDate: ref);
+      expect(series.any((p) => p.ctl > 0), isTrue,
+          reason: 'a low-HR run should still build CTL');
+      final lastDay = series[series.length - 2];
+      expect(lastDay.stress > 0, isTrue);
+    });
   });
 
   group('lift load', () {

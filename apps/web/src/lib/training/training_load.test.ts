@@ -216,6 +216,54 @@ test('aggregateDailyStress — pure-distance window (no HR runs) keeps legacy 10
 	assert.equal(daily.get(key), 50);
 });
 
+test('aggregateDailyStress — a low-HR run in TRIMP mode still contributes load, not zero', () => {
+	// A run whose avg_bpm <= resting_hr (misconfigured resting HR, strap
+	// dropout, a true recovery shuffle) computes hrr=0 → trimp=0 in the
+	// banister model. Pre-fix, the stress<=0 skip dropped it entirely and
+	// the run vanished from the fatigue/form curve. Post-fix it falls back to
+	// the same distance proxy an HR-less run uses, so a real logged run counts.
+	const prefs = { resting_hr_bpm: 55, max_hr_bpm: 190 };
+	const normalHr: RunForLoad = {
+		started_at: '2026-04-01T07:00:00Z',
+		duration_s: 3600,
+		distance_m: 12000,
+		metadata: { avg_bpm: 150 },
+	};
+	const lowHr: RunForLoad = {
+		started_at: '2026-04-02T07:00:00Z',
+		duration_s: 3000,
+		distance_m: 10000,
+		metadata: { avg_bpm: 50 }, // below resting → hrr clamps to 0 → trimp 0
+	};
+	const daily = aggregateDailyStress([normalHr, lowHr], prefs);
+	const lowHrKey = localDateKey(new Date(lowHr.started_at));
+	const lowHrStress = daily.get(lowHrKey) ?? 0;
+	assert.ok(
+		lowHrStress > 0,
+		`a low-HR run must still contribute load (distance-proxy fallback), got ${lowHrStress}`,
+	);
+	// And it lands on the calibrated fallback scale, not the legacy 10/km
+	// (10 km × 10 = 100). The window calibration rate is well under that.
+	const cal = computeCalibration([normalHr, lowHr], prefs);
+	assert.equal(lowHrStress, 10 * (cal.trimpPerKmFallback ?? 7));
+});
+
+test('computeTrainingLoadSeries — a single low-HR run still builds fitness in TRIMP mode', () => {
+	const ref = new Date('2026-05-01T12:00:00Z');
+	const day = new Date(ref);
+	day.setDate(day.getDate() - 1);
+	const prefs = { resting_hr_bpm: 55, max_hr_bpm: 190 };
+	// The window's only run has avg_bpm below resting — TRIMP=0. The series
+	// must still register stress, not paint a flat zero curve.
+	const runs: RunForLoad[] = [
+		{ started_at: day.toISOString(), duration_s: 3000, distance_m: 10000, metadata: { avg_bpm: 50 } },
+	];
+	const series = computeTrainingLoadSeries(runs, prefs, 90, ref);
+	assert.ok(series.some((p) => p.ctl > 0), 'a low-HR run should still build CTL');
+	const lastDay = series[series.length - 2];
+	assert.ok(lastDay.stress > 0, 'the low-HR run day carries non-zero stress');
+});
+
 // Persona-hunt Round 2 finding Pro #2: pre-fix, CTL started at 0
 // every render and ramped over the first ~6 weeks of the displayed
 // window. A pro who's been at CTL ≈ 80 for years saw TSB wrong by

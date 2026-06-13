@@ -122,14 +122,21 @@ export function computeStress(
 	const max = numericOrNull(prefs.max_hr_bpm);
 
 	if (cal.mode === 'trimp') {
+		const km = (run.distance_m ?? 0) / 1000;
+		const rate = cal.trimpPerKmFallback ?? 7; // sane default if cal is per-run + HR-less
 		if (avgBpm != null && rest != null && max != null && max > rest) {
-			return banisterTrimp(run.duration_s, avgBpm, rest, max);
+			const trimp = banisterTrimp(run.duration_s, avgBpm, rest, max);
+			// A run whose avg_bpm <= resting_hr (misconfigured resting HR, strap
+			// dropout, a genuine recovery shuffle) computes hrr=0 → trimp=0, and
+			// the stress<=0 skip in aggregateDailyStress would silently drop a
+			// real logged run off the fatigue/form curve. Fall back to the same
+			// distance proxy an HR-less run uses so a real effort always counts.
+			if (trimp > 0) return trimp;
+			return km * rate;
 		}
 		// HR-less run in TRIMP mode: use the window-calibrated fallback
 		// rate so this run's load is on the same scale as its TRIMP
 		// siblings, not the legacy 10 pts/km that would fake a spike.
-		const km = (run.distance_m ?? 0) / 1000;
-		const rate = cal.trimpPerKmFallback ?? 7; // sane default if cal is per-run + HR-less
 		return km * rate;
 	}
 
@@ -267,7 +274,7 @@ export interface TrainingLoadPoint {
 
 /// EWMA trio over a fixed-length daily window ending today (local tz).
 /// Days with no stress still tick the decay — that's the whole point.
-/// alpha = 1 - exp(-1/halflife). ATL halflife = 7, CTL halflife = 42.
+/// alpha = 1 - exp(-1/tau). ATL time constant = 7 days, CTL = 42 days.
 ///
 /// Persona-hunt Round 2 finding Pro #2: a pro with years of run
 /// history has been at CTL ≈ 80 for ages, but the prior implementation
