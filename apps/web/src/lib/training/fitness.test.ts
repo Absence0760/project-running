@@ -292,6 +292,14 @@ test('recoveryAdvice — sub-10 CTL yields the consistency-building advice', () 
 	assert.match(recoveryAdvice(0, 5), /still building|consistency/i);
 });
 
+test('recoveryAdvice — heavy overload warns even at low CTL (overreached new runner)', () => {
+	// ctl=8, tsb=-40 → acute load spiked far above chronic. The low-CTL
+	// "still building" message must NOT mask the rest warning.
+	const advice = recoveryAdvice(-40, 8);
+	assert.match(advice, /heavily loaded|rest day/i);
+	assert.doesNotMatch(advice, /still building|consistency/i);
+});
+
 test('recoveryAdvice — ladder rises through the TSB bands', () => {
 	const heavy = recoveryAdvice(-40, 50);
 	const loaded = recoveryAdvice(-15, 50);

@@ -189,6 +189,14 @@ void main() {
       expect(s.toLowerCase(), contains('heavily loaded'));
     });
 
+    test('heavy overload warns even at low CTL (overreached new runner)', () {
+      // ctl=8, tsb=-40 → the low-CTL "still building" message must not mask
+      // the rest warning.
+      final s = recoveryAdvice(-40, 8);
+      expect(s.toLowerCase(), contains('heavily loaded'));
+      expect(s.toLowerCase(), isNot(contains('building')));
+    });
+
     test('flags very positive TSB as fresh', () {
       final s = recoveryAdvice(30, 50);
       expect(s.toLowerCase(), contains('fresh'));

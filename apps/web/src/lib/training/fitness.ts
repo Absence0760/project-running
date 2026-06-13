@@ -293,11 +293,15 @@ export function recoveryAdvice(
 	if (returningFromLayoff) {
 		return 'Welcome back. Your form numbers reset after the break — rebuild gradually with easy, consistent running before any hard sessions.';
 	}
-	if (ctl < 10) {
-		return 'Fitness is still building. Focus on consistency; one quality session a week is plenty for now.';
-	}
+	// Heavy acute overload warrants a rest warning even at low chronic load.
+	// A new runner who just spiked a hard week (low CTL, deeply negative TSB)
+	// is exactly the at-injury-risk case the ctl<10 "still building" message
+	// would otherwise mask — so the overload guard comes first.
 	if (tsb < -30) {
 		return 'You\'re heavily loaded — easy running or a rest day today.';
+	}
+	if (ctl < 10) {
+		return 'Fitness is still building. Focus on consistency; one quality session a week is plenty for now.';
 	}
 	if (tsb < -10) {
 		return 'Loaded but within build territory. Easy / steady is right for today.';
