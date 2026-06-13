@@ -3794,6 +3794,32 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      search_public_events: {
+        Args: {
+          p_byday?: string
+          p_cadence?: string
+          p_category?: string
+          p_limit?: number
+          p_paid?: string
+          p_query?: string
+        }
+        Returns: {
+          capacity: number
+          category: string
+          club_id: string
+          club_name: string
+          club_slug: string
+          currency: string
+          discipline: string
+          duration_min: number
+          id: string
+          price_cents: number
+          recurrence_byday: string[]
+          recurrence_freq: string
+          starts_at: string
+          title: string
+        }[]
+      }
       search_public_routes: {
         Args: {
           p_featured_only?: boolean
