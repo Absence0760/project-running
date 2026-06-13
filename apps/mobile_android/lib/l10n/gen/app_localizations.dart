@@ -665,6 +665,24 @@ abstract class AppLocalizations {
   /// **'Clear search'**
   String get peopleClearSearchTooltip;
 
+  /// Generic tooltip for a clear-search icon button
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get commonClearSearch;
+
+  /// Generic tooltip for a dismiss / close icon button
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get commonDismiss;
+
+  /// Tooltip for the per-row remove-override icon button in the device override editor
+  ///
+  /// In en, this message translates to:
+  /// **'Remove override'**
+  String get settingsDevicesRemoveOverride;
+
   /// Section header shown above people search results
   ///
   /// In en, this message translates to:

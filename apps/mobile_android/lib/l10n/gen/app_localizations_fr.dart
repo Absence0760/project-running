@@ -366,6 +366,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get peopleClearSearchTooltip => 'Effacer la recherche';
 
   @override
+  String get commonClearSearch => 'Effacer la recherche';
+
+  @override
+  String get commonDismiss => 'Fermer';
+
+  @override
+  String get settingsDevicesRemoveOverride => 'Supprimer le réglage';
+
+  @override
   String get peopleSearchResultsHeader => 'Résultats de recherche';
 
   @override

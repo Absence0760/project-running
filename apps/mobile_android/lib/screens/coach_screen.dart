@@ -1218,6 +1218,7 @@ class _CoachScreenState extends State<CoachScreen> {
             ),
           ),
           IconButton(
+            tooltip: AppLocalizations.of(context).commonDismiss,
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
             iconSize: 18,

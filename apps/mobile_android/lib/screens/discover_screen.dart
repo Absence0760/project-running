@@ -191,6 +191,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               isDense: true,
               suffixIcon: _query.isNotEmpty
                   ? IconButton(
+                      tooltip: l10n.commonClearSearch,
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         _searchCtl.clear();

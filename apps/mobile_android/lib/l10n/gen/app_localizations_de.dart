@@ -366,6 +366,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get peopleClearSearchTooltip => 'Suche löschen';
 
   @override
+  String get commonClearSearch => 'Suche löschen';
+
+  @override
+  String get commonDismiss => 'Schließen';
+
+  @override
+  String get settingsDevicesRemoveOverride => 'Überschreibung entfernen';
+
+  @override
   String get peopleSearchResultsHeader => 'Suchergebnisse';
 
   @override

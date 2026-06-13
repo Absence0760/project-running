@@ -365,6 +365,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get peopleClearSearchTooltip => 'Limpar busca';
 
   @override
+  String get commonClearSearch => 'Limpar busca';
+
+  @override
+  String get commonDismiss => 'Dispensar';
+
+  @override
+  String get settingsDevicesRemoveOverride => 'Remover substituição';
+
+  @override
   String get peopleSearchResultsHeader => 'Resultados da busca';
 
   @override
@@ -9049,6 +9058,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get peopleClearSearchTooltip => 'Limpar busca';
+
+  @override
+  String get commonClearSearch => 'Limpar busca';
+
+  @override
+  String get commonDismiss => 'Dispensar';
+
+  @override
+  String get settingsDevicesRemoveOverride => 'Remover substituição';
 
   @override
   String get peopleSearchResultsHeader => 'Resultados da busca';

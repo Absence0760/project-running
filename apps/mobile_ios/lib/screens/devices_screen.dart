@@ -495,6 +495,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
                 title: Text(entry.key),
                 subtitle: Text('${entry.value}'),
                 trailing: IconButton(
+                  tooltip: l10n.settingsDevicesRemoveOverride,
                   icon: const Icon(Icons.close),
                   onPressed: () => setState(() => _current.remove(entry.key)),
                 ),

@@ -406,6 +406,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
+                        tooltip: l10n.commonClearSearch,
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();

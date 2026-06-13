@@ -358,6 +358,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get peopleClearSearchTooltip => '検索をクリア';
 
   @override
+  String get commonClearSearch => '検索をクリア';
+
+  @override
+  String get commonDismiss => '閉じる';
+
+  @override
+  String get settingsDevicesRemoveOverride => '上書き設定を削除';
+
+  @override
   String get peopleSearchResultsHeader => '検索結果';
 
   @override

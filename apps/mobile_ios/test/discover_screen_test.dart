@@ -147,6 +147,24 @@ void main() {
     expect(find.textContaining('18.00'), findsNothing);
   });
 
+  testWidgets('the search clear button carries a tooltip once a query is typed',
+      (tester) async {
+    final api = _FakeApi(const []);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    // No query yet → no clear button.
+    expect(find.byTooltip('Clear search'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, 'pilates');
+    await _settle(tester);
+
+    // The clear affordance is now an icon button with an accessible tooltip.
+    expect(find.byTooltip('Clear search'), findsOneWidget);
+  });
+
   testWidgets('empty results render the empty state', (tester) async {
     final api = _FakeApi(const []);
     await tester.pumpWidget(_wrap(
