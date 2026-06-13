@@ -53,12 +53,17 @@ import type {
 	SessionPlanBlock,
 	SessionPlanItem,
 	SessionPlanWithItems,
-	SessionItemKind
+	SessionItemKind,
+	ReportTargetKind
 } from '../types';
 // Re-export the session-plan domain shapes so consumers can import them from the
 // data-layer facade alongside fetchSessionPlan* (which returns SessionPlanWithItems)
 // and the SessionPlan*Input types defined below.
 export type { SessionPlan, SessionPlanBlock, SessionPlanItem, SessionPlanWithItems } from '../types';
+// ReportTargetKind lives in types.ts alongside the other CHECK-paired narrow
+// unions (so the CHECK<->union guard can read it from one file); re-exported
+// here so the report surfaces keep importing it from the data-layer facade.
+export type { ReportTargetKind } from '../types';
 import { nextInstanceAfter } from '../social/recurrence';
 import {
 	parseGymTemplate,
@@ -5648,7 +5653,6 @@ export async function deleteNotification(id: string): Promise<void> {
 // the same reporter already has a pending report against the same
 // target. See migration 20260908_001.
 
-export type ReportTargetKind = 'user' | 'club' | 'route';
 export type ReportReason =
 	| 'spam'
 	| 'harassment'

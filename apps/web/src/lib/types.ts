@@ -194,6 +194,10 @@ export type GymProgressionScheme =
 	| 'rpe_autoreg';
 // gym_routine_sets.set_type — set role within an exercise.
 export type GymSetType = 'warmup' | 'working' | 'dropset' | 'amrap' | 'failure' | 'backoff';
+// Polymorphic report target. Kept in lockstep with the `reports.target_kind`
+// CHECK constraint (migrations 20260908_001 / 20261117_001 / 20270115_001)
+// via apps/web/scripts/check_constraint_unions.mjs.
+export type ReportTargetKind = 'user' | 'club' | 'route' | 'comment' | 'club_post' | 'run';
 export type NotificationKind =
 	| 'kudos'
 	| 'comment'

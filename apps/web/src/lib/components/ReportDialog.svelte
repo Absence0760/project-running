@@ -9,16 +9,9 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 
-	// `comment` reports route through the same submit_report RPC; the
-	// backend `p_target_kind` is plain text so the value passes through.
-	// Kept local rather than widening the shared `ReportTargetKind`
-	// (which the user/club/route surfaces share) until comments are a
-	// first-class report target everywhere.
-	type ReportableKind = ReportTargetKind | 'comment';
-
 	interface Props {
 		open: boolean;
-		targetKind: ReportableKind;
+		targetKind: ReportTargetKind;
 		targetId: string;
 		/// Human-readable name of the thing being reported. Surfaced
 		/// in the dialog body so the user can sanity-check what they're
@@ -30,11 +23,13 @@
 
 	let { open, targetKind, targetId, targetLabel, onclose }: Props = $props();
 
-	const NOUNS: Record<ReportableKind, MessageKey> = {
+	const NOUNS: Record<ReportTargetKind, MessageKey> = {
 		user: 'reportDialog.nounProfile',
 		club: 'reportDialog.nounClub',
 		route: 'reportDialog.nounRoute',
 		comment: 'reportDialog.nounComment',
+		club_post: 'reportDialog.nounPost',
+		run: 'reportDialog.nounRun',
 	};
 
 	const REASONS: { value: ReportReason; label: MessageKey; hint: MessageKey }[] = [
@@ -90,7 +85,7 @@
 		error = null;
 		try {
 			await submitReport({
-				targetKind: targetKind as ReportTargetKind,
+				targetKind,
 				targetId,
 				reason,
 				notes: notes.trim() || undefined,
