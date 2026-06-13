@@ -14,7 +14,7 @@ ISO8601DateFormatter hoist, gym PR single-pass `RunningPrTracker`, single-pass r
 on Wear + the shared recorder, and the `public_run_counts` RPC). Three findings were
 **deferred, not dismissed**:
 
-- [ ] **[deferred — needs_safe_migration] enrichEvents over-fetches all-time "going" RSVPs to compute a next-instance count.**
+- [x] **[deferred — needs_safe_migration] enrichEvents over-fetches all-time "going" RSVPs to compute a next-instance count.** **— DONE 2026-06-13 (followups wave 1).**
   `data.ts` `enrichEvents` (~L2049) issues `event_attendees.select('event_id, instance_start').in(event_id, ids).eq('status','going')` with NO limit, then keeps only the rows matching each event's NEXT instance. A busy old club's recurring series accumulates one going-row per member per past instance (52 instances × 150 members ≈ 7,800 rows for one event), so a 200-event page can transfer tens of thousands of rows to produce 200 integers. Durable fix: an `event_next_instance_going_counts(p_event_ids uuid[], p_next_starts timestamptz[])` RPC counting only at each event's next-instance timestamp (the capacity trigger `20261018_001` already does exactly that scoped `count(*) ... where instance_start = ... and status='going'`). Index `(event_id, instance_start)` serves it. Bites only old high-attendance clubs; schedule the RPC, don't rush.
 
 - [x] **fetchPublicRoute does two serial reads on the anonymous share / OG-image path.** **DONE 2026-06-13**
@@ -153,7 +153,7 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 - [ ] **OSRM smoke test in CI** — blocked on free-runner capacity (OSM PBF extract + osrm-extract memory). Options: a self-hosted runner, or a pre-built OSRM cache in S3 the workflow downloads.
 - [ ] **Positive-path Edge Function tests** — the envelope suite covers auth-rejection only; 200-on-valid-HMAC / replay-dedupe / freshness-window tests need real secret values in the CI config.
 - [x] **`apps/job_worker` Go tests now gate CI** (2026-06-04) — added a `test-worker` job to `ci.yml` running `go vet ./...` + `go test ./...` (working-directory `apps/job_worker`). The whole worker Go suite — including the GDPR Art 20 export-completeness guard (`internal/personal_data_export_guard_test.go`, which fails when a new `user_id`-bearing table isn't wired into `exportPersonalDataSpecs` or the reasoned exclusion list) — now fails a PR instead of only failing locally.
-- [ ] **Two flaky `/history` run-list specs** (surfaced 2026-06-04 during the History polish) — `tests-e2e/runs/list.spec.ts:38` ("Walk activity filter narrows to the single seeded walk") and `:109` ("filter state survives a reload"). Both fail intermittently against the **224-run seed** in the all-time full-fetch path, and they fail identically with the History page **stashed to its pre-polish state** — i.e. pre-existing, not caused by the polish. Likely a timing race: the assertion (`toHaveCount(1)` / the restored filter) runs before the all-time full-fetch + client-side filter settles. Fix is probably to await a stable count / the loaded list rather than asserting immediately after flipping the activity filter — not a markup change. Low priority (the feature works; it's the test that's racy).
+- [x] **Two flaky `/history` run-list specs** (surfaced 2026-06-04 during the History polish) — `tests-e2e/runs/list.spec.ts:38` ("Walk activity filter narrows to the single seeded walk") and `:109` ("filter state survives a reload"). Both fail intermittently against the **224-run seed** in the all-time full-fetch path, and they fail identically with the History page **stashed to its pre-polish state** — i.e. pre-existing, not caused by the polish. Likely a timing race: the assertion (`toHaveCount(1)` / the restored filter) runs before the all-time full-fetch + client-side filter settles. Fix is probably to await a stable count / the loaded list rather than asserting immediately after flipping the activity filter — not a markup change. Low priority (the feature works; it's the test that's racy). **— DONE 2026-06-13 (followups wave 1).**
 
 ## Mobile
 
@@ -241,11 +241,11 @@ engagement/club scales the prod tables haven't reached; each wants a grouped-cou
 
 ## Route loop generation — loop-poor UX (designed, P3 half unbuilt)
 
-- [ ] **Largest-achievable-loop probe + 3-way choice** — the v2 sampled via-point loop generator ([decisions §137 amendment](../architecture/decisions.md), [route_loop_generation.md](../features/route_loop_generation.md)) ships polygon-first with a `round_trip` fall-through, but the doc's *first-class loop-poor UX* is **not built**. Today a loop-poor start (polygon generator returns `null`) falls through to `round_trip` and reuses the pre-existing "shorter than X — use Y instead" shortfall banner. Remaining: have `generatePolygonLoop` / `handleGenerate` surface the **largest in-band-free real loop** it actually found so the client can offer "best loop near you is ~X km", plus the explicit three-way choice — (a) generate that shorter real loop, (b) accept the out-and-back to the requested distance, (c) try a different start — across `RouteBuilder.svelte`, the SvelteKit `+server.ts`, and the generate-route Lambda. ~1 day. Durable fix for the reported sparse start.
+- [x] **Largest-achievable-loop probe + 3-way choice** — the v2 sampled via-point loop generator ([decisions §137 amendment](../architecture/decisions.md), [route_loop_generation.md](../features/route_loop_generation.md)) ships polygon-first with a `round_trip` fall-through, but the doc's *first-class loop-poor UX* is **not built**. Today a loop-poor start (polygon generator returns `null`) falls through to `round_trip` and reuses the pre-existing "shorter than X — use Y instead" shortfall banner. Remaining: have `generatePolygonLoop` / `handleGenerate` surface the **largest in-band-free real loop** it actually found so the client can offer "best loop near you is ~X km", plus the explicit three-way choice — (a) generate that shorter real loop, (b) accept the out-and-back to the requested distance, (c) try a different start — across `RouteBuilder.svelte`, the SvelteKit `+server.ts`, and the generate-route Lambda. ~1 day. Durable fix for the reported sparse start. **— DONE 2026-06-13 (followups wave 1).**
 
 - [ ] **Graph-cycle generator (v3) — use the real neighbourhood loop** — both v2 (polygon) and `round_trip` reason about *geometry*, not the street *graph*, so on irregular grids they can't trace the clean loop a human would pick (proven: 432 polygon placements found zero loops at a start where one demonstrably exists). The durable fix is to search the actual local street graph for cycles (direction-sampled disjoint-path loops on a foot-graph sidecar extracted from the same PBF). Full design, data-source comparison, phasing, and effort (~8–10 d, new prod sidecar is the real cost) in [graph_cycle_loop_generation.md](../features/graph_cycle_loop_generation.md). **P0 spike run 2026-06-10 → green-lit** (real clean loops at dense/medium areaEff 0.42–0.60 vs geometry's zero; the report start confirmed genuinely loop-poor). It also **subsumes the largest-achievable-loop probe above** (the graph search surfaces the largest clean loop for free). Remaining: P1–P3 (Go graph sidecar + integration + prod deploy).
 
-- [ ] **Tighten the polygon path toward target + multi-distance for the polygon radius** — the `round_trip` path now races a spread of request distances and lands in-band ([fix](../architecture/decisions.md)), but the polygon path's in-band selection still prefers the *roundest* loop, which can return ~+8–11% in dense areas when a closer loop exists. Apply the same closest-to-target weighting + race the polygon radius fraction, not just a fixed [0.12–0.16] band. Small, web-only.
+- [x] **Tighten the polygon path toward target + multi-distance for the polygon radius** — the `round_trip` path now races a spread of request distances and lands in-band ([fix](../architecture/decisions.md)), but the polygon path's in-band selection still prefers the *roundest* loop, which can return ~+8–11% in dense areas when a closer loop exists. Apply the same closest-to-target weighting + race the polygon radius fraction, not just a fixed [0.12–0.16] band. Small, web-only. **— DONE 2026-06-13 (followups wave 1).**
 
 - [ ] **Route-design preferences** — once the graph-cycle generator exists, expose preference knobs (avoid highways, stick to neighbourhoods, scenic/quiet, elevation-aware, opt-in cul-de-sacs) as edge weights/filters + a multi-objective scoring layer on the graph search. The avoid-highways/prefer-residential half is cheaply doable today via a GraphHopper custom profile. Design in [graph_cycle_loop_generation.md § Extension](../features/graph_cycle_loop_generation.md). ~2–3 d on top of v3.
 
@@ -609,13 +609,13 @@ rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
   stay in lockstep. Chose the fixed 48h window over retain-until-run-ends (the latter needs an
   in-progress/ended signal on `runs` that doesn't exist — inventing schema for marginal gain). pgtap
   (`live_run_pings_retention_test.sql`) pins the boundary: 47h59m survives, 72h reaped.
-- [ ] **[high, privacy/safety] Privacy-zone clipping drops the last-known ping with no SAR carve-out.**
+- [x] **[high, privacy/safety] Privacy-zone clipping drops the last-known ping with no SAR carve-out.** **— DONE 2026-06-13 (followups wave 1).**
   `20260618_001` / `20260704_001` BEFORE-INSERT triggers `return NULL` for any ping inside a privacy
   zone, so a runner who stops *inside* their own zone (injured at home/hotel) vanishes from the
   spectator + SAR feed at their pre-zone position. This is a *documented* privacy-vs-safety trade-off,
   so it is a **product/privacy decision, not a bug to rush** — route to the owner + a `/audit/privacy-zones`
   review. Option: keep the single most-recent ping as a coarse "last seen near here" for an active run.
-- [ ] **[high, intricate] `recurrence.ts` expands instances in viewer-local time → wrong `instance_start` for cross-TZ spectators.**
+- [x] **[high, intricate] `recurrence.ts` expands instances in viewer-local time → wrong `instance_start` for cross-TZ spectators.** **— DONE 2026-06-13 (followups wave 1).**
   `apps/web/src/lib/social/recurrence.ts` `startOfWeek`/`setHours` build instance instants in the
   viewer's local zone, so a spectator in another zone computes a drifted `instance_start` and the
   event live page can show "race not armed" for an in-progress race. **Route via `/safe-edit`** — it's a
@@ -638,7 +638,7 @@ rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
   Already fixed on `main` (commit `8e5fda8e`, verified 2026-06-13) — `formatLivePace` honours
   `preferred_unit` (sec/mi + `/mi` label when imperial), twin-identical, widget test covers both units.
   Listed as deferred but was closed independently; ticking on verification.
-- [ ] **[medium] No terminal "Finished" / "DNF" state on mobile (and DNF unmodelled on both).** Web has
+- [x] **[medium] No terminal "Finished" / "DNF" state on mobile (and DNF unmodelled on both).** Web has **— DONE 2026-06-13 (followups wave 1).**
   `runIsFinished`; mobile shows "Idle" forever after a finish. Neither distinguishes "no signal" from a
   race-marked DNF. Feature-scale; pairs with the staleness work.
 - [x] **[low] Demo ticker has no Page Visibility pause** (`live/[id]/+page.svelte` `startDemo`) —
@@ -649,6 +649,28 @@ rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
 Dismissed (not bugs): the mobile `formatLivePace` "5:60/km" rollover is already pinned by an existing
 test (cosmetic, intentional-enough); pace-shown-is-average-not-current is a labelling nuance, not a defect.
 
+### Wave 1 residual follow-ons (2026-06-13)
+
+Surfaced while landing the wave-1 fixes; each is a deliberate scope edge, recorded so it isn't lost:
+
+- [ ] **Label the coarse last-seen ping in the spectator/SAR UI (web + mobile).** Migration `20270121_001`
+  now keeps a single `coarse=true`, ~1 km-coarsened in-zone ping for an active run (the SAR-critical part).
+  But no client reads the `coarse` flag yet, so the spectator map shows it as an ordinary (slightly-off) dot.
+  Add a "last seen near here / approximate" badge + a distinct marker style gated on `coarse=true` on the web
+  `/live/[id]` + event live pages and the mobile `live_spectator_screen.dart` (+ iOS twin), so a coarse point
+  is never read as precise. Small cross-platform UI add; pairs with the existing `live_freshness` staleness UI.
+- [ ] **Extend the privacy-zone last-seen carve-out to `race_pings`.** `20270121_001` carved out
+  `live_run_pings` (the solo live/SAR feed) only; the sibling `race_pings` BEFORE-INSERT trigger
+  (`20260704_001`) still drops every in-zone ping. The event-leaderboard surface has different semantics
+  (a coarse dot on a competitive board is odder than on a solo SAR feed), so it was scoped out pending the
+  `/audit/privacy-zones` review — decide there whether race participants want the same coarse carve-out.
+- [ ] **Validate the Strava-CSV-UTC + FIT-compressed-timestamp fixes against real files pre-prod.** Both
+  landed (`2f1df8be` parses `Activity Date` as UTC against Strava's *documented* no-zone format;
+  `eef38a28` decodes compressed-timestamp FIT records against a *synthetic* fixture). Neither was validated
+  against a real Strava bulk export / real older-Garmin-or-Wahoo compressed-timestamp FIT — get one of each
+  and confirm the format string(s) + field layout before relying on them in prod (the parse is fail-safe /
+  falls back, so the risk is "no improvement", not corruption).
+
 ## Integration import hunt (2026-06-13) — verified findings deferred
 
 A bug-hunt on the file-import surface (`apps/web/src/lib/integrations/` + `packages/gpx_parser/`).
@@ -657,7 +679,7 @@ gain (`import.ts`), GPX (0,0) null-island points from missing lat/lon (`import.t
 `file_id` Date-stringified dedupe key (`garmin-fit.ts`), and the GPX route-name scoping
 (`route_parser.dart`). The two below are real but were deliberately NOT rushed:
 
-- [ ] **[high, intricate] Strava CSV `Activity Date` is parsed as viewer-local time, not UTC.**
+- [x] **[high, intricate] Strava CSV `Activity Date` is parsed as viewer-local time, not UTC.** **— DONE 2026-06-13 (followups wave 1).**
   `strava-zip.ts:209` does `started_at: new Date(row[idx.date]).toISOString()`. Strava's bulk-export
   `activities.csv` `Activity Date` is UTC but emitted without a zone designator (e.g.
   `Apr 15, 2026, 1:00:00 PM`), so `new Date()` interprets it in the importer's local zone — every
@@ -668,7 +690,7 @@ gain (`import.ts`), GPX (0,0) null-island points from missing lat/lon (`import.t
   consistent skew. **Needs a real Strava export fixture** to pin the format string(s) and confirm the
   UTC assumption, then parse explicitly as UTC. Likely also affects the mobile Strava-ZIP path — check
   the Dart twin.
-- [ ] **[medium, intricate] Dart FIT parser skips compressed-timestamp record messages → empty route
+- [x] **[medium, intricate] Dart FIT parser skips compressed-timestamp record messages → empty route **— DONE 2026-06-13 (followups wave 1).**
   for devices that compress record timestamps.** `fit_parser.dart:70-80`: a record header with bit 7
   set (compressed timestamp) hits `offset += def.totalFieldSize; continue;` — the lat/lng fields are
   never decoded, so a FIT file whose `record` messages all use the compressed-timestamp header parses
@@ -696,7 +718,7 @@ mirrored web↔Dart↔iOS). The three below are real but need a product/architec
 edit — **route each via `/safe-edit` when picked up** (they touch the plan generator / stored
 `fitness_snapshots` / the TS↔Dart parity twins):
 
-- [ ] **[high, product call] Generated plan's stated weekly volume ≠ the volume it actually prescribes.**
+- [x] **[high, product call] Generated plan's stated weekly volume ≠ the volume it actually prescribes.** **— DONE 2026-06-13 (followups wave 1).**
   `training.ts` `generateWeek` emits FIXED quality-day distances (intervals + tempo) and a full long run
   regardless of the week's `target_volume_m` (`weeklyKm*1000`), and clamps `remainingKm` to 0 when
   quality+long already exceed the budget. On small-volume plans (5k, half) the emitted sum of workout
@@ -705,14 +727,14 @@ edit — **route each via `/safe-edit` when picked up** (they touch the plan gen
   `peak > taper` on the *declared* number, never the emitted sum. **Needs a product decision**: cap
   quality/long-run to the weekly budget, OR recompute `target_volume_m` from the emitted workouts so the
   number the user sees matches the plan. Either way it's a core-generator change across the parity twin.
-- [ ] **[medium, model call] A low-/no-HR run contributes ZERO training load in TRIMP mode.**
+- [x] **[medium, model call] A low-/no-HR run contributes ZERO training load in TRIMP mode.** **— DONE 2026-06-13 (followups wave 1).**
   `training_load.ts`: in a window scored in `'trimp'` mode, a run whose `avg_bpm <= resting_hr_bpm`
   (misconfigured resting HR, strap dropout, true recovery run) gets `hrr=0 → trimp=0` and is dropped
   entirely by the `stress <= 0` skip — a real logged run vanishes from the fatigue/form curve. Single-run
   path is accidentally protected (all-zero-TRIMP falls back to distance mode); only the dashboard series
   hits it. **Needs a model decision**: should such a run fall back to the distance-proxy stress for that
   one run, or is TRIMP≈0 the honest answer? Mirror any fix to `training_load.dart`.
-- [ ] **[medium, architecture call] `fitness.ts` and `training_load.ts` compute the same fitness numbers
+- [x] **[medium, architecture call] `fitness.ts` and `training_load.ts` compute the same fitness numbers **— DONE 2026-06-13 (followups wave 1).**
   two different ways.** (1) Day bucketing: `training_load.ts` keys runs by LOCAL midnight (matching
   `streaks`/`recap`), `fitness.ts` keys by UTC midnight (documented as intentional, mirrors
   `fitness.dart`) — so a late-night run buckets to different days and the dashboard chart vs the fitness
@@ -736,7 +758,7 @@ truncated zone/run-meta fetch body (`zones.go`/`runmeta.go` — privacy leak), a
 push-rate-limiter buckets (`server.go`/`main.go` — process-lifetime memory leak). The two below are
 real but were not rushed:
 
-- [ ] **[high, product call] OSRM map-match silently truncates a run when one chunk can't be matched.**
+- [x] **[high, product call] OSRM map-match silently truncates a run when one chunk can't be matched.** **— DONE 2026-06-13 (followups wave 1).**
   `matcher_osrm.go` `Match` chunks the track at 100 points; a chunk that comes back `code != "Ok"`
   (a tunnel, an unmapped trail) returns `(nil, nil)` and the stitch loop appends nothing and
   `continue`s. So a 150-point run where chunk 2 doesn't match produces a 100-point matched track
@@ -748,7 +770,7 @@ real but were not rushed:
   runs; or (b) carry the unmatched chunk's raw points through (mirroring the existing 1-point-tail
   behaviour at `:100-105`), covering the full run with mixed snapped+raw geometry under a `matched`
   label. **Route via `/safe-edit`** with the semantics decided first.
-- [ ] **[medium, intricate] Live pings during a late-joiner's history replay can be dropped or
+- [x] **[medium, intricate] Live pings during a late-joiner's history replay can be dropped or **— DONE 2026-06-13 (followups wave 1).**
   duplicated.** `server.go` `handleSubscribe` registers the subscriber channel before the synchronous
   history replay, so (1) a ping published in the window between register and the `History()` snapshot is
   sent twice (once in replay, once live → duplicate dot), and (2) on a busy room a long replay can
@@ -772,7 +794,7 @@ plausibility clamp is no longer carried forward as the next interval's integrand
 it injected phantom distance the moment a good sample followed a glitch). The two below are real but
 need a design decision, not a rushed edit:
 
-- [ ] **[medium, design change] `_routeRemaining` over-counts on a loop / out-and-back route.**
+- [x] **[medium, design change] `_routeRemaining` over-counts on a loop / out-and-back route.** **— DONE 2026-06-13 (followups wave 1).**
   `run_recorder.dart` `_routeRemaining` picks the closest route segment purely by minimum perpendicular
   distance, then sums that segment's tail + all later segments. On a route that revisits its own corridor
   (out-and-back, lollipop, figure-eight — common for real runs), the geometrically-closest segment can be
@@ -780,7 +802,7 @@ need a design decision, not a rushed edit:
   tests only use monotonic, non-self-intersecting straight lines, so it's uncovered. The fix is a design
   change (track progress monotonically — never let the matched segment index move backward — rather than
   nearest-segment-per-tick), so **route via `/safe-edit`**.
-- [ ] **[low, sentinel trade-off] A GPS fix with altitude exactly `0.0` is stored as null elevation.**
+- [x] **[low, sentinel trade-off] A GPS fix with altitude exactly `0.0` is stored as null elevation.** **— DONE 2026-06-13 (followups wave 1).**
   `run_recorder.dart` `elevationMetres: pos.altitude != 0 ? pos.altitude : null` treats `0` as the
   "no altitude fix" sentinel — which drops a legitimate sea-level reading (coastal run) and leaves a gap
   in the elevation/grade profile. But many devices DO report `0.0` when they have no vertical fix, so
@@ -796,7 +818,7 @@ window, dashboard single training-load series, heatmap window guard, token-refre
 concurrency, store diff-before-write, the `run_engagement_counts` + `dm_threads`
 RPCs). One finding was **deferred, not dismissed**:
 
-- [ ] **[deferred — gated, no urgency] Weekly-digest builder enqueues up to 5000 jobs one HTTP INSERT at a time.**
+- [x] **[deferred — gated, no urgency] Weekly-digest builder enqueues up to 5000 jobs one HTTP INSERT at a time.** **— DONE 2026-06-13 (followups wave 1).**
   `apps/job_worker/internal/digest_builder.go` `EnqueueAllWeeklyDigests` loops over up to
   `maxDigestCandidatesPerRun=5000` recipient ids and POSTs one `/rest/v1/jobs` row per id
   (`supabase.go` `EnqueueWeeklyDigest`), fully serialized — ~75-150s of enqueue latency at a populated
