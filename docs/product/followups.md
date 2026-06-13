@@ -5,6 +5,24 @@ description: Open follow-ups only. Shipped items are pruned as they land — the
 
 # Open follow-ups
 
+## Perf-hunt round 2 deferrals (2026-06-13)
+
+A second perf-hunt sweep (fresh surfaces: web Svelte reactivity, web bundle, the rest of
+the server query layer, Wear OS Kotlin, watchOS + mobile sync) shipped 6 fixes (dead
+maplibre import on /routes, lazy-loaded PrivacyZonePicker, watchOS per-fix
+ISO8601DateFormatter hoist, gym PR single-pass `RunningPrTracker`, single-pass route math
+on Wear + the shared recorder, and the `public_run_counts` RPC). Three findings were
+**deferred, not dismissed**:
+
+- [ ] **[deferred — needs_safe_migration] enrichEvents over-fetches all-time "going" RSVPs to compute a next-instance count.**
+  `data.ts` `enrichEvents` (~L2049) issues `event_attendees.select('event_id, instance_start').in(event_id, ids).eq('status','going')` with NO limit, then keeps only the rows matching each event's NEXT instance. A busy old club's recurring series accumulates one going-row per member per past instance (52 instances × 150 members ≈ 7,800 rows for one event), so a 200-event page can transfer tens of thousands of rows to produce 200 integers. Durable fix: an `event_next_instance_going_counts(p_event_ids uuid[], p_next_starts timestamptz[])` RPC counting only at each event's next-instance timestamp (the capacity trigger `20261018_001` already does exactly that scoped `count(*) ... where instance_start = ... and status='going'`). Index `(event_id, instance_start)` serves it. Bites only old high-attendance clubs; schedule the RPC, don't rush.
+
+- [ ] **[deferred — needs_safe_edit] fetchPublicRoute does two serial reads on the anonymous share / OG-image path.**
+  `data.ts` `fetchPublicRoute` (~L1241) awaits the `public_routes` metadata read, THEN `fetchClippedRouteForViewer(id)` — but the clip RPC depends only on `id`, so they serialize for no data reason. One redundant Supabase RTT (tens of ms) added to time-to-first-render on `/share/route/[id]` + the OG-image Lambda. Fix: `Promise.all` both (they key only on `id`), null the result when meta is absent; same parallelization in `fetchRouteById`'s non-owner branch. Constant per request (not a scaling cliff), so a tidy latency win rather than urgent.
+
+- [ ] **[deferred — watchOS deferred target] CheckpointStore.loadTrackPoints buffers the whole track file at finish.**
+  `apps/watch_ios/WatchApp/CheckpointStore.swift` `loadTrackPoints` (~L187) does `String(contentsOf:)` + `.split` + `compactMap` — three large allocations held at once. Negligible for a 6h ultra (~1.7 MB) but ~60 MB transient peak for a 100h ultra (~28 MB NDJSON), an OOM/jank risk at the save transition on a memory-constrained watch. Streaming the read removes ~34 MB of that, but the bigger finish-path peak is `writeTrackJSON`'s `JSONEncoder().encode(run.track)` which still holds the full track — fix them together. **apps/watch_ios is an explicitly deferred target (no XCTest harness to pin a regression)** — do this when the deferral lifts and the whole finish/serialize path is reworked to stream.
+
 What's left after the gap-closure + persona-hunt sessions. Shipped work has been pruned: the operator cutover recipes for the Go-service migrations (live hub, Strava webhook, token refresh, data export, premium endpoints) live in [`apps/job_worker/deployment.md`](../../apps/job_worker/deployment.md) and [`apps/web/deployment.md`](../../apps/web/deployment.md); everything else is in git history. Pair this file with [`docs/testing/testing.md`](../testing/testing.md) "What's *not* covered" for the test view.
 
 Every item below is one of: (a) blocked on an external credential / account, (b) an operator deploy step on code that's already merged, or (c) a sized-but-unstarted feature awaiting a product green-light.
