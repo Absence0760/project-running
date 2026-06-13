@@ -137,6 +137,55 @@ void main() {
       }
     });
 
+    testWidgets('honours an injected loadSeries over its own recompute',
+        (tester) async {
+      // The dashboard computes ONE training-load series (with lifts) and passes
+      // it to FitnessCard, ReadinessCard, and the chart so they can't disagree.
+      // Pin that the card reads the injected series, not a self-recomputed
+      // run-only one: feed a series whose CTL/ATL/TSB are distinctive values
+      // the runs alone would never produce.
+      final now = DateTime.utc(2026, 5, 1);
+      final runs = [
+        _r(distance: 5000, durationS: 1500, startedAt: now.subtract(const Duration(days: 25))),
+        _r(distance: 5000, durationS: 1300, startedAt: now.subtract(const Duration(days: 5))),
+      ];
+      final injected = [
+        TrainingLoadPoint(
+          date: now,
+          stress: 120,
+          runStress: 60,
+          liftStress: 60,
+          atl: 71,
+          ctl: 88,
+          tsb: 17,
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: FitnessCard(runs: runs, now: now, loadSeries: injected),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final entry in {
+        'Fitness (CTL)': '88',
+        'Fatigue (ATL)': '71',
+        'Form (TSB)': '17',
+      }.entries) {
+        final stat = find.ancestor(
+            of: find.text(entry.key), matching: find.byType(FitnessStat));
+        expect(find.descendant(of: stat, matching: find.text(entry.value)),
+            findsOneWidget,
+            reason: '${entry.key} must come from the injected series '
+                '(${entry.value}), not a self-recompute.');
+      }
+    });
+
     testWidgets('uses an em-dash placeholder when VDOT cannot be computed',
         (tester) async {
       // Two qualifying-distance runs both outside the 90-day VDOT recency

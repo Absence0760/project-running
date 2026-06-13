@@ -15,18 +15,26 @@ class ReadinessCard extends StatelessWidget {
   final DateTime now;
   final HrPrefs hrPrefs;
 
+  /// The training-load series the dashboard already computed (once, with the
+  /// decided lift set). When provided, the card's TSB comes from it so
+  /// readiness can't disagree with the displayed form number or the chart —
+  /// and the O(runs) aggregation isn't re-run. Standalone callers omit it.
+  final List<TrainingLoadPoint>? loadSeries;
+
   const ReadinessCard({
     super.key,
     required this.runs,
     required this.now,
     this.hrPrefs = const HrPrefs(),
+    this.loadSeries,
   });
 
   @override
   Widget build(BuildContext context) {
     // TSB from the same training-load series the chart + fitness card use,
     // so readiness can't disagree with the displayed form number (round-5 pro).
-    final series = computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
+    final series =
+        loadSeries ?? computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
     final load = (series.isNotEmpty &&
             (series.last.ctl > 0 || series.last.atl > 0))
         ? series.last

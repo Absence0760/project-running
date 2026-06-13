@@ -20,11 +20,19 @@ class FitnessCard extends StatelessWidget {
   final List<Run> runs;
   final DateTime now;
   final HrPrefs hrPrefs;
+
+  /// The training-load series the dashboard already computed (once, with the
+  /// decided lift set). When provided, the card reads CTL/ATL/TSB + advice from
+  /// it so its numbers match the chart exactly — and the O(runs) aggregation
+  /// isn't re-run here. Standalone callers (e.g. tests) omit it and the card
+  /// falls back to computing a run-only series itself.
+  final List<TrainingLoadPoint>? loadSeries;
   const FitnessCard({
     super.key,
     required this.runs,
     required this.now,
     this.hrPrefs = const HrPrefs(),
+    this.loadSeries,
   });
 
   @override
@@ -37,7 +45,8 @@ class FitnessCard extends StatelessWidget {
     // the chart below uses, so the number, the advice, and the curve can't
     // contradict each other (round-5 pro). VO₂max / VDOT / qualifying stay
     // on computeSnapshot.
-    final series = computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
+    final series =
+        loadSeries ?? computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
     final load = (series.isNotEmpty &&
             (series.last.ctl > 0 || series.last.atl > 0))
         ? series.last

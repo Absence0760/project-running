@@ -390,14 +390,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return false;
   }
 
-  Widget _buildTrainingLoadChart(List<Run> runs, DateTime now) {
-    final hrPrefs = _hrPrefs();
-    final lifts = _readinessLifts();
-    final series = computeTrainingLoadSeries(runs,
-        prefs: hrPrefs, endDate: now, lifts: lifts);
+  /// The ONE training-load series the whole dashboard reads — computed once per
+  /// build with the single decided lift set (`_readinessLifts`, which honours
+  /// the exclude-gym opt-out) and the same prefs/endDate. FitnessCard,
+  /// ReadinessCard, and the chart are all fed this exact series, so the
+  /// CTL/ATL/TSB number, the recovery advice, and the plotted curve can't
+  /// disagree (the cards used to recompute a lift-LESS series of their own —
+  /// a silent inconsistency for any gym user) and the expensive aggregation
+  /// runs once instead of 3-4× per build.
+  List<TrainingLoadPoint> _trainingLoadSeries(List<Run> runs, DateTime now) =>
+      computeTrainingLoadSeries(runs,
+          prefs: _hrPrefs(), endDate: now, lifts: _readinessLifts());
+
+  Widget _buildTrainingLoadChart(
+      List<Run> runs, DateTime now, List<TrainingLoadPoint> series) {
     return TrainingLoadChart(
       points: series,
-      hasHr: hasTrimpSignal(runs, hrPrefs),
+      hasHr: hasTrimpSignal(runs, _hrPrefs()),
       includesLifts: series.any((p) => p.liftStress > 0),
     );
   }
@@ -455,6 +464,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = DateTime.now();
     final weekStart = weekStartLocal(now, weekStartDay: _weekStartDay);
     final monthStart = DateTime(now.year, now.month, 1);
+    // Compute the training-load series ONCE — FitnessCard, ReadinessCard, and
+    // the chart all read this same instance instead of each re-running the
+    // O(runs) aggregation (the cards even did so with a different lift input,
+    // disagreeing with the chart). See _trainingLoadSeries.
+    final loadSeries = _trainingLoadSeries(runs, now);
 
     // One pass over the runs list collects everything every card needs —
     // week totals, month totals, all-time totals, and the PB candidates.
@@ -741,15 +755,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   _kSectionGap,
                 ],
-                FitnessCard(runs: runs, now: now, hrPrefs: _hrPrefs()),
-                ReadinessCard(runs: runs, now: now, hrPrefs: _hrPrefs()),
+                FitnessCard(
+                    runs: runs,
+                    now: now,
+                    hrPrefs: _hrPrefs(),
+                    loadSeries: loadSeries),
+                ReadinessCard(
+                    runs: runs,
+                    now: now,
+                    hrPrefs: _hrPrefs(),
+                    loadSeries: loadSeries),
                 IntensityCard(
                   runs: runs,
                   hrZones: parseHrZones(widget.settingsSync?.service
                       ?.effective<Map>(SettingsKeys.hrZones)),
                   now: now,
                 ),
-                _buildTrainingLoadChart(runs, now),
+                _buildTrainingLoadChart(runs, now, loadSeries),
                 if (_hasRecentLift(now)) _gymReadinessNote(theme, l10n),
                 // Recent lifts trend list — self-hides for a pure runner (empty
                 // gym store), mirrors web /dashboard's recent-lifts card.

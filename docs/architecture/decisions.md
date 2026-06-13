@@ -3103,6 +3103,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 149. The mobile dashboard computes ONE training-load series and feeds it to every consumer
+
+**Decided (2026-06-13, perf-hunt).** `dashboard_screen.dart` rendered three surfaces off training load — `FitnessCard` (CTL/ATL/TSB + recovery advice), `ReadinessCard` (TSB), and `TrainingLoadChart` (the plotted curve) — and each independently called `computeTrainingLoadSeries(...)` in its own `build()`. Two problems: (1) **perf** — the O(runs) aggregation (two full passes + a 216-iteration EWMA walk) ran 3–4× per dashboard build, on the full track-less `summaryRuns`, re-run on every unrelated store/preference rebuild; (2) **correctness** — the chart passed `lifts: _readinessLifts()` while the two cards passed **no lifts**, so for any gym user (opt-out off) the headline fitness/fatigue/form number and the recovery advice silently disagreed with the curve right beside them, violating the cards' own "can't disagree with the displayed form" contract.
+
+**Fix.** The dashboard `State` exposes `_trainingLoadSeries(runs, now)` — the single series, computed with `_readinessLifts()` (which already honours the `exclude_gym_from_readiness` opt-out, §134). `build()` computes it once and threads the instance into `FitnessCard`, `ReadinessCard`, and the chart via an optional `loadSeries` param; the cards read `loadSeries.last` instead of recomputing. The param is optional so standalone callers (widget tests) still self-compute a run-only series.
+
+**Trade-off / behaviour change.** This is the deliberate part: a gym user with the opt-out OFF now sees lift load reflected in the Fitness + Readiness cards (previously run-only there, lift-inclusive only on the chart). That's the documented intent — the cards are *supposed* to match the chart — so it's a bug fix, not a new feature, but it does move the displayed CTL/ATL/TSB for those users. Pure run-only readiness is still one toggle away (`exclude_gym_from_readiness`). Pinned by `fitness_card_test.dart` (the card honours an injected `loadSeries` over a self-recompute). Cross-build memoisation (skipping the recompute when nothing changed) was left out — `now` changes every build and `summaryRuns` has no stable identity, so it'd need a run-store revision counter; the per-build single-compute already removes the dominant 3–4× waste.
+
+**Don't re-litigate** by reintroducing a per-card `computeTrainingLoadSeries` call — the whole point is one series, one lift decision, one source of truth shared by the number, the advice, and the curve.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
