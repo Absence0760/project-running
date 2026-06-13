@@ -69,7 +69,14 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     // With no stored value, the subtitle reflects the 'important' default.
-    expect(find.widgetWithText(ListTile, 'Push notifications'), findsOneWidget);
+    // Scope to this tile — the email-notifications tile shares the subtitle.
+    expect(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Push notifications'),
+        matching: find.text('Important only'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('picking Everything writes push_notifications=all to the bag',
