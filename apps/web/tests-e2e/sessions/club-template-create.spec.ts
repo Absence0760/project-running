@@ -5,12 +5,13 @@ import { USER_A } from '../fixtures/users';
 
 /**
  * Session planner P3 (session_planner.md) — create a club-owned session template
- * from the club Templates tab. The "New session template" affordance links to
- * the unified create hub (/plans/new?type=session&club=<id>), which mounts the
- * SessionPlanEditor in club-owned mode; on save it returns to the Templates tab
- * with the new template listed and the row carries club_id.
+ * from the club Templates tab. The single admin "Add template" button links to
+ * the unified create hub (/plans/new?club=<id>) where the user picks the kind;
+ * choosing "Session plan" mounts the SessionPlanEditor in club-owned mode (the
+ * club id flows through), and on save it returns to the Templates tab with the
+ * new template listed and the row carrying club_id.
  *
- * USER_A owns Richmond Run Club (admin), so the admin-only link is visible.
+ * USER_A owns Richmond Run Club (admin), so the admin-only button is visible.
  */
 
 const RICHMOND_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
@@ -39,15 +40,17 @@ test.describe('/clubs — create session template via the hub', () => {
 
 		await page.goto('/clubs/richmond-run-club?tab=templates');
 
-		// The admin-only front door links to the unified create hub, pre-scoped
-		// to session + this club.
-		const newLink = page.getByTestId('new-session-template');
-		await expect(newLink).toBeVisible({ timeout: 10_000 });
-		await newLink.click();
-		await page.waitForURL(/\/plans\/new\?.*type=session/, { timeout: 10_000 });
-		await page.waitForURL(new RegExp(`club=${RICHMOND_CLUB_ID}`), { timeout: 10_000 });
+		// One admin "Add template" front door → the create hub, scoped to this club.
+		const newBtn = page.getByTestId('new-template');
+		await expect(newBtn).toBeVisible({ timeout: 10_000 });
+		await newBtn.click();
+		await page.waitForURL(new RegExp(`/plans/new\\?.*club=${RICHMOND_CLUB_ID}`), {
+			timeout: 10_000
+		});
 
-		// The session branch is active — the editor is mounted.
+		// Pick the Session-plan kind from the hub chooser; the club id flows
+		// through so the editor mounts in club-owned mode.
+		await page.getByTestId('kind-session').click();
 		const editor = page.locator('.session-editor');
 		await expect(editor).toBeVisible({ timeout: 5_000 });
 		await editor.getByLabel('Title', { exact: true }).fill(title);

@@ -1241,16 +1241,19 @@
 				</div>
 			{/if}
 		{:else if tab === 'templates'}
+			{#if isAdmin}
+				<div class="templates-toolbar">
+					<a class="btn btn-primary" href="/plans/new?club={club.id}" data-testid="new-template">
+						<span class="material-symbols" aria-hidden="true">add</span>
+						{tr('clubHome.addTemplate')}
+					</a>
+				</div>
+			{/if}
+
 			<!-- Training plan templates -->
 			<section class="template-group">
 				<div class="template-group-head">
 					<h3>{tr('clubHome.trainingTemplatesTitle')}</h3>
-					{#if isAdmin}
-						<a class="btn btn-primary btn-sm" href="/plans/new?type=training">
-							<span class="material-symbols" aria-hidden="true">add</span>
-							{tr('clubHome.newTrainingTemplate')}
-						</a>
-					{/if}
 				</div>
 				<p class="section-hint">{tr('clubHome.templatesHint')}</p>
 				{#if clubTemplates.length > 0}
@@ -1292,16 +1295,6 @@
 			<section class="template-group">
 				<div class="template-group-head">
 					<h3>{tr('clubHome.sessionTemplatesTitle')}</h3>
-					{#if isAdmin}
-						<a
-							class="btn btn-primary btn-sm"
-							href="/plans/new?type=session&club={club.id}"
-							data-testid="new-session-template"
-						>
-							<span class="material-symbols" aria-hidden="true">add</span>
-							{tr('clubHome.newSessionTemplate')}
-						</a>
-					{/if}
 				</div>
 				<p class="section-hint">{tr('clubHome.sessionTemplatesHint')}</p>
 				{#if sessionTemplates.length > 0}
@@ -1339,12 +1332,6 @@
 			<section class="template-group">
 				<div class="template-group-head">
 					<h3>{tr('clubHome.gymRoutineTemplatesTitle')}</h3>
-					{#if isAdmin}
-						<a class="btn btn-primary btn-sm" href="/plans/new?type=gym">
-							<span class="material-symbols" aria-hidden="true">add</span>
-							{tr('clubHome.newGymTemplate')}
-						</a>
-					{/if}
 				</div>
 				<p class="section-hint">{tr('clubHome.gymRoutineTemplatesHint')}</p>
 				{#if gymRoutineTemplates.length > 0}
@@ -2325,6 +2312,11 @@
 		margin: 0 0 var(--space-md) 0;
 	}
 
+	.templates-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: var(--space-lg);
+	}
 	.template-group {
 		margin-bottom: var(--space-2xl);
 	}

@@ -265,6 +265,9 @@
 	</header>
 
 	{#if kind === 'training'}
+	{#if clubId}
+		<p class="picker-hint club-target-note">{m('plansNew.clubPublishNote')}</p>
+	{/if}
 	<section class="starter-picker">
 		<h2>{m('plansNew.starterHeading')}</h2>
 		<p class="picker-hint">{m('plansNew.starterHint')}</p>
@@ -352,6 +355,9 @@
 		</div>
 	{:else}
 		<div class="form-branch">
+			{#if clubId}
+				<p class="picker-hint club-target-note">{m('plansNew.clubPublishNote')}</p>
+			{/if}
 			<RoutineEditor suggestions={gymSuggestions} oncreated={onGymCreated} oncancel={handleCancel} />
 		</div>
 	{/if}
