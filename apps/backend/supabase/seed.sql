@@ -697,6 +697,114 @@ INSERT INTO event_attendees (event_id, user_id, status, instance_start) VALUES
   ('e1111111-0000-0000-0000-000000000001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'going', '2026-04-19T06:30:00Z'),
   ('e1111111-0000-0000-0000-000000000001', 'b2c3d4e5-f6a7-8901-bcde-f23456789012', 'maybe',  '2026-04-19T06:30:00Z');
 
+-- ───────── Cross-club activity discovery (the /social Discover tab) ─────────
+-- Backs search_public_events (migrations 20270110_001 + 20270111_001). The
+-- three events above are all category='run', free, untyped — they don't
+-- exercise the discovery filters. This block fans events across the public
+-- Virginia clubs so EVERY Discover filter dimension has something to match:
+--   * category   — run / cycle / class / social (≥1 each)
+--   * cadence    — one_off / weekly / biweekly / monthly (≥1 each)
+--   * weekday    — MO/TU/WE/TH/FR/SA/SU spread (byday + one-off isodow)
+--   * time       — morning (05–11) / afternoon (12–16) / evening (17–04)
+--   * paid/free  — three priced events + the rest free
+--   * discipline — Yoga / Pilates / Spin / Gravel / Strength text search
+--
+-- Times are anchored to America/New_York (EDT = UTC−4 in June) so the
+-- timezone-aware time-of-day bucket resolves to the organiser's intended
+-- LOCAL hour, not the UTC instant (e.g. 23:00Z = 19:00 EDT → evening). The
+-- recurring anchors use a near-future date whose weekday matches byday for
+-- readability; the one-offs sit in the next two weeks so they pass the
+-- `starts_at >= now()` upcoming gate.
+INSERT INTO events (
+  id, club_id, title, description, starts_at, timezone, duration_min, meet_label,
+  category, discipline, capacity, recurrence_freq, recurrence_byday, author_id
+) VALUES
+  -- run · weekly · SA · morning (07:00 EDT) · free
+  ('e4444444-0000-0000-0000-0000000000d1',
+   'c1111111-0000-0000-0000-000000000001',
+   'Saturday Sunrise 5K',
+   'Easy social 5K from Belle Isle at first light. Coffee at the lot after.',
+   '2026-06-13T11:00:00Z', 'America/New_York', 45, 'Belle Isle parking lot',
+   'run', null, null, 'weekly', ARRAY['SA'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- cycle · weekly · WE · afternoon (14:00 EDT) · free · discipline "Gravel Ride"
+  ('e5555555-0000-0000-0000-0000000000d2',
+   'c4444444-0000-0000-0000-000000000004',
+   'Wednesday Gravel Ride',
+   'Rolling gravel along the W&OD. ~40 km, regroup at every turn.',
+   '2026-06-17T18:00:00Z', 'America/New_York', 150, 'Memorial Bridge',
+   'cycle', 'Gravel Ride', 25, 'weekly', ARRAY['WE'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- class · weekly · TH · evening (19:00 EDT) · free · discipline "Vinyasa Yoga"
+  ('e6666666-0000-0000-0000-0000000000d3',
+   'c5555555-0000-0000-0000-000000000005',
+   'Recovery Vinyasa',
+   'Gentle flow for runners. Mats provided; first class free.',
+   '2026-06-18T23:00:00Z', 'America/New_York', 60, 'Botanical Garden studio',
+   'class', 'Vinyasa Yoga', 16, 'weekly', ARRAY['TH'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- social · biweekly · FR · evening (18:30 EDT) · free · discipline "Post-run Social"
+  ('e7777777-0000-0000-0000-0000000000d4',
+   'c9999999-0000-0000-0000-000000000009',
+   'Trailhead Social',
+   'Post-run hang at the brewery. No pace, no pressure — bring a friend.',
+   '2026-06-19T22:30:00Z', 'America/New_York', 90, 'Three Notch''d Brewing',
+   'social', 'Post-run Social', null, 'biweekly', ARRAY['FR'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- run · monthly · SU · morning (06:30 EDT) · free
+  ('e8888888-0000-0000-0000-0000000000d5',
+   'c8888888-0000-0000-0000-000000000008',
+   'Monthly Marathon Long Run',
+   'Progressive long run on the marathon course. Aid every 5 km.',
+   '2026-06-14T10:30:00Z', 'America/New_York', 180, 'Belle Isle parking lot',
+   'run', null, null, 'monthly', ARRAY['SU'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- run · ONE-OFF (future SA) · morning (08:00 EDT) · free
+  ('e9999999-0000-0000-0000-0000000000d6',
+   'c6666666-0000-0000-0000-000000000006',
+   'Boardwalk 10K Time Trial',
+   'Flat-and-fast 10K time trial on the Boardwalk. Chip-free, run your own.',
+   '2026-06-20T12:00:00Z', 'America/New_York', 60, 'VA Beach Boardwalk, 17th St',
+   'run', null, 100, null, null,
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- class · weekly · MO · evening (18:00 EDT) · PAID · discipline "Reformer Pilates"
+  ('ea000000-0000-0000-0000-0000000000d7',
+   'c5555555-0000-0000-0000-000000000005',
+   'Reformer Pilates',
+   'Reformer core + mobility for runners. Six machines — booking required.',
+   '2026-06-15T22:00:00Z', 'America/New_York', 50, 'Botanical Garden studio',
+   'class', 'Reformer Pilates', 6, 'weekly', ARRAY['MO'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- cycle · biweekly · TU · afternoon (12:00 EDT) · PAID · discipline "Spin"
+  ('eb000000-0000-0000-0000-0000000000d8',
+   'c4444444-0000-0000-0000-000000000004',
+   'Indoor Spin Studio',
+   'Lunchtime 45-min spin intervals. Shoes + towel provided.',
+   '2026-06-16T16:00:00Z', 'America/New_York', 45, 'Crystal City studio',
+   'cycle', 'Spin', 20, 'biweekly', ARRAY['TU'],
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  -- class · ONE-OFF (future SA) · morning (10:00 EDT) · PAID · discipline "Strength & Mobility"
+  ('ec000000-0000-0000-0000-0000000000d9',
+   'c7777777-0000-0000-0000-000000000007',
+   'Strength for Runners Workshop',
+   'Two-hour strength + mobility workshop. Kettlebells supplied; bring water.',
+   '2026-06-27T14:00:00Z', 'America/New_York', 120, 'Mill Mountain rec centre',
+   'class', 'Strength & Mobility', 18, null, null,
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+
+-- Price the three paid discovery events. event_pricing has a BEFORE-INSERT
+-- trigger gating pricing on the host's charges_enabled Stripe capability;
+-- the seed has no Stripe Connect account, so bypass it the same way the
+-- search_public_events pgtap fixture does (session_replication_role=replica
+-- suspends triggers for this superuser session only). NULL instance_start =
+-- the series default price the discovery "from" collapses to.
+SET session_replication_role = replica;
+INSERT INTO event_pricing (event_id, price_cents, currency) VALUES
+  ('ea000000-0000-0000-0000-0000000000d7', 1800, 'usd'),
+  ('eb000000-0000-0000-0000-0000000000d8', 1200, 'usd'),
+  ('ec000000-0000-0000-0000-0000000000d9', 2500, 'usd');
+SET session_replication_role = origin;
+
 -- Club posts — a top-level announcement + a reply so the threaded-reply
 -- UI has content on first load.
 INSERT INTO club_posts (id, club_id, event_id, event_instance_start, author_id, body, created_at) VALUES
