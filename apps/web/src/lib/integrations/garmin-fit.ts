@@ -303,8 +303,20 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 	);
 
 	const fileIdEntry = data.file_ids?.[0];
+	// fit-file-parser decodes FIT `date_time` fields (incl. file_id's
+	// time_created) into a JS Date. Template-stringifying a Date yields a
+	// localised, timezone-dependent string ("…GMT-0400 (Eastern Daylight
+	// Time)"), so the same activity imported in two timezones produced two
+	// different external_ids and the per-user runs.external_id unique index
+	// never caught the re-import. Coerce the Date back to epoch seconds for
+	// a stable, timezone-independent dedupe key.
+	const rawTimeCreated = (fileIdEntry as { time_created?: unknown } | undefined)?.time_created;
+	const timeKey =
+		rawTimeCreated instanceof Date
+			? Math.floor(rawTimeCreated.getTime() / 1000)
+			: (rawTimeCreated ?? '');
 	const garminFileId = fileIdEntry
-		? `${fileIdEntry.time_created ?? ''}-${fileIdEntry.serial_number ?? ''}`
+		? `${timeKey}-${fileIdEntry.serial_number ?? ''}`
 		: null;
 
 	return {

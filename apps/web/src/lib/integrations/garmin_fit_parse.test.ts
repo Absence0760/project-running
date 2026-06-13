@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { parseFitBuffer } from './garmin-fit';
+import { parseFitBuffer, garminExternalId } from './garmin-fit';
 
 const SEMI = 2 ** 31 / 180;
 
@@ -258,6 +258,17 @@ test('parseFitBuffer — GPS track survives (the trace strava-zip reuses for F4)
 	assert.ok(Math.abs(parsed!.track[0].lat - 51.5) < 1e-4);
 	assert.ok(Math.abs(parsed!.track[0].lng - -0.12) < 1e-4);
 	assert.equal(parsed!.track[0].ele, 100);
+});
+
+test('parseFitBuffer — garmin_file_id is a stable, timezone-independent numeric key', async () => {
+	const parsed = await parseFitBuffer(buildSyntheticTrailFit());
+	// file_id.time_created raw = 1000000000 (FIT epoch seconds) → unix
+	// seconds 1631065600 (FIT epoch is 631065600 s after the unix epoch);
+	// serial = 12345. The dedupe key must NOT be a localised Date string,
+	// or the same activity re-imported in another timezone slips past the
+	// runs.external_id unique index.
+	assert.equal(parsed!.garmin_file_id, '1631065600-12345');
+	assert.equal(garminExternalId(parsed!.garmin_file_id), 'garmin:1631065600-12345');
 });
 
 test('parseFitBuffer — core scalars round-trip', async () => {
