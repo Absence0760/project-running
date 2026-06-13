@@ -141,6 +141,52 @@ class _PendingSocial extends SocialService {
       Supabase.instance.client.channel('test-$clubId');
 }
 
+/// Member club with one top-level post and a gated createPost so the
+/// in-flight window stays open while the test taps Send a second time.
+class _ReplySocial extends SocialService {
+  int createCalls = 0;
+  final Completer<void> createGate = Completer<void>();
+
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _memberClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async => [
+        ClubPostView(
+          row: ClubPostRow(
+            id: 'post-1',
+            clubId: 'club-1',
+            authorId: 'someone',
+            body: 'Saturday long run?',
+            createdAt: DateTime.utc(2026, 5, 1),
+          ),
+          authorName: 'Sam',
+          replyCount: 0,
+        ),
+      ];
+  @override
+  Future<List<ClubPostView>> fetchPostReplies(String parentId, {int limit = 200}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  @override
+  Future<void> createPost({
+    required String clubId,
+    required String body,
+    String? parentPostId,
+    String? eventId,
+    DateTime? eventInstanceStart,
+  }) async {
+    createCalls++;
+    await createGate.future;
+  }
+
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
 GymRoutineRow _routine(String id, String title, int count) => GymRoutineRow(
       id: id,
       authorId: 'author',
@@ -237,6 +283,53 @@ void main() {
 
       // Let the gated approve finish so no timer/future leaks.
       social.approveGate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+  });
+
+  group('ClubDetailScreen — reply double-submit guard', () {
+    testWidgets('rapid double-tap of reply Send only fires createPost once',
+        (tester) async {
+      final social = _ReplySocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: social,
+            training: _FakeTraining(),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Feed is the default tab; expand the post's reply thread to reveal
+      // the composer (replyCount == 0 → the toggle reads "Reply").
+      await tester.tap(find.text('Reply'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Write a reply…'), 'On for 7am');
+      await tester.pump();
+
+      final sendBtn = find.widgetWithText(FilledButton, 'Send');
+      expect(sendBtn, findsOneWidget);
+
+      await tester.tap(sendBtn);
+      await tester.pump();
+      // Second tap while the first createPost is still gated in flight —
+      // the button is now disabled, so the tap is expected to miss.
+      await tester.tap(sendBtn, warnIfMissed: false);
+      await tester.pump();
+
+      expect(social.createCalls, 1);
+
+      // Release the gate so no future leaks.
+      social.createGate.complete();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
     });

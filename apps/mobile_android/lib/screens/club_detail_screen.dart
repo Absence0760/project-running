@@ -61,6 +61,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<ClubPostView> _posts = const [];
   List<ClubMemberRow> _pending = const [];
   final Set<String> _pendingBusy = {};
+  final Set<String> _replyBusy = {};
   List<TrainingPlanRow> _templates = const [];
   List<SessionPlanRow> _sessionTemplates = const [];
   String? _adoptingSessionId;
@@ -224,10 +225,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Future<void> _sendReply(String postId) async {
     final c = _club;
-    if (c == null) return;
+    if (c == null || _replyBusy.contains(postId)) return;
     final ctrl = _replyCtrls[postId];
     final body = ctrl?.text.trim();
     if (body == null || body.isEmpty) return;
+    setState(() => _replyBusy.add(postId));
     try {
       await widget.social.createPost(
         clubId: c.row.id,
@@ -249,6 +251,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       if (!mounted) return;
       showTopBanner(
           context, AppLocalizations.of(context).clubDetailReplyFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _replyBusy.remove(postId));
     }
   }
 
@@ -788,7 +792,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                           ),
                           const SizedBox(width: 6),
                           FilledButton(
-                            onPressed: () => _sendReply(p.row.id),
+                            onPressed: _replyBusy.contains(p.row.id)
+                                ? null
+                                : () => _sendReply(p.row.id),
                             style: FilledButton.styleFrom(
                               minimumSize: const Size(0, 40),
                               padding: const EdgeInsets.symmetric(horizontal: 12),
