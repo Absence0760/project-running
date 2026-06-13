@@ -1181,6 +1181,7 @@
 				return `<div class="cluster-route ${kept ? 'kept' : ''}"
 					data-route-id="${escapeHtml(r.id)}" data-lng="${r.lng}" data-lat="${r.lat}"
 					data-name="${escapeHtml(r.name)}" role="button" tabindex="0"
+					aria-label="${escapeHtml(`${r.name} — ${kept ? m('routeHeatmap.keptClickRemove') : m('routeHeatmap.clickKeep')}`)}"
 					title="${escapeHtml(kept ? m('routeHeatmap.keptClickRemove') : m('routeHeatmap.clickKeep'))}">
 					<span class="cluster-route-main">
 						<span class="cluster-route-name">${star}${escapeHtml(r.name)}</span>
@@ -1250,6 +1251,17 @@
 			const kept = pinnedIds.has(id);
 			row.classList.toggle('kept', kept);
 			row.title = kept ? m('routeHeatmap.keptClickRemove') : m('routeHeatmap.clickKeep');
+		});
+		// Keyboard activation for the role="button" rows (WCAG 2.1.1).
+		// Only the row itself (class cluster-route) — the inner View link
+		// keeps its native Enter-to-navigate.
+		el.addEventListener('keydown', (ev) => {
+			const ke = ev as KeyboardEvent;
+			if (ke.key !== 'Enter' && ke.key !== ' ') return;
+			const t = ke.target as HTMLElement;
+			if (!t.classList.contains('cluster-route')) return;
+			ke.preventDefault();
+			t.click();
 		});
 	}
 

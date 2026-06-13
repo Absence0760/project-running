@@ -780,7 +780,12 @@
 					role="button"
 					tabindex="0"
 					onclick={() => viewArchive(a.archived_at)}
-					onkeydown={(e) => { if (e.key === 'Enter') viewArchive(a.archived_at); }}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							viewArchive(a.archived_at);
+						}
+					}}
 				>
 					<span class="thread-title">{a.title}</span>
 					<span class="thread-meta">{formatArchiveDate(a.archived_at)} · {a.message_count}</span>
