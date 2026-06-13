@@ -320,7 +320,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       widget.settingsSync?.service?.effective<T>(key);
 
   Future<void> _putUniversal(String key, dynamic value) async {
-    await widget.settingsSync?.updateUniversal(<String, dynamic>{key: value});
+    try {
+      await widget.settingsSync?.updateUniversal(<String, dynamic>{key: value});
+    } catch (e) {
+      // Best-effort (L4): updateUniversal already persisted the change to
+      // the local cache and queued it for the next online drain before any
+      // server push, so a rare cache/auth throw here must not surface as an
+      // unhandled async error or revert the toggle.
+      debugPrint('settings updateUniversal failed for $key: $e');
+    }
     if (mounted) setState(() {});
   }
 
@@ -989,9 +997,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 onChanged: (v) async {
                   final value = v ? 'minimal' : 'full';
                   await prefs.setVoiceFeedbackVerbosity(value);
-                  await widget.settingsSync?.updateUniversal(
-                    <String, dynamic>{SettingsKeys.voiceFeedbackVerbosity: value},
-                  );
+                  await _putUniversal(SettingsKeys.voiceFeedbackVerbosity, value);
                 },
               ),
             ListTile(
