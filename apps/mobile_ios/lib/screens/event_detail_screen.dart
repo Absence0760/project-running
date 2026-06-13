@@ -389,6 +389,38 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
+  /// End / Cancel are irreversible and affect every participant, so they
+  /// confirm before firing (mirrors the web ConfirmDialog gate). Arm and
+  /// Fire Go stay one-tap.
+  Future<void> _confirmRaceAction(_RaceAction action) async {
+    final l10n = AppLocalizations.of(context);
+    final isCancel = action == _RaceAction.cancel;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(isCancel ? l10n.eventRaceCancelRace : l10n.eventRaceEnd),
+            content: Text(isCancel
+                ? l10n.eventRaceCancelConfirmBody
+                : l10n.eventRaceEndConfirmBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.eventSubmitCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(
+                    isCancel ? l10n.eventRaceCancelRace : l10n.eventRaceEnd),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok) await _raceMutation(action);
+  }
+
   Future<void> _rsvp(String status) async {
     final e = _event;
     final inst = _activeInstance;
@@ -923,7 +955,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   TextButton(
                     onPressed: _raceBusy
                         ? null
-                        : () => _raceMutation(_RaceAction.cancel),
+                        : () => _confirmRaceAction(_RaceAction.cancel),
                     child: Text(l10n.eventRaceCancel),
                   ),
                 ],
@@ -944,7 +976,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   FilledButton.icon(
                     onPressed: _raceBusy
                         ? null
-                        : () => _raceMutation(_RaceAction.end),
+                        : () => _confirmRaceAction(_RaceAction.end),
                     icon: const Icon(Icons.stop_circle),
                     label: Text(l10n.eventRaceEnd),
                   ),
@@ -952,7 +984,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   TextButton(
                     onPressed: _raceBusy
                         ? null
-                        : () => _raceMutation(_RaceAction.cancel),
+                        : () => _confirmRaceAction(_RaceAction.cancel),
                     child: Text(l10n.eventRaceCancelRace),
                   ),
                 ],
