@@ -206,6 +206,70 @@ class PeopleSuggestion extends PublicProfile {
   });
 }
 
+/// A discoverable public-club event returned by `search_public_events`
+/// (the cross-club activity Discover surface — web `/social?tab=discover`,
+/// mobile the Social Discover tab). Mirror of the web `PublicEventResult`
+/// interface in `apps/web/src/lib/core/data.ts`: an event + its club's
+/// name/slug + the cheapest current price, if any. Distinct from the
+/// club-scoped event detail row — this is the discovery projection.
+class PublicEventResult {
+  final String id;
+  final String clubId;
+  final String clubName;
+  final String clubSlug;
+  final String title;
+  final String category;
+  final String? discipline;
+  final DateTime startsAt;
+  final String? timezone;
+  final int? durationMin;
+  final String? recurrenceFreq;
+  final List<String>? recurrenceByday;
+  final int? capacity;
+  final int? priceCents;
+  final String? currency;
+
+  const PublicEventResult({
+    required this.id,
+    required this.clubId,
+    required this.clubName,
+    required this.clubSlug,
+    required this.title,
+    required this.category,
+    this.discipline,
+    required this.startsAt,
+    this.timezone,
+    this.durationMin,
+    this.recurrenceFreq,
+    this.recurrenceByday,
+    this.capacity,
+    this.priceCents,
+    this.currency,
+  });
+
+  factory PublicEventResult.fromRow(Map<String, dynamic> row) {
+    final byday = row['recurrence_byday'];
+    return PublicEventResult(
+      id: row['id'] as String,
+      clubId: row['club_id'] as String,
+      clubName: row['club_name'] as String,
+      clubSlug: row['club_slug'] as String,
+      title: row['title'] as String,
+      category: row['category'] as String,
+      discipline: row['discipline'] as String?,
+      startsAt: DateTime.parse(row['starts_at'] as String),
+      timezone: row['timezone'] as String?,
+      durationMin: (row['duration_min'] as num?)?.toInt(),
+      recurrenceFreq: row['recurrence_freq'] as String?,
+      recurrenceByday:
+          byday is List ? byday.map((e) => e as String).toList() : null,
+      capacity: (row['capacity'] as num?)?.toInt(),
+      priceCents: (row['price_cents'] as num?)?.toInt(),
+      currency: row['currency'] as String?,
+    );
+  }
+}
+
 /// One row of a run's segment-effort summary: the effort + the parent
 /// segment + the rank against the segment's leaderboard. Backs the
 /// per-run effort chips on the run-detail page.

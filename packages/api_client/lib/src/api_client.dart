@@ -1320,6 +1320,38 @@ class ApiClient {
         .toList();
   }
 
+  /// Cross-club activity discovery. Searches PUBLIC clubs' events across the
+  /// typed-events model by category / discipline / cadence / weekday /
+  /// time-of-day / paid-or-free. Backs the Social Discover tab. Mirrors
+  /// `searchPublicEvents` in `apps/web/src/lib/core/data.ts` + the
+  /// `search_public_events` RPC (migrations 20270110_001 + 20270111_001).
+  /// `security invoker` + scoped to `clubs.is_public = true`, so it works
+  /// logged-out and can only return rows the caller could already read.
+  Future<List<PublicEventResult>> searchPublicEvents({
+    String? query,
+    String? category,
+    String? cadence,
+    String? byday,
+    String? paid,
+    String? time,
+    int limit = 60,
+  }) async {
+    final q = query?.trim();
+    final data = await _client.rpc('search_public_events', params: {
+      'p_query': (q != null && q.isNotEmpty) ? q : null,
+      'p_category': category,
+      'p_cadence': cadence,
+      'p_byday': byday,
+      'p_paid': paid,
+      'p_time': time,
+      'p_limit': limit,
+    });
+    return (data as List)
+        .map<PublicEventResult>(
+            (row) => PublicEventResult.fromRow(row as Map<String, dynamic>))
+        .toList();
+  }
+
   /// The N most-used tags across public routes, for filter-chip population.
   /// Calls the `popular_route_tags` RPC so aggregation happens in Postgres
   /// (one GIN-indexed scan, returns a few KB) instead of pulling up to
