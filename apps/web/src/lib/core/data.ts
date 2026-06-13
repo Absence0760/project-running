@@ -4357,8 +4357,12 @@ export async function fetchEngagementSummaries(
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id;
 
-	const [kudosRows, viewerKudos, commentRows] = await Promise.all([
-		supabase.from(TABLES.run_kudos).select('run_id').in('run_id', runIds),
+	// Counts come from a server-side GROUP BY (run_engagement_counts) so the
+	// wire payload is one small row per run, not every kudos + comment row on
+	// the page (a popular share used to ship hundreds of rows to compute one
+	// integer). viewer_has_kudos stays a narrow per-run .in() lookup.
+	const [counts, viewerKudos] = await Promise.all([
+		supabase.rpc('run_engagement_counts', { p_run_ids: runIds }),
 		viewerId
 			? supabase
 					.from(TABLES.run_kudos)
@@ -4366,21 +4370,23 @@ export async function fetchEngagementSummaries(
 					.eq('user_id', viewerId)
 					.in('run_id', runIds)
 			: Promise.resolve({ data: [] as { run_id: string }[] }),
-		supabase.from(TABLES.run_comments).select('run_id').in('run_id', runIds),
 	]);
 
 	for (const id of runIds) out.set(id, { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 });
-	for (const row of kudosRows.data ?? []) {
-		const e = out.get(row.run_id as string);
-		if (e) e.kudos_count++;
+	for (const row of (counts.data ?? []) as {
+		run_id: string;
+		kudos_count: number;
+		comment_count: number;
+	}[]) {
+		const e = out.get(row.run_id);
+		if (e) {
+			e.kudos_count = Number(row.kudos_count) || 0;
+			e.comment_count = Number(row.comment_count) || 0;
+		}
 	}
 	for (const row of (viewerKudos.data ?? []) as { run_id: string }[]) {
 		const e = out.get(row.run_id);
 		if (e) e.viewer_has_kudos = true;
-	}
-	for (const row of commentRows.data ?? []) {
-		const e = out.get(row.run_id as string);
-		if (e) e.comment_count++;
 	}
 	return out;
 }
