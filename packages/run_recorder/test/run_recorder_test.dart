@@ -442,5 +442,36 @@ void main() {
       expect(run.metadata?['indoor'], isNull);
       expect(run.metadata?['indoor_source'], isNull);
     });
+
+    test('lap() records belt distance in treadmill mode, not GPS', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      // GPS accumulator runs underneath, but the belt is authoritative.
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 15, secondsFromStart: 6));
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1400);
+      r.lap();
+      expect(r.laps.last.cumulativeDistanceMetres, 400.0,
+          reason: 'a treadmill lap split must use belt distance, not GPS');
+    });
+
+    test('belt distance accrued while paused is not credited', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1000); // baseline
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1300); // 300 m run
+      expect(r.debugReportedDistanceMetres, 300.0);
+      r.pause();
+      // Belt keeps counting during the pause (user idling on a running belt).
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1600);
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1900);
+      expect(r.debugReportedDistanceMetres, 300.0,
+          reason: 'paused belt advance must not inflate the distance');
+      r.resume();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 2000);
+      expect(r.debugReportedDistanceMetres, 400.0,
+          reason: 'distance resumes from the frozen pre-pause value');
+    });
   });
 }

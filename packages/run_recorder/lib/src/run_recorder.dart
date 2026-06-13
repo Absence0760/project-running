@@ -577,9 +577,18 @@ class RunRecorder {
       if (!_recording) return;
       final now = DateTime.now();
       if (totalDistanceMetres != null) {
-        _treadmillBaselineMetres ??= totalDistanceMetres;
-        final delta = totalDistanceMetres - _treadmillBaselineMetres!;
-        _treadmillDistanceMetres = delta < 0 ? _treadmillDistanceMetres : delta;
+        if (_paused) {
+          // The belt keeps counting while the user is paused; rebase the
+          // baseline so the paused advance is excluded and the accumulated
+          // distance freezes (mirrors the GPS path's `if (_paused) return`
+          // and the speed branch's `!_paused` gate).
+          _treadmillBaselineMetres = totalDistanceMetres - _treadmillDistanceMetres;
+        } else {
+          _treadmillBaselineMetres ??= totalDistanceMetres;
+          final delta = totalDistanceMetres - _treadmillBaselineMetres!;
+          _treadmillDistanceMetres =
+              delta < 0 ? _treadmillDistanceMetres : delta;
+        }
       } else {
         final last = _treadmillLastSampleAt;
         if (last != null && !_paused) {
@@ -924,7 +933,7 @@ class RunRecorder {
     _laps.add(LapSplit(
       number: _laps.length + 1,
       timestamp: now,
-      cumulativeDistanceMetres: _distanceMetres,
+      cumulativeDistanceMetres: _reportedDistanceMetres,
       cumulativeDuration: _currentElapsed(),
     ));
     return _laps.length;
