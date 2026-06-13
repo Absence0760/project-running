@@ -176,6 +176,26 @@ class RunRecorder {
   /// matches the pre-strap behaviour.
   int? _currentBpm;
 
+  /// Treadmill (FTMS) distance source — an ADDITIVE, OPT-IN alternate to the
+  /// GPS L1 distance path. Off by default: every field here stays untouched
+  /// during a normal GPS run, and nothing in this block can run unless the
+  /// caller explicitly pushes a sample via [setTreadmillSample]. When active,
+  /// [_emitSnapshot] + [stop] report [_treadmillDistanceMetres] in place of
+  /// the GPS-accumulated [_distanceMetres]; the GPS `_onPosition` path is
+  /// never altered (any incidental fix still builds the track, it just stops
+  /// driving the headline distance). This is the same shape as [setHeartRate]
+  /// — an external sample fed in from a platform plugin the package doesn't
+  /// depend on.
+  bool _treadmillMode = false;
+  double _treadmillDistanceMetres = 0;
+  double? _treadmillBaselineMetres;
+  double _treadmillLastSpeedMps = 0;
+  DateTime? _treadmillLastSampleAt;
+
+  /// Whether the recorder is currently sourcing distance from a treadmill
+  /// rather than GPS.
+  bool get treadmillMode => _treadmillMode;
+
   /// Emits a [RunSnapshot] on every GPS fix once [prepare] has run, and once
   /// per second after [begin] starts recording time.
   Stream<RunSnapshot> get snapshots => _controller.stream;
@@ -251,6 +271,7 @@ class RunRecorder {
     _accuracyGateMetres = accuracyGateMetres;
     _locationAccuracy = accuracy;
     _lastAccuracyDropLogAt = null;
+    _resetTreadmill();
     _prepared = true;
 
     // Start the self-healing retry loop regardless of whether GPS is
@@ -387,6 +408,7 @@ class RunRecorder {
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
     _weakGps = false;
+    _resetTreadmillAccumulators();
     _recording = true;
     _paused = false;
 
@@ -453,6 +475,7 @@ class RunRecorder {
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
     _accuracyGateMetres = accuracyGateMetres;
+    _resetTreadmill();
     _prepared = true;
   }
 
@@ -465,9 +488,18 @@ class RunRecorder {
   @visibleForTesting
   List<Waypoint> get debugTrack => List.unmodifiable(_track);
 
-  /// Test-only: current accumulated distance.
+  /// Test-only: current GPS-accumulated distance (ignores treadmill mode).
   @visibleForTesting
   double get debugDistanceMetres => _distanceMetres;
+
+  /// Test-only: the headline distance the recorder would report on a snapshot
+  /// — belt distance in treadmill mode, GPS distance otherwise.
+  @visibleForTesting
+  double get debugReportedDistanceMetres => _reportedDistanceMetres;
+
+  /// Test-only: whether treadmill mode is currently active.
+  @visibleForTesting
+  bool get debugTreadmillMode => _treadmillMode;
 
   /// Test-only: elapsed time as seen by the monotonic stopwatch.
   @visibleForTesting
@@ -525,6 +557,74 @@ class RunRecorder {
     // visible in the breakdown anyway.
     if (bpm != null && (bpm < 30 || bpm > 230)) return;
     _currentBpm = bpm;
+  }
+
+  /// Feed a treadmill (FTMS) sample. The first call flips the recorder into
+  /// treadmill mode, after which the headline distance comes from the belt
+  /// rather than GPS. [speedMps] is the belt's instantaneous speed in metres
+  /// per second; [totalDistanceMetres], when the belt reports it, is the
+  /// cumulative session distance and is preferred over speed integration
+  /// (rebased to 0 on the first sample so a belt that was already running
+  /// doesn't credit pre-run distance).
+  ///
+  /// Wrapped in its own try/catch per the layered-resilience contract: a
+  /// malformed belt sample must never throw into the recorder loop or
+  /// degrade the GPS path. A bad sample is dropped and the last good distance
+  /// is kept. No-op until [begin] (distance only accumulates while recording).
+  void setTreadmillSample(double speedMps, {double? totalDistanceMetres}) {
+    try {
+      _treadmillMode = true;
+      if (!_recording) return;
+      final now = DateTime.now();
+      if (totalDistanceMetres != null) {
+        if (_paused) {
+          // The belt keeps counting while the user is paused; rebase the
+          // baseline so the paused advance is excluded and the accumulated
+          // distance freezes (mirrors the GPS path's `if (_paused) return`
+          // and the speed branch's `!_paused` gate).
+          _treadmillBaselineMetres = totalDistanceMetres - _treadmillDistanceMetres;
+        } else {
+          _treadmillBaselineMetres ??= totalDistanceMetres;
+          final delta = totalDistanceMetres - _treadmillBaselineMetres!;
+          _treadmillDistanceMetres =
+              delta < 0 ? _treadmillDistanceMetres : delta;
+        }
+      } else {
+        final last = _treadmillLastSampleAt;
+        if (last != null && !_paused) {
+          final dtSec = now.difference(last).inMilliseconds / 1000.0;
+          if (dtSec > 0 && dtSec < 30 && speedMps >= 0 && speedMps < 12) {
+            _treadmillDistanceMetres += _treadmillLastSpeedMps * dtSec;
+          }
+        }
+      }
+      _treadmillLastSpeedMps = speedMps;
+      _treadmillLastSampleAt = now;
+    } catch (e) {
+      debugPrint('RunRecorder: treadmill sample dropped — $e');
+    }
+  }
+
+  /// Leave treadmill mode and revert the headline distance to the GPS path.
+  /// Called when the user turns treadmill mode off or the belt is forgotten
+  /// mid-session.
+  void clearTreadmillMode() {
+    _treadmillMode = false;
+    _resetTreadmillAccumulators();
+  }
+
+  /// Full reset (mode + accumulators) — used by [prepare] so each run starts
+  /// on the GPS default until a belt sample flips it back on.
+  void _resetTreadmill() {
+    _treadmillMode = false;
+    _resetTreadmillAccumulators();
+  }
+
+  void _resetTreadmillAccumulators() {
+    _treadmillDistanceMetres = 0;
+    _treadmillBaselineMetres = null;
+    _treadmillLastSpeedMps = 0;
+    _treadmillLastSampleAt = null;
   }
 
   void _onPosition(Position pos) {
@@ -617,6 +717,13 @@ class RunRecorder {
     _emitSnapshot();
   }
 
+  /// Headline distance: belt distance in treadmill mode, GPS-accumulated
+  /// distance otherwise. Reading this is the only place the treadmill source
+  /// influences a normal run — when [_treadmillMode] is false (the default)
+  /// it is exactly the GPS value.
+  double get _reportedDistanceMetres =>
+      _treadmillMode ? _treadmillDistanceMetres : _distanceMetres;
+
   void _emitSnapshot() {
     final current = _currentWaypoint;
     final elapsed = _stopwatch.elapsed;
@@ -657,7 +764,7 @@ class RunRecorder {
 
     _controller.add(RunSnapshot(
       elapsed: elapsed,
-      distanceMetres: _distanceMetres,
+      distanceMetres: _reportedDistanceMetres,
       currentPaceSecondsPerKm: pace,
       currentPosition: current,
       track: _trackView,
@@ -826,7 +933,7 @@ class RunRecorder {
     _laps.add(LapSplit(
       number: _laps.length + 1,
       timestamp: now,
-      cumulativeDistanceMetres: _distanceMetres,
+      cumulativeDistanceMetres: _reportedDistanceMetres,
       cumulativeDuration: _currentElapsed(),
     ));
     return _laps.length;
@@ -849,16 +956,26 @@ class RunRecorder {
     final startedAt = _startTime ?? DateTime.now();
     final elapsed = _stopwatch.elapsed;
 
+    final metadata = <String, dynamic>{};
+    if (_laps.isNotEmpty) metadata['laps'] = lapsToCanonicalJson(_laps);
+    if (_treadmillMode) {
+      // Belt-measured distance is not GPS-measured, so the same exclusion the
+      // pedometer-estimated indoor path uses applies: `indoor: true` keeps it
+      // out of the VDOT ceiling, and `indoor_source` records that the belt
+      // (not a pedometer estimate) supplied the distance.
+      metadata['indoor'] = true;
+      metadata['indoor_source'] = 'treadmill';
+      metadata['distance_source'] = 'treadmill';
+    }
+
     return Run(
       id: _uuid.v4(),
       startedAt: startedAt,
       duration: elapsed,
-      distanceMetres: _distanceMetres,
+      distanceMetres: _reportedDistanceMetres,
       track: List.unmodifiable(_track),
       source: RunSource.app,
-      metadata: _laps.isEmpty
-          ? null
-          : {'laps': lapsToCanonicalJson(_laps)},
+      metadata: metadata.isEmpty ? null : metadata,
     );
   }
 

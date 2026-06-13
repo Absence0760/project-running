@@ -108,6 +108,13 @@ Smaller surface; can land in parallel with later P3 screens.
 - Strava OAuth live sync (matches web `/settings/integrations` shape — RevenueCat-style hand-off to the Strava OAuth web flow).
 - parkrun athlete-number import.
 
+## Device-additive capabilities (mobile-only, not parity gaps)
+
+Beyond closing the web→mobile parity gaps above, mobile also ships **device-led** capabilities that have no web equivalent (web is not a recording surface — the `decisions.md § 24` physical exception). These are net-new on mobile, not parity rows.
+
+- **BLE chest-strap HR** — shipped (`ble_heart_rate.dart`, wired into the run screen).
+- **Treadmill BLE (FTMS), C3** — `ble_treadmill.dart` (FTMS 0x1826 / Treadmill Data 0x2ACD parser, status stream, auto-reconnect) + `TreadmillTile` pairing UI in Settings → Integrations + the additive `RunRecorder.setTreadmillSample` distance seam (treadmill-sourced distance overrides GPS only when treadmill mode is active; the run is tagged `metadata.indoor_source = 'treadmill'`). **Built so far:** parser + model + pairing tile + recorder seam, all tested, twin-mirrored to iOS. **Deferred follow-up:** the live run-screen wiring (a mode toggle on the run screen that subscribes the belt stream and calls `setTreadmillSample` during recording, threading a shared `BleTreadmill` through `RunApp` → `run_screen`); the recorder seam it targets is shipped and proven, so this is purely UI wiring, not a recorder change.
+
 ## Cell flips
 
 Every time a feature lands on android, flip its `parity.md` row in the same PR — the matrix is only useful if it's current. Don't batch.

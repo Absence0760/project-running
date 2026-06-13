@@ -91,6 +91,15 @@ make it `U`. A pref that only makes sense on one physical device is `D`.
 
 Default visibility of new runs. Per-run override still wins. **Onboarding wizards on both web and mobile pre-select `private`** (privacy-by-default for a new runner — persona #56) and write it as an explicit bag value on finish, so a fresh account starts private and that choice roams + isn't overridden by another device's default. The legacy unset-fallback (for accounts that never set the pref and never ran the wizard) stays `followers` to avoid retroactively hiding existing users' runs. **Honoured on every run-creation path (persona #27):** web `createManualRun`/`saveRun` + the Strava/Garmin ZIP importers, and the server-side imports — the `parkrun-import` + `strava-import` Edge Functions and the Go worker's Strava ingest (`InsertStravaRun`). Only an explicit `public` default publishes; `followers`/`private`/unset and any settings-read error fall closed to private, so importing history never silently publishes it. (The deprecated `strava-webhook` EF rollback path defaults private regardless.)
 
+## Device-local pairing prefs (not in the synced bag)
+
+Some per-device prefs are **never** synced to `user_settings` / `user_device_settings` — they're hardware pairings meaningful only on the device that did the pairing, so they live in raw `SharedPreferences` on mobile (and would live in `localStorage` on web, were any of these surfaces web-relevant). They are listed here so the registry stays the single coordination point even though they don't carry a U/D/UD scope.
+
+| Pref | Owner | Keys | Notes |
+|---|---|---|---|
+| HR strap | `apps/mobile_*/lib/ble_heart_rate.dart` | `ble_hr_device_id`, `ble_hr_device_name` | Last-paired BLE chest strap. Auto-reconnected at app start. |
+| `treadmill_device` | `apps/mobile_*/lib/ble_treadmill.dart` | `treadmill_device_id`, `treadmill_device_name` | Last-paired BLE FTMS treadmill (C3). Device-local, per-device: a treadmill paired on a phone is irrelevant to the user's other devices, so it is deliberately **not** roamed through the settings bags. Paired from Settings → Integrations; auto-reconnected via `connectCached`. When a run is recorded against it, the recorder's treadmill seam tags the run `metadata.indoor_source = 'treadmill'` (see [metadata.md](metadata.md)). |
+
 ## Client responsibilities
 
 - **On sign-in**: fetch the user's `user_settings` row. If none exists, insert

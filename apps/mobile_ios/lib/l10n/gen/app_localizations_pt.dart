@@ -4995,6 +4995,45 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get integrationsTreadmillTitle => 'Passadeira';
+
+  @override
+  String get integrationsTreadmillChecking => 'A verificar…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'Emparelhada: $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired =>
+      'Nenhuma passadeira emparelhada — toque para procurar';
+
+  @override
+  String get integrationsTreadmillForget => 'Esquecer';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'Procurar passadeira';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'Certifique-se de que o Bluetooth da passadeira está ligado e o tapete ativo. A procura demora 3 a 8 segundos.';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'Nenhuma passadeira encontrada. Verifique se suporta Bluetooth (FTMS) e está por perto.';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'Falha ao emparelhar: $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
+  }
+
+  @override
   String get proTitle => 'Pro e suporte';
 
   @override
@@ -13495,6 +13534,45 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String integrationsHrRssi(int rssi) {
     return 'RSSI $rssi dBm';
+  }
+
+  @override
+  String get integrationsTreadmillTitle => 'Esteira';
+
+  @override
+  String get integrationsTreadmillChecking => 'Verificando…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'Pareada: $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired =>
+      'Nenhuma esteira pareada — toque para procurar';
+
+  @override
+  String get integrationsTreadmillForget => 'Esquecer';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'Procurar esteira';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'Verifique se o Bluetooth da esteira está ligado e a esteira ativa. A busca leva de 3 a 8 segundos.';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'Nenhuma esteira encontrada. Verifique se ela é compatível com Bluetooth (FTMS) e está por perto.';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'Falha ao parear: $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
   }
 
   @override

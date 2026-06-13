@@ -6196,6 +6196,61 @@
       }
     }
   },
+  "integrationsTreadmillTitle": "Treadmill",
+  "@integrationsTreadmillTitle": {
+    "description": "Tile title for the BLE FTMS treadmill"
+  },
+  "integrationsTreadmillChecking": "Checking…",
+  "@integrationsTreadmillChecking": {
+    "description": "Treadmill tile subtitle while checking for a paired treadmill"
+  },
+  "integrationsTreadmillPaired": "Paired: {name}",
+  "@integrationsTreadmillPaired": {
+    "description": "Treadmill tile subtitle showing the paired treadmill name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "integrationsTreadmillNotPaired": "No treadmill paired — tap to scan",
+  "@integrationsTreadmillNotPaired": {
+    "description": "Treadmill tile subtitle when no treadmill is paired"
+  },
+  "integrationsTreadmillForget": "Forget",
+  "@integrationsTreadmillForget": {
+    "description": "Tooltip on the forget-treadmill button"
+  },
+  "integrationsTreadmillScanTitle": "Scan for treadmill",
+  "@integrationsTreadmillScanTitle": {
+    "description": "Title of the treadmill scan bottom sheet"
+  },
+  "integrationsTreadmillScanHint": "Make sure the treadmill's Bluetooth is on and the belt is awake. Scanning takes 3–8 seconds.",
+  "@integrationsTreadmillScanHint": {
+    "description": "Hint text on the treadmill scan sheet"
+  },
+  "integrationsTreadmillScanEmpty": "No treadmills found. Make sure it supports Bluetooth (FTMS) and is nearby.",
+  "@integrationsTreadmillScanEmpty": {
+    "description": "Empty-state text on the treadmill scan sheet"
+  },
+  "integrationsTreadmillPairFailed": "Pair failed: {error}",
+  "@integrationsTreadmillPairFailed": {
+    "description": "Banner shown when pairing a treadmill fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "integrationsTreadmillLiveSpeed": "{speed} km/h",
+  "@integrationsTreadmillLiveSpeed": {
+    "description": "Live belt speed shown while connected to a treadmill",
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "proTitle": "Pro & support",
   "@proTitle": {
     "description": "AppBar title for the Settings > Pro & support screen"

@@ -8236,6 +8236,66 @@ abstract class AppLocalizations {
   /// **'RSSI {rssi} dBm'**
   String integrationsHrRssi(int rssi);
 
+  /// Tile title for the BLE FTMS treadmill
+  ///
+  /// In en, this message translates to:
+  /// **'Treadmill'**
+  String get integrationsTreadmillTitle;
+
+  /// Treadmill tile subtitle while checking for a paired treadmill
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get integrationsTreadmillChecking;
+
+  /// Treadmill tile subtitle showing the paired treadmill name
+  ///
+  /// In en, this message translates to:
+  /// **'Paired: {name}'**
+  String integrationsTreadmillPaired(String name);
+
+  /// Treadmill tile subtitle when no treadmill is paired
+  ///
+  /// In en, this message translates to:
+  /// **'No treadmill paired — tap to scan'**
+  String get integrationsTreadmillNotPaired;
+
+  /// Tooltip on the forget-treadmill button
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get integrationsTreadmillForget;
+
+  /// Title of the treadmill scan bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Scan for treadmill'**
+  String get integrationsTreadmillScanTitle;
+
+  /// Hint text on the treadmill scan sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Make sure the treadmill\'s Bluetooth is on and the belt is awake. Scanning takes 3–8 seconds.'**
+  String get integrationsTreadmillScanHint;
+
+  /// Empty-state text on the treadmill scan sheet
+  ///
+  /// In en, this message translates to:
+  /// **'No treadmills found. Make sure it supports Bluetooth (FTMS) and is nearby.'**
+  String get integrationsTreadmillScanEmpty;
+
+  /// Banner shown when pairing a treadmill fails
+  ///
+  /// In en, this message translates to:
+  /// **'Pair failed: {error}'**
+  String integrationsTreadmillPairFailed(Object error);
+
+  /// Live belt speed shown while connected to a treadmill
+  ///
+  /// In en, this message translates to:
+  /// **'{speed} km/h'**
+  String integrationsTreadmillLiveSpeed(String speed);
+
   /// AppBar title for the Settings > Pro & support screen
   ///
   /// In en, this message translates to:
