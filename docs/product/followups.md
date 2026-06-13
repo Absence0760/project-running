@@ -691,3 +691,39 @@ Minor / not fixed (recorded for completeness): `recap.ts` year membership + buck
 `getFullYear`/`getMonth` (internally consistent, follows the viewer's calendar — by design); `run_stats.ts`
 emits a silent `pace_s: 0` on backwards-jumping timestamps (defensive degradation of corrupt input);
 `phaseFor` gives a ≤3-week plan no base phase (callers default to 8–16 weeks).
+
+## Go worker / live-hub hunt (2026-06-13) — verified findings deferred
+
+A bug-hunt on `apps/job_worker/` (the live-hub WS fan-out, privacy/auth layer, worker drain,
+OSRM matcher, digest/premium math). Three bounded bugs were fixed + pinned the same day, all
+race-clean: require a JWT `exp` claim (`auth.go` — no more immortal tokens), fail closed on a
+truncated zone/run-meta fetch body (`zones.go`/`runmeta.go` — privacy leak), and reap idle
+push-rate-limiter buckets (`server.go`/`main.go` — process-lifetime memory leak). The two below are
+real but were not rushed:
+
+- [ ] **[high, product call] OSRM map-match silently truncates a run when one chunk can't be matched.**
+  `matcher_osrm.go` `Match` chunks the track at 100 points; a chunk that comes back `code != "Ok"`
+  (a tunnel, an unmapped trail) returns `(nil, nil)` and the stitch loop appends nothing and
+  `continue`s. So a 150-point run where chunk 2 doesn't match produces a 100-point matched track
+  (`len ≥ 2`) that `handleMapMatch` writes as `status='matched'` — the back third of the run is
+  silently discarded, presented as the authoritative line. Existing tests only cover all-chunks-match
+  or all-chunks-empty, never partial. **The fix direction is a product call on matched-track
+  semantics** — (a) skip the whole run (return nil → keep the original GPS track) when any chunk fails,
+  preserving the "a matched track covers the whole run" invariant but losing matching for trail/tunnel
+  runs; or (b) carry the unmatched chunk's raw points through (mirroring the existing 1-point-tail
+  behaviour at `:100-105`), covering the full run with mixed snapped+raw geometry under a `matched`
+  label. **Route via `/safe-edit`** with the semantics decided first.
+- [ ] **[medium, intricate] Live pings during a late-joiner's history replay can be dropped or
+  duplicated.** `server.go` `handleSubscribe` registers the subscriber channel before the synchronous
+  history replay, so (1) a ping published in the window between register and the `History()` snapshot is
+  sent twice (once in replay, once live → duplicate dot), and (2) on a busy room a long replay can
+  overflow the 8-slot channel and `trySend` drops intermediate live pings (the spectator jumps
+  position). Fixing it means snapshotting history + starting live buffering atomically, or de-duping the
+  replay tail against the live channel — a change to the subscribe state machine. **Route via `/safe-edit`.**
+
+Minor / not fixed (recorded for completeness): `runmeta.go` `LoadRunMeta` returns the cached
+`*RunMeta` pointer directly (a future caller mutating it would corrupt the per-room cache — no current
+mutator, so latent; `LoadZones` already returns a defensive copy); a zero-radius privacy zone matches
+only the exact centroid (UI likely enforces a minimum, but the hub accepts whatever it fetches);
+`worker_test.go`'s `nopMatcher` doesn't implement the `Matcher` interface (missing the `ctx` param) so
+it's dead/misleading test cruft, not a prod bug.
