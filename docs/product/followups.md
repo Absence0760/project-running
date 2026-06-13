@@ -651,3 +651,43 @@ free-text activity names only; a trailing blank line in `activities.csv` becomes
 profile with two equal adjacent `high_bpm` values would drop the whole set (no confirmed real input);
 `RouteParser._id()` / `FitParser` route id is `DateTime.now().ms` so two routes parsed in the same
 millisecond collide (caller-dependent).
+
+## Training / fitness math hunt (2026-06-13) — verified findings deferred
+
+A bug-hunt on the training + fitness math cluster (`training.ts`, `training_load.ts`, `fitness.ts`,
+`recap.ts`, `goals.ts` + Dart twins). Three bounded bugs were fixed + pinned the same day (recap
+cycle-exclusion, recoveryAdvice overload-warning ordering, vdotFromRun physiological ceiling — all
+mirrored web↔Dart↔iOS). The three below are real but need a product/architecture call, not a rushed
+edit — **route each via `/safe-edit` when picked up** (they touch the plan generator / stored
+`fitness_snapshots` / the TS↔Dart parity twins):
+
+- [ ] **[high, product call] Generated plan's stated weekly volume ≠ the volume it actually prescribes.**
+  `training.ts` `generateWeek` emits FIXED quality-day distances (intervals + tempo) and a full long run
+  regardless of the week's `target_volume_m` (`weeklyKm*1000`), and clamps `remainingKm` to 0 when
+  quality+long already exceed the budget. On small-volume plans (5k, half) the emitted sum of workout
+  distances overshoots the declared `target_volume_m` by ~25–70% (race week worst: a declared 16 km that
+  prescribes ~45 km incl. the goal-race distance). Mirrored in `training.dart`. Existing tests only check
+  `peak > taper` on the *declared* number, never the emitted sum. **Needs a product decision**: cap
+  quality/long-run to the weekly budget, OR recompute `target_volume_m` from the emitted workouts so the
+  number the user sees matches the plan. Either way it's a core-generator change across the parity twin.
+- [ ] **[medium, model call] A low-/no-HR run contributes ZERO training load in TRIMP mode.**
+  `training_load.ts`: in a window scored in `'trimp'` mode, a run whose `avg_bpm <= resting_hr_bpm`
+  (misconfigured resting HR, strap dropout, true recovery run) gets `hrr=0 → trimp=0` and is dropped
+  entirely by the `stress <= 0` skip — a real logged run vanishes from the fatigue/form curve. Single-run
+  path is accidentally protected (all-zero-TRIMP falls back to distance mode); only the dashboard series
+  hits it. **Needs a model decision**: should such a run fall back to the distance-proxy stress for that
+  one run, or is TRIMP≈0 the honest answer? Mirror any fix to `training_load.dart`.
+- [ ] **[medium, architecture call] `fitness.ts` and `training_load.ts` compute the same fitness numbers
+  two different ways.** (1) Day bucketing: `training_load.ts` keys runs by LOCAL midnight (matching
+  `streaks`/`recap`), `fitness.ts` keys by UTC midnight (documented as intentional, mirrors
+  `fitness.dart`) — so a late-night run buckets to different days and the dashboard chart vs the fitness
+  card disagree on ATL/CTL/TSB. (2) EWMA alpha: `training_load.ts` uses `1-exp(-1/N)` (proper time
+  constant), `fitness.ts` uses `1/N` (~7% different ATL). Reconciling means picking one convention
+  (LOCAL day + `1-exp(-1/N)` is the app's prevailing one) and updating `fitness.ts` + `fitness.dart` +
+  re-checking stored `fitness_snapshots`. Also a mislabeled "halflife" comment at `training_load.ts:270`
+  (those are time constants, not halflives). Architecture-consistency call, twin-affecting.
+
+Minor / not fixed (recorded for completeness): `recap.ts` year membership + bucketing use LOCAL
+`getFullYear`/`getMonth` (internally consistent, follows the viewer's calendar — by design); `run_stats.ts`
+emits a silent `pace_s: 0` on backwards-jumping timestamps (defensive degradation of corrupt input);
+`phaseFor` gives a ≤3-week plan no base phase (callers default to 8–16 weeks).
