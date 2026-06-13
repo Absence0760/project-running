@@ -1289,6 +1289,29 @@ export async function saveRoute(route: {
 }
 
 export async function deleteRoute(id: string): Promise<void> {
+	const { data: photos } = await supabase
+		.from(TABLES.route_photos)
+		.select('storage_path, thumb_512_path')
+		.eq('route_id', id);
+	if (photos && photos.length > 0) {
+		// Sweep route-photo blobs before the row delete. The FK cascade
+		// removes the route_photos rows (so the Storage SELECT join hides
+		// the bytes), but the blobs would otherwise orphan in the bucket —
+		// the same gap deleteRun closes for run photos. Best-effort.
+		const paths = photos
+			.flatMap((p: { storage_path: string | null; thumb_512_path: string | null }) => [
+				p.storage_path,
+				p.thumb_512_path,
+			])
+			.filter((p: string | null): p is string => !!p);
+		if (paths.length > 0) {
+			try {
+				await supabase.storage.from(BUCKETS.route_photos).remove(paths);
+			} catch (e) {
+				console.warn('deleteRoute: photo storage removal failed (orphaned files)', { route_id: id, count: paths.length, error: e });
+			}
+		}
+	}
 	const { error } = await supabase.from('routes').delete().eq('id', id);
 	if (error) throw error;
 }

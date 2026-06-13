@@ -832,6 +832,30 @@ class ApiClient {
   Future<void> deleteRoute(String routeId) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
+    try {
+      // Sweep route-photo blobs before the row delete. The FK cascade
+      // removes the route_photos rows (so the Storage SELECT join hides
+      // the bytes), but the blobs would otherwise orphan in the bucket —
+      // the same gap deleteRun closes for run photos. Best-effort.
+      final photoRows = await _client
+          .from(RoutePhotoRow.table)
+          .select(
+            '${RoutePhotoRow.colStoragePath}, ${RoutePhotoRow.colThumb512Path}',
+          )
+          .eq(RoutePhotoRow.colRouteId, routeId);
+      final paths = <String>[];
+      for (final row in photoRows) {
+        final storage = row[RoutePhotoRow.colStoragePath] as String?;
+        final thumb = row[RoutePhotoRow.colThumb512Path] as String?;
+        if (storage != null && storage.isNotEmpty) paths.add(storage);
+        if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
+      }
+      if (paths.isNotEmpty) {
+        await _client.storage.from(StorageBuckets.routePhotos).remove(paths);
+      }
+    } catch (e) {
+      // Best-effort — the row delete matters more than the file cleanup.
+    }
     await _client.from(RouteRow.table).delete().eq(RouteRow.colId, routeId);
   }
 
