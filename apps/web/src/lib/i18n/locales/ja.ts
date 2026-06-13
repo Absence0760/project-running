@@ -1912,6 +1912,8 @@ export const messages = {
 	"liveEvent.kicker": "ライブレース",
 	"liveEvent.heroFallback": "ライブレース",
 	"liveEvent.onCourse": "コース上",
+	"liveEvent.loadError": "このレースを読み込めませんでした。",
+	"liveEvent.retry": "再試行",
 	"liveEvent.noLiveData": "ライブ位置データはまだありません。レースが始まると、ランナーの時計やスマホが約10秒ごとにpingを送信します。",
 	"liveEvent.mapConsentTitle": "読み込むまで地図は無効です",
 	"liveEvent.mapConsentPrefix": "地図を読み込むと、あなたのIPアドレスが",

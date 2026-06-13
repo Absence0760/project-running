@@ -1916,6 +1916,8 @@ export const messages = {
 	"liveEvent.kicker": "Course en direct",
 	"liveEvent.heroFallback": "Course en direct",
 	"liveEvent.onCourse": "Sur le parcours",
+	"liveEvent.loadError": "Impossible de charger cette course.",
+	"liveEvent.retry": "Réessayer",
 	"liveEvent.noLiveData": "Pas encore de données de position en direct. Les montres et téléphones des coureurs envoient un ping toutes les ~10 secondes une fois la course lancée.",
 	"liveEvent.mapConsentTitle": "Carte désactivée jusqu'à ce que vous la chargiez",
 	"liveEvent.mapConsentPrefix": "Charger la carte envoie votre adresse IP à ",

@@ -1916,6 +1916,8 @@ export const messages = {
 	"liveEvent.kicker": "Live-Rennen",
 	"liveEvent.heroFallback": "Live-Rennen",
 	"liveEvent.onCourse": "Auf der Strecke",
+	"liveEvent.loadError": "Dieses Rennen konnte nicht geladen werden.",
+	"liveEvent.retry": "Erneut versuchen",
 	"liveEvent.noLiveData": "Noch keine Live-Positionsdaten. Die Uhren und Handys der Läufer senden alle ca. 10 Sekunden ein Ping, sobald das Rennen startet.",
 	"liveEvent.mapConsentTitle": "Karte deaktiviert, bis du sie lädst",
 	"liveEvent.mapConsentPrefix": "Beim Laden der Karte wird deine IP-Adresse an ",

@@ -1915,6 +1915,8 @@ export const messages = {
 	"liveEvent.kicker": "Corrida ao vivo",
 	"liveEvent.heroFallback": "Corrida ao vivo",
 	"liveEvent.onCourse": "No percurso",
+	"liveEvent.loadError": "Não foi possível carregar esta corrida.",
+	"liveEvent.retry": "Tentar novamente",
 	"liveEvent.noLiveData": "Ainda não há dados de posição ao vivo. Os relógios e celulares dos corredores enviam um ping a cada ~10 segundos assim que a corrida começa.",
 	"liveEvent.mapConsentTitle": "Mapa desativado até você carregá-lo",
 	"liveEvent.mapConsentPrefix": "Carregar o mapa envia seu endereço IP para ",

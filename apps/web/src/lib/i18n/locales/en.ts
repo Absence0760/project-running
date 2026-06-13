@@ -1925,6 +1925,8 @@ export const en = {
 	"liveEvent.kicker": "Live race",
 	"liveEvent.heroFallback": "Live race",
 	"liveEvent.onCourse": "On course",
+	"liveEvent.loadError": "Couldn't load this race.",
+	"liveEvent.retry": "Retry",
 	"liveEvent.noLiveData": "No live position data yet. Runners' watches and phones push pings every ~10 seconds once the race starts.",
 	"liveEvent.mapConsentTitle": "Map disabled until you load it",
 	"liveEvent.mapConsentPrefix": "Loading the map sends your IP address to ",

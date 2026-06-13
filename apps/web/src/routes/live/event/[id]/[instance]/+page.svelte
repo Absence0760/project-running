@@ -37,6 +37,7 @@
 	let profiles = $state<Map<string, { display_name: string | null }>>(new Map());
 	let nowTick = $state(Date.now());
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 
 	let channel: RealtimeChannel | null = null;
 
@@ -100,19 +101,27 @@
 	}
 
 	async function load() {
-		const [e, rs, ps, lp, rr] = await Promise.all([
-			fetchEventById(eventId),
-			fetchRaceSession(eventId, instance),
-			fetchRecentRacePings(eventId, instance),
-			fetchLatestRacePings(eventId, instance),
-			fetchEventResults(eventId, instance)
-		]);
-		event = e;
-		race = rs;
-		recentPings = ps;
-		leaderPings = lp;
-		results = rr;
-		profiles = await buildProfiles(lp, rr);
+		loading = true;
+		loadError = null;
+		try {
+			const [e, rs, ps, lp, rr] = await Promise.all([
+				fetchEventById(eventId),
+				fetchRaceSession(eventId, instance),
+				fetchRecentRacePings(eventId, instance),
+				fetchLatestRacePings(eventId, instance),
+				fetchEventResults(eventId, instance)
+			]);
+			event = e;
+			race = rs;
+			recentPings = ps;
+			leaderPings = lp;
+			results = rr;
+			profiles = await buildProfiles(lp, rr);
+		} catch (e) {
+			// Public spectator page — a rejected fetch would otherwise hang on
+			// "Loading…" forever with no recourse. Surface it with a retry.
+			loadError = e instanceof Error ? e.message : String(e);
+		}
 		loading = false;
 	}
 
@@ -508,6 +517,15 @@
 
 	{#if loading}
 		<p class="muted">{m('shell.loading')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('liveEvent.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{m('liveEvent.retry')}</button>
+		</div>
 	{:else}
 		<div class="layout">
 			<section class="leaderboard">
@@ -947,5 +965,29 @@
 			display: inline;
 			margin-inline-end: var(--space-sm);
 		}
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>
