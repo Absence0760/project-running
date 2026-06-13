@@ -3815,6 +3815,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      run_engagement_counts: {
+        Args: { p_run_ids: string[] }
+        Returns: {
+          comment_count: number
+          kudos_count: number
+          run_id: string
+        }[]
+      }
       search_clubs: {
         Args: {
           p_center_lat?: number
