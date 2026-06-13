@@ -1419,6 +1419,8 @@ export const messages = {
 	"clubHome.failedToLeave": "Verlassen fehlgeschlagen",
 	"clubHome.toastApprovedAll": "Alle ausstehenden Anfragen genehmigt.",
 	"clubHome.toastApproveAllFailed": "Konnte nicht alle genehmigen: {error}",
+	"clubHome.toastApproveFailed": "Anfrage konnte nicht genehmigt werden: {error}",
+	"clubHome.toastRejectFailed": "Anfrage konnte nicht abgelehnt werden: {error}",
 	"clubHome.toastRemoveMemberFailed": "Mitglied konnte nicht entfernt werden: {error}",
 	"clubHome.inviteCopied": "Einladungslink in die Zwischenablage kopiert.",
 	"clubHome.failedToPost": "Posten fehlgeschlagen",

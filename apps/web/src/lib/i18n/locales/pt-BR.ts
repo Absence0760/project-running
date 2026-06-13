@@ -1418,6 +1418,8 @@ export const messages = {
 	"clubHome.failedToLeave": "Falha ao sair",
 	"clubHome.toastApprovedAll": "Todas as solicitações pendentes aprovadas.",
 	"clubHome.toastApproveAllFailed": "Não foi possível aprovar todas: {error}",
+	"clubHome.toastApproveFailed": "Não foi possível aprovar a solicitação: {error}",
+	"clubHome.toastRejectFailed": "Não foi possível recusar a solicitação: {error}",
 	"clubHome.toastRemoveMemberFailed": "Não foi possível remover o membro: {error}",
 	"clubHome.inviteCopied": "Link de convite copiado para a área de transferência.",
 	"clubHome.failedToPost": "Falha ao publicar",

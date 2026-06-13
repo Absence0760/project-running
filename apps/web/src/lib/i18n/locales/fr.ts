@@ -1419,6 +1419,8 @@ export const messages = {
 	"clubHome.failedToLeave": "Échec du départ",
 	"clubHome.toastApprovedAll": "Toutes les demandes en attente approuvées.",
 	"clubHome.toastApproveAllFailed": "Impossible de tout approuver : {error}",
+	"clubHome.toastApproveFailed": "Impossible d'approuver la demande : {error}",
+	"clubHome.toastRejectFailed": "Impossible de refuser la demande : {error}",
 	"clubHome.toastRemoveMemberFailed": "Impossible de retirer le membre : {error}",
 	"clubHome.inviteCopied": "Lien d'invitation copié dans le presse-papiers.",
 	"clubHome.failedToPost": "Échec de la publication",

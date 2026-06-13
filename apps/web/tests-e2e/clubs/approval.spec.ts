@@ -77,6 +77,45 @@ test.describe('/clubs/[slug] — approval flow', () => {
 		).toHaveCount(0, { timeout: 10_000 });
 	});
 
+	test('a failed approve surfaces an error toast instead of silently doing nothing', async ({
+		page
+	}) => {
+		// The approve handler used to have no try/catch — a failed RPC threw
+		// into the void and the admin saw nothing. Force the PATCH that
+		// approveMember issues to 500 and assert the error toast appears and
+		// the pending row stays put.
+		await page.route('**/rest/v1/club_members*', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated approve failure' })
+				});
+			} else {
+				await route.continue();
+			}
+		});
+
+		await page.goto('/clubs/tempo-tuesday');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'UVA Tempo Tuesday' })
+		).toBeVisible({ timeout: 10_000 });
+
+		const pendingPanel = page.locator('section.admin-card', {
+			hasText: /Pending requests/
+		});
+		await expect(pendingPanel).toBeVisible({ timeout: 10_000 });
+
+		await pendingPanel.getByRole('button', { name: 'Approve' }).click();
+
+		// Error toast surfaces; the panel does NOT clear (approve failed).
+		await expect(page.locator('.toast.toast-error')).toContainText('Failed to approve request', {
+			timeout: 10_000
+		});
+		await expect(pendingPanel).toBeVisible();
+		await expect(pendingPanel).toContainText('Pending requests (1)');
+	});
+
 	test('admin approves the pending request → member moves to active, pending panel clears', async ({
 		page
 	}) => {

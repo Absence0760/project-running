@@ -471,10 +471,20 @@
 		}
 	}
 
+	let pendingBusy = $state<Set<string>>(new Set());
 	async function approve(userId: string) {
-		if (!club) return;
-		await approveMember(club.id, userId);
-		await load();
+		if (!club || pendingBusy.has(userId)) return;
+		pendingBusy = new Set(pendingBusy).add(userId);
+		try {
+			await approveMember(club.id, userId);
+			await load();
+		} catch (e: unknown) {
+			showToast(tr('clubHome.toastApproveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			const next = new Set(pendingBusy);
+			next.delete(userId);
+			pendingBusy = next;
+		}
 	}
 
 	let approvingAll = $state(false);
@@ -496,9 +506,18 @@
 	}
 
 	async function reject(userId: string) {
-		if (!club) return;
-		await rejectMember(club.id, userId);
-		await load();
+		if (!club || pendingBusy.has(userId)) return;
+		pendingBusy = new Set(pendingBusy).add(userId);
+		try {
+			await rejectMember(club.id, userId);
+			await load();
+		} catch (e: unknown) {
+			showToast(tr('clubHome.toastRejectFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			const next = new Set(pendingBusy);
+			next.delete(userId);
+			pendingBusy = next;
+		}
 	}
 
 	async function confirmRemoveMember() {
@@ -844,8 +863,8 @@
 								<strong>{p.display_name ?? tr('clubHome.memberFallback')}</strong>
 								<span class="when">{tr('clubHome.requestedRelative', { time: fmtRelative(p.joined_at ?? new Date().toISOString()) })}</span>
 							</div>
-							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)}>{tr('clubHome.approve')}</button>
-							<button class="btn-ghost" onclick={() => reject(p.user_id)}>{tr('clubHome.reject')}</button>
+							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)} disabled={pendingBusy.has(p.user_id)}>{tr('clubHome.approve')}</button>
+							<button class="btn-ghost" onclick={() => reject(p.user_id)} disabled={pendingBusy.has(p.user_id)}>{tr('clubHome.reject')}</button>
 						</div>
 					{/each}
 				</div>

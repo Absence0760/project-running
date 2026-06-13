@@ -1415,6 +1415,8 @@ export const messages = {
 	"clubHome.failedToLeave": "退会できませんでした",
 	"clubHome.toastApprovedAll": "保留中のリクエストをすべて承認しました。",
 	"clubHome.toastApproveAllFailed": "すべて承認できませんでした: {error}",
+	"clubHome.toastApproveFailed": "リクエストを承認できませんでした: {error}",
+	"clubHome.toastRejectFailed": "リクエストを却下できませんでした: {error}",
 	"clubHome.toastRemoveMemberFailed": "メンバーを削除できませんでした: {error}",
 	"clubHome.inviteCopied": "招待リンクをクリップボードにコピーしました。",
 	"clubHome.failedToPost": "投稿できませんでした",
