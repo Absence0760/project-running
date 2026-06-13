@@ -79,6 +79,14 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   Directory? dir;
   final Map<String, S> rowsById = <String, S>{};
 
+  /// Last-known on-disk JSON per row id. Lets [rewriteAll] skip re-writing a
+  /// row whose serialized content is byte-identical to what's already on disk
+  /// (the overwhelmingly common pull-to-refresh case where the server returns
+  /// the same rows) — turning a populated refresh from N forced fsync writes
+  /// into 0. Populated on cold-load + every write; a skipped row keeps its
+  /// existing file, so the crash-atomic write-before-prune contract is intact.
+  final Map<String, String> _writtenJson = <String, String>{};
+
   int _revision = 0;
 
   /// Monotonic counter bumped on every mutation (every [notifyListeners]).
@@ -163,6 +171,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   Future<void> loadAll() async {
     rowsById.clear();
     _summaries.clear();
+    _writtenJson.clear();
     _indexDirty = false;
     final d = dir;
     if (d == null) return;
@@ -181,6 +190,11 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
         final json = jsonDecode(raw) as Map<String, dynamic>;
         final stored = entryFromJson(migrateRecord(json, entity.path));
         rowsById[stored.id] = stored;
+        // Baseline for the rewriteAll diff: the bytes actually on disk. If a
+        // later rewrite's serialized form matches this, the write is skipped;
+        // if the on-disk form was a drifted/older shape it won't match and the
+        // row is rewritten (upgraded).
+        _writtenJson[stored.id] = raw;
       } catch (e) {
         debugPrint('$debugLabel: corrupt row ${entity.path}: $e');
       }
@@ -351,6 +365,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
 
   Future<void> dropRow(String id) async {
     rowsById.remove(id);
+    _writtenJson.remove(id);
     final file = File('${dir!.path}/$id.json');
     if (file.existsSync()) file.deleteSync();
     if (_summaries.remove(id) != null) _indexDirty = true;
@@ -372,7 +387,9 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   Future<void> _persistRow(S stored) async {
     rowsById[stored.id] = stored;
     final file = File('${dir!.path}/${stored.id}.json');
-    await writeJsonAtomic(file, stored.toJson());
+    final json = stored.toJson();
+    await writeJsonAtomic(file, json);
+    _writtenJson[stored.id] = jsonEncode(json);
     if (stored.isTombstone) {
       if (_summaries.remove(stored.id) != null) _indexDirty = true;
     } else {
@@ -396,9 +413,17 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     final keep = <String>{};
     for (final stored in rowsById.values) {
       final file = File('${d.path}/${stored.id}.json');
-      keep.add(file.path);
+      keep.add(file.path); // keep regardless of whether we rewrite below
+      final json = stored.toJson();
+      final encoded = jsonEncode(json);
+      // Skip the fsync when this row's serialized form is already on disk —
+      // the common refresh case where the server returned identical rows. The
+      // file is in `keep`, so the prune pass below won't touch it.
+      if (_writtenJson[stored.id] == encoded) continue;
       try {
-        await writeJsonAtomic(file, stored.toJson());
+        await writeJsonAtomic(file, json);
+        _writtenJson[stored.id] = encoded;
+        rewriteAtomicWrites++;
       } catch (e) {
         debugPrint('$debugLabel: rewrite write failed ${file.path}: $e');
       }
@@ -456,9 +481,16 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
         '${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}';
   }
 
+  /// Test-only: count of per-row atomic writes [rewriteAll] has performed.
+  /// The diff-before-write skip means a refresh that changes nothing leaves
+  /// this flat — the regression guard for the write-amplification fix.
+  @visibleForTesting
+  int rewriteAtomicWrites = 0;
+
   @visibleForTesting
   void debugClear() {
     rowsById.clear();
+    _writtenJson.clear();
     notifyListeners();
   }
 

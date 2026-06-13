@@ -407,6 +407,40 @@ void main() {
       expect(reloaded.workouts.map((w) => w.id).toSet(), {'w1', mine.id});
     });
 
+    test('a no-change refresh performs zero atomic rewrites (diff-before-write)',
+        () async {
+      await store.replaceFromServer([
+        _serverWorkout('w1', title: 'One'),
+        _serverWorkout('w2', title: 'Two'),
+      ]);
+      final afterFirst = store.rewriteAtomicWrites;
+      expect(afterFirst, greaterThan(0),
+          reason: 'the initial ingest writes the rows');
+
+      // Identical server payload — every row is byte-identical on disk, so the
+      // refresh must skip every per-row fsync (the write-amplification fix).
+      await store.replaceFromServer([
+        _serverWorkout('w1', title: 'One'),
+        _serverWorkout('w2', title: 'Two'),
+      ]);
+      expect(store.rewriteAtomicWrites, afterFirst,
+          reason: 'an unchanged refresh must not re-write any row');
+
+      // A single changed row rewrites only itself.
+      await store.replaceFromServer([
+        _serverWorkout('w1', title: 'One CHANGED'),
+        _serverWorkout('w2', title: 'Two'),
+      ]);
+      expect(store.rewriteAtomicWrites, afterFirst + 1,
+          reason: 'only the changed row is re-written');
+      expect(store.byId('w1')!.row['title'], 'One CHANGED');
+
+      // The skip kept the unchanged files intact — a fresh store reads both.
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.workouts.map((w) => w.id).toSet(), {'w1', 'w2'});
+    });
+
     test('per-write failure isolation: one bad row keeps its prior state, '
         'other rows still rewrite, orphans still cleaned', () async {
       // A directory sitting where a row file should be makes that row's
