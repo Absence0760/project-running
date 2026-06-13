@@ -6,6 +6,7 @@ import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { loadSettings, effective } from '../settings/settings';
 import { privacyDefaultToIsPublic } from '../social/run_visibility';
 import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
+import { assemblePublicRoute } from '../routes/public_route_assembly';
 import { stripExifFromFile } from '../util/exif_strip';
 import type {
 	Run,
@@ -1218,20 +1219,21 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		.maybeSingle();
 	if (ownerRead.data) return ownerRead.data;
 
-	const meta = await supabase
-		.from('public_routes')
-		.select('*')
-		.eq('id', id)
-		.maybeSingle();
-	if (!meta.data) return null;
+	// The metadata read and the server-clip RPC both key only on `id`, so
+	// fire them concurrently instead of serialising two round trips.
+	const assembled = await assemblePublicRoute(
+		async () =>
+			(await supabase.from('public_routes').select('*').eq('id', id).maybeSingle()).data,
+		() => fetchClippedRouteForViewer(id),
+	);
+	if (!assembled) return null;
 
-	const clipped = await fetchClippedRouteForViewer(id);
 	// public_routes intentionally omits `waypoints`, `geom`, `start_point`,
 	// and `is_starred`; pad them out so downstream consumers that read
 	// these keys still get a defined shape (empty arrays / nulls).
 	return {
-		...meta.data,
-		waypoints: clipped,
+		...assembled.meta,
+		waypoints: assembled.clipped,
 		is_starred: false,
 	} as Route;
 }
@@ -1240,16 +1242,17 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 /// non-owner branch — kept as a separate export so call sites that
 /// only ever intend to read a public route stay explicit.
 export async function fetchPublicRoute(id: string): Promise<Route | null> {
-	const { data } = await supabase
-		.from('public_routes')
-		.select('*')
-		.eq('id', id)
-		.maybeSingle();
-	if (!data) return null;
-	const clipped = await fetchClippedRouteForViewer(id);
+	// Both reads key only on `id`; run them concurrently so the anon
+	// share / OG-image path pays one round trip's latency, not two.
+	const assembled = await assemblePublicRoute(
+		async () =>
+			(await supabase.from('public_routes').select('*').eq('id', id).maybeSingle()).data,
+		() => fetchClippedRouteForViewer(id),
+	);
+	if (!assembled) return null;
 	return {
-		...data,
-		waypoints: clipped,
+		...assembled.meta,
+		waypoints: assembled.clipped,
 		is_starred: false,
 	} as Route;
 }
