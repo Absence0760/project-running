@@ -53,6 +53,7 @@
 	let scrollEl: HTMLDivElement | null = $state(null);
 	let composerEl: HTMLTextAreaElement | null = $state(null);
 	let showArchiveConfirm = $state(false);
+	let deleteArchiveAt = $state<string | null>(null);
 	let viewingArchiveAt = $state<string | null>(null);
 	// id of the user message currently being edited (if any). The bubble
 	// renders an inline textarea instead of its content while set.
@@ -226,9 +227,14 @@
 		await scrollToBottom();
 	}
 
-	async function deleteArchive(archivedAt: string, ev: Event) {
+	function askDeleteArchive(archivedAt: string, ev: Event) {
 		ev.stopPropagation();
-		if (!cachedUserId) return;
+		deleteArchiveAt = archivedAt;
+	}
+
+	async function confirmDeleteArchive() {
+		const archivedAt = deleteArchiveAt;
+		if (!archivedAt || !cachedUserId) return;
 		const { error: err } = await planFilter(
 			supabase
 				.from('coach_messages')
@@ -238,9 +244,12 @@
 		);
 		if (err) {
 			console.error('[coach] delete archive failed', err);
+			error = t('coachChat.deleteArchiveFailed');
+			deleteArchiveAt = null;
 			return;
 		}
 		archives = archives.filter((a) => a.archived_at !== archivedAt);
+		deleteArchiveAt = null;
 		if (viewingArchiveAt === archivedAt) await backToActive();
 	}
 
@@ -780,7 +789,7 @@
 						class="thread-delete"
 						title={t('coachChat.deleteForever')}
 						aria-label={t('coachChat.deleteArchive')}
-						onclick={(e) => deleteArchive(a.archived_at, e)}
+						onclick={(e) => askDeleteArchive(a.archived_at, e)}
 					>
 						<span class="material-symbols">close</span>
 					</button>
@@ -1090,6 +1099,16 @@
 		confirmLabel={t('coachChat.confirmStart')}
 		onconfirm={archiveCurrentThread}
 		oncancel={() => (showArchiveConfirm = false)}
+	/>
+
+	<ConfirmDialog
+		open={deleteArchiveAt !== null}
+		title={t('coachChat.confirmDeleteArchiveTitle')}
+		message={t('coachChat.confirmDeleteArchiveMessage')}
+		confirmLabel={t('coachChat.deleteForever')}
+		onconfirm={confirmDeleteArchive}
+		oncancel={() => (deleteArchiveAt = null)}
+		danger
 	/>
 </div>
 
