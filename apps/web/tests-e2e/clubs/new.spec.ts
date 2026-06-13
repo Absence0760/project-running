@@ -287,7 +287,7 @@ test.describe('/clubs/new', () => {
 		// 20260907_001) and raise P0001 before the row lands. The
 		// data.ts catch path converts that into a friendly "you're
 		// creating clubs too quickly" message, which the editor now
-		// routes through showToast (E4) rather than an inline <p>; pin
+		// routes through showToast rather than an inline <p>; pin
 		// both the wording AND that it lands in an error toast so a
 		// future refactor can't silently revert to the generic
 		// "Failed to create club" fallback or to inline text.

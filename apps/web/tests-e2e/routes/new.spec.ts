@@ -108,7 +108,7 @@ test.describe('/routes/new — save round-trip', () => {
 		// fires the BEFORE INSERT trigger. data.ts → rateLimitErrorMessage
 		// rewraps the P0001 as a friendly "creating routes too quickly"
 		// Error, the save handler now routes e.message through showToast
-		// (E4), and the user gets a readable error toast instead of either
+		// and the user gets a readable error toast instead of either
 		// the raw exception or the generic "Failed to save route" fallback.
 		const admin = getAdminClient();
 		const nowS = Math.floor(Date.now() / 1000);
@@ -141,7 +141,7 @@ test.describe('/routes/new — save round-trip', () => {
 			await submit.evaluate((el: HTMLButtonElement) => (el.disabled = false));
 			await submit.click();
 
-			// Friendly wording lands in a page-level error toast (E4),
+			// Friendly wording lands in a page-level error toast,
 			// not the modal's inline .save-error banner.
 			const errorToast = page.locator('.toast-error');
 			await expect(errorToast).toBeVisible({ timeout: 10_000 });

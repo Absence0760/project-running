@@ -5,7 +5,6 @@
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { rateLimitErrorMessage } from '$lib/util/rate_limit_errors';
 	import Modal from './Modal.svelte';
 
 	let {
@@ -102,10 +101,7 @@
 				onclose();
 			}
 		} catch (err) {
-			const friendly =
-				rateLimitErrorMessage(err as { code?: string; message?: string }) ??
-				(err instanceof Error ? err.message : m('importRoute.failedToSave'));
-			showToast(friendly, 'error');
+			showToast(err instanceof Error ? err.message : m('importRoute.failedToSave'), 'error');
 		} finally {
 			saving = false;
 		}

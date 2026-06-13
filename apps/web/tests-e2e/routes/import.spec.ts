@@ -409,7 +409,7 @@ test.describe('/routes — Import route modal', () => {
 		// the counter to 30 so the next saveRoute insert fires the BEFORE
 		// INSERT trigger; data.ts rewraps the P0001 via rateLimitErrorMessage
 		// and the ImportRoute handleSave catch now routes it through showToast
-		// (E4) instead of the inline .error banner. Pin the toast wording so a
+		// instead of the inline .error banner. Pin the toast wording so a
 		// refactor can't silently revert to the generic "failed to save" copy.
 		const admin = getAdminClient();
 		const nowS = Math.floor(Date.now() / 1000);

@@ -4,7 +4,6 @@
 	import type { JoinPolicy } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { rateLimitErrorMessage } from '$lib/util/rate_limit_errors';
 
 	interface Props {
 		oncreated?: (club: { slug: string; id: string }) => void;
@@ -58,10 +57,7 @@
 			});
 			oncreated?.(club);
 		} catch (e: unknown) {
-			const friendly =
-				rateLimitErrorMessage(e as { code?: string; message?: string }) ??
-				(e instanceof Error ? e.message : m('clubEditor.createFailed'));
-			showToast(friendly, 'error');
+			showToast(e instanceof Error ? e.message : m('clubEditor.createFailed'), 'error');
 		} finally {
 			busy = false;
 		}
