@@ -3235,6 +3235,8 @@ export const en = {
 	"gym.routine.subtitle": "{count, plural, one {# routine} other {# routines}}",
 	"gym.routine.link": "Routines",
 	"gym.routine.new": "New routine",
+	"gym.routine.loadError": "Couldn't load your routines.",
+	"gym.routine.retry": "Retry",
 	"gym.routine.back": "Back to routines",
 	"gym.routine.notFound": "Routine not found.",
 	"gym.routine.exerciseCount": "{count, plural, one {# exercise} other {# exercises}}",

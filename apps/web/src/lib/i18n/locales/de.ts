@@ -3226,6 +3226,8 @@ export const messages = {
 	"gym.routine.subtitle": "{count, plural, one {# Routine} other {# Routinen}}",
 	"gym.routine.link": "Routinen",
 	"gym.routine.new": "Neue Routine",
+	"gym.routine.loadError": "Deine Routinen konnten nicht geladen werden.",
+	"gym.routine.retry": "Erneut versuchen",
 	"gym.routine.back": "Zurück zu Routinen",
 	"gym.routine.notFound": "Routine nicht gefunden.",
 	"gym.routine.exerciseCount": "{count, plural, one {# Übung} other {# Übungen}}",

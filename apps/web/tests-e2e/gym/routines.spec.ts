@@ -18,6 +18,31 @@ import { USER_A } from '../fixtures/users';
 test.describe('/gym/routines — build, library, detail, promote, repeat', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('a failed routines load shows an error + retry, and retry recovers', async ({ page }) => {
+		let failNext = true;
+		await page.route('**/rest/v1/gym_routines**', async (route) => {
+			if (route.request().method() === 'GET' && failNext) {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/gym/routines');
+		// Error state, not the empty state masquerading as "no routines".
+		await expect(page.locator('.error-banner')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('routine-empty')).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Retry' }).click();
+		// Retry re-fetches (now unblocked) → the real empty-or-list state renders.
+		await expect(page.locator('.error-banner')).toHaveCount(0, { timeout: 10_000 });
+	});
+
 	test('library self-hides empty, builder creates a routine, detail + delete', async ({
 		page,
 	}) => {

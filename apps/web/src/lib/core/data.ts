@@ -6522,20 +6522,26 @@ export interface GymRoutineInput {
 }
 
 /// Authored routines for the signed-in user, most-recently-modified first.
-export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]> {
+/// Same as `fetchGymRoutines` but surfaces the error so the routines page
+/// can show a "couldn't load — retry" state rather than an empty list
+/// (indistinguishable from "no routines yet"). Mirrors the
+/// `fetchRoutesWithError` / `fetchMyPlansWithError` convention.
+export async function fetchGymRoutinesWithError(
+	limit = 100
+): Promise<{ routines: GymRoutineSummary[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { routines: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.gym_routines)
 		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('author_id', userId)
 		.order('last_modified_at', { ascending: false })
 		.limit(limit);
-	if (error) {
-		console.error('fetchGymRoutines failed', error);
-		return [];
-	}
-	return (data ?? []) as GymRoutineSummary[];
+	return { routines: (data ?? []) as GymRoutineSummary[], error: error?.message ?? null };
+}
+
+export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]> {
+	return (await fetchGymRoutinesWithError(limit)).routines;
 }
 
 /// A single routine with its exercises (by position) + their planned sets (by
