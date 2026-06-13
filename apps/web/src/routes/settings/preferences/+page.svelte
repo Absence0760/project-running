@@ -25,6 +25,7 @@
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
 
@@ -371,6 +372,17 @@
 	// the user must deliberately confirm. Grant stamps the consent timestamp
 	// via a SECURITY DEFINER RPC (first-stamp-wins, lock-trigger enforced);
 	// withdrawal nulls gender + DOB + the timestamp atomically per Art 7(3).
+	// Withdrawing consent (Art 7(3)) erases the saved height + the entire
+	// weight time-series — irreversible, so confirm before running the save.
+	let showWithdrawConfirm = $state(false);
+	function requestSaveDemographics() {
+		if (!healthDataConsent && healthDataConsentAt != null) {
+			showWithdrawConfirm = true;
+			return;
+		}
+		saveDemographics();
+	}
+
 	async function saveDemographics() {
 		if (!auth.user) return;
 		const heightVal = heightCm != null && heightCm > 0 ? heightCm : null;
@@ -747,7 +759,7 @@
 			<button
 				class="btn btn-primary btn-save"
 				type="button"
-				onclick={saveDemographics}
+				onclick={requestSaveDemographics}
 				disabled={savingDemographics}
 				data-testid="save-demographics"
 			>
@@ -914,6 +926,19 @@
 >
 	<PrivacyZonePicker oncreated={addZone} oncancel={() => (showZonePicker = false)} />
 </Modal>
+
+<ConfirmDialog
+	open={showWithdrawConfirm}
+	title={m('prefs.withdrawConsentTitle')}
+	message={m('prefs.withdrawConsentMessage')}
+	confirmLabel={m('prefs.withdrawConsentConfirm')}
+	onconfirm={() => {
+		showWithdrawConfirm = false;
+		saveDemographics();
+	}}
+	oncancel={() => (showWithdrawConfirm = false)}
+	danger
+/>
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
