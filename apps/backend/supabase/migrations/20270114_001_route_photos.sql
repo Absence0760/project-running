@@ -168,8 +168,15 @@ create trigger route_photos_block_thumb_path_update_trigger
 -- route_photos → private.is_route_visible_to so a route flipping to
 -- private propagates within the signed-URL TTL.
 
-insert into storage.buckets (id, name, public)
-values ('route-photos', 'route-photos', false)
+-- file_size_limit + allowed_mime_types match run-photos (20260620_001):
+-- caps the upload + restricts to image MIME types so a raw client
+-- upload can't drop an SVG-XSS or oversized blob into the bucket.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'route-photos', 'route-photos', false,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+)
 on conflict (id) do nothing;
 
 create policy "route-photo bytes visible when parent route is visible"
