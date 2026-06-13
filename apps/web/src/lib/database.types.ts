@@ -3802,9 +3802,12 @@ export type Database = {
           p_byday?: string
           p_cadence?: string
           p_category?: string
+          p_center_lat?: number
+          p_center_lng?: number
           p_limit?: number
           p_paid?: string
           p_query?: string
+          p_radius_m?: number
           p_time?: string
         }
         Returns: {
@@ -3815,6 +3818,7 @@ export type Database = {
           club_slug: string
           currency: string
           discipline: string
+          distance_m: number
           duration_min: number
           id: string
           price_cents: number

@@ -5,7 +5,7 @@
 -- category / weekday / paid filters that back the /social Discover tab.
 
 begin;
-select plan(10);
+select plan(13);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values ('aaaaaaaa-0000-0000-0000-0000000000d1', 'authenticated', 'authenticated', 'spe@disc.local', '', now(), now());
@@ -14,6 +14,12 @@ insert into clubs (id, owner_id, name, slug, is_public)
 values
   ('cccccccc-0000-0000-0000-0000000000f1', 'aaaaaaaa-0000-0000-0000-0000000000d1', 'Public Disc Club', 'public-disc', true),
   ('cccccccc-0000-0000-0000-0000000000f2', 'aaaaaaaa-0000-0000-0000-0000000000d1', 'Private Disc Club', 'private-disc', false);
+
+-- Public club anchored at a real geocoded point (NYC) for the proximity filter.
+insert into clubs (id, owner_id, name, slug, is_public, location_point)
+values
+  ('cccccccc-0000-0000-0000-0000000000f3', 'aaaaaaaa-0000-0000-0000-0000000000d1', 'Geo Disc Club', 'geo-disc', true,
+   ST_SetSRID(ST_MakePoint(-73.9857, 40.7484), 4326)::geography);
 
 -- Public club: a free weekly Sunday run + a paid weekly Sunday pilates class.
 insert into events (id, club_id, author_id, title, category, discipline, starts_at, recurrence_freq, recurrence_byday)
@@ -35,6 +41,13 @@ values
   ('eeeeeeee-0000-0000-0000-0000000000a4', 'cccccccc-0000-0000-0000-0000000000f1',
    'aaaaaaaa-0000-0000-0000-0000000000d1', 'Evening Pilates', 'class', 'Evening Pilates',
    timestamptz '2026-07-05 23:00:00+00', 'America/New_York', 'weekly', array['SU']);
+
+-- An event in the geocoded NYC club, for the proximity filter.
+insert into events (id, club_id, author_id, title, category, discipline, starts_at, recurrence_freq, recurrence_byday)
+values
+  ('eeeeeeee-0000-0000-0000-0000000000a5', 'cccccccc-0000-0000-0000-0000000000f3',
+   'aaaaaaaa-0000-0000-0000-0000000000d1', 'NYC Group Run', 'run', null,
+   now() + interval '2 days', 'weekly', array['SU']);
 
 -- Price the public pilates class (bypass the charges_enabled trigger for the fixture).
 set session_replication_role = replica;
@@ -92,6 +105,25 @@ select is(
   (select count(*)::int from search_public_events(p_time := 'morning')
      where id = 'eeeeeeee-0000-0000-0000-0000000000a4'),
   0, 'morning filter excludes the 19:00-local event (not its 23:00 UTC hour)');
+
+-- Proximity: a center near the NYC club (same point, default 50km radius)
+-- surfaces its event.
+select is(
+  (select count(*)::int from search_public_events(p_center_lng := -73.9857, p_center_lat := 40.7484)
+     where id = 'eeeeeeee-0000-0000-0000-0000000000a5'),
+  1, 'a near-center search surfaces the geocoded club''s event');
+
+-- A center in London (far outside 50km) excludes it.
+select is(
+  (select count(*)::int from search_public_events(p_center_lng := -0.1276, p_center_lat := 51.5072)
+     where id = 'eeeeeeee-0000-0000-0000-0000000000a5'),
+  0, 'an out-of-radius search excludes the geocoded club''s event');
+
+-- distance_m is populated (and ~0) for a near-center hit.
+select ok(
+  (select distance_m < 100 from search_public_events(p_center_lng := -73.9857, p_center_lat := 40.7484)
+     where id = 'eeeeeeee-0000-0000-0000-0000000000a5'),
+  'distance_m is computed from the club point for a near-center hit');
 
 select * from finish();
 rollback;
