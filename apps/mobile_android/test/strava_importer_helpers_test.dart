@@ -9,15 +9,24 @@ void main() {
       expect(out!.toUtc(), DateTime.utc(2026, 4, 9, 7, 30, 0));
     });
 
-    test('parses Strava 12-hour AM format', () {
-      // "Apr 9, 2026, 7:30:00 AM" — the canonical Strava export shape.
+    test('parses Strava 12-hour AM format as a UTC instant', () {
+      // "Apr 9, 2026, 7:30:00 AM" — the canonical Strava export shape. The
+      // cell is UTC but carries no zone designator, so the parse must yield a
+      // UTC DateTime (a local parse would shift the instant by the device
+      // offset, rolling some runs onto the wrong day/week/heatmap cell).
       final out = parseStravaDate('Apr 9, 2026, 7:30:00 AM');
       expect(out, isNotNull);
-      expect(out!.year, 2026);
-      expect(out.month, 4);
-      expect(out.day, 9);
-      expect(out.hour, 7);
-      expect(out.minute, 30);
+      expect(out!.isUtc, isTrue);
+      expect(out, DateTime.utc(2026, 4, 9, 7, 30, 0));
+    });
+
+    test('a midnight no-zone run keeps its UTC calendar day', () {
+      // The regression guard: a local parse would roll this off Apr 9 for any
+      // device behind/ahead of UTC.
+      final out = parseStravaDate('Apr 9, 2026, 12:00:00 AM');
+      expect(out, isNotNull);
+      expect(out!.isUtc, isTrue);
+      expect(out, DateTime.utc(2026, 4, 9, 0, 0, 0));
     });
 
     test('parses Strava 12-hour PM format and shifts hour by 12', () {

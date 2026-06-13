@@ -49,8 +49,9 @@ void main() {
       // English / metric default user.
       final d = parseStravaDate('Apr 9, 2026, 7:30:00 AM');
       expect(d, isNotNull);
-      // Strava's CSV dates have no timezone — we construct a local
-      // DateTime. Pin year/month/day/hour to avoid TZ-flake.
+      // Strava's CSV dates carry no zone designator but are UTC — we
+      // construct a UTC DateTime. Pin year/month/day/hour to avoid TZ-flake
+      // (the wall-clock fields read the same either way).
       expect(d!.year, 2026);
       expect(d.month, 4);
       expect(d.day, 9);

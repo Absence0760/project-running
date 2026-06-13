@@ -15,8 +15,16 @@ import 'package:uuid/uuid.dart';
 /// the year and optional 12-hour AM/PM marker), or sometimes ISO 8601.
 /// Returns null when the input matches neither shape — callers fall back
 /// to the per-track-file timestamp.
+///
+/// Strava emits the no-zone wall-clock form in UTC but WITHOUT a zone
+/// designator, so we build the parsed-components result as a UTC [DateTime]
+/// (`DateTime.utc`) rather than a local one — a local parse would shift every
+/// imported run by the device offset, rolling a midnight run onto the wrong
+/// day/week/heatmap cell. An already-zoned / ISO value is left to
+/// `DateTime.tryParse` so we never corrupt a value that already carries an
+/// offset.
 DateTime? parseStravaDate(String raw) {
-  // ISO first.
+  // ISO first — honours any embedded zone.
   final iso = DateTime.tryParse(raw);
   if (iso != null) return iso;
 
@@ -40,7 +48,7 @@ DateTime? parseStravaDate(String raw) {
   final ampm = m.group(7)?.toUpperCase();
   if (ampm == 'PM' && hour < 12) hour += 12;
   if (ampm == 'AM' && hour == 12) hour = 0;
-  return DateTime(year, month, day, hour, minute, second);
+  return DateTime.utc(year, month, day, hour, minute, second);
 }
 
 /// Imports a Strava data export ZIP into [Run] objects.

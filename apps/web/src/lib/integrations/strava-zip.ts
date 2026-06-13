@@ -22,6 +22,7 @@ import { buildStravaDedupeSet } from './strava-zip-dedupe';
 import { gunzipBlob } from '../util/gunzip';
 import { classifyStravaMember } from './strava-zip-classify';
 import { indexHeader, type HeaderIndex } from './strava-zip-header';
+import { parseStravaCsvDateToIso } from './strava-zip-date';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
 
@@ -206,7 +207,7 @@ async function importOne(
 		metadata[METADATA_KEYS.strava_activity_type] = row[idx.stravaType];
 
 	const { id: runId } = await saveRun({
-		started_at: new Date(startedAt).toISOString(),
+		started_at: parseStravaCsvDateToIso(startedAt) ?? new Date().toISOString(),
 		distance_m: Math.max(0, Math.round(distanceM)),
 		duration_s: Math.max(0, Math.round(durationS)),
 		elevation_m: elevationM > 0 ? Math.round(elevationM) : null,
