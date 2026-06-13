@@ -188,4 +188,36 @@ void main() {
       );
     });
   });
+
+  group('_routeProgress (single-pass)', () {
+    test('returns null when no route is loaded', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      expect(r.debugRouteProgress(at(0, 0)), isNull);
+    });
+
+    test('equals the separate off-route + remaining calcs across probes', () {
+      // A multi-segment out-and-back so the closest segment isn't trivially
+      // the first; the combined pass must match the two functions exactly.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(
+            route: route([
+          [0, 0],
+          [0, 0.001],
+          [0.001, 0.001],
+          [0.001, 0],
+          [0.0005, 0],
+        ]));
+      final probes = [
+        at(0, 0),
+        at(0.0001, 0.0005),
+        at(0.001, 0.0005),
+        at(0.0007, 0.0001),
+      ];
+      for (final p in probes) {
+        final prog = r.debugRouteProgress(p)!;
+        expect(prog.offRoute, closeTo(r.debugOffRouteDistance(p)!, 1e-6));
+        expect(prog.remaining, closeTo(r.debugRouteRemaining(p)!, 1e-6));
+      }
+    });
+  });
 }

@@ -84,6 +84,49 @@ object RouteMath {
         return remaining
     }
 
+    /// Off-route distance + distance-remaining in a SINGLE segment walk.
+    /// [offRouteDistanceM] and [routeRemainingM] each independently scan every
+    /// segment projecting [pos] onto it to find the closest one; the recording
+    /// service calls both per GPS fix, so on a long un-downsampled route that's
+    /// two full O(segments) projection passes per ~1 Hz fix. This shares the
+    /// closest-segment search, returning both results — behaviour-identical to
+    /// calling the two functions, half the projection trig. Null for <2-point
+    /// routes (matches the two functions' null contract).
+    fun routeProgress(pos: LatLng, route: List<LatLng>): RouteProgress? {
+        if (route.size < 2) return null
+
+        var closestSegmentIdx = 1
+        var minDist = Double.POSITIVE_INFINITY
+        var tAtClosest = 0.0
+        for (i in 1 until route.size) {
+            val proj = projectPointOnSegment(
+                pos.lat, pos.lng,
+                route[i - 1].lat, route[i - 1].lng,
+                route[i].lat, route[i].lng,
+            )
+            if (proj.distance < minDist) {
+                minDist = proj.distance
+                closestSegmentIdx = i
+                tAtClosest = proj.t
+            }
+        }
+
+        val a = route[closestSegmentIdx - 1]
+        val b = route[closestSegmentIdx]
+        val segLen = haversineM(a.lat, a.lng, b.lat, b.lng)
+        var remaining = segLen * (1.0 - tAtClosest)
+        for (i in closestSegmentIdx + 1 until route.size) {
+            remaining += haversineM(
+                route[i - 1].lat, route[i - 1].lng,
+                route[i].lat, route[i].lng,
+            )
+        }
+        // minDist is the min perpendicular distance to any segment — the exact
+        // value offRouteDistanceM returns (distanceToSegmentM == projection
+        // distance), so this is offRoute + remaining with no precision change.
+        return RouteProgress(offRouteDistanceM = minDist, remainingM = remaining)
+    }
+
     /// Perpendicular distance in metres from point P to segment A-B,
     /// using an equirectangular projection centred on A. Accurate for
     /// the short segments that make up a running route; not suitable
@@ -143,4 +186,9 @@ object RouteMath {
     data class LatLng(val lat: Double, val lng: Double)
 
     data class Projection(val distance: Double, val t: Double)
+
+    /// Combined output of [routeProgress] — the off-route distance (min
+    /// perpendicular distance to any segment) + the distance remaining to the
+    /// route end, both in metres.
+    data class RouteProgress(val offRouteDistanceM: Double, val remainingM: Double)
 }

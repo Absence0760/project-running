@@ -185,4 +185,36 @@ class RouteMathTest {
         // ~1.5e-3 degrees at lat 52.52 × ~67,800 m/°lng ≈ 101 m.
         assertEquals(101.7, h, metreTolerance)
     }
+
+    @Test
+    fun `routeProgress returns null for routes under two points`() {
+        assertNull(RouteMath.routeProgress(berlinA, emptyList()))
+        assertNull(RouteMath.routeProgress(berlinA, listOf(berlinA)))
+    }
+
+    @Test
+    fun `routeProgress equals the two standalone functions across the route`() {
+        // A multi-segment out-and-back so the closest segment isn't trivially
+        // the first. The single-pass combined result must match
+        // offRouteDistanceM + routeRemainingM exactly (it shares their
+        // closest-segment search) — the guard for the per-fix collapse.
+        val route = listOf(
+            LatLng(52.5200, 13.4050),
+            LatLng(52.5200, 13.4065),
+            LatLng(52.5210, 13.4065),
+            LatLng(52.5210, 13.4050),
+            LatLng(52.5205, 13.4050),
+        )
+        val probes = listOf(
+            LatLng(52.5200 + 50.0 / 111_320.0, 13.40575),
+            LatLng(52.5210, 13.40575),
+            LatLng(52.5207, 13.4051),
+            berlinA,
+        )
+        for (p in probes) {
+            val progress = RouteMath.routeProgress(p, route)!!
+            assertEquals(RouteMath.offRouteDistanceM(p, route)!!, progress.offRouteDistanceM, 1e-9)
+            assertEquals(RouteMath.routeRemainingM(p, route)!!, progress.remainingM, 1e-9)
+        }
+    }
 }

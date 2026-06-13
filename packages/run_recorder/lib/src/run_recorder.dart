@@ -537,6 +537,12 @@ class RunRecorder {
   @visibleForTesting
   double? debugOffRouteDistance(Waypoint pos) => _offRouteDistance(pos);
 
+  /// Test-only: the single-pass off-route + remaining the snapshot path uses.
+  /// Must equal `(debugOffRouteDistance, debugRouteRemaining)`.
+  @visibleForTesting
+  ({double offRoute, double remaining})? debugRouteProgress(Waypoint pos) =>
+      _routeProgress(pos);
+
   /// Pause the timer and stop accumulating distance until [resume] is called.
   void pause() {
     if (!_recording || _paused) return;
@@ -757,8 +763,11 @@ class RunRecorder {
         offRoute = _cachedOffRoute;
         remaining = _cachedRouteRemaining;
       } else {
-        offRoute = _offRouteDistance(current);
-        remaining = _routeRemaining(current);
+        // One pass for both — shares the closest-segment search instead of
+        // walking every route segment twice (off-route + remaining).
+        final progress = _routeProgress(current);
+        offRoute = progress?.offRoute;
+        remaining = progress?.remaining;
         _lastRouteCalcFor = current;
         _cachedOffRoute = offRoute;
         _cachedRouteRemaining = remaining;
@@ -833,6 +842,43 @@ class RunRecorder {
       remaining += _haversine(p.lat, p.lng, q.lat, q.lng);
     }
     return remaining;
+  }
+
+  /// Off-route distance + distance-remaining in a SINGLE walk over the route.
+  /// [_offRouteDistance] and [_routeRemaining] each scan every segment
+  /// projecting [pos] to find the closest one; computing them separately does
+  /// that closest-segment search twice. This shares it — the min perpendicular
+  /// distance IS the off-route value (`_distanceToSegmentMetres` ==
+  /// projection distance), so the result is identical with half the projection
+  /// trig. Null when no route is selected (matches both methods' contract).
+  ({double offRoute, double remaining})? _routeProgress(Waypoint pos) {
+    final route = _route;
+    if (route == null || route.waypoints.length < 2) return null;
+
+    int closestSegmentIdx = 0;
+    double minDist = double.infinity;
+    double tAtClosest = 0;
+    for (int i = 1; i < route.waypoints.length; i++) {
+      final a = route.waypoints[i - 1];
+      final b = route.waypoints[i];
+      final result = _projectPointOnSegment(pos.lat, pos.lng, a.lat, a.lng, b.lat, b.lng);
+      if (result.distance < minDist) {
+        minDist = result.distance;
+        closestSegmentIdx = i;
+        tAtClosest = result.t;
+      }
+    }
+
+    final a = route.waypoints[closestSegmentIdx - 1];
+    final b = route.waypoints[closestSegmentIdx];
+    final segLen = _haversine(a.lat, a.lng, b.lat, b.lng);
+    double remaining = segLen * (1 - tAtClosest);
+    for (int i = closestSegmentIdx + 1; i < route.waypoints.length; i++) {
+      final p = route.waypoints[i - 1];
+      final q = route.waypoints[i];
+      remaining += _haversine(p.lat, p.lng, q.lat, q.lng);
+    }
+    return (offRoute: minDist, remaining: remaining);
   }
 
   /// Project a point onto a line segment using equirectangular coordinates.

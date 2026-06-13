@@ -432,10 +432,15 @@ class RunRecordingService : Service() {
         val elapsedS = activeElapsedMs() / 1000.0
         val pace = if (newDistance >= 50.0 && elapsedS > 0) elapsedS / newDistance * 1000.0 else null
         val posLL = RouteMath.LatLng(p.lat, p.lng)
-        val offRoute = if (routeWaypoints.isNotEmpty())
-            RouteMath.offRouteDistanceM(posLL, routeWaypoints) else null
-        val remaining = if (routeWaypoints.isNotEmpty())
-            RouteMath.routeRemainingM(posLL, routeWaypoints) else null
+        // One pass for both the off-route distance and the distance remaining —
+        // each used to walk every segment of the (un-downsampled) route per GPS
+        // fix and re-find the closest segment independently. routeProgress
+        // shares that search; on a 5k-point ultra route at ~1 Hz that halves the
+        // per-fix projection trig on the recording hot path.
+        val progress = if (routeWaypoints.isNotEmpty())
+            RouteMath.routeProgress(posLL, routeWaypoints) else null
+        val offRoute = progress?.offRouteDistanceM
+        val remaining = progress?.remainingM
         // Append to the rolling overlay buffer; halve density on
         // overflow so memory stays O(cap) regardless of run length.
         // The disk-backed full track via TrackWriter is the source of
