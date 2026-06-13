@@ -502,7 +502,16 @@
 	<title>{m('history.pageTitle')}</title>
 </svelte:head>
 
-<div class="page">
+<!-- data-list-state lets e2e await the full-fetch + client-filter
+     settling deterministically after a filter flip. Flipping an
+     activity/source filter flips fetchMode to `full`, which re-fires
+     loadInitial (loading true→false) AND changes lastFetchMode. The
+     marker combines both so a test can await `loaded-full` — a state
+     only reachable once the filtered full-fetch has resolved, so it
+     can't match the brief pre-refetch `loaded-paginated` window.
+     Asserting the filtered count before this races the in-flight
+     refetch. -->
+<div class="page" data-testid="runs-surface" data-list-state={loading ? 'loading' : `loaded-${lastFetchMode}`}>
 	<RunSurfaceTabs active="runs" />
 	<!--
 		audit/accessibility (May 2026) High — WCAG 1.3.1 + 2.4.6.

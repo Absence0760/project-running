@@ -108,6 +108,17 @@ test.describe('/runs', () => {
 		// name is the most stable selector.
 		await page.getByRole('button', { name: 'Walk', exact: true }).click();
 
+		// Flipping the activity filter flips fetchMode to `full`, which
+		// re-fires loadInitial against the 224-run all-time set. Wait
+		// for the full-fetch + client filter to settle (`loaded-full`)
+		// before counting — asserting immediately races the in-flight
+		// refetch. `loaded-full` can't match the brief pre-refetch
+		// `loaded-paginated` window, so this isn't a premature-settle.
+		await expect(page.getByTestId('runs-surface')).toHaveAttribute(
+			'data-list-state',
+			'loaded-full'
+		);
+
 		// Exactly one walk row in the seed.
 		await expect(page.locator('.run-card')).toHaveCount(1);
 
@@ -171,6 +182,13 @@ test.describe('/runs', () => {
 		await expect(page.locator('.run-card').first()).toBeVisible();
 
 		await page.getByRole('button', { name: 'Walk', exact: true }).click();
+		// The activity filter flips fetchMode to `full`; wait for the
+		// resulting full-fetch + client filter to settle before
+		// counting rather than racing the in-flight refetch.
+		await expect(page.getByTestId('runs-surface')).toHaveAttribute(
+			'data-list-state',
+			'loaded-full'
+		);
 		await expect(page.locator('.run-card')).toHaveCount(1);
 
 		// Reload — both selections must hold.
@@ -182,6 +200,13 @@ test.describe('/runs', () => {
 			page.getByRole('button', { name: 'Walk', exact: true })
 		).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.getByLabel('Date range')).toHaveValue('all');
+		// After reload the hydrated `all`+Walk filters re-fire the
+		// full-fetch; wait for it to settle (`loaded-full`) before
+		// asserting the restored count rather than racing the load.
+		await expect(page.getByTestId('runs-surface')).toHaveAttribute(
+			'data-list-state',
+			'loaded-full'
+		);
 		await expect(page.locator('.run-card')).toHaveCount(1);
 
 		// Restore so subsequent tests don't inherit a Walk filter via
