@@ -3979,6 +3979,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get planDetailNotFound => 'Plan no encontrado.';
 
   @override
+  String get planDetailLongestLongRun => 'Tirada larga más larga';
+
+  @override
   String get planDetailPublishTooltip => 'Publicar como plantilla del club';
 
   @override

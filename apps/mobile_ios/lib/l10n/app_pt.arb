@@ -1090,6 +1090,7 @@
   "planDetailTimeoutError": "Tempo de conexão esgotado. Verifique sua rede e tente novamente.",
   "planDetailLoadError": "Não foi possível carregar este plano. Toque em tentar novamente.",
   "planDetailNotFound": "Plano não encontrado.",
+  "planDetailLongestLongRun": "Corrida longa mais longa",
   "planDetailPublishTooltip": "Publicar como modelo do clube",
   "planDetailDaysPerWeek": "{count} dias/sem.",
   "planDetailCurrentWeek": "Esta semana",

@@ -6647,6 +6647,12 @@ abstract class AppLocalizations {
   /// **'Plan not found.'**
   String get planDetailNotFound;
 
+  /// Plan-detail header stat label for the longest completed long run
+  ///
+  /// In en, this message translates to:
+  /// **'Longest long run'**
+  String get planDetailLongestLongRun;
+
   /// Publish-as-template AppBar action tooltip
   ///
   /// In en, this message translates to:

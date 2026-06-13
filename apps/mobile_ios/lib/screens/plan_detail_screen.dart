@@ -13,6 +13,7 @@ import '../l10n/number_format.dart';
 import '../local_run_store.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../plan_adherence.dart';
+import '../plan_progress.dart';
 import '../plan_replan.dart';
 import '../plan_adaptive_replan.dart';
 import '../social_service.dart' show ClubView, RecentRunRow, SocialService;
@@ -241,6 +242,30 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       isTaper: week.phase == 'taper' || week.phase == 'race',
       recoveryWeekImminent: recoveryImminent,
     ));
+  }
+
+  /// Overall phase arc (base→build→peak→taper→race) the plan moves through,
+  /// de-duplicated into canonical order.
+  List<String> _orderedPhases() =>
+      orderedPlanPhases(_weeks.map((w) => PlanProgressWeek(w.phase)).toList());
+
+  /// Longest long run completed so far — actual recorded distance when the
+  /// linked run is in the recent-runs window, else the planned target.
+  double? _longestLongRunMetres() {
+    final actualById = <String, double>{};
+    for (final r in _recentRuns) {
+      actualById[r.id] = r.distanceM;
+    }
+    final workouts = _byWeek.values
+        .expand((x) => x)
+        .map((w) => LongRunWorkout(
+              kind: w.kind,
+              targetDistanceM: w.targetDistanceM,
+              completedRunId: w.completedRunId,
+              manuallyCompleted: w.manuallyCompleted,
+            ))
+        .toList();
+    return longestCompletedLongRunMetres(workouts, actualById);
   }
 
   List<ReplanWeek> _buildReplanInput(TrainingPlanRow plan) {
@@ -526,6 +551,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               const SizedBox(height: 12),
               _todayCard(theme, l10n, p, todayWorkout),
             ],
+            ..._progressSection(theme, l10n,
+                _weeks.isNotEmpty ? _weeks[currentWeek].phase : null),
             ..._adherenceSection(theme, l10n, p),
             ..._replanSection(theme, l10n, p),
             if (_weeks.isNotEmpty) ...[
@@ -592,6 +619,71 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             for (var i = 0; i < flags.length; i++) ...[
               if (i > 0) const SizedBox(height: 8),
               flags[i],
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _progressSection(
+      ThemeData theme, AppLocalizations l10n, String? currentPhase) {
+    final phases = _orderedPhases();
+    final longest = _longestLongRunMetres();
+    if (phases.length <= 1 && longest == null) return const [];
+    return [
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (phases.length > 1)
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (var i = 0; i < phases.length; i++) ...[
+                    if (i > 0)
+                      Icon(Icons.chevron_right,
+                          size: 14, color: theme.colorScheme.outline),
+                    Text(
+                      planPhaseLabel(l10n, planPhaseFromDb(phases[i]))
+                          .toUpperCase(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: phases[i] == currentPhase
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                        color: phases[i] == currentPhase
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            if (longest != null) ...[
+              if (phases.length > 1) const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.trending_up,
+                      size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text('${l10n.planDetailLongestLongRun}: ',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      )),
+                  Text(fmtKm(longest),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
             ],
           ],
         ),

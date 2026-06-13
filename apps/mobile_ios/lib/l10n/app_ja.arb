@@ -1090,6 +1090,7 @@
   "planDetailTimeoutError": "接続がタイムアウトしました。ネットワークを確認して再試行してください。",
   "planDetailLoadError": "このプランを読み込めませんでした。再試行をタップしてください。",
   "planDetailNotFound": "プランが見つかりません。",
+  "planDetailLongestLongRun": "最長のロング走",
   "planDetailPublishTooltip": "クラブテンプレートとして公開",
   "planDetailDaysPerWeek": "週{count}日",
   "planDetailCurrentWeek": "今週",

@@ -4931,6 +4931,10 @@
   "@planDetailNotFound": {
     "description": "Plan-detail not-found body"
   },
+  "planDetailLongestLongRun": "Longest long run",
+  "@planDetailLongestLongRun": {
+    "description": "Plan-detail header stat label for the longest completed long run"
+  },
   "planDetailPublishTooltip": "Publish as club template",
   "@planDetailPublishTooltip": {
     "description": "Publish-as-template AppBar action tooltip"

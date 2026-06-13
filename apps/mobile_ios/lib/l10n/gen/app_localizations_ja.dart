@@ -3739,6 +3739,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planDetailNotFound => 'プランが見つかりません。';
 
   @override
+  String get planDetailLongestLongRun => '最長のロング走';
+
+  @override
   String get planDetailPublishTooltip => 'クラブテンプレートとして公開';
 
   @override

@@ -1090,6 +1090,7 @@
   "planDetailTimeoutError": "Se agotó el tiempo de conexión. Comprueba tu red e inténtalo de nuevo.",
   "planDetailLoadError": "No se pudo cargar este plan. Toca Reintentar.",
   "planDetailNotFound": "Plan no encontrado.",
+  "planDetailLongestLongRun": "Tirada larga más larga",
   "planDetailPublishTooltip": "Publicar como plantilla del club",
   "planDetailDaysPerWeek": "{count} días/sem.",
   "planDetailCurrentWeek": "Esta semana",

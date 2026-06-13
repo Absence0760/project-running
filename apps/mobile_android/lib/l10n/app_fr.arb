@@ -1090,6 +1090,7 @@
   "planDetailTimeoutError": "Délai de connexion dépassé. Vérifiez votre réseau et réessayez.",
   "planDetailLoadError": "Impossible de charger ce plan. Appuyez sur Réessayer.",
   "planDetailNotFound": "Plan introuvable.",
+  "planDetailLongestLongRun": "Sortie longue la plus longue",
   "planDetailPublishTooltip": "Publier comme modèle de club",
   "planDetailDaysPerWeek": "{count} jours/sem.",
   "planDetailCurrentWeek": "Cette semaine",
