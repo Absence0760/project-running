@@ -1159,6 +1159,8 @@ export const messages = {
 	"settingsDevices.pushEnableFailedToast": "通知を有効にできませんでした：{message}",
 	"settingsDevices.pushDisabledToast": "このデバイスで通知を無効にしました。",
 	"settingsDevices.renameFailedToast": "名前の変更に失敗しました：{message}",
+	"settingsDevices.clearOverrideFailedToast": "上書き設定を解除できませんでした：{message}",
+	"settingsDevices.removeDeviceFailedToast": "デバイスを削除できませんでした：{message}",
 	"settingsIntegrations.title": "連携",
 	"settingsIntegrations.tagline": "Strava、parkrun、Garmin、Apple HealthKit からランをインポート。アカウントを連携したくない場合は一括エクスポートの zip をドロップしてください。",
 	"settingsIntegrations.loading": "連携を読み込み中…",

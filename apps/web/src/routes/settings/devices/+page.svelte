@@ -138,7 +138,10 @@
 			.delete()
 			.eq('user_id', auth.user.id)
 			.eq('device_id', deviceId);
-		if (error) return;
+		if (error) {
+			showToast(m('settingsDevices.removeDeviceFailedToast', { message: error.message }), 'error');
+			return;
+		}
 		devices = devices.filter((d) => d.device_id !== deviceId);
 		confirmingRemove = null;
 
@@ -210,9 +213,9 @@
 	}
 
 	/// Drop a single override key from a device. The rest of the row
-	/// stays. Mutates the in-memory list optimistically — the next
-	/// reload re-reads from the server so a failure would be caught on
-	/// next open.
+	/// stays. A failure surfaces as an error toast — silently returning
+	/// left the value on screen with no explanation of why the Clear did
+	/// nothing.
 	async function clearOverride(deviceId: string, key: string) {
 		if (!auth.user) return;
 		const device = devices.find((d) => d.device_id === deviceId);
@@ -223,7 +226,10 @@
 			.update({ prefs: rest, updated_at: new Date().toISOString() })
 			.eq('user_id', auth.user.id)
 			.eq('device_id', deviceId);
-		if (error) return;
+		if (error) {
+			showToast(m('settingsDevices.clearOverrideFailedToast', { message: error.message }), 'error');
+			return;
+		}
 		devices = devices.map((d) =>
 			d.device_id === deviceId ? { ...d, prefs: rest } : d,
 		);

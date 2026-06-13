@@ -163,6 +163,51 @@ test.describe('/settings/devices', () => {
 		await expect(plantedRow.locator('.override-value', { hasText: 'satellite' })).toBeVisible();
 	});
 
+	test('a failed clear-override surfaces an error toast instead of silently no-op', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const plantedDeviceId = `${PLANTED_DEVICE_PREFIX}clear-fail-${Date.now()}`;
+
+		await admin.from('user_device_settings').insert({
+			user_id: USER_A.id,
+			device_id: plantedDeviceId,
+			platform: 'android',
+			label: 'Clear-fail fixture',
+			prefs: { map_style: 'satellite' }
+		});
+
+		await page.goto('/settings/preferences');
+		await expect(page.getByRole('heading', { name: 'Units & Display' })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.goto('/settings/devices');
+		const plantedRow = rowByLabel(page, 'Clear-fail fixture');
+		await expect(plantedRow).toBeVisible({ timeout: 10_000 });
+		await plantedRow.locator('.override-link').click();
+
+		// Only intercept AFTER the page has provisioned its own row, so the
+		// failure is scoped to the Clear write.
+		await page.route('**/rest/v1/user_device_settings**', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await plantedRow.locator('button.override-clear').first().click();
+
+		await expect(page.locator('.toast-error')).toBeVisible({ timeout: 5_000 });
+		// The override is still shown — the clear didn't silently succeed.
+		await expect(plantedRow.locator('.overrides code', { hasText: 'map_style' })).toBeVisible();
+	});
+
 	test('delete device confirmation removes the row', async ({ page }) => {
 		const admin = getAdminClient();
 		const plantedDeviceId = `${PLANTED_DEVICE_PREFIX}delete-${Date.now()}`;
