@@ -125,26 +125,33 @@ func TestOSRMMatcher_SuccessfulMatch(t *testing.T) {
 	}
 }
 
-func TestOSRMMatcher_NoMatchReturnsEmpty(t *testing.T) {
+func TestOSRMMatcher_NoMatchCarriesRawPointsThrough(t *testing.T) {
 	// OSRM signals "I couldn't align this" by replying 200 with
-	// code != "Ok" (NoMatch / NoSegment / TooBig). The worker treats
-	// that as 'skipped', not 'failed' — so the matcher returns
-	// (nil, nil), not an error.
+	// code != "Ok" (NoMatch / NoSegment / TooBig). Rather than drop the
+	// chunk — which would silently truncate the run under a 'matched'
+	// label — the matcher carries the chunk's raw input points through,
+	// so the output covers the whole input with raw geometry.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"code":"NoMatch","message":"Could not match the trace."}`)
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)
-	out, err := m.Match(context.Background(), []TrackPoint{
+	in := []TrackPoint{
 		{Lat: 51.5, Lng: -0.1},
 		{Lat: 51.51, Lng: -0.11},
-	})
+	}
+	out, err := m.Match(context.Background(), in)
 	if err != nil {
 		t.Fatalf("NoMatch should not surface as error: %v", err)
 	}
-	if out != nil {
-		t.Errorf("NoMatch should return nil output, got %v", out)
+	if len(out) != len(in) {
+		t.Fatalf("NoMatch should carry raw points through: len out=%d want %d", len(out), len(in))
+	}
+	for i := range in {
+		if out[i] != in[i] {
+			t.Errorf("out[%d]=%+v, want raw %+v", i, out[i], in[i])
+		}
 	}
 }
 
@@ -253,12 +260,65 @@ func TestOSRMMatcher_TailChunkOfOnePassedThrough(t *testing.T) {
 	}
 }
 
-func TestOSRMMatcher_StitchedTooShortReturnsEmpty(t *testing.T) {
-	// If every chunk comes back empty (NoMatch on each), the stitched
-	// total has < 2 points. handleMapMatch translates that into
-	// status='skipped'.
+func TestOSRMMatcher_PartialMatchCoversWholeRunWithRawFallback(t *testing.T) {
+	// 250 points / chunk size 100 → 3 chunks (100, 100, 50). The middle
+	// chunk runs through a tunnel and OSRM returns code != "Ok" for it.
+	// The previous behaviour dropped that chunk and continued, silently
+	// truncating the run to chunks 1 + 3 (150 points) under a 'matched'
+	// label. The fix carries the failed chunk's raw input through so the
+	// output covers ALL 250 input points.
+	var call atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"code":"NoMatch"}`)
+		n := strings.Count(r.URL.Path[len("/match/v1/foot/"):], ";") + 1
+		idx := call.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if idx == 2 {
+			// Tunnel: engine can't align this chunk.
+			fmt.Fprint(w, `{"code":"NoMatch","message":"Could not match the trace."}`)
+			return
+		}
+		var sb strings.Builder
+		sb.WriteString(`{"code":"Ok","matchings":[{"confidence":1.0,"geometry":{"coordinates":[`)
+		for i := 0; i < n; i++ {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			fmt.Fprintf(&sb, "[%.4f,%.4f]", -0.1+float64(i)*0.0001, 51.5+float64(i)*0.0001)
+		}
+		sb.WriteString(`]}}]}`)
+		fmt.Fprint(w, sb.String())
+	}))
+	defer srv.Close()
+
+	in := make([]TrackPoint, 250)
+	for i := range in {
+		in[i] = TrackPoint{Lat: 51.5 + float64(i)*0.001, Lng: -0.1 + float64(i)*0.001}
+	}
+	m := NewOSRMMatcher(srv.URL)
+	out, err := m.Match(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 250 {
+		t.Fatalf("partial match should cover the whole run: len out=%d, want 250", len(out))
+	}
+	// The failed middle chunk (input indices 100..199) must appear as the
+	// VERBATIM raw input, not snapped — that's the coverage we'd otherwise
+	// silently lose.
+	for i := 100; i < 200; i++ {
+		if out[i] != in[i] {
+			t.Fatalf("out[%d]=%+v, want raw passthrough %+v", i, out[i], in[i])
+		}
+	}
+}
+
+func TestOSRMMatcher_StitchedTooShortReturnsEmpty(t *testing.T) {
+	// OSRM can reply code="Ok" with an empty coordinate list (a degenerate
+	// matching). That chunk contributes nothing AND isn't a not-matched
+	// signal, so there's no raw fallback — the stitched total stays < 2
+	// points. handleMapMatch translates that into status='skipped'.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"code":"Ok","matchings":[{"confidence":0.0,"geometry":{"coordinates":[]}}]}`)
 	}))
 	defer srv.Close()
 	m := NewOSRMMatcher(srv.URL)

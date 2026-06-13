@@ -21,10 +21,15 @@ package internal
 // Error model:
 //   * Network / 5xx → returned as an error so the worker's transient
 //     classifier defers the job.
-//   * 200 with `code != "Ok"` → matched empty: the engine couldn't
-//     align the track. We treat that as a *non-failure* by returning
-//     an empty slice; handleMapMatch then writes `status='skipped'`
-//     rather than wedging the run as 'failed'.
+//   * 200 with `code != "Ok"` on a chunk → the engine couldn't align
+//     that chunk (tunnel, unmapped trail). We carry that chunk's raw
+//     input points through into the stitched output rather than drop
+//     them, so the matched track always covers the WHOLE run with
+//     mixed snapped + raw geometry. Dropping a failed chunk would
+//     silently truncate the run under a 'matched' label.
+//   * Every chunk failing → the whole stitched track is raw. Only a
+//     track too short to match at all (< 2 points stitched) returns
+//     empty, which handleMapMatch writes as `status='skipped'`.
 
 import (
 	"context"
@@ -78,9 +83,11 @@ func (m *OSRMMatcher) Version() string {
 }
 
 // Match runs each chunk through OSRM's /match endpoint and stitches
-// the snapped tracepoints back together. Empty input → empty output;
-// failed match (engine returned no usable tracepoints) → empty output
-// so handleMapMatch writes `skipped`.
+// the snapped tracepoints back together. Empty input → empty output. A
+// chunk the engine can't align contributes its raw input points so the
+// stitched track keeps full run coverage; only a track too short to
+// stitch 2+ points returns empty, which handleMapMatch writes as
+// `skipped`.
 func (m *OSRMMatcher) Match(ctx context.Context, points []TrackPoint) ([]TrackPoint, error) {
 	if len(points) < 2 {
 		return nil, nil
@@ -104,9 +111,21 @@ func (m *OSRMMatcher) Match(ctx context.Context, points []TrackPoint) ([]TrackPo
 			out = append(out, chunk...)
 			continue
 		}
-		matched, err := m.matchChunk(ctx, chunk)
+		matched, ok, err := m.matchChunk(ctx, chunk)
 		if err != nil {
 			return nil, err
+		}
+		if !ok {
+			// The engine couldn't align this chunk (code != "Ok": a
+			// tunnel gap, an unmapped trail, a too-noisy stretch).
+			// Dropping it and continuing would silently discard this
+			// chunk's span from a track we still label 'matched',
+			// truncating coverage of the run. Carry the raw input
+			// points through instead — same passthrough as the
+			// 1-point tail above — so the matched track covers the
+			// WHOLE run with mixed snapped + raw geometry.
+			out = append(out, chunk...)
+			continue
 		}
 		out = append(out, matched...)
 	}
@@ -118,7 +137,11 @@ func (m *OSRMMatcher) Match(ctx context.Context, points []TrackPoint) ([]TrackPo
 	return out, nil
 }
 
-func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]TrackPoint, error) {
+// matchChunk returns the snapped points for one chunk. The bool is
+// false when OSRM replied 200 but couldn't align the chunk (code !=
+// "Ok" / no matchings) — distinct from (nil, true) so the caller can
+// fall back to the raw input rather than silently dropping the span.
+func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]TrackPoint, bool, error) {
 	// OSRM's URL format: /match/v1/{profile}/{lng,lat;lng,lat;...}
 	// Coordinates are lng-first, semicolon-separated. Building the
 	// path manually avoids URL-encoding overhead on a hot path.
@@ -140,33 +163,33 @@ func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]Tra
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sb.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	resp, err := m.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		// Surface the OSRM error verbatim — it's small JSON like
 		// `{"code":"InvalidUrl","message":"URL is invalid"}`. The
 		// worker's transient classifier picks up 5xx as defer-worthy.
-		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+		return nil, false, &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
 	}
 
 	var resp2 osrmMatchResponse
 	if err := json.Unmarshal(body, &resp2); err != nil {
-		return nil, fmt.Errorf("decode osrm response: %w", err)
+		return nil, false, fmt.Errorf("decode osrm response: %w", err)
 	}
 	// `code != "Ok"` → engine didn't find a sufficiently confident
-	// alignment. Surface as empty so handleMapMatch writes 'skipped'
-	// rather than failing the run.
+	// alignment for this chunk. Report not-matched so the caller carries
+	// the chunk's raw input points through, keeping full run coverage.
 	if resp2.Code != "Ok" || len(resp2.Matchings) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	// Concatenate every matching's coordinates. Most tracks return
@@ -181,7 +204,7 @@ func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]Tra
 			out = append(out, TrackPoint{Lng: c[0], Lat: c[1]})
 		}
 	}
-	return out, nil
+	return out, true, nil
 }
 
 // osrmMatchResponse is the subset of OSRM's /match response we read.
