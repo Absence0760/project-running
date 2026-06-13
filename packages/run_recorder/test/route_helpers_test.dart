@@ -103,6 +103,45 @@ void main() {
         ]));
       expect(r.debugRouteRemaining(at(0, 0)), closeTo(3 * 111.195, 1.0));
     });
+
+    test('remaining never increases around a self-revisiting loop', () {
+      // A rectangular loop that finishes back at its start. As the runner
+      // comes down the closing (left) edge toward [0,0], the
+      // perpendicular-closest segment is the opening edge [0,0]->[0,0.001]
+      // already walked at the start, so a non-monotonic search would reset
+      // remaining toward the full perimeter. The monotonic floor must keep
+      // remaining non-increasing all the way round.
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(route: route([
+          [0, 0],
+          [0, 0.001],
+          [0.001, 0.001],
+          [0.001, 0],
+          [0, 0],
+        ]));
+      final probes = [
+        at(0, 0), // start, opening edge
+        at(0, 0.0005),
+        at(0, 0.001), // first corner
+        at(0.0005, 0.001), // top edge
+        at(0.001, 0.001), // second corner
+        at(0.001, 0.0005), // right edge
+        at(0.001, 0), // third corner
+        at(0.0005, 0), // closing edge — perpendicular-near the opening edge
+        at(0, 0), // back at the finish
+      ];
+      double? previous;
+      for (final p in probes) {
+        final remaining = r.debugRouteRemaining(p)!;
+        if (previous != null) {
+          expect(remaining, lessThanOrEqualTo(previous + 1e-6),
+              reason: 'remaining jumped up at (${p.lat}, ${p.lng})');
+        }
+        previous = remaining;
+      }
+      // And it has genuinely wound down to ~0 by the finish.
+      expect(previous, closeTo(0, 1.0));
+    });
   });
 
   group('_offRouteDistance', () {

@@ -13,14 +13,16 @@ void main() {
     required double metresEast,
     required int secondsFromStart,
     double accuracy = 5,
+    double altitude = 400,
+    double altitudeAccuracy = 2,
   }) {
     return Position(
       longitude: lngBase + metresEast / metrePerDegLng,
       latitude: lat,
       timestamp: DateTime(2026, 4, 10, 10, 0, secondsFromStart),
       accuracy: accuracy,
-      altitude: 400,
-      altitudeAccuracy: 2,
+      altitude: altitude,
+      altitudeAccuracy: altitudeAccuracy,
       heading: 90,
       headingAccuracy: 5,
       speed: 2.5,
@@ -55,6 +57,52 @@ void main() {
       r.begin();
       expect(r.recording, isTrue);
       expect(r.prepared, isTrue);
+    });
+  });
+
+  group('elevation sentinel', () {
+    test('altitude 0.0 with a valid accuracy is kept (sea-level fix)', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.debugInjectPosition(makePosition(
+        metresEast: 0,
+        secondsFromStart: 0,
+        altitude: 0,
+        altitudeAccuracy: 3,
+      ));
+      expect(r.debugCurrentWaypoint!.elevationMetres, 0);
+    });
+
+    test('altitude 0.0 with no vertical fix is null', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.debugInjectPosition(makePosition(
+        metresEast: 0,
+        secondsFromStart: 0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+      ));
+      expect(r.debugCurrentWaypoint!.elevationMetres, isNull);
+    });
+
+    test('altitude with a non-finite accuracy is null', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.debugInjectPosition(makePosition(
+        metresEast: 0,
+        secondsFromStart: 0,
+        altitude: 120,
+        altitudeAccuracy: double.nan,
+      ));
+      expect(r.debugCurrentWaypoint!.elevationMetres, isNull);
+    });
+
+    test('a real altitude with a valid accuracy is kept', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.debugInjectPosition(makePosition(
+        metresEast: 0,
+        secondsFromStart: 0,
+        altitude: 412.5,
+        altitudeAccuracy: 2,
+      ));
+      expect(r.debugCurrentWaypoint!.elevationMetres, 412.5);
     });
   });
 

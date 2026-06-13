@@ -146,6 +146,13 @@ class RunRecorder {
   Waypoint? _lastRouteCalcFor;
   double? _cachedOffRoute;
   double? _cachedRouteRemaining;
+  // Lowest route-segment index the closest-segment search is allowed to
+  // match. Progress along the route is monotonic: on a loop, out-and-back, or
+  // figure-eight the perpendicular-closest segment can be one already passed
+  // (the route doubles back near the runner). Without this floor the matched
+  // segment jumps backwards and "distance remaining" climbs UP. Clamping the
+  // search to start at the last matched index keeps remaining non-increasing.
+  int _minMatchedSegmentIdx = 1;
   DateTime? _lastTrackedPositionAt;
   bool _recording = false;
   bool _paused = false;
@@ -269,6 +276,7 @@ class RunRecorder {
     _lastRouteCalcFor = null;
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
+    _minMatchedSegmentIdx = 1;
     _recording = false;
     _paused = false;
     _route = route;
@@ -475,6 +483,7 @@ class RunRecorder {
     _lastRouteCalcFor = null;
     _cachedOffRoute = null;
     _cachedRouteRemaining = null;
+    _minMatchedSegmentIdx = 1;
     _recording = false;
     _paused = false;
     _route = route;
@@ -682,7 +691,15 @@ class RunRecorder {
     _currentWaypoint = Waypoint(
       lat: pos.latitude,
       lng: pos.longitude,
-      elevationMetres: pos.altitude != 0 ? pos.altitude : null,
+      // Keep the altitude whenever the platform reports a real vertical fix.
+      // Gating on `altitude != 0` dropped a legitimate sea-level reading; a
+      // finite positive altitudeAccuracy is the platform's signal that the
+      // vertical component is a measurement rather than the unset default
+      // (which reports 0 / non-finite accuracy).
+      elevationMetres: (pos.altitudeAccuracy.isFinite &&
+              pos.altitudeAccuracy > 0)
+          ? pos.altitude
+          : null,
       timestamp: pos.timestamp,
       bpm: _currentBpm,
     );
@@ -807,11 +824,15 @@ class RunRecorder {
     final route = _route;
     if (route == null || route.waypoints.length < 2) return null;
 
-    // Find the segment closest to the runner.
-    int closestSegmentIdx = 0;
+    // Find the segment closest to the runner, never matching a segment
+    // earlier than [_minMatchedSegmentIdx] (monotonic progress — see the
+    // field doc). Clamp the floor to the route length in case the route
+    // shrank between calls.
+    final searchStart = _minMatchedSegmentIdx.clamp(1, route.waypoints.length - 1);
+    int closestSegmentIdx = searchStart;
     double minDist = double.infinity;
     double tAtClosest = 0;
-    for (int i = 1; i < route.waypoints.length; i++) {
+    for (int i = searchStart; i < route.waypoints.length; i++) {
       final a = route.waypoints[i - 1];
       final b = route.waypoints[i];
       final result = _projectPointOnSegment(
@@ -828,6 +849,7 @@ class RunRecorder {
         tAtClosest = result.t;
       }
     }
+    _minMatchedSegmentIdx = closestSegmentIdx;
 
     // Distance from closest projection to end of current segment, then sum
     // the lengths of all subsequent segments.
@@ -855,10 +877,11 @@ class RunRecorder {
     final route = _route;
     if (route == null || route.waypoints.length < 2) return null;
 
-    int closestSegmentIdx = 0;
+    final searchStart = _minMatchedSegmentIdx.clamp(1, route.waypoints.length - 1);
+    int closestSegmentIdx = searchStart;
     double minDist = double.infinity;
     double tAtClosest = 0;
-    for (int i = 1; i < route.waypoints.length; i++) {
+    for (int i = searchStart; i < route.waypoints.length; i++) {
       final a = route.waypoints[i - 1];
       final b = route.waypoints[i];
       final result = _projectPointOnSegment(pos.lat, pos.lng, a.lat, a.lng, b.lat, b.lng);
@@ -868,6 +891,7 @@ class RunRecorder {
         tAtClosest = result.t;
       }
     }
+    _minMatchedSegmentIdx = closestSegmentIdx;
 
     final a = route.waypoints[closestSegmentIdx - 1];
     final b = route.waypoints[closestSegmentIdx];
@@ -912,8 +936,13 @@ class RunRecorder {
     final route = _route;
     if (route == null || route.waypoints.length < 2) return null;
 
+    // Search from the monotonic floor (see [_minMatchedSegmentIdx]) so the
+    // off-route distance reflects the same already-passed-segments view as
+    // [_routeProgress]; reading the floor without advancing it (this helper
+    // measures off-route distance, it doesn't own progress).
+    final searchStart = _minMatchedSegmentIdx.clamp(1, route.waypoints.length - 1);
     double minDist = double.infinity;
-    for (int i = 1; i < route.waypoints.length; i++) {
+    for (int i = searchStart; i < route.waypoints.length; i++) {
       final a = route.waypoints[i - 1];
       final b = route.waypoints[i];
       final d = _distanceToSegmentMetres(pos.lat, pos.lng, a.lat, a.lng, b.lat, b.lng);
