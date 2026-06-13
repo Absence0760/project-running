@@ -5,6 +5,7 @@ import {
 	normaliseExerciseName,
 	computeExercisePrs,
 	workoutPrs,
+	RunningPrTracker,
 	kE1rmMaxReps,
 	type GymSetLike,
 } from './gym_prs';
@@ -126,4 +127,32 @@ test('workoutPrs: case-insensitive history match prevents a false PR', () => {
 	const prior = [set('Bench Press', 5, 100)];
 	const prs = workoutPrs(prior, [set('bench press', 5, 95)]);
 	assert.deepEqual(prs, []);
+});
+
+test('RunningPrTracker.judge matches workoutPrs walked over growing prior', () => {
+	// A chronological sequence of workouts (each a set list). The running
+	// tracker must produce, per workout, the SAME PR kinds as
+	// workoutPrs(all-sets-before, this-workout) — the O(n) single pass can't
+	// drift from the O(workouts×sets) reference.
+	const workouts: GymSetLike[][] = [
+		[set('Bench', 5, 100), set('Squat', 5, 140)], // both brand-new PRs
+		[set('Bench', 5, 95)], // beats nothing
+		[set('Bench', 3, 110), set('Curl', 10, 20)], // Bench weight+e1rm PR, Curl new
+		[set('Squat', 1, 160)], // Squat weight+e1rm PR, not volume
+		[set('bench press', 5, 200)], // different exercise key — its own PR
+		[set('Bench', 5, 100)], // ties the original, no PR
+	];
+	const tracker = new RunningPrTracker();
+	const prior: GymSetLike[] = [];
+	for (const w of workouts) {
+		const viaTracker = tracker.judge(w);
+		const viaLoop = workoutPrs(prior, w);
+		prior.push(...w);
+		// Order-independent compare of the (exerciseName, sorted kinds) sets.
+		const norm = (rs: typeof viaLoop) =>
+			rs
+				.map((r) => `${r.exerciseName}:${[...r.kinds].sort().join(',')}`)
+				.sort();
+		assert.deepEqual(norm(viaTracker), norm(viaLoop));
+	}
 });

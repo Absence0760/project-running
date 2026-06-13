@@ -84,41 +84,48 @@ double _round1(double n) => (n * 10).round() / 10;
 /// Compute the PR table across a flat set list, keyed by normalised exercise
 /// name. Sets with a blank exercise name are ignored. Insertion order of the
 /// returned map follows first appearance of each exercise.
+/// Fold one set into a running PR map (max of each metric). The shared
+/// per-set body of [computeExercisePrs] + [RunningPrTracker] so the two can't
+/// diverge. A blank exercise name is ignored.
+void _accumulateSet(Map<String, ExercisePr> out, GymSetLike s) {
+  final key = normaliseExerciseName(s.exerciseName);
+  if (key == '') return;
+  final weight = _numericOrNull(s.weightKg);
+  final reps = _numericOrNull(s.reps);
+
+  var pr = out[key] ?? ExercisePr(exerciseName: s.exerciseName);
+  out[key] = pr;
+
+  if (weight != null && weight > 0) {
+    if (pr.heaviestWeightKg == null ||
+        weight > pr.heaviestWeightKg! ||
+        (weight == pr.heaviestWeightKg && (reps ?? 0) > (pr.heaviestWeightReps ?? 0))) {
+      pr = pr._copyWith(
+        heaviestWeightKg: weight,
+        heaviestWeightReps: reps,
+        clearReps: true,
+      );
+      out[key] = pr;
+    }
+    if (reps != null && reps > 0) {
+      final volume = weight * reps;
+      if (pr.bestVolumeKg == null || volume > pr.bestVolumeKg!) {
+        pr = pr._copyWith(bestVolumeKg: _round1(volume.toDouble()));
+        out[key] = pr;
+      }
+      final e1rm = estimatedOneRepMax(weight, reps.toInt());
+      if (pr.bestEst1RmKg == null || e1rm > pr.bestEst1RmKg!) {
+        pr = pr._copyWith(bestEst1RmKg: _round1(e1rm));
+        out[key] = pr;
+      }
+    }
+  }
+}
+
 Map<String, ExercisePr> computeExercisePrs(List<GymSetLike> sets) {
   final out = <String, ExercisePr>{};
   for (final s in sets) {
-    final key = normaliseExerciseName(s.exerciseName);
-    if (key == '') continue;
-    final weight = _numericOrNull(s.weightKg);
-    final reps = _numericOrNull(s.reps);
-
-    var pr = out[key] ?? ExercisePr(exerciseName: s.exerciseName);
-    out[key] = pr;
-
-    if (weight != null && weight > 0) {
-      if (pr.heaviestWeightKg == null ||
-          weight > pr.heaviestWeightKg! ||
-          (weight == pr.heaviestWeightKg && (reps ?? 0) > (pr.heaviestWeightReps ?? 0))) {
-        pr = pr._copyWith(
-          heaviestWeightKg: weight,
-          heaviestWeightReps: reps,
-          clearReps: true,
-        );
-        out[key] = pr;
-      }
-      if (reps != null && reps > 0) {
-        final volume = weight * reps;
-        if (pr.bestVolumeKg == null || volume > pr.bestVolumeKg!) {
-          pr = pr._copyWith(bestVolumeKg: _round1(volume.toDouble()));
-          out[key] = pr;
-        }
-        final e1rm = estimatedOneRepMax(weight, reps.toInt());
-        if (pr.bestEst1RmKg == null || e1rm > pr.bestEst1RmKg!) {
-          pr = pr._copyWith(bestEst1RmKg: _round1(e1rm));
-          out[key] = pr;
-        }
-      }
-    }
+    _accumulateSet(out, s);
   }
   return out;
 }
@@ -152,6 +159,38 @@ List<WorkoutPrResult> workoutPrs(
     }
   });
   return results;
+}
+
+/// Single-pass PR detector for the chronological "did THIS workout set a PR vs
+/// everything before it?" question asked once per workout when walking
+/// oldest→newest. Maintains ONE running PR map and folds each workout's sets in
+/// after judging it — O(total sets), versus calling [workoutPrs] in a loop with
+/// a growing priorSets list (which re-derives the full prior map every workout:
+/// O(workouts × prior sets)). Results match that loop because the metric
+/// updates are order-independent maxes.
+class RunningPrTracker {
+  final Map<String, ExercisePr> _running = <String, ExercisePr>{};
+
+  /// Judge [workoutSets] against all sets folded in so far, then fold them in.
+  /// Same semantics as [workoutPrs]`(everythingBefore, workoutSets)`.
+  List<WorkoutPrResult> judge(List<GymSetLike> workoutSets) {
+    final current = computeExercisePrs(workoutSets);
+    final results = <WorkoutPrResult>[];
+    current.forEach((key, cur) {
+      final before = _running[key];
+      final kinds = <PrKind>[];
+      if (_beats(cur.heaviestWeightKg, before?.heaviestWeightKg)) kinds.add(PrKind.weight);
+      if (_beats(cur.bestVolumeKg, before?.bestVolumeKg)) kinds.add(PrKind.volume);
+      if (_beats(cur.bestEst1RmKg, before?.bestEst1RmKg)) kinds.add(PrKind.e1rm);
+      if (kinds.isNotEmpty) {
+        results.add(WorkoutPrResult(exerciseName: cur.exerciseName, kinds: kinds));
+      }
+    });
+    for (final s in workoutSets) {
+      _accumulateSet(_running, s);
+    }
+    return results;
+  }
 }
 
 bool _beats(double? current, double? prior) {

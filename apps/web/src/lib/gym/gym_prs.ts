@@ -68,48 +68,53 @@ function round1(n: number): number {
 /// Compute the PR table across a flat set list, keyed by normalised exercise
 /// name. Sets with a blank exercise name are ignored. Insertion order of the
 /// returned Map follows first appearance of each exercise in `sets`.
-export function computeExercisePrs(sets: GymSetLike[]): Map<string, ExercisePr> {
-	const out = new Map<string, ExercisePr>();
-	for (const s of sets) {
-		const key = normaliseExerciseName(s.exercise_name ?? '');
-		if (key === '') continue;
-		const weight = numericOrNull(s.weight_kg);
-		const reps = numericOrNull(s.reps);
+/// Fold one set into a running PR map (max of each metric). The shared
+/// per-set body of [computeExercisePrs] + [RunningPrTracker] so the two can't
+/// diverge. A blank exercise name is ignored.
+function accumulateSet(out: Map<string, ExercisePr>, s: GymSetLike): void {
+	const key = normaliseExerciseName(s.exercise_name ?? '');
+	if (key === '') return;
+	const weight = numericOrNull(s.weight_kg);
+	const reps = numericOrNull(s.reps);
 
-		let pr = out.get(key);
-		if (!pr) {
-			pr = {
-				exerciseName: s.exercise_name,
-				heaviestWeightKg: null,
-				heaviestWeightReps: null,
-				bestVolumeKg: null,
-				bestEst1RmKg: null,
-			};
-			out.set(key, pr);
+	let pr = out.get(key);
+	if (!pr) {
+		pr = {
+			exerciseName: s.exercise_name,
+			heaviestWeightKg: null,
+			heaviestWeightReps: null,
+			bestVolumeKg: null,
+			bestEst1RmKg: null,
+		};
+		out.set(key, pr);
+	}
+
+	if (weight != null && weight > 0) {
+		// Heaviest weight; ties broken by more reps at that weight.
+		if (
+			pr.heaviestWeightKg == null ||
+			weight > pr.heaviestWeightKg ||
+			(weight === pr.heaviestWeightKg && (reps ?? 0) > (pr.heaviestWeightReps ?? 0))
+		) {
+			pr.heaviestWeightKg = weight;
+			pr.heaviestWeightReps = reps ?? null;
 		}
-
-		if (weight != null && weight > 0) {
-			// Heaviest weight; ties broken by more reps at that weight.
-			if (
-				pr.heaviestWeightKg == null ||
-				weight > pr.heaviestWeightKg ||
-				(weight === pr.heaviestWeightKg && (reps ?? 0) > (pr.heaviestWeightReps ?? 0))
-			) {
-				pr.heaviestWeightKg = weight;
-				pr.heaviestWeightReps = reps ?? null;
+		if (reps != null && reps > 0) {
+			const volume = weight * reps;
+			if (pr.bestVolumeKg == null || volume > pr.bestVolumeKg) {
+				pr.bestVolumeKg = round1(volume);
 			}
-			if (reps != null && reps > 0) {
-				const volume = weight * reps;
-				if (pr.bestVolumeKg == null || volume > pr.bestVolumeKg) {
-					pr.bestVolumeKg = round1(volume);
-				}
-				const e1rm = estimatedOneRepMax(weight, reps);
-				if (pr.bestEst1RmKg == null || e1rm > pr.bestEst1RmKg) {
-					pr.bestEst1RmKg = round1(e1rm);
-				}
+			const e1rm = estimatedOneRepMax(weight, reps);
+			if (pr.bestEst1RmKg == null || e1rm > pr.bestEst1RmKg) {
+				pr.bestEst1RmKg = round1(e1rm);
 			}
 		}
 	}
+}
+
+export function computeExercisePrs(sets: GymSetLike[]): Map<string, ExercisePr> {
+	const out = new Map<string, ExercisePr>();
+	for (const s of sets) accumulateSet(out, s);
 	return out;
 }
 
@@ -144,6 +149,34 @@ export function workoutPrs(
 		if (kinds.length > 0) results.push({ exerciseName: cur.exerciseName, kinds });
 	}
 	return results;
+}
+
+/// Single-pass PR detector for the chronological "did THIS workout set a PR vs
+/// everything before it?" question asked once per workout when walking
+/// oldest→newest. Maintains ONE running PR map and folds each workout's sets in
+/// after judging it — O(total sets) with one normalise per set, versus calling
+/// [workoutPrs] in a loop with a growing priorSets array (which re-derives the
+/// full prior map every workout: O(workouts × prior sets)). Results are
+/// identical to that loop because the metric updates are order-independent maxes.
+export class RunningPrTracker {
+	private readonly running = new Map<string, ExercisePr>();
+
+	/// Judge [workoutSets] against all sets folded in so far, then fold them in.
+	/// Same semantics as [workoutPrs]`(everythingBefore, workoutSets)`.
+	judge(workoutSets: GymSetLike[]): WorkoutPrResult[] {
+		const current = computeExercisePrs(workoutSets);
+		const results: WorkoutPrResult[] = [];
+		for (const [key, cur] of current) {
+			const before = this.running.get(key);
+			const kinds: PrKind[] = [];
+			if (beats(cur.heaviestWeightKg, before?.heaviestWeightKg)) kinds.push('weight');
+			if (beats(cur.bestVolumeKg, before?.bestVolumeKg)) kinds.push('volume');
+			if (beats(cur.bestEst1RmKg, before?.bestEst1RmKg)) kinds.push('e1rm');
+			if (kinds.length > 0) results.push({ exerciseName: cur.exerciseName, kinds });
+		}
+		for (const s of workoutSets) accumulateSet(this.running, s);
+		return results;
+	}
 }
 
 /// True when `current` is a real value that strictly exceeds `prior`

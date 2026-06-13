@@ -7,7 +7,7 @@
 		type GymWorkout,
 		type GymSetWithDate,
 	} from '$lib/core/data';
-	import { workoutPrs, type GymSetLike } from '$lib/gym/gym_prs';
+	import { RunningPrTracker, type GymSetLike } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -60,18 +60,19 @@
 		return (setsByWorkout.get(id) ?? []).length;
 	}
 
-	// Which workouts set at least one PR. Walk oldest→newest accumulating
-	// prior sets so each workout is judged against everything before it.
+	// Which workouts set at least one PR. Walk oldest→newest with a running PR
+	// tracker so each workout is judged against everything before it in a single
+	// O(total sets) pass — the previous loop re-derived the full prior-set PR map
+	// (with a per-set regex) for every workout, O(workouts × prior sets).
 	const prWorkoutIds = $derived.by(() => {
 		const ids = new Set<string>();
 		const ordered = [...workouts].sort((a, b) => a.started_at.localeCompare(b.started_at));
-		const prior: GymSetLike[] = [];
+		const tracker = new RunningPrTracker();
 		for (const w of ordered) {
 			const mine = (setsByWorkout.get(w.id) ?? []).map(
 				(s): GymSetLike => ({ exercise_name: s.exercise_name, reps: s.reps, weight_kg: s.weight_kg }),
 			);
-			if (workoutPrs(prior, mine).length > 0) ids.add(w.id);
-			prior.push(...mine);
+			if (tracker.judge(mine).length > 0) ids.add(w.id);
 		}
 		return ids;
 	});

@@ -122,4 +122,31 @@ void main() {
       expect(prs, isEmpty);
     });
   });
+
+  group('RunningPrTracker', () {
+    test('judge matches workoutPrs walked over a growing prior', () {
+      // The O(n) single-pass tracker must produce, per workout, the SAME PR
+      // kinds as workoutPrs(all-sets-before, this-workout).
+      final workouts = <List<GymSetLike>>[
+        [_set('Bench', 5, 100), _set('Squat', 5, 140)],
+        [_set('Bench', 5, 95)],
+        [_set('Bench', 3, 110), _set('Curl', 10, 20)],
+        [_set('Squat', 1, 160)],
+        [_set('bench press', 5, 200)],
+        [_set('Bench', 5, 100)],
+      ];
+      final tracker = RunningPrTracker();
+      final prior = <GymSetLike>[];
+      List<String> norm(List<WorkoutPrResult> rs) => rs
+          .map((r) => '${r.exerciseName}:${(r.kinds.map((k) => k.name).toList()..sort()).join(',')}')
+          .toList()
+        ..sort();
+      for (final w in workouts) {
+        final viaTracker = tracker.judge(w);
+        final viaLoop = workoutPrs(prior, w);
+        prior.addAll(w);
+        expect(norm(viaTracker), norm(viaLoop));
+      }
+    });
+  });
 }
