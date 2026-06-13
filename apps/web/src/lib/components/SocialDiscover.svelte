@@ -12,6 +12,7 @@
 	let category = $state<'' | 'run' | 'cycle' | 'class' | 'social'>('');
 	let cadence = $state<'' | 'one_off' | 'weekly' | 'biweekly' | 'monthly'>('');
 	let byday = $state<'' | EventWeekday>('');
+	let time = $state<'' | 'morning' | 'afternoon' | 'evening'>('');
 	let paid = $state<'' | 'free' | 'paid'>('');
 
 	let results = $state<PublicEventResult[]>([]);
@@ -43,6 +44,7 @@
 		if (category) f.category = category;
 		if (cadence) f.cadence = cadence;
 		if (byday) f.byday = byday;
+		if (time) f.time = time;
 		if (paid) f.paid = paid;
 		results = await searchPublicEvents(f);
 		loading = false;
@@ -57,6 +59,7 @@
 		cadence;
 		byday;
 		paid;
+		time;
 		clearTimeout(timer);
 		timer = setTimeout(run, 250);
 		return () => clearTimeout(timer);
@@ -138,6 +141,15 @@
 					{#each WEEKDAYS as d (d)}
 						<option value={d}>{m(WEEKDAY_KEY[d])}</option>
 					{/each}
+				</select>
+			</label>
+			<label class="field">
+				<span>{m('discover.timeLabel')}</span>
+				<select bind:value={time} data-testid="discover-time">
+					<option value="">{m('discover.timeAny')}</option>
+					<option value="morning">{m('discover.morning')}</option>
+					<option value="afternoon">{m('discover.afternoon')}</option>
+					<option value="evening">{m('discover.evening')}</option>
 				</select>
 			</label>
 			<div class="field">

@@ -1523,6 +1523,9 @@ export interface PublicEventFilters {
 	cadence?: 'one_off' | 'weekly' | 'biweekly' | 'monthly';
 	byday?: EventWeekday;
 	paid?: 'free' | 'paid';
+	/// Local time-of-day bucket — resolved against each event's timezone
+	/// (UTC fallback for legacy rows). morning 05–11, afternoon 12–16, evening 17–04.
+	time?: 'morning' | 'afternoon' | 'evening';
 	limit?: number;
 }
 
@@ -1539,6 +1542,7 @@ export interface PublicEventResult {
 	category: string;
 	discipline: string | null;
 	starts_at: string;
+	timezone: string | null;
 	duration_min: number | null;
 	recurrence_freq: string | null;
 	recurrence_byday: string[] | null;
@@ -1559,6 +1563,7 @@ export async function searchPublicEvents(
 		p_cadence: f.cadence ?? undefined,
 		p_byday: f.byday ?? undefined,
 		p_paid: f.paid ?? undefined,
+		p_time: f.time ?? undefined,
 		p_limit: f.limit ?? 60,
 	});
 	if (error) {
@@ -2054,6 +2059,17 @@ function normaliseEvent(e: Event): Event {
 	};
 }
 
+/// The caller's IANA timezone (e.g. 'America/New_York'), or null if the
+/// runtime can't resolve one — events anchor to this so discovery can filter
+/// by local time-of-day.
+function localTimezone(): string | null {
+	try {
+		return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+	} catch {
+		return null;
+	}
+}
+
 export async function createEvent(input: {
 	club_id: string;
 	title: string;
@@ -2064,6 +2080,7 @@ export async function createEvent(input: {
 	gym_template?: EventGymTemplate | null;
 	description?: string;
 	starts_at: string; // ISO
+	timezone?: string | null; // IANA; defaults to the organiser's browser tz
 	duration_min?: number;
 	meet_label?: string;
 	meet_lat?: number;
@@ -2089,6 +2106,9 @@ export async function createEvent(input: {
 			gym_template: input.category === 'class' ? (input.gym_template ?? null) : null,
 			description: input.description?.trim() || null,
 			starts_at: input.starts_at,
+			// Anchor the event to the organiser's local timezone so discovery's
+			// time-of-day filter resolves "7pm" as local, not the UTC instant.
+			timezone: input.timezone ?? localTimezone(),
 			duration_min: input.duration_min ?? null,
 			meet_label: input.meet_label?.trim() || null,
 			meet_lat: input.meet_lat ?? null,

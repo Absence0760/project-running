@@ -28,7 +28,9 @@ test.describe('/social — activity discovery', () => {
 				title: 'E2E Discover Class',
 				category: 'class',
 				discipline,
-				starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+				// 23:00 UTC = 19:00 America/New_York (EDT) → evening, local.
+				starts_at: '2026-07-05T23:00:00.000Z',
+				timezone: 'America/New_York',
 				recurrence_freq: 'weekly',
 				recurrence_byday: ['SU'],
 			})
@@ -68,6 +70,14 @@ test.describe('/social — activity discovery', () => {
 		await page.getByTestId('discover-day').selectOption('SU');
 		await expect(row).toBeVisible({ timeout: 10_000 });
 		await page.getByTestId('discover-day').selectOption('MO');
+		await expect(row).toBeHidden({ timeout: 10_000 });
+
+		// Time-of-day resolves the event's LOCAL hour (19:00 New York), not the
+		// 23:00 UTC instant: evening keeps it, morning drops it.
+		await page.getByTestId('discover-day').selectOption('');
+		await page.getByTestId('discover-time').selectOption('evening');
+		await expect(row).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('discover-time').selectOption('morning');
 		await expect(row).toBeHidden({ timeout: 10_000 });
 	});
 });
