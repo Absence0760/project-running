@@ -125,16 +125,32 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
         lastModifiedAt: entry.lastModifiedAt,
       );
 
-  /// Live workouts (excludes tombstones), newest-started first.
+  List<StoredGymWorkout>? _workoutsCache;
+  int _workoutsCacheRevision = -1;
+
+  /// Live workouts (excludes tombstones), newest-started first. Cached against
+  /// [storeRevision] so the dashboard — which reads this several times per
+  /// build and rebuilds on unrelated run/food/prefs mutations — re-sorts the
+  /// whole gym history only after an actual change, not on every access. The
+  /// sort key is parsed once per workout rather than per comparison.
   List<StoredGymWorkout> get workouts {
-    final live = rowsById.values.where((w) => !w.isTombstone).toList();
-    live.sort((a, b) {
-      final at = a.startedAt;
-      final bt = b.startedAt;
+    if (_workoutsCache != null && _workoutsCacheRevision == storeRevision) {
+      return _workoutsCache!;
+    }
+    final keyed = [
+      for (final w in rowsById.values)
+        if (!w.isTombstone) (w: w, t: w.startedAt),
+    ];
+    keyed.sort((a, b) {
+      final at = a.t;
+      final bt = b.t;
       if (at == null || bt == null) return 0;
       return bt.compareTo(at);
     });
-    return live;
+    final out = [for (final e in keyed) e.w];
+    _workoutsCache = out;
+    _workoutsCacheRevision = storeRevision;
+    return out;
   }
 
   /// Serialised live workouts (excludes tombstones) in the

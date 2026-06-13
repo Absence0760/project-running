@@ -79,6 +79,22 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   Directory? dir;
   final Map<String, S> rowsById = <String, S>{};
 
+  int _revision = 0;
+
+  /// Monotonic counter bumped on every mutation (every [notifyListeners]).
+  /// Subclasses cache derived views — a sorted list, an aggregate — keyed on
+  /// this so a getter recomputes only after a change instead of on every
+  /// read. The dashboard reads `workouts` / `rows` several times per build and
+  /// rebuilds on unrelated store mutations, so an unkeyed re-sort of the whole
+  /// history per access is the hot path this guards against.
+  int get storeRevision => _revision;
+
+  @override
+  void notifyListeners() {
+    _revision++;
+    super.notifyListeners();
+  }
+
   /// Compact on-disk summary index, keyed by row id. Each value is the
   /// [summaryOf] map for a live (non-tombstone) row. Kept in lockstep with
   /// [rowsById] in memory on every mutation (cheap, no disk); flushed once to

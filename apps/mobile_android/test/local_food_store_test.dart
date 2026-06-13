@@ -112,6 +112,41 @@ void main() {
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   });
 
+  group('rows cache (revision-keyed)', () {
+    test('repeated reads with no mutation return the identical cached list',
+        () async {
+      await store.createLocal(
+        startedAt: DateTime.utc(2026, 6, 1),
+        itemName: 'Oats',
+      );
+      final first = store.rows;
+      final second = store.rows;
+      expect(identical(first, second), isTrue,
+          reason: 'A read with no intervening mutation must hit the cache, '
+              'not re-sort the whole food history.');
+    });
+
+    test('a mutation invalidates the cache and the new entry sorts in',
+        () async {
+      await store.createLocal(
+        startedAt: DateTime.utc(2026, 6, 1),
+        itemName: 'older',
+      );
+      final before = store.rows;
+      expect(before, hasLength(1));
+      await store.createLocal(
+        startedAt: DateTime.utc(2026, 6, 5),
+        itemName: 'newer',
+      );
+      final after = store.rows;
+      expect(identical(before, after), isFalse,
+          reason: 'A mutation must bump storeRevision so rows recomputes.');
+      expect(after, hasLength(2));
+      expect(after.first['item_name'], 'newer',
+          reason: 'Newest-logged stays first after the cache refresh.');
+    });
+  });
+
   group('createLocal', () {
     test('mints a v4 UUID and marks the entry pendingCreate', () async {
       final stored = await store.createLocal(

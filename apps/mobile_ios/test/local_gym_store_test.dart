@@ -136,6 +136,44 @@ void main() {
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   });
 
+  group('workouts cache (revision-keyed)', () {
+    test('repeated reads with no mutation return the identical cached list',
+        () async {
+      await store.createLocal(
+        title: 'A',
+        startedAt: DateTime.utc(2026, 6, 1),
+        sets: [_set('Bench', reps: 5, kg: 60)],
+      );
+      final first = store.workouts;
+      final second = store.workouts;
+      expect(identical(first, second), isTrue,
+          reason: 'A read with no intervening mutation must hit the cache, '
+              'not re-sort the whole history.');
+    });
+
+    test('a mutation invalidates the cache and the new workout sorts in',
+        () async {
+      await store.createLocal(
+        title: 'older',
+        startedAt: DateTime.utc(2026, 6, 1),
+        sets: [_set('Bench', reps: 5, kg: 60)],
+      );
+      final before = store.workouts;
+      expect(before, hasLength(1));
+      await store.createLocal(
+        title: 'newer',
+        startedAt: DateTime.utc(2026, 6, 5),
+        sets: [_set('Squat', reps: 5, kg: 100)],
+      );
+      final after = store.workouts;
+      expect(identical(before, after), isFalse,
+          reason: 'A mutation must bump storeRevision so the getter recomputes.');
+      expect(after, hasLength(2));
+      expect(after.first.row['title'], 'newer',
+          reason: 'Newest-started stays first after the cache refresh.');
+    });
+  });
+
   group('createLocal', () {
     test('mints a v4 UUID and marks the workout pendingCreate', () async {
       final stored = await store.createLocal(

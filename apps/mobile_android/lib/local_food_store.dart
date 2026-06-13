@@ -111,16 +111,31 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
         lastModifiedAt: entry.lastModifiedAt,
       );
 
-  /// Live entries (excludes tombstones), newest-logged first.
+  List<Map<String, dynamic>>? _rowsCache;
+  int _rowsCacheRevision = -1;
+
+  /// Live entries (excludes tombstones), newest-logged first. Cached against
+  /// [storeRevision] so the nutrition screen's repeated per-frame reads (the
+  /// day list + the 7-day trend) don't each re-sort the whole food history.
+  /// The sort key is parsed once per entry rather than per comparison.
   List<Map<String, dynamic>> get rows {
-    final live = rowsById.values.where((f) => !f.isTombstone).toList();
-    live.sort((a, b) {
-      final at = a.startedAt;
-      final bt = b.startedAt;
+    if (_rowsCache != null && _rowsCacheRevision == storeRevision) {
+      return _rowsCache!;
+    }
+    final keyed = [
+      for (final f in rowsById.values)
+        if (!f.isTombstone) (row: f.row, t: f.startedAt),
+    ];
+    keyed.sort((a, b) {
+      final at = a.t;
+      final bt = b.t;
       if (at == null || bt == null) return 0;
       return bt.compareTo(at);
     });
-    return live.map((f) => f.row).toList();
+    final out = [for (final e in keyed) e.row];
+    _rowsCache = out;
+    _rowsCacheRevision = storeRevision;
+    return out;
   }
 
   /// Serialised live entries (excludes tombstones) in the
