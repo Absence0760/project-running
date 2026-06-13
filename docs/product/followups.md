@@ -613,3 +613,41 @@ rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
 
 Dismissed (not bugs): the mobile `formatLivePace` "5:60/km" rollover is already pinned by an existing
 test (cosmetic, intentional-enough); pace-shown-is-average-not-current is a labelling nuance, not a defect.
+
+## Integration import hunt (2026-06-13) — verified findings deferred
+
+A bug-hunt on the file-import surface (`apps/web/src/lib/integrations/` + `packages/gpx_parser/`).
+Four bugs were fixed + pinned the same day: GPX/KML/GeoJSON sea-level-elevation loss + fabricated
+gain (`import.ts`), GPX (0,0) null-island points from missing lat/lon (`import.ts`), the Garmin
+`file_id` Date-stringified dedupe key (`garmin-fit.ts`), and the GPX route-name scoping
+(`route_parser.dart`). The two below are real but were deliberately NOT rushed:
+
+- [ ] **[high, intricate] Strava CSV `Activity Date` is parsed as viewer-local time, not UTC.**
+  `strava-zip.ts:209` does `started_at: new Date(row[idx.date]).toISOString()`. Strava's bulk-export
+  `activities.csv` `Activity Date` is UTC but emitted without a zone designator (e.g.
+  `Apr 15, 2026, 1:00:00 PM`), so `new Date()` interprets it in the importer's local zone — every
+  Strava-imported run is shifted by the local UTC offset (runs near midnight land on the wrong
+  calendar day → wrong dashboard week / heatmap cell). **Deferred, not because it isn't a bug, but
+  because the exact CSV date format varies by export era + locale** and a format-specific UTC parse
+  written blind (no real export to test against) could corrupt timestamps worse than the current
+  consistent skew. **Needs a real Strava export fixture** to pin the format string(s) and confirm the
+  UTC assumption, then parse explicitly as UTC. Likely also affects the mobile Strava-ZIP path — check
+  the Dart twin.
+- [ ] **[medium, intricate] Dart FIT parser skips compressed-timestamp record messages → empty route
+  for devices that compress record timestamps.** `fit_parser.dart:70-80`: a record header with bit 7
+  set (compressed timestamp) hits `offset += def.totalFieldSize; continue;` — the lat/lng fields are
+  never decoded, so a FIT file whose `record` messages all use the compressed-timestamp header parses
+  to **zero waypoints** even though GPS data is present. The fix (reuse `_parseRecordMessage` for
+  compressed-timestamp records whose def is `_recordMesgNum`) is small but it's a **binary
+  state-machine change** and a synthetic fixture only tests my reading of the spec, not real files.
+  **Needs a real compressed-timestamp FIT file** (older Garmin / some Wahoo) to validate the field
+  layout — route via `/safe-edit`. Web's `garmin-fit.ts` uses the `fit-file-parser` lib and is not
+  affected; this is the hand-rolled Dart parser only.
+
+Minor / not fixed this round (low impact, recorded for completeness): `parseCsv` keeps a stray `\r`
+inside a quoted multi-line field (`strava-zip.ts:279` CR-strip is only in the unquoted arm) — affects
+free-text activity names only; a trailing blank line in `activities.csv` becomes a phantom
+`failed: 1` row (cosmetic count inflation); `buildHrZonesFromFit` `Set`-dedupes zone boundaries so a
+profile with two equal adjacent `high_bpm` values would drop the whole set (no confirmed real input);
+`RouteParser._id()` / `FitParser` route id is `DateTime.now().ms` so two routes parsed in the same
+millisecond collide (caller-dependent).
