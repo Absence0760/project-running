@@ -3283,6 +3283,7 @@ export async function fetchPlan(id: string): Promise<{
 	plan: TrainingPlan | null;
 	weeks: PlanWeek[];
 	workouts: PlanWorkout[];
+	error: string | null;
 }> {
 	const [planRes, weeksRes] = await Promise.all([
 		supabase.from('training_plans').select('*').eq('id', id).maybeSingle(),
@@ -3292,10 +3293,14 @@ export async function fetchPlan(id: string): Promise<{
 			.eq('plan_id', id)
 			.order('week_index', { ascending: true })
 	]);
+	// Surface a query error so the detail page can show a "couldn't load —
+	// retry" state instead of the not-found page (a real error otherwise
+	// reads as a missing plan when the rows just come back null).
+	const error = planRes.error?.message ?? weeksRes.error?.message ?? null;
 	const plan = (planRes.data ?? null) as TrainingPlan | null;
 	const weeks = (weeksRes.data ?? []) as PlanWeek[];
 	if (!plan || weeks.length === 0) {
-		return { plan, weeks, workouts: [] };
+		return { plan, weeks, workouts: [], error };
 	}
 	const weekIds = weeks.map((w) => w.id);
 	const { data: woData } = await supabase
@@ -3306,7 +3311,8 @@ export async function fetchPlan(id: string): Promise<{
 	return {
 		plan,
 		weeks,
-		workouts: (woData ?? []) as PlanWorkout[]
+		workouts: (woData ?? []) as PlanWorkout[],
+		error
 	};
 }
 
