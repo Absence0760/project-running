@@ -1493,6 +1493,7 @@
 <Modal
 	open={showEventModal && club != null}
 	title={tr('clubHome.newEvent')}
+	wide
 	onclose={() => (showEventModal = false)}
 >
 	{#if club}
