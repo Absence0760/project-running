@@ -4987,6 +4987,45 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get integrationsTreadmillTitle => 'Tapis de course';
+
+  @override
+  String get integrationsTreadmillChecking => 'Vérification…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'Appairé : $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired =>
+      'Aucun tapis appairé — touchez pour rechercher';
+
+  @override
+  String get integrationsTreadmillForget => 'Oublier';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'Rechercher un tapis de course';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'Assurez-vous que le Bluetooth du tapis est activé et que le tapis est actif. La recherche prend 3 à 8 secondes.';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'Aucun tapis trouvé. Vérifiez qu\'il prend en charge le Bluetooth (FTMS) et qu\'il est à proximité.';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'Échec de l\'appairage : $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
+  }
+
+  @override
   String get proTitle => 'Pro et soutien';
 
   @override

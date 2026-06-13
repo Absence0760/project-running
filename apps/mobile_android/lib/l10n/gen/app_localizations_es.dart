@@ -4973,6 +4973,45 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get integrationsTreadmillTitle => 'Cinta de correr';
+
+  @override
+  String get integrationsTreadmillChecking => 'Comprobando…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'Emparejada: $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired =>
+      'Ninguna cinta emparejada: toca para buscar';
+
+  @override
+  String get integrationsTreadmillForget => 'Olvidar';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'Buscar cinta de correr';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'Asegúrate de que el Bluetooth de la cinta esté activado y la banda despierta. La búsqueda tarda de 3 a 8 segundos.';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'No se encontraron cintas. Asegúrate de que sea compatible con Bluetooth (FTMS) y esté cerca.';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'Error al emparejar: $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
+  }
+
+  @override
   String get proTitle => 'Pro y apoyo';
 
   @override

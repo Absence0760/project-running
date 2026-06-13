@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../ble_heart_rate.dart';
+import '../ble_treadmill.dart';
 import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -354,6 +355,8 @@ class _SettingsIntegrationsScreenState
               ),
             const Divider(),
             HeartRateMonitorTile(heartRate: widget.heartRate),
+            const Divider(),
+            const TreadmillTile(),
             if (Platform.isAndroid) ...[
               const Divider(),
               SwitchListTile(
@@ -540,6 +543,204 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(l10n.integrationsHrScanEmpty),
+              ),
+            ..._results.map((r) {
+              return ListTile(
+                leading: const Icon(Icons.bluetooth),
+                title: Text(r.name),
+                subtitle: Text(l10n.integrationsHrRssi(r.rssi)),
+                onTap: () => Navigator.of(context).pop(r),
+              );
+            }),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(l10n.integrationsCancel),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings tile to pair / forget a BLE FTMS treadmill. Mirrors
+/// [HeartRateMonitorTile]; owns its own [BleTreadmill] (self-contained, like
+/// the HR reader, persisting to its own SharedPreferences keys) so it doesn't
+/// need an instance threaded through the whole app graph. While connected it
+/// shows the live belt speed so the user can confirm the pairing works.
+class TreadmillTile extends StatefulWidget {
+  const TreadmillTile({super.key});
+
+  @override
+  State<TreadmillTile> createState() => _TreadmillTileState();
+}
+
+class _TreadmillTileState extends State<TreadmillTile> {
+  final BleTreadmill _treadmill = BleTreadmill();
+  String? _pairedName;
+  bool _loading = true;
+  double? _liveSpeedKmh;
+  StreamSubscription<TreadmillSample>? _sampleSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _sampleSub = _treadmill.stream.listen(
+      (s) {
+        if (mounted) setState(() => _liveSpeedKmh = s.instantaneousSpeedKmh);
+      },
+      onError: (Object e) => debugPrint('treadmill sample stream error: $e'),
+    );
+  }
+
+  @override
+  void dispose() {
+    _sampleSub?.cancel();
+    unawaited(_treadmill.dispose());
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final name = await _treadmill.pairedName();
+    if (!mounted) return;
+    setState(() {
+      _pairedName = name;
+      _loading = false;
+    });
+  }
+
+  Future<void> _pair() async {
+    final device = await showModalBottomSheet<BleTreadmillCandidate>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _TreadmillScanSheet(treadmill: _treadmill),
+    );
+    if (device != null) {
+      try {
+        await _treadmill.pair(device);
+      } catch (e) {
+        if (mounted) {
+          showTopBanner(context,
+              AppLocalizations.of(context).integrationsTreadmillPairFailed(e));
+        }
+      }
+      await _refresh();
+    }
+  }
+
+  Future<void> _forget() async {
+    await _treadmill.forget();
+    if (mounted) setState(() => _liveSpeedKmh = null);
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final paired = _pairedName;
+    final live = _liveSpeedKmh;
+    return ListTile(
+      leading: const Icon(Icons.directions_run_outlined),
+      title: Text(l10n.integrationsTreadmillTitle),
+      subtitle: Text(
+        _loading
+            ? l10n.integrationsTreadmillChecking
+            : live != null
+                ? l10n.integrationsTreadmillLiveSpeed(live.toStringAsFixed(1))
+                : paired != null
+                    ? l10n.integrationsTreadmillPaired(paired)
+                    : l10n.integrationsTreadmillNotPaired,
+      ),
+      trailing: paired != null
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: l10n.integrationsTreadmillForget,
+              onPressed: _forget,
+            )
+          : const Icon(Icons.chevron_right),
+      onTap: _pair,
+    );
+  }
+}
+
+class _TreadmillScanSheet extends StatefulWidget {
+  final BleTreadmill treadmill;
+  const _TreadmillScanSheet({required this.treadmill});
+
+  @override
+  State<_TreadmillScanSheet> createState() => _TreadmillScanSheetState();
+}
+
+class _TreadmillScanSheetState extends State<_TreadmillScanSheet> {
+  List<BleTreadmillCandidate> _results = const [];
+  bool _scanning = true;
+  StreamSubscription<List<BleTreadmillCandidate>>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = widget.treadmill.scan().listen(
+      (list) {
+        if (mounted) setState(() => _results = list);
+      },
+      onDone: () {
+        if (mounted) setState(() => _scanning = false);
+      },
+      onError: (Object e) {
+        debugPrint('treadmill scan error: $e');
+        if (mounted) setState(() => _scanning = false);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.integrationsTreadmillScanTitle,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_scanning)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.integrationsTreadmillScanHint,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            if (_results.isEmpty && !_scanning)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(l10n.integrationsTreadmillScanEmpty),
               ),
             ..._results.map((r) {
               return ListTile(

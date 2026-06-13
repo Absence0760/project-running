@@ -4680,6 +4680,44 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get integrationsTreadmillTitle => 'トレッドミル';
+
+  @override
+  String get integrationsTreadmillChecking => '確認中…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'ペアリング済み: $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired => 'トレッドミル未ペアリング — タップして検索';
+
+  @override
+  String get integrationsTreadmillForget => '解除';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'トレッドミルを検索';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'トレッドミルの Bluetooth がオンで、ベルトが起動していることを確認してください。検索には 3〜8 秒かかります。';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'トレッドミルが見つかりません。Bluetooth (FTMS) に対応し、近くにあることを確認してください。';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'ペアリングに失敗しました: $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
+  }
+
+  @override
   String get proTitle => 'Pro とサポート';
 
   @override

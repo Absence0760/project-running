@@ -4927,6 +4927,45 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get integrationsTreadmillTitle => 'Treadmill';
+
+  @override
+  String get integrationsTreadmillChecking => 'Checking…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'Paired: $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired =>
+      'No treadmill paired — tap to scan';
+
+  @override
+  String get integrationsTreadmillForget => 'Forget';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'Scan for treadmill';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'Make sure the treadmill\'s Bluetooth is on and the belt is awake. Scanning takes 3–8 seconds.';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'No treadmills found. Make sure it supports Bluetooth (FTMS) and is nearby.';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'Pair failed: $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
+  }
+
+  @override
   String get proTitle => 'Pro & support';
 
   @override

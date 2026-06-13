@@ -4979,6 +4979,45 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get integrationsTreadmillTitle => 'Laufband';
+
+  @override
+  String get integrationsTreadmillChecking => 'Wird geprüft…';
+
+  @override
+  String integrationsTreadmillPaired(String name) {
+    return 'Gekoppelt: $name';
+  }
+
+  @override
+  String get integrationsTreadmillNotPaired =>
+      'Kein Laufband gekoppelt – zum Suchen tippen';
+
+  @override
+  String get integrationsTreadmillForget => 'Entfernen';
+
+  @override
+  String get integrationsTreadmillScanTitle => 'Nach Laufband suchen';
+
+  @override
+  String get integrationsTreadmillScanHint =>
+      'Stelle sicher, dass das Bluetooth des Laufbands aktiv und das Band wach ist. Die Suche dauert 3–8 Sekunden.';
+
+  @override
+  String get integrationsTreadmillScanEmpty =>
+      'Keine Laufbänder gefunden. Stelle sicher, dass es Bluetooth (FTMS) unterstützt und in der Nähe ist.';
+
+  @override
+  String integrationsTreadmillPairFailed(Object error) {
+    return 'Kopplung fehlgeschlagen: $error';
+  }
+
+  @override
+  String integrationsTreadmillLiveSpeed(String speed) {
+    return '$speed km/h';
+  }
+
+  @override
   String get proTitle => 'Pro & Support';
 
   @override
