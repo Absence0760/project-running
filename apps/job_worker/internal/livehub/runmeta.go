@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -86,16 +87,13 @@ func (f *SupabaseRunMetaFetcher) get(ctx context.Context, path string) ([]byte, 
 		return nil, err
 	}
 	defer resp.Body.Close()
-	buf := make([]byte, 0, 1024)
-	chunk := make([]byte, 1024)
-	for {
-		n, readErr := resp.Body.Read(chunk)
-		if n > 0 {
-			buf = append(buf, chunk[:n]...)
-		}
-		if readErr != nil {
-			break
-		}
+	// io.ReadAll surfaces a mid-stream read error (a truncated 2xx body)
+	// as a fetch error rather than silently treating the partial bytes as
+	// a complete success — so the authorizer fails closed (deny) instead
+	// of reading a half-parsed run row. Mirrors zones.go's get().
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("supabase %d %s: %s", resp.StatusCode, path, string(buf))

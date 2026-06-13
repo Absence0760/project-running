@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -141,16 +142,16 @@ func (f *SupabaseZoneFetcher) get(ctx context.Context, path string) ([]byte, err
 		return nil, err
 	}
 	defer resp.Body.Close()
-	buf := make([]byte, 0, 1024)
-	chunk := make([]byte, 1024)
-	for {
-		n, readErr := resp.Body.Read(chunk)
-		if n > 0 {
-			buf = append(buf, chunk[:n]...)
-		}
-		if readErr != nil {
-			break
-		}
+	// io.ReadAll surfaces a mid-stream read error (e.g. a connection reset
+	// that truncates a 2xx body). The previous hand-rolled loop broke on
+	// ANY read error and then treated the partial bytes as a complete
+	// success — fail-OPEN. On this privacy boundary a truncated body that
+	// parsed to an empty zone list would broadcast the runner's exact
+	// (home) location, so we MUST fail closed: a read error becomes a
+	// fetch error, and Server.shouldDrop drops the ping.
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("supabase %d %s: %s", resp.StatusCode, path, string(buf))
