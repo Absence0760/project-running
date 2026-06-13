@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import {
-		fetchMyAthletes,
+		fetchMyAthletesWithError,
 		fetchPendingCoachInvites,
 		fetchMyCoaches,
 		createCoachInvite,
@@ -21,6 +21,7 @@
 	let pending = $state<PendingCoachInvite[]>([]);
 	let coaches = $state<CoachAthleteLink[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let minting = $state(false);
 
 	type PendingConfirm =
@@ -32,6 +33,7 @@
 
 	async function load() {
 		loading = true;
+		loadError = null;
 		// Wait for the auth store to hydrate before fetching — the roster
 		// fetchers bail to [] when auth.user is null, and on a hard load
 		// (or under CI load) onMount can fire before fetchUser resolves,
@@ -40,11 +42,15 @@
 		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
-		[athletes, pending, coaches] = await Promise.all([
-			fetchMyAthletes(),
+		const [athletesResult, p, c] = await Promise.all([
+			fetchMyAthletesWithError(),
 			fetchPendingCoachInvites(),
 			fetchMyCoaches()
 		]);
+		athletes = athletesResult.athletes;
+		pending = p;
+		coaches = c;
+		loadError = athletesResult.error;
 		loading = false;
 	}
 
@@ -159,6 +165,15 @@
 
 	{#if loading}
 		<p class="muted">{m('shell.loading')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('coaching.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{m('coaching.retry')}</button>
+		</div>
 	{:else}
 		<section class="card">
 			<div class="card-head">
@@ -314,6 +329,30 @@
 		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 		margin: 0;
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 	.link-list {
 		list-style: none;

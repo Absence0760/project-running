@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import {
-		fetchMyAthletes,
+		fetchMyAthletesWithError,
 		fetchAthleteRuns,
 		fetchAthletePlanOverview,
 		fetchMyPlans,
@@ -21,6 +21,7 @@
 	const athleteId = $derived($page.params.id);
 
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let link = $state<CoachAthleteLink | null>(null);
 	let notOnRoster = $state(false);
 	let runs = $state<AthleteRunSummary[]>([]);
@@ -37,6 +38,7 @@
 
 	async function load() {
 		loading = true;
+		loadError = null;
 		const id = athleteId;
 		if (!id) {
 			notOnRoster = true;
@@ -49,21 +51,33 @@
 		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
-		// Confirm the coaching relationship (and get the display name) from
-		// the roster. RLS already gates the run/plan reads, but resolving
-		// the link gives us the header + a clean "not on your roster" state.
-		const roster = await fetchMyAthletes();
-		link = roster.find((a) => a.user_id === id) ?? null;
-		if (!link) {
-			notOnRoster = true;
-			loading = false;
-			return;
+		try {
+			// Confirm the coaching relationship (and get the display name) from
+			// the roster. RLS already gates the run/plan reads, but resolving
+			// the link gives us the header + a clean "not on your roster" state.
+			const roster = await fetchMyAthletesWithError();
+			if (roster.error) {
+				loadError = roster.error;
+				loading = false;
+				return;
+			}
+			link = roster.athletes.find((a) => a.user_id === id) ?? null;
+			if (!link) {
+				notOnRoster = true;
+				loading = false;
+				return;
+			}
+			[runs, overview, myPlans] = await Promise.all([
+				fetchAthleteRuns(id, 20),
+				fetchAthletePlanOverview(id),
+				fetchMyPlans()
+			]);
+		} catch (e) {
+			// A rejected fetch (auth/timeout/RLS) would otherwise leave the
+			// page stuck on its loading spinner forever — surface it with a
+			// retry instead.
+			loadError = e instanceof Error ? e.message : String(e);
 		}
-		[runs, overview, myPlans] = await Promise.all([
-			fetchAthleteRuns(id, 20),
-			fetchAthletePlanOverview(id),
-			fetchMyPlans()
-		]);
 		loading = false;
 	}
 
@@ -162,6 +176,15 @@
 
 	{#if loading}
 		<p class="muted">{m('shell.loading')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('coaching.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{m('coaching.retry')}</button>
+		</div>
 	{:else if notOnRoster}
 		<div class="card">
 			<h1>{m('coachingAthlete.notOnRosterTitle')}</h1>
@@ -500,5 +523,29 @@
 		background: var(--color-surface);
 		color: var(--color-text-secondary);
 		border: 1px solid var(--color-border);
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>

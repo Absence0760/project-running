@@ -3097,16 +3097,26 @@ export async function deleteClubPost(id: string): Promise<void> {
 
 // --- Training plans ---
 
-export async function fetchMyPlans(limit = 100): Promise<TrainingPlan[]> {
+/// Same as `fetchMyPlans` but surfaces the error alongside the rows, so
+/// a caller can show a "couldn't load — retry" state instead of an empty
+/// list that's indistinguishable from "user has no plans". Mirrors the
+/// `fetchRoutesWithError` convention.
+export async function fetchMyPlansWithError(
+	limit = 100
+): Promise<{ plans: TrainingPlan[]; error: string | null }> {
 	// Templates live in the same table; filter them out of the
 	// user-facing plan list (decisions §35).
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from('training_plans')
 		.select('*')
 		.eq('is_template', false)
 		.order('created_at', { ascending: false })
 		.limit(limit);
-	return (data ?? []) as TrainingPlan[];
+	return { plans: (data ?? []) as TrainingPlan[], error: error?.message ?? null };
+}
+
+export async function fetchMyPlans(limit = 100): Promise<TrainingPlan[]> {
+	return (await fetchMyPlansWithError(limit)).plans;
 }
 
 /// Plan templates owned by `clubId`. Visible to club members; admins
@@ -5859,16 +5869,25 @@ export async function createCoachInvite(note?: string): Promise<string> {
 }
 
 /// Active athletes on the signed-in coach's roster, newest acceptance first.
-export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
+/// Same as `fetchMyAthletes` but surfaces the roster-query error so a
+/// caller can show a "couldn't load — retry" state instead of an empty
+/// roster that's indistinguishable from "no athletes yet". The profile
+/// enrichment stays best-effort (a missing display name isn't a load
+/// failure). Mirrors the `fetchRoutesWithError` convention.
+export async function fetchMyAthletesWithError(): Promise<{
+	athletes: CoachAthleteLink[];
+	error: string | null;
+}> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
-	const { data: rows } = await supabase
+	if (!userId) return { athletes: [], error: null };
+	const { data: rows, error } = await supabase
 		.from(TABLES.coach_athletes)
 		.select('id, status, note, created_at, accepted_at, athlete_id')
 		.eq('coach_id', userId)
 		.eq('status', 'active')
 		.order('accepted_at', { ascending: false });
-	if (!rows || rows.length === 0) return [];
+	if (error) return { athletes: [], error: error.message };
+	if (!rows || rows.length === 0) return { athletes: [], error: null };
 	const ids = (rows as { athlete_id: string }[]).map((r) => r.athlete_id);
 	const { data: profiles } = await supabase
 		.from('user_profiles')
@@ -5876,16 +5895,23 @@ export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
 		.in('id', ids);
 	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
 	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
-	return (rows as Array<Record<string, unknown>>).map((r) => ({
-		id: r.id as string,
-		status: r.status as CoachAthleteStatus,
-		note: (r.note as string | null) ?? null,
-		created_at: r.created_at as string,
-		accepted_at: (r.accepted_at as string | null) ?? null,
-		user_id: r.athlete_id as string,
-		display_name: byId.get(r.athlete_id as string)?.display_name ?? null,
-		avatar_url: byId.get(r.athlete_id as string)?.avatar_url ?? null
-	}));
+	return {
+		athletes: (rows as Array<Record<string, unknown>>).map((r) => ({
+			id: r.id as string,
+			status: r.status as CoachAthleteStatus,
+			note: (r.note as string | null) ?? null,
+			created_at: r.created_at as string,
+			accepted_at: (r.accepted_at as string | null) ?? null,
+			user_id: r.athlete_id as string,
+			display_name: byId.get(r.athlete_id as string)?.display_name ?? null,
+			avatar_url: byId.get(r.athlete_id as string)?.avatar_url ?? null
+		})),
+		error: null
+	};
+}
+
+export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
+	return (await fetchMyAthletesWithError()).athletes;
 }
 
 /// One athlete's recent runs for the coach review surface

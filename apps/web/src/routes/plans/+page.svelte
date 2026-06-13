@@ -4,7 +4,7 @@
 	import { formatDateShort } from '$lib/format/time';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/core/data';
+	import { fetchMyPlansWithError, deletePlan, updatePlanStatus } from '$lib/core/data';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 
@@ -17,6 +17,7 @@
 
 	let plans = $state<TrainingPlan[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let confirmTarget = $state<TrainingPlan | null>(null);
 	let confirmAction = $state<'abandon' | 'delete' | null>(null);
 	let showPlanModal = $state(false);
@@ -26,7 +27,10 @@
 
 	async function load() {
 		loading = true;
-		plans = await fetchMyPlans();
+		loadError = null;
+		const result = await fetchMyPlansWithError();
+		plans = result.plans;
+		loadError = result.error;
 		loading = false;
 	}
 
@@ -274,6 +278,15 @@
 			{/each}
 		</div>
 		<p class="sr-only" role="status">{m('plansPage.loadingPlans')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('plansPage.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{m('plansPage.retry')}</button>
+		</div>
 	{:else if plans.length === 0}
 		<section class="empty">
 			<span class="material-symbols empty-icon" aria-hidden="true">calendar_month</span>
@@ -856,5 +869,31 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		margin-bottom: var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>
