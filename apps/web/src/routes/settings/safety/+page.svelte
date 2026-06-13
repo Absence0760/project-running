@@ -20,6 +20,9 @@
 	let loading = $state(true);
 	let email = $state('');
 	let adding = $state(false);
+	// In-flight guard for an incoming-request response so a double-click
+	// can't fire confirm/decline twice.
+	let respondingId = $state<string | null>(null);
 	let confirmingRemove = $state<SafetyContact | null>(null);
 
 	// Mirror the server-side CHECK so the user gets an inline message before
@@ -74,22 +77,30 @@
 	}
 
 	async function handleConfirm(req: PendingSafetyRequest) {
+		if (respondingId) return;
+		respondingId = req.id;
 		try {
 			await confirmSafetyRequest(req.id);
 			await reload();
 			showToast(m('safety.confirmedToast'), 'success');
 		} catch (e) {
 			showToast(m('safety.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			respondingId = null;
 		}
 	}
 
 	async function handleDecline(req: PendingSafetyRequest) {
+		if (respondingId) return;
+		respondingId = req.id;
 		try {
 			await declineSafetyRequest(req.id);
 			await reload();
 			showToast(m('safety.declinedToast'), 'info');
 		} catch (e) {
 			showToast(m('safety.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			respondingId = null;
 		}
 	}
 </script>
@@ -155,10 +166,10 @@
 					<li class="contact">
 						<span class="who">{m('safety.incomingFrom', { name: req.owner_name || m('safety.unknownRunner') })}</span>
 						<span class="actions">
-							<button class="btn-primary sm" onclick={() => handleConfirm(req)} data-testid="safety-confirm-request">
+							<button class="btn-primary sm" onclick={() => handleConfirm(req)} disabled={respondingId !== null} data-testid="safety-confirm-request">
 								{m('safety.confirm')}
 							</button>
-							<button class="btn-text" onclick={() => handleDecline(req)}>
+							<button class="btn-text" onclick={() => handleDecline(req)} disabled={respondingId !== null}>
 								{m('safety.decline')}
 							</button>
 						</span>

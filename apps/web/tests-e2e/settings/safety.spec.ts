@@ -70,6 +70,50 @@ test.describe('/settings/safety', () => {
 		}
 	});
 
+	test('double-clicking Confirm on an incoming request fires the RPC once', async ({
+		browser,
+	}) => {
+		// Plant a pending request from USER_A to USER_B (matched by email).
+		const admin = getAdminClient();
+		const { error } = await admin
+			.from('safety_contacts')
+			.insert({ owner_id: USER_A.id, contact_email: USER_B.email });
+		expect(error).toBeNull();
+
+		const ctx = await browser.newContext({ storageState: USER_B.storageStatePath });
+		const page = await ctx.newPage();
+		try {
+			let calls = 0;
+			await page.route('**/rest/v1/rpc/confirm_safety_contact**', async (route) => {
+				calls++;
+				// Hold the response so the busy guard stays engaged across the
+				// second synchronous click.
+				await new Promise((r) => setTimeout(r, 400));
+				await route.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+			});
+
+			await page.goto('/settings/safety');
+			await expect(page.getByTestId('safety-incoming')).toBeVisible({ timeout: 5_000 });
+
+			// Two native clicks in one task — the respondingId guard set on the
+			// first must make the second a no-op before the disabled attr paints.
+			await page
+				.getByTestId('safety-confirm-request')
+				.evaluate((el: HTMLButtonElement) => {
+					el.click();
+					el.click();
+				});
+
+			// The RPC is faked (the row stays pending), so the section doesn't
+			// clear — wait for the in-flight guard to release (button re-enabled)
+			// then assert the double-click only fired the RPC once.
+			await expect(page.getByTestId('safety-confirm-request')).toBeEnabled({ timeout: 5_000 });
+			expect(calls).toBe(1);
+		} finally {
+			await ctx.close();
+		}
+	});
+
 	test('external contact confirms via the email-link token; a bad token fails', async ({
 		browser,
 	}) => {

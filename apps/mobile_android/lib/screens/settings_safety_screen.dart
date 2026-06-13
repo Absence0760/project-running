@@ -32,6 +32,9 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
 
   bool _loading = true;
   bool _adding = false;
+  // In-flight guard for an incoming-request response (confirm/decline) so a
+  // double-tap can't fire the RPC twice.
+  String? _respondingId;
   List<SafetyContact> _contacts = const [];
   List<PendingSafetyRequest> _pending = const [];
 
@@ -127,26 +130,32 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
   Future<void> _confirm(PendingSafetyRequest req) async {
     final l10n = AppLocalizations.of(context);
     final api = widget.api;
-    if (api == null) return;
+    if (api == null || _respondingId != null) return;
+    setState(() => _respondingId = req.id);
     try {
       await api.confirmSafetyRequest(req.id);
       await _reload();
       _banner(l10n.safetyConfirmedToast);
     } catch (e) {
       _banner(l10n.safetyAddFailed(e.toString()));
+    } finally {
+      if (mounted) setState(() => _respondingId = null);
     }
   }
 
   Future<void> _decline(PendingSafetyRequest req) async {
     final l10n = AppLocalizations.of(context);
     final api = widget.api;
-    if (api == null) return;
+    if (api == null || _respondingId != null) return;
+    setState(() => _respondingId = req.id);
     try {
       await api.declineSafetyRequest(req.id);
       await _reload();
       _banner(l10n.safetyDeclinedToast);
     } catch (e) {
       _banner(l10n.safetyAddFailed(e.toString()));
+    } finally {
+      if (mounted) setState(() => _respondingId = null);
     }
   }
 
@@ -257,12 +266,16 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           TextButton(
-                            onPressed: () => _decline(req),
+                            onPressed: _respondingId != null
+                                ? null
+                                : () => _decline(req),
                             child: Text(l10n.safetyDecline),
                           ),
                           const SizedBox(width: 4),
                           FilledButton(
-                            onPressed: () => _confirm(req),
+                            onPressed: _respondingId != null
+                                ? null
+                                : () => _confirm(req),
                             child: Text(l10n.safetyConfirm),
                           ),
                         ],
