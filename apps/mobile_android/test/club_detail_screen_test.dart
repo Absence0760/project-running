@@ -187,6 +187,40 @@ class _ReplySocial extends SocialService {
       Supabase.instance.client.channel('test-$clubId');
 }
 
+/// Training service that surfaces one plan template and gates the clone
+/// so the in-flight window stays open across a second Adopt tap.
+class _AdoptTraining extends TrainingService {
+  int cloneCalls = 0;
+  final Completer<void> cloneGate = Completer<void>();
+
+  @override
+  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async => [
+        TrainingPlanRow(
+          id: 'tmpl-1',
+          userId: 'owner',
+          name: 'Club 10k Plan',
+          goalEvent: 'distance_10k',
+          goalDistanceM: 10000,
+          startDate: DateTime(2026, 5, 1),
+          endDate: DateTime(2026, 7, 1),
+          daysPerWeek: 4,
+          status: 'active',
+          source: 'generated',
+          isTemplate: true,
+        ),
+      ];
+
+  @override
+  Future<String> clonePlanTemplate({
+    required String templateId,
+    DateTime? startDate,
+  }) async {
+    cloneCalls++;
+    await cloneGate.future;
+    return 'new-plan';
+  }
+}
+
 GymRoutineRow _routine(String id, String title, int count) => GymRoutineRow(
       id: id,
       authorId: 'author',
@@ -245,6 +279,44 @@ void main() {
       expect(find.text('Club push day'), findsOneWidget);
       expect(find.text('3 exercises'), findsOneWidget);
       expect(find.text('Adopt'), findsWidgets);
+    });
+
+    testWidgets('double-tapping a plan-template Adopt clones only once',
+        (tester) async {
+      final training = _AdoptTraining();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _FakeSocial(),
+            training: training,
+            apiClient: _FakeApi(const []),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Templates'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Club 10k Plan'), findsOneWidget);
+      final adopt = find.widgetWithText(FilledButton, 'Adopt');
+      expect(adopt, findsOneWidget);
+
+      await tester.tap(adopt);
+      await tester.pump();
+      // Second tap while the gated clone is in flight — button disabled now.
+      await tester.tap(adopt, warnIfMissed: false);
+      await tester.pump();
+
+      expect(training.cloneCalls, 1);
+      // Gate left pending intentionally: completing it would navigate to
+      // PlanDetailScreen (unstubbed). cloneCalls is the assertion.
     });
   });
 

@@ -65,6 +65,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   List<TrainingPlanRow> _templates = const [];
   List<SessionPlanRow> _sessionTemplates = const [];
   String? _adoptingSessionId;
+  String? _adoptingPlanId;
   List<GymRoutineRow> _gymRoutineTemplates = const [];
   String? _adoptingRoutineId;
   List<cm.Route> _routes = const [];
@@ -1270,6 +1271,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   }
 
   Future<void> _adoptTemplate(TrainingPlanRow t) async {
+    if (_adoptingPlanId != null) return;
+    setState(() => _adoptingPlanId = t.id);
     try {
       final newId = await widget.training.clonePlanTemplate(templateId: t.id);
       if (!mounted) return;
@@ -1288,6 +1291,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       if (!mounted) return;
       showTopBanner(
           context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _adoptingPlanId = null);
     }
   }
 
@@ -1459,7 +1464,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: () => _adoptTemplate(t),
+                      onPressed: _adoptingPlanId == t.id
+                          ? null
+                          : () => _adoptTemplate(t),
                       child: Text(l10n.clubDetailAdopt),
                     ),
                   ],
