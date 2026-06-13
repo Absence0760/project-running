@@ -753,6 +753,24 @@ need a design decision, not a rushed edit:
   `pos.altitudeAccuracy` (a real fix vs. a default) rather than the value — a larger change. Documented
   here as a known sentinel-vs-real-zero trade-off, not rushed.
 
+## Perf-hunt deferrals (2026-06-13)
+
+A perf-hunt sweep (5 surfaces) shipped 13 fixes (live-map incremental smooth/pace,
+store sorted-view caching, gym-routine batch insert, following-feed dedupe, relink
+window, dashboard single training-load series, heatmap window guard, token-refresh
+concurrency, store diff-before-write, the `run_engagement_counts` + `dm_threads`
+RPCs). One finding was **deferred, not dismissed**:
+
+- [ ] **[deferred — gated, no urgency] Weekly-digest builder enqueues up to 5000 jobs one HTTP INSERT at a time.**
+  `apps/job_worker/internal/digest_builder.go` `EnqueueAllWeeklyDigests` loops over up to
+  `maxDigestCandidatesPerRun=5000` recipient ids and POSTs one `/rest/v1/jobs` row per id
+  (`supabase.go` `EnqueueWeeklyDigest`), fully serialized — ~75-150s of enqueue latency at a populated
+  opted-in base. PostgREST accepts a JSON-array body, so the durable fix is a chunked bulk insert
+  (~5000 → ~10 requests, preserving per-chunk skip-on-error). **Deferred because there is no input that
+  makes it bite today:** the function has zero non-test callers and is behind an explicit
+  CISO/counsel gate (no pg_cron wires it), and even once scheduled it's a weekly background pass where a
+  ~2-minute enqueue burst is invisible. Fix it as part of the gated cron-wiring change, not standalone.
+
 Minor / not fixed (recorded for completeness): `workout_runner.dart` `rewindStep` re-anchors a duration
 step's elapsed clock to "now", stretching a rewound duration step (matches the distance-axis rewind
 design intent, untested for duration); `gym_workout_runner.dart` `adherence()` returns `abandoned` for a
