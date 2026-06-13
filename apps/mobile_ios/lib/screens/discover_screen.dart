@@ -432,10 +432,15 @@ class _ResultCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
-                    Text(event.clubName, style: theme.textTheme.bodyMedium),
+                    Text(event.clubName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium),
                     const SizedBox(height: 2),
                     Text(meta,
                         style: theme.textTheme.bodySmall?.copyWith(

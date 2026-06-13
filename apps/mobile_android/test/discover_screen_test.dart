@@ -99,6 +99,30 @@ void main() {
     expect(find.textContaining('18.00'), findsOneWidget);
   });
 
+  testWidgets('long title + club name truncate with an ellipsis (no overflow)',
+      (tester) async {
+    final api = _FakeApi([
+      _ev(
+        discipline:
+            'Extremely Long Reformer Pilates Mobility And Core Conditioning Class Name',
+      ),
+    ]);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    final title = tester.widget<Text>(find.text(
+        'Extremely Long Reformer Pilates Mobility And Core Conditioning Class Name'));
+    expect(title.maxLines, 1);
+    expect(title.overflow, TextOverflow.ellipsis);
+
+    final club =
+        tester.widget<Text>(find.text('Norfolk Botanical Runners'));
+    expect(club.maxLines, 1);
+    expect(club.overflow, TextOverflow.ellipsis);
+  });
+
   testWidgets('falls back to the title when discipline is null',
       (tester) async {
     final api = _FakeApi([

@@ -472,10 +472,16 @@
 	.result-title {
 		font-size: 1rem;
 		font-weight: 700;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.result-club {
 		font-size: 0.9rem;
 		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.result-meta {
 		font-size: 0.85rem;
