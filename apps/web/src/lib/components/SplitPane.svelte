@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		storageKey: string;
@@ -109,7 +110,7 @@
 		class:dragging
 		role="separator"
 		aria-orientation="vertical"
-		aria-label="Drag to resize panes"
+		aria-label={m('splitPane.resizeLabel')}
 		tabindex="0"
 		onpointerdown={startDrag}
 		onkeydown={onKey}

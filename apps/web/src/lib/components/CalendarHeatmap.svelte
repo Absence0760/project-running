@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 	import { formatISO } from '$lib/training/training';
 	import { fmtKm } from '$lib/format/units.svelte';
@@ -115,7 +116,7 @@
 	viewBox="0 0 {svgWidth} {svgHeight}"
 	class="heatmap"
 	role="img"
-	aria-label="Activity calendar heatmap"
+	aria-label={m('calendarHeatmap.label')}
 >
 	{#each dayLabels as label, i}
 		{#if label}

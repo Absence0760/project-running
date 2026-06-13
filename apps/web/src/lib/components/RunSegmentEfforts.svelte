@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatDuration } from '$lib/format/time';
+	import { m } from '$lib/i18n/store.svelte';
 	import {
 		fetchEffortsForRun,
 		computeSegmentEffortsForRun,
@@ -94,7 +95,7 @@
 </script>
 
 {#if loading}
-	<p class="muted">Checking segments…</p>
+	<p class="muted">{m('segmentEfforts.checking')}</p>
 {:else if efforts.length > 0}
 	<ul class="efforts">
 		{#each efforts as e (e.effort.id)}
@@ -114,11 +115,11 @@
 	</ul>
 {:else if routeId}
 	<p class="muted">
-		No segment efforts on this run.
+		{m('segmentEfforts.none')}
 	</p>
 {:else}
 	<p class="muted">
-		Segments are matched per route — link this run to a saved route to compete on its leaderboards.
+		{m('segmentEfforts.linkHint')}
 	</p>
 {/if}
 

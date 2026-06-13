@@ -18,6 +18,7 @@
 -->
 <script lang="ts">
 	import { formatDistance } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	interface Props {
 		totalDistanceM: number;
 		fraction: number;
@@ -30,8 +31,8 @@
 <div class="scrubber">
 	<div class="header">
 		<span class="title">
-			<span class="material-symbols">directions_run</span>
-			Preview
+			<span class="material-symbols" aria-hidden="true">directions_run</span>
+			{m('routePreview.title')}
 		</span>
 		<span class="reached" data-testid="scrubber-reached">
 			{formatDistance(totalDistanceM * fraction)}
@@ -43,6 +44,7 @@
 		max="1"
 		step="0.001"
 		value={fraction}
+		aria-label={m('routePreview.scrubLabel')}
 		data-testid="route-scrubber"
 		oninput={(e) => {
 			const v = parseFloat((e.target as HTMLInputElement).value);
@@ -60,8 +62,8 @@
 		onblur={() => onscrubbing(false)}
 	/>
 	<div class="ends">
-		<span>Start</span>
-		<span>Finish</span>
+		<span>{m('routePreview.start')}</span>
+		<span>{m('routePreview.finish')}</span>
 	</div>
 </div>
 

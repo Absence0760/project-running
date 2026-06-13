@@ -3,7 +3,7 @@
 	import { isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { fmtKm } from '$lib/format/units.svelte';
-	import { currentLocale } from '$lib/i18n/store.svelte';
+	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import { monthName, weekdayAbbrevs, leadingBlanks, type WeekStart } from '$lib/format/calendar';
 
 	type Props = {
@@ -133,9 +133,9 @@
 			class="nav"
 			onclick={prev}
 			disabled={currentIdx === 0}
-			aria-label="Previous month"
+			aria-label={m('planCalendar.prevMonth')}
 		>
-			<span class="material-symbols">chevron_left</span>
+			<span class="material-symbols" aria-hidden="true">chevron_left</span>
 		</button>
 		<h3>{monthName(current.month, currentLocale())} {current.year}</h3>
 		<button
@@ -143,9 +143,9 @@
 			class="nav"
 			onclick={next}
 			disabled={currentIdx === months.length - 1}
-			aria-label="Next month"
+			aria-label={m('planCalendar.nextMonth')}
 		>
-			<span class="material-symbols">chevron_right</span>
+			<span class="material-symbols" aria-hidden="true">chevron_right</span>
 		</button>
 	</header>
 
