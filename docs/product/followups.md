@@ -17,8 +17,12 @@ on Wear + the shared recorder, and the `public_run_counts` RPC). Three findings 
 - [ ] **[deferred — needs_safe_migration] enrichEvents over-fetches all-time "going" RSVPs to compute a next-instance count.**
   `data.ts` `enrichEvents` (~L2049) issues `event_attendees.select('event_id, instance_start').in(event_id, ids).eq('status','going')` with NO limit, then keeps only the rows matching each event's NEXT instance. A busy old club's recurring series accumulates one going-row per member per past instance (52 instances × 150 members ≈ 7,800 rows for one event), so a 200-event page can transfer tens of thousands of rows to produce 200 integers. Durable fix: an `event_next_instance_going_counts(p_event_ids uuid[], p_next_starts timestamptz[])` RPC counting only at each event's next-instance timestamp (the capacity trigger `20261018_001` already does exactly that scoped `count(*) ... where instance_start = ... and status='going'`). Index `(event_id, instance_start)` serves it. Bites only old high-attendance clubs; schedule the RPC, don't rush.
 
-- [ ] **[deferred — needs_safe_edit] fetchPublicRoute does two serial reads on the anonymous share / OG-image path.**
-  `data.ts` `fetchPublicRoute` (~L1241) awaits the `public_routes` metadata read, THEN `fetchClippedRouteForViewer(id)` — but the clip RPC depends only on `id`, so they serialize for no data reason. One redundant Supabase RTT (tens of ms) added to time-to-first-render on `/share/route/[id]` + the OG-image Lambda. Fix: `Promise.all` both (they key only on `id`), null the result when meta is absent; same parallelization in `fetchRouteById`'s non-owner branch. Constant per request (not a scaling cliff), so a tidy latency win rather than urgent.
+- [x] **fetchPublicRoute does two serial reads on the anonymous share / OG-image path.** **DONE 2026-06-13**
+  (commit `7edbe100`). Extracted a shared `assemblePublicRoute(readMeta, readClip)` helper
+  (`apps/web/src/lib/routes/public_route_assembly.ts`) that `Promise.all`s the `public_routes` metadata read
+  + the clip RPC (both key only on `id`) and returns null when meta is absent; wired into both
+  `fetchPublicRoute` and `fetchRouteById`'s non-owner branch. 3 unit tests (concurrency assertion +
+  null-when-absent + assemble-when-present).
 
 - [ ] **[deferred — watchOS deferred target] CheckpointStore.loadTrackPoints buffers the whole track file at finish.**
   `apps/watch_ios/WatchApp/CheckpointStore.swift` `loadTrackPoints` (~L187) does `String(contentsOf:)` + `.split` + `compactMap` — three large allocations held at once. Negligible for a 6h ultra (~1.7 MB) but ~60 MB transient peak for a 100h ultra (~28 MB NDJSON), an OOM/jank risk at the save transition on a memory-constrained watch. Streaming the read removes ~34 MB of that, but the bigger finish-path peak is `writeTrackJSON`'s `JSONEncoder().encode(run.track)` which still holds the full track — fix them together. **apps/watch_ios is an explicitly deferred target (no XCTest harness to pin a regression)** — do this when the deferral lifts and the whole finish/serialize path is reworked to stream.
@@ -180,7 +184,13 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 ## Tech debt
 
-- [ ] **Auth-readiness spin-wait loop copied into the gym-session route** — the `onMount` polling loop (`for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) await sleep(50)`) was copied again into `apps/web/src/routes/gym/session/[routineId]/+page.svelte`. The durable fix is to expose an auth-ready Promise / reactive signal on the auth store (`$lib/stores/auth.svelte.ts`) that routes can `await` once instead of each open-coding a bounded poll. Don't propagate the pattern to any further new routes; convert the existing copies when the store gains the signal.
+- [x] **Auth-readiness spin-wait loop copied into the gym-session route** — **DONE 2026-06-13** (commit
+  `e0a7ca14`). The auth store (`$lib/stores/auth.svelte.ts`) now exposes `ready()` — a Promise backed by a
+  resolver gate driven from the existing `onAuthStateChange`/`getSession`/`refreshSession`/`fetchUser` hooks
+  (`auth_ready.ts`), resolving once auth is genuinely settled (user resolved OR definitively anon), with a 3s
+  timeout fallback so a wedged session check can't hang a page. All ~36 open-coded bounded-poll copies across
+  the route tree were converted to a single `await auth.ready()`; the reactive `$effect` early-return guard on
+  `/runs` (a correct different pattern) was left intact. 7 unit tests on the settle predicate + ready() paths.
 
 ## Performance — deferred hot spots (perf-hunt 2026-06-10)
 
@@ -584,21 +594,21 @@ migration, a privacy/product decision, or an auth state-machine change that shou
 rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
 `reviews/persona-moab240-spectator.md`, `reviews/persona-utmb-spectator.md`.
 
-- [ ] **[critical, privacy] Event live-leaderboard leaks every runner's real display name to anon worldwide viewers.**
-  `apps/web/src/routes/live/event/[id]/[instance]/+page.svelte` `load()` queries `user_profiles`
-  for `display_name` and `nameFor()` renders the real name to any unauthenticated caller — no
-  follow-edge gate. The sibling `/live/[id]` page correctly uses `shouldRevealDisplayName` /
-  `runnerHandle` (anon sees `Runner #XXXX`, only mutual-follows see the name). The event page
-  exposes real-time position + real name of every participant to anyone with the URL. **Route
-  via `/safe-edit`** (privacy boundary): apply the same `runner_handle` gate the solo page uses.
-- [ ] **[high, backend] `live_run_pings` 4h retention deletes the live feed + last-known position mid-run for ultras.**
-  `20260509_001_live_run_pings.sql:93` deletes pings `< now() - interval '4 hours'`; the sibling
-  `race_pings` uses 48h (`20261213_001`). For any run > 4h (every ultra this app targets) the cron
-  continuously deletes the oldest breadcrumbs while the run is live, and a SAR-critical last-known
-  position ages out within ~4h of signal loss. Fix: widen `live_run_pings` retention to match
-  `race_pings` (48h) — or, better, retain until the run/`race_session` ends rather than a flat
-  window. **Land directly on `main`** (a new migration) to avoid a migration-number race with the
-  parallel marketplace work; verify against the local stack (DB up on 54322) with a pgtap negative-check.
+- [x] **[critical, privacy] Event live-leaderboard leaks every runner's real display name to anon worldwide viewers.**
+  **DONE 2026-06-13** (commit `208e2508`). `apps/web/src/routes/live/event/[id]/[instance]/+page.svelte`
+  now applies the same `runner_handle` gate the solo `/live/[id]` page uses — anon + non-mutual-follow
+  viewers see `Runner #XXXX`, only mutual-follows see the real `display_name`, fail-closed when follow
+  state is unknown. The gate also covers the finished/DNF results lists (account-bound result rows resolve
+  through the gated profiles map; bib-only imported finishers keep their printed name since they have no
+  account to gate and key on bib). New `race_leaderboard.ts` parity-free web helper + 6 unit tests; anon
+  Playwright spec in `tests-e2e/live/event.spec.ts`.
+- [x] **[high, backend] `live_run_pings` 4h retention deletes the live feed + last-known position mid-run for ultras.**
+  **DONE 2026-06-13** (migration `20270119_001_live_run_pings_retention.sql`, commit `93c991e7`).
+  `cleanup_stale_live_run_pings()` redefined in place (same every-15-min pg_cron job) to reap at 48h
+  instead of 4h, matching the `race_pings` sibling (`20261213_001`) so the two position-ping pipelines
+  stay in lockstep. Chose the fixed 48h window over retain-until-run-ends (the latter needs an
+  in-progress/ended signal on `runs` that doesn't exist — inventing schema for marginal gain). pgtap
+  (`live_run_pings_retention_test.sql`) pins the boundary: 47h59m survives, 72h reaped.
 - [ ] **[high, privacy/safety] Privacy-zone clipping drops the last-known ping with no SAR carve-out.**
   `20260618_001` / `20260704_001` BEFORE-INSERT triggers `return NULL` for any ping inside a privacy
   zone, so a runner who stops *inside* their own zone (injured at home/hotel) vanishes from the
@@ -611,23 +621,30 @@ rushed. Detailed write-ups in `reviews/persona-moab240-sweep-medical-sar.md`,
   event live page can show "race not armed" for an in-progress race. **Route via `/safe-edit`** — it's a
   TS↔Dart parity pair (`recurrence`) and touches the marketplace's per-instance logic, so coordinate
   with the instructor-business session to avoid a collision.
-- [ ] **[medium, web] WS reconnect reuses a stale JWT.** `live_hub.ts` builds the subscribe URL once with
-  `?token=<jwt>`; `connect()` reuses it on every reconnect, so after ~1h a private-run reconnect 403s and
-  spins forever with only a spinner. Fix: re-read the session token before each reconnect (pass a token
-  provider, not a static string). Auth state-machine — route via `/safe-edit`.
-- [ ] **[medium, web] Event leaderboard: non-deterministic tie order + a 1000-ping cap can drop a back-of-pack runner.**
-  `live/event/.../+page.svelte` sorts by `distance_m` with no tie-break (ranks jitter on refresh), and
-  `fetchRecentRacePings` caps at 1000 newest rows so a slow runner can fall out of the "latest per user"
-  Map entirely. Fix: stable tie-break (e.g. `elapsed_s` then `user_id`) + a per-user-latest query.
-- [ ] **[medium, mobile] Live spectator pace hardcodes `/km`, ignoring the imperial preference.**
-  `live_spectator_screen.dart` `formatLivePace` always appends `/km` while distance respects
-  `formatDistanceForPref`; an imperial viewer sees mixed units. Mirror the web `formatPace` unit switch;
-  needs the iOS twin + a test update (the existing widget test pins `/km`).
+- [x] **[medium, web] WS reconnect reuses a stale JWT.** **DONE 2026-06-13** (commit `b55e7932`). The
+  reconnect loop was extracted into an env-free, injectable `createReconnectingSocket` (`live_hub_helpers.ts`)
+  that takes a `getToken: () => string | null | undefined` provider and re-reads it on EVERY (re)connect,
+  rebuilding the subscribe URL fresh — so a reconnect after the JWT rotates authorizes with the current
+  token instead of 403-spinning on the captured one. The live page seeds a synchronously-readable token
+  mirror from `getSession()` and keeps it current via an `onAuthStateChange` listener (torn down in
+  `onDestroy`). 12 unit tests incl. the reconnect-uses-fresh-token case.
+- [x] **[medium, web] Event leaderboard: non-deterministic tie order + a 1000-ping cap can drop a back-of-pack runner.**
+  **DONE 2026-06-13** (commit `208e2508` + migration `20270120_001_latest_race_pings.sql`). Deterministic
+  tie-break (`distance_m` DESC → `elapsed_s` ASC → `user_id`) in `race_leaderboard.ts`; the dropped-runner
+  cap fixed at the root with a `latest_race_pings(p_event_id, p_instance_start)` SECURITY INVOKER RPC
+  (DISTINCT ON, served by the existing `race_pings_by_race_user` index) returning the latest ping per user
+  rather than the 1000 newest overall.
+- [x] **[medium, mobile] Live spectator pace hardcodes `/km`, ignoring the imperial preference.**
+  Already fixed on `main` (commit `8e5fda8e`, verified 2026-06-13) — `formatLivePace` honours
+  `preferred_unit` (sec/mi + `/mi` label when imperial), twin-identical, widget test covers both units.
+  Listed as deferred but was closed independently; ticking on verification.
 - [ ] **[medium] No terminal "Finished" / "DNF" state on mobile (and DNF unmodelled on both).** Web has
   `runIsFinished`; mobile shows "Idle" forever after a finish. Neither distinguishes "no signal" from a
   race-marked DNF. Feature-scale; pairs with the staleness work.
-- [ ] **[low] Demo ticker has no Page Visibility pause** (`live/[id]/+page.svelte` `startDemo`) — a
-  backgrounded multi-day tab keeps animating every 3s. Add a `visibilitychange` guard.
+- [x] **[low] Demo ticker has no Page Visibility pause** (`live/[id]/+page.svelte` `startDemo`) —
+  **DONE 2026-06-13** (commit `b55e7932`). `startDemo` registers a `visibilitychange` guard that stops the
+  3s ticker when `document.hidden` and resumes (from the paused angle) on return; listener + ticker torn
+  down in `onDestroy`, SSR-guarded.
 
 Dismissed (not bugs): the mobile `formatLivePace` "5:60/km" rollover is already pinned by an existing
 test (cosmetic, intentional-enough); pace-shown-is-average-not-current is a labelling nuance, not a defect.
