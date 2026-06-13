@@ -2042,19 +2042,24 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	}
 
 	const ids = events.map((e) => e.id);
+	const nextStarts = ids.map((id) => nextMap.get(id)!);
 	const userId = auth.user?.id;
 
-	// One round-trip each for the going-counts and the viewer's RSVPs,
-	// then aggregate per-event client-side — previously this fanned out to
-	// 2×N queries (one per event for the count, one per event for the RSVP),
-	// so a club events list issued dozens of round-trips. Each event's count
-	// is scoped to ITS next instance, so we fetch the going rows + their
-	// instance_start and tally only the ones that match `nextMap`.
-	const countsPromise = supabase
-		.from(TABLES.event_attendees)
-		.select('event_id, instance_start')
-		.in('event_id', ids)
-		.eq('status', 'going');
+	// The going-count is scoped to each event's NEXT instance and computed
+	// server-side: the event_next_instance_going_counts RPC pairs each event id
+	// with its next-instance timestamp (by ordinality) and returns one integer
+	// per event. The prior client-side approach fetched EVERY all-time
+	// status='going' row for the listed events with no limit and tallied the
+	// matching instance locally — tens of thousands of rows on the wire to
+	// produce N integers. The viewer's RSVPs are a single bounded per-user
+	// fetch, so those still come back as rows and are matched to the next
+	// instance client-side.
+	const countsPromise = supabase.rpc(
+		// Not yet in database.types.ts (orchestrator regenerates on landing the
+		// 20270122_001 migration); the RPC name is cast until then.
+		'event_next_instance_going_counts' as never,
+		{ p_event_ids: ids, p_next_starts: nextStarts } as never
+	);
 	const rsvpPromise = userId
 		? supabase
 				.from(TABLES.event_attendees)
@@ -2067,16 +2072,14 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 
 	// Compare instants, not raw strings: nextMap holds toISOString() ('…Z')
 	// while Postgres returns timestamptz as '…+00:00', so a string `===`
-	// never matches and every count/RSVP would be dropped (regression from
-	// the client-side debatch in 7e386e57 — the prior per-event `.eq()`
-	// compared timestamptz server-side).
+	// never matches and every RSVP would be dropped (regression from the
+	// client-side debatch in 7e386e57 — the prior per-event `.eq()` compared
+	// timestamptz server-side).
 	const sameInstant = (a: string, b: string | undefined): boolean =>
 		b != null && new Date(a).getTime() === new Date(b).getTime();
 	const counts = new Map<string, number>();
-	for (const row of (countRes.data ?? []) as { event_id: string; instance_start: string }[]) {
-		if (sameInstant(row.instance_start, nextMap.get(row.event_id))) {
-			counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
-		}
+	for (const row of (countRes.data ?? []) as { event_id: string; going_count: number }[]) {
+		counts.set(row.event_id, Number(row.going_count));
 	}
 	const rsvps = new Map<string, RsvpStatus | null>();
 	for (const row of (rsvpRes.data ?? []) as { event_id: string; status: string; instance_start: string }[]) {
