@@ -197,6 +197,26 @@ void main() {
       expect(l.acuteLoad! > 0, isTrue);
       expect(l.chronicLoad! > 0, isTrue);
     });
+
+    // Pins the reconciled EWMA convention: runs bucket by LOCAL day and the
+    // curves use alpha = 1 − exp(−1/halflife) (matching training_load.dart),
+    // NOT UTC bucketing + a 1/N step. A single 10 km / 60-min run
+    // (TSS = 69.44…) at threshold pace 300 s/km, logged at local noon 9 days
+    // before a local-07:00 `now`, walked across a 43-day window. Both inputs
+    // are local-clock so the numbers are timezone-stable (noon never rolls a
+    // calendar day). Computed, not guessed — same values as the web mirror.
+    test('single run produces the reconciled (alpha-EWMA, local-day) values', () {
+      final now = DateTime(2026, 4, 30, 7); // local 2026-04-30 07:00
+      final run = _r(
+        distance: 10000,
+        durationS: 3600,
+        startedAt: DateTime(2026, 4, 21, 12), // local 2026-04-21 noon
+      );
+      final l = trainingLoad([run], 300, now: now);
+      expect(l.acuteLoad!, closeTo(2.555695151929763, 1e-9));
+      expect(l.chronicLoad!, closeTo(1.3187582819498793, 1e-9));
+      expect(l.trainingStressBal!, closeTo(-1.2369368699798837, 1e-9));
+    });
   });
 
   group('recoveryAdvice', () {

@@ -252,6 +252,30 @@ test('trainingLoad — emits non-null curves with at least one qualifying run', 
 	assert.ok(load.chronicLoad! > 0);
 });
 
+// Pins the reconciled EWMA convention: runs bucket by LOCAL day and the
+// curves use alpha = 1 − exp(−1/halflife) (matching training_load.ts), NOT
+// UTC bucketing + a 1/N step. A single 10 km / 60-min run (TSS = 69.44…) at
+// threshold pace 300 s/km, logged at local noon 9 days before a local-07:00
+// `now`, walked across a 43-day window. Both inputs are local-clock so the
+// numbers are timezone-stable (noon never rolls a calendar day). Computed,
+// not guessed — change these only if the convention changes.
+test('trainingLoad — single run produces the reconciled (alpha-EWMA, local-day) ATL/CTL/TSB', () => {
+	const now = new Date(2026, 3, 30, 7, 0, 0).getTime(); // local 2026-04-30 07:00
+	const run = r({
+		started_at: new Date(2026, 3, 21, 12, 0, 0).toISOString(), // local 2026-04-21 noon
+		distance_m: 10000,
+		duration_s: 3600,
+	});
+	const load = trainingLoad([run], 300, now);
+	assert.ok(load.acuteLoad != null && load.chronicLoad != null && load.trainingStressBal != null);
+	assert.ok(Math.abs(load.acuteLoad! - 2.555695151929763) < 1e-9, `atl ${load.acuteLoad}`);
+	assert.ok(Math.abs(load.chronicLoad! - 1.3187582819498793) < 1e-9, `ctl ${load.chronicLoad}`);
+	assert.ok(
+		Math.abs(load.trainingStressBal! - -1.2369368699798837) < 1e-9,
+		`tsb ${load.trainingStressBal}`,
+	);
+});
+
 test('trainingLoad — TSB rises during a 14-day taper with no further runs', () => {
 	const buildEnd = NOW - 14 * 24 * 3600 * 1000;
 	const runs: Run[] = [];

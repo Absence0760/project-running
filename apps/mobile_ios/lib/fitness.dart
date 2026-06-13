@@ -154,8 +154,11 @@ double runTss(double distanceM, int durationS, double thresholdPaceSecPerKm) {
   return durationH * intensity * intensity * 100;
 }
 
-double _ewma(double prev, double sample, double tau) {
-  return prev + (sample - prev) / tau;
+/// EWMA: new = old + alpha · (sample − old). Alpha is a per-day decay
+/// rate. Matches the curve in `training_load.dart` so the dashboard's
+/// fitness/fatigue/form chart and this Fitness-card rollup agree.
+double _ewma(double prev, double sample, double alpha) {
+  return prev + alpha * (sample - prev);
 }
 
 class TrainingLoad {
@@ -171,6 +174,12 @@ class TrainingLoad {
 
 /// Daily-bucketed TSS → 7-day ATL, 42-day CTL, TSB = CTL − ATL,
 /// evaluated at `now`. Returns nulls when there's no data.
+///
+/// Computes fitness the same way as `training_load.dart` (the app's
+/// prevailing convention, shared with streaks / recap): runs bucket by
+/// LOCAL calendar day, and the EWMAs use alpha = 1 − exp(−1/halflife)
+/// (a proper time constant) rather than a 1/N step. ATL halflife = 7,
+/// CTL halflife = 42.
 TrainingLoad trainingLoad(
   Iterable<Run> runs,
   double? thresholdPaceSecPerKm, {
@@ -180,9 +189,9 @@ TrainingLoad trainingLoad(
     return const TrainingLoad(
         acuteLoad: null, chronicLoad: null, trainingStressBal: null);
   }
-  final byDay = <String, double>{};
+  final byDay = <DateTime, double>{};
   for (final r in qualifyingRuns(runs)) {
-    final key = _dayKey(r.startedAt.toUtc());
+    final key = _dayKey(r.startedAt);
     final tss = runTss(r.distanceMetres, r.duration.inSeconds,
         thresholdPaceSecPerKm);
     byDay.update(key, (existing) => existing + tss, ifAbsent: () => tss);
@@ -192,15 +201,15 @@ TrainingLoad trainingLoad(
         acuteLoad: null, chronicLoad: null, trainingStressBal: null);
   }
 
-  final t = (now ?? DateTime.now()).toUtc();
-  final endDay = DateTime.utc(t.year, t.month, t.day);
-  final earliestMs = byDay.keys
-      .map((k) => DateTime.parse('${k}T00:00:00Z').millisecondsSinceEpoch)
-      .reduce(math.min);
+  final t = (now ?? DateTime.now()).toLocal();
+  final endDay = DateTime(t.year, t.month, t.day);
+  final earliestMs = byDay.keys.map((k) => k.millisecondsSinceEpoch).reduce(math.min);
   final earliestStart =
       math.min(earliestMs, endDay.millisecondsSinceEpoch - 42 * 86400000);
-  final startDay = DateTime.fromMillisecondsSinceEpoch(earliestStart, isUtc: true);
+  final startDay = DateTime.fromMillisecondsSinceEpoch(earliestStart);
 
+  final atlAlpha = 1 - math.exp(-1 / 7);
+  final ctlAlpha = 1 - math.exp(-1 / 42);
   var atl = 0.0;
   var ctl = 0.0;
   // After a sustained layoff (kLayoffResetDays of no runs) fitness is
@@ -210,7 +219,7 @@ TrainingLoad trainingLoad(
   var zeroStreak = 0;
   for (var d = startDay;
       !d.isAfter(endDay);
-      d = d.add(const Duration(days: 1))) {
+      d = DateTime(d.year, d.month, d.day + 1)) {
     final tss = byDay[_dayKey(d)] ?? 0.0;
     if (tss > 0) {
       zeroStreak = 0;
@@ -218,8 +227,8 @@ TrainingLoad trainingLoad(
       atl = 0;
       ctl = 0;
     }
-    atl = _ewma(atl, tss, 7);
-    ctl = _ewma(ctl, tss, 42);
+    atl = _ewma(atl, tss, atlAlpha);
+    ctl = _ewma(ctl, tss, ctlAlpha);
   }
   return TrainingLoad(
     acuteLoad: atl,
@@ -228,11 +237,9 @@ TrainingLoad trainingLoad(
   );
 }
 
-String _dayKey(DateTime dt) {
-  final yyyy = dt.year.toString().padLeft(4, '0');
-  final mm = dt.month.toString().padLeft(2, '0');
-  final dd = dt.day.toString().padLeft(2, '0');
-  return '$yyyy-$mm-$dd';
+DateTime _dayKey(DateTime dt) {
+  final local = dt.isUtc ? dt.toLocal() : dt;
+  return DateTime(local.year, local.month, local.day);
 }
 
 /// Top-level snapshot — combines VDOT, VO2 max, and training load into

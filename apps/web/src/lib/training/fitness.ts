@@ -20,7 +20,7 @@
 ///   averages over daily TSS. 7-day ATL, 42-day CTL, TSB = CTL − ATL.
 
 import type { Run } from '../types';
-import { kLayoffResetDays } from './training_load';
+import { kLayoffResetDays, localDateKey } from './training_load';
 
 export interface FitnessSnapshot {
 	vdot: number | null;
@@ -203,14 +203,22 @@ export function thresholdPaceSecPerKmFromVdot(vdot: number | null): number | nul
 	return 1000 / mps;
 }
 
-/// EWMA: new = old + (sample − old) × (1 / tau). Scale is per-day.
-function ewma(prev: number, sample: number, tau: number): number {
-	return prev + (sample - prev) / tau;
+/// EWMA: new = old + alpha × (sample − old). Alpha is a per-day decay
+/// rate. Matches the curve in `training_load.ts` so the dashboard's
+/// fitness/fatigue/form chart and this Fitness-card rollup agree.
+function ewma(prev: number, sample: number, alpha: number): number {
+	return prev + alpha * (sample - prev);
 }
 
 /// Full training-load rollup: daily-bucketed TSS → 7-day ATL,
 /// 42-day CTL, TSB = CTL − ATL, evaluated at `nowMs`. Returns nulls
 /// when there's no data.
+///
+/// Computes fitness the same way as `training_load.ts` (the app's
+/// prevailing convention, shared with streaks / recap): runs bucket by
+/// LOCAL calendar day, and the EWMAs use alpha = 1 − exp(−1/halflife)
+/// (a proper time constant) rather than a 1/N step. ATL halflife = 7,
+/// CTL halflife = 42.
 export function trainingLoad(
 	runs: Run[],
 	thresholdPaceSecPerKm: number | null,
@@ -224,24 +232,28 @@ export function trainingLoad(
 	// what moves the averages down during rest.
 	const byDay = new Map<string, number>();
 	for (const r of qualifyingRuns(runs)) {
-		// UTC-keyed intentionally: started_at is UTC; the EWMA loop uses UTC day
-		// boundaries too. This is the one place where UTC bucketing is correct —
-		// matches fitness.dart's _dayKey(r.startedAt.toUtc()).
-		const key = new Date(r.started_at).toISOString().slice(0, 10);
+		const key = localDateKey(new Date(r.started_at));
 		const tss = runTss(r.distance_m, r.duration_s, thresholdPaceSecPerKm);
 		byDay.set(key, (byDay.get(key) ?? 0) + tss);
 	}
 	if (byDay.size === 0) {
 		return { acuteLoad: null, chronicLoad: null, trainingStressBal: null };
 	}
-	// Start from 60 days of pre-history (zeros) so the CTL has a chance
+	// Start from 42 days of pre-history (zeros) so the CTL has a chance
 	// to establish a baseline, then march forward to `now`.
 	const endDay = new Date(nowMs);
-	endDay.setUTCHours(0, 0, 0, 0);
-	const earliest = Math.min(...Array.from(byDay.keys()).map((k) => new Date(k).getTime()));
+	endDay.setHours(0, 0, 0, 0);
+	const earliest = Math.min(
+		...Array.from(byDay.keys()).map((k) => {
+			const [y, m, d] = k.split('-').map(Number);
+			return new Date(y, m - 1, d).getTime();
+		}),
+	);
 	const startDay = new Date(Math.min(earliest, endDay.getTime() - 42 * 24 * 3600_000));
-	startDay.setUTCHours(0, 0, 0, 0);
+	startDay.setHours(0, 0, 0, 0);
 
+	const atlAlpha = 1 - Math.exp(-1 / 7);
+	const ctlAlpha = 1 - Math.exp(-1 / 42);
 	let atl = 0;
 	let ctl = 0;
 	// After a sustained layoff (kLayoffResetDays of no runs) fitness is
@@ -250,18 +262,18 @@ export function trainingLoad(
 	// triggers "very fresh, build again / race soon" advice. Persona-hunt
 	// comeback #29.
 	let zeroStreak = 0;
-	const dayMs = 24 * 3600_000;
-	for (let t = startDay.getTime(); t <= endDay.getTime(); t += dayMs) {
-		const key = new Date(t).toISOString().slice(0, 10);
-		const tss = byDay.get(key) ?? 0;
+	const cursor = new Date(startDay);
+	while (cursor.getTime() <= endDay.getTime()) {
+		const tss = byDay.get(localDateKey(cursor)) ?? 0;
 		if (tss > 0) {
 			zeroStreak = 0;
 		} else if (++zeroStreak >= kLayoffResetDays) {
 			atl = 0;
 			ctl = 0;
 		}
-		atl = ewma(atl, tss, 7);
-		ctl = ewma(ctl, tss, 42);
+		atl = ewma(atl, tss, atlAlpha);
+		ctl = ewma(ctl, tss, ctlAlpha);
+		cursor.setDate(cursor.getDate() + 1);
 	}
 	return { acuteLoad: atl, chronicLoad: ctl, trainingStressBal: ctl - atl };
 }
