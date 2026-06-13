@@ -1,11 +1,38 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/screens/gym_detail_screen.dart';
+
+/// Counts updateLocal calls so the double-submit guard can be asserted.
+class _CountingGymStore extends LocalGymStore {
+  int updateCalls = 0;
+  @override
+  Future<void> updateLocal(
+    String id, {
+    String? title,
+    int? durationS,
+    String? notes,
+    bool? isPublic,
+    Map<String, dynamic>? metadata,
+    List<GymSetInput>? sets,
+  }) async {
+    updateCalls++;
+    return super.updateLocal(
+      id,
+      title: title,
+      durationS: durationS,
+      notes: notes,
+      isPublic: isPublic,
+      metadata: metadata,
+      sets: sets,
+    );
+  }
+}
 
 Future<({LocalGymStore store, Directory dir, String id})> _seed() async {
   final dir = Directory.systemTemp.createTempSync('gym_detail_vis');
@@ -66,5 +93,44 @@ void main() {
     // The chip + tooltip now reflect public.
     expect(find.text('Public'), findsOneWidget);
     expect(find.byTooltip('Make private'), findsOneWidget);
+  });
+
+  testWidgets('double-tapping the visibility toggle writes the store only once',
+      (tester) async {
+    late _CountingGymStore store;
+    late String id;
+    late Directory dir;
+    await tester.runAsync(() async {
+      final dirTmp = Directory.systemTemp.createTempSync('gym_detail_vis2');
+      final s = _CountingGymStore();
+      await s.init(overrideDirectory: dirTmp);
+      final stored = await s.createLocal(
+        title: 'Push day',
+        startedAt: DateTime.now().toUtc(),
+        sets: const [
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
+        ],
+      );
+      store = s;
+      id = stored.id;
+      dir = dirTmp;
+    });
+    addTearDown(() => dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(store, id));
+    await tester.pump();
+
+    // Two synchronous taps — the _actionBusy guard set on the first must
+    // make the second a no-op before the rebuild paints the disabled button.
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Make public'));
+      await tester.tap(find.byTooltip('Make public'), warnIfMissed: false);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+    await tester.pump();
+
+    expect(store.updateCalls, 1);
+    expect(store.byId(id)!.workout.isPublic, isTrue);
   });
 }

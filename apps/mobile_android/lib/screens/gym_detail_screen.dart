@@ -62,6 +62,11 @@ class GymDetailScreen extends StatefulWidget {
 
 class _GymDetailScreenState extends State<GymDetailScreen> {
   bool _isOnline = true;
+  // In-flight guard for the AppBar actions (visibility toggle / repeat /
+  // save-as-routine / edit / delete) so a double-tap can't flip visibility
+  // twice (two pendingUpdate writes + two syncs) or open two sheets / two
+  // delete dialogs.
+  bool _actionBusy = false;
 
   // Self-owned routine store so "Save as routine" works wherever the detail
   // screen is reached from (gym list, history, dashboard) without threading a
@@ -218,13 +223,19 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   }
 
   Future<void> _edit(StoredGymWorkout w) async {
-    final saved = await showGymComposeSheet(
-      context: context,
-      store: widget.store,
-      existing: w,
-      suggestions: gymExerciseSuggestions(widget.store.workouts),
-    );
-    if (saved == true) await _maybeSync();
+    if (_actionBusy) return;
+    setState(() => _actionBusy = true);
+    try {
+      final saved = await showGymComposeSheet(
+        context: context,
+        store: widget.store,
+        existing: w,
+        suggestions: gymExerciseSuggestions(widget.store.workouts),
+      );
+      if (saved == true) await _maybeSync();
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
   }
 
   /// "Save as routine" — promote this logged session's grouped sets into a
@@ -232,6 +243,16 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   /// builder seeded with it. Mirrors web's openSaveAsRoutine. The builder owns
   /// the create + sync.
   Future<void> _saveAsRoutine(StoredGymWorkout w) async {
+    if (_actionBusy) return;
+    setState(() => _actionBusy = true);
+    try {
+      await _saveAsRoutineInner(w);
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<void> _saveAsRoutineInner(StoredGymWorkout w) async {
     final draft = routine_helper.routineFromWorkout(
       w.workout.title,
       [
@@ -297,6 +318,16 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   /// "Repeat last" — instantiate this session's sets into a fresh gym log (no
   /// saved routine required). Mirrors web's openRepeat → GymEditor seed.
   Future<void> _repeatLast(StoredGymWorkout w) async {
+    if (_actionBusy) return;
+    setState(() => _actionBusy = true);
+    try {
+      await _repeatLastInner(w);
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<void> _repeatLastInner(StoredGymWorkout w) async {
     final seed = <GymSetInput>[
       for (final s in w.sets)
         (
@@ -321,6 +352,8 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
   /// local store write (pendingUpdate) is durable + drains on the next sync,
   /// mirroring web's setGymWorkoutPublic + the route-detail toggle.
   Future<void> _toggleVisibility(StoredGymWorkout w) async {
+    if (_actionBusy) return;
+    setState(() => _actionBusy = true);
     final next = !w.workout.isPublic;
     try {
       await widget.store.updateLocal(w.id, isPublic: next);
@@ -333,10 +366,22 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
           AppLocalizations.of(context).gymVisibilityFailed('$e'),
         );
       }
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
     }
   }
 
   Future<void> _delete(StoredGymWorkout w) async {
+    if (_actionBusy) return;
+    setState(() => _actionBusy = true);
+    try {
+      await _deleteInner(w);
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<void> _deleteInner(StoredGymWorkout w) async {
     final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
           context: context,
@@ -487,28 +532,28 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                   tooltip:
                       w.workout.isPublic ? l10n.gymMakePrivate : l10n.gymMakePublic,
                   icon: Icon(w.workout.isPublic ? Icons.public : Icons.public_off),
-                  onPressed: () => _toggleVisibility(w),
+                  onPressed: _actionBusy ? null : () => _toggleVisibility(w),
                 ),
                 IconButton(
                   tooltip: l10n.gymRoutineRepeatLast,
                   icon: const Icon(Icons.replay),
-                  onPressed: () => _repeatLast(w),
+                  onPressed: _actionBusy ? null : () => _repeatLast(w),
                 ),
                 if (_routineStoreReady)
                   IconButton(
                     tooltip: l10n.gymRoutineSaveAsRoutine,
                     icon: const Icon(Icons.list_alt),
-                    onPressed: () => _saveAsRoutine(w),
+                    onPressed: _actionBusy ? null : () => _saveAsRoutine(w),
                   ),
                 IconButton(
                   tooltip: l10n.gymEdit,
                   icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => _edit(w),
+                  onPressed: _actionBusy ? null : () => _edit(w),
                 ),
                 IconButton(
                   tooltip: l10n.gymDelete,
                   icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _delete(w),
+                  onPressed: _actionBusy ? null : () => _delete(w),
                 ),
               ],
       ),
