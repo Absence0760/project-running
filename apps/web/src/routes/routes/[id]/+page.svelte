@@ -563,11 +563,14 @@
 						<div class="star-row">
 							{#each [1, 2, 3, 4, 5] as star}
 								<button
+									type="button"
 									class="star-btn"
 									class:filled={star <= reviewRating}
+									aria-label={m('routeDetail.rateStars', { n: star })}
+									aria-pressed={star <= reviewRating}
 									onclick={() => reviewRating = star}
 								>
-									<span class="material-symbols">{star <= reviewRating ? 'star' : 'star_border'}</span>
+									<span class="material-symbols" aria-hidden="true">{star <= reviewRating ? 'star' : 'star_border'}</span>
 								</button>
 							{/each}
 						</div>

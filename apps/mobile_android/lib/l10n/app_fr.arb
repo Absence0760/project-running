@@ -665,6 +665,7 @@
   "routeDetailAddTagHint": "ajouter une étiquette",
   "routeDetailReviewsHeading": "Avis",
   "routeDetailRate": "Noter",
+  "routeDetailRateStars": "Définir la note à {n} sur 5",
   "routeDetailReviewsOffline": "Avis indisponibles hors ligne",
   "routeDetailNoReviews": "Aucun avis pour l'instant",
   "routeDetailRateDialogTitle": "Noter cet itinéraire",

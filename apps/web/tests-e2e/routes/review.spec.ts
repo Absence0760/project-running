@@ -59,6 +59,10 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 
 		const formStars = page.locator('.review-form .star-row .star-btn');
 		await expect(formStars).toHaveCount(5);
+		// Each star button exposes an accessible name for screen readers.
+		await expect(
+			page.locator('.review-form').getByRole('button', { name: 'Set rating to 4 of 5' })
+		).toBeVisible();
 		await formStars.nth(3).click();
 		await page.locator('.review-textarea').fill(comment);
 		await page

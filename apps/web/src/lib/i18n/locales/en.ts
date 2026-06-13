@@ -632,6 +632,7 @@ export const en = {
 	"routeDetail.avgRating": "({rating} / 5)",
 	"routeDetail.cancel": "Cancel",
 	"routeDetail.rate": "Rate",
+	"routeDetail.rateStars": "Set rating to {n} of 5",
 	"routeDetail.commentPlaceholder": "Comment (optional)",
 	"routeDetail.submit": "Submit",
 	"routeDetail.noReviews": "No reviews yet",

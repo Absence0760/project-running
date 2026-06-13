@@ -619,6 +619,7 @@ export const messages = {
 	"routeDetail.avgRating": "({rating} / 5)",
 	"routeDetail.cancel": "キャンセル",
 	"routeDetail.rate": "評価する",
+	"routeDetail.rateStars": "評価を5段階中{n}に設定",
 	"routeDetail.commentPlaceholder": "コメント (任意)",
 	"routeDetail.submit": "送信",
 	"routeDetail.noReviews": "まだレビューはありません",

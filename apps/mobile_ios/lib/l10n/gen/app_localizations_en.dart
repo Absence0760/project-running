@@ -2421,6 +2421,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailRate => 'Rate';
 
   @override
+  String routeDetailRateStars(int n) {
+    return 'Set rating to $n of 5';
+  }
+
+  @override
   String get routeDetailReviewsOffline => 'Reviews unavailable offline';
 
   @override

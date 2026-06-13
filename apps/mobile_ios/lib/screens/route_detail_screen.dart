@@ -374,6 +374,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 children: List.generate(5, (i) {
                   final star = i + 1;
                   return IconButton(
+                    tooltip: AppLocalizations.of(context).routeDetailRateStars(star),
                     icon: Icon(
                       star <= selectedRating
                           ? Icons.star

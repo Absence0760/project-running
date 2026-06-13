@@ -623,6 +623,7 @@ export const messages = {
 	"routeDetail.avgRating": "({rating} / 5)",
 	"routeDetail.cancel": "Abbrechen",
 	"routeDetail.rate": "Bewerten",
+	"routeDetail.rateStars": "Bewertung auf {n} von 5 setzen",
 	"routeDetail.commentPlaceholder": "Kommentar (optional)",
 	"routeDetail.submit": "Senden",
 	"routeDetail.noReviews": "Noch keine Bewertungen",

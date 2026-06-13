@@ -2292,6 +2292,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailRate => '評価';
 
   @override
+  String routeDetailRateStars(int n) {
+    return '評価を5段階中$nに設定';
+  }
+
+  @override
   String get routeDetailReviewsOffline => 'レビューはオフラインでは利用できません';
 
   @override

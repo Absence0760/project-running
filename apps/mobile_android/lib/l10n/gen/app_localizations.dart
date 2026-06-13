@@ -4097,6 +4097,12 @@ abstract class AppLocalizations {
   /// **'Rate'**
   String get routeDetailRate;
 
+  /// Accessible tooltip for each star button in the rate-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Set rating to {n} of 5'**
+  String routeDetailRateStars(int n);
+
   /// Empty-state shown when reviews can't be loaded offline
   ///
   /// In en, this message translates to:

@@ -2829,6 +2829,11 @@
   "@routeDetailRate": {
     "description": "Label on the button that opens the rate-route dialog"
   },
+  "routeDetailRateStars": "Set rating to {n} of 5",
+  "@routeDetailRateStars": {
+    "description": "Accessible tooltip for each star button in the rate-route dialog",
+    "placeholders": { "n": { "type": "int" } }
+  },
   "routeDetailReviewsOffline": "Reviews unavailable offline",
   "@routeDetailReviewsOffline": {
     "description": "Empty-state shown when reviews can't be loaded offline"

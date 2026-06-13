@@ -2439,6 +2439,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailRate => 'Valorar';
 
   @override
+  String routeDetailRateStars(int n) {
+    return 'Establecer la valoración en $n de 5';
+  }
+
+  @override
   String get routeDetailReviewsOffline => 'Reseñas no disponibles sin conexión';
 
   @override

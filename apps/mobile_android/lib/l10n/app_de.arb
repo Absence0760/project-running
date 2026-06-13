@@ -665,6 +665,7 @@
   "routeDetailAddTagHint": "Tag hinzufügen",
   "routeDetailReviewsHeading": "Bewertungen",
   "routeDetailRate": "Bewerten",
+  "routeDetailRateStars": "Bewertung auf {n} von 5 setzen",
   "routeDetailReviewsOffline": "Bewertungen offline nicht verfügbar",
   "routeDetailNoReviews": "Noch keine Bewertungen",
   "routeDetailRateDialogTitle": "Diese Route bewerten",

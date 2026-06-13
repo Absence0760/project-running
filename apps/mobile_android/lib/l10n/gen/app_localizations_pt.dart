@@ -2437,6 +2437,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailRate => 'Avaliar';
 
   @override
+  String routeDetailRateStars(int n) {
+    return 'Definir a avaliação como $n de 5';
+  }
+
+  @override
   String get routeDetailReviewsOffline => 'Avaliações indisponíveis offline';
 
   @override
@@ -11106,6 +11111,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeDetailRate => 'Avaliar';
+
+  @override
+  String routeDetailRateStars(int n) {
+    return 'Definir a avaliação como $n de 5';
+  }
 
   @override
   String get routeDetailReviewsOffline => 'Avaliações indisponíveis offline';

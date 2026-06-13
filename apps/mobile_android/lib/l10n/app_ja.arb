@@ -665,6 +665,7 @@
   "routeDetailAddTagHint": "タグを追加",
   "routeDetailReviewsHeading": "レビュー",
   "routeDetailRate": "評価",
+  "routeDetailRateStars": "評価を5段階中{n}に設定",
   "routeDetailReviewsOffline": "レビューはオフラインでは利用できません",
   "routeDetailNoReviews": "まだレビューがありません",
   "routeDetailRateDialogTitle": "このルートを評価",

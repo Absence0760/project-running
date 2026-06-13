@@ -665,6 +665,7 @@
   "routeDetailAddTagHint": "añadir etiqueta",
   "routeDetailReviewsHeading": "Reseñas",
   "routeDetailRate": "Valorar",
+  "routeDetailRateStars": "Establecer la valoración en {n} de 5",
   "routeDetailReviewsOffline": "Reseñas no disponibles sin conexión",
   "routeDetailNoReviews": "Aún no hay reseñas",
   "routeDetailRateDialogTitle": "Valora esta ruta",

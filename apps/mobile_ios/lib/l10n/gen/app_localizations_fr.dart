@@ -2448,6 +2448,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeDetailRate => 'Noter';
 
   @override
+  String routeDetailRateStars(int n) {
+    return 'Définir la note à $n sur 5';
+  }
+
+  @override
   String get routeDetailReviewsOffline => 'Avis indisponibles hors ligne';
 
   @override
