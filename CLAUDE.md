@@ -104,6 +104,15 @@ When there's a choice between a quick patch and the durable fix, **lead with the
 - **A short-term fix is only acceptable when the user explicitly chooses it** after seeing the long-term option, or when the durable fix is genuinely out of scope for an urgent hotfix (say so, and note the follow-up).
 - This reinforces the existing discipline rules: fix the root cause (don't inflate timeouts / retries / skips to hide a bug), don't defer on low-priority grounds, and close flagged gaps in the same turn rather than leaving a TODO. The default is **do it right**, not **do it again later**.
 
+## Compliance sign-offs gate prod, not code
+
+A legal / CISO / counsel sign-off (privacy-boundary changes, Art 9 health-data consent, Stripe Connect payouts, GDPR retention, anything tagged "gated on owner+CISO+counsel" in the docs) is a **pre-production deploy gate, not a reason to leave the code unwritten.** Write the feature, land it behind whatever flag/config the design calls for, and record the sign-off as a deploy-time checklist item — do **not** stub it out, half-build it, or park it in followups as "blocked on legal."
+
+- **Build the whole code path now**, including the privacy/consent/payout logic, tests, and docs. The reviewer (counsel/CISO) reviews *shipped code on `main`*, which is easier to evaluate than a description of intent.
+- **Keep the prod gate explicit and fail-closed**: the gating flag/secret defaults to off/unset so the feature can't reach real users until the sign-off lands (e.g. Stripe live keys unset, a feature flag default-off, `BYPASS_PAYWALL` dev-only). The gate lives in config, not in missing code.
+- **Record the sign-off as a pre-deploy checklist item**, not a `- [ ]` "blocked on legal" follow-up. The followups entry, if any, tracks the *deploy/credential* step, not the code.
+- This does **not** override genuine external blockers: a missing third-party credential/account (Garmin OAuth approval, a Firebase project, a RunSignUp key) or on-device/hardware/real-fixture validation still gates *going live* — but write all the code that doesn't depend on the secret, behind the same fail-closed gate. See [decisions.md § 150](docs/architecture/decisions.md).
+
 ## Branches & PRs
 
 - `main` is the working branch. Commits land directly on `main` when the user has asked for the work; PRs to `main` are still the path for anything that needs review.

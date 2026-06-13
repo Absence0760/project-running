@@ -3115,6 +3115,20 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 150. A legal / CISO / counsel sign-off is a pre-prod deploy gate, not a reason to leave code unwritten
+
+**Decided (2026-06-13, owner directive).** Several features in the docs were parked as "blocked on owner+CISO+counsel sign-off" (Stripe Connect payouts, Art 9 health-data consent flows, privacy-boundary changes, GDPR retention). That gating was being read as "don't write the code yet," which left half-built or stubbed surfaces and a growing followups backlog of *code* that was actually only waiting on a *review*. The owner clarified the intended model: **write all the code; the sign-off gates the production deploy, not the keyboard.**
+
+**Policy.** Build the complete code path — privacy/consent/payout logic, tests, docs — and land it on `main` behind a **fail-closed** gate (a default-off feature flag, an unset live secret/key, a dev-only bypass). Counsel/CISO then review *shipped code*, which is more reviewable than a description of intent, and the sign-off becomes a line on the pre-deploy checklist (flip the flag / set the live key), not a `- [ ]` "blocked on legal" follow-up. The gate must live in **config**, never in missing code, and must keep the feature unreachable by real users until the sign-off lands.
+
+**Trade-off.** Code for not-yet-approved features sits on `main` ahead of its legal clearance. That's acceptable *because* the fail-closed gate makes it inert in prod, and it's strictly better than the alternative (un-reviewable intent + drifting stubs). It does mean reviewers must trust the gate — so the gate's default-off/unset state is itself something tests pin (e.g. paywall + Stripe-key + flag guards).
+
+**Boundary.** This does **not** dissolve genuine external blockers: a missing third-party credential/account (Garmin OAuth approval, a Firebase project, a RunSignUp key) or on-device/hardware/real-fixture validation still gates *going live*. The rule there is the same in spirit — write every line that doesn't require the secret, behind the same fail-closed gate, so only the credential/validation remains.
+
+**Don't re-litigate** by re-parking codeable work as "blocked on legal" in followups. If a session finds a compliance-gated feature unbuilt, the default is to build it behind the gate, not to defer it. Recorded in `CLAUDE.md § Compliance sign-offs gate prod, not code`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
