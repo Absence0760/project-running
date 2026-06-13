@@ -2183,6 +2183,9 @@
 		font-size: 0.85rem;
 		cursor: pointer;
 		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.search-results li button:hover {

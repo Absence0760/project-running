@@ -108,6 +108,9 @@
 	}
 	.plan-title {
 		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.plan-meta {
 		color: var(--text-muted);
