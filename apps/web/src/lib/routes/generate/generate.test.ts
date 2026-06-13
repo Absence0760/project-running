@@ -8,7 +8,7 @@ import {
 	parseRoundTrip,
 	type Fetcher,
 } from './graphhopper';
-import { areaEfficiency, enclosedAreaM2, pickBestLoop } from './select';
+import { areaEfficiency, enclosedAreaM2, inBandScore, pickBestLoop } from './select';
 import { DEFAULT_SEEDS, handleGenerate, parseGenerateRequest, REQUEST_MULTIPLIERS } from './handler';
 
 const BASE = 'http://gh.local';
@@ -178,6 +178,27 @@ test('pickBestLoop prefers the rounder loop when distances tie', () => {
 	const square = { coordinates: squareLoop(0, 0, 0.0056), distanceM: 5000 };
 	const best = pickBestLoop([spur, square], 5000);
 	assert.equal(best, square);
+});
+
+test('pickBestLoop prefers a near-target in-band loop over an equally-round longer one', () => {
+	// Two equally-round squares, both inside the ±15% band: one at target (5000 m),
+	// one +11% (5550 m) — the dense-grid overshoot the old "roundest wins" surfaced.
+	// 5000 m perimeter → 1250 m side → 0.005614° half; 5550 → 1387.5 → 0.006231°.
+	const onTarget = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
+	const longer = { coordinates: squareLoop(0, 0, 0.006231), distanceM: 5550 };
+	// Same shape, so closeness must decide → the on-target loop wins.
+	assert.ok(Math.abs(areaEfficiency(onTarget) - areaEfficiency(longer)) < 0.01);
+	assert.equal(pickBestLoop([longer, onTarget], 5000), onTarget);
+});
+
+test('inBandScore discounts roundness by distance from target', () => {
+	const onTarget = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
+	const longer = { coordinates: squareLoop(0, 0, 0.006231), distanceM: 5550 };
+	assert.ok(inBandScore(onTarget, 5000) > inBandScore(longer, 5000));
+	// A genuinely rounder loop can still win a small closeness deficit: a perfect
+	// square at +11% (closeness 0.89) beats a low-area spur at target.
+	const spur = { coordinates: spurLoop(0, 0, 0.01), distanceM: 5000 };
+	assert.ok(inBandScore(longer, 5000) > inBandScore(spur, 5000));
 });
 
 test('pickBestLoop picks the closest-to-target when nothing is in-band', () => {

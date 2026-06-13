@@ -5,10 +5,14 @@
  * or may not have a candidate near the target. Two tiers:
  *
  *  - If any candidate lands within ±DISTANCE_BAND of the target, they're all
- *    "close enough" on distance, so we choose on *shape*: maximise an
+ *    "close enough" on distance, so we choose on a *combined* score: the
  *    isoperimetric "area efficiency" (enclosed area vs the area a circle of the
  *    same perimeter would enclose — ~1 for a clean round loop, →0 for an
- *    out-and-back spur). Distance closeness breaks ties.
+ *    out-and-back spur) discounted by how far the candidate strays from target.
+ *    Pure "roundest wins" surfaced a needlessly long in-band loop (+8–11% in
+ *    dense grids) when a near-target in-band loop existed; the closeness discount
+ *    pulls the choice back toward target without letting a marginally-rounder
+ *    spur beat a genuinely round near-target loop.
  *  - If NONE is in-band (a sparse start where every seed over/undershoots), the
  *    closest-to-target candidate wins — a 6.9 km loop beats a rounder 9.2 km one
  *    when 5 km was asked. Shape breaks ties.
@@ -54,6 +58,17 @@ export function areaEfficiency(c: LoopCandidate): number {
 	return enclosedAreaM2(c.coordinates) / circleArea;
 }
 
+/// In-band selection score: roundness discounted by how far the candidate
+/// strays from target. The discount `1 - |len − target| / target` is 1 at the
+/// target and falls linearly to `1 - DISTANCE_BAND` (≈0.85) at the band edge, so
+/// a candidate 11% long must be ~13% rounder to still win — it can, but only when
+/// it's genuinely the cleaner loop, never merely a marginal tie. Mirrors the
+/// closest-to-target weighting the out-of-band tier already applies.
+export function inBandScore(c: LoopCandidate, targetDistanceM: number): number {
+	const closeness = 1 - Math.abs(c.distanceM - targetDistanceM) / targetDistanceM;
+	return areaEfficiency(c) * closeness;
+}
+
 export function pickBestLoop(
 	candidates: ReadonlyArray<LoopCandidate>,
 	targetDistanceM: number,
@@ -65,21 +80,22 @@ export function pickBestLoop(
 		(c) => Math.abs(c.distanceM - targetDistanceM) <= DISTANCE_BAND * targetDistanceM,
 	);
 
-	// In-band: all close enough on distance → pick the roundest; closeness ties.
+	// In-band: all close enough on distance → pick the best closeness-weighted
+	// roundness; exact distance breaks ties.
 	if (within.length > 0) {
 		let best = within[0];
-		let bestEff = areaEfficiency(best);
+		let bestScore = inBandScore(best, targetDistanceM);
 		for (let i = 1; i < within.length; i++) {
 			const c = within[i];
-			const eff = areaEfficiency(c);
+			const score = inBandScore(c, targetDistanceM);
 			const better =
-				eff > bestEff + 1e-9 ||
-				(Math.abs(eff - bestEff) <= 1e-9 &&
+				score > bestScore + 1e-9 ||
+				(Math.abs(score - bestScore) <= 1e-9 &&
 					Math.abs(c.distanceM - targetDistanceM) <
 						Math.abs(best.distanceM - targetDistanceM));
 			if (better) {
 				best = c;
-				bestEff = eff;
+				bestScore = score;
 			}
 		}
 		return best;
