@@ -12,6 +12,7 @@
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import RunGearChips from '$lib/components/RunGearChips.svelte';
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
@@ -106,6 +107,7 @@
 	let editIsDnf = $state(false);
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
+	let showReportRun = $state(false);
 	let shareConfirmIntersectsZone = $state(false);
 	let shareConfirmHasZones = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
@@ -1236,7 +1238,7 @@
 						{/if}
 					</div>
 				</div>
-				{#if auth.loggedIn}
+				{#if auth.loggedIn && auth.user?.id === run.user_id}
 					<div class="action-btns" role="toolbar" aria-label={m('runDetail.runActions')}>
 						<button
 							class="icon-btn"
@@ -1289,6 +1291,17 @@
 							onclick={handleDelete}
 						>
 							<span class="material-symbols">delete</span>
+						</button>
+					</div>
+				{:else if auth.loggedIn}
+					<div class="action-btns" role="toolbar" aria-label={m('runDetail.runActions')}>
+						<button
+							class="icon-btn"
+							aria-label={m('runDetail.reportRun')}
+							title={m('runDetail.reportRun')}
+							onclick={() => (showReportRun = true)}
+						>
+							<span class="material-symbols">flag</span>
 						</button>
 					</div>
 				{/if}
@@ -1732,6 +1745,16 @@
 	</SplitPane>
 	</div>
 </div>
+
+{#if run}
+	<ReportDialog
+		open={showReportRun}
+		targetKind="run"
+		targetId={run.id}
+		targetLabel={runTitle || formatDate(run.started_at)}
+		onclose={() => (showReportRun = false)}
+	/>
+{/if}
 
 <ConfirmDialog
 	open={showDeleteConfirm}

@@ -8,6 +8,7 @@
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import RunGearChips from '$lib/components/RunGearChips.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Run, TrackPoint } from '$lib/types';
@@ -102,6 +103,11 @@
 	let runTitle = $derived(
 		((run?.metadata as Record<string, unknown> | null)?.title as string) ?? '',
 	);
+
+	let canReport = $derived(
+		auth.loggedIn && run != null && auth.user?.id !== run.user_id,
+	);
+	let showReport = $state(false);
 </script>
 
 {#if loading}
@@ -128,6 +134,17 @@
 		<span>{formatPace(run.duration_s, run.distance_m)}</span>
 		<span class="meta-sep">&middot;</span>
 		<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
+		{#if canReport}
+			<button
+				type="button"
+				class="report-btn"
+				aria-label={m('runDetail.reportRun')}
+				title={m('runDetail.reportRun')}
+				onclick={() => (showReport = true)}
+			>
+				<span class="material-symbols" aria-hidden="true">flag</span>
+			</button>
+		{/if}
 	</div>
 
 	{#if track.length > 0}
@@ -173,6 +190,14 @@
 			<a href="/login?signup=1" class="btn btn-primary">{m('runShareView.signUpForFree')}</a>
 		</div>
 	{/if}
+
+	<ReportDialog
+		open={showReport}
+		targetKind="run"
+		targetId={run.id}
+		targetLabel={runTitle || formatDate(run.started_at)}
+		onclose={() => (showReport = false)}
+	/>
 {/if}
 
 <style>
@@ -180,6 +205,25 @@
 		text-align: center;
 		color: var(--color-text-tertiary);
 		padding: var(--space-2xl);
+	}
+
+	.report-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		padding: 0.15rem;
+		margin-left: 0.1rem;
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		border-radius: var(--radius-sm);
+	}
+	.report-btn:hover {
+		color: var(--color-danger);
+	}
+	.report-btn .material-symbols {
+		font-size: 1.05rem;
 	}
 
 	h1 {

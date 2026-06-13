@@ -119,6 +119,7 @@
 	let error = $state<string | null>(null);
 	let showLeaveConfirm = $state(false);
 	let showReportDialog = $state(false);
+	let reportPostId = $state<string | null>(null);
 	let showRegenConfirm = $state(false);
 	let showDeleteClubConfirm = $state(false);
 	let showDeletePostConfirm = $state<string | null>(null);
@@ -1005,6 +1006,16 @@
 										<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
 									</div>
 								</a>
+								{#if auth.loggedIn && auth.user?.id !== post.author_id}
+									<button
+										class="icon-btn"
+										onclick={() => (reportPostId = post.id)}
+										aria-label={tr('clubHome.reportPost')}
+										title={tr('clubHome.reportPost')}
+									>
+										<span class="material-symbols" aria-hidden="true">flag</span>
+									</button>
+								{/if}
 								{#if isAdmin}
 									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label={tr('clubHome.deletePostAria')}>
 										<span class="material-symbols" aria-hidden="true">close</span>
@@ -1508,6 +1519,13 @@
 		onclose={() => (showReportDialog = false)}
 	/>
 {/if}
+
+<ReportDialog
+	open={reportPostId !== null}
+	targetKind="club_post"
+	targetId={reportPostId ?? ''}
+	onclose={() => (reportPostId = null)}
+/>
 
 <Modal
 	open={showEventModal && club != null}
