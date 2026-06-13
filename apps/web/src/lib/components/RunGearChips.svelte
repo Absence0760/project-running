@@ -64,7 +64,7 @@
 				<span class="material-symbols">
 					{g.kind === 'bike' ? 'directions_bike' : 'directions_run'}
 				</span>
-				{g.name}
+				<span class="gear-name" title={g.name}>{g.name}</span>
 			</span>
 		{/each}
 		{#if canManage}
@@ -127,8 +127,16 @@
 		border-radius: 999px;
 		font-size: 0.82rem;
 		color: var(--color-text);
+		max-width: 14rem;
+		min-width: 0;
 	}
-	.gear-chip .material-symbols { font-size: 0.95em; opacity: 0.7; }
+	.gear-chip .material-symbols { font-size: 0.95em; opacity: 0.7; flex-shrink: 0; }
+	.gear-chip .gear-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+	}
 	.edit-btn {
 		background: transparent;
 		border: 1px solid var(--color-border);

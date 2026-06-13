@@ -181,7 +181,12 @@ class _RunGearChipsState extends State<RunGearChips> {
                 size: 16,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-              label: Text(g.name),
+              // Cap the chip + ellipsize so a long gear name can't blow
+              // past the row width (RenderFlex overflow).
+              label: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Text(g.name, overflow: TextOverflow.ellipsis),
+              ),
               visualDensity: VisualDensity.compact,
             ),
           if (_canManage)

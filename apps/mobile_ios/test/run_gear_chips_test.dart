@@ -87,6 +87,27 @@ void main() {
       expect(find.text('Edit'), findsNothing);
       expect(find.text('+ Tag gear'), findsNothing);
     });
+
+    testWidgets('a long gear name ellipsizes and does not overflow the row',
+        (tester) async {
+      // Narrow surface so an uncapped chip would blow past the row width.
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const longName = 'Nike Vaporfly Next% 3 Special Limited Edition';
+      await _pump(
+        tester,
+        _FakeApiClient(
+          viewerId: 'someone-else',
+          gear: [_gear('g1', 'shoe', longName)],
+        ),
+      );
+      final text = tester.widget<Text>(find.text(longName));
+      expect(text.overflow, TextOverflow.ellipsis);
+      // No RenderFlex overflow was thrown while laying the chip out.
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('RunGearChips — owner view', () {
