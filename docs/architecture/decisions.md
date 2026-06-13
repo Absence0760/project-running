@@ -3089,6 +3089,20 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 148. Event-level visibility — a public club can mark an individual event members-only
+
+**Decided (2026-06-12, migration `20270113_001`).** Event visibility used to be inherited entirely from the parent club (`20260416_001`): an event was readable iff its club was (`is_public OR owner OR member`). A **private** club's events were therefore already members-only — but a **public** club had no way to hide an individual event (a committee meeting, a members-only social, a draft) from the world, and since cross-club discovery shipped (§147) every public-club event was globally discoverable. Added `events.is_public` (boolean, default `true` → preserves prior behaviour) and an event-level gate.
+
+**One source of truth, inheritance for the rest.** The tightening lives in the single `events` SELECT policy: `<club gate> AND (events.is_public OR is_club_member(club_id))`. `is_club_member` covers owner + admins + members (the owner is enrolled as an `owner` `club_members` row by `enroll_club_owner`). Every other event-delegating surface — `event_attendees` (read + self-RSVP insert), `event_results`, `race_pings`, `run_photos` (table + storage bytes), the event photo gallery — already gates via an `exists (… from events …)` subquery, so the caller's RLS on `events` is applied inside that subquery and they **inherit** the change automatically. Two surfaces needed explicit fixes because they bypass that inheritance: event-tied `club_posts` (its SELECT checks the club only — re-gated so an event-tied post inherits event visibility) and `is_event_visible` (the `SECURITY DEFINER` helper backing the `event_pricing` SELECT policy — `SECURITY DEFINER` strips the caller's RLS, so it was leaking a members-only event's pricing to non-members; recreated to mirror the event-level gate). `search_public_events` adds an explicit `is_public = true` filter (defence-in-depth + it keeps a *member's* own private events out of global discovery, which is the right discovery semantic). `get_event_meet_point` was already gated on `is_club_member`, which is correct for a private event unchanged.
+
+**Why a boolean, not inheritance-only or a visibility enum.** Mirrors `clubs.is_public` exactly (least surprise); the private-club case is already handled by the club gate, so the flag only changes the public-club case. A three-state enum (public / members / draft) was considered and rejected as premature — `is_public=false` already expresses "members-only", and a draft state has no requester. Default `true` means every existing row and every client that doesn't set it stays public.
+
+**Trade-off / surface.** The change touches the security-critical RLS layer, so it's pinned by `rls_events_test.sql` (23 pgtap assertions: non-member/anon hidden, member/owner visible, attendees + event-tied posts + pricing all hidden from non-members, discovery exclusion) + the web e2e (`event-visibility.spec.ts`). Web exposes a "Members only" toggle in `EventEditor` (shown only for a public club) + a badge on the detail page; mobile shows the read-side badge (create-side toggle is a deferred mirror — mobile event create is itself web-canonical-additive). **Per SOC 2 / GovRAMP this RLS change wants CISO sign-off before a production deploy.**
+
+**Don't re-litigate** by moving the gate out of the single `events` SELECT policy into each delegating surface (the `exists(… from events …)` inheritance is the whole point — duplicating the predicate is how they'd drift), or by assuming a new event-delegating surface inherits for free if it's `SECURITY DEFINER` (it won't — `is_event_visible` is the cautionary tale; a definer helper must re-implement the event-level gate explicitly).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
