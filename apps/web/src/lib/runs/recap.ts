@@ -235,11 +235,19 @@ export function buildYearInRunningRecap(
 		totalDistance += r.distance_m;
 		totalDuration += r.duration_s;
 		totalElevation += elevationOf(r);
-		if (r.distance_m > longest) longest = r.distance_m;
+
+		// "Longest run" + "fastest pace" are run-family headline stats —
+		// exclude cycling so a single long, fast bike ride doesn't masquerade
+		// as the year's longest run / fastest pace in a "Year in Running"
+		// card. Matches goals.ts's pace-eligibility filter. (Totals + the
+		// most-used-activity tally stay all-inclusive — those are cross-modal
+		// by design.)
+		const isRunFamily = (r.activity_type ?? 'run') !== 'cycle';
+		if (isRunFamily && r.distance_m > longest) longest = r.distance_m;
 
 		// Pace, in s/km, only on runs with non-trivial distance so a 200 m
 		// stroll doesn't dominate.
-		if (r.distance_m > 500 && r.duration_s > 0) {
+		if (isRunFamily && r.distance_m > 500 && r.duration_s > 0) {
 			const pace = r.duration_s / (r.distance_m / 1000);
 			if (fastestPaceSecPerKm == null || pace < fastestPaceSecPerKm) {
 				fastestPaceSecPerKm = pace;

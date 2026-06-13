@@ -208,6 +208,28 @@ void main() {
       expect(r.fastestPaceSecPerKm, closeTo(240, 0.1));
     });
 
+    test('a cycle ride is not the fastest pace / longest run', () {
+      final runs = [
+        _run(
+          id: 'run', // 5km @ 5:00/km = 300 s/km
+          startedAt: DateTime(2025, 3, 1),
+          distanceM: 5000,
+          duration: const Duration(minutes: 25),
+        ),
+        _run(
+          id: 'ride', // 40km @ 2:00/km = 120 s/km — faster + longer, but a bike
+          startedAt: DateTime(2025, 4, 1),
+          distanceM: 40000,
+          duration: const Duration(minutes: 80),
+          activity: 'cycle',
+        ),
+      ];
+      final r = buildYearInRunningRecap(runs, 2025);
+      expect(r.fastestPaceSecPerKm, closeTo(300, 0.1)); // the run, not the bike
+      expect(r.longestRunM, 5000); // the run, not the bike
+      expect(r.totalDistanceM, 45000); // totals stay all-inclusive
+    });
+
     test('mostUsedActivity reflects the highest-count metadata key', () {
       final runs = [
         _run(

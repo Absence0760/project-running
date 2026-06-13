@@ -134,9 +134,15 @@ YearInRunningRecap buildYearInRunningRecap(List<Run> runs, int year) {
     totalDistance += r.distanceMetres;
     totalDuration += r.duration.inSeconds;
     _elevationOf(r); // tally exists if future fields land here
-    if (r.distanceMetres > longest) longest = r.distanceMetres;
 
-    if (r.distanceMetres > 500 && r.duration.inSeconds > 0) {
+    // "Longest run" + "fastest pace" are run-family headline stats — exclude
+    // cycling so a single long, fast bike ride doesn't masquerade as the
+    // year's longest run / fastest pace. Matches goals.dart pace eligibility
+    // + the web recap twin. (Totals + most-used-activity stay all-inclusive.)
+    final isRunFamily = ((r.metadata?['activity_type'] as String?) ?? 'run') != 'cycle';
+    if (isRunFamily && r.distanceMetres > longest) longest = r.distanceMetres;
+
+    if (isRunFamily && r.distanceMetres > 500 && r.duration.inSeconds > 0) {
       final pace = r.duration.inSeconds / (r.distanceMetres / 1000);
       if (fastestPace == null || pace < fastestPace) fastestPace = pace;
     }

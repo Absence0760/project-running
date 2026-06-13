@@ -93,6 +93,26 @@ test('buildYearInRunningRecap: fastest pace ignores sub-500 m efforts', () => {
 	assert.equal(r.fastestPaceSecPerKm, 240);
 });
 
+test('buildYearInRunningRecap: a cycle ride is not the fastest pace / longest run', () => {
+	const runs = [
+		// 5k run at 5:00/km (300 s/km).
+		mkRun({ startedAt: '2026-03-01T10:00:00', distance_m: 5000, duration_s: 1500 }),
+		// 40 km bike ride at 2:00/km (120 s/km) — faster pace + longer distance,
+		// but a "Year in Running" headline must not surface it as either.
+		mkRun({
+			startedAt: '2026-04-01T10:00:00',
+			distance_m: 40000,
+			duration_s: 4800,
+			activity: 'cycle',
+		}),
+	];
+	const r = buildYearInRunningRecap(runs, 2026);
+	assert.equal(r.fastestPaceSecPerKm, 300, 'fastest pace is the run, not the bike');
+	assert.equal(r.longestRunM, 5000, 'longest run is the run, not the bike');
+	// Totals stay all-inclusive (cross-modal by design).
+	assert.equal(r.totalDistanceM, 45000);
+});
+
 test('buildYearInRunningRecap: top week sums all distance in a Mon-Sun window', () => {
 	// Three runs in week 1 of Feb 2026 — Mon Feb 2 / Wed Feb 4 / Fri
 	// Feb 6 — plus one in week 2. The top week should be Feb 2's row.
