@@ -673,6 +673,7 @@
   "routeDetailOfflineSaved": "Salvo para uso offline.",
   "routeDetailOfflineRemoved": "Removido dos salvamentos offline.",
   "routeDetailTagSaveFailed": "Não foi possível salvar a etiqueta: {error}",
+  "routeDetailTagRemoveFailed": "Não foi possível remover a etiqueta: {error}",
   "routeDetailShareFailed": "Não foi possível compartilhar {format}: {error}",
   "routeDetailClubsLoadTimeout": "Não foi possível carregar seus clubes — verifique sua rede.",
   "routeDetailClubsLoadFailed": "Não foi possível carregar seus clubes.",

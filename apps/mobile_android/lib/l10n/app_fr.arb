@@ -673,6 +673,7 @@
   "routeDetailOfflineSaved": "Enregistré pour une utilisation hors ligne.",
   "routeDetailOfflineRemoved": "Retiré des enregistrements hors ligne.",
   "routeDetailTagSaveFailed": "Impossible d'enregistrer l'étiquette : {error}",
+  "routeDetailTagRemoveFailed": "Impossible de supprimer l'étiquette : {error}",
   "routeDetailShareFailed": "Impossible de partager {format} : {error}",
   "routeDetailClubsLoadTimeout": "Impossible de charger vos clubs — vérifiez votre réseau.",
   "routeDetailClubsLoadFailed": "Impossible de charger vos clubs.",

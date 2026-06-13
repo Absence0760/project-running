@@ -673,6 +673,7 @@
   "routeDetailOfflineSaved": "Für offline gespeichert.",
   "routeDetailOfflineRemoved": "Aus den Offline-Speicherungen entfernt.",
   "routeDetailTagSaveFailed": "Tag konnte nicht gespeichert werden: {error}",
+  "routeDetailTagRemoveFailed": "Tag konnte nicht entfernt werden: {error}",
   "routeDetailShareFailed": "{format} konnte nicht geteilt werden: {error}",
   "routeDetailClubsLoadTimeout": "Deine Clubs konnten nicht geladen werden — überprüfe dein Netzwerk.",
   "routeDetailClubsLoadFailed": "Deine Clubs konnten nicht geladen werden.",

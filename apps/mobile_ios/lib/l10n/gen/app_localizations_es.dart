@@ -2473,6 +2473,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'No se pudo quitar la etiqueta: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'No se pudo compartir $format: $error';
   }

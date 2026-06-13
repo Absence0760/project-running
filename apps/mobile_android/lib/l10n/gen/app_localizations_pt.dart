@@ -2471,6 +2471,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Não foi possível remover a etiqueta: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'Não foi possível compartilhar $format: $error';
   }
@@ -10891,6 +10896,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String routeDetailTagSaveFailed(String error) {
     return 'Não foi possível salvar a etiqueta: $error';
+  }
+
+  @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Não foi possível remover a etiqueta: $error';
   }
 
   @override

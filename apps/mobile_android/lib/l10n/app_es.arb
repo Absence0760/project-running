@@ -673,6 +673,7 @@
   "routeDetailOfflineSaved": "Guardado para uso sin conexión.",
   "routeDetailOfflineRemoved": "Eliminado de los guardados sin conexión.",
   "routeDetailTagSaveFailed": "No se pudo guardar la etiqueta: {error}",
+  "routeDetailTagRemoveFailed": "No se pudo quitar la etiqueta: {error}",
   "routeDetailShareFailed": "No se pudo compartir {format}: {error}",
   "routeDetailClubsLoadTimeout": "No se pudieron cargar tus clubes — comprueba tu red.",
   "routeDetailClubsLoadFailed": "No se pudieron cargar tus clubes.",

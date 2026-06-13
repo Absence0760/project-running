@@ -673,6 +673,7 @@
   "routeDetailOfflineSaved": "オフライン用に保存しました。",
   "routeDetailOfflineRemoved": "オフライン保存から削除しました。",
   "routeDetailTagSaveFailed": "タグを保存できませんでした: {error}",
+  "routeDetailTagRemoveFailed": "タグを削除できませんでした: {error}",
   "routeDetailShareFailed": "{format} を共有できませんでした: {error}",
   "routeDetailClubsLoadTimeout": "クラブを読み込めませんでした — ネットワークを確認してください。",
   "routeDetailClubsLoadFailed": "クラブを読み込めませんでした。",

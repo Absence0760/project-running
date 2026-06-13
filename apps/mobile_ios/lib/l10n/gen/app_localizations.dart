@@ -4145,6 +4145,12 @@ abstract class AppLocalizations {
   /// **'Could not save tag: {error}'**
   String routeDetailTagSaveFailed(String error);
 
+  /// Banner shown when removing a route tag fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove tag: {error}'**
+  String routeDetailTagRemoveFailed(String error);
+
   /// Banner shown when sharing a route as a file fails
   ///
   /// In en, this message translates to:

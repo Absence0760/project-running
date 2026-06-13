@@ -2326,6 +2326,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'タグを削除できませんでした: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return '$format を共有できませんでした: $error';
   }

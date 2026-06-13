@@ -2483,6 +2483,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Impossible de supprimer l\'étiquette : $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return 'Impossible de partager $format : $error';
   }

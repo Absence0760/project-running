@@ -2481,6 +2481,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String routeDetailTagRemoveFailed(String error) {
+    return 'Tag konnte nicht entfernt werden: $error';
+  }
+
+  @override
   String routeDetailShareFailed(String format, String error) {
     return '$format konnte nicht geteilt werden: $error';
   }

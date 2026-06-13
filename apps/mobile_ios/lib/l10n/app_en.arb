@@ -2899,6 +2899,15 @@
       }
     }
   },
+  "routeDetailTagRemoveFailed": "Could not remove tag: {error}",
+  "@routeDetailTagRemoveFailed": {
+    "description": "Banner shown when removing a route tag fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeDetailShareFailed": "Could not share {format}: {error}",
   "@routeDetailShareFailed": {
     "description": "Banner shown when sharing a route as a file fails",
