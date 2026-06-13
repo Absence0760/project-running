@@ -160,8 +160,29 @@ function parseGpx(xml: string): ImportedRoute[] {
 	return routes;
 }
 
+/**
+ * Validate a GPX `lat`/`lon` attribute pair. Returns `null` for a
+ * missing or non-numeric coordinate so the caller can skip the point —
+ * matching the TCX / KML paths and the Dart twin. The old code coerced
+ * a missing attribute to `0`, inserting a phantom (0,0) "null island"
+ * waypoint that added ~8,600 km of bogus distance into and out of the
+ * Gulf of Guinea.
+ */
+export function validLatLon(
+	latAttr: string | null | undefined,
+	lonAttr: string | null | undefined,
+): { lat: number; lng: number } | null {
+	const lat = parseFloat(latAttr ?? '');
+	const lng = parseFloat(lonAttr ?? '');
+	if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+	return { lat, lng };
+}
+
 function toWaypoints(points: Element[]): TrackPoint[] {
-	return points.map((pt) => {
+	const out: TrackPoint[] = [];
+	for (const pt of points) {
+		const coord = validLatLon(pt.getAttribute('lat'), pt.getAttribute('lon'));
+		if (!coord) continue;
 		const ts = pt.querySelector('time')?.textContent?.trim() || undefined;
 		// Garmin's `gpxtpx:TrackPointExtension` puts `<hr>` under
 		// `<extensions>`; namespace prefixes vary by exporter so match
@@ -176,14 +197,15 @@ function toWaypoints(points: Element[]): TrackPoint[] {
 				if (Number.isFinite(v) && v >= 30 && v <= 230) bpm = v;
 			}
 		}
-		return {
-			lat: parseFloat(pt.getAttribute('lat') ?? '0'),
-			lng: parseFloat(pt.getAttribute('lon') ?? '0'),
+		out.push({
+			lat: coord.lat,
+			lng: coord.lng,
 			ele: parseEle(pt.querySelector('ele')?.textContent),
 			ts,
 			bpm,
-		};
-	});
+		});
+	}
+	return out;
 }
 
 /**
