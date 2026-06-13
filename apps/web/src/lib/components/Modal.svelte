@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		open: boolean;
@@ -87,7 +88,7 @@
 			<button
 				class="modal-close"
 				type="button"
-				aria-label="Close"
+				aria-label={m('modal.close')}
 				onclick={onclose}
 			>
 				<span class="material-symbols">close</span>

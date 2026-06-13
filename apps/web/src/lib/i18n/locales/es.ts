@@ -2134,6 +2134,8 @@ export const messages = {
 	"routeExplorer.tabSearch": "Buscar",
 	"routeExplorer.tabNearMe": "Cerca de mí",
 	"routeExplorer.searchPlaceholder": "Buscar rutas por nombre...",
+	"routeExplorer.clearSearch": "Borrar búsqueda",
+	"modal.close": "Cerrar",
 	"routeExplorer.sortMostRun": "Más recorridas",
 	"routeExplorer.sortNewest": "Más recientes",
 	"routeExplorer.sortFeatured": "Destacadas",

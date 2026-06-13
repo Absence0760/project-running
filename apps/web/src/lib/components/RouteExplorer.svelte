@@ -236,8 +236,13 @@
 			onkeydown={handleKeydown}
 		/>
 		{#if query}
-			<button class="clear-btn" onclick={() => { query = ''; search(); }}>
-				<span class="material-symbols">close</span>
+			<button
+				type="button"
+				class="clear-btn"
+				aria-label={t('routeExplorer.clearSearch')}
+				onclick={() => { query = ''; search(); }}
+			>
+				<span class="material-symbols" aria-hidden="true">close</span>
 			</button>
 		{/if}
 	</div>

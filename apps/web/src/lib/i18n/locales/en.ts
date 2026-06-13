@@ -2143,6 +2143,8 @@ export const en = {
 	"routeExplorer.tabSearch": "Search",
 	"routeExplorer.tabNearMe": "Near Me",
 	"routeExplorer.searchPlaceholder": "Search routes by name...",
+	"routeExplorer.clearSearch": "Clear search",
+	"modal.close": "Close",
 	"routeExplorer.sortMostRun": "Most run",
 	"routeExplorer.sortNewest": "Newest",
 	"routeExplorer.sortFeatured": "Featured",

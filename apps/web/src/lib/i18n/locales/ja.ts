@@ -2130,6 +2130,8 @@ export const messages = {
 	"routeExplorer.tabSearch": "検索",
 	"routeExplorer.tabNearMe": "近くの場所",
 	"routeExplorer.searchPlaceholder": "名前でルートを検索...",
+	"routeExplorer.clearSearch": "検索をクリア",
+	"modal.close": "閉じる",
 	"routeExplorer.sortMostRun": "よく走られている",
 	"routeExplorer.sortNewest": "新着",
 	"routeExplorer.sortFeatured": "おすすめ",
