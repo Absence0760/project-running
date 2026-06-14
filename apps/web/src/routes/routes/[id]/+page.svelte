@@ -14,6 +14,8 @@
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
+	import { describeRoute, localisedTemplate } from '$lib/routes/route_description';
+	import { requestAiDescription } from '$lib/routes/route_describe_client';
 	import { env } from '$env/dynamic/public';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Route } from '$lib/types';
@@ -93,6 +95,71 @@
 
 	let isOwner = $derived(route !== null && auth.user?.id === route.user_id);
 	let showReportDialog = $state(false);
+
+	// "Describe this route" affordance. The templated description is the
+	// always-works baseline (computed locally, no network); Pro users can
+	// enhance it into an AI-written paragraph. `genDescription` holds the
+	// generated text (separate from `route.description`, the stored one);
+	// `genSource` tracks whether it came from the model. State is reset
+	// when the route changes.
+	let genDescription = $state<string | null>(null);
+	let genSource = $state<'ai' | 'template' | null>(null);
+	let describing = $state(false);
+	let describeError = $state<string | null>(null);
+	let showUpgradeHint = $state(false);
+
+	/// Map the loaded route into the describer's input shape. Endpoints
+	/// come from the first/last displayed waypoint so loop detection works
+	/// for non-owners too (they get the clipped trace, which still starts
+	/// and ends at the route's real endpoints unless a privacy zone
+	/// clipped them — in which case point-to-point is the safe default).
+	function describeInput() {
+		const wps = displayWaypoints;
+		return {
+			name: route?.name ?? 'This route',
+			distanceM: route?.distance_m ?? 0,
+			elevationM: route?.elevation_m ?? null,
+			surface: route?.surface ?? null,
+			start: wps.length > 0 ? { lat: wps[0].lat, lng: wps[0].lng } : undefined,
+			end:
+				wps.length > 1
+					? { lat: wps[wps.length - 1].lat, lng: wps[wps.length - 1].lng }
+					: undefined,
+		};
+	}
+
+	/// Generate a description. Always shows the templated baseline first
+	/// (instant, offline), then — for Pro users — asks the server to
+	/// enhance it. A free user's request returns the templated text with
+	/// `upgrade:true`, which surfaces the Pro upsell. Any hard failure
+	/// (network / non-200) leaves the templated text in place and shows a
+	/// non-blocking error; the baseline is never lost.
+	async function describe() {
+		if (!route || describing) return;
+		describing = true;
+		describeError = null;
+		showUpgradeHint = false;
+		const input = describeInput();
+		const parts = describeRoute(input);
+		// L1 baseline: render the localised templated sentence immediately.
+		genDescription = localisedTemplate(parts, input.name, {
+			t: m,
+			formatDistance,
+		});
+		genSource = 'template';
+		try {
+			const ai = await requestAiDescription(input);
+			genDescription = ai.description;
+			genSource = ai.source;
+			showUpgradeHint = ai.upgrade;
+		} catch (_) {
+			// Keep the templated baseline already shown; flag the failure
+			// without clobbering the description.
+			describeError = m('routeDetail.describeFailed');
+		} finally {
+			describing = false;
+		}
+	}
 
 	async function addTag() {
 		if (!route) return;
@@ -395,6 +462,33 @@
 					</div>
 					{#if route.description}
 						<p class="route-description">{route.description}</p>
+					{:else if genDescription}
+						<p class="route-description">{genDescription}</p>
+						{#if genSource === 'ai'}
+							<p class="desc-attribution">
+								<span class="material-symbols">auto_awesome</span>
+								{m('routeDetail.aiAttribution')}
+							</p>
+						{/if}
+						{#if showUpgradeHint}
+							<p class="desc-upgrade">
+								{m('routeDetail.enhanceUpgradeHint')}
+								<a href="/settings/upgrade">{m('routeDetail.enhanceAi')}</a>
+							</p>
+						{/if}
+						{#if describeError}
+							<p class="desc-error" role="alert">{describeError}</p>
+						{/if}
+					{:else}
+						<button
+							type="button"
+							class="describe-btn"
+							onclick={describe}
+							disabled={describing}
+						>
+							<span class="material-symbols">auto_awesome</span>
+							{describing ? m('routeDetail.describing') : m('routeDetail.describe')}
+						</button>
 					{/if}
 					{#if (route.tags && route.tags.length > 0) || isOwner}
 						<div class="tags-row">
@@ -939,6 +1033,59 @@
 		font-size: 0.92rem;
 		line-height: 1.5;
 		white-space: pre-wrap;
+	}
+
+	.describe-btn {
+		margin-top: var(--space-sm);
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs, 0.25rem);
+		padding: var(--space-2xs, 0.3rem) var(--space-sm);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		background: var(--color-surface-2, var(--color-surface));
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm, 6px);
+		cursor: pointer;
+	}
+	.describe-btn:hover:not(:disabled) {
+		color: var(--color-text);
+		border-color: var(--color-text-secondary);
+	}
+	.describe-btn:disabled {
+		opacity: 0.6;
+		cursor: default;
+	}
+	.describe-btn .material-symbols {
+		font-size: 1.1rem;
+	}
+
+	.desc-attribution {
+		margin: var(--space-2xs, 0.25rem) 0 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs, 0.25rem);
+		color: var(--color-text-tertiary, var(--color-text-secondary));
+		font-size: 0.78rem;
+	}
+	.desc-attribution .material-symbols {
+		font-size: 0.95rem;
+	}
+
+	.desc-upgrade {
+		margin: var(--space-2xs, 0.25rem) 0 0;
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+	.desc-upgrade a {
+		color: var(--color-primary, var(--color-accent, inherit));
+		font-weight: 600;
+	}
+
+	.desc-error {
+		margin: var(--space-2xs, 0.25rem) 0 0;
+		font-size: 0.8rem;
+		color: var(--color-error, #dc2626);
 	}
 
 	.actions {

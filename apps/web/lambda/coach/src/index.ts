@@ -18,6 +18,7 @@ import type { LambdaFunctionURLEvent } from 'aws-lambda';
 import { Buffer } from 'node:buffer';
 import { handleCoach } from '../../../src/lib/coach/handler';
 import type { CoachConfig } from '../../../src/lib/coach/types';
+import { handleRouteDescribe } from '../../../src/lib/routes/route_describe/handler';
 
 // Provided by the Node.js managed Lambda runtime; declared inline
 // because @types/aws-lambda doesn't ship a definition for it (the API
@@ -58,6 +59,18 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	// whole handler so the operator-facing error stays in the logs
 	// while the client gets a generic 503.
 	try {
+		// CloudFront routes the whole `/api/coach/*` prefix to this
+		// Function URL. The route-describe sub-path is a separate,
+		// non-streaming handler (a Pro perk that enhances a route
+		// description, with a templated fallback) — dispatch it before
+		// the coach provider check so an unconfigured COACH_PROVIDER
+		// doesn't 503 a route-describe request.
+		const rawPath = event.rawPath ?? '';
+		if (rawPath.includes('/route-describe')) {
+			await dispatchRouteDescribe(event, responseStream);
+			return;
+		}
+
 		const provider = (process.env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
 		if (provider !== 'anthropic' && provider !== 'openai') {
 			console.error(`[coach lambda] invalid COACH_PROVIDER value: '${provider}'`);
@@ -161,6 +174,43 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	}
 	},
 );
+
+// Route-describe sub-handler. Non-streaming (one short paragraph), so
+// it always writes a single JSON response. `bypassPaywallEnabled:
+// false` is hard-coded for the same reason as the coach config — the
+// production Lambda must never honour the dev paywall bypass.
+async function dispatchRouteDescribe(
+	event: LambdaFunctionURLEvent,
+	responseStream: ResponseStream,
+): Promise<void> {
+	const decoded = decodeLambdaBody(
+		event.body,
+		event.isBase64Encoded === true,
+		32 * 1024,
+	);
+	if (!decoded.ok) {
+		writeJson(responseStream, decoded.status, { error: decoded.error });
+		return;
+	}
+	let rawBody: unknown;
+	try {
+		rawBody = decoded.body ? JSON.parse(decoded.body) : null;
+	} catch {
+		writeJson(responseStream, 400, { error: 'invalid JSON' });
+		return;
+	}
+	const authHeader =
+		event.headers?.['x-supabase-authorization'] ??
+		event.headers?.['X-Supabase-Authorization'] ??
+		null;
+	const result = await handleRouteDescribe(authHeader, rawBody, {
+		anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+		publicSupabaseUrl: requireEnv('PUBLIC_SUPABASE_URL'),
+		publicSupabaseAnonKey: requireEnv('PUBLIC_SUPABASE_ANON_KEY'),
+		bypassPaywallEnabled: false,
+	});
+	writeJson(responseStream, result.status, JSON.parse(result.body));
+}
 
 function writeJson(responseStream: ResponseStream, status: number, body: unknown): void {
 	const stream = awslambda.HttpResponseStream.from(responseStream, {

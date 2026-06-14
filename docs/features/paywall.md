@@ -40,6 +40,18 @@ What the Pro tier changes:
   helper; that's the next planned widening when individual functions
   get hot.
 
+- **AI route descriptions.** On a route's detail page, every user can
+  tap "Describe this route" to get an instant, offline templated
+  description built from the route's stats (`localisedTemplate` in
+  `$lib/routes/route_description.ts`). Pro users' tap additionally calls
+  `/api/coach/route-describe`, which asks Claude (`claude-opus-4-8`,
+  adaptive thinking) to turn those facts into a richer paragraph. The
+  gate is server-side (`is_pro()`, fail-closed) and the enhancement is
+  L4-additive: a free caller, a missing key, a model error/refusal, or a
+  timeout all degrade to the templated text, so the affordance never
+  breaks. A free user's response carries `upgrade:true`, which surfaces a
+  one-line "Enhance with AI (Pro)" upsell linking to `/settings/upgrade`.
+
 `/settings/upgrade` shows a two-card layout: a Pro plan card
 ($9.99 / month, feature bullets, "Get Pro" CTA) and a one-off Donate
 button that links to an external payment provider. The transparent
@@ -83,6 +95,7 @@ flow requires an admin SQL session; from a client there is no way.
 |---|---|---|
 | Higher AI Coach daily cap (10/day vs 2/day) | `ai_coach` | Server: `apps/web/src/lib/coach/handler.ts` checks `is_pro()` via the auth context, resolves `TIER_LIMITS[tier].dailyLimit`, and runs the same `increment_coach_usage` + `usedToday > dailyLimit` gate for both tiers. A free user's 3rd attempt of a UTC day returns 429 with `{ error: 'daily_limit', tier: 'free', limit: 2 }`; a Pro user's 11th attempt returns 429 with `{ error: 'daily_limit', tier: 'pro', limit: 10 }`. Client: `CoachChat.svelte` reads back the tier and limit from the SSE `meta` event and shows the "Free badge · N of 2 remaining" or "Pro badge · N of 10 remaining · priority context window" footer. The composer is replaced with a `.limit-bar` block when `usedToday >= dailyLimit`. |
 | Priority processing — coach context | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 75-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
+| AI route description | _(no key — perk, not gate)_ | Server: `apps/web/src/lib/routes/route_describe/handler.ts` verifies the JWT, gates on `is_pro()` (fail-closed: an RPC error or a free caller serves the templated text, never the model), then calls `claude-opus-4-8` (adaptive thinking, 400-token cap, 12 s timeout). Reached via `/api/coach/route-describe` (dev `+server.ts`; prod routed inside the coach Lambda by `rawPath.includes('/route-describe')`). Every failure mode — not-Pro, missing `ANTHROPIC_API_KEY`, model error, `stop_reason:'refusal'`, empty completion, timeout — returns 200 with `{ description: <templated>, source: 'template' }`; a free caller also gets `upgrade:true`. Client: `/routes/[id]` renders `localisedTemplate` instantly, then swaps in the AI text on a `source:'ai'` 200 with an `auto_awesome` attribution. |
 | Priority map-matching | `priority_processing` | DB: every enqueue site for `kind='map_match'` jobs (the auto-trigger `runs_enqueue_match_job` and the manual-rematch RPC `enqueue_run_rematch`) calls `job_scheduled_at_for_user(uuid)` from migration `20260730_001`. Pro / lifetime → `now()` (front of queue); free → `now() + 30 s` (defers behind Pro). The worker's `claim_next_job` orders by `(scheduled_at, id)` so Pro jobs are always claimable strictly before free jobs enqueued at the same instant. **Future job kinds follow the same pattern** — call the helper at enqueue time; don't inline `case ... subscription_tier ...`. See [decisions.md § 57](../architecture/decisions.md#57-map-matching-is-free-queue-priority-is-the-pro-perk). |
 
 `PRO_ONLY_FEATURES` in `features.ts` is empty today — every screen is
