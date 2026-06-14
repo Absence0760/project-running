@@ -38,7 +38,9 @@ import type {
 	NotificationKind,
 	GymSetType,
 	GymExerciseModality,
-	GymProgressionScheme
+	GymProgressionScheme,
+	RouteMarker,
+	RouteMarkerKind
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -2445,11 +2447,13 @@ export async function clearRsvp(eventId: string, instanceStart: string): Promise
 export async function markAttendance(
 	eventId: string,
 	userId: string,
+	instanceStart: string,
 	attendance: EventAttendance | null
 ): Promise<void> {
 	const { error } = await supabase.rpc('mark_attendance', {
 		p_event_id: eventId,
 		p_user_id: userId,
+		p_instance_start: instanceStart,
 		p_attendance: attendance
 	});
 	if (error) throw error;
@@ -5138,6 +5142,80 @@ export async function updateRoutePhotoCaption(
 		.from(TABLES.route_photos)
 		.update({ caption: trimmed })
 		.eq('id', photoId);
+	if (error) throw error;
+}
+
+// --- Route course markers (migration 20270129_001) ---
+
+function asRouteMarker(row: Record<string, unknown>): RouteMarker {
+	return {
+		...row,
+		meta: (row.meta as Record<string, unknown>) ?? {}
+	} as RouteMarker;
+}
+
+/// Course markers for a route, ordered by distance along the line. Reads
+/// through `route_markers_for_viewer`, which gates visibility (owner /
+/// public / club member) AND redacts any marker inside the owner's privacy
+/// zones for a non-owner — the marker analogue of `clip_route_for_viewer`.
+/// Fails closed (empty list) on error so a redaction failure never leaks.
+export async function fetchRouteMarkers(routeId: string): Promise<RouteMarker[]> {
+	const { data, error } = await supabase.rpc('route_markers_for_viewer', {
+		p_route_id: routeId
+	});
+	if (error) {
+		console.warn('route_markers_for_viewer failed; failing closed (no markers)', error);
+		return [];
+	}
+	return ((data ?? []) as Record<string, unknown>[]).map(asRouteMarker);
+}
+
+export async function addRouteMarker(input: {
+	route_id: string;
+	kind: RouteMarkerKind;
+	label: string;
+	lat: number;
+	lng: number;
+	meta?: Record<string, unknown>;
+}): Promise<RouteMarker> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const { data, error } = await supabase
+		.from(TABLES.route_markers)
+		.insert({
+			route_id: input.route_id,
+			user_id: userId,
+			kind: input.kind,
+			label: input.label.trim(),
+			lat: input.lat,
+			lng: input.lng,
+			meta: input.meta ?? {}
+		})
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('Insert failed');
+	return asRouteMarker(data);
+}
+
+export async function updateRouteMarker(
+	id: string,
+	patch: { kind?: RouteMarkerKind; label?: string; lat?: number; lng?: number; meta?: Record<string, unknown> }
+): Promise<void> {
+	const update: Record<string, unknown> = {};
+	if (patch.kind !== undefined) update.kind = patch.kind;
+	if (patch.label !== undefined) update.label = patch.label.trim();
+	if (patch.lat !== undefined) update.lat = patch.lat;
+	if (patch.lng !== undefined) update.lng = patch.lng;
+	if (patch.meta !== undefined) update.meta = patch.meta;
+	if (Object.keys(update).length === 0) return;
+
+	const { error } = await supabase.from(TABLES.route_markers).update(update).eq('id', id);
+	if (error) throw error;
+}
+
+export async function deleteRouteMarker(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.route_markers).delete().eq('id', id);
 	if (error) throw error;
 }
 

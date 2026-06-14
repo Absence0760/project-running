@@ -6,6 +6,7 @@ import type { EventGymTemplate } from './social/event_gym_template';
 
 type RunRow = Database['public']['Tables']['runs']['Row'];
 type RouteRow = Database['public']['Tables']['routes']['Row'];
+type RouteMarkerRow = Database['public']['Tables']['route_markers']['Row'];
 type IntegrationRow = Database['public']['Tables']['integrations']['Row'];
 type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
 type ClubRow = Database['public']['Tables']['clubs']['Row'];
@@ -74,6 +75,24 @@ export type Route = Omit<RouteRow, 'waypoints' | 'surface'> & {
 
 export type Integration = Omit<IntegrationRow, 'provider'> & {
 	provider: IntegrationProvider;
+};
+
+// Course markers on a route (migration 20270129_001). `kind` is the narrow
+// union enforced by the CHECK constraint + check_constraint_unions.mjs;
+// `meta` is a loose bag whose per-kind keys (services, cutoff_clock,
+// cutoff_elapsed_s, note, …) are documented in docs/features/route_markers.md.
+export type RouteMarkerKind =
+	| 'aid_station'
+	| 'cutoff'
+	| 'crew_access'
+	| 'hazard'
+	| 'note'
+	| 'climb'
+	| 'custom';
+
+export type RouteMarker = Omit<RouteMarkerRow, 'kind' | 'meta'> & {
+	kind: RouteMarkerKind;
+	meta: Record<string, unknown>;
 };
 
 export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_tier'> & {

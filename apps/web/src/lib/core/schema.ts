@@ -42,6 +42,7 @@ export const TABLES = {
 	event_results: 'event_results',
 	route_reviews: 'route_reviews',
 	route_photos: 'route_photos',
+	route_markers: 'route_markers',
 	run_kudos: 'run_kudos',
 	run_comments: 'run_comments',
 	run_photos: 'run_photos',
