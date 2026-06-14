@@ -47,3 +47,13 @@ test('weeklyIntakeSummary: rounds a fractional average', () => {
 	assert.equal(s.avgCalories, 2001); // round(4001/2) = round(2000.5) = 2001
 	assert.equal(s.deltaPerDay, 1);
 });
+
+test('weeklyIntakeSummary: a fractional target yields a whole-number delta (twin parity)', () => {
+	// Regression: subtracting an un-rounded fractional target produced a long
+	// decimal (e.g. -100.40000000000009) that the week chip rendered raw, and
+	// diverged from the Dart twin which rounds the target. The delta must be an
+	// integer on both platforms.
+	const s = weeklyIntakeSummary([2200], 2300.4);
+	assert.equal(s.deltaPerDay, -100);
+	assert.equal(Number.isInteger(s.deltaPerDay), true);
+});
