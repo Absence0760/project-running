@@ -136,6 +136,154 @@ test('replanRemaining: several missed long runs make up the LARGEST, not the ear
 	assert.equal(r.changes.filter((c) => c.reason === 'make_up_long').length, 1);
 });
 
+test('replanRemaining: largest missed long wins even when it is the EARLIEST week', () => {
+	// Mirror image of the previous case — the largest miss now iterates
+	// first. The result must be identical: order must not matter.
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 44_000,
+			actualMetres: 22_000,
+			isComplete: true,
+			workouts: [wo('big', '2026-06-01', 'long', 30_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('small', '2026-06-08', 'long', 24_000, { isPast: true })],
+		},
+		{
+			weekIndex: 2,
+			phase: 'build',
+			plannedMetres: 46_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-15', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-12' });
+	const makeUp = r.changes.find((c) => c.workoutId === 'next');
+	assert.equal(makeUp?.toMetres, Math.round(22_000 * (1 + MAKE_UP_MAX_INCREASE)));
+	assert.equal(r.changes.filter((c) => c.reason === 'make_up_long').length, 1);
+});
+
+test('replanRemaining: when the largest miss is under the cap the make-up reaches it exactly', () => {
+	// Largest miss 24 km < cap (22 km * 1.15 = 25.3 km), so the make-up lands
+	// ON the largest miss — proving the max feeds Math.min, not the cap, and
+	// not the smaller/earlier 20 km miss.
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('small', '2026-06-01', 'long', 20_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 42_000,
+			actualMetres: 21_000,
+			isComplete: true,
+			workouts: [wo('mid', '2026-06-08', 'long', 24_000, { isPast: true })],
+		},
+		{
+			weekIndex: 2,
+			phase: 'build',
+			plannedMetres: 44_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-15', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-12' });
+	const makeUp = r.changes.find((c) => c.workoutId === 'next');
+	assert.equal(makeUp?.toMetres, 24_000);
+});
+
+test('replanRemaining: a taper miss is excluded from the make-up max even if it is the largest', () => {
+	// The 35 km taper miss gets "skip" advice → it must NOT drive the make-up.
+	// Only the 23 km build miss is eligible, and it is under the cap, so the
+	// next long lands on 23 km — not the taper's 35 km (which the cap would
+	// otherwise mask as 25.3 km).
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('build-miss', '2026-06-01', 'long', 23_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'taper',
+			plannedMetres: 38_000,
+			actualMetres: 10_000,
+			isComplete: true,
+			workouts: [wo('taper-miss', '2026-06-08', 'long', 35_000, { isPast: true })],
+		},
+		{
+			weekIndex: 2,
+			phase: 'build',
+			plannedMetres: 42_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-15', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-12' });
+	const makeUp = r.changes.find((c) => c.workoutId === 'next');
+	assert.equal(makeUp?.toMetres, 23_000);
+});
+
+test('replanRemaining: three missed longs still produce exactly one capped make-up', () => {
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 36_000,
+			actualMetres: 18_000,
+			isComplete: true,
+			workouts: [wo('m1', '2026-06-01', 'long', 18_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 44_000,
+			actualMetres: 22_000,
+			isComplete: true,
+			workouts: [wo('m2', '2026-06-08', 'long', 31_000, { isPast: true })],
+		},
+		{
+			weekIndex: 2,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('m3', '2026-06-15', 'long', 24_000, { isPast: true })],
+		},
+		{
+			weekIndex: 3,
+			phase: 'build',
+			plannedMetres: 46_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-22', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-19' });
+	const makeUps = r.changes.filter((c) => c.reason === 'make_up_long');
+	assert.equal(makeUps.length, 1);
+	// Largest miss is 31 km → capped to 22 km * 1.15.
+	assert.equal(makeUps[0].toMetres, Math.round(22_000 * (1 + MAKE_UP_MAX_INCREASE)));
+});
+
 test('replanRemaining: a missed long run in the TAPER is skipped, never made up', () => {
 	const weeks: ReplanWeek[] = [
 		{
