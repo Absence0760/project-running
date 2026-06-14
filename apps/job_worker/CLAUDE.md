@@ -180,6 +180,9 @@ apps/job_worker/
 │   ├── unsubscribe/         # unauth RFC 8058 one-click opt-out endpoint (/unsubscribe/weekly-digest)
 │   │   ├── server.go        # verify token → flip pref off + insert suppression; fail-closed on bad/missing token
 │   │   └── server_test.go   # 10 tests: valid GET/POST / bad / missing / cross-user / no-secret 503 / no-address / 500
+│   ├── bouncehook/          # provider bounce/complaint webhook (POST /v1/email/bounce → email_suppressions)
+│   │   ├── server.go        # shared-secret + rate-limited; classify Resend/SES event → suppress hard bounce + complaint (soft bounce no-op)
+│   │   └── server_test.go   # 16 tests: resend/ses bounce+complaint / soft-bounce no-op / dedupe / 503 / 403 / 405 / 400 / 500 / classify branches
 │   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload
 │   ├── handler_strava_event_test.go # 10 tests on the ingest dispatch
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests

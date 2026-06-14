@@ -111,12 +111,16 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
   `WEEKLY_DIGEST_UNSUB_SECRET`). **NOT enabled:** the builder is
   **UNSCHEDULED** — no `pg_cron` ships (no marketing send fires). The **opt-in
   preference toggle** ships on web `/settings/preferences` + mobile Settings →
-  Preferences (default off). Enabling an actual send (wiring the builder's
-  `pg_cron`) is **gated on CISO + counsel sign-off** (bulk/promotional mail
-  under CAN-SPAM + GDPR/ePrivacy, unlike the transactional kinds). Still
-  outstanding for an enabled send: **bounce/complaint suppression** ingest (the
-  `email_suppressions` table exists; the provider webhook that writes
-  `bounce`/`complaint` rows is not built).
+  Preferences (default off). The **provider bounce/complaint suppression
+  webhook** is now built (`POST /v1/email/bounce`, worker
+  `internal/bouncehook/` — parses Resend event JSON / SES-over-SNS
+  notifications, writes a `bounce`/`complaint` row to `email_suppressions` per
+  affected address, soft bounces are a no-op; shared-secret authed +
+  rate-limited like the Strava hook, gated on `EMAIL_BOUNCE_WEBHOOK_SECRET`
+  unset → 503). Enabling an actual send (wiring the builder's `pg_cron`) is
+  **gated on CISO + counsel sign-off** (bulk/promotional mail under CAN-SPAM +
+  GDPR/ePrivacy, unlike the transactional kinds) — the only remaining work for
+  an enabled send is that operator-side `pg_cron` schedule + the sign-off.
 - [ ] **Lifecycle drip** (engagement) — re-engagement, onboarding drip,
   streak/goal nudges. Reuse the `lifecycle_email` kind + the digest's opt-in /
   suppression / unsubscribe rails. Not built. Same CISO/counsel gate.
@@ -163,8 +167,11 @@ None of this sends in prod until an operator:
    jobs finish done while leaving the notification rows pending.
 3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
    spam-filed.
-4. (Before any **bulk/engagement** mail) RFC 8058 one-click unsubscribe +
-   bounce/complaint suppression.
+4. (Before any **bulk/engagement** mail) the RFC 8058 one-click unsubscribe
+   endpoint (set `WEEKLY_DIGEST_UNSUB_SECRET`) + the bounce/complaint
+   suppression webhook (set `EMAIL_BOUNCE_WEBHOOK_SECRET`, ≥32 chars, and point
+   the provider's bounce/complaint webhook at `POST /v1/email/bounce?secret=…`).
+   Both are built behind their secrets; unset → the endpoints return 503.
 
 ## Where the code lives
 
@@ -175,8 +182,10 @@ None of this sends in prod until an operator:
   (pref gate + payload), and the `internal/webpush/` RFC 8291/8292 sender.
   Weekly digest (behind the gate): `handler_weekly_digest.go` (gate + render),
   `digest_builder.go` (`EnqueueAllWeeklyDigests` — UNSCHEDULED),
-  `internal/digesttoken/` (the stateless RFC 8058 HMAC token), and
-  `internal/unsubscribe/` (the unauth `/unsubscribe/weekly-digest` endpoint).
+  `internal/digesttoken/` (the stateless RFC 8058 HMAC token),
+  `internal/unsubscribe/` (the unauth `/unsubscribe/weekly-digest` endpoint),
+  and `internal/bouncehook/` (the provider bounce/complaint webhook at
+  `POST /v1/email/bounce` that writes `bounce`/`complaint` suppression rows).
 - Migrations: `20261130_001` (notification channel + reminders), `20261202_001`
   (welcome), `20261203_001` (subscription emails), `20261218_001` (safety
   contacts + the `safety_email` kind), `20261219_001` (web-push channel + the
