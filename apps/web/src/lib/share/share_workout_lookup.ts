@@ -10,6 +10,7 @@
 /// what the owner already chose to make public.
 
 import { createClient } from '@supabase/supabase-js';
+import { TABLES } from '../core/schema';
 
 export interface SharedWorkoutSet {
 	set_index: number;
@@ -57,7 +58,7 @@ export async function lookupSharedWorkout(
 		// non-public id resolves to "not found" rather than relying on RLS to
 		// blank the row.
 		const { data: workout } = await supabase
-			.from('gym_workouts')
+			.from(TABLES.gym_workouts)
 			.select('id, user_id, title, started_at, set_count, volume_kg, is_public')
 			.eq('id', id)
 			.eq('is_public', true)
@@ -65,7 +66,7 @@ export async function lookupSharedWorkout(
 		if (!workout) return { workout: null, displayName: null };
 
 		const { data: sets } = await supabase
-			.from('gym_sets')
+			.from(TABLES.gym_sets)
 			.select('set_index, exercise_name, reps, weight_kg, duration_s')
 			.eq('workout_id', id)
 			.order('set_index', { ascending: true });

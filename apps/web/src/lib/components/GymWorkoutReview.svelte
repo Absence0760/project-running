@@ -243,11 +243,11 @@
 		border-radius: var(--radius-sm);
 	}
 	.verdict-completed {
-		color: var(--color-success-strong);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 		background: var(--color-success-light);
 	}
 	.verdict-partial {
-		color: var(--color-warning-strong);
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		background: var(--color-warning-light, rgba(230, 169, 107, 0.16));
 	}
 	.verdict-abandoned {
@@ -293,11 +293,11 @@
 		font-size: 0.9rem;
 	}
 	.status-hit {
-		color: var(--color-success-strong);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 		background: var(--color-success-light);
 	}
 	.status-partial {
-		color: var(--color-warning-strong);
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		background: var(--color-warning-light, rgba(230, 169, 107, 0.16));
 	}
 	.status-missed {

@@ -2109,7 +2109,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2xs);
-		padding-left: var(--space-lg);
+		padding-inline-start: var(--space-lg);
 		margin: 0;
 	}
 	.session-steps li {
@@ -2455,7 +2455,7 @@
 		font-size: 1.15rem;
 	}
 	.register-status.registered {
-		color: var(--color-success-strong);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.register-status.closed {
 		color: var(--color-text-tertiary);

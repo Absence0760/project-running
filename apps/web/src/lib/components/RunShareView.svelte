@@ -214,7 +214,7 @@
 		background: none;
 		border: none;
 		padding: 0.15rem;
-		margin-left: 0.1rem;
+		margin-inline-start: 0.1rem;
 		color: var(--color-text-tertiary);
 		cursor: pointer;
 		border-radius: var(--radius-sm);

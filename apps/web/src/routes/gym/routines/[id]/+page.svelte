@@ -327,11 +327,11 @@
 		max-width: 24rem;
 	}
 	.set-table th {
-		text-align: left;
-		padding-right: var(--space-md);
+		text-align: start;
+		padding-inline-end: var(--space-md);
 	}
 	.set-table td {
-		padding-right: var(--space-md);
+		padding-inline-end: var(--space-md);
 	}
 	.not-found {
 		color: var(--text-muted);

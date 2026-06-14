@@ -1738,22 +1738,28 @@ test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
 	const heatmap = read('src/lib/components/CalendarHeatmap.svelte');
 	const train = read('src/lib/components/TrainingLoadChart.svelte');
 	const map = read('src/lib/components/RunMap.svelte');
+	// CalendarHeatmap + TrainingLoadChart + RunMap had their accessible
+	// names extracted into the i18n catalogue, so assert the labelled-
+	// landmark wiring (via the m()/t() key) plus the English copy that
+	// names each.
 	assert.match(
 		heatmap,
-		/<svg[^>]*role="img"[^>]*aria-label="Activity calendar heatmap"/s,
+		/<svg[^>]*role="img"[^>]*aria-label=\{m\('calendarHeatmap\.label'\)\}/s,
 		'CalendarHeatmap.svelte <svg> must carry role="img" + an ' +
-			'aria-label.',
+			'aria-label (calendarHeatmap.label).',
 	);
-	// TrainingLoadChart + RunMap had their accessible names extracted
-	// into the i18n catalogue, so assert the labelled-landmark wiring
-	// (via the m()/t() key) plus the English copy that names each.
+	const en = read('src/lib/i18n/locales/en.ts');
+	assert.match(
+		en,
+		/"calendarHeatmap\.label":\s*"Activity calendar heatmap"/,
+		'calendarHeatmap.label copy must name the activity heatmap.',
+	);
 	assert.match(
 		train,
 		/<svg[^>]*role="img"[^>]*aria-label=\{t\('trainingLoad\.chartAriaLabel'\)\}/s,
 		'TrainingLoadChart.svelte <svg> must carry role="img" + an ' +
 			'aria-label that names the chart.',
 	);
-	const en = read('src/lib/i18n/locales/en.ts');
 	assert.match(
 		en,
 		/"trainingLoad\.chartAriaLabel":\s*"Training load chart/,

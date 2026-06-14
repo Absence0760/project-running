@@ -141,7 +141,7 @@
 		font-family: 'Material Symbols Outlined';
 	}
 	.status-ready {
-		color: var(--color-success-strong);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.status-warn {
 		color: var(--color-warning, var(--color-danger));

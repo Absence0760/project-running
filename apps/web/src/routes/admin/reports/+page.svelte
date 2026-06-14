@@ -278,7 +278,7 @@
 		font-size: 0.9rem;
 	}
 	th {
-		text-align: left;
+		text-align: start;
 		padding: var(--space-sm);
 		color: var(--color-text-secondary);
 		font-weight: 600;
@@ -301,7 +301,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
 		color: var(--color-text-secondary);
-		margin-right: 0.4rem;
+		margin-inline-end: 0.4rem;
 	}
 	.target-link {
 		font-family: var(--font-mono, monospace);

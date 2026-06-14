@@ -405,7 +405,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-xs);
-		padding-left: var(--space-lg);
+		padding-inline-start: var(--space-lg);
 	}
 	.steps li {
 		display: flex;

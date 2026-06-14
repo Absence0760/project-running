@@ -152,10 +152,10 @@
 		display: inline-block;
 		width: 0.85em;
 		height: 0.85em;
-		margin-right: 0.4rem;
+		margin-inline-end: 0.4rem;
 		vertical-align: -0.1em;
 		border: 2px solid currentColor;
-		border-right-color: transparent;
+		border-inline-end-color: transparent;
 		border-radius: 50%;
 		animation: confirm-spin 0.6s linear infinite;
 	}

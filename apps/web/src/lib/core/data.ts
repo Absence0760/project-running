@@ -3847,7 +3847,7 @@ export async function fetchRelinkCandidateRuns(
 	const loIso = new Date(schedMs - bufferMs).toISOString();
 	const hiIso = new Date(schedMs + bufferMs).toISOString();
 	let runQuery = supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('id, started_at, distance_m, duration_s')
 		.eq('user_id', userId);
 	runQuery = currentRunId
