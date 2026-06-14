@@ -899,6 +899,7 @@
   "discoverPaid": "Payant",
   "discoverLoading": "Recherche…",
   "discoverEmpty": "Aucune activité publique ne correspond à ces filtres pour l'instant.",
+  "discoverSearchFailed": "Impossible de charger les activités. Vérifiez votre connexion et réessayez.",
   "clubsTitle": "Clubs",
   "clubsFindPeople": "Trouver des gens",
   "clubsNewClub": "Nouveau club",

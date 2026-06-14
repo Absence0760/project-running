@@ -899,6 +899,7 @@
   "discoverPaid": "有料",
   "discoverLoading": "検索中…",
   "discoverEmpty": "この条件に一致する公開アクティビティはまだありません。",
+  "discoverSearchFailed": "アクティビティを読み込めませんでした。接続を確認してもう一度お試しください。",
   "clubsTitle": "クラブ",
   "clubsFindPeople": "ユーザーを探す",
   "clubsNewClub": "新しいクラブ",

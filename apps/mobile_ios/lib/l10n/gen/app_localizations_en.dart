@@ -3271,6 +3271,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discoverEmpty => 'No public activities match these filters yet.';
 
   @override
+  String get discoverSearchFailed =>
+      'Couldn\'t load activities. Check your connection and try again.';
+
+  @override
   String get clubsTitle => 'Clubs';
 
   @override

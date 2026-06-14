@@ -3104,6 +3104,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get discoverEmpty => 'この条件に一致する公開アクティビティはまだありません。';
 
   @override
+  String get discoverSearchFailed => 'アクティビティを読み込めませんでした。接続を確認してもう一度お試しください。';
+
+  @override
   String get clubsTitle => 'クラブ';
 
   @override

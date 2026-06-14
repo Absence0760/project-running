@@ -3295,6 +3295,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Nenhuma atividade pública corresponde a esses filtros ainda.';
 
   @override
+  String get discoverSearchFailed =>
+      'Não foi possível carregar as atividades. Verifique sua conexão e tente novamente.';
+
+  @override
   String get clubsTitle => 'Clubes';
 
   @override
@@ -12001,6 +12005,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get discoverEmpty =>
       'Nenhuma atividade pública corresponde a esses filtros ainda.';
+
+  @override
+  String get discoverSearchFailed =>
+      'Não foi possível carregar as atividades. Verifique sua conexão e tente novamente.';
 
   @override
   String get clubsTitle => 'Clubes';

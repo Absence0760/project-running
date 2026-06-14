@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
+import '../widgets/error_state.dart';
 import 'event_detail_screen.dart';
 
 /// Cross-club activity discovery — the Social hub's Discover tab. Mirrors
@@ -46,6 +47,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   String _paid = '';
 
   bool _loading = true;
+  bool _error = false;
   List<PublicEventResult> _results = const [];
 
   @override
@@ -68,7 +70,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Future<void> _run() async {
     final gen = ++_searchGen;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
     try {
       final next = await widget.api.searchPublicEvents(
         query: _query.trim().isEmpty ? null : _query.trim(),
@@ -87,6 +92,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       if (!mounted || gen != _searchGen) return;
       setState(() {
         _results = const [];
+        _error = true;
         _loading = false;
       });
     }
@@ -310,6 +316,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       color: theme.colorScheme.onSurfaceVariant)),
             ],
           ),
+        ),
+      );
+    } else if (_error) {
+      resultsArea = Padding(
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+        child: ErrorState(
+          message: l10n.discoverSearchFailed,
+          onRetry: _run,
         ),
       );
     } else if (_results.isEmpty) {

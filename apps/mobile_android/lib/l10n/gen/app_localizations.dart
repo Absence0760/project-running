@@ -5501,6 +5501,12 @@ abstract class AppLocalizations {
   /// **'No public activities match these filters yet.'**
   String get discoverEmpty;
 
+  /// Discover tab — error state shown when the activity search fails (distinct from the empty state)
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load activities. Check your connection and try again.'**
+  String get discoverSearchFailed;
+
   /// AppBar title for the standalone clubs screen
   ///
   /// In en, this message translates to:

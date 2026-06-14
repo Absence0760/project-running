@@ -3307,6 +3307,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucune activité publique ne correspond à ces filtres pour l\'instant.';
 
   @override
+  String get discoverSearchFailed =>
+      'Impossible de charger les activités. Vérifiez votre connexion et réessayez.';
+
+  @override
   String get clubsTitle => 'Clubs';
 
   @override

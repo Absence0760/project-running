@@ -3999,6 +3999,10 @@
   "@discoverEmpty": {
     "description": "Discover tab — empty state when no events match the filters"
   },
+  "discoverSearchFailed": "Couldn't load activities. Check your connection and try again.",
+  "@discoverSearchFailed": {
+    "description": "Discover tab — error state shown when the activity search fails (distinct from the empty state)"
+  },
   "clubsTitle": "Clubs",
   "@clubsTitle": {
     "description": "AppBar title for the standalone clubs screen"

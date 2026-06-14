@@ -39,6 +39,25 @@ class _FakeApi extends ApiClient {
   }
 }
 
+class _ThrowingApi extends ApiClient {
+  // Throws until `failing` is flipped false, so a test can simulate recovery.
+  bool failing = true;
+
+  @override
+  Future<List<PublicEventResult>> searchPublicEvents({
+    String? query,
+    String? category,
+    String? cadence,
+    String? byday,
+    String? paid,
+    String? time,
+    int limit = 60,
+  }) async {
+    if (failing) throw Exception('simulated failure');
+    return const [];
+  }
+}
+
 PublicEventResult _ev({
   String id = 'ev1',
   String title = 'Sunday Long Run',
@@ -188,6 +207,42 @@ void main() {
     await tester.tap(find.text('Paid'));
     await _settle(tester);
     expect(api.lastArgs['paid'], 'paid');
+  });
+
+  testWidgets('a failed search shows the error state with Retry, not empty',
+      (tester) async {
+    final api = _ThrowingApi();
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    expect(
+        find.text(
+            "Couldn't load activities. Check your connection and try again."),
+        findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    // The empty state must NOT show — a failure is distinct from "no matches".
+    expect(find.text('No public activities match these filters yet.'),
+        findsNothing);
+  });
+
+  testWidgets('Retry after recovery clears the error and shows empty',
+      (tester) async {
+    final api = _ThrowingApi();
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+    expect(find.text('Retry'), findsOneWidget);
+
+    api.failing = false;
+    await tester.tap(find.text('Retry'));
+    await _settle(tester);
+
+    expect(find.text('Retry'), findsNothing);
+    expect(find.text('No public activities match these filters yet.'),
+        findsOneWidget);
   });
 
   testWidgets('selecting a category chip re-queries with that category',

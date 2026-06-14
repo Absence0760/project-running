@@ -3294,6 +3294,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ninguna actividad pública coincide con estos filtros todavía.';
 
   @override
+  String get discoverSearchFailed =>
+      'No se pudieron cargar las actividades. Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
   String get clubsTitle => 'Clubes';
 
   @override
