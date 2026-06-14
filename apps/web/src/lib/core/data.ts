@@ -3187,6 +3187,182 @@ export async function setPlanIsTemplate(
 	if (error) throw error;
 }
 
+export type PublicPlanLibraryEntry = TrainingPlan & {
+	author_handle: string | null;
+};
+
+/// Browse the public plan library — published plans any user can clone
+/// (migration 20270126_001). Optional case-insensitive name search.
+/// Each entry carries the author's public display name (handle) joined
+/// from user_profiles; no other author data is exposed. Mirrors mobile
+/// `TrainingService.fetchPublicPlanLibrary`.
+export async function fetchPublicPlanLibrary(
+	query = '',
+	limit = 100
+): Promise<{ plans: PublicPlanLibraryEntry[]; error: string | null }> {
+	let q = supabase
+		.from('training_plans')
+		.select('*')
+		.eq('is_public_template', true)
+		.order('created_at', { ascending: false })
+		.limit(limit);
+	const trimmed = query.trim();
+	if (trimmed) q = q.ilike('name', `%${trimmed}%`);
+	const { data, error } = await q;
+	if (error) return { plans: [], error: error.message };
+	const rows = (data ?? []) as TrainingPlan[];
+	const authorIds = [...new Set(rows.map((r) => r.user_id))];
+	const byId = new Map<string, string | null>();
+	if (authorIds.length > 0) {
+		const { data: profiles } = await supabase
+			.from('user_profiles')
+			.select('id, display_name')
+			.in('id', authorIds);
+		for (const p of profiles ?? []) byId.set(p.id, p.display_name);
+	}
+	return {
+		plans: rows.map((r) => ({ ...r, author_handle: byId.get(r.user_id) ?? null })),
+		error: null,
+	};
+}
+
+/// Clone a public-library plan into a user-owned active plan, anchored
+/// at new_start_date. Returns the new plan's id. The clone_public_plan
+/// RPC authorises on public visibility server-side and strips the
+/// publisher's private fitness data.
+export async function clonePublicPlan(
+	templateId: string,
+	newStartDate: string
+): Promise<string> {
+	const { data, error } = await supabase.rpc('clone_public_plan', {
+		template_id: templateId,
+		new_start_date: newStartDate,
+	});
+	if (error) throw error;
+	return data as string;
+}
+
+/// Publish one of the viewer's plans to the public library: copy the
+/// plan row + every plan_week + plan_workout into a new
+/// `is_public_template = true` sibling, leaving the original plan
+/// untouched on the user's list (mirrors `publishPlanAsTemplate`, in the
+/// public direction). Publisher fitness data (vdot/current_5k_seconds)
+/// is stripped so it can't leak to cloners. Returns the new template id.
+export async function publishPlanToLibrary(sourcePlanId: string): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const source = await fetchPlan(sourcePlanId);
+	if (!source.plan) throw new Error('Source plan not found');
+	if (source.plan.user_id !== userId) {
+		throw new Error('Only the plan owner can publish');
+	}
+	const src = source.plan;
+
+	const { data: tmpl, error: planErr } = await supabase
+		.from('training_plans')
+		.insert({
+			user_id: userId,
+			name: src.name,
+			goal_event: src.goal_event,
+			goal_distance_m: src.goal_distance_m,
+			goal_time_seconds: src.goal_time_seconds,
+			start_date: src.start_date,
+			end_date: src.end_date,
+			days_per_week: src.days_per_week,
+			vdot: null,
+			current_5k_seconds: null,
+			status: 'completed',
+			notes: src.notes,
+			is_template: true,
+			is_public_template: true,
+			club_id: null,
+			parent_template_id: null,
+		})
+		.select('id')
+		.single();
+	if (planErr || !tmpl) throw planErr ?? new Error('Template insert failed');
+	const newPlanId = tmpl.id as string;
+
+	if (source.weeks.length === 0) return newPlanId;
+
+	const weekRows = source.weeks.map((w) => ({
+		plan_id: newPlanId,
+		week_index: w.week_index,
+		phase: w.phase,
+		target_volume_m: w.target_volume_m,
+		notes: w.notes,
+	}));
+	const { data: weekRes, error: weekErr } = await supabase
+		.from('plan_weeks')
+		.insert(weekRows)
+		.select('id, week_index');
+	if (weekErr || !weekRes) throw weekErr ?? new Error('Weeks insert failed');
+
+	const byIdx = new Map<number, string>();
+	for (const w of weekRes as { id: string; week_index: number }[]) {
+		byIdx.set(w.week_index, w.id);
+	}
+	const oldToNew = new Map<string, string>();
+	for (const old of source.weeks) {
+		const newId = byIdx.get(old.week_index);
+		if (newId) oldToNew.set(old.id, newId);
+	}
+
+	const workoutRows = source.workouts
+		.map((w) => {
+			const newWeekId = oldToNew.get(w.week_id);
+			if (!newWeekId) return null;
+			return {
+				week_id: newWeekId,
+				scheduled_date: w.scheduled_date,
+				kind: w.kind,
+				target_distance_m: w.target_distance_m,
+				target_duration_seconds: w.target_duration_seconds,
+				target_pace_sec_per_km: w.target_pace_sec_per_km,
+				target_pace_tolerance_sec: w.target_pace_tolerance_sec,
+				structure: w.structure,
+				notes: w.notes,
+			};
+		})
+		.filter((r): r is NonNullable<typeof r> => r != null);
+	if (workoutRows.length > 0) {
+		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
+		if (woErr) throw woErr;
+	}
+
+	return newPlanId;
+}
+
+/// Unpublish a public-library template the viewer owns — deletes the
+/// published copy (weeks + workouts cascade). Owner-only via RLS.
+export async function unpublishFromLibrary(templateId: string): Promise<void> {
+	const { error } = await supabase
+		.from('training_plans')
+		.delete()
+		.eq('id', templateId)
+		.eq('is_public_template', true);
+	if (error) throw error;
+}
+
+/// The viewer's own published public-library plans (so the plan-detail
+/// page can show whether a plan is already published and offer Unpublish).
+export async function fetchMyPublishedPlans(): Promise<TrainingPlan[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('training_plans')
+		.select('*')
+		.eq('is_public_template', true)
+		.eq('user_id', userId)
+		.order('created_at', { ascending: false });
+	if (error) {
+		console.error('fetchMyPublishedPlans failed', error);
+		return [];
+	}
+	return (data ?? []) as TrainingPlan[];
+}
+
 /**
  * Clone a user's plan into a new club-owned template, leaving the
  * original plan untouched on the user's /plans list. Mirrors

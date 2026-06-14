@@ -60,6 +60,7 @@ TrainingPlanRow _template(String id, String name) => TrainingPlanRow(
       status: 'completed',
       source: 'generated',
       isTemplate: true,
+      isPublicTemplate: false,
       clubId: 'club-1',
       createdAt: DateTime(2026, 1, 1),
     );

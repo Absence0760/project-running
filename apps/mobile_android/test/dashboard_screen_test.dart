@@ -48,6 +48,7 @@ ActivePlanOverview _overviewWithTodayWorkout({String kind = 'long'}) {
     status: 'active',
     source: 'app',
     isTemplate: false,
+    isPublicTemplate: false,
   );
   final week = PlanWeekRow(
     id: 'wk-1',

@@ -6878,6 +6878,180 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get planNewTemplatePickerCancel;
 
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Public plan library'**
+  String get planLibraryTitle;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Plans published by other runners. Clone one into your account to start training.'**
+  String get planLibrarySubheading;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Search plans by name'**
+  String get planLibrarySearchHint;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load the library. Retry.'**
+  String get planLibraryLoadError;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get planLibraryRetry;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'No published plans yet.'**
+  String get planLibraryEmpty;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'No plans match “{query}”.'**
+  String planLibraryEmptySearch(String query);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'by {author}'**
+  String planLibraryByAuthor(String author);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'a runner'**
+  String get planLibraryAnonymous;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'{weeks} weeks'**
+  String planLibraryWeeks(int weeks);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'{days}×/week'**
+  String planLibraryDaysPerWeek(int days);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Clone into my plans'**
+  String get planLibraryClone;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Cloning…'**
+  String get planLibraryCloning;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Plan cloned.'**
+  String get planLibraryCloneSuccess;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to clone: {error}'**
+  String planLibraryCloneFailed(String error);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Start date'**
+  String get planLibraryStartDate;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'This plan is no longer in the public library.'**
+  String get planLibraryNotFound;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Weeks'**
+  String get planLibraryPreviewWeeks;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Week {n}'**
+  String planLibraryPreviewWeek(int n);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Public plan library'**
+  String get planDetailPublishLibraryLabel;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Publish to library'**
+  String get planDetailPublishLibrary;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Share a copy of this plan so anyone can clone it. Your fitness numbers are not shared.'**
+  String get planDetailPublishLibraryHint;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Plan published to the public library. Your personal plan is unchanged.'**
+  String get planDetailPublishLibrarySuccess;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to publish: {error}'**
+  String planDetailPublishLibraryFailed(String error);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Unpublish'**
+  String get planDetailUnpublishLibrary;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from the public library.'**
+  String get planDetailUnpublishSuccess;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to unpublish: {error}'**
+  String planDetailUnpublishFailed(String error);
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'This plan is in the public library.'**
+  String get planDetailAlreadyPublished;
+
+  /// Public plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Browse library'**
+  String get plansBrowseLibrary;
+
   /// Plan-new built-in starter-plan picker
   ///
   /// In en, this message translates to:

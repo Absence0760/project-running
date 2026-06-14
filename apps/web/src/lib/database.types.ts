@@ -2713,6 +2713,7 @@ export type Database = {
           goal_event: Database["public"]["Enums"]["goal_event"]
           goal_time_seconds: number | null
           id: string
+          is_public_template: boolean
           is_template: boolean
           name: string
           notes: string | null
@@ -2736,6 +2737,7 @@ export type Database = {
           goal_event: Database["public"]["Enums"]["goal_event"]
           goal_time_seconds?: number | null
           id?: string
+          is_public_template?: boolean
           is_template?: boolean
           name: string
           notes?: string | null
@@ -2759,6 +2761,7 @@ export type Database = {
           goal_event?: Database["public"]["Enums"]["goal_event"]
           goal_time_seconds?: number | null
           id?: string
+          is_public_template?: boolean
           is_template?: boolean
           name?: string
           notes?: string | null
@@ -3374,6 +3377,10 @@ export type Database = {
         Returns: string
       }
       clone_plan_template: {
+        Args: { new_start_date: string; template_id: string }
+        Returns: string
+      }
+      clone_public_plan: {
         Args: { new_start_date: string; template_id: string }
         Returns: string
       }

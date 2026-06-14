@@ -33,6 +33,7 @@ ActivePlanOverview _overview({
     status: 'active',
     source: 'generated',
     isTemplate: false,
+    isPublicTemplate: false,
   );
   return ActivePlanOverview(
     plan: plan,

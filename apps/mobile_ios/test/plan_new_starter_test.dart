@@ -53,6 +53,7 @@ class _FakeTraining extends TrainingService {
       status: 'active',
       source: 'generated',
       isTemplate: false,
+      isPublicTemplate: false,
     );
   }
 }

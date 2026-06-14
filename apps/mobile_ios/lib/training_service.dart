@@ -28,6 +28,16 @@ class ActivePlanOverview {
   });
 }
 
+/// A public-library plan paired with its author's public handle. The
+/// browse + preview surfaces show the handle but never any other author
+/// data. Mirrors web `data.ts#PublicPlanLibraryEntry`.
+class PublicPlanLibraryEntry {
+  final TrainingPlanRow plan;
+  final String? authorHandle;
+
+  const PublicPlanLibraryEntry({required this.plan, required this.authorHandle});
+}
+
 class TrainingService extends ChangeNotifier {
   final SupabaseClient? _override;
 
@@ -251,6 +261,176 @@ class TrainingService extends ChangeNotifier {
     );
     notifyListeners();
     return newId as String;
+  }
+
+  /// Browse the public plan library — published plans any user can clone
+  /// (migration 20270126_001). Optional case-insensitive name search.
+  /// Each entry carries the author's public display name (handle) joined
+  /// from user_profiles; no other author data is exposed. Mirrors web
+  /// `data.ts#fetchPublicPlanLibrary`.
+  Future<List<PublicPlanLibraryEntry>> fetchPublicPlanLibrary({
+    String query = '',
+  }) async {
+    var sel = _c.from('training_plans').select().eq('is_public_template', true);
+    final trimmed = query.trim();
+    if (trimmed.isNotEmpty) sel = sel.ilike('name', '%$trimmed%');
+    final rows = await sel.order('created_at', ascending: false).limit(100);
+    final plans = (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(TrainingPlanRow.fromJson)
+        .toList();
+    final authorIds = {for (final p in plans) p.userId}.toList();
+    final byId = <String, String?>{};
+    if (authorIds.isNotEmpty) {
+      final profiles = await _c
+          .from('user_profiles')
+          .select('id, display_name')
+          .inFilter('id', authorIds);
+      for (final p in profiles as List) {
+        final m = p as Map<String, dynamic>;
+        byId[m['id'] as String] = m['display_name'] as String?;
+      }
+    }
+    return [
+      for (final p in plans)
+        PublicPlanLibraryEntry(plan: p, authorHandle: byId[p.userId]),
+    ];
+  }
+
+  /// Clone a public-library plan into a user-owned active plan, anchored
+  /// at [startDate]. The clone_public_plan RPC authorises on public
+  /// visibility server-side and strips the publisher's private fitness
+  /// data. Mirrors web `data.ts#clonePublicPlan`.
+  Future<String> clonePublicPlan({
+    required String templateId,
+    DateTime? startDate,
+  }) async {
+    final newId = await _c.rpc(
+      'clone_public_plan',
+      params: {
+        'template_id': templateId,
+        'new_start_date': toIsoDate(startDate ?? DateTime.now()),
+      },
+    );
+    notifyListeners();
+    return newId as String;
+  }
+
+  /// Publish one of the viewer's plans to the public library: copy the
+  /// plan + every week + workout into a new `is_public_template = true`
+  /// sibling, leaving the original untouched (mirrors
+  /// publishPlanAsTemplate, in the public direction). Publisher fitness
+  /// data is stripped. Returns the new template id. Mirrors web
+  /// `data.ts#publishPlanToLibrary`.
+  Future<String> publishPlanToLibrary({required String planId}) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+
+    final src = await fetchPlan(planId);
+    final source = src.plan;
+    if (source == null) {
+      throw Exception('Source plan not found');
+    }
+    if (source.userId != uid) {
+      throw Exception('Only the plan owner can publish');
+    }
+
+    final templateRow = await _c.from('training_plans').insert({
+      'user_id': uid,
+      'name': source.name,
+      'goal_event': source.goalEvent,
+      'goal_distance_m': source.goalDistanceM,
+      'goal_time_seconds': source.goalTimeSeconds,
+      'start_date': toIsoDate(source.startDate),
+      'end_date': toIsoDate(source.endDate),
+      'days_per_week': source.daysPerWeek,
+      'vdot': null,
+      'current_5k_seconds': null,
+      'status': 'completed',
+      'notes': source.notes,
+      'is_template': true,
+      'is_public_template': true,
+      'club_id': null,
+      'parent_template_id': null,
+    }).select('id').single();
+    final newPlanId = templateRow['id'] as String;
+
+    if (src.weeks.isEmpty) {
+      notifyListeners();
+      return newPlanId;
+    }
+
+    final weekRes = await _c.from('plan_weeks').insert([
+      for (final w in src.weeks)
+        {
+          'plan_id': newPlanId,
+          'week_index': w.weekIndex,
+          'phase': w.phase,
+          'target_volume_m': w.targetVolumeM,
+          'notes': w.notes,
+        },
+    ]).select('id, week_index');
+
+    final byIdx = <int, String>{};
+    for (final r in weekRes as List) {
+      final m = r as Map<String, dynamic>;
+      byIdx[m['week_index'] as int] = m['id'] as String;
+    }
+    final oldToNew = <String, String>{};
+    for (final w in src.weeks) {
+      final newId = byIdx[w.weekIndex];
+      if (newId != null) oldToNew[w.id] = newId;
+    }
+
+    final workoutPayload = <Map<String, dynamic>>[];
+    for (final w in src.workouts) {
+      final newWeekId = oldToNew[w.weekId];
+      if (newWeekId == null) continue;
+      workoutPayload.add({
+        'week_id': newWeekId,
+        'scheduled_date': toIsoDate(w.scheduledDate),
+        'kind': w.kind,
+        'target_distance_m': w.targetDistanceM,
+        'target_duration_seconds': w.targetDurationSeconds,
+        'target_pace_sec_per_km': w.targetPaceSecPerKm,
+        'target_pace_tolerance_sec': w.targetPaceToleranceSec,
+        'structure': w.structure,
+        'notes': w.notes,
+      });
+    }
+    if (workoutPayload.isNotEmpty) {
+      await _c.from('plan_workouts').insert(workoutPayload);
+    }
+    notifyListeners();
+    return newPlanId;
+  }
+
+  /// Unpublish a public-library template the viewer owns — deletes the
+  /// published copy (weeks + workouts cascade). Owner-only via RLS.
+  Future<void> unpublishFromLibrary(String templateId) async {
+    await _c
+        .from('training_plans')
+        .delete()
+        .eq('id', templateId)
+        .eq('is_public_template', true);
+    notifyListeners();
+  }
+
+  /// The viewer's own published public-library plans (so plan detail can
+  /// show whether a plan is already published and offer Unpublish).
+  Future<List<TrainingPlanRow>> fetchMyPublishedPlans() async {
+    final uid = _uid;
+    if (uid == null) return const [];
+    final rows = await _c
+        .from('training_plans')
+        .select()
+        .eq('is_public_template', true)
+        .eq('user_id', uid)
+        .order('created_at', ascending: false);
+    return (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(TrainingPlanRow.fromJson)
+        .toList();
   }
 
   /// Duplicate a plan week — insert a copy right after [weekIndex], pushing
