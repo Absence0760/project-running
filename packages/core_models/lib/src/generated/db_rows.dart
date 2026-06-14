@@ -169,6 +169,10 @@ class ClubRow {
   static const String colMemberCount = 'member_count';
   static const String colIsVerified = 'is_verified';
   static const String colRequiresActivityWaiver = 'requires_activity_waiver';
+  static const String colWebsiteUrl = 'website_url';
+  static const String colInstagramUrl = 'instagram_url';
+  static const String colStravaUrl = 'strava_url';
+  static const String colFacebookUrl = 'facebook_url';
 
   final String id;
   final String ownerId;
@@ -186,6 +190,10 @@ class ClubRow {
   final int memberCount;
   final bool isVerified;
   final bool requiresActivityWaiver;
+  final String? websiteUrl;
+  final String? instagramUrl;
+  final String? stravaUrl;
+  final String? facebookUrl;
 
   const ClubRow({
     required this.id,
@@ -204,6 +212,10 @@ class ClubRow {
     required this.memberCount,
     required this.isVerified,
     required this.requiresActivityWaiver,
+    this.websiteUrl,
+    this.instagramUrl,
+    this.stravaUrl,
+    this.facebookUrl,
   });
 
   factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
@@ -223,6 +235,10 @@ class ClubRow {
     memberCount: (json['member_count'] as num).toInt(),
     isVerified: (json['is_verified'] as bool?) ?? false,
     requiresActivityWaiver: (json['requires_activity_waiver'] as bool?) ?? false,
+    websiteUrl: json['website_url'] as String?,
+    instagramUrl: json['instagram_url'] as String?,
+    stravaUrl: json['strava_url'] as String?,
+    facebookUrl: json['facebook_url'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -242,6 +258,10 @@ class ClubRow {
     colMemberCount: memberCount,
     colIsVerified: isVerified,
     colRequiresActivityWaiver: requiresActivityWaiver,
+    colWebsiteUrl: websiteUrl,
+    colInstagramUrl: instagramUrl,
+    colStravaUrl: stravaUrl,
+    colFacebookUrl: facebookUrl,
   };
 }
 

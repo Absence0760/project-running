@@ -192,7 +192,9 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           description: string | null
+          facebook_url: string | null
           id: string
+          instagram_url: string | null
           invite_token: string | null
           is_public: boolean | null
           is_verified: boolean
@@ -204,13 +206,17 @@ export type Database = {
           owner_id: string
           requires_activity_waiver: boolean
           slug: string
+          strava_url: string | null
           updated_at: string | null
+          website_url: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
           description?: string | null
+          facebook_url?: string | null
           id?: string
+          instagram_url?: string | null
           invite_token?: string | null
           is_public?: boolean | null
           is_verified?: boolean
@@ -222,13 +228,17 @@ export type Database = {
           owner_id: string
           requires_activity_waiver?: boolean
           slug: string
+          strava_url?: string | null
           updated_at?: string | null
+          website_url?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string | null
           description?: string | null
+          facebook_url?: string | null
           id?: string
+          instagram_url?: string | null
           invite_token?: string | null
           is_public?: boolean | null
           is_verified?: boolean
@@ -240,7 +250,9 @@ export type Database = {
           owner_id?: string
           requires_activity_waiver?: boolean
           slug?: string
+          strava_url?: string | null
           updated_at?: string | null
+          website_url?: string | null
         }
         Relationships: []
       }
@@ -3978,7 +3990,9 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           description: string | null
+          facebook_url: string | null
           id: string
+          instagram_url: string | null
           invite_token: string | null
           is_public: boolean | null
           is_verified: boolean
@@ -3990,7 +4004,9 @@ export type Database = {
           owner_id: string
           requires_activity_waiver: boolean
           slug: string
+          strava_url: string | null
           updated_at: string | null
+          website_url: string | null
         }[]
         SetofOptions: {
           from: "*"
