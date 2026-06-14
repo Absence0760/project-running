@@ -285,10 +285,14 @@ ResolvedPaces resolveTrainingPacesWithMeta({
 }) {
   double goalPace;
   var isFallback = false;
-  if (recent5kSec != null) {
+  // Positivity, not just non-null: a 0 anchor is "no usable time" (matches the
+  // web twin's JS truthiness). Treating `0 != null` as a real anchor ran Riegel
+  // on a 0 time → goalPace 0 → every pace band rounded to 0, and suppressed the
+  // "estimated paces" fallback flag — a plan whose every target was 0:00/km.
+  if (recent5kSec != null && recent5kSec > 0) {
     final predicted = riegelPredict(5000, recent5kSec, goalDistanceM);
     goalPace = predicted / (goalDistanceM / 1000);
-  } else if (goalTimeSec != null) {
+  } else if (goalTimeSec != null && goalTimeSec > 0) {
     goalPace = goalTimeSec / (goalDistanceM / 1000);
   } else {
     goalPace = _kFallbackGoalPaceSecPerKm;

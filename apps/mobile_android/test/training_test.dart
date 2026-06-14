@@ -301,6 +301,29 @@ void main() {
       expect(p.easy > 0, isTrue);
       expect(p.interval > 0, isTrue);
     });
+
+    test('a zero recent5kSec/goalTimeSec is treated as no anchor (twin parity)', () {
+      // Regression: `0 != null` ran Riegel on a 0 time → goalPace 0 → every band
+      // 0:00/km + isFallback wrongly false. A 0 anchor is "no usable time" and
+      // must fall through to the conservative fallback, matching the web twin.
+      final zeroRecent = resolveTrainingPacesWithMeta(
+        goalDistanceM: 10000,
+        recent5kSec: 0,
+      );
+      expect(zeroRecent.isFallback, isTrue);
+      expect(zeroRecent.paces.easy > 0, isTrue);
+      expect(zeroRecent.paces.interval > 0, isTrue);
+
+      final zeroGoal = resolveTrainingPacesWithMeta(
+        goalDistanceM: 10000,
+        goalTimeSec: 0,
+      );
+      expect(zeroGoal.isFallback, isTrue);
+      expect(zeroGoal.paces.easy > 0, isTrue);
+
+      final fallback = resolveTrainingPacesWithMeta(goalDistanceM: 10000);
+      expect(zeroRecent.paces.easy, fallback.paces.easy);
+    });
   });
 
   group('phaseFor', () {
