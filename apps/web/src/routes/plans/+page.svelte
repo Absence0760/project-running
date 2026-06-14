@@ -251,6 +251,10 @@
 			</div>
 
 			<div class="toolbar-actions">
+				<a class="add-btn add-btn-outline" href="/plans/library">
+					<span class="material-symbols">public</span>
+					{m('plansPage.browseLibrary')}
+				</a>
 				<button class="add-btn" type="button" onclick={() => (showPlanModal = true)}>
 					<span class="material-symbols">add</span>
 					{m('plansPage.newPlan')}
@@ -512,6 +516,15 @@
 	}
 	.add-btn:hover {
 		background: var(--color-primary-hover);
+	}
+	.add-btn-outline {
+		background: transparent;
+		color: var(--color-primary);
+		border: 1.5px solid var(--color-primary);
+	}
+	.add-btn-outline:hover {
+		background: var(--color-primary);
+		color: var(--color-surface);
 	}
 	.add-btn .material-symbols {
 		font-size: 1.1rem;

@@ -8,6 +8,9 @@
 		fetchMyClubs,
 		fetchRuns,
 		publishPlanAsTemplate,
+		publishPlanToLibrary,
+		unpublishFromLibrary,
+		fetchMyPublishedPlans,
 		updatePlanWorkout,
 		updatePlanWeek,
 		updatePlanMeta,
@@ -454,8 +457,44 @@
 			adminClubs = clubs.filter(
 				(c) => c.viewer_role === 'owner' || c.viewer_role === 'admin'
 			);
+			// Has the owner already published a copy of this plan to the
+			// public library? Match on parent_template_id is not set on the
+			// published copy, so detect by name + a published flag fetch.
+			const published = await fetchMyPublishedPlans();
+			publishedTemplate = published.find((t) => t.name === plan?.name) ?? null;
 		}
 	});
+
+	let publishedTemplate = $state<TrainingPlan | null>(null);
+	let libraryBusy = $state(false);
+
+	async function publishToLibrary() {
+		if (!plan || libraryBusy) return;
+		libraryBusy = true;
+		try {
+			const newId = await publishPlanToLibrary(plan.id);
+			publishedTemplate = { ...plan, id: newId, is_public_template: true };
+			showToast(m('planDetail.publishLibrarySuccess'));
+		} catch (e) {
+			showToast(m('planDetail.publishLibraryFailed', { error: String(e) }), 'error');
+		} finally {
+			libraryBusy = false;
+		}
+	}
+
+	async function unpublishFromLibraryAction() {
+		if (!publishedTemplate || libraryBusy) return;
+		libraryBusy = true;
+		try {
+			await unpublishFromLibrary(publishedTemplate.id);
+			publishedTemplate = null;
+			showToast(m('planDetail.unpublishLibrarySuccess'));
+		} catch (e) {
+			showToast(m('planDetail.unpublishLibraryFailed', { error: String(e) }), 'error');
+		} finally {
+			libraryBusy = false;
+		}
+	}
 
 	let publishingBusy = $state(false);
 	async function publishAsTemplate() {
@@ -1013,6 +1052,33 @@
 				>
 					{m('planDetail.publish')}
 				</button>
+			</section>
+		{/if}
+
+		{#if !plan.is_template && plan.user_id === auth.user?.id}
+			<section class="publish-row">
+				<span class="publish-label">{m('planDetail.publishLibraryLabel')}</span>
+				{#if publishedTemplate}
+					<span class="publish-hint">{m('planDetail.alreadyPublished')}</span>
+					<button
+						class="btn btn-outline"
+						type="button"
+						disabled={libraryBusy}
+						onclick={unpublishFromLibraryAction}
+					>
+						{m('planDetail.unpublishLibrary')}
+					</button>
+				{:else}
+					<span class="publish-hint">{m('planDetail.publishLibraryHint')}</span>
+					<button
+						class="btn btn-outline"
+						type="button"
+						disabled={libraryBusy}
+						onclick={publishToLibrary}
+					>
+						{m('planDetail.publishLibrary')}
+					</button>
+				{/if}
 			</section>
 		{/if}
 
@@ -1680,6 +1746,11 @@
 	.publish-label {
 		font-size: 0.9rem;
 		color: var(--color-text-secondary);
+	}
+	.publish-hint {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		flex: 1 1 14rem;
 	}
 	.publish-row select {
 		padding: 0.4rem 0.7rem;
