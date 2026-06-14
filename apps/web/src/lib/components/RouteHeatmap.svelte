@@ -864,10 +864,33 @@
 	// when geolocation has bowed out (wantDataFit) — so a working fix still
 	// wins, but a denied / unavailable / absent one lands the user on the
 	// route data (e.g. the Virginia routes) instead of the world view.
-	function fitToRoutePins() {
-		if (!map || didInitialFit || !wantDataFit || routePins.length === 0) return;
+	async function fitToRoutePins() {
+		if (!map || didInitialFit || !wantDataFit) return;
+		// Prefer the pins already loaded for the current viewport. But the
+		// initial [0,30] world view doesn't span the whole globe (its bounds
+		// are roughly the Atlantic basin), so a user whose routes sit outside
+		// it (e.g. North America) would have an EMPTY viewport set and nothing
+		// to frame — leaving them stranded at the world view, the bug this
+		// fallback exists to fix. When the viewport carries no pins, fetch a
+		// global set so there's always something to frame.
+		let pins = routePins;
+		if (pins.length === 0) {
+			try {
+				pins = await fetchDiscoverableRoutesInBbox({
+					minLng: -180,
+					minLat: -85,
+					maxLng: 180,
+					maxLat: 85,
+					filter: routeFilter,
+					bands: selectedBands,
+				});
+			} catch {
+				pins = [];
+			}
+		}
+		if (!map || didInitialFit || pins.length === 0) return;
 		const bounds = new maplibregl.LngLatBounds();
-		for (const r of routePins) bounds.extend([r.lng, r.lat]);
+		for (const r of pins) bounds.extend([r.lng, r.lat]);
 		map.fitBounds(bounds, { padding: 64, maxZoom: 12, duration: 600 });
 		didInitialFit = true;
 	}

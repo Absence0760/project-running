@@ -37,13 +37,19 @@ test.describe('/share/session/[id] — anon', () => {
 			.single();
 		if (error) throw error;
 		publicPlanId = (pub as { id: string }).id;
-		await admin.from('session_plan_items').insert([
+		// per_side must be set on EVERY row: PostgREST aligns the column set
+		// across a batch insert, so omitting it on one row (while another sets
+		// it) sends an explicit null — and per_side is NOT NULL (default only
+		// applies when the column is absent from the whole statement). Leaving
+		// it off the first row 23502'd the batch and left the plan item-less.
+		const { error: itemsErr } = await admin.from('session_plan_items').insert([
 			{
 				plan_id: publicPlanId,
 				position: 0,
 				movement_name: 'Downward Dog',
 				kind: 'hold',
-				duration_s: 60
+				duration_s: 60,
+				per_side: false
 			},
 			{
 				plan_id: publicPlanId,
@@ -54,6 +60,7 @@ test.describe('/share/session/[id] — anon', () => {
 				per_side: true
 			}
 		]);
+		if (itemsErr) throw itemsErr;
 
 		const { data: priv } = await admin
 			.from('session_plans')
