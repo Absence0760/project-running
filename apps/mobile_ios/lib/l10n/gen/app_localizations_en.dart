@@ -8988,4 +8988,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clubDetailEditClub => 'Edit club';
+
+  @override
+  String get roadbookTitle => 'Roadbook';
+
+  @override
+  String get roadbookCrewSheet => 'Roadbook (crew sheet)';
+
+  @override
+  String get roadbookGoalTime => 'Goal time';
+
+  @override
+  String get roadbookStartTime => 'Start time';
+
+  @override
+  String get roadbookEffort => 'Effort';
+
+  @override
+  String get roadbookEven => 'Even';
+
+  @override
+  String get roadbookStart => 'Start';
+
+  @override
+  String get roadbookFinish => 'Finish';
+
+  @override
+  String get roadbookShare => 'Share';
+
+  @override
+  String get roadbookNoMarkers => 'Add course markers to build a roadbook.';
+
+  @override
+  String get roadbookAddElevation => 'Add elevation';
+
+  @override
+  String get roadbookElevationUnavailable =>
+      'Elevation data unavailable for this route';
+
+  @override
+  String roadbookSummary(String distance, String vert, String time) {
+    return '$distance · $vert vert · goal $time';
+  }
 }

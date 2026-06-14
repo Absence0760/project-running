@@ -2507,5 +2507,18 @@
   "clubEditorFacebook": "Facebook",
   "clubEditorSaveChanges": "変更を保存",
   "clubDetailVisitWebsite": "ウェブサイトを見る",
-  "clubDetailEditClub": "クラブを編集"
+  "clubDetailEditClub": "クラブを編集",
+  "roadbookTitle": "ロードブック",
+  "roadbookCrewSheet": "ロードブック（クルーシート）",
+  "roadbookGoalTime": "目標タイム",
+  "roadbookStartTime": "スタート時刻",
+  "roadbookEffort": "強度ベース",
+  "roadbookEven": "イーブン",
+  "roadbookStart": "スタート",
+  "roadbookFinish": "フィニッシュ",
+  "roadbookShare": "共有",
+  "roadbookNoMarkers": "コースマーカーを追加してロードブックを作成しましょう。",
+  "roadbookAddElevation": "標高を追加",
+  "roadbookElevationUnavailable": "このルートの標高データは利用できません",
+  "roadbookSummary": "{distance} · 獲得 {vert} · 目標 {time}"
 }

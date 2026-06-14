@@ -9076,6 +9076,49 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get clubDetailEditClub => 'Editar clube';
+
+  @override
+  String get roadbookTitle => 'Roadbook';
+
+  @override
+  String get roadbookCrewSheet => 'Roadbook (planilha da equipe)';
+
+  @override
+  String get roadbookGoalTime => 'Tempo-alvo';
+
+  @override
+  String get roadbookStartTime => 'Horário de largada';
+
+  @override
+  String get roadbookEffort => 'Esforço';
+
+  @override
+  String get roadbookEven => 'Uniforme';
+
+  @override
+  String get roadbookStart => 'Largada';
+
+  @override
+  String get roadbookFinish => 'Chegada';
+
+  @override
+  String get roadbookShare => 'Compartilhar';
+
+  @override
+  String get roadbookNoMarkers =>
+      'Adicione marcadores ao percurso para criar um roadbook.';
+
+  @override
+  String get roadbookAddElevation => 'Adicionar altimetria';
+
+  @override
+  String get roadbookElevationUnavailable =>
+      'Dados de altimetria indisponíveis para este percurso';
+
+  @override
+  String roadbookSummary(String distance, String vert, String time) {
+    return '$distance · $vert de ganho · meta $time';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18150,4 +18193,47 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clubDetailEditClub => 'Editar clube';
+
+  @override
+  String get roadbookTitle => 'Roadbook';
+
+  @override
+  String get roadbookCrewSheet => 'Roadbook (planilha da equipe)';
+
+  @override
+  String get roadbookGoalTime => 'Tempo-alvo';
+
+  @override
+  String get roadbookStartTime => 'Horário de largada';
+
+  @override
+  String get roadbookEffort => 'Esforço';
+
+  @override
+  String get roadbookEven => 'Uniforme';
+
+  @override
+  String get roadbookStart => 'Largada';
+
+  @override
+  String get roadbookFinish => 'Chegada';
+
+  @override
+  String get roadbookShare => 'Compartilhar';
+
+  @override
+  String get roadbookNoMarkers =>
+      'Adicione marcadores ao percurso para criar um roadbook.';
+
+  @override
+  String get roadbookAddElevation => 'Adicionar altimetria';
+
+  @override
+  String get roadbookElevationUnavailable =>
+      'Dados de altimetria indisponíveis para este percurso';
+
+  @override
+  String roadbookSummary(String distance, String vert, String time) {
+    return '$distance · $vert de ganho · meta $time';
+  }
 }

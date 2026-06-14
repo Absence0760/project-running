@@ -2507,5 +2507,18 @@
   "clubEditorFacebook": "Facebook",
   "clubEditorSaveChanges": "Enregistrer les modifications",
   "clubDetailVisitWebsite": "Visiter notre site",
-  "clubDetailEditClub": "Modifier le club"
+  "clubDetailEditClub": "Modifier le club",
+  "roadbookTitle": "Roadbook",
+  "roadbookCrewSheet": "Roadbook (feuille d'assistance)",
+  "roadbookGoalTime": "Temps visé",
+  "roadbookStartTime": "Heure de départ",
+  "roadbookEffort": "Effort",
+  "roadbookEven": "Régulier",
+  "roadbookStart": "Départ",
+  "roadbookFinish": "Arrivée",
+  "roadbookShare": "Partager",
+  "roadbookNoMarkers": "Ajoutez des repères de parcours pour créer un roadbook.",
+  "roadbookAddElevation": "Ajouter le dénivelé",
+  "roadbookElevationUnavailable": "Données d'altitude indisponibles pour ce parcours",
+  "roadbookSummary": "{distance} · {vert} D+ · objectif {time}"
 }

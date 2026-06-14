@@ -19,6 +19,7 @@ import '../route_describe_client.dart';
 import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../social_service.dart' show ClubView, SocialService;
+import 'roadbook_screen.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
 import '../widgets/report_sheet.dart';
@@ -1047,6 +1048,23 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 },
               ),
             ),
+            if (_markerPins.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RoadbookScreen(
+                        route: widget.route,
+                        waypoints: _displayWaypoints,
+                        api: widget.apiClient,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.table_chart_outlined, size: 18),
+                  label: Text(AppLocalizations.of(context).roadbookCrewSheet),
+                ),
+              ),
 
             const Divider(),
 

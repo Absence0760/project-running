@@ -15083,6 +15083,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit club'**
   String get clubDetailEditClub;
+
+  /// Roadbook screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Roadbook'**
+  String get roadbookTitle;
+
+  /// Route-detail roadbook entry button
+  ///
+  /// In en, this message translates to:
+  /// **'Roadbook (crew sheet)'**
+  String get roadbookCrewSheet;
+
+  /// Goal time field label
+  ///
+  /// In en, this message translates to:
+  /// **'Goal time'**
+  String get roadbookGoalTime;
+
+  /// Start time field label
+  ///
+  /// In en, this message translates to:
+  /// **'Start time'**
+  String get roadbookStartTime;
+
+  /// Effort pacing model
+  ///
+  /// In en, this message translates to:
+  /// **'Effort'**
+  String get roadbookEffort;
+
+  /// Even pacing model
+  ///
+  /// In en, this message translates to:
+  /// **'Even'**
+  String get roadbookEven;
+
+  /// Start checkpoint
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get roadbookStart;
+
+  /// Finish checkpoint
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get roadbookFinish;
+
+  /// Share roadbook
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get roadbookShare;
+
+  /// Empty state on the roadbook screen
+  ///
+  /// In en, this message translates to:
+  /// **'Add course markers to build a roadbook.'**
+  String get roadbookNoMarkers;
+
+  /// Fetch elevation action
+  ///
+  /// In en, this message translates to:
+  /// **'Add elevation'**
+  String get roadbookAddElevation;
+
+  /// Elevation fetch failed
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation data unavailable for this route'**
+  String get roadbookElevationUnavailable;
+
+  /// Roadbook summary line
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} · {vert} vert · goal {time}'**
+  String roadbookSummary(String distance, String vert, String time);
 }
 
 class _AppLocalizationsDelegate

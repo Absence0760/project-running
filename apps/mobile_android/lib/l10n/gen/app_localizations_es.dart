@@ -9080,4 +9080,47 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get clubDetailEditClub => 'Editar club';
+
+  @override
+  String get roadbookTitle => 'Roadbook';
+
+  @override
+  String get roadbookCrewSheet => 'Roadbook (hoja de equipo)';
+
+  @override
+  String get roadbookGoalTime => 'Tiempo objetivo';
+
+  @override
+  String get roadbookStartTime => 'Hora de salida';
+
+  @override
+  String get roadbookEffort => 'Esfuerzo';
+
+  @override
+  String get roadbookEven => 'Uniforme';
+
+  @override
+  String get roadbookStart => 'Salida';
+
+  @override
+  String get roadbookFinish => 'Meta';
+
+  @override
+  String get roadbookShare => 'Compartir';
+
+  @override
+  String get roadbookNoMarkers =>
+      'Añade marcadores de ruta para crear un roadbook.';
+
+  @override
+  String get roadbookAddElevation => 'Añadir altimetría';
+
+  @override
+  String get roadbookElevationUnavailable =>
+      'Datos de altimetría no disponibles para esta ruta';
+
+  @override
+  String roadbookSummary(String distance, String vert, String time) {
+    return '$distance · $vert desnivel · objetivo $time';
+  }
 }

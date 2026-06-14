@@ -8629,4 +8629,45 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get clubDetailEditClub => 'クラブを編集';
+
+  @override
+  String get roadbookTitle => 'ロードブック';
+
+  @override
+  String get roadbookCrewSheet => 'ロードブック（クルーシート）';
+
+  @override
+  String get roadbookGoalTime => '目標タイム';
+
+  @override
+  String get roadbookStartTime => 'スタート時刻';
+
+  @override
+  String get roadbookEffort => '強度ベース';
+
+  @override
+  String get roadbookEven => 'イーブン';
+
+  @override
+  String get roadbookStart => 'スタート';
+
+  @override
+  String get roadbookFinish => 'フィニッシュ';
+
+  @override
+  String get roadbookShare => '共有';
+
+  @override
+  String get roadbookNoMarkers => 'コースマーカーを追加してロードブックを作成しましょう。';
+
+  @override
+  String get roadbookAddElevation => '標高を追加';
+
+  @override
+  String get roadbookElevationUnavailable => 'このルートの標高データは利用できません';
+
+  @override
+  String roadbookSummary(String distance, String vert, String time) {
+    return '$distance · 獲得 $vert · 目標 $time';
+  }
 }
