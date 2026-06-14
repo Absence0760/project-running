@@ -7145,6 +7145,30 @@ abstract class AppLocalizations {
   /// **'Couldn\'t unlink the run. Try again.'**
   String get workoutUnlinkError;
 
+  /// Skipped badge on workout detail
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get workoutSkipped;
+
+  /// Skip button on workout detail
+  ///
+  /// In en, this message translates to:
+  /// **'Skip this workout'**
+  String get workoutSkip;
+
+  /// Un-skip button on a skipped workout
+  ///
+  /// In en, this message translates to:
+  /// **'Un-skip'**
+  String get workoutUnskip;
+
+  /// Error banner when toggling a workout skip fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update the skip. Try again.'**
+  String get workoutSkipError;
+
   /// Re-link-to-a-different-run button on workout detail
   ///
   /// In en, this message translates to:

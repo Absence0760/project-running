@@ -4330,6 +4330,19 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de dissocier la course. Réessayez.';
 
   @override
+  String get workoutSkipped => 'Ignoré';
+
+  @override
+  String get workoutSkip => 'Ignorer cette séance';
+
+  @override
+  String get workoutUnskip => 'Annuler l\'ignorance';
+
+  @override
+  String get workoutSkipError =>
+      'Impossible de mettre à jour l\'ignorance. Réessayez.';
+
+  @override
   String get workoutRelink => 'Réassocier';
 
   @override

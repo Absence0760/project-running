@@ -4060,6 +4060,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get workoutUnlinkError => 'ランのリンクを解除できませんでした。もう一度お試しください。';
 
   @override
+  String get workoutSkipped => 'スキップ済み';
+
+  @override
+  String get workoutSkip => 'このワークアウトをスキップ';
+
+  @override
+  String get workoutUnskip => 'スキップを取り消す';
+
+  @override
+  String get workoutSkipError => 'スキップを更新できませんでした。もう一度お試しください。';
+
+  @override
   String get workoutRelink => 'リンクし直す';
 
   @override
