@@ -1643,6 +1643,8 @@ export const messages = {
 	"clubHome.unpublish": "Dépublier",
 	"clubHome.emptyMembersTitle": "Aucun membre pour l'instant",
 	"clubHome.emptyMembersBody": "Dès que quelqu'un rejoint, il apparaîtra ici avec son rôle.",
+	"clubHome.emptyTemplatesTitle": "Aucun modèle pour l'instant",
+	"clubHome.emptyTemplatesBody": "Les modèles de club permettent aux membres d'adopter un plan d'entraînement, une séance ou une routine de muscu dans les leurs. Les admins peuvent en publier un via « Ajouter un modèle » ci-dessus.",
 	"clubHome.changeRoleAria": "Changer le rôle du membre",
 	"clubHome.toastRoleChangeFailed": "Impossible de changer le rôle : {error}",
 	"clubHome.roleOptionAdmin": "Admin",

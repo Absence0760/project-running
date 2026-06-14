@@ -1652,6 +1652,8 @@ export const en = {
 	"clubHome.unpublish": "Unpublish",
 	"clubHome.emptyMembersTitle": "No members yet",
 	"clubHome.emptyMembersBody": "As soon as someone joins, they'll appear here with their role.",
+	"clubHome.emptyTemplatesTitle": "No templates yet",
+	"clubHome.emptyTemplatesBody": "Club templates let members adopt a training plan, session, or gym routine into their own. Admins can publish one with Add template above.",
 	"clubHome.changeRoleAria": "Change member role",
 	"clubHome.toastRoleChangeFailed": "Failed to change role: {error}",
 	"clubHome.roleOptionAdmin": "Admin",

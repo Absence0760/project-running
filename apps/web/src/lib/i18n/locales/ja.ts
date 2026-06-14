@@ -1639,6 +1639,8 @@ export const messages = {
 	"clubHome.unpublish": "公開を取り消す",
 	"clubHome.emptyMembersTitle": "まだメンバーがいません",
 	"clubHome.emptyMembersBody": "誰かが参加すると、その役割とともにここに表示されます。",
+	"clubHome.emptyTemplatesTitle": "テンプレートはまだありません",
+	"clubHome.emptyTemplatesBody": "クラブのテンプレートを使うと、メンバーはトレーニングプラン・セッション・ジムルーチンを自分用に取り込めます。管理者は上の「テンプレートを追加」から公開できます。",
 	"clubHome.changeRoleAria": "メンバーの役割を変更",
 	"clubHome.toastRoleChangeFailed": "役割を変更できませんでした: {error}",
 	"clubHome.roleOptionAdmin": "管理者",

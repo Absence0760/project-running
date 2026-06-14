@@ -1642,6 +1642,8 @@ export const messages = {
 	"clubHome.unpublish": "Despublicar",
 	"clubHome.emptyMembersTitle": "Ainda não há membros",
 	"clubHome.emptyMembersBody": "Assim que alguém entrar, aparecerá aqui com seu papel.",
+	"clubHome.emptyTemplatesTitle": "Ainda não há modelos",
+	"clubHome.emptyTemplatesBody": "Os modelos do clube permitem que os membros adotem um plano de treino, uma sessão ou uma rotina de academia nos seus próprios. Os administradores podem publicar um com Adicionar modelo acima.",
 	"clubHome.changeRoleAria": "Alterar papel do membro",
 	"clubHome.toastRoleChangeFailed": "Não foi possível alterar o papel: {error}",
 	"clubHome.roleOptionAdmin": "Administrador",

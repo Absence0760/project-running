@@ -1643,6 +1643,8 @@ export const messages = {
 	"clubHome.unpublish": "Zurückziehen",
 	"clubHome.emptyMembersTitle": "Noch keine Mitglieder",
 	"clubHome.emptyMembersBody": "Sobald jemand beitritt, erscheint er hier mit seiner Rolle.",
+	"clubHome.emptyTemplatesTitle": "Noch keine Vorlagen",
+	"clubHome.emptyTemplatesBody": "Mit Club-Vorlagen können Mitglieder einen Trainingsplan, eine Session oder eine Gym-Routine in ihre eigenen übernehmen. Admins veröffentlichen eine über „Vorlage hinzufügen“ oben.",
 	"clubHome.changeRoleAria": "Mitgliederrolle ändern",
 	"clubHome.toastRoleChangeFailed": "Rolle konnte nicht geändert werden: {error}",
 	"clubHome.roleOptionAdmin": "Admin",

@@ -1643,6 +1643,8 @@ export const messages = {
 	"clubHome.unpublish": "Despublicar",
 	"clubHome.emptyMembersTitle": "Aún no hay miembros",
 	"clubHome.emptyMembersBody": "En cuanto alguien se una, aparecerá aquí con su rol.",
+	"clubHome.emptyTemplatesTitle": "Aún no hay plantillas",
+	"clubHome.emptyTemplatesBody": "Las plantillas del club permiten a los miembros adoptar un plan de entrenamiento, una sesión o una rutina de gimnasio en los suyos. Los administradores pueden publicar una con Añadir plantilla arriba.",
 	"clubHome.changeRoleAria": "Cambiar el rol del miembro",
 	"clubHome.toastRoleChangeFailed": "No se pudo cambiar el rol: {error}",
 	"clubHome.roleOptionAdmin": "Administrador",

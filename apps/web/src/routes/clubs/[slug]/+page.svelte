@@ -1338,13 +1338,20 @@
 				</div>
 			{/if}
 
+			{#if clubTemplates.length === 0 && sessionTemplates.length === 0 && gymRoutineTemplates.length === 0}
+				<div class="empty-card">
+					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<h3>{tr('clubHome.emptyTemplatesTitle')}</h3>
+					<p class="empty-text">{tr('clubHome.emptyTemplatesBody')}</p>
+				</div>
+			{:else}
 			<!-- Training plan templates -->
+			{#if clubTemplates.length > 0}
 			<section class="template-group">
 				<div class="template-group-head">
 					<h3>{tr('clubHome.trainingTemplatesTitle')}</h3>
 				</div>
 				<p class="section-hint">{tr('clubHome.templatesHint')}</p>
-				{#if clubTemplates.length > 0}
 					<ul class="template-list">
 						{#each clubTemplates as t (t.id)}
 							<li class="template-row">
@@ -1376,16 +1383,16 @@
 							</li>
 						{/each}
 					</ul>
-				{/if}
 			</section>
+			{/if}
 
 			<!-- Session templates -->
+			{#if sessionTemplates.length > 0}
 			<section class="template-group">
 				<div class="template-group-head">
 					<h3>{tr('clubHome.sessionTemplatesTitle')}</h3>
 				</div>
 				<p class="section-hint">{tr('clubHome.sessionTemplatesHint')}</p>
-				{#if sessionTemplates.length > 0}
 					<ul class="template-list">
 						{#each sessionTemplates as s (s.id)}
 							<li class="template-row">
@@ -1413,16 +1420,16 @@
 							</li>
 						{/each}
 					</ul>
-				{/if}
 			</section>
+			{/if}
 
 			<!-- Gym routine templates -->
+			{#if gymRoutineTemplates.length > 0}
 			<section class="template-group">
 				<div class="template-group-head">
 					<h3>{tr('clubHome.gymRoutineTemplatesTitle')}</h3>
 				</div>
 				<p class="section-hint">{tr('clubHome.gymRoutineTemplatesHint')}</p>
-				{#if gymRoutineTemplates.length > 0}
 					<ul class="template-list">
 						{#each gymRoutineTemplates as g (g.id)}
 							<li class="template-row">
@@ -1449,8 +1456,9 @@
 							</li>
 						{/each}
 					</ul>
-				{/if}
 			</section>
+			{/if}
+			{/if}
 		{:else if tab === 'members'}
 			{#if members.length === 0}
 				<div class="empty-card">
