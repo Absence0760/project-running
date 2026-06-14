@@ -72,6 +72,72 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 		await expect(page).toHaveURL(new RegExp(`/plans/${SEED_PLAN_ID}$`));
 	});
 
+	test('skip + un-skip a workout from the detail page', async ({ page }) => {
+		// Pick a non-rest, non-completed workout off the plan so the
+		// Skip control renders (rest days + linked-run workouts don't
+		// show it). Reset its skip state after so the test is idempotent.
+		const admin = getAdminClient();
+		const { data: weekRow } = await admin
+			.from('plan_weeks')
+			.select('id')
+			.eq('plan_id', SEED_PLAN_ID)
+			.eq('week_index', 0)
+			.maybeSingle();
+		const { data: woRow } = await admin
+			.from('plan_workouts')
+			.select('id, kind')
+			.eq('week_id', (weekRow as { id: string }).id)
+			.neq('kind', 'rest')
+			.is('completed_run_id', null)
+			.order('scheduled_date', { ascending: true })
+			.limit(1)
+			.maybeSingle();
+		expect(woRow).not.toBeNull();
+		const wo = woRow as { id: string };
+
+		try {
+			await admin
+				.from('plan_workouts')
+				.update({ skipped_at: null, manually_completed: false })
+				.eq('id', wo.id);
+
+			await page.goto(`/plans/${SEED_PLAN_ID}/workouts/${wo.id}`);
+
+			// Skip it — the "Skipped" badge + an Un-skip button appear.
+			await page.getByRole('button', { name: /^Skip this workout$/i }).click();
+			await expect(page.getByText('Skipped', { exact: true })).toBeVisible({
+				timeout: 10_000
+			});
+			const unskip = page.getByRole('button', { name: /^Un-skip$/i });
+			await expect(unskip).toBeVisible();
+
+			// Server-side: skipped_at stamped.
+			const { data: afterSkip } = await admin
+				.from('plan_workouts')
+				.select('skipped_at')
+				.eq('id', wo.id)
+				.maybeSingle();
+			expect((afterSkip as { skipped_at: string | null }).skipped_at).not.toBeNull();
+
+			// Un-skip returns it to a plain to-do (the Skip button is back).
+			await unskip.click();
+			await expect(
+				page.getByRole('button', { name: /^Skip this workout$/i })
+			).toBeVisible({ timeout: 10_000 });
+			const { data: afterUnskip } = await admin
+				.from('plan_workouts')
+				.select('skipped_at')
+				.eq('id', wo.id)
+				.maybeSingle();
+			expect((afterUnskip as { skipped_at: string | null }).skipped_at).toBeNull();
+		} finally {
+			await admin
+				.from('plan_workouts')
+				.update({ skipped_at: null })
+				.eq('id', wo.id);
+		}
+	});
+
 	test('not-found: visiting a missing workout id renders "Workout not found"', async ({
 		page
 	}) => {
