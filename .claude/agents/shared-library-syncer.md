@@ -1,6 +1,6 @@
 ---
 name: shared-library-syncer
-description: Use proactively after editing any TS↔Dart parity helper. Several pure-logic helpers exist in both apps/web/src/lib/ (TypeScript) and apps/mobile_android/lib/ (Dart). The convention is "keep in lockstep" but it's documented, not enforced. This agent detects divergence on the eight known pairs and reports what needs updating on the other side. Run after edits to any file in the pair list below before declaring the task done.
+description: Use proactively after editing any TS↔Dart parity helper. Several pure-logic helpers exist in both apps/web/src/lib/ (TypeScript) and apps/mobile_android/lib/ (Dart). The convention is "keep in lockstep" but it's documented, not enforced. This agent detects divergence on the known parity pairs (listed in full below) and reports what needs updating on the other side. Run after edits to any file in the pair list below before declaring the task done.
 tools: Bash, Read
 model: haiku
 ---
@@ -43,6 +43,16 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/training/plan_replan.ts` (`replanRemaining`) | `apps/mobile_android/lib/plan_replan.dart` | `training/plan_replan.test.ts` ↔ `test/plan_replan_test.dart` |
 | `apps/web/src/lib/training/plan_adaptive_replan.ts` (`adaptiveReplanRemaining`) | `apps/mobile_android/lib/plan_adaptive_replan.dart` | `training/plan_adaptive_replan.test.ts` ↔ `test/plan_adaptive_replan_test.dart` |
 | `apps/web/src/lib/training/starter_plans.ts` (`STARTER_PLANS`, `instantiateStarter`) | `apps/mobile_android/lib/starter_plans.dart` | `training/starter_plans.test.ts` ↔ `test/starter_plans_test.dart` |
+| `apps/web/src/lib/runs/age_grade.ts` | `apps/mobile_android/lib/age_grade.dart` | `runs/age_grade.test.ts` ↔ `test/age_grade_test.dart` |
+| `apps/web/src/lib/social/runner_handle.ts` | `apps/mobile_android/lib/runner_handle.dart` | `social/runner_handle.test.ts` ↔ `test/runner_handle_test.dart` |
+| `apps/web/src/lib/routes/route_description.ts` (`describeRoute`, `assembleEnglish`) | `apps/mobile_android/lib/route_description.dart` | `routes/route_description.test.ts` ↔ `test/route_description_test.dart` |
+| `apps/web/src/lib/training/current_week.ts` (`currentWeek`) | `apps/mobile_android/lib/current_week.dart` | `training/current_week.test.ts` ↔ `test/current_week_test.dart` |
+| `apps/web/src/lib/training/plan_progress.ts` (`orderedPlanPhases`, `longestCompletedLongRunMetres`) | `apps/mobile_android/lib/plan_progress.dart` | `training/plan_progress.test.ts` ↔ `test/plan_progress_test.dart` |
+| `apps/web/src/lib/training/relink_candidates.ts` (`filterRelinkCandidates`) | `apps/mobile_android/lib/relink_candidates.dart` | `training/relink_candidates.test.ts` ↔ `test/relink_candidates_test.dart` |
+| `apps/web/src/lib/gym/routine_editor_build.ts` (`assignSupersetGroups`) | `apps/mobile_android/lib/routine_editor_build.dart` | `gym/routine_editor_build.test.ts` ↔ `test/routine_editor_build_test.dart` |
+| `apps/web/src/lib/gym/progression_prefill.ts` (`lastSessionSets`) | `apps/mobile_android/lib/progression_prefill.dart` | `gym/progression_prefill.test.ts` ↔ `test/progression_prefill_test.dart` |
+
+> The embedded factor tables `apps/web/src/lib/runs/age_grade_tables.ts` ↔ `apps/mobile_android/lib/age_grade_tables.dart` are part of the `age_grade` pair but are **generated** from `scripts/age_grade/` and stay identical by construction — never hand-edit them.
 
 The mobile_android side is the byte-identical twin source — `apps/mobile_ios/` mirrors it automatically (handled by `mobile-twin-mirror`), so you only compare web ↔ android.
 
