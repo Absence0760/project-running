@@ -24,7 +24,7 @@ This is the repeatable "do another round of this" loop: **improve → commit per
 - **Web is canonical** ([decisions §24](../../docs/architecture/decisions.md)). Build the improvement on web first. Mobile/watch mirror later.
 - **Real gap, not churn.** Pick something with user value: a missing signal (e.g. "warn before a shoe is worn out"), a feature that should be interconnected but isn't (e.g. "today's run should raise the nutrition goal"), or a shipped surface that's inconsistent with the rest of the app. Confirm the gap is real by reading the code before building — don't assume.
 - **Recommend the long-term solution and do it fully** (CLAUDE.md). No band-aids; fix the root cause and extract the reusable piece when there is one.
-- **Pin every fix with a test** so it can't regress — a unit test for pure logic, an e2e for a UI path, or a source-scan guard for a class of mistake.
+- **Pin every fix with a test** so it can't regress — a unit test for pure logic, an e2e for a UI path, or a source-scan guard for a class of mistake. This covers **any bug surfaced while building**, not just the improvement itself: if the round uncovers a latent defect, fix it at the root and pin it (the adjacent edge cases too, so a near-miss can't resurface it) in its own commit. A fix with no test is not done.
 
 ## The loop
 

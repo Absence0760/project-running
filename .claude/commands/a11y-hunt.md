@@ -65,6 +65,7 @@ Per [CLAUDE.md § Commit cadence](../../CLAUDE.md), each fix is its own commit w
 - **Fix every platform the violation ships on in the same piece** — web `.svelte` + the byte-identical mobile twin (`mobile-twin-mirror`) + watch where it applies. Don't fix web contrast and leave the Dart twin failing.
 - **i18n**: any new user-facing label/alt text added for a name/role fix goes into all six locales (`apps/web/src/lib/i18n/locales/*` + the mobile ARBs); `messages_parity.test.ts` / `l10n_parity_test.dart` enforce it.
 - **Pin it.** This repo guards a11y with source-level tests (`contrast_guard.test.ts`, `rtl_css_guards.test.ts`, `rtl_shell_guards.test.ts`): add/extend a guard that asserts the contrast ratio clears AA, the target meets the minimum, or the logical property is used — so the regression can't silently return. Compute the asserted ratio in the test, don't hard-code a number you didn't derive.
+- **Every violation fixed in this loop gets its guard in the same commit — including ones found incidentally**, and across **every** theme/locale/platform the criterion applies to (both light + dark for contrast, every locale for a label, both twins). A fix with no guard is not done; a verified-but-deferred violation goes to `docs/product/followups.md`, not into an unguarded commit.
 
 **Commit discipline (shared working tree — [CLAUDE.md § Working alongside other Claude sessions](../../CLAUDE.md)):**
 - Always path-scoped: `git commit -m "…" -- path1 path2 …`. `git add <new-file>` for new files only; never `git add -A`/`-u`, never a bare `git commit`.

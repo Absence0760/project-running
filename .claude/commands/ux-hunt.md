@@ -59,6 +59,7 @@ Per piece (one anti-pattern = one or two commits — web commit, mobile commit):
 - Web UI path → Playwright in `apps/web/tests-e2e/` (intercept a request with `route.fulfill({status:500})` to force the failure path; assert cancel-keeps / confirm-removes for a confirm).
 - Mobile → a Flutter widget test in `apps/mobile_android/test/` (mirror to iOS).
 - **Crucial:** when you add a confirm to an action, the **existing** e2e/widget tests that assumed an immediate delete will break — update them to step through the dialog in the same commit.
+- **Every anti-pattern fixed in this loop gets a test in the same commit — including ones found incidentally**, and on every platform the fix ships to. Cover the case that *was* broken (the failure path, the second rapid tap, the empty state), not just the happy path. A fix with no test is not done; a verified-but-deferred issue goes to `docs/product/followups.md`, not into an untested commit.
 
 **Commit discipline** ([CLAUDE.md § Working alongside other Claude sessions](../../CLAUDE.md)): always path-scoped (`git commit -m "…" -- path …`), never `git add -A`/`-u`/bare commit, `git status` before each, every path yours, no AI attribution, never `git push` without an ask.
 
