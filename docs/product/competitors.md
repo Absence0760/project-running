@@ -65,7 +65,7 @@ The Android app already covers a surprising amount of ground for an in-developme
 
 ### What's deliberately not in the app yet (and why)
 
-Most of what this section used to gate has shipped — OAuth (Google + Apple sign-in), Strava live OAuth + webhook sync, parkrun athlete-number import, BLE chest-strap HR, persistent disk tile cache, premium training endpoints + the matching UI (training plans, VDOT / VO₂ max, training load, recovery advice), the **live structured-workout execution loop** (Android — band overlay + planned-vs-actual review, see [workout_execution.md](../features/workout_execution.md)), **audio-coached / guided runs** (web preview library + mobile TTS execution), live spectator (Supabase Realtime path), segments + leaderboards (v1 + v2 tiered with KOM/QOM crowns), follows + kudos + comments + notifications inbox, clubs + events + posts, gear tracking, photos on runs, web heatmap v1. Today's genuinely deferred items, sourced from the `[ ]` rows in [roadmap.md](roadmap.md) Phase 3 + the unphased competitor-parity backlog:
+Most of what this section used to gate has shipped — OAuth (Google + Apple sign-in), Strava live OAuth + webhook sync, parkrun athlete-number import, BLE chest-strap HR, persistent disk tile cache, premium training endpoints + the matching UI (training plans, VDOT / VO₂ max, training load, recovery advice), the **live structured-workout execution loop** (Android — band overlay + planned-vs-actual review, see [workout_execution.md](../features/workout_execution.md)), **audio-coached / guided runs** (web preview library + mobile TTS execution), live spectator (Supabase Realtime path), segments + leaderboards (v1 + v2 tiered with KOM/QOM crowns), follows + kudos + comments + notifications inbox, clubs + events + posts, gear tracking, photos on runs, heatmap discovery (web + mobile). Today's genuinely deferred items, sourced from the `[ ]` rows in [roadmap.md](roadmap.md) Phase 3 + the unphased competitor-parity backlog:
 
 - **Training-plan re-planning around missed sessions** — the generator emits a static plan and the adherence layer (`plan_adherence.ts`) now *detects* drift + a missed long run, but the plan doesn't auto-adjust. This is the last real training-engine gap and Runna's headline feature.
 - **Push notifications (FCM / APNs)** — `device_tokens` table is shipped; the sender + client-side token registration are blocked on user-supplied Firebase / APNs credentials.
@@ -290,6 +290,8 @@ Seven apps, each as **Positioning / Strengths / Weaknesses / Verdict**. For the 
 | Wear OS | ✓ | ✓ | — | — | — | — | — | — |
 | Garmin sync | ✓ | ✓ | Native | ✓ | Partial | ✓ | ✓ | — |
 
+> **iOS / Apple Watch caveat:** the iOS and Apple Watch ✓ above reflect code-complete parity (the byte-identical Dart twin + the native watch projects), not verified shipping. [`parity.md`](parity.md) defers both pending Mac-runtime verification — cross-reference it before treating these as live.
+
 ---
 
 ## Feature gap matrix
@@ -305,7 +307,7 @@ Same legend as above. The **This app** column notes the platform(s) each feature
 | Open-source maps (MapLibre) | ✓ | — | — | — | — | — | — | — |
 | Turn-by-turn navigation | ✓ | — | ✓ | — | Limited | ✓ | — | Breadcrumb only |
 | Offline maps | Partial (disk tile cache shipped; offline packs pending) | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — | ✓ (on-watch, higher-end models) |
-| Heatmaps / popular-route tiles | ✓ (web v1; mobile read pending) | ✓ (premium) | — | — | — | ✓ | — | — |
+| Heatmaps / popular-route tiles | ✓ (web + mobile) | ✓ (premium) | — | — | — | ✓ | — | — |
 | Community routes | ✓ (web, Android) | ✓ | — | — | ✓ | ✓ | — | — |
 | Route-condition reports | Backlog | — | — | — | ✓ | ✓ | — | — |
 | **Integrations & import** | | | | | | | | |

@@ -568,4 +568,4 @@ These are stubs. Each closes a gap against a specific competitor (see `docs/prod
 
 ---
 
-*Last updated: April 2026*
+*Last updated: 2026-06-14*
