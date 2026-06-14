@@ -1750,6 +1750,7 @@ export const en = {
 	"coachingAthlete.missedCount": "{n} missed",
 	"coachingAthlete.statusDone": "Done",
 	"coachingAthlete.statusMissed": "Missed",
+	"coachingAthlete.statusSkipped": "Skipped",
 	"coachingAthlete.statusUpcoming": "Upcoming",
 	"coachingAthlete.recentRuns": "Recent runs",
 	"coachingAthlete.noRunsYet": "No runs recorded yet.",

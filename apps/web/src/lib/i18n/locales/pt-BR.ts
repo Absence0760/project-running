@@ -1740,6 +1740,7 @@ export const messages = {
 	"coachingAthlete.missedCount": "{n} perdidos",
 	"coachingAthlete.statusDone": "Feito",
 	"coachingAthlete.statusMissed": "Perdido",
+	"coachingAthlete.statusSkipped": "Ignorado",
 	"coachingAthlete.statusUpcoming": "Próximo",
 	"coachingAthlete.recentRuns": "Corridas recentes",
 	"coachingAthlete.noRunsYet": "Nenhuma corrida registrada ainda.",

@@ -1741,6 +1741,7 @@ export const messages = {
 	"coachingAthlete.missedCount": "{n} verpasst",
 	"coachingAthlete.statusDone": "Erledigt",
 	"coachingAthlete.statusMissed": "Verpasst",
+	"coachingAthlete.statusSkipped": "Übersprungen",
 	"coachingAthlete.statusUpcoming": "Anstehend",
 	"coachingAthlete.recentRuns": "Letzte Läufe",
 	"coachingAthlete.noRunsYet": "Noch keine Läufe aufgezeichnet.",

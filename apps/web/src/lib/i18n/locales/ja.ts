@@ -1737,6 +1737,7 @@ export const messages = {
 	"coachingAthlete.missedCount": "{n}件未実施",
 	"coachingAthlete.statusDone": "完了",
 	"coachingAthlete.statusMissed": "未実施",
+	"coachingAthlete.statusSkipped": "スキップ",
 	"coachingAthlete.statusUpcoming": "予定",
 	"coachingAthlete.recentRuns": "最近のラン",
 	"coachingAthlete.noRunsYet": "まだランが記録されていません。",

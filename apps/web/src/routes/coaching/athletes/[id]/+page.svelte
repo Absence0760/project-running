@@ -17,6 +17,7 @@
 	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { formatDuration, formatDate } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
+	import { isWorkoutSkipped } from '$lib/training/training';
 
 	const athleteId = $derived($page.params.id);
 
@@ -121,8 +122,11 @@
 		return formatPace(r.duration_s, r.distance_m);
 	}
 
-	function workoutStatus(w: PlanWorkout): 'done' | 'missed' | 'upcoming' | 'rest' {
+	function workoutStatus(w: PlanWorkout): 'done' | 'missed' | 'skipped' | 'upcoming' | 'rest' {
 		if (w.kind === 'rest') return 'rest';
+		// A deliberately-skipped workout is off the books — never a miss (mirrors
+		// fetchAthletePlanOverview's completionPct, which drops it from the total).
+		if (isWorkoutSkipped(w)) return 'skipped';
 		if (w.manually_completed === true || w.completed_run_id != null) return 'done';
 		// Local-tz today vs the scheduled date string (YYYY-MM-DD).
 		const today = new Date();
@@ -138,7 +142,10 @@
 	// Compliance counts over the whole plan (rest days excluded).
 	const compliance = $derived.by(() => {
 		if (!overview) return null;
-		const real = overview.workouts.filter((w) => w.kind !== 'rest');
+		// Skipped workouts are off the books (same exclusion fetchAthletePlanOverview
+		// applies to completionPct) — keeping them in the denominator here made the
+		// X/Y-done text disagree with the progress bar and miscounted a skip as a miss.
+		const real = overview.workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w));
 		const done = real.filter(
 			(w) => w.manually_completed === true || w.completed_run_id != null
 		).length;
@@ -277,7 +284,9 @@
 									? m('coachingAthlete.statusDone')
 									: status === 'missed'
 										? m('coachingAthlete.statusMissed')
-										: m('coachingAthlete.statusUpcoming')}
+										: status === 'skipped'
+											? m('coachingAthlete.statusSkipped')
+											: m('coachingAthlete.statusUpcoming')}
 							</span>
 						</li>
 					{/each}
@@ -521,6 +530,11 @@
 		background: var(--color-surface);
 		color: var(--color-text-secondary);
 		border: 1px solid var(--color-border);
+	}
+	.status-pill.status-skipped {
+		background: var(--color-surface);
+		color: var(--color-text-secondary);
+		border: 1px dashed var(--color-border);
 	}
 	.error-banner {
 		display: flex;
