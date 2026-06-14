@@ -3061,6 +3061,7 @@ class TrainingPlanRow {
   static const String colParentTemplateId = 'parent_template_id';
   static const String colClubId = 'club_id';
   static const String colAssignedByCoachId = 'assigned_by_coach_id';
+  static const String colIsPublicTemplate = 'is_public_template';
 
   final String id;
   final String userId;
@@ -3083,6 +3084,7 @@ class TrainingPlanRow {
   final String? parentTemplateId;
   final String? clubId;
   final String? assignedByCoachId;
+  final bool isPublicTemplate;
 
   const TrainingPlanRow({
     required this.id,
@@ -3106,6 +3108,7 @@ class TrainingPlanRow {
     this.parentTemplateId,
     this.clubId,
     this.assignedByCoachId,
+    required this.isPublicTemplate,
   });
 
   factory TrainingPlanRow.fromJson(Map<String, dynamic> json) => TrainingPlanRow(
@@ -3130,6 +3133,7 @@ class TrainingPlanRow {
     parentTemplateId: json['parent_template_id'] as String?,
     clubId: json['club_id'] as String?,
     assignedByCoachId: json['assigned_by_coach_id'] as String?,
+    isPublicTemplate: (json['is_public_template'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3154,6 +3158,7 @@ class TrainingPlanRow {
     colParentTemplateId: parentTemplateId,
     colClubId: clubId,
     colAssignedByCoachId: assignedByCoachId,
+    colIsPublicTemplate: isPublicTemplate,
   };
 }
 
