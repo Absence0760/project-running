@@ -8605,4 +8605,28 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routeMarkerServiceDropBag => 'ドロップバッグ';
+
+  @override
+  String get clubFormEditTitle => 'クラブを編集';
+
+  @override
+  String get clubEditorWebsite => 'ウェブサイト';
+
+  @override
+  String get clubEditorInstagram => 'Instagram';
+
+  @override
+  String get clubEditorStrava => 'Strava';
+
+  @override
+  String get clubEditorFacebook => 'Facebook';
+
+  @override
+  String get clubEditorSaveChanges => '変更を保存';
+
+  @override
+  String get clubDetailVisitWebsite => 'ウェブサイトを見る';
+
+  @override
+  String get clubDetailEditClub => 'クラブを編集';
 }

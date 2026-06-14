@@ -9052,6 +9052,30 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeMarkerServiceDropBag => 'Drop bag';
+
+  @override
+  String get clubFormEditTitle => 'Editar clube';
+
+  @override
+  String get clubEditorWebsite => 'Site';
+
+  @override
+  String get clubEditorInstagram => 'Instagram';
+
+  @override
+  String get clubEditorStrava => 'Strava';
+
+  @override
+  String get clubEditorFacebook => 'Facebook';
+
+  @override
+  String get clubEditorSaveChanges => 'Salvar alterações';
+
+  @override
+  String get clubDetailVisitWebsite => 'Visite nosso site';
+
+  @override
+  String get clubDetailEditClub => 'Editar clube';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18102,4 +18126,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeMarkerServiceDropBag => 'Drop bag';
+
+  @override
+  String get clubFormEditTitle => 'Editar clube';
+
+  @override
+  String get clubEditorWebsite => 'Site';
+
+  @override
+  String get clubEditorInstagram => 'Instagram';
+
+  @override
+  String get clubEditorStrava => 'Strava';
+
+  @override
+  String get clubEditorFacebook => 'Facebook';
+
+  @override
+  String get clubEditorSaveChanges => 'Salvar alterações';
+
+  @override
+  String get clubDetailVisitWebsite => 'Visite nosso site';
+
+  @override
+  String get clubDetailEditClub => 'Editar clube';
 }

@@ -28,6 +28,10 @@ class _FakeSocialService extends SocialService {
     String? locationLabel,
     bool isPublic = true,
     String joinPolicy = 'open',
+    String? websiteUrl,
+    String? instagramUrl,
+    String? stravaUrl,
+    String? facebookUrl,
   }) async {
     throw _throwOnCreate;
   }

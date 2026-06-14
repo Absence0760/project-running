@@ -2499,5 +2499,13 @@
   "routeMarkerServiceFood": "Comida",
   "routeMarkerServiceMedical": "Médico",
   "routeMarkerServiceToilets": "Banheiros",
-  "routeMarkerServiceDropBag": "Drop bag"
+  "routeMarkerServiceDropBag": "Drop bag",
+  "clubFormEditTitle": "Editar clube",
+  "clubEditorWebsite": "Site",
+  "clubEditorInstagram": "Instagram",
+  "clubEditorStrava": "Strava",
+  "clubEditorFacebook": "Facebook",
+  "clubEditorSaveChanges": "Salvar alterações",
+  "clubDetailVisitWebsite": "Visite nosso site",
+  "clubDetailEditClub": "Editar clube"
 }

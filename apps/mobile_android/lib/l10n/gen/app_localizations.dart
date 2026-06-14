@@ -15035,6 +15035,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drop bag'**
   String get routeMarkerServiceDropBag;
+
+  /// Title of the edit-club form
+  ///
+  /// In en, this message translates to:
+  /// **'Edit club'**
+  String get clubFormEditTitle;
+
+  /// Club website link field label
+  ///
+  /// In en, this message translates to:
+  /// **'Website'**
+  String get clubEditorWebsite;
+
+  /// Club Instagram link field label
+  ///
+  /// In en, this message translates to:
+  /// **'Instagram'**
+  String get clubEditorInstagram;
+
+  /// Club Strava link field label
+  ///
+  /// In en, this message translates to:
+  /// **'Strava'**
+  String get clubEditorStrava;
+
+  /// Club Facebook link field label
+  ///
+  /// In en, this message translates to:
+  /// **'Facebook'**
+  String get clubEditorFacebook;
+
+  /// Save button on the edit-club form
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get clubEditorSaveChanges;
+
+  /// Club page website link label
+  ///
+  /// In en, this message translates to:
+  /// **'Visit our website'**
+  String get clubDetailVisitWebsite;
+
+  /// Club page edit action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Edit club'**
+  String get clubDetailEditClub;
 }
 
 class _AppLocalizationsDelegate

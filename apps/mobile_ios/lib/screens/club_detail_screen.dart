@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart' hide Route;
@@ -18,6 +19,7 @@ import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
+import '../widgets/club_form_sheet.dart';
 import '../widgets/event_form_sheet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/route_track_preview.dart';
@@ -348,6 +350,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           ],
         ),
         actions: [
+          if (c.isAdmin)
+            IconButton(
+              tooltip: AppLocalizations.of(context).clubDetailEditClub,
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _openEdit(c),
+            ),
           IconButton(
             tooltip: AppLocalizations.of(context).clubDetailReportClub,
             icon: const Icon(Icons.flag_outlined),
@@ -468,6 +476,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
+                _clubLinks(context, c),
               ],
             ),
           ),
@@ -475,6 +484,47 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           cta,
         ],
       ),
+    );
+  }
+
+  Future<void> _openEdit(ClubView c) async {
+    final saved = await showClubFormSheet(
+      context,
+      social: widget.social,
+      existing: c.row,
+    );
+    if (saved != null) await _load();
+  }
+
+  Widget _clubLinks(BuildContext context, ClubView c) {
+    final l10n = AppLocalizations.of(context);
+    final links = <Widget>[];
+    void launch(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
+    if (c.row.websiteUrl != null && c.row.websiteUrl!.isNotEmpty) {
+      links.add(TextButton.icon(
+        onPressed: () => launch(c.row.websiteUrl!),
+        icon: const Icon(Icons.language, size: 18),
+        label: Text(l10n.clubDetailVisitWebsite),
+      ));
+    }
+    void social(String? url, IconData icon, String label) {
+      if (url == null || url.isEmpty) return;
+      links.add(IconButton(
+        tooltip: label,
+        icon: Icon(icon, size: 20),
+        onPressed: () => launch(url),
+      ));
+    }
+
+    social(c.row.instagramUrl, Icons.photo_camera, 'Instagram');
+    social(c.row.stravaUrl, Icons.directions_run, 'Strava');
+    social(c.row.facebookUrl, Icons.thumb_up, 'Facebook');
+
+    if (links.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: links),
     );
   }
 

@@ -10487,5 +10487,21 @@
   "routeMarkerServiceToilets": "Toilets",
   "@routeMarkerServiceToilets": {"description": "Aid service: toilets"},
   "routeMarkerServiceDropBag": "Drop bag",
-  "@routeMarkerServiceDropBag": {"description": "Aid service: drop bag"}
+  "@routeMarkerServiceDropBag": {"description": "Aid service: drop bag"},
+  "clubFormEditTitle": "Edit club",
+  "@clubFormEditTitle": {"description": "Title of the edit-club form"},
+  "clubEditorWebsite": "Website",
+  "@clubEditorWebsite": {"description": "Club website link field label"},
+  "clubEditorInstagram": "Instagram",
+  "@clubEditorInstagram": {"description": "Club Instagram link field label"},
+  "clubEditorStrava": "Strava",
+  "@clubEditorStrava": {"description": "Club Strava link field label"},
+  "clubEditorFacebook": "Facebook",
+  "@clubEditorFacebook": {"description": "Club Facebook link field label"},
+  "clubEditorSaveChanges": "Save changes",
+  "@clubEditorSaveChanges": {"description": "Save button on the edit-club form"},
+  "clubDetailVisitWebsite": "Visit our website",
+  "@clubDetailVisitWebsite": {"description": "Club page website link label"},
+  "clubDetailEditClub": "Edit club",
+  "@clubDetailEditClub": {"description": "Club page edit action tooltip"}
 }

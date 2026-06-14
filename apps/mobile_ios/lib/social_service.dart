@@ -23,7 +23,8 @@ import 'recurrence.dart';
 // lockstep.
 const String _clubSelectCols =
     'id, owner_id, name, slug, description, avatar_url, location_label, '
-    'is_public, is_verified, join_policy, member_count, created_at, updated_at';
+    'is_public, is_verified, join_policy, member_count, '
+    'website_url, instagram_url, strava_url, facebook_url, created_at, updated_at';
 
 // Column-level grant lockdown: `events.meet_lat` / `meet_lng` are
 // revoked from anon + authenticated (migrations 20260723_001 +
@@ -396,6 +397,10 @@ class SocialService extends ChangeNotifier {
     String? locationLabel,
     bool isPublic = true,
     String joinPolicy = 'open',
+    String? websiteUrl,
+    String? instagramUrl,
+    String? stravaUrl,
+    String? facebookUrl,
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
@@ -412,6 +417,10 @@ class SocialService extends ChangeNotifier {
         isPublic: isPublic,
         joinPolicy: joinPolicy,
         inviteToken: inviteToken,
+        websiteUrl: websiteUrl,
+        instagramUrl: instagramUrl,
+        stravaUrl: stravaUrl,
+        facebookUrl: facebookUrl,
       );
       try {
         final inserted = await _c
@@ -446,6 +455,10 @@ class SocialService extends ChangeNotifier {
     required bool isPublic,
     required String joinPolicy,
     String? inviteToken,
+    String? websiteUrl,
+    String? instagramUrl,
+    String? stravaUrl,
+    String? facebookUrl,
   }) {
     String? trimToNull(String? s) {
       final t = s?.trim();
@@ -460,7 +473,53 @@ class SocialService extends ChangeNotifier {
       'is_public': isPublic,
       'join_policy': joinPolicy,
       'invite_token': inviteToken,
+      'website_url': normaliseClubLink(websiteUrl),
+      'instagram_url': normaliseClubLink(instagramUrl),
+      'strava_url': normaliseClubLink(stravaUrl),
+      'facebook_url': normaliseClubLink(facebookUrl),
     };
+  }
+
+  /// Trim a club link, returning null for empty / non-http(s) input so a
+  /// `javascript:`/`data:` URL can't be stored (XSS). The DB CHECK is the
+  /// authoritative backstop; this is the friendly client-side gate. Twin of
+  /// web's `normaliseClubLink` in `data.ts`.
+  static String? normaliseClubLink(String? raw) {
+    final v = (raw ?? '').trim();
+    if (v.isEmpty) return null;
+    return RegExp(r'^https?://', caseSensitive: false).hasMatch(v) ? v : null;
+  }
+
+  /// Update a club's editable fields (admin-gated by RLS). Links are
+  /// normalised the same way as on create.
+  Future<void> updateClub(
+    String id, {
+    String? name,
+    String? description,
+    String? locationLabel,
+    bool? isPublic,
+    String? websiteUrl,
+    String? instagramUrl,
+    String? stravaUrl,
+    String? facebookUrl,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (name != null) patch['name'] = name.trim();
+    if (description != null) {
+      patch['description'] = description.trim().isEmpty ? null : description.trim();
+    }
+    if (locationLabel != null) {
+      patch['location_label'] =
+          locationLabel.trim().isEmpty ? null : locationLabel.trim();
+    }
+    if (isPublic != null) patch['is_public'] = isPublic;
+    if (websiteUrl != null) patch['website_url'] = normaliseClubLink(websiteUrl);
+    if (instagramUrl != null) patch['instagram_url'] = normaliseClubLink(instagramUrl);
+    if (stravaUrl != null) patch['strava_url'] = normaliseClubLink(stravaUrl);
+    if (facebookUrl != null) patch['facebook_url'] = normaliseClubLink(facebookUrl);
+    if (patch.isEmpty) return;
+    await _c.from('clubs').update(patch).eq('id', id);
+    notifyListeners();
   }
 
   /// Pure helper: generate a 32-hex-char invite token. Mirrors web's

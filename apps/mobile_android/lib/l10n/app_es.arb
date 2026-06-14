@@ -2499,5 +2499,13 @@
   "routeMarkerServiceFood": "Comida",
   "routeMarkerServiceMedical": "Médico",
   "routeMarkerServiceToilets": "Aseos",
-  "routeMarkerServiceDropBag": "Bolsa de avituallamiento"
+  "routeMarkerServiceDropBag": "Bolsa de avituallamiento",
+  "clubFormEditTitle": "Editar club",
+  "clubEditorWebsite": "Sitio web",
+  "clubEditorInstagram": "Instagram",
+  "clubEditorStrava": "Strava",
+  "clubEditorFacebook": "Facebook",
+  "clubEditorSaveChanges": "Guardar cambios",
+  "clubDetailVisitWebsite": "Visita nuestro sitio web",
+  "clubDetailEditClub": "Editar club"
 }

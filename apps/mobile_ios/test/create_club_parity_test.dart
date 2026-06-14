@@ -195,6 +195,46 @@ void main() {
       expect(token, '0' * 32);
     });
   });
+
+  group('normaliseClubLink — XSS gate (web parity)', () {
+    test('keeps http(s) URLs, trimmed', () {
+      expect(SocialService.normaliseClubLink('https://example.com'),
+          'https://example.com');
+      expect(SocialService.normaliseClubLink('  http://example.com  '),
+          'http://example.com');
+    });
+
+    test('drops empty / whitespace to null', () {
+      expect(SocialService.normaliseClubLink(null), isNull);
+      expect(SocialService.normaliseClubLink(''), isNull);
+      expect(SocialService.normaliseClubLink('   '), isNull);
+    });
+
+    test('drops non-http(s) schemes (javascript:/data:/ftp:)', () {
+      expect(SocialService.normaliseClubLink('javascript:alert(1)'), isNull);
+      expect(SocialService.normaliseClubLink('data:text/html,x'), isNull);
+      expect(SocialService.normaliseClubLink('ftp://example.com'), isNull);
+      expect(SocialService.normaliseClubLink('example.com'), isNull);
+    });
+
+    test('buildCreateClubBody normalises every link column', () {
+      final body = SocialService.buildCreateClubBody(
+        ownerId: ownerId,
+        name: 'Club',
+        slug: 'club',
+        isPublic: true,
+        joinPolicy: 'open',
+        websiteUrl: 'https://club.example',
+        instagramUrl: 'javascript:alert(1)',
+        stravaUrl: '  ',
+        facebookUrl: 'http://fb.example/club',
+      );
+      expect(body['website_url'], 'https://club.example');
+      expect(body['instagram_url'], isNull);
+      expect(body['strava_url'], isNull);
+      expect(body['facebook_url'], 'http://fb.example/club');
+    });
+  });
 }
 
 class _ZeroRandom implements Random {

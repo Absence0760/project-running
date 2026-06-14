@@ -9062,4 +9062,28 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routeMarkerServiceDropBag => 'Dropbag';
+
+  @override
+  String get clubFormEditTitle => 'Club bearbeiten';
+
+  @override
+  String get clubEditorWebsite => 'Webseite';
+
+  @override
+  String get clubEditorInstagram => 'Instagram';
+
+  @override
+  String get clubEditorStrava => 'Strava';
+
+  @override
+  String get clubEditorFacebook => 'Facebook';
+
+  @override
+  String get clubEditorSaveChanges => 'Änderungen speichern';
+
+  @override
+  String get clubDetailVisitWebsite => 'Webseite besuchen';
+
+  @override
+  String get clubDetailEditClub => 'Club bearbeiten';
 }

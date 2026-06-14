@@ -2499,5 +2499,13 @@
   "routeMarkerServiceFood": "補給食",
   "routeMarkerServiceMedical": "救護",
   "routeMarkerServiceToilets": "トイレ",
-  "routeMarkerServiceDropBag": "ドロップバッグ"
+  "routeMarkerServiceDropBag": "ドロップバッグ",
+  "clubFormEditTitle": "クラブを編集",
+  "clubEditorWebsite": "ウェブサイト",
+  "clubEditorInstagram": "Instagram",
+  "clubEditorStrava": "Strava",
+  "clubEditorFacebook": "Facebook",
+  "clubEditorSaveChanges": "変更を保存",
+  "clubDetailVisitWebsite": "ウェブサイトを見る",
+  "clubDetailEditClub": "クラブを編集"
 }
