@@ -12,6 +12,7 @@
 		clonePlanTemplate,
 		createTrainingPlan,
 		fetchGymExerciseNames,
+		publishGymRoutineAsTemplate,
 	} from '$lib/core/data';
 	import { STARTER_PLANS, starterById, instantiateStarter } from '$lib/training/starter_plans';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -77,8 +78,26 @@
 		else goto(`/sessions/${id}`);
 	}
 
-	function onGymCreated(id: string): void {
-		goto(`/gym/routines/${id}`);
+	// Gym routines have no club-admin INSERT policy (unlike session_plans), so a
+	// club-owned routine can only be minted through the admin-checked
+	// publish_gym_routine_as_template RPC. When the editor was opened from a
+	// club's Templates tab, publish the freshly-built routine to the club in the
+	// same step (matching the session branch's one-step club create) and return
+	// to that tab; the personal routine stays on the user's /gym/routines list,
+	// mirroring how publishing a training plan leaves its source plan.
+	async function onGymCreated(id: string): Promise<void> {
+		if (clubId) {
+			try {
+				await publishGymRoutineAsTemplate(id, clubId);
+			} catch (e) {
+				console.error('publish gym routine as club template failed', e);
+				showToast(m('plansNew.clubPublishFailed'), 'error');
+				goto(`/gym/routines/${id}`);
+				return;
+			}
+		}
+		if (clubId && backHref.startsWith('/clubs/')) goto(backHref);
+		else goto(`/gym/routines/${id}`);
 	}
 
 	// Back/cancel target. Defaults to /plans; when the user arrived from a
