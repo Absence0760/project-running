@@ -15,6 +15,8 @@ import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../route_describe_client.dart';
+import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../social_service.dart' show ClubView, SocialService;
 import '../widgets/live_run_map.dart';
@@ -50,6 +52,17 @@ class RouteDetailScreen extends StatefulWidget {
   /// Supabase client. Tests pass a fake.
   final SocialService? social;
 
+  /// Injectable AI-enhancement call for the "Describe this route"
+  /// affordance. Defaults to the real Pro-gated endpoint; tests pass a
+  /// stub to exercise the enhance / upgrade / failure paths without a
+  /// network or a Supabase session.
+  final Future<AiDescriptionResult> Function(RouteDescriptionInput)?
+      describeAi;
+
+  /// Injectable Pro check. Defaults to `apiClient.isPro()`; tests pass a
+  /// fixed value to drive the Pro vs free branch deterministically.
+  final Future<bool> Function()? checkPro;
+
   const RouteDetailScreen({
     super.key,
     required this.route,
@@ -58,6 +71,8 @@ class RouteDetailScreen extends StatefulWidget {
     this.apiClient,
     this.isOwner = false,
     this.social,
+    this.describeAi,
+    this.checkPro,
   });
 
   @override
@@ -108,6 +123,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   bool get _isOwner => widget.isOwner && widget.apiClient?.userId != null;
 
+  // "Describe this route" affordance. The templated description is the
+  // always-works baseline (computed locally, no network); Pro users can
+  // enhance it into an AI-written paragraph. `_genDescription` holds the
+  // generated text (separate from `route.description`, the stored one);
+  // `_genSource` tracks whether it came from the model. Only surfaced
+  // when the route has no stored description, mirroring web.
+  String? _genDescription;
+  String? _genSource;
+  bool _describing = false;
+  bool _describeFailed = false;
+  bool _showUpgradeHint = false;
+
   @override
   void initState() {
     super.initState();
@@ -156,6 +183,207 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       debugPrint('clipRouteForViewer failed for ${widget.route.id}: $e');
       if (mounted) setState(() => _displayWaypoints = const []);
     }
+  }
+
+  /// Map the loaded route into the describer's input shape. Endpoints
+  /// come from the first/last displayed waypoint so loop detection works
+  /// for non-owners too (they get the clipped trace, which still starts
+  /// and ends at the route's real endpoints unless a privacy zone
+  /// clipped them — in which case point-to-point is the safe default).
+  RouteDescriptionInput _describeInput() {
+    final wps = _displayWaypoints;
+    return RouteDescriptionInput(
+      name: widget.route.name,
+      distanceM: widget.route.distanceMetres,
+      elevationM: widget.route.elevationGainMetres,
+      surface: widget.route.surface,
+      start: wps.isNotEmpty ? LatLng(wps.first.lat, wps.first.lng) : null,
+      end: wps.length > 1 ? LatLng(wps.last.lat, wps.last.lng) : null,
+    );
+  }
+
+  /// Build the localised, unit-aware templated description from the
+  /// structured parts. The always-works L1 baseline — instant, no
+  /// network — and the floor the AI path falls back to. Mirrors web's
+  /// `localisedTemplate` (apps/web/src/lib/routes/route_description.ts):
+  /// distance + gain run through the unit-aware formatters; every word is
+  /// translated via the ARB catalogue.
+  String _localisedTemplate(
+    RouteDescriptionParts parts,
+    String name,
+    AppLocalizations l10n,
+    DistanceUnit unit,
+  ) {
+    final shape = switch (parts.shape) {
+      RouteShape.loop => l10n.routeDetailDescShapeLoop,
+      RouteShape.outAndBack => l10n.routeDetailDescShapeOutAndBack,
+      RouteShape.pointToPoint => l10n.routeDetailDescShapePointToPoint,
+    };
+    final surface = switch (parts.surface) {
+      'road' => l10n.routeDetailDescSurfaceRoad,
+      'trail' => l10n.routeDetailDescSurfaceTrail,
+      'mixed' => l10n.routeDetailDescSurfaceMixed,
+      _ => null,
+    };
+    final distance = UnitFormat.distance(parts.distanceM, unit);
+    final sentence = surface != null
+        ? l10n.routeDetailDescSentence(name, distance, surface, shape)
+        : l10n.routeDetailDescSentenceNoSurface(name, distance, shape);
+    if (parts.elevationM > 0) {
+      final elevation = switch (parts.elevation) {
+        ElevationProfile.flat => l10n.routeDetailDescElevFlat,
+        ElevationProfile.rolling => l10n.routeDetailDescElevRolling,
+        ElevationProfile.hilly => l10n.routeDetailDescElevHilly,
+        ElevationProfile.mountainous => l10n.routeDetailDescElevMountainous,
+      };
+      final climb = l10n.routeDetailDescClimb(
+        UnitFormat.elevation(parts.elevationM, unit),
+        elevation,
+        l10n.routeDetailDescPerKm(parts.gainPerKm),
+      );
+      return '$sentence $climb';
+    }
+    return '$sentence ${l10n.routeDetailDescFlat}';
+  }
+
+  /// Generate a description. Always shows the templated baseline first
+  /// (instant, offline), then — for Pro users — asks the server to
+  /// enhance it. A free user's request short-circuits to the upgrade
+  /// hint without a network call. Any hard failure (network / non-200)
+  /// leaves the templated text in place and shows a non-blocking error;
+  /// the baseline is never lost. Fail-closed: an unknown Pro state is
+  /// treated as not-Pro, so a check failure shows templated-only.
+  Future<void> _describe() async {
+    if (_describing) return;
+    final l10n = AppLocalizations.of(context);
+    final unit = widget.preferences.unit;
+    setState(() {
+      _describing = true;
+      _describeFailed = false;
+      _showUpgradeHint = false;
+    });
+
+    final input = _describeInput();
+    final parts = describeRoute(input);
+    // L1 baseline: render the localised templated sentence immediately.
+    setState(() {
+      _genDescription = _localisedTemplate(parts, input.name, l10n, unit);
+      _genSource = 'template';
+    });
+
+    var isPro = false;
+    try {
+      isPro = await (widget.checkPro?.call() ??
+          widget.apiClient?.isPro() ??
+          Future.value(false));
+    } catch (e) {
+      debugPrint('route_detail: isPro check failed: $e');
+      isPro = false;
+    }
+
+    if (!isPro) {
+      if (mounted) {
+        setState(() {
+          _showUpgradeHint = true;
+          _describing = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final ai =
+          await (widget.describeAi ?? requestAiDescription)(input);
+      if (!mounted) return;
+      setState(() {
+        _genDescription = ai.description;
+        _genSource = ai.source;
+        _showUpgradeHint = ai.upgrade;
+      });
+    } catch (e) {
+      debugPrint('route_detail: requestAiDescription failed: $e');
+      if (mounted) setState(() => _describeFailed = true);
+    } finally {
+      if (mounted) setState(() => _describing = false);
+    }
+  }
+
+  /// The "Describe this route" surface shown when the route has no
+  /// stored description. Before generation: a single button. After: the
+  /// generated text, an AI-attribution line (when the model produced it),
+  /// the Pro upgrade hint (free users / server upgrade signal), and a
+  /// non-blocking error line that never replaces the baseline.
+  Widget _describeBlock(ThemeData theme, AppLocalizations l10n) {
+    if (_genDescription == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _describing ? null : _describe,
+          icon: const Icon(Icons.auto_awesome, size: 18),
+          label: Text(_describing
+              ? l10n.routeDetailDescribing
+              : l10n.routeDetailDescribe),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.routeDetailDescriptionHeading,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _genDescription!,
+          style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+        ),
+        if (_genSource == 'ai')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.auto_awesome,
+                    size: 14, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    l10n.routeDetailAiAttribution,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_showUpgradeHint)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              l10n.routeDetailEnhanceUpgradeHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        if (_describeFailed)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              l10n.routeDetailDescribeFailed,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Future<void> _loadBookmarkState() async {
@@ -735,6 +963,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     ),
                   ],
                 ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                child: _describeBlock(theme, l10n),
               ),
 
             // Surface + run-count + featured metadata. Left-aligned

@@ -2414,6 +2414,87 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailDescriptionHeading => 'Descrição';
 
   @override
+  String get routeDetailDescribe => 'Descrever esta rota';
+
+  @override
+  String get routeDetailDescribing => 'Descrevendo…';
+
+  @override
+  String get routeDetailAiAttribution =>
+      'Escrito por IA a partir dos dados da rota';
+
+  @override
+  String get routeDetailDescribeFailed =>
+      'Não foi possível gerar uma descrição. Tente novamente.';
+
+  @override
+  String get routeDetailEnhanceUpgradeHint =>
+      'Descrições com IA são um recurso Pro. Faça upgrade para aprimorar.';
+
+  @override
+  String get routeDetailDescShapeLoop => 'em circuito';
+
+  @override
+  String get routeDetailDescShapeOutAndBack => 'ida e volta';
+
+  @override
+  String get routeDetailDescShapePointToPoint => 'ponto a ponto';
+
+  @override
+  String get routeDetailDescSurfaceRoad => 'de asfalto';
+
+  @override
+  String get routeDetailDescSurfaceTrail => 'de trilha';
+
+  @override
+  String get routeDetailDescSurfaceMixed => 'de superfície mista';
+
+  @override
+  String get routeDetailDescElevFlat => 'plana';
+
+  @override
+  String get routeDetailDescElevRolling => 'levemente ondulada';
+
+  @override
+  String get routeDetailDescElevHilly => 'com subidas';
+
+  @override
+  String get routeDetailDescElevMountainous => 'montanhosa';
+
+  @override
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  ) {
+    return '$name é uma rota $shape $surface de $distance.';
+  }
+
+  @override
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  ) {
+    return '$name é uma rota $shape de $distance.';
+  }
+
+  @override
+  String routeDetailDescClimb(String gain, String elevation, String perKm) {
+    return 'Tem $gain de ganho de elevação — $elevation, cerca de $perKm por km.';
+  }
+
+  @override
+  String get routeDetailDescFlat =>
+      'Tem pouca ou nenhuma variação de elevação.';
+
+  @override
+  String routeDetailDescPerKm(int m) {
+    return '$m m';
+  }
+
+  @override
   String routeDetailRunCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -11144,6 +11225,87 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeDetailDescriptionHeading => 'Descrição';
+
+  @override
+  String get routeDetailDescribe => 'Descrever esta rota';
+
+  @override
+  String get routeDetailDescribing => 'Descrevendo…';
+
+  @override
+  String get routeDetailAiAttribution =>
+      'Escrito por IA a partir dos dados da rota';
+
+  @override
+  String get routeDetailDescribeFailed =>
+      'Não foi possível gerar uma descrição. Tente novamente.';
+
+  @override
+  String get routeDetailEnhanceUpgradeHint =>
+      'Descrições com IA são um recurso Pro. Faça upgrade para aprimorar.';
+
+  @override
+  String get routeDetailDescShapeLoop => 'em circuito';
+
+  @override
+  String get routeDetailDescShapeOutAndBack => 'ida e volta';
+
+  @override
+  String get routeDetailDescShapePointToPoint => 'ponto a ponto';
+
+  @override
+  String get routeDetailDescSurfaceRoad => 'de asfalto';
+
+  @override
+  String get routeDetailDescSurfaceTrail => 'de trilha';
+
+  @override
+  String get routeDetailDescSurfaceMixed => 'de superfície mista';
+
+  @override
+  String get routeDetailDescElevFlat => 'plana';
+
+  @override
+  String get routeDetailDescElevRolling => 'levemente ondulada';
+
+  @override
+  String get routeDetailDescElevHilly => 'com subidas';
+
+  @override
+  String get routeDetailDescElevMountainous => 'montanhosa';
+
+  @override
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  ) {
+    return '$name é uma rota $shape $surface de $distance.';
+  }
+
+  @override
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  ) {
+    return '$name é uma rota $shape de $distance.';
+  }
+
+  @override
+  String routeDetailDescClimb(String gain, String elevation, String perKm) {
+    return 'Tem $gain de ganho de elevação — $elevation, cerca de $perKm por km.';
+  }
+
+  @override
+  String get routeDetailDescFlat =>
+      'Tem pouca ou nenhuma variação de elevação.';
+
+  @override
+  String routeDetailDescPerKm(int m) {
+    return '$m m';
+  }
 
   @override
   String routeDetailRunCount(int count) {

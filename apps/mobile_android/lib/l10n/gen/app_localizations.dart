@@ -4067,6 +4067,135 @@ abstract class AppLocalizations {
   /// **'Description'**
   String get routeDetailDescriptionHeading;
 
+  /// Button that generates a description for a route with none stored
+  ///
+  /// In en, this message translates to:
+  /// **'Describe this route'**
+  String get routeDetailDescribe;
+
+  /// Button label while a route description is being generated
+  ///
+  /// In en, this message translates to:
+  /// **'Describing…'**
+  String get routeDetailDescribing;
+
+  /// Attribution line under an AI-written route description
+  ///
+  /// In en, this message translates to:
+  /// **'Written by AI from this route\'s stats'**
+  String get routeDetailAiAttribution;
+
+  /// Non-blocking error when the AI enhancement fails; the templated baseline stays shown
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t generate a description. Please try again.'**
+  String get routeDetailDescribeFailed;
+
+  /// Upsell shown to free users; the templated description still shows
+  ///
+  /// In en, this message translates to:
+  /// **'AI descriptions are a Pro feature. Upgrade to enhance.'**
+  String get routeDetailEnhanceUpgradeHint;
+
+  /// Route shape word: a route that returns to its start
+  ///
+  /// In en, this message translates to:
+  /// **'loop'**
+  String get routeDetailDescShapeLoop;
+
+  /// Route shape word: out and back along the same path
+  ///
+  /// In en, this message translates to:
+  /// **'out-and-back'**
+  String get routeDetailDescShapeOutAndBack;
+
+  /// Route shape word: starts and ends in different places
+  ///
+  /// In en, this message translates to:
+  /// **'point-to-point'**
+  String get routeDetailDescShapePointToPoint;
+
+  /// Route surface word used inside the templated description sentence
+  ///
+  /// In en, this message translates to:
+  /// **'road'**
+  String get routeDetailDescSurfaceRoad;
+
+  /// Route surface word used inside the templated description sentence
+  ///
+  /// In en, this message translates to:
+  /// **'trail'**
+  String get routeDetailDescSurfaceTrail;
+
+  /// Route surface word used inside the templated description sentence
+  ///
+  /// In en, this message translates to:
+  /// **'mixed-surface'**
+  String get routeDetailDescSurfaceMixed;
+
+  /// Elevation character word inside the templated climb clause
+  ///
+  /// In en, this message translates to:
+  /// **'flat'**
+  String get routeDetailDescElevFlat;
+
+  /// Elevation character word inside the templated climb clause
+  ///
+  /// In en, this message translates to:
+  /// **'gently rolling'**
+  String get routeDetailDescElevRolling;
+
+  /// Elevation character word inside the templated climb clause
+  ///
+  /// In en, this message translates to:
+  /// **'hilly'**
+  String get routeDetailDescElevHilly;
+
+  /// Elevation character word inside the templated climb clause
+  ///
+  /// In en, this message translates to:
+  /// **'mountainous'**
+  String get routeDetailDescElevMountainous;
+
+  /// Templated route description sentence with a surface word
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is a {distance} {surface} {shape} route.'**
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  );
+
+  /// Templated route description sentence when the surface is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is a {distance} {shape} route.'**
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  );
+
+  /// Templated climb clause appended when the route has elevation gain
+  ///
+  /// In en, this message translates to:
+  /// **'It has {gain} of climbing — {elevation}, about {perKm} per km.'**
+  String routeDetailDescClimb(String gain, String elevation, String perKm);
+
+  /// Templated clause appended when the route is essentially flat
+  ///
+  /// In en, this message translates to:
+  /// **'It has little to no elevation change.'**
+  String get routeDetailDescFlat;
+
+  /// Per-kilometre gain figure embedded in the climb clause
+  ///
+  /// In en, this message translates to:
+  /// **'{m} m'**
+  String routeDetailDescPerKm(int m);
+
   /// Meta chip showing how many runs used this route
   ///
   /// In en, this message translates to:

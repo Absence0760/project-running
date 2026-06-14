@@ -2416,6 +2416,86 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailDescriptionHeading => 'Descripción';
 
   @override
+  String get routeDetailDescribe => 'Describir esta ruta';
+
+  @override
+  String get routeDetailDescribing => 'Describiendo…';
+
+  @override
+  String get routeDetailAiAttribution =>
+      'Escrito por IA a partir de los datos de la ruta';
+
+  @override
+  String get routeDetailDescribeFailed =>
+      'No se pudo generar una descripción. Inténtalo de nuevo.';
+
+  @override
+  String get routeDetailEnhanceUpgradeHint =>
+      'Las descripciones con IA son una función Pro. Mejora tu plan para usarla.';
+
+  @override
+  String get routeDetailDescShapeLoop => 'circular';
+
+  @override
+  String get routeDetailDescShapeOutAndBack => 'ida y vuelta';
+
+  @override
+  String get routeDetailDescShapePointToPoint => 'de punto a punto';
+
+  @override
+  String get routeDetailDescSurfaceRoad => 'de asfalto';
+
+  @override
+  String get routeDetailDescSurfaceTrail => 'de sendero';
+
+  @override
+  String get routeDetailDescSurfaceMixed => 'de superficie mixta';
+
+  @override
+  String get routeDetailDescElevFlat => 'llana';
+
+  @override
+  String get routeDetailDescElevRolling => 'suavemente ondulada';
+
+  @override
+  String get routeDetailDescElevHilly => 'con cuestas';
+
+  @override
+  String get routeDetailDescElevMountainous => 'montañosa';
+
+  @override
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  ) {
+    return '$name es una ruta $shape $surface de $distance.';
+  }
+
+  @override
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  ) {
+    return '$name es una ruta $shape de $distance.';
+  }
+
+  @override
+  String routeDetailDescClimb(String gain, String elevation, String perKm) {
+    return 'Tiene $gain de desnivel positivo — $elevation, unos $perKm por km.';
+  }
+
+  @override
+  String get routeDetailDescFlat => 'Apenas tiene desnivel.';
+
+  @override
+  String routeDetailDescPerKm(int m) {
+    return '$m m';
+  }
+
+  @override
   String routeDetailRunCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

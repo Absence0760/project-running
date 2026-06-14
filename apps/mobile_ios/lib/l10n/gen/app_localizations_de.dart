@@ -2423,6 +2423,86 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routeDetailDescriptionHeading => 'Beschreibung';
 
   @override
+  String get routeDetailDescribe => 'Diese Route beschreiben';
+
+  @override
+  String get routeDetailDescribing => 'Wird beschrieben…';
+
+  @override
+  String get routeDetailAiAttribution =>
+      'Von KI aus den Streckendaten verfasst';
+
+  @override
+  String get routeDetailDescribeFailed =>
+      'Beschreibung konnte nicht erstellt werden. Bitte erneut versuchen.';
+
+  @override
+  String get routeDetailEnhanceUpgradeHint =>
+      'KI-Beschreibungen sind eine Pro-Funktion. Upgrade zum Verbessern.';
+
+  @override
+  String get routeDetailDescShapeLoop => 'Rundkurs';
+
+  @override
+  String get routeDetailDescShapeOutAndBack => 'Hin-und-zurück';
+
+  @override
+  String get routeDetailDescShapePointToPoint => 'Punkt-zu-Punkt';
+
+  @override
+  String get routeDetailDescSurfaceRoad => 'Straßen';
+
+  @override
+  String get routeDetailDescSurfaceTrail => 'Trail';
+
+  @override
+  String get routeDetailDescSurfaceMixed => 'Mixed-Surface';
+
+  @override
+  String get routeDetailDescElevFlat => 'flach';
+
+  @override
+  String get routeDetailDescElevRolling => 'leicht hügelig';
+
+  @override
+  String get routeDetailDescElevHilly => 'hügelig';
+
+  @override
+  String get routeDetailDescElevMountainous => 'bergig';
+
+  @override
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  ) {
+    return '$name ist eine $distance lange $surface-$shape-Route.';
+  }
+
+  @override
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  ) {
+    return '$name ist eine $distance lange $shape-Route.';
+  }
+
+  @override
+  String routeDetailDescClimb(String gain, String elevation, String perKm) {
+    return 'Sie hat $gain Anstieg — $elevation, etwa $perKm pro km.';
+  }
+
+  @override
+  String get routeDetailDescFlat => 'Sie hat kaum Höhenunterschied.';
+
+  @override
+  String routeDetailDescPerKm(int m) {
+    return '$m m';
+  }
+
+  @override
   String routeDetailRunCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
