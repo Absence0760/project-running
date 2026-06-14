@@ -232,6 +232,7 @@ See [docs/features/clubs.md](../features/clubs.md). No features.md section yet �
 | Browse clubs | ✓ | ✗ | ✓ | N/A | N/A | |
 | Create club | ✓ | ✗ | ✓ | N/A | N/A | Android: FAB on `clubs_screen.dart` opens `widgets/club_form_sheet.dart` (name, description, location, public/private, join policy with the same visibility ↔ policy linking as web `ClubEditor`). Auto-slugifies the name; the `enroll_club_owner` trigger inserts the owner's `club_members` row server-side. |
 | Club detail (feed / events / members tabs) | ✓ | ✗ | ✓ | N/A | N/A | |
+| Club website + social links | ✓ | ✓ | ✓ | N/A | N/A | A club publishes a website + Instagram/Strava/Facebook link row ("Visit our website"). Migration `20270131_001`: four `*_url` columns with an http(s)-scheme CHECK (XSS backstop) + explicit `grant select`. Admin-edited via dual-mode `ClubEditor` (web) / `club_form_sheet` (mobile); rendered in the club header with `rel="noopener noreferrer nofollow"`. `normaliseClubLink` (web `data.ts` ↔ mobile `social_service.dart`) drops non-http(s) input before write. See [clubs.md § Club links](../features/clubs.md). |
 | Club posts with threaded replies | ✓ | ✗ | ✓ | N/A | N/A | |
 | Create event | ✓ | ✗ | ✓ | N/A | N/A | Android: admin-only "Create event" button on the Events tab of `club_detail_screen.dart` opens `widgets/event_form_sheet.dart` (title, starts_at picker, description, meet label, distance/duration, recurrence none/weekly/biweekly/monthly with auto-byday from the picked DOW). |
 | Event detail + RSVP | ✓ | ✗ | ✓ | N/A | N/A | |

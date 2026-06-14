@@ -64,6 +64,21 @@ Surfaces:
 
 Companion table: `saved_routes (user_id, route_id, saved_at)`. RouteExplorer's bookmark icon inserts a reference here instead of cloning the row, killing the duplicate-public-routes problem the previous "save to library" flow caused. The `/routes` "My routes" tab unions personal `routes` with `saved_routes` so bookmarks still appear in the user's library view. RLS scopes saved_routes rows to `auth.uid() = user_id`; the underlying route is gated independently by routes RLS (public + own + club-member). See `docs/architecture/decisions.md § 30` for the design rationale (and why we deliberately leapfrog Strava's user-only-ownership model here).
 
+### Club links
+
+A club can publish a website + socials row ("Visit our website"):
+`clubs.website_url` / `instagram_url` / `strava_url` / `facebook_url`
+(migration `20270131_001`). Each column is constrained to an `http`/`https`
+scheme by a DB CHECK so a stored `javascript:`/`data:` URL can never reach a
+rendered anchor; clients additionally drop non-http(s) values
+(`normaliseClubLink`, web `data.ts` ↔ mobile `social_service.dart`) and render
+the row with `rel="noopener noreferrer nofollow"` + `target="_blank"`. The four
+columns are explicitly `grant select`-ed (the `clubs` SELECT lockdown,
+`20260801_001`, denies new columns by default). Edited via the admin-only
+`ClubEditor` (web, now dual-mode create+edit) / `club_form_sheet` (mobile,
+dual-mode), rendered in the club header on web `/clubs/[slug]` + mobile
+`club_detail_screen`.
+
 ## Data model
 
 Tables: `clubs`, `club_members`, `events`, `event_attendees`, `event_exceptions`, `club_posts`, `event_results`. `event_results` is **account-optional** since `20261028_001` (persona #43) — surrogate `id` PK, nullable `user_id`, `bib` + `finisher_name` for imported non-account finishers, an additive `event_results_insert_organiser` policy for bulk import, and a CHECK requiring an account OR a bib+name; see `api_database.md § event_results`. Full definitions + RLS in `api_database.md § clubs / club_members / events / event_attendees / club_posts`. `clubs.requires_activity_waiver` + `club_members.activity_waiver_ack_at` (`20261023_001`) back the optional activity-risk waiver: an admin can require it at create time, and a member's acknowledgement timestamp is stamped on join (parkrun persona #45; per-event RSVP waiver is a follow-up). `event_exceptions` (`20261019_001`) is the per-instance cancellation/audit table — `(event_id, instance_start)` pkey + `cancelled_by` / `cancelled_at` / `reason`; organiser-only writes via `is_event_organiser`, readable with the parent event. Phase 1 migration: `apps/backend/supabase/migrations/20260416_001_clubs_and_events.sql`. Phase 2 migration: `20260417_001_phase2_social.sql` — adds recurrence columns on `events`, `instance_start` + composite pkey on `event_attendees`, `join_policy` + `invite_token` on `clubs`, `status` on `club_members`, `parent_post_id` + `event_instance_start` on `club_posts`, and the `join_club_by_token` RPC.

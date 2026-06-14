@@ -488,6 +488,10 @@ create table clubs (
                                                         -- club; no `events.is_verified` column.
   join_policy   text not null default 'open',          -- 'open' | 'request' | 'invite' (migration 20260417_001)
   invite_token  text unique,                           -- invite-link token; see join_club_by_token (20260417_001)
+  website_url   text,                                  -- "Visit our website" links (migration 20270131_001).
+  instagram_url text,                                  -- Each has an http(s)-scheme CHECK (XSS backstop) and
+  strava_url    text,                                  -- an explicit `grant select` (the clubs SELECT lockdown
+  facebook_url  text,                                  -- 20260801_001 denies new columns by default).
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
