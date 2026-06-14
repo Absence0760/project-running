@@ -5887,6 +5887,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get dashboardSectionStreak => 'Serie';
 
   @override
+  String get dashboardWeekStripTitle => 'Diese Woche';
+
+  @override
+  String dashboardWeekStripCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Aktivitäten',
+      one: '$count Aktivität',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardWeekStripDayAria(String dow, String dist) {
+    return '$dow: $dist';
+  }
+
+  @override
+  String dashboardWeekStripDayRestAria(String dow) {
+    return '$dow: Ruhetag';
+  }
+
+  @override
   String get dashboardSectionLast20Weeks => 'Letzte 20 Wochen';
 
   @override

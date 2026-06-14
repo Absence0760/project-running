@@ -5878,6 +5878,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get dashboardSectionStreak => 'Sequência';
 
   @override
+  String get dashboardWeekStripTitle => 'Esta semana';
+
+  @override
+  String dashboardWeekStripCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades',
+      one: '$count atividade',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardWeekStripDayAria(String dow, String dist) {
+    return '$dow: $dist';
+  }
+
+  @override
+  String dashboardWeekStripDayRestAria(String dow) {
+    return '$dow: dia de descanso';
+  }
+
+  @override
   String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';
 
   @override
@@ -14571,6 +14595,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get dashboardSectionStreak => 'Sequência';
+
+  @override
+  String get dashboardWeekStripTitle => 'Esta semana';
+
+  @override
+  String dashboardWeekStripCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades',
+      one: '$count atividade',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardWeekStripDayAria(String dow, String dist) {
+    return '$dow: $dist';
+  }
+
+  @override
+  String dashboardWeekStripDayRestAria(String dow) {
+    return '$dow: dia de descanso';
+  }
 
   @override
   String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';

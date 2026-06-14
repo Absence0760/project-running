@@ -27,6 +27,7 @@ import '../widgets/mileage_trend_card.dart';
 import '../widgets/nutrition_rings_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/recent_lifts_card.dart';
+import '../widgets/this_week_strip.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/training_load_chart.dart';
@@ -704,6 +705,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                   ],
+                ),
+                _kSectionGap,
+                Card(
+                  child: Padding(
+                    padding: _kCardPadding,
+                    child: ThisWeekStrip(
+                      runs: runs,
+                      unit: unit,
+                      weekStartDay: _weekStartDay,
+                      now: now,
+                    ),
+                  ),
                 ),
                 _kSectionGap,
                 _SectionHeader(l10n.dashboardSectionStreak),
