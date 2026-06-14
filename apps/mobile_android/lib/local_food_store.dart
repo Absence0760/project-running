@@ -247,11 +247,26 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   /// Replace the in-memory state from a fresh `food_log` fetch. Pending-*
   /// entries are preserved as-is — only `synced` rows are overwritten so
   /// an offline edit isn't clobbered by the server's older copy.
-  Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
+  ///
+  /// When the fetch was WINDOWED (the nutrition + dashboard surfaces pull only
+  /// the last 7 days), pass that window as `[windowStart, windowEnd)`. A synced
+  /// row whose `started_at` falls OUTSIDE the window could not have been
+  /// returned by the fetch, so its absence is "outside the window", NOT a
+  /// server-side deletion — it is preserved (and its on-disk file kept). Within
+  /// the window, an absent synced row is treated as deleted and pruned. With no
+  /// window (both null) this is a full replace: every absent synced row is
+  /// pruned, the right behaviour only when the caller fetched the COMPLETE set.
+  Future<void> replaceFromServer(
+    List<Map<String, dynamic>> serverRows, {
+    DateTime? windowStart,
+    DateTime? windowEnd,
+  }) async {
     final preserved = <String, StoredFood>{};
     final syncedLocal = <String, StoredFood>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
+        preserved[entry.key] = entry.value;
+      } else if (_outsideWindow(entry.value.startedAt, windowStart, windowEnd)) {
         preserved[entry.key] = entry.value;
       } else {
         syncedLocal[entry.key] = entry.value;
@@ -293,6 +308,18 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   static DateTime? _parseTs(dynamic v) {
     if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
     return null;
+  }
+
+  /// True when [at] falls outside the half-open fetch window `[start, end)`.
+  /// A null timestamp can't be placed, so it's treated as in-window (eligible
+  /// for prune) — preserving the no-window full-replace contract when both
+  /// bounds are null. Compares absolute instants, so a UTC `started_at` and a
+  /// local window bound compare correctly.
+  static bool _outsideWindow(DateTime? at, DateTime? start, DateTime? end) {
+    if (at == null) return false;
+    if (start != null && at.isBefore(start)) return true;
+    if (end != null && !at.isBefore(end)) return true;
+    return false;
   }
 
   @override

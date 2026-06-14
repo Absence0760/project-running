@@ -270,7 +270,7 @@ class _RunsScreenState extends State<RunsScreen> {
     if (api == null || api.userId == null || gymStore == null) return;
     try {
       final fresh = await api.fetchGymWorkoutsWithSets(limit: 100);
-      await gymStore.replaceFromServer(fresh);
+      await gymStore.replaceFromServer(fresh, fetchLimit: 100);
     } catch (e) {
       debugPrint('History gym hydrate failed: $e');
     }
@@ -281,7 +281,11 @@ class _RunsScreenState extends State<RunsScreen> {
       final weekStart = DateTime(now.year, now.month, now.day - 6);
       final tomorrow = DateTime(now.year, now.month, now.day + 1);
       final fresh = await api.fetchFoodLog(from: weekStart, to: tomorrow);
-      await foodStore.replaceFromServer([for (final r in fresh) r.toJson()]);
+      await foodStore.replaceFromServer(
+        [for (final r in fresh) r.toJson()],
+        windowStart: weekStart,
+        windowEnd: tomorrow,
+      );
     } catch (e) {
       debugPrint('History food hydrate failed: $e');
     }

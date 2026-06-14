@@ -148,7 +148,11 @@ class _NutritionScreenState extends State<NutritionScreen> {
       // the one cache.
       final weekStart = _todayStart.subtract(const Duration(days: 6));
       final fresh = await api.fetchFoodLog(from: weekStart, to: _tomorrow);
-      await widget.store.replaceFromServer([for (final r in fresh) r.toJson()]);
+      await widget.store.replaceFromServer(
+        [for (final r in fresh) r.toJson()],
+        windowStart: weekStart,
+        windowEnd: _tomorrow,
+      );
       if (widget.store.hasPending) await widget.store.syncWithServer(api);
       _weightKg = await api.fetchLatestBodyWeightKg();
       final exercise = await _todayExercise(api, _weightKg);

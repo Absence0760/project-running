@@ -257,14 +257,39 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
   /// each paired with their sets). Pending-* workouts are preserved as-is
   /// — only `synced` rows are overwritten so an offline edit isn't
   /// clobbered by the server's older copy.
+  ///
+  /// The hydrating surfaces fetch only the newest N workouts
+  /// (`fetchGymWorkoutsWithSets(limit:)`), so pass that limit as [fetchLimit].
+  /// When the returned page is full (>= limit) there may be OLDER workouts the
+  /// fetch couldn't see; their lower bound is the oldest `started_at` returned.
+  /// A synced workout older than that bound is preserved (its absence is
+  /// "outside the fetch window", not a server-side deletion) so opening the gym
+  /// screen can't silently wipe synced history beyond the newest [fetchLimit].
+  /// With no [fetchLimit] / window this is a full replace — correct only when
+  /// the caller fetched the COMPLETE set.
   Future<void> replaceFromServer(
     List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>
-        serverWorkouts,
-  ) async {
+        serverWorkouts, {
+    DateTime? windowStart,
+    DateTime? windowEnd,
+    int? fetchLimit,
+  }) async {
+    if (windowStart == null &&
+        fetchLimit != null &&
+        serverWorkouts.length >= fetchLimit) {
+      DateTime? oldest;
+      for (final w in serverWorkouts) {
+        final ts = _parseTs(w.workout['started_at']);
+        if (ts != null && (oldest == null || ts.isBefore(oldest))) oldest = ts;
+      }
+      windowStart = oldest;
+    }
     final preserved = <String, StoredGymWorkout>{};
     final syncedLocal = <String, StoredGymWorkout>{};
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
+        preserved[entry.key] = entry.value;
+      } else if (_outsideWindow(entry.value.startedAt, windowStart, windowEnd)) {
         preserved[entry.key] = entry.value;
       } else {
         syncedLocal[entry.key] = entry.value;
@@ -307,6 +332,16 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
   static DateTime? _parseTs(dynamic v) {
     if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
     return null;
+  }
+
+  /// True when [at] falls outside the half-open fetch window `[start, end)`.
+  /// A null timestamp is treated as in-window (eligible for prune), preserving
+  /// the no-window full-replace contract. Compares absolute instants.
+  static bool _outsideWindow(DateTime? at, DateTime? start, DateTime? end) {
+    if (at == null) return false;
+    if (start != null && at.isBefore(start)) return true;
+    if (end != null && !at.isBefore(end)) return true;
+    return false;
   }
 
   @override

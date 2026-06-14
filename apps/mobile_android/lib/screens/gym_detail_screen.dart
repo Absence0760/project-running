@@ -118,7 +118,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     if (widget.store.byId(widget.workoutId) != null) return;
     try {
       final fresh = await api.fetchGymWorkoutsWithSets(limit: 100);
-      await widget.store.replaceFromServer(fresh);
+      await widget.store.replaceFromServer(fresh, fetchLimit: 100);
     } catch (e) {
       _isOnline = false;
       debugPrint('gym_detail_screen: load failed: $e');

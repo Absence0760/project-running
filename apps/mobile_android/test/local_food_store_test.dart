@@ -322,6 +322,52 @@ void main() {
       ]);
       expect(store.rows.first['item_name'], 'New');
     });
+
+    test(
+        'a windowed fetch preserves synced rows older than the window — does '
+        'not wipe history before windowStart', () async {
+      // Seed a synced entry from 30 days ago and one inside the last week.
+      await store.replaceFromServer([
+        _serverRow('old', itemName: 'Old', startedAt: DateTime.utc(2026, 5, 1)),
+        _serverRow('recent', itemName: 'Recent', startedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      expect(store.rows.any((r) => r['id'] == 'old'), isTrue);
+
+      // The next 7-day windowed hydrate returns only the in-window entry. The
+      // older one is outside [windowStart, windowEnd) and must be preserved,
+      // not deleted as if absent==removed.
+      await store.replaceFromServer(
+        [_serverRow('recent', itemName: 'Recent', startedAt: DateTime.utc(2026, 6, 1))],
+        windowStart: DateTime.utc(2026, 5, 26),
+        windowEnd: DateTime.utc(2026, 6, 3),
+      );
+      expect(store.rows.any((r) => r['id'] == 'old'), isTrue,
+          reason: 'a synced entry older than the window must survive');
+      expect(store.rows.any((r) => r['id'] == 'recent'), isTrue);
+
+      // On-disk state agrees — a fresh store reads both back.
+      final reloaded = LocalFoodStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows.any((r) => r['id'] == 'old'), isTrue);
+    });
+
+    test(
+        'a row absent WITHIN the window is still pruned (deletion propagates '
+        'inside the window)', () async {
+      await store.replaceFromServer([
+        _serverRow('keep', startedAt: DateTime.utc(2026, 6, 1)),
+        _serverRow('gone', startedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      // Both are inside the next window; 'gone' is now absent → real deletion.
+      await store.replaceFromServer(
+        [_serverRow('keep', startedAt: DateTime.utc(2026, 6, 1))],
+        windowStart: DateTime.utc(2026, 5, 26),
+        windowEnd: DateTime.utc(2026, 6, 3),
+      );
+      expect(store.rows.any((r) => r['id'] == 'gone'), isFalse,
+          reason: 'an in-window absence is a deletion and must propagate');
+      expect(store.rows.any((r) => r['id'] == 'keep'), isTrue);
+    });
   });
 
   group('_rewriteAll crash-atomic ordering', () {

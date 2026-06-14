@@ -183,7 +183,7 @@ class _GymScreenState extends State<GymScreen> {
     setState(() => _refreshing = true);
     try {
       final fresh = await api.fetchGymWorkoutsWithSets(limit: 100);
-      await widget.store.replaceFromServer(fresh);
+      await widget.store.replaceFromServer(fresh, fetchLimit: 100);
       if (widget.store.hasPending) {
         await widget.store.syncWithServer(api);
       }

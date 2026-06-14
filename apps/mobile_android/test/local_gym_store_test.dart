@@ -362,6 +362,52 @@ void main() {
       ]);
       expect(store.byId('w1')!.row['title'], 'New');
     });
+
+    test(
+        'a count-windowed fetch (fetchLimit) preserves synced rows older than '
+        'the returned page — does not wipe history beyond the newest N',
+        () async {
+      // Seed two synced workouts: an old one (Jan) and a newer one (Jun).
+      await store.replaceFromServer([
+        _serverWorkout('old', title: 'January', startedAt: DateTime.utc(2026, 1, 1)),
+        _serverWorkout('new', title: 'June', startedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      expect(store.byId('old'), isNotNull);
+
+      // A later "newest N" hydrate returns a FULL page (limit 1) of only the
+      // newest workout. The old one is outside the fetch window, so it must be
+      // preserved rather than pruned as if deleted.
+      await store.replaceFromServer(
+        [_serverWorkout('new', title: 'June', startedAt: DateTime.utc(2026, 6, 1))],
+        fetchLimit: 1,
+      );
+      expect(store.byId('old'), isNotNull,
+          reason: 'a synced workout older than the page must survive');
+      expect(store.byId('new'), isNotNull);
+
+      // The on-disk state must agree — a fresh store still reads both back.
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.byId('old'), isNotNull);
+    });
+
+    test(
+        'a partial page (count below fetchLimit) is still a full replace — '
+        'an absent synced row is a real deletion', () async {
+      await store.replaceFromServer([
+        _serverWorkout('old', startedAt: DateTime.utc(2026, 1, 1)),
+        _serverWorkout('new', startedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      // The page (1 row) is BELOW the limit of 100, so it's the complete set:
+      // the missing 'old' was genuinely deleted server-side and must be pruned.
+      await store.replaceFromServer(
+        [_serverWorkout('new', startedAt: DateTime.utc(2026, 6, 1))],
+        fetchLimit: 100,
+      );
+      expect(store.byId('old'), isNull,
+          reason: 'a sub-limit page is the full set; deletion propagates');
+      expect(store.byId('new'), isNotNull);
+    });
   });
 
   group('_rewriteAll crash-atomic ordering', () {

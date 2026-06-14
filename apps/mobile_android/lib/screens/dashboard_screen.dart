@@ -151,7 +151,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (api == null || api.userId == null) return;
     try {
       final fresh = await api.fetchGymWorkoutsWithSets(limit: 100);
-      await widget.gymStore.replaceFromServer(fresh);
+      await widget.gymStore.replaceFromServer(fresh, fetchLimit: 100);
     } catch (e) {
       debugPrint('dashboard gym hydrate failed: $e');
     }
@@ -161,8 +161,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final weekStart = todayStart.subtract(const Duration(days: 6));
       final tomorrow = DateTime(now.year, now.month, now.day + 1);
       final fresh = await api.fetchFoodLog(from: weekStart, to: tomorrow);
-      await widget.foodStore
-          .replaceFromServer([for (final r in fresh) r.toJson()]);
+      await widget.foodStore.replaceFromServer(
+        [for (final r in fresh) r.toJson()],
+        windowStart: weekStart,
+        windowEnd: tomorrow,
+      );
     } catch (e) {
       debugPrint('dashboard food hydrate failed: $e');
     }
