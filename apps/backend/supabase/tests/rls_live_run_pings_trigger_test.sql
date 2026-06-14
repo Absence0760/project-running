@@ -1,5 +1,6 @@
 -- Pin the `live_run_pings_drop_in_zone` BEFORE-INSERT trigger from
--- migration 20260618_001_clip_live_run_pings_to_privacy_zones.sql.
+-- migration 20260618_001_clip_live_run_pings_to_privacy_zones.sql, as
+-- amended by 20270121_001_privacy_zone_last_seen_carveout.sql.
 --
 -- The live spectator surfaces (apps/web `/live/[id]` +
 -- `apps/mobile_*/lib/screens/live_spectator_screen.dart`) render
@@ -10,19 +11,28 @@
 -- run. If a future migration silently drops, weakens, or renames it,
 -- those coordinates start streaming over Realtime.
 --
+-- The privacy-vs-safety carve-out (20270121_001): an in-zone ping is no
+-- longer dropped outright. The precise lat/lng is never stored, but the
+-- SINGLE most-recent in-zone ping per run is RETAINED coarsened to a
+-- ~2-dp (~1.1 km) grid and flagged `coarse = true`, so a runner who
+-- collapses inside their own zone still leaves a last-seen cell for
+-- search-and-rescue without broadcasting their exact home point.
+--
 -- This file pins:
 --   1. The trigger exists with the expected name + table + timing.
 --   2. The function it dispatches to is SECURITY DEFINER (it has to
 --      cross the user_settings RLS gate to read the broadcaster's
 --      zones).
---   3. Behaviour: with a zone configured, an in-zone ping is dropped;
---      an out-of-zone ping is stored.
+--   3. Behaviour (carve-out): an in-zone ping never stores its precise
+--      coordinates, but a single coarse `coarse = true` last-seen point
+--      is retained and advances to the newest in-zone stop; an
+--      out-of-zone ping is stored precise + uncoarsened.
 --   4. Behaviour: a user without zones has every ping stored
 --      (no-op fast-path).
 
 begin;
 
-select plan(7);
+select plan(9);
 
 -- 1. Trigger exists at the expected name + table.
 select has_trigger(
@@ -78,29 +88,54 @@ values
    '2026-06-18 10:00:00+00', 1800, 5000, 'app',
    '{"activity_type":"run"}', true);
 
--- 4. In-zone ping is silently dropped — INSERT succeeds (no error)
---    but the row is not stored.
+-- 4a. In-zone ping: the PRECISE coordinates are never stored. The ping
+--     lands at (47.3707, 8.5409) — ~103 m from the zone centre (47.37,
+--     8.54), inside the 150 m radius — and the carve-out coarsens it
+--     before insert, so the exact point must not survive on the run.
 insert into live_run_pings (run_id, user_id, lat, lng)
 values ('33333333-3333-3333-3333-333333333301',
-        '00000000-0000-0000-0000-0000000ddd01', 47.37, 8.54);
+        '00000000-0000-0000-0000-0000000ddd01', 47.3707, 8.5409);
 select results_eq(
   $$ select count(*)::int from live_run_pings
      where run_id = '33333333-3333-3333-3333-333333333301'
-       and lat = 47.37 and lng = 8.54 $$,
+       and lat = 47.3707 and lng = 8.5409 $$,
   $$ values (0) $$,
-  'in-zone ping is silently dropped by the trigger (Realtime sees nothing)'
+  'in-zone ping never stores its precise coordinates (Realtime sees no exact point)'
 );
 
--- 5. Out-of-zone ping is stored.
+-- 4b. A single coarse last-seen IS retained for SAR, rounded to ~2-dp
+--     (47.37, 8.54) and flagged coarse = true.
+select results_eq(
+  $$ select count(*)::int from live_run_pings
+     where run_id = '33333333-3333-3333-3333-333333333301'
+       and coarse = true and lat = 47.37 and lng = 8.54 $$,
+  $$ values (1) $$,
+  'in-zone ping retained as a single coarse (~2-dp) last-seen point for SAR'
+);
+
+-- 4c. A second in-zone ping advances the last-seen point but does NOT
+--     accumulate — at most one coarse row per run survives.
+insert into live_run_pings (run_id, user_id, lat, lng)
+values ('33333333-3333-3333-3333-333333333301',
+        '00000000-0000-0000-0000-0000000ddd01', 47.3694, 8.5413);
+select results_eq(
+  $$ select count(*)::int from live_run_pings
+     where run_id = '33333333-3333-3333-3333-333333333301'
+       and coarse = true $$,
+  $$ values (1) $$,
+  'a later in-zone ping replaces the prior coarse last-seen (at most one per run)'
+);
+
+-- 5. Out-of-zone ping is stored precise + uncoarsened.
 insert into live_run_pings (run_id, user_id, lat, lng)
 values ('33333333-3333-3333-3333-333333333301',
         '00000000-0000-0000-0000-0000000ddd01', 47.37, 8.5550);
 select results_eq(
   $$ select count(*)::int from live_run_pings
      where run_id = '33333333-3333-3333-3333-333333333301'
-       and lng = 8.5550 $$,
+       and lng = 8.5550 and coarse = false $$,
   $$ values (1) $$,
-  'out-of-zone ping is stored normally'
+  'out-of-zone ping is stored normally (precise, not coarsened)'
 );
 
 -- ── User without zones: no-op fast-path ──
