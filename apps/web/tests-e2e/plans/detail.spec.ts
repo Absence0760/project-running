@@ -118,7 +118,13 @@ test.describe('/plans/[id]', () => {
 		// Pick the club + click Publish. The publish-row is gated on
 		// `!plan.is_template && adminClubs.length > 0` — runner owns
 		// three seeded clubs so the dropdown is populated.
-		const publishRow = page.locator('.publish-row');
+		// Two `.publish-row` sections exist now (publish-to-club + the
+		// public-library publish from migration 20270126). Scope to the
+		// club one via its unique "Club to publish to" select so the
+		// selector isn't ambiguous.
+		const publishRow = page
+			.locator('.publish-row')
+			.filter({ has: page.getByLabel('Club to publish to') });
 		await expect(publishRow).toBeVisible({ timeout: 10_000 });
 		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
 		await publishRow.getByRole('button', { name: 'Publish' }).click();
@@ -238,7 +244,13 @@ test.describe('/plans/[id]', () => {
 
 		// Drive the publish UI.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		const publishRow = page.locator('.publish-row');
+		// Two `.publish-row` sections exist now (publish-to-club + the
+		// public-library publish from migration 20270126). Scope to the
+		// club one via its unique "Club to publish to" select so the
+		// selector isn't ambiguous.
+		const publishRow = page
+			.locator('.publish-row')
+			.filter({ has: page.getByLabel('Club to publish to') });
 		await expect(publishRow).toBeVisible({ timeout: 10_000 });
 		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
 		await publishRow.getByRole('button', { name: 'Publish' }).click();

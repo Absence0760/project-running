@@ -19,6 +19,11 @@
 	});
 
 	onMount(async () => {
+		// Wait for the auth store to hydrate before reading auth.user —
+		// there's a window where auth.loading has flipped false but `user`
+		// is still null (fetchUser in flight), and gating the fetch on that
+		// stale null would render the no-account state to a signed-in host.
+		await auth.ready();
 		if (auth.user) {
 			account = await fetchPayoutAccount();
 		}

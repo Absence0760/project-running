@@ -284,13 +284,23 @@
 	}
 
 	function sessionStepLabel(step: (typeof sessionSteps)[number]): string {
+		// A per-side item expands into two steps (left then right). The read
+		// view localizes the side word so the two are distinguishable —
+		// expandSessionSteps only carries the `side`, it deliberately leaves
+		// the wording to the display layer.
+		const name =
+			step.side === 'left'
+				? m('session.sideLeft', { name: step.movementName })
+				: step.side === 'right'
+					? m('session.sideRight', { name: step.movementName })
+					: step.movementName;
 		if (step.kind === 'reps') {
-			return m('session.stepReps', { name: step.movementName, reps: step.reps ?? 0 });
+			return m('session.stepReps', { name, reps: step.reps ?? 0 });
 		}
 		if (step.kind === 'flow') {
-			return m('session.stepFlow', { name: step.movementName, seconds: step.durationS ?? 0 });
+			return m('session.stepFlow', { name, seconds: step.durationS ?? 0 });
 		}
-		return m('session.stepHold', { name: step.movementName, seconds: step.durationS ?? 0 });
+		return m('session.stepHold', { name, seconds: step.durationS ?? 0 });
 	}
 
 	let isPast = $derived(

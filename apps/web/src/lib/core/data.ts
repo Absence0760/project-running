@@ -6661,7 +6661,10 @@ export async function createGymWorkout(input: {
 			duration_s: input.duration_s ?? null,
 			notes: input.notes ?? null,
 			is_public: input.is_public ?? false,
-			metadata: input.metadata ?? null,
+			// gym_workouts.metadata is NOT NULL default '{}' (20270101_001).
+			// Sending an explicit null bypasses the default and trips a 23502,
+			// so coalesce to an empty bag when the caller omits it.
+			metadata: input.metadata ?? {},
 			last_modified_at: nowIso,
 		})
 		.select('*')

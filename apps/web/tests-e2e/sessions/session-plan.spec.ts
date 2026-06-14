@@ -102,20 +102,20 @@ test.describe('/sessions — session plan build, read, attach', () => {
 		// Three movements: a hold, a per-side hold, and a reps item.
 		// Movement 0 (default row): Downward Dog, hold 30s.
 		const cards = modal.locator('.item-card');
-		await cards.nth(0).getByLabel('Movement').fill('Downward Dog');
+		await cards.nth(0).getByLabel('Movement', { exact: true }).fill('Downward Dog');
 		await cards.nth(0).getByLabel('Seconds').fill('30');
 
 		// Movement 1: Low Lunge, hold 45s, per side.
 		await modal.getByRole('button', { name: 'Add movement' }).click();
-		await cards.nth(1).getByLabel('Movement').fill('Low Lunge');
+		await cards.nth(1).getByLabel('Movement', { exact: true }).fill('Low Lunge');
 		await cards.nth(1).getByLabel('Seconds').fill('45');
 		await cards.nth(1).getByLabel('Per side (left & right)').check();
 
 		// Movement 2: The Hundred, reps.
 		await modal.getByRole('button', { name: 'Add movement' }).click();
 		await cards.nth(2).getByLabel('Type').selectOption('reps');
-		await cards.nth(2).getByLabel('Movement').fill('The Hundred');
-		await cards.nth(2).getByLabel('Reps').fill('100');
+		await cards.nth(2).getByLabel('Movement', { exact: true }).fill('The Hundred');
+		await cards.nth(2).getByLabel('Reps', { exact: true }).fill('100');
 
 		await modal.getByRole('button', { name: 'Save', exact: true }).click();
 

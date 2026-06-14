@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { deleteRun, insertRun } from '../fixtures/simulate';
+import { deleteRun, insertRun, withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -17,6 +17,12 @@ test.describe('/dashboard This Week strip', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test('renders the week ribbon and folds in a run logged today', async ({ page }) => {
+		// The seed plants a now()-relative "Morning easy 8K" run for runner,
+		// so the current week isn't empty out of the box. Clear it (restored
+		// in finally so the /nutrition + readiness specs still see it) so the
+		// strip total + today's cell reflect ONLY our inserted run.
+		const restoreWeek = await withCleanCurrentWeek(USER_A.id);
+
 		// 06:00 local today, 7.50 km — well inside the current calendar week.
 		const today = new Date();
 		today.setHours(6, 0, 0, 0);
@@ -43,6 +49,7 @@ test.describe('/dashboard This Week strip', () => {
 			await expect(strip.getByText('7.5 km')).toHaveCount(2);
 		} finally {
 			await deleteRun(runId);
+			await restoreWeek();
 		}
 	});
 });

@@ -88,13 +88,13 @@ test.describe('/routes', () => {
 		const allCount = await page.locator('.route-card').count();
 		expect(allCount).toBeGreaterThan(2);
 
-		await page.getByLabel('Surface').selectOption('road');
+		await page.getByLabel('Surface', { exact: true }).selectOption('road');
 		await expect
 			.poll(() => page.locator('.route-card').count(), { timeout: 5_000 })
 			.toBeLessThan(allCount);
 
 		// Restore.
-		await page.getByLabel('Surface').selectOption('any');
+		await page.getByLabel('Surface', { exact: true }).selectOption('any');
 		await expect(page.locator('.route-card')).toHaveCount(allCount);
 	});
 
