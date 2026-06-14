@@ -77,8 +77,37 @@ activity's data-field picker.
 - **Metric vs statute**: change the simulated device's units; pace unit
   (min/km vs min/mi) follows `System.getDeviceSettings().distanceUnits`.
 
+## 6. Run the unit tests
+
+The Minetti GAP model has host-pure unit tests under `source-test/`
+(`GradeAdjustedPaceTest.mc`), written against the Connect IQ `Test` framework
+(`(:test)` functions taking a `Test.Logger`). They drive the static helpers
+(`costAtGrade` / `gradeFactor` / `gapPace` / `formatPace`) directly, so they
+need **no** simulated `Activity.Info` sensor feed — just the simulator process.
+
+`monkey.jungle` adds `source-test` to `base.sourcePath` and excludes it from
+release builds via `base.excludeAnnotations = test`, so the test code only
+compiles into a unit-test build and never ships to a watch.
+
+Build a unit-test binary and run it against the simulator:
+
+```
+connectiq                                                         # launch the sim once
+monkeyc -f monkey.jungle -o bin/RunGapTest.prg -y developer_key -d fenix7 --unit-test
+monkeydo bin/RunGapTest.prg fenix7 -t
+```
+
+`monkeydo … -t` runs every `(:test)` function and prints PASS/FAIL per test.
+In VS Code the Monkey C extension exposes the same via **"Connect IQ: Run Unit
+Tests"** (device picker). Expected: all tests pass. The expected pace/factor
+numbers in the suite are pinned to the canonical TS/Dart parity oracle
+(`apps/web/src/lib/runs/grade_adjusted_pace.ts` +
+`apps/mobile_android/lib/grade_adjusted_pace.dart`) so the field can't drift
+from the web/mobile GAP surfaces.
+
 ## Not wired up yet
 
-No CI job builds this (no `monkeyc` on the GitHub runners). No Supabase sync —
-the field only reads on-watch `Activity.Info`. Both are deliberate for the
+No CI job builds this OR runs the unit tests (no `monkeyc` on the GitHub
+runners, and the SDK isn't installed on this workstation yet). No Supabase
+sync — the field only reads on-watch `Activity.Info`. All deliberate for the
 spike; see [CLAUDE.md](CLAUDE.md) for the path each would take.

@@ -61,12 +61,22 @@ here is a demo of the toolchain, not a launched feature.
 
 ```
 manifest.xml                         app id, type=datafield, device list, perms
-monkey.jungle                        build config
+monkey.jungle                        build config (source + source-test paths, `test` excludeAnnotation)
 resources/strings/strings.xml        AppName + field label
 resources/drawables/                 launcher_icon.png + drawables.xml
 source/RunGarminApp.mc               AppBase entry (getInitialView → the field)
 source/GradeAdjustedPaceView.mc      SimpleDataField: Minetti-model GAP
+source-test/GradeAdjustedPaceTest.mc CIQ (:test) unit tests for the GAP model
 ```
+
+The Minetti GAP math (`costAtGrade` / `gradeFactor` / `gapPace` / `formatPace`)
+is exposed as **static** functions so `source-test/GradeAdjustedPaceTest.mc` can
+unit-test it host-pure (no `Activity.Info` / simulator sensor feed). Expected
+values are pinned to the TS/Dart parity oracle (`grade_adjusted_pace.ts` +
+`grade_adjusted_pace.dart`); keep all three in lockstep. Run via
+`monkeyc --unit-test` + `monkeydo … -t` (see [local_testing.md § 6](local_testing.md)).
+These were authored but **not executed** — the Connect IQ SDK is not installed
+on the dev workstation yet.
 
 ## Toolchain
 

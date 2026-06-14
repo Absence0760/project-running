@@ -4,3 +4,10 @@
 # resource overrides (e.g. resources-fenix7x/) would be added as
 # `<product>.resourcePath = ...` lines here when a device needs them.
 project.manifest = manifest.xml
+
+# Test sources live under source-test/ and are compiled into the binary ONLY
+# for a unit-test build (`monkeyc --unit-test` / the simulator's Run Tests).
+# A normal release build excludes them via the `test` annotation so the
+# (:test) functions and their fixtures never ship to a watch.
+base.sourcePath = source;source-test
+base.excludeAnnotations = test
