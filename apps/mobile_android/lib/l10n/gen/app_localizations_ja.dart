@@ -8494,4 +8494,115 @@ class AppLocalizationsJa extends AppLocalizations {
   String coachingAthleteLoadError(String error) {
     return 'アスリートを読み込めませんでした: $error';
   }
+
+  @override
+  String get routeMarkerHeading => 'コースマーカー';
+
+  @override
+  String get routeMarkerAdd => 'マーカーを追加';
+
+  @override
+  String get routeMarkerEmpty => 'コースマーカーはまだありません。エイドステーションや関門などをルート上に追加しましょう。';
+
+  @override
+  String get routeMarkerEdit => 'マーカーを編集';
+
+  @override
+  String get routeMarkerDelete => '削除';
+
+  @override
+  String get routeMarkerCancel => 'キャンセル';
+
+  @override
+  String get routeMarkerSave => '保存';
+
+  @override
+  String get routeMarkerSaving => '保存中…';
+
+  @override
+  String get routeMarkerKindLabel => '種類';
+
+  @override
+  String get routeMarkerNameLabel => '名前';
+
+  @override
+  String get routeMarkerNamePlaceholder => '例: エイド2';
+
+  @override
+  String get routeMarkerServicesLabel => 'サービス';
+
+  @override
+  String get routeMarkerCutoffLabel => '関門時刻';
+
+  @override
+  String get routeMarkerNoteLabel => 'メモ';
+
+  @override
+  String get routeMarkerTapToPlace => '地図をタップしてマーカーを配置します。';
+
+  @override
+  String get routeMarkerPlaced => '配置しました。もう一度地図をタップすると移動できます。';
+
+  @override
+  String routeMarkerCutoffAt(String time) {
+    return '関門 $time';
+  }
+
+  @override
+  String get routeMarkerLabelRequired => 'マーカーに名前を付けてください。';
+
+  @override
+  String get routeMarkerPlaceRequired => '先に地図上にマーカーを配置してください。';
+
+  @override
+  String routeMarkerSaveFailed(String error) {
+    return 'マーカーを保存できませんでした: $error';
+  }
+
+  @override
+  String routeMarkerDeleteFailed(String error) {
+    return 'マーカーを削除できませんでした: $error';
+  }
+
+  @override
+  String get routeMarkerDeleteConfirmTitle => 'マーカーを削除しますか？';
+
+  @override
+  String get routeMarkerDeleteConfirmMessage => 'マーカーはルートから完全に削除されます。';
+
+  @override
+  String get routeMarkerKindAidStation => 'エイドステーション';
+
+  @override
+  String get routeMarkerKindCutoff => '関門';
+
+  @override
+  String get routeMarkerKindCrewAccess => 'クルー / 駐車';
+
+  @override
+  String get routeMarkerKindHazard => '危険箇所';
+
+  @override
+  String get routeMarkerKindNote => 'メモ';
+
+  @override
+  String get routeMarkerKindClimb => '登り';
+
+  @override
+  String get routeMarkerKindCustom => 'カスタム';
+
+  @override
+  String get routeMarkerServiceWater => '水';
+
+  @override
+  String get routeMarkerServiceFood => '補給食';
+
+  @override
+  String get routeMarkerServiceMedical => '救護';
+
+  @override
+  String get routeMarkerServiceToilets => 'トイレ';
+
+  @override
+  String get routeMarkerServiceDropBag => 'ドロップバッグ';
 }

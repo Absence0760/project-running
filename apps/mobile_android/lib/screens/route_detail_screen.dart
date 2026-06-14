@@ -22,6 +22,7 @@ import '../social_service.dart' show ClubView, SocialService;
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
 import '../widgets/report_sheet.dart';
+import '../widgets/route_markers_panel.dart';
 import '../widgets/route_photos.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
@@ -109,6 +110,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   // doesn't own would otherwise leak the unclipped polyline through
   // LiveRunMap's plannedRoute prop.
   List<cm.Waypoint> _displayWaypoints = const [];
+
+  // Course-marker wiring between RouteMarkersPanel (owns the data) and the
+  // LiveRunMap (renders the pins + reports placement / pin taps).
+  final GlobalKey<RouteMarkersPanelState> _markersPanelKey = GlobalKey();
+  List<MapMarkerPin> _markerPins = const [];
+  bool _markerPlacing = false;
 
   /// 0.0 = start, 1.0 = finish. Drives the route-preview scrubber:
   /// dragging the slider feeds an interpolated lat/lng to the
@@ -800,6 +807,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 track: const [],
                 plannedRoute: _displayWaypoints,
                 followRunner: false,
+                courseMarkers: _markerPins,
+                markerPlacing: _markerPlacing,
+                onMarkerPlace: (wp) =>
+                    _markersPanelKey.currentState?.placeAt(wp),
+                onMarkerTap: (id) =>
+                    _markersPanelKey.currentState?.selectMarker(id),
                 // Only mount the preview-runner pulse while the user
                 // is actually scrubbing — releasing the thumb fades
                 // back to the static polyline view so the marker
@@ -1014,6 +1027,25 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 setState(() => _tags = next);
               },
               initialTags: _tags,
+            ),
+
+            const Divider(),
+
+            // Course markers — aid stations, cutoffs, crew access, etc.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+              child: RouteMarkersPanel(
+                key: _markersPanelKey,
+                api: widget.apiClient,
+                routeId: route.id,
+                isOwner: _isOwner,
+                onPinsChanged: (pins) {
+                  if (mounted) setState(() => _markerPins = pins);
+                },
+                onPlacingChanged: (placing) {
+                  if (mounted) setState(() => _markerPlacing = placing);
+                },
+              ),
             ),
 
             const Divider(),

@@ -8962,4 +8962,119 @@ class AppLocalizationsFr extends AppLocalizations {
   String coachingAthleteLoadError(String error) {
     return 'Impossible de charger l\'athlète : $error';
   }
+
+  @override
+  String get routeMarkerHeading => 'Repères de parcours';
+
+  @override
+  String get routeMarkerAdd => 'Ajouter un repère';
+
+  @override
+  String get routeMarkerEmpty =>
+      'Aucun repère de parcours. Ajoutez des ravitaillements, des barrières horaires et plus le long du parcours.';
+
+  @override
+  String get routeMarkerEdit => 'Modifier le repère';
+
+  @override
+  String get routeMarkerDelete => 'Supprimer';
+
+  @override
+  String get routeMarkerCancel => 'Annuler';
+
+  @override
+  String get routeMarkerSave => 'Enregistrer';
+
+  @override
+  String get routeMarkerSaving => 'Enregistrement…';
+
+  @override
+  String get routeMarkerKindLabel => 'Type';
+
+  @override
+  String get routeMarkerNameLabel => 'Nom';
+
+  @override
+  String get routeMarkerNamePlaceholder => 'ex. Ravito 2';
+
+  @override
+  String get routeMarkerServicesLabel => 'Services';
+
+  @override
+  String get routeMarkerCutoffLabel => 'Barrière horaire';
+
+  @override
+  String get routeMarkerNoteLabel => 'Note';
+
+  @override
+  String get routeMarkerTapToPlace => 'Touchez la carte pour placer ce repère.';
+
+  @override
+  String get routeMarkerPlaced =>
+      'Placé. Touchez à nouveau la carte pour le déplacer.';
+
+  @override
+  String routeMarkerCutoffAt(String time) {
+    return 'Barrière $time';
+  }
+
+  @override
+  String get routeMarkerLabelRequired => 'Donnez un nom au repère.';
+
+  @override
+  String get routeMarkerPlaceRequired =>
+      'Placez d\'abord le repère sur la carte.';
+
+  @override
+  String routeMarkerSaveFailed(String error) {
+    return 'Impossible d\'enregistrer le repère : $error';
+  }
+
+  @override
+  String routeMarkerDeleteFailed(String error) {
+    return 'Impossible de supprimer le repère : $error';
+  }
+
+  @override
+  String get routeMarkerDeleteConfirmTitle => 'Supprimer le repère ?';
+
+  @override
+  String get routeMarkerDeleteConfirmMessage =>
+      'Cela supprime définitivement le repère du parcours.';
+
+  @override
+  String get routeMarkerKindAidStation => 'Ravitaillement';
+
+  @override
+  String get routeMarkerKindCutoff => 'Barrière horaire';
+
+  @override
+  String get routeMarkerKindCrewAccess => 'Assistance / parking';
+
+  @override
+  String get routeMarkerKindHazard => 'Danger';
+
+  @override
+  String get routeMarkerKindNote => 'Note';
+
+  @override
+  String get routeMarkerKindClimb => 'Montée';
+
+  @override
+  String get routeMarkerKindCustom => 'Personnalisé';
+
+  @override
+  String get routeMarkerServiceWater => 'Eau';
+
+  @override
+  String get routeMarkerServiceFood => 'Nourriture';
+
+  @override
+  String get routeMarkerServiceMedical => 'Médical';
+
+  @override
+  String get routeMarkerServiceToilets => 'Toilettes';
+
+  @override
+  String get routeMarkerServiceDropBag => 'Sac de ravitaillement';
 }

@@ -859,6 +859,79 @@ class ApiClient {
     await _client.from(RouteRow.table).delete().eq(RouteRow.colId, routeId);
   }
 
+  /// Course markers for a route, ordered by distance along the line. Reads
+  /// through the `route_markers_for_viewer` RPC, which gates visibility and
+  /// redacts any marker inside the owner's privacy zones for a non-owner.
+  /// Fails closed (empty list) on error so a redaction failure never leaks.
+  Future<List<RouteMarkerRow>> fetchRouteMarkers(String routeId) async {
+    if (routeId.isEmpty) return const [];
+    try {
+      final data = await _client.rpc('route_markers_for_viewer', params: {
+        'p_route_id': routeId,
+      });
+      if (data is! List) return const [];
+      return data
+          .whereType<Map>()
+          .map((m) => RouteMarkerRow.fromJson(m.cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Add a course marker (owner-only at the RLS layer). Returns the inserted
+  /// row (with the server-derived `position_m`).
+  Future<RouteMarkerRow> addRouteMarker({
+    required String routeId,
+    required String kind,
+    required String label,
+    required double lat,
+    required double lng,
+    Map<String, dynamic> meta = const {},
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(RouteMarkerRow.table)
+        .insert(<String, dynamic>{
+          RouteMarkerRow.colRouteId: routeId,
+          RouteMarkerRow.colUserId: userId,
+          RouteMarkerRow.colKind: kind,
+          RouteMarkerRow.colLabel: label.trim(),
+          RouteMarkerRow.colLat: lat,
+          RouteMarkerRow.colLng: lng,
+          RouteMarkerRow.colMeta: meta,
+        })
+        .select()
+        .single();
+    return RouteMarkerRow.fromJson(row);
+  }
+
+  Future<void> updateRouteMarker(
+    String id, {
+    String? kind,
+    String? label,
+    double? lat,
+    double? lng,
+    Map<String, dynamic>? meta,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (kind != null) patch[RouteMarkerRow.colKind] = kind;
+    if (label != null) patch[RouteMarkerRow.colLabel] = label.trim();
+    if (lat != null) patch[RouteMarkerRow.colLat] = lat;
+    if (lng != null) patch[RouteMarkerRow.colLng] = lng;
+    if (meta != null) patch[RouteMarkerRow.colMeta] = meta;
+    if (patch.isEmpty) return;
+    await _client
+        .from(RouteMarkerRow.table)
+        .update(patch)
+        .eq(RouteMarkerRow.colId, id);
+  }
+
+  Future<void> deleteRouteMarker(String id) async {
+    await _client.from(RouteMarkerRow.table).delete().eq(RouteMarkerRow.colId, id);
+  }
+
   /// Fetch the user's runs, newest first.
   ///
   /// Returned runs have an empty `track`. Use [fetchTrack] to download the

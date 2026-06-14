@@ -153,6 +153,24 @@ String currentTileUrl() {
   }
 }
 
+/// A course marker (aid station, cutoff, …) to paint on the map. `color`
+/// is the shared hex from `routeMarkerKinds` so a pin matches the web twin
+/// and the schedule list.
+class MapMarkerPin {
+  final String id;
+  final String label;
+  final String color;
+  final double lat;
+  final double lng;
+  const MapMarkerPin({
+    required this.id,
+    required this.label,
+    required this.color,
+    required this.lat,
+    required this.lng,
+  });
+}
+
 class LiveRunMap extends StatefulWidget {
   /// The GPS track recorded so far.
   final List<Waypoint> track;
@@ -256,7 +274,22 @@ class LiveRunMap extends StatefulWidget {
     this.ghostPosition,
     this.hoverIdx,
     this.previewPosition,
+    this.courseMarkers = const [],
+    this.markerPlacing = false,
+    this.onMarkerPlace,
+    this.onMarkerTap,
   });
+
+  /// Course markers (aid stations, cutoffs, …) painted as coloured pins
+  /// with a label above the trace. Empty = no marker layer.
+  final List<MapMarkerPin> courseMarkers;
+
+  /// When true, a map tap reports its lat/lng up via [onMarkerPlace]
+  /// (the marker-editor "tap to drop a pin" mode) instead of doing
+  /// segment selection.
+  final bool markerPlacing;
+  final ValueChanged<Waypoint>? onMarkerPlace;
+  final ValueChanged<String>? onMarkerTap;
 
   @override
   State<LiveRunMap> createState() => _LiveRunMapState();
@@ -705,7 +738,16 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             onPositionChanged: (pos, hasGesture) {
               if (hasGesture) setState(() => _userPanned = true);
             },
-            onTap: widget.onSegmentSelect == null ? null : _handleMapTap,
+            onTap: (widget.onSegmentSelect == null && !widget.markerPlacing)
+                ? null
+                : (tapPos, latLng) {
+                    if (widget.markerPlacing) {
+                      widget.onMarkerPlace
+                          ?.call(Waypoint(lat: latLng.latitude, lng: latLng.longitude));
+                      return;
+                    }
+                    _handleMapTap(tapPos, latLng);
+                  },
           ),
           children: [
             // Dark map tiles with HTTP cache. `maxNativeZoom` caps tile
@@ -898,6 +940,29 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                 ],
               ),
 
+            // Course markers (aid stations, cutoffs, …). Coloured pins
+            // above the trace with a label; tapping one (in edit mode)
+            // reports its id up so the host can edit / delete it.
+            if (widget.courseMarkers.isNotEmpty)
+              MarkerLayer(
+                key: const ValueKey('course-markers'),
+                markers: [
+                  for (final m in widget.courseMarkers)
+                    Marker(
+                      point: LatLng(m.lat, m.lng),
+                      width: 120,
+                      height: 44,
+                      alignment: Alignment.topCenter,
+                      child: GestureDetector(
+                        onTap: widget.onMarkerTap == null
+                            ? null
+                            : () => widget.onMarkerTap!(m.id),
+                        child: _CourseMarkerPin(label: m.label, color: m.color),
+                      ),
+                    ),
+                ],
+              ),
+
             // Current position marker — drawn from the interpolated tween
             // position so the dot glides smoothly between GPS fixes, with
             // the raw latest fix as a fallback on the very first frame.
@@ -962,6 +1027,61 @@ class _DistanceMarkerPin extends StatelessWidget {
           color: Color(0xFF1E293B),
         ),
       ),
+    );
+  }
+}
+
+/// Coloured course-marker pin + label. Mirrors the `route-marker-bg` +
+/// `route-marker-label` MapLibre layers on `RunMap.svelte` (coloured
+/// circle, white halo, label below).
+class _CourseMarkerPin extends StatelessWidget {
+  final String label;
+  final String color;
+  const _CourseMarkerPin({required this.label, required this.color});
+
+  Color get _color {
+    final hex = color.replaceFirst('#', '');
+    final v = int.tryParse(hex, radix: 16);
+    if (v == null) return const Color(0xFF6B7280);
+    return Color(0xFF000000 | v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: _color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 3, spreadRadius: 0.5),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -14825,6 +14825,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load athlete: {error}'**
   String coachingAthleteLoadError(String error);
+
+  /// Heading for the route course-markers panel
+  ///
+  /// In en, this message translates to:
+  /// **'Course markers'**
+  String get routeMarkerHeading;
+
+  /// Add a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Add marker'**
+  String get routeMarkerAdd;
+
+  /// Empty state for the course-markers panel
+  ///
+  /// In en, this message translates to:
+  /// **'No course markers yet. Add aid stations, cutoffs, and more along the route.'**
+  String get routeMarkerEmpty;
+
+  /// Edit a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Edit marker'**
+  String get routeMarkerEdit;
+
+  /// Delete a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get routeMarkerDelete;
+
+  /// Cancel the marker editor
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get routeMarkerCancel;
+
+  /// Save a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get routeMarkerSave;
+
+  /// Saving a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get routeMarkerSaving;
+
+  /// Marker kind field label
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get routeMarkerKindLabel;
+
+  /// Marker name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get routeMarkerNameLabel;
+
+  /// Marker name field hint
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Aid 2'**
+  String get routeMarkerNamePlaceholder;
+
+  /// Aid services field label
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get routeMarkerServicesLabel;
+
+  /// Cutoff time field label
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-off time'**
+  String get routeMarkerCutoffLabel;
+
+  /// Note field label
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get routeMarkerNoteLabel;
+
+  /// Hint to place a marker by tapping the map
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the map to place this marker.'**
+  String get routeMarkerTapToPlace;
+
+  /// Confirmation that a marker was placed
+  ///
+  /// In en, this message translates to:
+  /// **'Placed. Tap the map again to move it.'**
+  String get routeMarkerPlaced;
+
+  /// Cutoff time detail line
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-off {time}'**
+  String routeMarkerCutoffAt(String time);
+
+  /// Validation: marker name required
+  ///
+  /// In en, this message translates to:
+  /// **'Give the marker a name.'**
+  String get routeMarkerLabelRequired;
+
+  /// Validation: marker must be placed
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the map to place the marker first.'**
+  String get routeMarkerPlaceRequired;
+
+  /// Error: save marker failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save marker: {error}'**
+  String routeMarkerSaveFailed(String error);
+
+  /// Error: delete marker failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete marker: {error}'**
+  String routeMarkerDeleteFailed(String error);
+
+  /// Delete-marker confirm title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete marker?'**
+  String get routeMarkerDeleteConfirmTitle;
+
+  /// Delete-marker confirm message
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the marker from the route permanently.'**
+  String get routeMarkerDeleteConfirmMessage;
+
+  /// Marker kind: aid station
+  ///
+  /// In en, this message translates to:
+  /// **'Aid station'**
+  String get routeMarkerKindAidStation;
+
+  /// Marker kind: cutoff
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-off'**
+  String get routeMarkerKindCutoff;
+
+  /// Marker kind: crew access
+  ///
+  /// In en, this message translates to:
+  /// **'Crew / parking'**
+  String get routeMarkerKindCrewAccess;
+
+  /// Marker kind: hazard
+  ///
+  /// In en, this message translates to:
+  /// **'Hazard'**
+  String get routeMarkerKindHazard;
+
+  /// Marker kind: note
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get routeMarkerKindNote;
+
+  /// Marker kind: climb
+  ///
+  /// In en, this message translates to:
+  /// **'Climb'**
+  String get routeMarkerKindClimb;
+
+  /// Marker kind: custom
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get routeMarkerKindCustom;
+
+  /// Aid service: water
+  ///
+  /// In en, this message translates to:
+  /// **'Water'**
+  String get routeMarkerServiceWater;
+
+  /// Aid service: food
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get routeMarkerServiceFood;
+
+  /// Aid service: medical
+  ///
+  /// In en, this message translates to:
+  /// **'Medical'**
+  String get routeMarkerServiceMedical;
+
+  /// Aid service: toilets
+  ///
+  /// In en, this message translates to:
+  /// **'Toilets'**
+  String get routeMarkerServiceToilets;
+
+  /// Aid service: drop bag
+  ///
+  /// In en, this message translates to:
+  /// **'Drop bag'**
+  String get routeMarkerServiceDropBag;
 }
 
 class _AppLocalizationsDelegate

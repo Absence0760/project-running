@@ -8940,4 +8940,120 @@ class AppLocalizationsEs extends AppLocalizations {
   String coachingAthleteLoadError(String error) {
     return 'No se pudo cargar el atleta: $error';
   }
+
+  @override
+  String get routeMarkerHeading => 'Marcadores de ruta';
+
+  @override
+  String get routeMarkerAdd => 'Añadir marcador';
+
+  @override
+  String get routeMarkerEmpty =>
+      'Aún no hay marcadores. Añade avituallamientos, cortes de tiempo y más a lo largo de la ruta.';
+
+  @override
+  String get routeMarkerEdit => 'Editar marcador';
+
+  @override
+  String get routeMarkerDelete => 'Eliminar';
+
+  @override
+  String get routeMarkerCancel => 'Cancelar';
+
+  @override
+  String get routeMarkerSave => 'Guardar';
+
+  @override
+  String get routeMarkerSaving => 'Guardando…';
+
+  @override
+  String get routeMarkerKindLabel => 'Tipo';
+
+  @override
+  String get routeMarkerNameLabel => 'Nombre';
+
+  @override
+  String get routeMarkerNamePlaceholder => 'p. ej. Avituallamiento 2';
+
+  @override
+  String get routeMarkerServicesLabel => 'Servicios';
+
+  @override
+  String get routeMarkerCutoffLabel => 'Hora de corte';
+
+  @override
+  String get routeMarkerNoteLabel => 'Nota';
+
+  @override
+  String get routeMarkerTapToPlace =>
+      'Toca el mapa para colocar este marcador.';
+
+  @override
+  String get routeMarkerPlaced =>
+      'Colocado. Toca de nuevo el mapa para moverlo.';
+
+  @override
+  String routeMarkerCutoffAt(String time) {
+    return 'Corte $time';
+  }
+
+  @override
+  String get routeMarkerLabelRequired => 'Ponle un nombre al marcador.';
+
+  @override
+  String get routeMarkerPlaceRequired =>
+      'Primero coloca el marcador en el mapa.';
+
+  @override
+  String routeMarkerSaveFailed(String error) {
+    return 'No se pudo guardar el marcador: $error';
+  }
+
+  @override
+  String routeMarkerDeleteFailed(String error) {
+    return 'No se pudo eliminar el marcador: $error';
+  }
+
+  @override
+  String get routeMarkerDeleteConfirmTitle => '¿Eliminar marcador?';
+
+  @override
+  String get routeMarkerDeleteConfirmMessage =>
+      'Esto elimina el marcador de la ruta de forma permanente.';
+
+  @override
+  String get routeMarkerKindAidStation => 'Avituallamiento';
+
+  @override
+  String get routeMarkerKindCutoff => 'Corte de tiempo';
+
+  @override
+  String get routeMarkerKindCrewAccess => 'Equipo / aparcamiento';
+
+  @override
+  String get routeMarkerKindHazard => 'Peligro';
+
+  @override
+  String get routeMarkerKindNote => 'Nota';
+
+  @override
+  String get routeMarkerKindClimb => 'Subida';
+
+  @override
+  String get routeMarkerKindCustom => 'Personalizado';
+
+  @override
+  String get routeMarkerServiceWater => 'Agua';
+
+  @override
+  String get routeMarkerServiceFood => 'Comida';
+
+  @override
+  String get routeMarkerServiceMedical => 'Médico';
+
+  @override
+  String get routeMarkerServiceToilets => 'Aseos';
+
+  @override
+  String get routeMarkerServiceDropBag => 'Bolsa de avituallamiento';
 }

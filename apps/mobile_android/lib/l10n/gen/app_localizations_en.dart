@@ -8850,4 +8850,118 @@ class AppLocalizationsEn extends AppLocalizations {
   String coachingAthleteLoadError(String error) {
     return 'Couldn\'t load athlete: $error';
   }
+
+  @override
+  String get routeMarkerHeading => 'Course markers';
+
+  @override
+  String get routeMarkerAdd => 'Add marker';
+
+  @override
+  String get routeMarkerEmpty =>
+      'No course markers yet. Add aid stations, cutoffs, and more along the route.';
+
+  @override
+  String get routeMarkerEdit => 'Edit marker';
+
+  @override
+  String get routeMarkerDelete => 'Delete';
+
+  @override
+  String get routeMarkerCancel => 'Cancel';
+
+  @override
+  String get routeMarkerSave => 'Save';
+
+  @override
+  String get routeMarkerSaving => 'Saving…';
+
+  @override
+  String get routeMarkerKindLabel => 'Type';
+
+  @override
+  String get routeMarkerNameLabel => 'Name';
+
+  @override
+  String get routeMarkerNamePlaceholder => 'e.g. Aid 2';
+
+  @override
+  String get routeMarkerServicesLabel => 'Services';
+
+  @override
+  String get routeMarkerCutoffLabel => 'Cut-off time';
+
+  @override
+  String get routeMarkerNoteLabel => 'Note';
+
+  @override
+  String get routeMarkerTapToPlace => 'Tap the map to place this marker.';
+
+  @override
+  String get routeMarkerPlaced => 'Placed. Tap the map again to move it.';
+
+  @override
+  String routeMarkerCutoffAt(String time) {
+    return 'Cut-off $time';
+  }
+
+  @override
+  String get routeMarkerLabelRequired => 'Give the marker a name.';
+
+  @override
+  String get routeMarkerPlaceRequired =>
+      'Tap the map to place the marker first.';
+
+  @override
+  String routeMarkerSaveFailed(String error) {
+    return 'Could not save marker: $error';
+  }
+
+  @override
+  String routeMarkerDeleteFailed(String error) {
+    return 'Could not delete marker: $error';
+  }
+
+  @override
+  String get routeMarkerDeleteConfirmTitle => 'Delete marker?';
+
+  @override
+  String get routeMarkerDeleteConfirmMessage =>
+      'This removes the marker from the route permanently.';
+
+  @override
+  String get routeMarkerKindAidStation => 'Aid station';
+
+  @override
+  String get routeMarkerKindCutoff => 'Cut-off';
+
+  @override
+  String get routeMarkerKindCrewAccess => 'Crew / parking';
+
+  @override
+  String get routeMarkerKindHazard => 'Hazard';
+
+  @override
+  String get routeMarkerKindNote => 'Note';
+
+  @override
+  String get routeMarkerKindClimb => 'Climb';
+
+  @override
+  String get routeMarkerKindCustom => 'Custom';
+
+  @override
+  String get routeMarkerServiceWater => 'Water';
+
+  @override
+  String get routeMarkerServiceFood => 'Food';
+
+  @override
+  String get routeMarkerServiceMedical => 'Medical';
+
+  @override
+  String get routeMarkerServiceToilets => 'Toilets';
+
+  @override
+  String get routeMarkerServiceDropBag => 'Drop bag';
 }
