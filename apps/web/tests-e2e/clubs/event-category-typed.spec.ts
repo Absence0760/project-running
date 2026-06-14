@@ -54,13 +54,17 @@ test.describe('/clubs/[slug] — typed events (slice E)', () => {
 		await expect(modal).toBeVisible({ timeout: 5_000 });
 
 		// The athletic fields are uniquely addressable: the distance input is
-		// the only step="0.1" number input, the pace minutes input carries the
-		// "min" placeholder, and the route picker is the only <select>. Asserting
-		// on these (not the label text) avoids colliding with the category hint
-		// copy, which itself mentions "distance" / "pace".
+		// the only step="0.1" number input, the pace control's seconds input
+		// carries the unique "sec" placeholder (the "min" placeholder collides
+		// with the class-only gym-template duration field), and the route picker
+		// is the only <select>. Asserting on these (not the label text) avoids
+		// colliding with the category hint copy, which itself mentions
+		// "distance" / "pace".
 		const distanceInput = modal.locator('input[step="0.1"]');
-		const paceInput = modal.getByPlaceholder('min', { exact: true });
-		const routeSelect = modal.locator('select');
+		const paceInput = modal.getByPlaceholder('sec', { exact: true });
+		// Scope to the athletic route picker by its testid — `locator('select')`
+		// also matches the class-only session-plan-picker select.
+		const routeSelect = modal.getByTestId('event-route-select');
 		const disciplineInput = modal.getByPlaceholder(/Vinyasa yoga/);
 
 		// Default category is Group run — the athletic surface is present.

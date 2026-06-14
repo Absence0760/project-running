@@ -345,7 +345,7 @@
 	{#if isAthleticCategory(category)}
 		<label>
 			<span>{m('eventEditor.route')} <span class="optional">{m('eventEditor.optional')}</span></span>
-			<select bind:value={routeId}>
+			<select bind:value={routeId} data-testid="event-route-select">
 				<option value="">{m('eventEditor.noRoute')}</option>
 				{#if clubRoutes.length > 0}
 					<optgroup label={m('eventEditor.clubRoutes', { clubName })}>

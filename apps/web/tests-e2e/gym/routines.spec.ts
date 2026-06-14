@@ -196,7 +196,9 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 		await page.getByTestId('routine-set-reps').nth(0).fill('5');
 		await page.getByTestId('routine-set-weight').nth(0).fill('40');
 		await page.getByTestId('routine-set-rest').nth(0).fill('60');
-		await page.getByTestId('routine-superset-toggle').nth(0).check();
+		// Progression lives in the per-exercise <details class="advanced">,
+		// collapsed by default — open it before reaching the select.
+		await page.locator('.exercise-block').nth(0).getByText('Advanced').click();
 		await page.locator('.exercise-block').nth(0).getByTestId('routine-progression').selectOption('linear');
 
 		// Add a second exercise to complete the superset.
@@ -204,6 +206,10 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 		await page.getByTestId('routine-exercise-name').nth(1).fill(exB);
 		await page.getByTestId('routine-set-reps').nth(1).fill('8');
 		await page.getByTestId('routine-set-weight').nth(1).fill('20');
+
+		// Now that a next exercise exists, link the first into a superset with
+		// it — the toggle is (correctly) disabled while exA is the last row.
+		await page.getByTestId('routine-superset-toggle').nth(0).check();
 
 		await page.getByTestId('routine-save').click();
 		await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });

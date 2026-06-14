@@ -557,7 +557,10 @@
 			showToast(m('routeNew.savedToast'), 'success');
 			goto(`/routes/${saved.id}`);
 		} catch (err) {
-			showToast(err instanceof Error ? err.message : m('routeNew.saveFailedError'), 'error');
+			// Surface the failure IN the save modal (persistent, in-context)
+			// and keep it open with the user's work intact — a transient toast
+			// would vanish and read as a half-navigated dead end.
+			saveError = err instanceof Error ? err.message : m('routeNew.saveFailedError');
 		} finally {
 			saving = false;
 		}

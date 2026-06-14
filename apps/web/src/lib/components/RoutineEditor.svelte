@@ -125,7 +125,12 @@
 		if (exercises[ei].sets.length === 0) exercises[ei].sets = [emptySet()];
 	}
 
-	function intOrNull(s: string): number | null {
+	function intOrNull(s: string | number): number | null {
+		// A `<input type="number" bind:value>` binds a NUMBER even when the
+		// field is declared string (Svelte coercion — see apps/web/CLAUDE.md),
+		// so coerce at the boundary rather than rejecting every numeric input
+		// as "not a string" (which silently dropped target reps/duration/etc).
+		if (typeof s === 'number') return Number.isFinite(s) ? Math.trunc(s) : null;
 		if (typeof s !== 'string' || s.trim() === '') return null;
 		const n = parseInt(s, 10);
 		return Number.isFinite(n) ? n : null;
