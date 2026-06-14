@@ -5,15 +5,33 @@ import {
 	assembleEnglish,
 	describeRoute,
 	elevationProfile,
+	localisedTemplate,
 	routeShape,
 	LOOP_CLOSE_M,
 	type RouteDescriptionInput,
 } from './route_description';
 
 /**
- * Twin of `apps/mobile_android/test/route_description_test.dart` — keep
- * the cases and count in lockstep.
+ * The `describeRoute` / `elevationProfile` / `routeShape` /
+ * `assembleEnglish` cases are the twin of
+ * `apps/mobile_android/test/route_description_test.dart` — keep those 12
+ * in lockstep. The `localisedTemplate` cases below are web-only (the
+ * mobile UI renders its own localised string from the same parts) and
+ * are not part of the twin count.
  */
+
+/// A fake i18n + unit layer for localisedTemplate: the translator echoes
+/// the key (so assertions pin which keys + slots are used) and the
+/// formatter renders metres in the chosen unit (so we can assert the
+/// builder is unit-aware rather than baking km).
+function fakeI18n(unit: 'km' | 'mi' = 'km') {
+	return {
+		t: (key: string, params?: Record<string, string | number>) =>
+			params ? `${key}{${JSON.stringify(params)}}` : key,
+		formatDistance: (m: number) =>
+			unit === 'mi' ? `${(m / 1609.344).toFixed(2)}mi` : `${m}m`,
+	};
+}
 
 test('elevationProfile buckets gain-per-km into the four bands', () => {
 	// 0 m over 10 km → flat
@@ -136,4 +154,68 @@ test('assembleEnglish handles a flat road loop with no climbing', () => {
 	});
 	const text = assembleEnglish(parts, 'Track');
 	assert.equal(text, 'Track is a 5.0 km road loop route with little to no elevation change.');
+});
+
+// ── localisedTemplate (web-only; not part of the twin count) ──
+
+test('localisedTemplate emits a climb clause for an elevated route', () => {
+	const parts = describeRoute({
+		name: 'Summit',
+		distanceM: 12000,
+		elevationM: 480,
+		surface: 'trail',
+		start: { lat: 51.5, lng: -0.12 },
+		end: { lat: 51.7, lng: 0.0 },
+	});
+	const out = localisedTemplate(parts, 'Summit', fakeI18n());
+	assert.match(out, /routeDetail\.descSentence/);
+	assert.match(out, /routeDetail\.descClimb/);
+	assert.doesNotMatch(out, /routeDetail\.descFlat/);
+	assert.match(out, /routeDetail\.descShapePointToPoint/);
+	assert.match(out, /routeDetail\.descSurfaceTrail/);
+	assert.match(out, /routeDetail\.descElevHilly/);
+	assert.match(out, /12000m/); // distance through formatDistance
+	assert.match(out, /480m/); // gain through formatDistance
+});
+
+test('localisedTemplate emits the flat clause when there is no climbing', () => {
+	const parts = describeRoute({
+		name: 'Track',
+		distanceM: 5000,
+		elevationM: 0,
+		surface: 'road',
+		start: { lat: 0, lng: 0 },
+		end: { lat: 0, lng: 0 },
+	});
+	const out = localisedTemplate(parts, 'Track', fakeI18n());
+	assert.match(out, /routeDetail\.descFlat/);
+	assert.doesNotMatch(out, /routeDetail\.descClimb/);
+	assert.match(out, /routeDetail\.descShapeLoop/);
+	assert.match(out, /routeDetail\.descSurfaceRoad/);
+});
+
+test('localisedTemplate renders distance in the viewer unit (mi)', () => {
+	const parts = describeRoute({
+		name: 'x',
+		distanceM: 10000,
+		elevationM: 0,
+		surface: null,
+		start: { lat: 0, lng: 0 },
+		end: { lat: 0, lng: 0 },
+	});
+	const out = localisedTemplate(parts, 'x', fakeI18n('mi'));
+	assert.match(out, /6\.21mi/); // 10000 m → 6.21 mi
+});
+
+test('localisedTemplate omits the surface word when surface is null', () => {
+	const parts = describeRoute({
+		name: 'x',
+		distanceM: 5000,
+		elevationM: 0,
+		surface: null,
+		start: { lat: 0, lng: 0 },
+		end: { lat: 0, lng: 0 },
+	});
+	const out = localisedTemplate(parts, 'x', fakeI18n());
+	assert.doesNotMatch(out, /routeDetail\.descSurface/);
 });

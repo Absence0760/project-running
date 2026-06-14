@@ -158,14 +158,85 @@ const ELEVATION_WORD: Record<ElevationProfile, string> = {
 	mountainous: 'mountainous',
 };
 
+/** What the localised template builder needs from the i18n + unit layer. */
+export interface DescribeI18n {
+	/** The project's `m(key, params)` translator. */
+	t: (key: string, params?: Record<string, string | number>) => string;
+	/** `formatDistance(metres)` — unit-aware, from $lib/format/units. */
+	formatDistance: (metres: number) => string;
+}
+
+const SHAPE_I18N_KEY: Record<RouteShape, string> = {
+	loop: 'routeDetail.descShapeLoop',
+	out_and_back: 'routeDetail.descShapeOutAndBack',
+	point_to_point: 'routeDetail.descShapePointToPoint',
+};
+
+const SURFACE_I18N_KEY: Record<string, string> = {
+	road: 'routeDetail.descSurfaceRoad',
+	trail: 'routeDetail.descSurfaceTrail',
+	mixed: 'routeDetail.descSurfaceMixed',
+};
+
+const ELEV_I18N_KEY: Record<ElevationProfile, string> = {
+	flat: 'routeDetail.descElevFlat',
+	rolling: 'routeDetail.descElevRolling',
+	hilly: 'routeDetail.descElevHilly',
+	mountainous: 'routeDetail.descElevMountainous',
+};
+
+/**
+ * Build the localised, unit-aware templated description from the
+ * structured parts. This is the always-works L1 baseline the route-detail
+ * UI shows instantly (no network) and the floor the AI path falls back to.
+ * Distance + gain run through the injected `formatDistance` so a
+ * mi-preference viewer reads miles; every word is translated via the
+ * injected `t`. Pure — no env / store imports — so it stays unit-testable
+ * and free of the SvelteKit `$env` graph.
+ */
+export function localisedTemplate(
+	parts: RouteDescriptionParts,
+	name: string,
+	i18n: DescribeI18n,
+): string {
+	const { t, formatDistance } = i18n;
+	const shape = t(SHAPE_I18N_KEY[parts.shape]);
+	// The surface slot is empty for a surface-less route and the bare
+	// translated word otherwise. Each locale's `descSentence` owns the
+	// surrounding separators (a Western language puts a space after the
+	// slot; Japanese puts none), with a `descSentenceNoSurface` variant
+	// for the empty case so neither path leaves a dangling separator.
+	const surface = parts.surface
+		? t(SURFACE_I18N_KEY[parts.surface] ?? parts.surface)
+		: null;
+	const sentence = t(
+		surface ? 'routeDetail.descSentence' : 'routeDetail.descSentenceNoSurface',
+		{
+			name,
+			distance: formatDistance(parts.distanceM),
+			surface: surface ?? '',
+			shape,
+		},
+	);
+	if (parts.elevationM > 0) {
+		const climb = t('routeDetail.descClimb', {
+			gain: formatDistance(parts.elevationM),
+			elevation: t(ELEV_I18N_KEY[parts.elevation]),
+			perKm: t('routeDetail.descPerKm', { m: parts.gainPerKm }),
+		});
+		return `${sentence} ${climb}`;
+	}
+	return `${sentence} ${t('routeDetail.descFlat')}`;
+}
+
 /**
  * Canonical English assembler. Used to seed the LLM prompt (plain prose
  * the model enhances) and as the literal fallback string in tests and on
  * the server's degraded path. The route-detail UI does NOT call this —
- * it builds a localised, unit-aware sentence from `RouteDescriptionParts`
- * so non-English viewers and mi-preference viewers get correct output.
+ * it builds a localised, unit-aware sentence via `localisedTemplate` so
+ * non-English viewers and mi-preference viewers get correct output.
  * Distance is rendered in km here because this string is English-only by
- * contract; the localised UI path handles mi.
+ * contract.
  */
 export function assembleEnglish(
 	parts: RouteDescriptionParts,
