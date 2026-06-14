@@ -175,9 +175,12 @@ async function handleCompleted(
       .eq('instance_start', attendee.instance_start)
       .eq('status', 'going')
       .neq('user_id', attendee.user_id);
-    // The just-paid order is confirmed; it does not count as a competing
-    // pending hold. Recheck going against capacity (pending excluded — a
-    // pending hold does not yet occupy a seat at confirm time).
+    // Best-effort fast path only. This recheck is NOT authoritative: it counts
+    // only seated 'going' rows and holds no lock, so a competing paid order
+    // that hasn't seated yet is invisible and N webhooks racing the last seat
+    // all read 'available'. The advisory-locked enforce_event_capacity trigger
+    // below is the real never-oversell guard; this just shortcuts the obvious
+    // already-full case.
     if (capacityDecision(goingCount ?? 0, 0, capacity) === 'full') {
       // Oversold against another path. P1 has NO automated refund: leave
       // the order paid, do NOT seat, and flag for a manual Stripe-
@@ -192,8 +195,12 @@ async function handleCompleted(
 
   // Seat the attendee (the paid order_id satisfies the
   // enforce_paid_order_for_priced_event trigger). Upsert on the PK so a
-  // retry is idempotent.
-  const { error: seatErr } = await service
+  // retry is idempotent. Read the PERSISTED status back: the advisory-locked
+  // enforce_event_capacity BEFORE trigger silently rewrites NEW.status to
+  // 'waitlisted' when the seat is over capacity (it demotes rather than
+  // raising), and that trigger — not the lock-free recheck above — is the
+  // authoritative guard. RETURNING reflects the BEFORE-trigger mutation.
+  const { data: seated, error: seatErr } = await service
     .from('event_attendees')
     .upsert({
       event_id: attendee.event_id,
@@ -201,10 +208,29 @@ async function handleCompleted(
       instance_start: attendee.instance_start,
       status: 'going',
       order_id: attendee.order_id,
-    }, { onConflict: 'event_id,user_id,instance_start' });
+    }, { onConflict: 'event_id,user_id,instance_start' })
+    .select('status')
+    .maybeSingle();
   if (seatErr) {
     console.error('attendee seat failed (code):', seatErr?.code ?? 'unknown');
     return Response.json({ ok: false, error: 'seat_failed' }, { status: 500 });
+  }
+
+  // The buyer paid but the capacity trigger demoted them to the waitlist
+  // (lost the last seat to a concurrent paid order the recheck couldn't see).
+  // P1 has no automated refund — report oversold + order_id so ops can refund,
+  // instead of falsely telling the caller the seat was confirmed.
+  if (seated?.status === 'waitlisted') {
+    console.error(
+      'OVERSOLD: paid order demoted to waitlist by capacity trigger, flag for manual refund. order:',
+      order.id,
+    );
+    return Response.json({
+      ok: true,
+      oversold: true,
+      waitlisted: true,
+      order_id: order.id,
+    });
   }
 
   return Response.json({ ok: true, seated: true, order_id: order.id });
