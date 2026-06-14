@@ -3157,6 +3157,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 153. The race roadbook allocates goal time by grade-adjusted effort and shares via URL params, not a schema
+
+**Decided (2026-06-14, `roadbook.ts`/`.dart` + `/routes/[id]/roadbook`).** The roadbook turns a route's markers + a goal finish time into a per-checkpoint crew sheet (projected arrival, cutoff margin). Two choices: (1) goal time is allocated across legs by **grade-adjusted effort** (`gradeFactor`, Minetti) by default — climbs get proportionally more time — not by even pace; (2) the runner's goal/start/pacing-model live in the **page's URL query params**, with **no persistence layer** (no `race_plans` table) in v1.
+
+**Why.** (1) Even splits are wrong on vert-heavy ultra courses — the differentiator over Strava/Garmin is an effort-honest schedule, and the app already had the Minetti model (decisions §107) sitting unused for this. It degrades cleanly to even pace when a route has no elevation (and the UI backfills vert from Open-Meteo on demand). (2) The headline use case is "send crew a link and they see the same sheet" — URL params deliver that with zero schema, RLS, or a management UI, and the page is print-friendly + copy-as-text for a crew chat. Saving named plans is a clean follow-up once the engine + UI are proven.
+
+**Trade-off.** A roadbook isn't saved — reopening needs the link (or re-entering the goal). Acceptable for v1; the `race_plans` table is the deferred next phase. Effort allocation assumes the runner *targets* even effort, which most pacing strategies approximate; a fade/positive-split model is a later refinement.
+
+**Boundary / not-yet-done.** Saved named race plans, a fueling column (carbs/hr synced to aid stations via the nutrition engine), a Riegel-seeded default goal + confidence badge, and GPX/FIT waypoint export to the watch are all deferred. See [race_roadbook.md](../features/race_roadbook.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

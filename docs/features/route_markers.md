@@ -80,6 +80,12 @@ cut-off chip renders identically on both platforms.
   kind carries), `sortMarkers` (schedule order), `parseCutoff`, and the
   `AID_SERVICES` vocabulary.
 
+## Consumers
+
+- **[Race roadbook](race_roadbook.md)** — the markers + a goal time produce a
+  per-checkpoint crew sheet (projected arrival, cutoff margin, services). The
+  markers' `position_m` + cutoff `meta` are the roadbook's spine.
+
 ## Deferred
 
 - **Club-defined custom marker kinds** — a `club_marker_kinds` catalogue a club
