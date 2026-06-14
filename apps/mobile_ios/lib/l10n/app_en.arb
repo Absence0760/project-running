@@ -7285,6 +7285,25 @@
   "@dashboardSectionStreak": {
     "description": "Section header above the run-streak card"
   },
+  "dashboardWeekStripTitle": "This Week",
+  "@dashboardWeekStripTitle": {
+    "description": "Title of the dashboard current-calendar-week activity ribbon"
+  },
+  "dashboardWeekStripCount": "{count, plural, one{{count} activity} other{{count} activities}}",
+  "@dashboardWeekStripCount": {
+    "description": "Activity count in the week-strip header",
+    "placeholders": {"count": {"type": "num"}}
+  },
+  "dashboardWeekStripDayAria": "{dow}: {dist}",
+  "@dashboardWeekStripDayAria": {
+    "description": "Accessibility label for a logged day cell in the week strip",
+    "placeholders": {"dow": {"type": "String"}, "dist": {"type": "String"}}
+  },
+  "dashboardWeekStripDayRestAria": "{dow}: rest day",
+  "@dashboardWeekStripDayRestAria": {
+    "description": "Accessibility label for a day cell with no logged activity",
+    "placeholders": {"dow": {"type": "String"}}
+  },
   "dashboardSectionLast20Weeks": "Last 20 Weeks",
   "@dashboardSectionLast20Weeks": {
     "description": "Section header above the 20-week activity heatmap"

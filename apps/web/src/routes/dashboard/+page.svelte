@@ -30,6 +30,7 @@
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
+	import ThisWeekStrip from '$lib/components/ThisWeekStrip.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
@@ -1018,6 +1019,13 @@
 				</span>
 			</div>
 		</div>
+
+		<!-- Current calendar-week activity ribbon — the day-by-day shape
+		     behind the "This Week" stat card. Honours week_start_day +
+		     the source filter (filteredRuns). Distinct from the plan-detail
+		     CurrentWeekStrip, which anchors to the plan's week, not the
+		     calendar. Pure derivation in lib/training/current_week.ts. -->
+		<ThisWeekStrip activities={filteredRuns} weekStart={weekStartDay} {now} />
 
 		<!-- Multi-metric goals — local-only. Lives directly under the
 		     stat-grid so the "what am I working toward?" lens sits next

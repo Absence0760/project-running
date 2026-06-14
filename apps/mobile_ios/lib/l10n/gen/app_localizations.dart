@@ -9688,6 +9688,30 @@ abstract class AppLocalizations {
   /// **'Streak'**
   String get dashboardSectionStreak;
 
+  /// Title of the dashboard current-calendar-week activity ribbon
+  ///
+  /// In en, this message translates to:
+  /// **'This Week'**
+  String get dashboardWeekStripTitle;
+
+  /// Activity count in the week-strip header
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} activity} other{{count} activities}}'**
+  String dashboardWeekStripCount(num count);
+
+  /// Accessibility label for a logged day cell in the week strip
+  ///
+  /// In en, this message translates to:
+  /// **'{dow}: {dist}'**
+  String dashboardWeekStripDayAria(String dow, String dist);
+
+  /// Accessibility label for a day cell with no logged activity
+  ///
+  /// In en, this message translates to:
+  /// **'{dow}: rest day'**
+  String dashboardWeekStripDayRestAria(String dow);
+
   /// Section header above the 20-week activity heatmap
   ///
   /// In en, this message translates to:

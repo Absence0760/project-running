@@ -5545,6 +5545,29 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dashboardSectionStreak => '連続記録';
 
   @override
+  String get dashboardWeekStripTitle => '今週';
+
+  @override
+  String dashboardWeekStripCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件のアクティビティ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardWeekStripDayAria(String dow, String dist) {
+    return '$dow: $dist';
+  }
+
+  @override
+  String dashboardWeekStripDayRestAria(String dow) {
+    return '$dow: 休息日';
+  }
+
+  @override
   String get dashboardSectionLast20Weeks => '直近20週間';
 
   @override
