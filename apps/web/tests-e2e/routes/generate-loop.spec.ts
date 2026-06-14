@@ -1193,6 +1193,62 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await expect(page.getByRole('button', { name: /Save Route/ })).toBeDisabled();
 	});
 
+	test('quiet-roads toggle appears and sets preference=quiet on the generate request', async ({
+		page,
+	}) => {
+		// The avoid-highways / prefer-residential control. Off → today's request
+		// (no preference field). On → the body carries preference:'quiet', which the
+		// server turns into a GraphHopper custom model. Capture the POST body off the
+		// mock to assert the wiring.
+		let capturedBody: { preference?: string } | null = null;
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+				preference?: string;
+			};
+			capturedBody = body;
+			const coordinates = loopPolyline(body.start, body.targetDistanceM);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ coordinates, distanceM }),
+			});
+		});
+
+		// Open the distance panel and confirm the toggle is present + off.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		const toggle = page.getByTestId('quiet-roads-toggle');
+		await expect(toggle).toBeVisible();
+		await expect(toggle).not.toBeChecked();
+
+		// Default (off): the request omits the preference field.
+		await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
+		expect(capturedBody).not.toBeNull();
+		expect(capturedBody!.preference).toBeUndefined();
+
+		// Turn it on; the next page-driven generate carries preference:'quiet'.
+		await toggle.check();
+		await expect(toggle).toBeChecked();
+		await page.evaluate(({ s }) => {
+			(
+				window as unknown as {
+					__routeBuilderPage: { setStartPoint: (p: { lat: number; lng: number }) => void };
+				}
+			).__routeBuilderPage.setStartPoint(s);
+		}, { s: FIELD_START });
+		await page.getByRole('button', { name: /Generate .* loop/i }).click();
+		await expect.poll(() => capturedBody?.preference).toBe('quiet');
+	});
+
 	test('keyboard coordinate entry sets the start point without a map tap (WCAG 2.1.1)', async ({
 		page
 	}) => {

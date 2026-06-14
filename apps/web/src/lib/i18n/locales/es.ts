@@ -744,6 +744,8 @@ export const messages = {
 	"routeNew.endLongitude": "Longitud de fin",
 	"routeNew.setEnd": "Fijar fin",
 	"routeNew.distance": "Distancia",
+	"routeNew.quietRoads": "Calles tranquilas (evitar autopistas)",
+	"routeNew.quietRoadsHint": "Orienta el bucle generado hacia calles residenciales y lejos de las vías principales.",
 	"routeNew.cancelGenerating": "Cancelar generación…",
 	"routeNew.generateRoute": "Generar ruta de {distance}",
 	"routeNew.generateLoop": "Generar circuito de {distance}",

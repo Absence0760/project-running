@@ -743,6 +743,8 @@ export const messages = {
 	"routeNew.endLongitude": "Longitude do fim",
 	"routeNew.setEnd": "Definir fim",
 	"routeNew.distance": "Distância",
+	"routeNew.quietRoads": "Ruas tranquilas (evitar rodovias)",
+	"routeNew.quietRoadsHint": "Direciona o trajeto gerado para ruas residenciais e longe das vias principais.",
 	"routeNew.cancelGenerating": "Cancelar geração…",
 	"routeNew.generateRoute": "Gerar rota de {distance}",
 	"routeNew.generateLoop": "Gerar circuito de {distance}",

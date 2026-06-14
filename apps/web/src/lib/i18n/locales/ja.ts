@@ -740,6 +740,8 @@ export const messages = {
 	"routeNew.endLongitude": "ゴールの経度",
 	"routeNew.setEnd": "ゴールを設定",
 	"routeNew.distance": "距離",
+	"routeNew.quietRoads": "静かな道（幹線道路を避ける）",
+	"routeNew.quietRoadsHint": "生成されるループを幹線道路から離し、住宅街の道に寄せます。",
 	"routeNew.cancelGenerating": "生成をキャンセル…",
 	"routeNew.generateRoute": "{distance} のルートを生成",
 	"routeNew.generateLoop": "{distance} のループを生成",

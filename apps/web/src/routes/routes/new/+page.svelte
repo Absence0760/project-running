@@ -226,6 +226,11 @@
 	let paceSec = $state(30);
 	let targetKm = $state(5);
 	let showDistanceTarget = $state(false);
+	// Avoid-highways / prefer-residential preference for distance generation.
+	// Off → today's generation; on → the server biases the loop onto quiet
+	// streets via a GraphHopper custom model, falling back to plain generation
+	// if the engine can't honour it.
+	let quietRoads = $state(false);
 	let pickingPoint = $state<'start' | 'end' | null>(null);
 	let startPoint = $state<{ lat: number; lng: number } | null>(null);
 	let endPoint = $state<{ lat: number; lng: number } | null>(null);
@@ -385,7 +390,12 @@
 		const start = startPoint ?? undefined;
 		const end = endPoint ?? undefined;
 
-		const ok = await builder?.generateLoop(targetKm * 1000, start, end);
+		const ok = await builder?.generateLoop(
+			targetKm * 1000,
+			start,
+			end,
+			quietRoads ? 'quiet' : undefined,
+		);
 		routed = !!ok;
 	}
 
@@ -410,7 +420,7 @@
 		targetKm = Math.round(largest / 100) / 10;
 		const start = startPoint ?? undefined;
 		const end = endPoint ?? undefined;
-		const ok = await builder?.generateLoop(largest, start, end);
+		const ok = await builder?.generateLoop(largest, start, end, quietRoads ? 'quiet' : undefined);
 		routed = !!ok;
 	}
 
@@ -696,6 +706,10 @@
 						<button onclick={() => setTargetFromKm(21.1)}>Half</button>
 						<button onclick={() => setTargetFromKm(42.2)}>Full</button>
 					</div>
+					<label class="quiet-roads" title={m('routeNew.quietRoadsHint')}>
+						<input type="checkbox" bind:checked={quietRoads} data-testid="quiet-roads-toggle" />
+						<span>{m('routeNew.quietRoads')}</span>
+					</label>
 					{#if builderBusy}
 						<button class="btn btn-outline" onclick={() => builder?.cancelGeneration()}>
 							{m('routeNew.cancelGenerating')}
@@ -1341,6 +1355,20 @@
 	.target-presets button:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
+	}
+
+	.quiet-roads {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		font-size: 0.8rem;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+	.quiet-roads input[type="checkbox"] {
+		width: auto;
+		flex-shrink: 0;
+		accent-color: var(--color-primary);
 	}
 
 	.target-btn {

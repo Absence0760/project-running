@@ -753,6 +753,8 @@ export const en = {
 	"routeNew.endLongitude": "End longitude",
 	"routeNew.setEnd": "Set end",
 	"routeNew.distance": "Distance",
+	"routeNew.quietRoads": "Quiet roads (avoid highways)",
+	"routeNew.quietRoadsHint": "Bias the generated loop onto residential streets and away from major roads.",
 	"routeNew.cancelGenerating": "Cancel generating…",
 	"routeNew.generateRoute": "Generate {distance} route",
 	"routeNew.generateLoop": "Generate {distance} loop",
