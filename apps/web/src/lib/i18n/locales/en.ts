@@ -2579,6 +2579,8 @@ export const en = {
 	"discover.paid": "Paid",
 	"discover.loading": "Searching…",
 	"discover.empty": "No public activities match these filters yet.",
+	"discover.searchFailed": "Couldn't load activities. Check your connection and try again.",
+	"discover.retry": "Retry",
 	"discover.nearLabel": "Near",
 	"discover.nearPlaceholder": "Near a place…",
 	"discover.useMyLocation": "Use my location",

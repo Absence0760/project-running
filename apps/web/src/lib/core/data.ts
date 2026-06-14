@@ -1614,8 +1614,7 @@ export async function searchPublicEvents(
 		p_limit: f.limit ?? 60,
 	});
 	if (error) {
-		console.warn('search_public_events RPC failed', error);
-		return [];
+		throw error;
 	}
 	return (data ?? []) as PublicEventResult[];
 }

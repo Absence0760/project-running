@@ -2570,6 +2570,8 @@ export const messages = {
 	"discover.paid": "De pago",
 	"discover.loading": "Buscando…",
 	"discover.empty": "Todavía no hay actividades públicas que coincidan con estos filtros.",
+	"discover.searchFailed": "No se pudieron cargar las actividades. Comprueba tu conexión e inténtalo de nuevo.",
+	"discover.retry": "Reintentar",
 	"discover.nearLabel": "Cerca de",
 	"discover.nearPlaceholder": "Cerca de un lugar…",
 	"discover.useMyLocation": "Usar mi ubicación",

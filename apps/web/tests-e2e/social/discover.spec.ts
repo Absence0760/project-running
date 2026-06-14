@@ -171,3 +171,40 @@ test.describe('/social — proximity discovery', () => {
 		await expect(row).toBeHidden({ timeout: 10_000 });
 	});
 });
+
+/**
+ * Failure handling: a failed search_public_events RPC must show a distinct
+ * error + Retry state, not the "no activities match" empty state (which would
+ * be indistinguishable from a legitimately empty result). Retry, once the RPC
+ * recovers, must clear the error and render results/empty.
+ */
+test.describe('/social — discovery failure', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('a failed search shows an error with Retry, not the empty state', async ({ page }) => {
+		// Fail every search_public_events RPC until we lift the route.
+		let failing = true;
+		await page.route('**/rest/v1/rpc/search_public_events*', async (route) => {
+			if (failing) {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+			} else {
+				await route.continue();
+			}
+		});
+
+		await page.goto('/social?tab=discover');
+
+		// Distinct error state, not the empty state.
+		await expect(page.getByTestId('discover-error')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('discover-empty')).toBeHidden();
+
+		// Recover the RPC and retry → the error clears.
+		failing = false;
+		await page.getByTestId('discover-retry').click();
+		await expect(page.getByTestId('discover-error')).toBeHidden({ timeout: 10_000 });
+	});
+});
