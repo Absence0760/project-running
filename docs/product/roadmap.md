@@ -403,6 +403,7 @@ Claude-powered training advisor embedded in the web app. Reviews the runner's pl
 - [x] Conversation archive + sidebar history list with auto-derived titles (first user message, truncated). "Start new" flips `archived_at` rather than deleting; per-archive view (read-only) and delete
 - [x] Inline bubble actions on hover — copy, regenerate (assistant), edit-and-resend (user), thumbs-up / thumbs-down (assistant). Reactions persisted via column-level UPDATE on `coach_messages.reaction`
 - [x] Server `mode` (`send` / `regenerate` / `edit`) + `anchor_message_id` truncate-and-rerun support so regenerate / edit don't duplicate user messages
+- [x] **AI route descriptions** (web) — `/routes/[id]` "Describe this route" renders a templated description for everyone (offline, `localisedTemplate` over the `route_description` twin), and enhances it with `claude-opus-4-8` for Pro users via `/api/coach/route-describe` (server `is_pro()` gate, fail-closed, templated fallback on every failure — `decisions.md § 151`). Mobile UI wiring deferred; the Dart twin helper exists for parity.
 
 ### Monetisation — Pro tier + one-off donations
 

@@ -3129,6 +3129,20 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 151. AI route descriptions are an L4 enhancement over a templated baseline, never a standalone LLM feature
+
+**Decided (2026-06-14, commits on `feat/ai-route-description`).** A route's detail page can describe the route in prose. The obvious build is "call an LLM with the route's stats." Instead the feature is two layers: a pure templated describer (`route_description.ts` / `.dart` twin — `describeRoute` buckets distance band, surface, m/km elevation character, and loop-vs-point-to-point shape into structured parts; `localisedTemplate` renders them in the viewer's locale + units) is the **always-works L1 baseline**, and the LLM call (`/api/coach/route-describe` → `claude-opus-4-8`, adaptive thinking) is a **strictly-additive L4 enhancement** that only ever *replaces* the baseline text on success.
+
+**Why.** Three reasons. (1) *Layered resilience* — the run-recording contract that a higher-layer failure can't break a lower one applies here too: a free user, an unset `ANTHROPIC_API_KEY`, a model error, a `stop_reason:'refusal'`, an empty completion, or a timeout all degrade to the templated text, so the affordance never shows a blank box or a hard error. (2) *Cost + paywall* — the LLM path is a Pro perk gated server-side on `is_pro()` (fail-closed), so free users still get a useful description with zero model spend, and the gate can't be bypassed from devtools. (3) *Grounding* — the model is handed the verified templated facts and told to stay strictly within them, so it embellishes phrasing without inventing landmarks or scenery the app doesn't know about.
+
+**Trade-off.** The templated sentence is plain (a structured i18n template, not natural per-locale grammar), and the AI text isn't persisted (it's regenerated per view, not saved to `routes.description`). Both are acceptable: the baseline reads fine, and not persisting keeps the write path and a not-yet-built owner "save this" affordance out of scope. The endpoint reuses the coach Lambda's transport + the dev `+server.ts` bypass gates rather than standing up a new function.
+
+**Boundary / not-yet-done.** The mobile route-detail *UI* doesn't wire the affordance yet — only the `route_description` Dart twin exists (for parity + a future mobile surface). Persisting an owner-chosen description and an "out-and-back" shape distinct from "loop" (the stored waypoints can't tell them apart) are deferred.
+
+**Don't re-litigate** by adding a raw "just call the LLM" describe path with no templated fallback, or by moving the paywall gate client-side. The gate is server-side and the fallback is the floor.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
