@@ -54,16 +54,32 @@ export interface MealSlotGroup<T extends MacroRow> {
 /// Group entries into the four meal slots in display order, omitting empty
 /// slots (anti-clutter — no "Dinner 0 kcal" row). Entries with a null slot
 /// fall under 'snack'.
+///
+/// One pass over `entries`: bucket each row and accumulate its calories as
+/// we go, rather than filtering the whole list once per slot and re-summing
+/// each bucket (which walked the day's log 8× — 4 filters + 4 sums — on
+/// every reactive recompute of the daily view).
 export function groupByMealSlot<T extends MacroRow>(entries: T[]): MealSlotGroup<T>[] {
+	const buckets = new Map<MealSlot, { entries: T[]; calories: number }>();
+	for (const e of entries) {
+		const slot = e.meal_slot ?? 'snack';
+		let bucket = buckets.get(slot);
+		if (!bucket) {
+			bucket = { entries: [], calories: 0 };
+			buckets.set(slot, bucket);
+		}
+		bucket.entries.push(e);
+		bucket.calories += e.calories ?? 0;
+	}
 	const groups: MealSlotGroup<T>[] = [];
 	for (const slot of MEAL_SLOTS) {
-		const inSlot = entries.filter((e) => (e.meal_slot ?? 'snack') === slot);
-		if (inSlot.length === 0) continue;
+		const bucket = buckets.get(slot);
+		if (!bucket) continue;
 		groups.push({
 			slot,
 			label: MEAL_SLOT_LABELS[slot],
-			entries: inSlot,
-			calories: sumMacros(inSlot).calories,
+			entries: bucket.entries,
+			calories: Math.round(bucket.calories),
 		});
 	}
 	return groups;

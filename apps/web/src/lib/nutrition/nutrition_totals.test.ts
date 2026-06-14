@@ -31,6 +31,31 @@ test('groupByMealSlot orders slots and omits empty ones', () => {
 	assert.equal(groups.find((g) => g.slot === 'breakfast')!.calories, 412);
 });
 
+test('groupByMealSlot sums calories across multiple entries in one slot', () => {
+	const many: MacroRow[] = [
+		{ calories: 100, protein_g: null, carbs_g: null, fat_g: null, meal_slot: 'breakfast' },
+		{ calories: 250, protein_g: null, carbs_g: null, fat_g: null, meal_slot: 'breakfast' },
+		{ calories: null, protein_g: 5, carbs_g: null, fat_g: null, meal_slot: 'breakfast' }, // null kcal → 0
+		{ calories: 300, protein_g: null, carbs_g: null, fat_g: null, meal_slot: null }, // → snack
+	];
+	const groups = groupByMealSlot(many);
+	assert.deepEqual(groups.map((g) => g.slot), ['breakfast', 'snack']);
+	const breakfast = groups.find((g) => g.slot === 'breakfast')!;
+	assert.equal(breakfast.entries.length, 3);
+	assert.equal(breakfast.calories, 350);
+	assert.equal(groups.find((g) => g.slot === 'snack')!.calories, 300);
+});
+
+test('groupByMealSlot preserves entry order within a slot', () => {
+	const ordered: MacroRow[] = [
+		{ calories: 1, protein_g: null, carbs_g: null, fat_g: null, meal_slot: 'lunch' },
+		{ calories: 2, protein_g: null, carbs_g: null, fat_g: null, meal_slot: 'lunch' },
+		{ calories: 3, protein_g: null, carbs_g: null, fat_g: null, meal_slot: 'lunch' },
+	];
+	const lunch = groupByMealSlot(ordered).find((g) => g.slot === 'lunch')!;
+	assert.deepEqual(lunch.entries.map((e) => e.calories), [1, 2, 3]);
+});
+
 test('ringFraction clamps to [0,1] and hides on a missing/zero target', () => {
 	assert.equal(ringFraction(500, 2000), 0.25);
 	assert.equal(ringFraction(3000, 2000), 1); // clamped
