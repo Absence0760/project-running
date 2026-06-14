@@ -2798,6 +2798,105 @@
   "@routeDetailDescriptionHeading": {
     "description": "Section heading for the route description"
   },
+  "routeDetailDescribe": "Describe this route",
+  "@routeDetailDescribe": {
+    "description": "Button that generates a description for a route with none stored"
+  },
+  "routeDetailDescribing": "Describing…",
+  "@routeDetailDescribing": {
+    "description": "Button label while a route description is being generated"
+  },
+  "routeDetailAiAttribution": "Written by AI from this route's stats",
+  "@routeDetailAiAttribution": {
+    "description": "Attribution line under an AI-written route description"
+  },
+  "routeDetailDescribeFailed": "Couldn't generate a description. Please try again.",
+  "@routeDetailDescribeFailed": {
+    "description": "Non-blocking error when the AI enhancement fails; the templated baseline stays shown"
+  },
+  "routeDetailEnhanceUpgradeHint": "AI descriptions are a Pro feature. Upgrade to enhance.",
+  "@routeDetailEnhanceUpgradeHint": {
+    "description": "Upsell shown to free users; the templated description still shows"
+  },
+  "routeDetailDescShapeLoop": "loop",
+  "@routeDetailDescShapeLoop": {
+    "description": "Route shape word: a route that returns to its start"
+  },
+  "routeDetailDescShapeOutAndBack": "out-and-back",
+  "@routeDetailDescShapeOutAndBack": {
+    "description": "Route shape word: out and back along the same path"
+  },
+  "routeDetailDescShapePointToPoint": "point-to-point",
+  "@routeDetailDescShapePointToPoint": {
+    "description": "Route shape word: starts and ends in different places"
+  },
+  "routeDetailDescSurfaceRoad": "road",
+  "@routeDetailDescSurfaceRoad": {
+    "description": "Route surface word used inside the templated description sentence"
+  },
+  "routeDetailDescSurfaceTrail": "trail",
+  "@routeDetailDescSurfaceTrail": {
+    "description": "Route surface word used inside the templated description sentence"
+  },
+  "routeDetailDescSurfaceMixed": "mixed-surface",
+  "@routeDetailDescSurfaceMixed": {
+    "description": "Route surface word used inside the templated description sentence"
+  },
+  "routeDetailDescElevFlat": "flat",
+  "@routeDetailDescElevFlat": {
+    "description": "Elevation character word inside the templated climb clause"
+  },
+  "routeDetailDescElevRolling": "gently rolling",
+  "@routeDetailDescElevRolling": {
+    "description": "Elevation character word inside the templated climb clause"
+  },
+  "routeDetailDescElevHilly": "hilly",
+  "@routeDetailDescElevHilly": {
+    "description": "Elevation character word inside the templated climb clause"
+  },
+  "routeDetailDescElevMountainous": "mountainous",
+  "@routeDetailDescElevMountainous": {
+    "description": "Elevation character word inside the templated climb clause"
+  },
+  "routeDetailDescSentence": "{name} is a {distance} {surface} {shape} route.",
+  "@routeDetailDescSentence": {
+    "description": "Templated route description sentence with a surface word",
+    "placeholders": {
+      "name": {"type": "String"},
+      "distance": {"type": "String"},
+      "surface": {"type": "String"},
+      "shape": {"type": "String"}
+    }
+  },
+  "routeDetailDescSentenceNoSurface": "{name} is a {distance} {shape} route.",
+  "@routeDetailDescSentenceNoSurface": {
+    "description": "Templated route description sentence when the surface is unknown",
+    "placeholders": {
+      "name": {"type": "String"},
+      "distance": {"type": "String"},
+      "shape": {"type": "String"}
+    }
+  },
+  "routeDetailDescClimb": "It has {gain} of climbing — {elevation}, about {perKm} per km.",
+  "@routeDetailDescClimb": {
+    "description": "Templated climb clause appended when the route has elevation gain",
+    "placeholders": {
+      "gain": {"type": "String"},
+      "elevation": {"type": "String"},
+      "perKm": {"type": "String"}
+    }
+  },
+  "routeDetailDescFlat": "It has little to no elevation change.",
+  "@routeDetailDescFlat": {
+    "description": "Templated clause appended when the route is essentially flat"
+  },
+  "routeDetailDescPerKm": "{m} m",
+  "@routeDetailDescPerKm": {
+    "description": "Per-kilometre gain figure embedded in the climb clause",
+    "placeholders": {
+      "m": {"type": "int"}
+    }
+  },
   "routeDetailRunCount": "{count, plural, one{{count} run} other{{count} runs}}",
   "@routeDetailRunCount": {
     "description": "Meta chip showing how many runs used this route",

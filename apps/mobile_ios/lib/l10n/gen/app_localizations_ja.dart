@@ -2275,6 +2275,84 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailDescriptionHeading => '説明';
 
   @override
+  String get routeDetailDescribe => 'このルートを説明';
+
+  @override
+  String get routeDetailDescribing => '説明を作成中…';
+
+  @override
+  String get routeDetailAiAttribution => 'ルートのデータからAIが作成';
+
+  @override
+  String get routeDetailDescribeFailed => '説明を生成できませんでした。もう一度お試しください。';
+
+  @override
+  String get routeDetailEnhanceUpgradeHint =>
+      'AIによる説明はPro機能です。アップグレードして強化しましょう。';
+
+  @override
+  String get routeDetailDescShapeLoop => '周回';
+
+  @override
+  String get routeDetailDescShapeOutAndBack => '往復';
+
+  @override
+  String get routeDetailDescShapePointToPoint => 'ポイント間';
+
+  @override
+  String get routeDetailDescSurfaceRoad => 'ロード';
+
+  @override
+  String get routeDetailDescSurfaceTrail => 'トレイル';
+
+  @override
+  String get routeDetailDescSurfaceMixed => '混在路面';
+
+  @override
+  String get routeDetailDescElevFlat => '平坦';
+
+  @override
+  String get routeDetailDescElevRolling => '緩やかなアップダウン';
+
+  @override
+  String get routeDetailDescElevHilly => '起伏あり';
+
+  @override
+  String get routeDetailDescElevMountainous => '山岳';
+
+  @override
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  ) {
+    return '$nameは$distanceの$surface・$shapeルートです。';
+  }
+
+  @override
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  ) {
+    return '$nameは$distanceの$shapeルートです。';
+  }
+
+  @override
+  String routeDetailDescClimb(String gain, String elevation, String perKm) {
+    return '獲得標高は$gain（$elevation、1kmあたり約$perKm）です。';
+  }
+
+  @override
+  String get routeDetailDescFlat => '標高差はほとんどありません。';
+
+  @override
+  String routeDetailDescPerKm(int m) {
+    return '$m m';
+  }
+
+  @override
   String routeDetailRunCount(int count) {
     return '$count 回の実行';
   }

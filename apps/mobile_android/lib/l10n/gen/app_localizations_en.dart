@@ -2398,6 +2398,86 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailDescriptionHeading => 'Description';
 
   @override
+  String get routeDetailDescribe => 'Describe this route';
+
+  @override
+  String get routeDetailDescribing => 'Describing…';
+
+  @override
+  String get routeDetailAiAttribution =>
+      'Written by AI from this route\'s stats';
+
+  @override
+  String get routeDetailDescribeFailed =>
+      'Couldn\'t generate a description. Please try again.';
+
+  @override
+  String get routeDetailEnhanceUpgradeHint =>
+      'AI descriptions are a Pro feature. Upgrade to enhance.';
+
+  @override
+  String get routeDetailDescShapeLoop => 'loop';
+
+  @override
+  String get routeDetailDescShapeOutAndBack => 'out-and-back';
+
+  @override
+  String get routeDetailDescShapePointToPoint => 'point-to-point';
+
+  @override
+  String get routeDetailDescSurfaceRoad => 'road';
+
+  @override
+  String get routeDetailDescSurfaceTrail => 'trail';
+
+  @override
+  String get routeDetailDescSurfaceMixed => 'mixed-surface';
+
+  @override
+  String get routeDetailDescElevFlat => 'flat';
+
+  @override
+  String get routeDetailDescElevRolling => 'gently rolling';
+
+  @override
+  String get routeDetailDescElevHilly => 'hilly';
+
+  @override
+  String get routeDetailDescElevMountainous => 'mountainous';
+
+  @override
+  String routeDetailDescSentence(
+    String name,
+    String distance,
+    String surface,
+    String shape,
+  ) {
+    return '$name is a $distance $surface $shape route.';
+  }
+
+  @override
+  String routeDetailDescSentenceNoSurface(
+    String name,
+    String distance,
+    String shape,
+  ) {
+    return '$name is a $distance $shape route.';
+  }
+
+  @override
+  String routeDetailDescClimb(String gain, String elevation, String perKm) {
+    return 'It has $gain of climbing — $elevation, about $perKm per km.';
+  }
+
+  @override
+  String get routeDetailDescFlat => 'It has little to no elevation change.';
+
+  @override
+  String routeDetailDescPerKm(int m) {
+    return '$m m';
+  }
+
+  @override
   String routeDetailRunCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

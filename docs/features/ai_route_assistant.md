@@ -1,11 +1,35 @@
 # AI route assistant — natural-language route requests + descriptions
 
-**Status: PROPOSAL — not built.** A thin LLM layer that *bookends* the route
+**Status: Component B (description) SHIPPED — web + mobile. Component A (NL →
+constraints) is still a PROPOSAL.** A thin LLM layer that *bookends* the route
 generator: turn a plain-English request into generation constraints, and turn a
 generated route into a plain-English description. Written 2026-06-10. Pairs with
 the route generators ([route_loop_generation.md](route_loop_generation.md),
 [graph_cycle_loop_generation.md](graph_cycle_loop_generation.md)) and their
 preference layer.
+
+## What's shipped (Component B — route → description)
+
+The "Describe this route" affordance ships on **web and both mobile twins**.
+On a route with no stored description the route-detail surface shows a
+"Describe this route" action; tapping it renders the **templated baseline
+instantly** (offline, no model — `describeRoute` parts → a localised,
+unit-aware sentence) and then, **for Pro users only**, calls the Pro-gated
+`/api/coach/route-describe` endpoint (`claude-opus-4-8`) for an AI-written
+paragraph that replaces the baseline, with an AI-attribution line. Gating is
+**fail-closed** end to end:
+
+- **Server**: the endpoint enforces `is_pro()` and degrades to the templated
+  text on every failure (`decisions.md § 151`).
+- **Web**: `localisedTemplate` (`apps/web/src/lib/routes/route_description.ts`)
+  + `route_describe_client.ts` on `/routes/[id]`.
+- **Mobile**: the `describeRoute` twin helper
+  (`apps/mobile_android/lib/route_description.dart`) feeds an in-screen
+  localised template built from the ARB catalogue + `UnitFormat`; the tap runs
+  a client-side Pro check (`isPro()`, unknown → not-Pro) and only Pro users hit
+  the endpoint via `route_describe_client.dart`. A non-Pro tap surfaces the
+  upgrade hint over the templated text; a model failure keeps the templated
+  baseline and shows a non-blocking error — the route view never breaks.
 
 ## Core principle: the LLM is the interface, not the router
 
