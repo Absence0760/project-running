@@ -97,6 +97,45 @@ test('replanRemaining: a make-up never shrinks an already-longer next long run',
 	assert.equal(r.changes.length, 0);
 });
 
+test('replanRemaining: several missed long runs make up the LARGEST, not the earliest', () => {
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			// Earliest miss (smaller).
+			workouts: [wo('miss-a', '2026-06-01', 'long', 24_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 44_000,
+			actualMetres: 22_000,
+			isComplete: true,
+			// Later miss (largest) — this is the one to recover.
+			workouts: [wo('miss-b', '2026-06-08', 'long', 30_000, { isPast: true })],
+		},
+		{
+			weekIndex: 2,
+			phase: 'build',
+			plannedMetres: 46_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-15', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-12' });
+	const makeUp = r.changes.find((c) => c.workoutId === 'next');
+	assert.equal(makeUp?.reason, 'make_up_long');
+	// Driven by the 30 km miss → capped to 22 km * 1.15 = 25.3 km → 25300,
+	// NOT the earlier 24 km miss (which would only reach 24000).
+	assert.equal(makeUp?.toMetres, Math.round(22_000 * (1 + MAKE_UP_MAX_INCREASE)));
+	// Exactly one make-up change for the next long (no double-push).
+	assert.equal(r.changes.filter((c) => c.reason === 'make_up_long').length, 1);
+});
+
 test('replanRemaining: a missed long run in the TAPER is skipped, never made up', () => {
 	const weeks: ReplanWeek[] = [
 		{

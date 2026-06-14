@@ -107,6 +107,10 @@ export function replanRemaining(input: {
 	// ── 1. Missed long runs in past weeks → make up in the future ──
 	// The missed run itself is FROZEN (past) — we never mutate it; it just
 	// triggers a forward make-up. The adherence banner already surfaces it.
+	// With several outstanding missed long runs the make-up honours the
+	// LARGEST one (the most demanding session to recover) — a 30 km miss
+	// outranks an earlier 24 km miss — not whichever happened first.
+	let maxMissedLong = 0;
 	for (let i = 0; i < weeks.length; i++) {
 		const week = weeks[i];
 		for (const wo of week.workouts) {
@@ -117,18 +121,20 @@ export function replanRemaining(input: {
 				recoveryWeekImminent: recoveryWeekImminent(weeks, i),
 			});
 			if (advice.recommendation !== 'make_up') continue;
-			// Make up by ensuring the NEXT future long run doesn't regress
-			// below the missed distance — capped so it can't spike.
-			const missed = wo.targetDistanceM ?? 0;
-			const next = futureLongRuns[0];
-			if (!next || missed <= 0) continue;
-			const plannedNext = next.targetDistanceM ?? 0;
-			if (plannedNext <= 0) continue;
-			const capped = Math.min(missed, Math.round(plannedNext * (1 + MAKE_UP_MAX_INCREASE)));
-			if (capped > plannedNext && !changes.some((c) => c.workoutId === next.id)) {
+			maxMissedLong = Math.max(maxMissedLong, wo.targetDistanceM ?? 0);
+		}
+	}
+	// Make up by ensuring the NEXT future long run doesn't regress below the
+	// largest missed distance — capped so it can't spike.
+	const nextLong = futureLongRuns[0];
+	if (nextLong && maxMissedLong > 0) {
+		const plannedNext = nextLong.targetDistanceM ?? 0;
+		if (plannedNext > 0) {
+			const capped = Math.min(maxMissedLong, Math.round(plannedNext * (1 + MAKE_UP_MAX_INCREASE)));
+			if (capped > plannedNext) {
 				changes.push({
-					workoutId: next.id,
-					scheduledDate: next.scheduledDate,
+					workoutId: nextLong.id,
+					scheduledDate: nextLong.scheduledDate,
 					reason: 'make_up_long',
 					field: 'target_distance_m',
 					fromMetres: plannedNext,

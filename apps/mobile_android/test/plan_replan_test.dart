@@ -99,6 +99,44 @@ void main() {
     expect(r.changes.length, 0);
   });
 
+  test('several missed long runs make up the LARGEST, not the earliest', () {
+    final weeks = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 40000,
+        actualMetres: 20000,
+        isComplete: true,
+        workouts: [_wo('miss-a', '2026-06-01', 'long', 24000, isPast: true)],
+      ),
+      ReplanWeek(
+        weekIndex: 1,
+        phase: 'build',
+        plannedMetres: 44000,
+        actualMetres: 22000,
+        isComplete: true,
+        workouts: [_wo('miss-b', '2026-06-08', 'long', 30000, isPast: true)],
+      ),
+      ReplanWeek(
+        weekIndex: 2,
+        phase: 'build',
+        plannedMetres: 46000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [_wo('next', '2026-06-15', 'long', 22000)],
+      ),
+    ];
+    final r = replanRemaining(weeks: weeks, today: '2026-06-12');
+    final makeUp = r.changes.firstWhere((c) => c.workoutId == 'next');
+    expect(makeUp.reason, ReplanReason.makeUpLong);
+    // Driven by the 30 km miss → capped to 22 km * 1.15, not the 24 km miss.
+    expect(makeUp.toMetres, (22000 * (1 + makeUpMaxIncrease)).round());
+    expect(
+      r.changes.where((c) => c.reason == ReplanReason.makeUpLong).length,
+      1,
+    );
+  });
+
   test('a missed long run in the TAPER is skipped, never made up', () {
     final weeks = [
       ReplanWeek(

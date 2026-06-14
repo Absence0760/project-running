@@ -133,6 +133,10 @@ ReplanResult replanRemaining({
     ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
   // ── 1. Missed long runs in past weeks → make up in the future ──
+  // With several outstanding missed long runs the make-up honours the
+  // LARGEST one (the most demanding session to recover), not whichever
+  // happened first.
+  var maxMissedLong = 0.0;
   for (var i = 0; i < sorted.length; i++) {
     final week = sorted[i];
     for (final wo in week.workouts) {
@@ -144,15 +148,18 @@ ReplanResult replanRemaining({
       ));
       if (advice.recommendation != MakeUpRecommendation.makeUp) continue;
       final missed = wo.targetDistanceM ?? 0;
-      if (futureLongRuns.isEmpty || missed <= 0) continue;
-      final next = futureLongRuns.first;
-      final plannedNext = next.targetDistanceM ?? 0;
-      if (plannedNext <= 0) continue;
-      final capped = missed < (plannedNext * (1 + makeUpMaxIncrease)).round()
-          ? missed
-          : (plannedNext * (1 + makeUpMaxIncrease)).round().toDouble();
-      if (capped > plannedNext &&
-          !changes.any((c) => c.workoutId == next.id)) {
+      if (missed > maxMissedLong) maxMissedLong = missed;
+    }
+  }
+  if (futureLongRuns.isNotEmpty && maxMissedLong > 0) {
+    final next = futureLongRuns.first;
+    final plannedNext = next.targetDistanceM ?? 0;
+    if (plannedNext > 0) {
+      final capped =
+          maxMissedLong < (plannedNext * (1 + makeUpMaxIncrease)).round()
+              ? maxMissedLong
+              : (plannedNext * (1 + makeUpMaxIncrease)).round().toDouble();
+      if (capped > plannedNext) {
         changes.add(ReplanChange(
           workoutId: next.id,
           scheduledDate: next.scheduledDate,
