@@ -13,8 +13,8 @@ operator process, not a legal opinion. Counsel review before EU launch.
 
 | Right | Article | How it's satisfied | Surface |
 |---|---|---|---|
-| Access / copy | 15 | Full export (every personal-data table + run-photo bytes + tracks) | Settings → "Export data" → `data-export` (Go worker `/v1/export`) |
-| Portability | 20 | Same machine-readable export (JSON + GPX + zip) | as above |
+| Access / copy | 15 | Machine-readable export of personal-data tables + run-photo bytes + tracks. **Known gap:** the export spec (`export-data/backup_spec.ts` + the job_worker `buildBackupSpecs`) keys most tables off a literal `user_id` column, so tables owned via a differently-named column are not yet included — `session_plans` (`author_id`), `event_orders` (`buyer_user_id`), `route_photos` (`owner_id`), and `event_pricing` (`event_id` → host). These ARE erased on account deletion (they cascade), but are missing from the export. Closing this gap is a tracked follow-up before EU launch. | Settings → "Export data" → `data-export` (Go worker `/v1/export`) |
+| Portability | 20 | Same machine-readable export (JSON + GPX + zip); same known gap as Access above | as above |
 | Rectification | 16 | Profile + preference edits; run title/notes edit | Settings, run detail |
 | Erasure | 17 | Account deletion (cascade + Storage drain + third-party deauth + audit log) | Settings → Delete account (email re-entry challenge) → `delete-account` EF |
 | Restriction | 18 | **No self-service toggle** — manual SOP below | operator |

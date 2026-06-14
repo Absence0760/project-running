@@ -7,6 +7,7 @@ Operating docs that back the project's international-launch posture. The `/audit
 | [data-subject-rights.md](data-subject-rights.md) | How each GDPR right is satisfied + the Art 18/21 manual operator SOP |
 | [retention.md](retention.md) | How long do we keep each personal-data category? When does auto-deletion fire? |
 | [sub-processors.md](sub-processors.md) | Every external service that touches user data — input to the Privacy Policy + GDPR Art 30 Record of Processing Activities |
+| [sub-processor-changelog.md](sub-processor-changelog.md) | The GDPR Art 28(2) change-disclosure history — every sub-processor addition / replacement, landed ≥30 days before activation. `sub-processors.md` is the snapshot; this is the history |
 | [dpia.md](dpia.md) | GDPR Art 35 Data Protection Impact Assessment for live-location + heart-rate tracking |
 | [breach-runbook.md](breach-runbook.md) | 72-hour Art 33/34 notification flow — who calls what, in what order |
 | [eu-representative.md](eu-representative.md) | Art 27 placeholder — required for non-EU controllers offering services to EU residents |
