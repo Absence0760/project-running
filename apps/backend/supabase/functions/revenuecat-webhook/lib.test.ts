@@ -38,6 +38,21 @@ Deno.test('mapEventToTier — product id with "lifetime" substring → lifetime'
   assertEquals(mapEventToTier('PRODUCT_CHANGE', 'lifetime_special', null), 'lifetime');
 });
 
+Deno.test('mapEventToTier — PRODUCT_CHANGE to a non-lifetime product does NOT downgrade a lifetime holder', () => {
+  // A lifetime owner with a parallel monthly sub for another entitlement does
+  // a plan change on that sub: RC fires PRODUCT_CHANGE with a non-lifetime
+  // product id. Knocking them to `pro` would lose "never expires" and then
+  // drop them to free when the sub later expires. Must keep lifetime (null =
+  // no tier write).
+  assertStrictEquals(mapEventToTier('PRODUCT_CHANGE', 'pro_yearly', 'lifetime'), null);
+  assertStrictEquals(mapEventToTier('PRODUCT_CHANGE', null, 'lifetime'), null);
+  // A genuine upgrade TO a lifetime product still asserts lifetime.
+  assertEquals(mapEventToTier('PRODUCT_CHANGE', 'pro_lifetime', 'lifetime'), 'lifetime');
+  // A non-lifetime holder is unaffected — PRODUCT_CHANGE still grants pro.
+  assertEquals(mapEventToTier('PRODUCT_CHANGE', 'pro_yearly', 'pro'), 'pro');
+  assertEquals(mapEventToTier('PRODUCT_CHANGE', 'pro_yearly', 'free'), 'pro');
+});
+
 Deno.test('mapEventToTier — null product id with activating event → pro (default)', () => {
   // RC's payloads always include product_id but the helper is
   // permissive: missing → empty string → no "lifetime" substring → pro.

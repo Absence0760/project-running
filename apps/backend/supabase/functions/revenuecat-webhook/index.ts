@@ -125,11 +125,16 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
     return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
   }
 
-  // Resolve the user's current tier so the deactivating-event branch
-  // can avoid demoting a `lifetime` holder. We look it up only when
-  // the event is deactivating; activating events don't need it.
+  // Resolve the user's current tier so the tier mapper can avoid demoting a
+  // `lifetime` holder. Needed for deactivating events (don't reset lifetime on
+  // a parallel-sub expiry) AND for PRODUCT_CHANGE (a plan change on a parallel
+  // sub must not knock lifetime down to pro). Other activating events always
+  // grant at least pro, so the lookup is skipped for them.
   let currentTier: string | null = null;
-  if ((DEACTIVATING_EVENTS as readonly string[]).includes(event.type)) {
+  if (
+    (DEACTIVATING_EVENTS as readonly string[]).includes(event.type) ||
+    event.type === 'PRODUCT_CHANGE'
+  ) {
     const { data } = await supabase
       .from('user_profiles')
       .select('subscription_tier')

@@ -71,7 +71,15 @@ export function mapEventToTier(
 ): Tier | null {
   if ((ACTIVATING_EVENTS as readonly string[]).includes(eventType)) {
     const pid = productId ?? '';
-    return pid.includes('lifetime') ? 'lifetime' : 'pro';
+    const next: Tier = pid.includes('lifetime') ? 'lifetime' : 'pro';
+    // Never knock a `lifetime` holder down to `pro` on an activating event.
+    // PRODUCT_CHANGE fires for a plan change on ANY of the user's products, so
+    // a lifetime owner who changes a parallel monthly sub (for a different
+    // entitlement) would otherwise be downgraded to pro — and then to free when
+    // that sub later expires. lifetime never expires; only an explicit lifetime
+    // product can (re)assert it. Mirrors the deactivating-path protection.
+    if (currentTier === 'lifetime' && next !== 'lifetime') return null;
+    return next;
   }
   if ((DEACTIVATING_EVENTS as readonly string[]).includes(eventType)) {
     if (currentTier === 'lifetime') return null;
