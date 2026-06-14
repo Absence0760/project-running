@@ -157,6 +157,13 @@ class RunRecorder {
   bool _recording = false;
   bool _paused = false;
   Route? _route;
+  // Suffix sums of route segment lengths, precomputed once when the route is
+  // set: `_routeTailAfter[k]` is the total length of all route segments
+  // strictly after segment k (segment j connects waypoint j-1 → j). The
+  // distance-remaining calc on every GPS fix then adds the tail in O(1)
+  // instead of re-summing the whole remaining route — that inline sum was
+  // O(R) per fix, i.e. O(R²) over a multi-hour run on a 2000-waypoint route.
+  List<double>? _routeTailAfter;
   double _trackThresholdMetres = 3;
   double _maxSpeedMps = 10;
   double _accuracyGateMetres = 20;
@@ -280,6 +287,7 @@ class RunRecorder {
     _recording = false;
     _paused = false;
     _route = route;
+    _routeTailAfter = _computeRouteTailAfter(route);
     _trackThresholdMetres =
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
@@ -487,6 +495,7 @@ class RunRecorder {
     _recording = false;
     _paused = false;
     _route = route;
+    _routeTailAfter = _computeRouteTailAfter(route);
     _trackThresholdMetres =
         max(distanceFilterMetres.toDouble(), minMovementMetres);
     _maxSpeedMps = maxSpeedMps;
@@ -904,13 +913,28 @@ class RunRecorder {
     final a = route.waypoints[closestSegmentIdx - 1];
     final b = route.waypoints[closestSegmentIdx];
     final segLen = _haversine(a.lat, a.lng, b.lat, b.lng);
-    double remaining = segLen * (1 - tAtClosest);
-    for (int i = closestSegmentIdx + 1; i < route.waypoints.length; i++) {
-      final p = route.waypoints[i - 1];
-      final q = route.waypoints[i];
-      remaining += _haversine(p.lat, p.lng, q.lat, q.lng);
-    }
+    // Partial current segment + the precomputed length of every segment after
+    // it (O(1)) instead of re-summing the route tail on every fix.
+    final tail = _routeTailAfter;
+    final remaining = segLen * (1 - tAtClosest) +
+        (tail != null && closestSegmentIdx < tail.length ? tail[closestSegmentIdx] : 0);
     return (offRoute: minDist, remaining: remaining);
+  }
+
+  /// Suffix sums of route segment lengths. `tail[k]` is the summed length of
+  /// every segment strictly after segment k (segment j connects waypoint
+  /// j-1 → j). Built once per route so [_routeProgress] can resolve the
+  /// remaining-route distance in O(1). Null for a route too short to have a
+  /// segment.
+  static List<double>? _computeRouteTailAfter(Route? route) {
+    if (route == null || route.waypoints.length < 2) return null;
+    final wps = route.waypoints;
+    final n = wps.length;
+    final tail = List<double>.filled(n, 0);
+    for (int k = n - 2; k >= 0; k--) {
+      tail[k] = tail[k + 1] + _haversine(wps[k].lat, wps[k].lng, wps[k + 1].lat, wps[k + 1].lng);
+    }
+    return tail;
   }
 
   /// Project a point onto a line segment using equirectangular coordinates.

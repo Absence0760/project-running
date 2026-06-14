@@ -258,5 +258,26 @@ void main() {
         expect(prog.remaining, closeTo(r.debugRouteRemaining(p)!, 1e-6));
       }
     });
+
+    test('O(1) suffix-sum remaining matches the inline sum as the matched '
+        'segment advances down a long route', () {
+      // A long straight north-bound route (40 segments). The optimized
+      // _routeProgress resolves the remaining-route distance from a
+      // precomputed suffix array; it must equal the inline per-fix sum
+      // (_routeRemaining) at every advancing probe, exercising many distinct
+      // suffix indices — the guard against the suffix array drifting from the
+      // segment lengths.
+      final pts = <List<double>>[];
+      for (int i = 0; i <= 40; i++) {
+        pts.add([i * 0.001, 0]);
+      }
+      final r = RunRecorder()..debugPrepareWithoutStream(route: route(pts));
+      for (int i = 0; i <= 40; i += 3) {
+        final p = at(i * 0.001, 0);
+        final prog = r.debugRouteProgress(p)!;
+        expect(prog.remaining, closeTo(r.debugRouteRemaining(p)!, 1e-6),
+            reason: 'mismatch at waypoint $i');
+      }
+    });
   });
 }
