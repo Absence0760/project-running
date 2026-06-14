@@ -46,6 +46,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
+	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
@@ -95,6 +96,7 @@
 	let clubRoutes = $state<Route[]>([]);
 	let transferableRoutes = $state<Route[]>([]);
 	let showTransferModal = $state(false);
+	let showEditModal = $state(false);
 	let transferRouteId = $state('');
 	let clubTemplates = $state<TrainingPlan[]>([]);
 	let sessionTemplates = $state<SessionPlan[]>([]);
@@ -781,6 +783,31 @@
 				{#if club.description}
 					<p class="desc">{club.description}</p>
 				{/if}
+				{#if club.website_url || club.instagram_url || club.strava_url || club.facebook_url}
+					<p class="club-links">
+						{#if club.website_url}
+							<a href={club.website_url} target="_blank" rel="noopener noreferrer nofollow">
+								<span class="material-symbols" aria-hidden="true">language</span>
+								{tr('clubHome.visitWebsite')}
+							</a>
+						{/if}
+						{#if club.instagram_url}
+							<a href={club.instagram_url} target="_blank" rel="noopener noreferrer nofollow" aria-label="Instagram">
+								<span class="material-symbols" aria-hidden="true">photo_camera</span>
+							</a>
+						{/if}
+						{#if club.strava_url}
+							<a href={club.strava_url} target="_blank" rel="noopener noreferrer nofollow" aria-label="Strava">
+								<span class="material-symbols" aria-hidden="true">directions_run</span>
+							</a>
+						{/if}
+						{#if club.facebook_url}
+							<a href={club.facebook_url} target="_blank" rel="noopener noreferrer nofollow" aria-label="Facebook">
+								<span class="material-symbols" aria-hidden="true">thumb_up</span>
+							</a>
+						{/if}
+					</p>
+				{/if}
 			</div>
 			<div class="hero-actions">
 				{#if !club.viewer_role && club.viewer_status === 'pending'}
@@ -820,6 +847,12 @@
 					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 						<span class="material-symbols" aria-hidden="true">add</span>
 						{tr('clubHome.newEvent')}
+					</button>
+				{/if}
+				{#if isAdmin}
+					<button class="btn-secondary" type="button" onclick={() => (showEditModal = true)}>
+						<span class="material-symbols" aria-hidden="true">edit</span>
+						{tr('clubHome.editClub')}
 					</button>
 				{/if}
 				{#if !isAdmin && auth.loggedIn}
@@ -1575,6 +1608,24 @@
 			clubIsPublic={club.is_public}
 			oncreated={handleEventCreated}
 			oncancel={() => (showEventModal = false)}
+		/>
+	{/if}
+</Modal>
+
+<Modal
+	open={showEditModal && club != null}
+	title={tr('clubHome.editClubTitle')}
+	wide
+	onclose={() => (showEditModal = false)}
+>
+	{#if club}
+		<ClubEditor
+			existing={club}
+			onsaved={async () => {
+				showEditModal = false;
+				await load();
+			}}
+			oncancel={() => (showEditModal = false)}
 		/>
 	{/if}
 </Modal>

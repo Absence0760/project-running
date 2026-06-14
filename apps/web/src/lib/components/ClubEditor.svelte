@@ -1,22 +1,31 @@
 <script lang="ts">
-	import { createClub } from '$lib/core/data';
+	import { createClub, updateClub } from '$lib/core/data';
 	import { geocodePlace } from '$lib/routes/geocoding';
-	import type { JoinPolicy } from '$lib/types';
+	import type { Club, JoinPolicy } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 
 	interface Props {
+		/// When set, the editor edits this club instead of creating a new one.
+		existing?: Club;
 		oncreated?: (club: { slug: string; id: string }) => void;
+		onsaved?: () => void;
 		oncancel?: () => void;
 	}
-	let { oncreated, oncancel }: Props = $props();
+	let { existing, oncreated, onsaved, oncancel }: Props = $props();
 
-	let name = $state('');
-	let description = $state('');
-	let location = $state('');
-	let visibility = $state<'public' | 'private'>('public');
-	let joinPolicy = $state<JoinPolicy>('open');
-	let requireWaiver = $state(false);
+	let name = $state(existing?.name ?? '');
+	let description = $state(existing?.description ?? '');
+	let location = $state(existing?.location_label ?? '');
+	let visibility = $state<'public' | 'private'>(
+		existing && !existing.is_public ? 'private' : 'public'
+	);
+	let joinPolicy = $state<JoinPolicy>(existing?.join_policy ?? 'open');
+	let requireWaiver = $state(existing?.requires_activity_waiver ?? false);
+	let websiteUrl = $state(existing?.website_url ?? '');
+	let instagramUrl = $state(existing?.instagram_url ?? '');
+	let stravaUrl = $state(existing?.strava_url ?? '');
+	let facebookUrl = $state(existing?.facebook_url ?? '');
 	let busy = $state(false);
 
 	$effect(() => {
@@ -35,6 +44,20 @@
 		if (!name.trim() || busy) return;
 		busy = true;
 		try {
+			if (existing) {
+				await updateClub(existing.id, {
+					name: name.trim(),
+					description: description.trim() || null,
+					location_label: location.trim() || null,
+					is_public: visibility === 'public',
+					website_url: websiteUrl,
+					instagram_url: instagramUrl,
+					strava_url: stravaUrl,
+					facebook_url: facebookUrl
+				});
+				onsaved?.();
+				return;
+			}
 			// Geocode the location string so the new club is searchable
 			// by region (see `searchClubs` + migration 20260905_001).
 			// Null is fine — the club still appears via the ILIKE branch
@@ -53,7 +76,11 @@
 				location_point_wkt: locationPointWkt,
 				is_public: visibility === 'public',
 				join_policy: joinPolicy,
-				requires_activity_waiver: requireWaiver
+				requires_activity_waiver: requireWaiver,
+				website_url: websiteUrl,
+				instagram_url: instagramUrl,
+				strava_url: stravaUrl,
+				facebook_url: facebookUrl
 			});
 			oncreated?.(club);
 		} catch (e: unknown) {
@@ -92,6 +119,26 @@
 	</label>
 
 	<fieldset>
+		<legend>{m('clubEditor.links')} <span class="optional">{m('clubEditor.optional')}</span></legend>
+		<label class="link-field">
+			<span>{m('clubEditor.website')}</span>
+			<input type="url" bind:value={websiteUrl} placeholder="https://example.com" maxlength="500" inputmode="url" />
+		</label>
+		<label class="link-field">
+			<span>{m('clubEditor.instagram')}</span>
+			<input type="url" bind:value={instagramUrl} placeholder="https://instagram.com/yourclub" maxlength="500" inputmode="url" />
+		</label>
+		<label class="link-field">
+			<span>{m('clubEditor.strava')}</span>
+			<input type="url" bind:value={stravaUrl} placeholder="https://strava.com/clubs/yourclub" maxlength="500" inputmode="url" />
+		</label>
+		<label class="link-field">
+			<span>{m('clubEditor.facebook')}</span>
+			<input type="url" bind:value={facebookUrl} placeholder="https://facebook.com/yourclub" maxlength="500" inputmode="url" />
+		</label>
+	</fieldset>
+
+	<fieldset>
 		<legend>{m('clubEditor.visibility')}</legend>
 		<label class="radio">
 			<input
@@ -121,7 +168,7 @@
 		</label>
 	</fieldset>
 
-	{#if visibility === 'public'}
+	{#if visibility === 'public' && !existing}
 		<fieldset>
 			<legend>{m('clubEditor.whoCanJoin')}</legend>
 			<label class="radio">
@@ -153,19 +200,25 @@
 		</fieldset>
 	{/if}
 
-	<label class="toggle-row">
-		<input type="checkbox" bind:checked={requireWaiver} />
-		<span>
-			{m('clubEditor.waiverLabel')}
-		</span>
-	</label>
+	{#if !existing}
+		<label class="toggle-row">
+			<input type="checkbox" bind:checked={requireWaiver} />
+			<span>
+				{m('clubEditor.waiverLabel')}
+			</span>
+		</label>
+	{/if}
 
 	<div class="actions">
 		{#if oncancel}
 			<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>{m('clubEditor.cancel')}</button>
 		{/if}
 		<button type="submit" class="btn btn-primary" disabled={!name.trim() || busy}>
-			{busy ? m('clubEditor.creating') : m('clubEditor.createClub')}
+			{#if existing}
+				{busy ? m('clubEditor.saving') : m('clubEditor.saveChanges')}
+			{:else}
+				{busy ? m('clubEditor.creating') : m('clubEditor.createClub')}
+			{/if}
 		</button>
 	</div>
 </form>

@@ -1469,7 +1469,7 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 // falls back to `GenericStringError` and downstream type assertions
 // fail svelte-check.
 const CLUB_SELECT_COLS =
-	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, requires_activity_waiver, created_at, updated_at' as const;
+	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, requires_activity_waiver, website_url, instagram_url, strava_url, facebook_url, created_at, updated_at' as const;
 
 // Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
 // from anon + authenticated (migrations 20260723_001 + 20260806_001 +
@@ -1544,6 +1544,10 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
 		member_count: (r.member_count ?? 0) as number,
 		requires_activity_waiver: (r.requires_activity_waiver as boolean | undefined) ?? false,
+		website_url: (r.website_url ?? null) as string | null,
+		instagram_url: (r.instagram_url ?? null) as string | null,
+		strava_url: (r.strava_url ?? null) as string | null,
+		facebook_url: (r.facebook_url ?? null) as string | null,
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
@@ -1711,6 +1715,10 @@ export async function createClub(input: {
 	is_public: boolean;
 	join_policy: JoinPolicy;
 	requires_activity_waiver?: boolean;
+	website_url?: string | null;
+	instagram_url?: string | null;
+	strava_url?: string | null;
+	facebook_url?: string | null;
 }): Promise<Club & { invite_token: string | null }> {
 	// invite_token is excluded from the base Club shape (column-grant
 	// lockdown) but createClub knows the freshly-generated token —
@@ -1738,6 +1746,10 @@ export async function createClub(input: {
 				is_public: input.is_public,
 				join_policy: input.join_policy,
 				requires_activity_waiver: input.requires_activity_waiver ?? false,
+				website_url: normaliseClubLink(input.website_url),
+				instagram_url: normaliseClubLink(input.instagram_url),
+				strava_url: normaliseClubLink(input.strava_url),
+				facebook_url: normaliseClubLink(input.facebook_url),
 				invite_token: inviteToken
 			})
 			.select(CLUB_SELECT_COLS)
@@ -1778,10 +1790,39 @@ export async function regenerateInviteToken(clubId: string): Promise<string> {
 
 export async function updateClub(
 	id: string,
-	patch: Partial<Pick<Club, 'name' | 'description' | 'location_label' | 'is_public' | 'avatar_url'>>
+	patch: Partial<
+		Pick<
+			Club,
+			| 'name'
+			| 'description'
+			| 'location_label'
+			| 'is_public'
+			| 'avatar_url'
+			| 'website_url'
+			| 'instagram_url'
+			| 'strava_url'
+			| 'facebook_url'
+		>
+	>
 ): Promise<void> {
-	const { error } = await supabase.from('clubs').update(patch).eq('id', id);
+	// Fail closed on a non-http(s) link so a javascript:/data: URL never
+	// reaches the row (the DB CHECK is the backstop; this keeps the error
+	// friendly + client-side). Empty string clears the link.
+	const clean = { ...patch };
+	for (const k of ['website_url', 'instagram_url', 'strava_url', 'facebook_url'] as const) {
+		if (k in clean) clean[k] = normaliseClubLink(clean[k]);
+	}
+	const { error } = await supabase.from('clubs').update(clean).eq('id', id);
 	if (error) throw error;
+}
+
+/// Trim a club link, returning null for empty / non-http(s) input so a
+/// `javascript:`/`data:` URL can't be stored (XSS). The DB CHECK is the
+/// authoritative backstop; this is the friendly client-side gate.
+export function normaliseClubLink(raw: string | null | undefined): string | null {
+	const v = (raw ?? '').trim();
+	if (!v) return null;
+	return /^https?:\/\//i.test(v) ? v : null;
 }
 
 export async function deleteClub(id: string): Promise<void> {
