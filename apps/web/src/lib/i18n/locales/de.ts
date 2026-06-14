@@ -710,6 +710,8 @@ export const messages = {
 	"routeNew.endLongitude": "End-Längengrad",
 	"routeNew.setEnd": "Ende setzen",
 	"routeNew.distance": "Distanz",
+	"routeNew.quietRoads": "Ruhige Straßen (Autobahnen meiden)",
+	"routeNew.quietRoadsHint": "Lenkt die generierte Runde auf Wohnstraßen und weg von Hauptstraßen.",
 	"routeNew.cancelGenerating": "Generierung abbrechen…",
 	"routeNew.generateRoute": "{distance}-Route generieren",
 	"routeNew.generateLoop": "{distance}-Schleife generieren",

@@ -20,6 +20,7 @@
 		selectLoopAnchors,
 	} from '$lib/routes/route_loop';
 	import { nearestInsertIndex } from '$lib/routes/insert_index';
+	import type { RoutePreference } from '$lib/routes/generate/graphhopper';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { searchPlaces } from '$lib/routes/geocoding';
@@ -1284,13 +1285,16 @@
 		start: { lat: number; lng: number },
 		targetDistanceM: number,
 		startVersion: number,
+		preference?: RoutePreference,
 	): Promise<boolean> {
 		let res: Response;
 		try {
 			res = await fetch('/api/routes/generate', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ start, targetDistanceM }),
+				body: JSON.stringify(
+					preference ? { start, targetDistanceM, preference } : { start, targetDistanceM },
+				),
 			});
 		} catch {
 			return false;
@@ -1373,7 +1377,8 @@
 	export async function generateLoop(
 		targetDistanceM: number,
 		startFrom?: { lat: number; lng: number },
-		endAt?: { lat: number; lng: number }
+		endAt?: { lat: number; lng: number },
+		preference?: RoutePreference
 	): Promise<boolean> {
 		// Refuse re-entry. generateLoop overwrites waypoints + markers on
 		// every iteration; a second concurrent call would have its state
@@ -1457,7 +1462,7 @@
 			) < NEAR_POINT_M;
 		if (isLoopCase) {
 			const startVersion = routeVersion;
-			const served = await generateLoopFromServer(start, targetDistanceM, startVersion);
+			const served = await generateLoopFromServer(start, targetDistanceM, startVersion, preference);
 			if (routeVersion !== startVersion) return false;
 			if (served) {
 				success = true;

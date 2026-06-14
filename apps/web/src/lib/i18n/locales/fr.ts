@@ -710,6 +710,8 @@ export const messages = {
 	"routeNew.endLongitude": "Longitude de l'arrivée",
 	"routeNew.setEnd": "Définir l'arrivée",
 	"routeNew.distance": "Distance",
+	"routeNew.quietRoads": "Routes tranquilles (éviter les grands axes)",
+	"routeNew.quietRoadsHint": "Oriente la boucle générée vers les rues résidentielles, à l'écart des grands axes.",
 	"routeNew.cancelGenerating": "Annuler la génération…",
 	"routeNew.generateRoute": "Générer un itinéraire de {distance}",
 	"routeNew.generateLoop": "Générer une boucle de {distance}",
