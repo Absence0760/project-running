@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../exercise_history.dart';
+import '../exercise_records.dart' show DatedGymSet;
 import '../gym_progression.dart';
 import '../gym_prs.dart';
 import '../gym_routine.dart' as routine_helper;
@@ -447,11 +448,21 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final out = <String, ({ExerciseSession prev, double? deltaKg})>{};
     final startedAt = w.row['started_at'] as String? ?? '';
     if (startedAt.isEmpty) return out;
+    // Index the full set history by exercise key in one pass. Previously this
+    // called previousExerciseSession per block, and each call re-walked the
+    // whole flat history (every set across every workout) to filter for that
+    // one exercise — O(exercises × all-sets) on every detail-screen open.
+    // Grouping once makes each lookup scan only its own exercise's sets.
     final history = gymSetHistory(widget.store.workouts);
+    final byExercise = <String, List<DatedGymSet>>{};
+    for (final s in history) {
+      (byExercise[normaliseExerciseName(s.exerciseName)] ??= <DatedGymSet>[]).add(s);
+    }
     for (final block in blocks) {
       final key = normaliseExerciseName(block.name);
       if (key == '' || out.containsKey(key)) continue;
-      final prev = previousExerciseSession(history, block.name, startedAt);
+      final prev =
+          previousExerciseSession(byExercise[key] ?? const [], block.name, startedAt);
       if (prev == null) continue;
       double? thisTop;
       for (final ref in block.sets) {

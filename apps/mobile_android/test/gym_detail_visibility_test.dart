@@ -95,6 +95,57 @@ void main() {
     expect(find.byTooltip('Make private'), findsOneWidget);
   });
 
+  testWidgets(
+      'vs-last-time hint resolves the right prior session per exercise '
+      '(grouped-history path)', (tester) async {
+    late LocalGymStore store;
+    late String currentId;
+    late Directory dir;
+    await tester.runAsync(() async {
+      final dirTmp = Directory.systemTemp.createTempSync('gym_detail_prev');
+      final s = LocalGymStore();
+      await s.init(overrideDirectory: dirTmp);
+      // An earlier *different* exercise — must NOT be picked as Bench's prev.
+      await s.createLocal(
+        title: 'Leg day',
+        startedAt: DateTime.utc(2026, 6, 1, 8),
+        sets: const [
+          (exerciseName: 'Squat', reps: 5, weightKg: 100.0, rpe: null, durationS: null),
+        ],
+      );
+      // The earlier Bench session — the one the hint should compare against.
+      await s.createLocal(
+        title: 'Push day',
+        startedAt: DateTime.utc(2026, 6, 3, 8),
+        sets: const [
+          (exerciseName: 'Bench', reps: 8, weightKg: 50.0, rpe: null, durationS: null),
+        ],
+      );
+      // The current (most recent) Bench session being viewed: 60 kg, +10 kg.
+      final current = await s.createLocal(
+        title: 'Push day',
+        startedAt: DateTime.utc(2026, 6, 10, 8),
+        sets: const [
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
+        ],
+      );
+      store = s;
+      currentId = current.id;
+      dir = dirTmp;
+    });
+    addTearDown(() => dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(store, currentId));
+    await tester.pump();
+
+    // The hint compares against the earlier *Bench* session (50 kg × 8),
+    // not the heavier Squat — i.e. the per-exercise grouping is correct.
+    expect(find.textContaining('Last time'), findsOneWidget);
+    expect(find.textContaining('50'), findsWidgets);
+    // And it reads as a gain (this session 60 kg > last 50 kg).
+    expect(find.byIcon(Icons.trending_up), findsOneWidget);
+  });
+
   testWidgets('double-tapping the visibility toggle writes the store only once',
       (tester) async {
     late _CountingGymStore store;
