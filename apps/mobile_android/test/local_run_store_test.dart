@@ -1153,6 +1153,38 @@ void main() {
       expect(store.unsyncedRuns.map((r) => r.id), ['u-old']);
     });
 
+    test('sidecar prune keeps synced runs outside the resident window '
+        '(pruned against summaries, not the window)', () async {
+      await seed([
+        mk('old1', DateTime(2026, 1, 1)),
+        mk('old2', DateTime(2026, 2, 1)),
+        mk('newest', DateTime(2026, 3, 1)),
+      ]);
+      // Window of 1: only 'newest' is resident; old1/old2 live in summaries.
+      final store = LocalRunStore()..residentWindow = 1;
+      await store.init(overrideDirectory: tempDir);
+      expect(store.runs.map((r) => r.id), ['newest']);
+
+      // Record + sync a fresh run — this triggers _persistSyncedIds on the hot
+      // path. The out-of-window synced ids must survive the prune.
+      await store.save(mk('fresh', DateTime(2026, 4, 1)));
+      await store.markSynced('fresh');
+
+      final ids = ((jsonDecode(
+                  File('${tempDir.path}/synced_ids.json').readAsStringSync())
+              as Map<String, dynamic>)['ids'] as List)
+          .cast<String>()
+          .toSet();
+      expect(ids.containsAll({'old1', 'old2', 'newest', 'fresh'}), isTrue,
+          reason: 'a synced run outside the resident window keeps its sidecar id');
+
+      // It must NOT be re-classified as unsynced + re-uploaded on cold load.
+      final reloaded = LocalRunStore()..residentWindow = 1;
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.unsyncedRuns, isEmpty,
+          reason: 'no windowed-out synced run is wrongly re-queued for upload');
+    });
+
     test('drift rebuild: a missing index is rebuilt from the run files',
         () async {
       await seed([mk('a', DateTime(2026, 1, 1)), mk('b', DateTime(2026, 2, 1))]);

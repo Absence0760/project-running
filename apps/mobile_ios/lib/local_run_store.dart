@@ -680,10 +680,16 @@ class LocalRunStore extends ChangeNotifier {
     // server-side (on another device / web) is never given a local
     // delete() call; it just stops arriving in the delta fetch, so its
     // id would otherwise linger in the sidecar forever and the on-disk
-    // set would grow without bound. `unsyncedRuns` already intersects
-    // with `_runs`, so the only effect of a stale id is sidecar bloat;
-    // self-heal it on every write.
-    final liveIds = _runs.map((r) => r.id).toSet();
+    // set would grow without bound.
+    //
+    // Prune against `_summaries` (the full track-less projection of EVERY
+    // local row), NOT `_runs` (the resident window of newest-N ∪ unsynced).
+    // delete()/deleteMany() drop the summary together with the file, so a
+    // missing summary is exactly "no local file". Using `_runs` would drop
+    // the sidecar id of any SYNCED run outside the resident window, so the
+    // next cold load re-classifies it as unsynced (residency invariant) and
+    // re-uploads its full track on the next drain.
+    final liveIds = _summaries.map((s) => s.id).toSet();
     _syncedIds.retainWhere(liveIds.contains);
     try {
       await writeJsonAtomic(_syncedIdsFile, {
