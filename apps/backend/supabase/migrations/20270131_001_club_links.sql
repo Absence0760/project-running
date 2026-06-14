@@ -16,3 +16,12 @@ alter table clubs add column strava_url    text
   check (strava_url    is null or strava_url    ~* '^https?://');
 alter table clubs add column facebook_url  text
   check (facebook_url  is null or facebook_url  ~* '^https?://');
+
+-- `clubs` SELECT is column-level granted (the invite_token lockdown,
+-- 20260801_001) — new columns are deny-by-default. These four are meant to be
+-- cross-user readable (a public club's links show to anyone who can see the
+-- club), so grant SELECT explicitly. INSERT/UPDATE need no column grant — RLS
+-- (is_club_admin) gates the write and PostgREST doesn't require column SELECT
+-- to write.
+grant select (website_url, instagram_url, strava_url, facebook_url)
+  on clubs to authenticated, anon;
