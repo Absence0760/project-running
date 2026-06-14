@@ -6980,10 +6980,26 @@ export interface SessionPlanInput {
 export async function fetchSessionPlans(): Promise<SessionPlan[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
-	const { data, error } = await supabase
-		.from('session_plans')
-		.select('*')
-		.order('updated_at', { ascending: false });
+
+	// Scope the read to the rows the list actually shows — the user's own
+	// plans plus plans owned by a club they belong to. A bare select('*')
+	// leaned entirely on the RLS policies to filter, forcing Postgres to
+	// seq-scan every session_plan in the table and run the per-row
+	// is_club_member() subquery on each. Filtering explicitly lets the
+	// (author_id, updated_at) and (club_id, updated_at) indexes serve it
+	// (BitmapOr), and also matches the documented intent — a stranger's
+	// public plan should not appear in "my session plans".
+	const { data: memberships } = await supabase
+		.from(TABLES.club_members)
+		.select('club_id')
+		.eq('user_id', userId);
+	const clubIds = (memberships ?? []).map((m: { club_id: string }) => m.club_id);
+
+	let query = supabase.from('session_plans').select('*');
+	query = clubIds.length
+		? query.or(`author_id.eq.${userId},club_id.in.(${clubIds.join(',')})`)
+		: query.eq('author_id', userId);
+	const { data, error } = await query.order('updated_at', { ascending: false });
 	if (error) throw error;
 	return (data ?? []) as SessionPlan[];
 }
