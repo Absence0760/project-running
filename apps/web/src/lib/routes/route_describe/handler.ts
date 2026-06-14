@@ -27,9 +27,18 @@ import {
 } from '../route_description';
 import { parseAuthHeader } from '../../coach/limits';
 
-/** Model + budget for the enhancement. One short paragraph; no streaming. */
+/**
+ * Model + budget for the enhancement. The visible output is one short
+ * 2-3 sentence paragraph, but adaptive thinking draws from the same
+ * `max_tokens` ceiling — so the cap has to leave room for a thinking
+ * block *plus* the paragraph, or the model can spend the budget thinking
+ * and return empty text (which would then fall back to the template).
+ * 1024 comfortably covers both; the prose itself stays short because the
+ * system prompt asks for one paragraph. No streaming — well under the
+ * streaming-timeout threshold.
+ */
 const ROUTE_DESCRIBE_MODEL = 'claude-opus-4-8';
-const ROUTE_DESCRIBE_MAX_TOKENS = 400;
+const ROUTE_DESCRIBE_MAX_TOKENS = 1024;
 
 /** Hard wall-clock cap so a slow model call can't hang the request. */
 const ROUTE_DESCRIBE_TIMEOUT_MS = 12_000;
