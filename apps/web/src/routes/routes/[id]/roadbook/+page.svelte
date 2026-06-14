@@ -1,0 +1,472 @@
+<script lang="ts">
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { m } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
+	import { fetchRouteById, fetchRouteMarkers } from '$lib/core/data';
+	import type { Route, RouteMarker } from '$lib/types';
+	import {
+		buildRoadbook,
+		type RoadbookWaypoint,
+		type RoadbookMarker,
+		type PacingModel,
+		type CutoffStatus
+	} from '$lib/routes/roadbook';
+	import { kindSpec } from '$lib/routes/route_markers';
+	import { fetchElevations } from '$lib/routes/elevation';
+	import { fmtSplitTime } from '$lib/runs/race_day';
+	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
+
+	let { data }: { data: { id: string } } = $props();
+
+	let route = $state<Route | null>(null);
+	let markers = $state<RouteMarker[]>([]);
+	let loading = $state(true);
+	// Open-Meteo elevations fetched on demand when the route lacks stored ele.
+	let fetchedEle = $state<number[] | null>(null);
+	let fetchingEle = $state(false);
+
+	// Sensible starting goal until the user sets one: route distance at a
+	// moderate trail pace. Editable; the URL is the source of truth.
+	const DEFAULT_SEC_PER_KM = 390; // 6:30/km
+
+	$effect(() => {
+		void data.id;
+		load();
+	});
+
+	async function load() {
+		loading = true;
+		route = await fetchRouteById(data.id);
+		markers = route ? await fetchRouteMarkers(data.id) : [];
+		loading = false;
+	}
+
+	// ---- URL-backed controls (shareable) ----
+	const params = $derived($page.url.searchParams);
+
+	let goalSeconds = $derived.by(() => {
+		// The `goal` param is raw seconds (the input below converts H:MM:SS → s).
+		const raw = params.get('goal');
+		const parsed = raw ? Number(raw) : NaN;
+		if (Number.isFinite(parsed) && parsed > 0) return Math.round(parsed);
+		const km = (route?.distance_m ?? 0) / 1000;
+		return Math.max(60, Math.round(km * DEFAULT_SEC_PER_KM));
+	});
+
+	let startClockMin = $derived.by(() => {
+		const raw = params.get('start');
+		return raw ? parseClockToMinutes(raw) : null;
+	});
+
+	let model = $derived<PacingModel>(params.get('model') === 'even' ? 'even' : 'effort');
+
+	function updateParam(key: string, value: string | null) {
+		const url = new URL($page.url);
+		if (value == null || value === '') url.searchParams.delete(key);
+		else url.searchParams.set(key, value);
+		goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true, noScroll: true });
+	}
+
+	// ---- roadbook computation ----
+	const waypoints = $derived.by<RoadbookWaypoint[]>(() => {
+		const wps = route?.waypoints ?? [];
+		return wps.map((w, i) => ({
+			lat: w.lat,
+			lng: w.lng,
+			ele: w.ele ?? fetchedEle?.[i] ?? null
+		}));
+	});
+
+	const roadbook = $derived(
+		buildRoadbook(
+			waypoints,
+			markers.map(
+				(mk): RoadbookMarker => ({
+					position_m: mk.position_m,
+					kind: mk.kind,
+					label: mk.label,
+					meta: mk.meta
+				})
+			),
+			{ goalSeconds, startClockMin, model }
+		)
+	);
+
+	async function addElevation() {
+		if (!route || fetchingEle) return;
+		fetchingEle = true;
+		try {
+			const coords = route.waypoints.map((w) => [w.lng, w.lat] as [number, number]);
+			const eles = await fetchElevations(coords);
+			if (eles.length === coords.length && eles.some((e) => e !== 0)) {
+				fetchedEle = eles;
+			} else {
+				showToast(m('roadbook.elevationUnavailable'), 'info');
+			}
+		} catch {
+			showToast(m('roadbook.elevationUnavailable'), 'info');
+		} finally {
+			fetchingEle = false;
+		}
+	}
+
+	function checkpointLabel(leg: (typeof roadbook)['legs'][number]): string {
+		if (leg.checkpoint === 'start') return m('roadbook.start');
+		if (leg.checkpoint === 'finish') return m('roadbook.finish');
+		return leg.checkpoint.label;
+	}
+
+	function checkpointColor(leg: (typeof roadbook)['legs'][number]): string {
+		if (leg.checkpoint === 'start') return '#22c55e';
+		if (leg.checkpoint === 'finish') return '#ef4444';
+		return kindSpec(leg.checkpoint.kind).color;
+	}
+
+	function cutoffClass(status: CutoffStatus): string {
+		return status === 'miss' ? 'cut-miss' : status === 'tight' ? 'cut-tight' : 'cut-safe';
+	}
+
+	function fmtMargin(seconds: number): string {
+		const sign = seconds < 0 ? '−' : '+';
+		return `${sign}${fmtSplitTime(Math.abs(seconds))}`;
+	}
+
+	function fmtClock(min: number | undefined): string {
+		if (min == null) return '';
+		const h = Math.floor(min / 60) % 24;
+		const mm = Math.round(min % 60);
+		return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+	}
+
+	function parseClockToSeconds(raw: string): number | null {
+		const parts = raw.split(':').map((p) => Number(p));
+		if (parts.some((n) => !Number.isFinite(n))) return null;
+		if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+		if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60;
+		return null;
+	}
+
+	function parseClockToMinutes(raw: string): number | null {
+		const parts = raw.split(':').map((p) => Number(p));
+		if (parts.length < 2 || parts.some((n) => !Number.isFinite(n))) return null;
+		return parts[0] * 60 + parts[1];
+	}
+
+	// Goal input bound as H:MM:SS.
+	let goalInput = $derived(fmtSplitTime(goalSeconds));
+	let startInput = $derived(startClockMin == null ? '' : fmtClock(startClockMin));
+
+	function onGoalChange(e: Event) {
+		const v = (e.currentTarget as HTMLInputElement).value.trim();
+		const secs = parseClockToSeconds(v);
+		updateParam('goal', secs && secs > 0 ? String(secs) : null);
+	}
+
+	async function copyAsText() {
+		const lines = [`${route?.name ?? m('roadbook.heading')} — ${m('roadbook.heading')}`, ''];
+		lines.push(`${m('roadbook.colCheckpoint')} | ${m('roadbook.colDistance')} | ${m('roadbook.colArrival')} | ${m('roadbook.colCutoff')}`);
+		for (const leg of roadbook.legs) {
+			const cut = leg.cutoff ? `${fmtClock(undefined) || ''}${fmtMargin(leg.cutoff.marginS)}` : '';
+			lines.push(
+				`${checkpointLabel(leg)} | ${formatDistance(leg.cumDistM)} | ${fmtSplitTime(leg.projectedElapsedS)}${leg.projectedClockMin != null ? ` (${fmtClock(leg.projectedClockMin)})` : ''} | ${cut}`
+			);
+		}
+		try {
+			await navigator.clipboard.writeText(lines.join('\n'));
+			showToast(m('roadbook.copied'), 'success');
+		} catch {
+			showToast(m('roadbook.copyFailed'), 'error');
+		}
+	}
+
+	function serviceLabel(s: string): string {
+		return m(`routeMarker.service.${s}` as 'routeMarker.service.water');
+	}
+</script>
+
+<svelte:head>
+	<title>{route ? `${route.name} — ${m('roadbook.heading')}` : m('roadbook.heading')}</title>
+</svelte:head>
+
+<div class="roadbook-page">
+	{#if loading}
+		<p class="muted">{m('roadbook.loading')}</p>
+	{:else if !route}
+		<p class="muted">{m('roadbook.routeNotFound')}</p>
+	{:else}
+		<header class="rb-header">
+			<div>
+				<a class="back" href={`/routes/${route.id}`}>← {route.name}</a>
+				<h1>{m('roadbook.heading')}</h1>
+			</div>
+			<div class="rb-actions no-print">
+				<button class="btn btn-secondary btn-sm" onclick={copyAsText}>
+					<span class="material-symbols" aria-hidden="true">content_copy</span>
+					{m('roadbook.copy')}
+				</button>
+				<button class="btn btn-secondary btn-sm" onclick={() => window.print()}>
+					<span class="material-symbols" aria-hidden="true">print</span>
+					{m('roadbook.print')}
+				</button>
+			</div>
+		</header>
+
+		<section class="rb-controls no-print">
+			<label>
+				{m('roadbook.goalTime')}
+				<input
+					type="text"
+					inputmode="numeric"
+					value={goalInput}
+					placeholder="4:30:00"
+					onchange={onGoalChange}
+				/>
+			</label>
+			<label>
+				{m('roadbook.startTime')}
+				<input
+					type="time"
+					value={startInput}
+					onchange={(e) => updateParam('start', (e.currentTarget as HTMLInputElement).value || null)}
+				/>
+			</label>
+			<div class="model-toggle" role="group" aria-label={m('roadbook.pacingModel')}>
+				<button class:active={model === 'effort'} onclick={() => updateParam('model', 'effort')}>
+					{m('roadbook.modelEffort')}
+				</button>
+				<button class:active={model === 'even'} onclick={() => updateParam('model', null)}>
+					{m('roadbook.modelEven')}
+				</button>
+			</div>
+		</section>
+
+		{#if markers.length === 0}
+			<p class="muted empty">{m('roadbook.noMarkers')} <a href={`/routes/${route.id}`}>{m('roadbook.addMarkers')}</a></p>
+		{:else}
+			<p class="rb-summary">
+				{m('roadbook.summary', {
+					distance: formatDistance(roadbook.totalDistM),
+					vert: formatElevation(roadbook.totalGainM),
+					time: fmtSplitTime(roadbook.totalSeconds)
+				})}
+				{#if model === 'effort' && !roadbook.hasElevation}
+					<button class="link-btn no-print" onclick={addElevation} disabled={fetchingEle}>
+						{fetchingEle ? m('roadbook.addingElevation') : m('roadbook.addElevation')}
+					</button>
+				{/if}
+			</p>
+
+			<table class="rb-table">
+				<thead>
+					<tr>
+						<th>{m('roadbook.colCheckpoint')}</th>
+						<th class="num">{m('roadbook.colDistance')}</th>
+						<th class="num">{m('roadbook.colVert')}</th>
+						<th class="num">{m('roadbook.colArrival')}</th>
+						<th>{m('roadbook.colCutoff')}</th>
+						<th class="no-print">{m('roadbook.colServices')}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each roadbook.legs as leg, i (i)}
+						<tr>
+							<td>
+								<span class="dot" style="background:{checkpointColor(leg)}"></span>
+								{checkpointLabel(leg)}
+							</td>
+							<td class="num">{formatDistance(leg.cumDistM)}</td>
+							<td class="num vert">
+								{#if leg.legGainM >= 1 || leg.legLossM >= 1}
+									<span class="up">+{Math.round(leg.legGainM)}</span>
+									<span class="down">−{Math.round(leg.legLossM)}</span>
+								{:else}—{/if}
+							</td>
+							<td class="num">
+								{fmtSplitTime(leg.projectedElapsedS)}
+								{#if leg.projectedClockMin != null}<span class="clock">{fmtClock(leg.projectedClockMin)}</span>{/if}
+							</td>
+							<td>
+								{#if leg.cutoff}
+									<span class="cut {cutoffClass(leg.cutoff.status)}">
+										{fmtClock(startClockMin != null ? (startClockMin + leg.cutoff.limitElapsedS / 60) : undefined) || fmtSplitTime(leg.cutoff.limitElapsedS)}
+										<small>{fmtMargin(leg.cutoff.marginS)}</small>
+									</span>
+								{/if}
+							</td>
+							<td class="no-print services">
+								{#each leg.services as s (s)}<span class="svc">{serviceLabel(s)}</span>{/each}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		{/if}
+	{/if}
+</div>
+
+<style>
+	.roadbook-page {
+		padding: var(--space-xl) var(--space-2xl);
+		max-width: 64rem;
+	}
+	.rb-header {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.rb-header h1 {
+		margin: 0;
+		font-size: 1.5rem;
+	}
+	.back {
+		display: inline-block;
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.9rem;
+		margin-bottom: 2px;
+	}
+	.rb-actions {
+		display: flex;
+		gap: var(--space-sm);
+	}
+	.rb-controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.rb-controls label {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+	}
+	.rb-controls input {
+		padding: 6px 8px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--surface);
+		color: var(--text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+	.model-toggle {
+		display: inline-flex;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		overflow: hidden;
+	}
+	.model-toggle button {
+		border: none;
+		background: var(--surface);
+		color: var(--text-secondary);
+		padding: 7px 12px;
+		cursor: pointer;
+		font-size: 0.85rem;
+	}
+	.model-toggle button.active {
+		background: var(--accent, #4f46e5);
+		color: #fff;
+	}
+	.rb-summary {
+		color: var(--text-secondary);
+		margin: 0 0 var(--space-sm);
+	}
+	.link-btn {
+		background: none;
+		border: none;
+		color: var(--accent, #4f46e5);
+		cursor: pointer;
+		padding: 0 0 0 8px;
+		font: inherit;
+	}
+	.rb-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.92rem;
+	}
+	.rb-table th,
+	.rb-table td {
+		text-align: left;
+		padding: 8px 10px;
+		border-bottom: 1px solid var(--border);
+		vertical-align: top;
+	}
+	.rb-table th.num,
+	.rb-table td.num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.dot {
+		display: inline-block;
+		width: 0.7rem;
+		height: 0.7rem;
+		border-radius: 999px;
+		margin-right: 6px;
+		vertical-align: middle;
+	}
+	.vert .up {
+		color: #c2410c;
+	}
+	.vert .down {
+		color: #2563eb;
+		margin-left: 4px;
+	}
+	.clock {
+		display: block;
+		color: var(--text-secondary);
+		font-size: 0.8rem;
+	}
+	.cut {
+		display: inline-flex;
+		flex-direction: column;
+		padding: 2px 8px;
+		border-radius: 6px;
+		font-variant-numeric: tabular-nums;
+	}
+	.cut small {
+		font-size: 0.75rem;
+		opacity: 0.85;
+	}
+	.cut-safe {
+		background: rgba(34, 197, 94, 0.15);
+		color: #15803d;
+	}
+	.cut-tight {
+		background: rgba(245, 158, 11, 0.18);
+		color: #b45309;
+	}
+	.cut-miss {
+		background: rgba(239, 68, 68, 0.18);
+		color: #b91c1c;
+	}
+	.services .svc {
+		display: inline-block;
+		background: var(--surface-2, #f1f5f9);
+		color: var(--text-secondary);
+		border-radius: 4px;
+		padding: 1px 6px;
+		margin: 0 4px 2px 0;
+		font-size: 0.78rem;
+	}
+	.empty {
+		margin-top: var(--space-md);
+	}
+	@media print {
+		.no-print {
+			display: none !important;
+		}
+		.roadbook-page {
+			padding: 0;
+			max-width: none;
+		}
+		.rb-table {
+			font-size: 0.8rem;
+		}
+	}
+</style>

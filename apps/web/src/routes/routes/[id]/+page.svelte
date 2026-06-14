@@ -640,6 +640,12 @@
 					bind:pendingPlacement={markerPendingPlacement}
 					bind:selectId={markerSelectId}
 				/>
+				{#if markerPins.length > 0}
+					<a class="btn btn-outline btn-sm roadbook-link" href={`/routes/${route.id}/roadbook`}>
+						<span class="material-symbols" aria-hidden="true">table_chart</span>
+						{m('roadbook.crewSheet')}
+					</a>
+				{/if}
 			</section>
 
 			<section class="section">
