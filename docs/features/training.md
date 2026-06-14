@@ -28,7 +28,7 @@ A Claude-powered second-opinion chat embedded below the week grid on the plan de
 - Server endpoint `POST /api/coach` — runs per-request (`prerender = false`), reads the caller's Supabase JWT to scope context pulls via RLS.
 - Context = user profile + active (or specified) plan + `plan_weeks` + `plan_workouts` + last 20 runs, serialised as JSON. Phase 4 adds the Tier-1 cross-modality slice: a bounded `recent_lifts` array (capped per-session gym summaries) + a `nutrition_7d` daily-average rollup (gated on the Art 9 health-consent, like DOB/HR). Both self-hide when nothing is logged — see [multi_modal.md § Cross-modality](multi_modal.md#cross-modality-touches-tier-1--ship-with-phase-4-this-is-the-headline).
 - **Prompt caching at two breakpoints**: (1) coach system prompt, (2) first user message carrying the context dump. Subsequent chat turns hit the cache for ~95% of input tokens. `cache_control: { type: 'ephemeral' }` on both blocks. The UI surfaces `cache_read` / `cache_creation` / `input` / `output` token counts below the composer for verification.
-- Model: `claude-sonnet-4-5`. Output tokens: 768 (free tier) / 2048 (Pro tier). Context window: 30 runs (free) / 200 runs (Pro).
+- Model: `claude-sonnet-4-5`. Output tokens: 768 (free tier) / 2048 (Pro tier). Context window: 30 runs (free) / 75 runs (Pro) — `maxRunsLimit` in `apps/web/src/lib/coach/types.ts`.
 
 **Deploy requirement**: the endpoint runs as a Node 24 Lambda Function URL behind the prod CloudFront distribution (see [`apps/web/deployment.md`](../../apps/web/deployment.md) and [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). The static SvelteKit build (under `adapter-static`) does not serve `/api/coach`; CloudFront routes that path to the Lambda. `ANTHROPIC_API_KEY` is sops-encrypted under `infra/envs/<env>/secrets.enc.yaml` (env-specific AWS KMS key) and wired into the Lambda's env by Terraform; missing key returns 503.
 
@@ -56,7 +56,7 @@ Plan + event creation flows intentionally stay on mobile (unlike clubs, where we
 
 ## Engine: `apps/web/src/lib/training/training.ts`
 
-Pure TypeScript, no deps, 100% tested under `src/lib/training.test.ts` (20 tests, run with `npx tsx --test src/lib/training.test.ts`).
+Pure TypeScript, no deps, 100% tested under `apps/web/src/lib/training/training.test.ts` (60 tests, run with `npx tsx --test src/lib/training/training.test.ts`).
 
 - **VDOT from race** — Daniels' published formula: `vo2 = -4.6 + 0.182258v + 0.000104v²`, `pct = 0.8 + 0.1894393·e^(-0.012778T) + 0.2989558·e^(-0.1932605T)`, `VDOT = vo2 / pct`.
 - **Riegel equivalence** — `t2 = t1 × (d2/d1)^1.06` for projecting a recent 5K to the goal-race distance.
@@ -137,5 +137,5 @@ Distinct from the AI Coach chat above: a human coach links to an athlete via a s
 - **Built-in starter plan library** — **Shipped on web (2026-06-12, Training P3):** a built-in catalogue (C25K / 12-wk half / 16-wk marathon) as `generatePlan` presets, instantiated through the existing `createTrainingPlan` path (no RPC, distinct from club templates). `starter_plans.ts` ↔ `starter_plans.dart` parity pair (`STARTER_PLANS` + `instantiateStarter`, 7+7 tests); web picker on `/plans/new` above the club-template picker; Playwright `starter-plan.spec.ts`. **Mobile picker shipped** (`plan_new_screen` `_starterCard` + `_StarterPicker` sheet → `instantiateStarter` → `createPlan`, ARB×7, widget tests, byte-identical iOS twin).
 - **Paste-a-template import** — markdown table → weeks/workouts.
 - **Export as markdown / JSON** — round-trips through the paste path above.
-- **Dart port of the engine** — *Shipped in Phase 3 Android port* via `apps/mobile_android/lib/training.dart` with 17 mirror tests in `test/training_test.dart`. Must stay in sync with `apps/web/src/lib/training/training.ts`; any change to pace multipliers, phase breakdown, or mileage fractions requires updating both files and re-running both test suites.
+- **Dart port of the engine** — *Shipped in Phase 3 Android port* via `apps/mobile_android/lib/training.dart` with 53 mirror tests in `test/training_test.dart`. Must stay in sync with `apps/web/src/lib/training/training.ts`; any change to pace multipliers, phase breakdown, or mileage fractions requires updating both files and re-running both test suites.
 - **Premium gating** — the plans surface is free in v1. A later Stripe migration gates whichever features turn out to need it.

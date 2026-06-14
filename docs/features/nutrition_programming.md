@@ -292,7 +292,7 @@ Mirrors gym's three-pair factoring; each independently testable, each on the tra
 | `nutrition/nutrition_adherence.ts` ↔ `nutrition/nutrition_adherence.dart` | the direction-aware per-macro band reducer → `DayAdherence` (reuses `MACRO_IS_CEILING` from `nutrition_budget`) |
 | `nutrition/nutrition_progression.ts` ↔ `nutrition/nutrition_progression.dart` | `prescribeNextWeek(weightSeries, adherenceHistory, config)` — the next-week target prescriber per scheme |
 
-These reuse the shipped `nutrition_targets` (Mifflin-St Jeor base), `nutrition_budget` (`MACRO_IS_CEILING`, `macroBudget`), and the `body_metrics` weight series. `nutrition_budget`, `hydration`, and `nutrition_week` are web-only today — **their mobile mirrors must land as part of this work** if `prescribeNextWeek` / the day verdict reuse them, not be deferred again (the same "land the mirror now" obligation gym programming put on `exercise_history`).
+These reuse the shipped `nutrition_targets` (Mifflin-St Jeor base), `nutrition_budget` (`MACRO_IS_CEILING`, `macroBudget`), and the `body_metrics` weight series. `nutrition_budget`, `hydration`, and `nutrition_week` already have their Dart mirrors (`apps/mobile_android/lib/{nutrition_budget,hydration,nutrition_week}.dart`), so reusing them from `prescribeNextWeek` / the day verdict needs no new mirror work.
 
 ### Schemes
 
@@ -447,7 +447,7 @@ Mobile widget tests cover the plan editor, the seeded day view, and the adherenc
 
 **Generated (committed):** `apps/web/src/lib/database.types.ts`, `packages/core_models/lib/src/generated/db_rows.dart`.
 
-**Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/nutrition/meal_plan.ts`, `nutrition_adherence.ts`, `nutrition_progression.ts`, plus the mobile mirrors of the web-only `nutrition_budget`/`hydration`/`nutrition_week` if reused, `MealPlanEditor.svelte`, `NutritionPlanLibrary.svelte`, `NutritionPlanCard.svelte`, `NutritionAdherencePanel.svelte`, routes `/nutrition/plans/[id]`, `/nutrition/plans/new`, `/nutrition` (+ seeding + panel), **P3:** `/coaching/clients/[id]` (+ Nutrition panel), `core/data.ts` client API, i18n in all six locales.
+**Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/nutrition/meal_plan.ts`, `nutrition_adherence.ts`, `nutrition_progression.ts` (the `nutrition_budget`/`hydration`/`nutrition_week` mirrors they reuse already exist on mobile), `MealPlanEditor.svelte`, `NutritionPlanLibrary.svelte`, `NutritionPlanCard.svelte`, `NutritionAdherencePanel.svelte`, routes `/nutrition/plans/[id]`, `/nutrition/plans/new`, `/nutrition` (+ seeding + panel), **P3:** `/coaching/clients/[id]` (+ Nutrition panel), `core/data.ts` client API, i18n in all six locales.
 
 **Mobile (`mobile_android` → byte-identical `mobile_ios`):** `lib/nutrition/meal_plan.dart`, `nutrition_adherence.dart`, `nutrition_progression.dart`, `lib/stores/local_nutrition_plan_store.dart`, `screens/nutrition_plan_detail_screen.dart`, `widgets/meal_plan_editor_sheet.dart`, `widgets/nutrition_adherence_panel.dart`, extend `nutrition_screen.dart`, ARBs.
 

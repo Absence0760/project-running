@@ -47,7 +47,7 @@ Confirmed by reading migrations + source on 2026-06-11 (not just trusting the do
 | 7 Attendance | **Shipped (M6)** | `event_attendees.attendance` (`attended` / `no_show`, NULL until marked, migration `20270102_001`) + the organiser-only `mark_attendance` SECURITY DEFINER RPC (sole write path); host marking UI on web + mobile twin, read-only for non-hosts. Orthogonal to RSVP `status`. |
 | 8 Cancel → refund | **Schema P1, coupling P2** | `event_exceptions` cancel + `notify_event_cancel` shipped; automated `refund_orders_for_instance` is deferred (P2). P1 refunds are manual via Stripe dashboard. |
 | 9 Earnings / reconcile | **MISSING in-app** | `data.ts` has `fetchPayoutAccount` but no host earnings/registrations summary. Stripe dashboard only. |
-| 10 Mobile register | **P3** | Mobile renders read-only + "Register on the web"; create is web-only by design. |
+| 10 Mobile register | **P3** | Mobile has no register / checkout / payout flow on `event_detail_screen.dart` — paid events render read-only (the Discover list shows the price, no purchase path); registration + payment are web-only by design. |
 
 **Also confirmed (now resolved):** `gym_sets` originally had `reps` / `weight_kg` / `rpe` but no `duration_s`. M2 added a nullable `gym_sets.duration_s` (migration `20261231_001`), so a 90 s plank or a timed hold now has a first-class home — this closed `session_planner.md` open question #1.
 

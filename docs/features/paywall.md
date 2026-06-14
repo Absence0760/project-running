@@ -301,7 +301,7 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_WEBHOOK_SECRET` | Supabase function env | HMAC signing secret from RevenueCat |
 | `REVENUECAT_API_KEY_IOS` | iOS app `.env` / CI secrets | RevenueCat project API key for iOS |
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
-| `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
+| `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/billing/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
 
 ### Regional availability & international payments
 

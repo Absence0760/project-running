@@ -39,7 +39,7 @@ gym_routines  +  gym_routine_exercises  +  gym_routine_sets   (relational plan)
     ▼
 List<GymStep>                         ← computed once at session start
     │
-    │  prescribeNext(history, lastActuals, config)   — pure, suggests next targets
+    │  nextPrescription(history, lastActuals, config)   — pure, suggests next targets
     ▼
 Prefilled editable session draft (StoredGymWorkout, pendingCreate)
     │
@@ -269,7 +269,7 @@ The engine is **three** pure TS↔Dart parity pairs, not one monolith (the clean
 |---|---|
 | `gym/gym_routine.ts` ↔ `gym_routine.dart` | `routineFromWorkout`, `prefillFromRoutine`, `expandRoutineSteps` (grouped/round-robin plan → flat step list) |
 | `gym/gym_adherence.ts` ↔ `gym_adherence.dart` | the per-axis 80%-cutoff reducer + skip/abandon logic → `'completed' \| 'partial' \| 'abandoned'` |
-| `gym/gym_progression.ts` ↔ `gym_progression.dart` | `prescribeNext` — the next-target prescriber per scheme |
+| `gym/gym_progression.ts` ↔ `gym_progression.dart` | `nextPrescription` — the next-target prescriber per scheme |
 
 Mobile lives flat under `apps/mobile_android/lib/` (where the existing gym helpers `gym_prs.dart` / `exercise_history.dart` / `lift_load.dart` already sit — there is no `lib/gym/` subdir on mobile today; web nests under `gym/`, mobile is flat) and is mirrored **byte-identical** into `apps/mobile_ios/`. Each pair has identical algorithm, edge cases, outputs, and **test count** on both sides. They reuse `estimatedOneRepMax` + `normaliseExerciseName` (from `gym_prs`) and consume the `ExerciseSession[]` series from `exercise_history.ts` (`previousExerciseSession`) — so the prescriber and the "vs last time" hint can never drift. (The mobile `exercise_history.dart` mirror has already landed and is a tracked parity pair, so "next target" can reuse `previousExerciseSession` without new mirror work.)
 
@@ -328,7 +328,7 @@ export type ProgressionRationale =
   | { kind: 'wave_step'; weekIndex: number }
   | { kind: 'rpe_adjust'; deltaKg: number };
 
-export function prescribeNext(
+export function nextPrescription(
   history: ExerciseSession[],              // from exercise_history.ts (chronological, oldest-first)
   lastActuals: LastSessionActuals | null,  // null ⇒ first-ever session
   config: ProgressionConfig,
@@ -419,9 +419,8 @@ SvelteKit, the canonical feature surface. Everything **self-hides** until a rout
 
 - A **Routines** section on the existing `/gym` page, **above** the workout list. The whole section self-hides when the user has zero routines — no empty "create your first" placeholder (that would violate self-hide).
 - **Entry to create:** when routines exist → a `New routine` button in the section header. When none exist → routines are surfaced *only* via the `GymEditor` "Save as routine" affordance (§ low-friction entry) and via Coach.
-- **Rows** (`RoutineCard.svelte`): title, exercise count, superset glyph, last-used date, progression-model chip. Actions: **Start** (→ session), **Edit**, **Duplicate**, **Delete** (via global `ConfirmDialog`).
-- **Routes:** extend `/gym/+page.svelte`; add `/gym/routines/[id]` (detail/preview, mirrors `/plans/[id]`) and `/gym/routines/new` (thin wrapper around the builder, mirroring `/plans/new` ↔ `PlanEditor`).
-- **Components:** `RoutineLibrary.svelte`, `RoutineCard.svelte`.
+- **Rows:** title, exercise count, superset glyph, last-used date, progression-model chip. Actions: **Start** (→ session), **Edit**, **Duplicate**, **Delete** (via global `ConfirmDialog`). As shipped, the list lives at `/gym/routines/+page.svelte` rather than in dedicated `RoutineCard` / `RoutineLibrary` components.
+- **Routes:** the `/gym/routines` list (`/gym/routines/+page.svelte`), `/gym/routines/[id]` (detail/preview, mirrors `/plans/[id]`), and `/gym/routines/new` (thin wrapper around the builder, mirroring `/plans/new` ↔ `PlanEditor`). The only routine component that shipped is `RoutineEditor.svelte`.
 
 ### Routine builder — sibling of `GymEditor`
 
@@ -537,7 +536,7 @@ Mobile widget tests cover the builder, execute band, and detail-Start instantiat
 
 **Generated (committed):** `apps/web/src/lib/database.types.ts`, `packages/core_models/lib/src/generated/db_rows.dart`.
 
-**Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/gym/gym_routine.ts`, `src/lib/gym/gym_adherence.ts`, `src/lib/gym/gym_progression.ts`, `src/lib/core/schema.ts` (metadata routing), `RoutineLibrary.svelte`, `RoutineCard.svelte`, `RoutineEditor.svelte`, `ExerciseBlockList.svelte` (extracted), `GymSessionRunner.svelte`, `GymExecutionBand.svelte`, `RestTimer.svelte`, `GymWorkoutReview.svelte`, routes `/gym/routines/[id]`, `/gym/routines/new`, `/gym/session/[routineId]`, `/gym/[id]` (+ panel), i18n in all six locales.
+**Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/gym/gym_routine.ts`, `src/lib/gym/gym_adherence.ts`, `src/lib/gym/gym_progression.ts`, `src/lib/core/schema.ts` (metadata routing), `RoutineEditor.svelte`, `ExerciseBlockList.svelte` (extracted), `GymSessionRunner.svelte`, `GymExecutionBand.svelte`, `RestTimer.svelte`, `GymWorkoutReview.svelte`, routes `/gym/routines/[id]`, `/gym/routines/new`, `/gym/session/[routineId]`, `/gym/[id]` (+ panel), i18n in all six locales.
 
 **Mobile (`mobile_android` → byte-identical `mobile_ios`):** `lib/gym_routine.dart`, `lib/gym_adherence.dart`, `lib/gym_progression.dart`, `lib/local_routine_store.dart` (stores live flat in `lib/`, e.g. `local_gym_store.dart` — there is no `lib/stores/`), `screens/routine_library_screen.dart`, `screens/routine_detail_screen.dart`, `screens/routine_execute_screen.dart`, `widgets/routine_builder_sheet.dart`, `widgets/gym_execution_band.dart`, extend `gym_screen.dart` / `gym_detail_screen.dart` / `gym_summary_card.dart`, ARBs.
 
@@ -579,7 +578,7 @@ Four web-first, independently-shippable slices. Each ships value alone, mirrors 
 
 ### P4 — Progression schemes (the engine) — ~5–6 days
 
-**Scope.** Per-exercise schemes prescribing the next session's targets from logged history. Ship the highest-value first: **linear**, **double_progression**, **five_by_five**, **percent_cycle**, **rpe_autoreg** (the `progression` column + `progression_params`). The `periodisation` (routine-level) and the four narrow-union CHECK pairs are already in `20270101_001`; P4 wires the engine. Coach-authored progression (if built) is **validated/clamped by the same pure `prescribeNext` guardrails** before write — the engine is authoritative, the LLM advisory.
+**Scope.** Per-exercise schemes prescribing the next session's targets from logged history. Ship the highest-value first: **linear**, **double_progression**, **five_by_five**, **percent_cycle**, **rpe_autoreg** (the `progression` column + `progression_params`). The `periodisation` (routine-level) and the four narrow-union CHECK pairs are already in `20270101_001`; P4 wires the engine. Coach-authored progression (if built) is **validated/clamped by the same pure `nextPrescription` guardrails** before write — the engine is authoritative, the LLM advisory.
 
 **Parity / tests.** `gym_progression` pair, deterministic, identical edge cases + test count; `shared-library-syncer` after edits. `/audit:schema-drift` (CHECK↔union) must pass. Playwright for scheme selection + next-target preview.
 

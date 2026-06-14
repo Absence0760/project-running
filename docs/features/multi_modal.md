@@ -502,7 +502,8 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   the `Goal <base> + <exercise> kcal` breakdown on workout days, so a long-run
   day's goal rises instead of leaving you under-fuelled. Avoids the
   double-count the old activity-multiplier-only target would create
-  (decisions §134). *(Web shipped; mobile mirror is a follow-up.)*
+  (decisions §134). *(Shipped on web and mobile — `exercise_calories.dart`'s
+  `exerciseCaloriesForDay` is wired into `nutrition_screen.dart`.)*
 
 ```
   Nutrition                              Wed 4 Jun
@@ -567,8 +568,9 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   a transparent note when recent lifts are in the fatigue, and an
   `exclude_gym_from_readiness` pref (Settings → Preferences) that drops lifts
   from the readiness/recovery curve for a pure run-only signal — display-side
-  only, the run-only curve stays recoverable (decisions §134). *(Web shipped;
-  mobile mirror is a follow-up.)*
+  only, the run-only curve stays recoverable (decisions §134). *(Shipped on web
+  and mobile — the toggle lives in `settings_preferences_screen.dart` and
+  `dashboard_screen.dart` drops lifts from the readiness curve when it's on.)*
 - **Nutrition → run guidance is NOT deterministic, by design.** Under-eating
   does not move the readiness ring (auxiliary inputs are kept from corrupting
   run readiness); fuelling adequacy is the AI Coach's soft-reasoning job via

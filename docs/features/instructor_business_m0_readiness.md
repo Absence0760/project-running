@@ -45,7 +45,7 @@ These come straight from [club_events.md § Compliance](club_events.md#complianc
 
 These are real, code-level gaps found on 2026-06-11. They are **M1/M9 work (gated)** — listed here so the sign-off owners know what "go-live" actually costs. Do **not** fix these as part of M0.
 
-1. **DSAR export is incomplete.** `event_orders` and `instructor_payout_accounts` are **not** in `exportPersonalDataSpecs()` (`apps/job_worker/internal/supabase.go`). They must be added (subject to the counsel-set retention term) before prod exposure, and `personal_data_export_guard_test.go` must pass. Verify with `/audit/data-export-completeness`.
+1. **DSAR export is incomplete.** `instructor_payout_accounts` is now in `exportPersonalDataSpecs()` (`apps/job_worker/internal/supabase.go`, `TableInstructorPayoutAccounts`); `event_orders` is **not** yet. It must be added (subject to the counsel-set retention term) before prod exposure, and `personal_data_export_guard_test.go` must pass. Verify with `/audit/data-export-completeness`.
 2. **Account-deletion path must cover both tables** (subject to the financial-retention override). Verify with `/audit/account-deletion-completeness`.
 3. **Sub-processor not yet disclosed.** Stripe Connect must be added to the sub-processor list + changelog (30-day notice) and the Privacy Policy.
 

@@ -6,6 +6,8 @@ A reference for every external data source the app connects to, how each integra
 
 **Contents:** [Overview](#overview) · [Apple HealthKit](#apple-healthkit) · [Android Health Connect](#android-health-connect) · [Strava](#strava) · [parkrun](#parkrun) · [Garmin Connect](#garmin-connect) · [Race results (RunSignUp + general scraping)](#race-results-runsignup--general-scraping) · [Treadmills (BLE FTMS) — deferred](#treadmills-ble-ftms--deferred) · [The `health` Flutter package](#the-health-flutter-package) · [Deduplication strategy](#deduplication-strategy)
 
+> The Treadmills (BLE FTMS) section heading keeps its `— deferred` suffix only to preserve the anchor; the integration itself has **shipped on mobile** (read its first paragraph). Only the live run-screen mode toggle remains deferred.
+
 ## Overview
 
 | Source | Type | Auth | Data | Phase |
@@ -140,7 +142,7 @@ Native in-app OAuth via `flutter_web_auth_2` — Chrome Custom Tabs on Android, 
 
 ```
 1. User taps Strava tile in Settings → Integrations.
-2. `_connectStrava` (settings_screen.dart) builds the same /oauth/authorize
+2. `_connectStrava` (settings_integrations_screen.dart) builds the same /oauth/authorize
    URL via `stravaAuthUrl(redirectUri)` in `lib/strava.dart`. Redirect URI
    uses the `threkir://strava-callback` custom scheme.
 3. `WebAuth.authenticate(url)` opens Chrome Custom Tabs (Android) or
@@ -157,7 +159,7 @@ Native in-app OAuth via `flutter_web_auth_2` — Chrome Custom Tabs on Android, 
 Operational pre-requisites:
 - The `threkir://strava-callback` URI must be allow-listed in the Strava developer console **and** in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function.
 - Falls back to the web browser hand-off on builds where the client ID is unconfigured (matches the existing `url_launcher` path used before native OAuth shipped).
-- `lib/strava.dart` mirrors `apps/web/src/lib/integrations/strava.ts` and is unit-tested (7 tests on URL building + configured-state checks).
+- `lib/strava.dart` mirrors `apps/web/src/lib/integrations/strava.ts` and is unit-tested (16 tests in `test/strava_test.dart` on URL building + callback parsing + configured-state checks).
 
 ### Webhook (real-time sync)
 
@@ -266,7 +268,7 @@ User enters athlete number: A123456
 ### Edge Function
 
 ```typescript
-// apps/backend/functions/parkrun-import/index.ts
+// apps/backend/supabase/functions/parkrun-import/index.ts
 import * as cheerio from 'cheerio';
 
 export async function POST(req: Request) {
@@ -422,32 +424,26 @@ Common timing platforms and their URL patterns:
 
 ## Treadmills (BLE FTMS) — deferred
 
-**Status:** not implemented. Sized + scoped here so a future session has a starting point. Deferred until competitor parity rows above settle out — a treadmill integration is a discrete, indoor-only data source and doesn't unlock anything else in the roadmap.
+**Status:** **shipped on mobile** (Android + the byte-identical iOS twin; iOS unverified on Mac runtime per [decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). The only piece still deferred is the **live run-screen treadmill-mode toggle** — UI wiring against the already-shipped recorder seam, no recorder change needed (parity backlog C3). Web is N/A: it's the canonical *feature* surface, not a recording surface ([decisions.md § 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)). Matches the `parity.md` Treadmill row and roadmap item 13.
 
-### What it would give you
+### What it gives you
 
-A real-time speed / distance / incline / cadence / calories stream from the treadmill itself, replacing the GPS-derived numbers that don't exist on a treadmill. Today the indoor path falls back to `pedometer × stride` distance (`distance_source = "pedometer"`, `indoor_estimated = true` — see [docs/backend/metadata.md](../backend/metadata.md) and [docs/features/run_recording.md § Layering](run_recording.md#layering) layer 14). A treadmill stream replaces that estimate with an authoritative one.
+A real-time speed / distance stream from the treadmill itself, replacing the GPS-derived numbers that don't exist on a treadmill. The indoor fallback path is `pedometer × stride` distance (`distance_source = "pedometer"`, `indoor_estimated = true` — see [docs/backend/metadata.md](../backend/metadata.md) and [docs/features/run_recording.md § Layering](run_recording.md#layering) layer 14); a paired treadmill replaces that estimate with the authoritative belt distance.
 
-### How it would work
+### How it works
 
-The Bluetooth SIG **Fitness Machine Service (FTMS, `0x1826`)** is the standardised GATT profile for cardio equipment. The Treadmill Data characteristic (`0x2ACD`) emits a notification every ~1 s carrying instantaneous speed (uint16, 0.01 km/h), instantaneous pace (uint16, 0.1 s/km), total distance (uint24, m), inclination (sint16, 0.1 %), elevation gain (uint16, 0.1 m), and optional cadence / HR / energy fields gated by the leading flags bitfield. There is also an FTMS Control Point (`0x2AD9`) for write-back commands (start, stop, set speed, set incline) — the read path is enough for v1; control is a follow-up.
+The Bluetooth SIG **Fitness Machine Service (FTMS, `0x1826`)** is the standardised GATT profile for cardio equipment. The Treadmill Data characteristic (`0x2ACD`) emits a notification every ~1 s carrying instantaneous speed (uint16, 0.01 km/h), instantaneous pace (uint16, 0.1 s/km), total distance (uint24, m), inclination (sint16, 0.1 %), elevation gain (uint16, 0.1 m), and optional cadence / HR / energy fields gated by the leading flags bitfield. There is also an FTMS Control Point (`0x2AD9`) for write-back commands (start, stop, set speed, set incline) — the read path is what shipped; control is a follow-up.
 
-Wiring on the mobile side mirrors the existing BLE chest-strap pattern in `apps/mobile_android/lib/ble_heart_rate.dart`:
+The mobile implementation mirrors the existing BLE chest-strap pattern in `apps/mobile_android/lib/ble_heart_rate.dart`:
 
-1. Reuse `flutter_blue_plus` (already a dependency).
-2. New module: `apps/mobile_android/lib/ble_treadmill.dart` exposing `Stream<TreadmillSample>` with `{speedMps, distanceM, inclinePct, cadenceSpm?, hrBpm?, kcal?}`. ~9 unit tests on the parser following the `ble_heart_rate_test.dart` shape.
-3. Settings tile: a "Pair treadmill" entry in Settings → Devices that runs an FTMS-filtered scan, lets the user pick one device, and stores the MAC + display name in `user_device_settings.prefs.treadmill_device`.
-4. Recording substitution: `packages/run_recorder` accepts an optional treadmill stream. When present, snapshots are emitted from treadmill samples instead of GPS — the existing 1 s timer stays as the L0 clock fallback if the BLE link drops mid-run.
-5. New activity type or metadata flag: easiest is `metadata.indoor_source = "treadmill"` alongside the existing `indoor_estimated` / `distance_source` keys; no new union. Register in [docs/backend/metadata.md](../backend/metadata.md).
-6. Map / off-route / privacy-zone surfaces are skipped automatically because the run carries no track points — same code path indoor pedometer runs already use.
+1. **BLE backend:** `flutter_reactive_ble` — the same backend the HR reader uses (**not** `flutter_blue_plus`).
+2. **Reader module:** `apps/mobile_android/lib/ble_treadmill.dart` exposes a `Stream<TreadmillSample>` (`BleTreadmill`). The pure `parseTreadmillData(raw)` function decodes the FTMS `0x2ACD` payload per its leading flags bitfield, and `statusStream` surfaces a `BleTreadmillStatus` (`disconnected` / `connecting` / `connected` / `reconnecting` / `connectFailed`) with backoff auto-reconnect after a working connection drops — mirroring the HR reader's reconnect contract. ~20 unit tests in `apps/mobile_android/test/ble_treadmill_test.dart`.
+3. **Settings tile:** `TreadmillTile` in `apps/mobile_android/lib/screens/settings_integrations_screen.dart` (Settings → Integrations) runs an FTMS-filtered scan, lets the user pick a device, and pairs it. The paired belt's id + name persist to the reader's **own `SharedPreferences` keys** (`treadmill_device_id` / `treadmill_device_name`), **not** `user_device_settings.prefs` — pairing is an on-device capability that doesn't roam (same reasoning as the Health Connect write-back flag), so subsequent sessions auto-reconnect silently.
+4. **Recorder seam:** `packages/run_recorder/lib/src/run_recorder.dart` exposes an additive opt-in seam — `setTreadmillSample(speedMps, {totalDistanceMetres})` flips the recorder into treadmill mode (belt distance overrides the GPS-accumulated headline distance), and `clearTreadmillMode()` reverts to the GPS path. Belt distance only influences a run while treadmill mode is on; the GPS L0/L1 + auto-pause path is untouched, paused belt-advance is excluded, and a dropped BLE link falls back to the L0 clock. On `stop()` the recorder writes `metadata['indoor_source'] = 'treadmill'` (and `metadata['distance_source'] = 'treadmill'`).
+5. **Metadata flag:** `metadata.indoor_source = "treadmill"` sits alongside the existing `indoor_estimated` / `distance_source` keys; no new union. Registered in [docs/backend/metadata.md](../backend/metadata.md).
+6. Map / off-route / privacy-zone surfaces are skipped automatically because the run carries no track points — the same code path indoor pedometer runs already use.
 
-The watch (Wear OS / watchOS) gets the same BLE plumbing if the user wants the treadmill paired with the watch instead of the phone — Wear OS has its own `BluetoothGatt` API and Apple Watch can pair FTMS via `CBCentralManager`. Watch pairing is a follow-up to phone pairing, not a parallel item.
-
-The web app does not get this integration. Browsers can technically reach FTMS via Web Bluetooth on Chrome desktop / Android, but a 60-minute treadmill run with the screen on is hostile to the browser's BLE permission and power model — and web is the canonical *feature* surface, not a recording surface (see [decisions.md § 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)).
-
-### Effort
-
-3–5 dev-days for a v1 that handles the standard FTMS shape, surfaces a pair flow, and substitutes the stream into the recorder. Most of the work is the parser + the UI plumbing; the BLE layer is already proven by the chest-strap path.
+**Still deferred:** the live run-screen mode toggle (the UI that lets the user flip treadmill mode on mid-run against the shipped seam). The watch (Wear OS / watchOS) BLE plumbing is also a follow-up — Wear OS has its own `BluetoothGatt` API and Apple Watch can pair FTMS via `CBCentralManager`; watch pairing is downstream of phone pairing, not a parallel item.
 
 ### The catch
 
@@ -462,10 +458,10 @@ Standards-compliant: most newer Sole, Horizon, Bowflex, Matrix, Reebok, Schwinn,
 
 ### Schema impact
 
-Minimal:
+Minimal — and no migration was needed:
 
-- `user_device_settings.prefs.treadmill_device: { mac, name, last_paired_at }` — no migration, prefs is already a free-form jsonb.
-- `runs.metadata.indoor_source: "treadmill"` — register in [docs/backend/metadata.md](../backend/metadata.md). No CHECK constraint needed (metadata is unschemaed).
+- Paired-belt identity lives in the reader's own on-device `SharedPreferences` keys (`treadmill_device_id` / `treadmill_device_name`), not the database — pairing doesn't roam.
+- `runs.metadata.indoor_source: "treadmill"` — registered in [docs/backend/metadata.md](../backend/metadata.md). No CHECK constraint needed (metadata is unschemaed).
 
 No new table; no narrow union to update; no codegen pass needed.
 
@@ -476,9 +472,9 @@ No new table; no narrow union to update; no codegen pass needed.
 The single most important integration library in the stack. One Dart package abstracts both Apple HealthKit (iOS) and Android Health Connect behind an identical API.
 
 ```yaml
-# packages/core_models/pubspec.yaml
+# apps/mobile_android/pubspec.yaml
 dependencies:
-  health: ^10.0.0
+  health: ^13.0.0
 ```
 
 ### Permissions required
@@ -521,4 +517,4 @@ All upserts use `ON CONFLICT (external_id) DO NOTHING` — the first-written rec
 
 ---
 
-*Last updated: April 2026*
+*Last updated: 2026-06-14*
