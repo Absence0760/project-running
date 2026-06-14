@@ -119,12 +119,18 @@ void main() {
       // prescribe dangerously fast paces.
       await _pump(tester);
       await tester.pump();
+      // The form is a lazy ListView and the recent-5K field sits below the
+      // starter-plan picker, so it isn't built initially. Pass the bare
+      // finder (no `.last` — the 'min' hint is unique) so scrollUntilVisible
+      // can scroll-and-build it; `.last` over a not-yet-built finder throws
+      // "Bad state: No element" and breaks the scroll loop.
+      final minField = find.widgetWithText(TextField, 'min');
       await tester.scrollUntilVisible(
-        find.widgetWithText(TextField, 'min').last,
+        minField,
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.enterText(find.widgetWithText(TextField, 'min').last, '22');
+      await tester.enterText(minField, '22');
       await tester.pump();
       expect(confirmFinder, findsOneWidget);
       expect(warnFinder, findsOneWidget);
@@ -133,12 +139,13 @@ void main() {
     testWidgets('ticking the confirm box clears the warning', (tester) async {
       await _pump(tester);
       await tester.pump();
+      final minField = find.widgetWithText(TextField, 'min');
       await tester.scrollUntilVisible(
-        find.widgetWithText(TextField, 'min').last,
+        minField,
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.enterText(find.widgetWithText(TextField, 'min').last, '22');
+      await tester.enterText(minField, '22');
       await tester.pump();
       // Tap the tile title (the raw Checkbox sits below the fold); the
       // CheckboxListTile toggles from a tap anywhere on the tile.

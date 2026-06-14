@@ -230,16 +230,17 @@ void main() {
     test('sub-10s tail zero-pads on the right', () {
       expect(formatLivePace(305), '5:05 /km');
     });
-    test('truncates the fractional second (canonical UnitFormat shape)', () {
-      // Now delegates to formatPaceForPref → UnitFormat.pace, which
-      // truncates the fractional second rather than rounding. 330.5/km
-      // renders "5:30 /km" (was "5:31" under the old local rounder).
-      expect(formatLivePace(330.5), '5:30 /km');
+    test('rounds the fractional second (canonical UnitFormat shape)', () {
+      // Delegates to formatPaceForPref → UnitFormat.pace, which rounds the
+      // whole-second total to match web's paceMinutesSeconds (decisions:
+      // 1ec6f688). 330.5/km rounds up to "5:31 /km".
+      expect(formatLivePace(330.5), '5:31 /km');
     });
     test('never emits an invalid 60th second', () {
-      // 359.9/km truncates to "5:59 /km" — the old local rounder
-      // produced the invalid "5:60 /km"; the canonical formatter can't.
-      expect(formatLivePace(359.9), '5:59 /km');
+      // 359.9/km rounds to 360 s, which rolls cleanly to "6:00 /km" — never
+      // the invalid "5:60 /km". Rounding the total FIRST (not the seconds
+      // field in isolation) is what makes the rollover safe.
+      expect(formatLivePace(359.9), '6:00 /km');
     });
     test('handles very slow paces (>10 min/km)', () {
       expect(formatLivePace(720), '12:00 /km');
@@ -250,8 +251,8 @@ void main() {
       await prefs.init();
       registerActivePreferences(prefs);
       addTearDown(resetActivePreferencesForTest);
-      // 300 s/km → 300 * 1.609344 ≈ 482.8 s/mi → 8:02 /mi.
-      expect(formatLivePace(300), '8:02 /mi');
+      // 300 s/km → 300 * 1.609344 ≈ 482.8 s/mi → rounds to 483 → 8:03 /mi.
+      expect(formatLivePace(300), '8:03 /mi');
     });
   });
 

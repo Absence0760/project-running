@@ -18,6 +18,7 @@ EventView _event({
     startsAt: when,
     authorId: 'user1',
     category: 'run',
+    isPublic: true,
     meetLabel: meetLabel,
   );
   return EventView(

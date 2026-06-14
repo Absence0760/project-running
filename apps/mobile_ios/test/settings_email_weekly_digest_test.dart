@@ -44,6 +44,14 @@ Future<void> _pump(
   required Preferences prefs,
   required SettingsSyncService sync,
 }) {
+  // The weekly-digest toggle is the last row in a long preferences list.
+  // On the default 800x600 test viewport, scrollUntilVisible leaves its
+  // centre just below the fold (y≈626), so tap() can't hit it. Give the
+  // test a tall viewport so the whole list is reachable.
+  tester.view.physicalSize = const Size(800, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
