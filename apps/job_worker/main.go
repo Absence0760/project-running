@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/bouncehook"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/dataexport"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
@@ -570,7 +571,27 @@ func main() {
 		logger.Warn("unsubscribe: DISABLED — WEEKLY_DIGEST_UNSUB_SECRET unset; unsubscribe endpoint returns 503 + digest renders without a List-Unsubscribe link")
 	}
 
-	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv, premiumSrv, unsubSrv)
+	// Email bounce/complaint webhook — POST /v1/email/bounce. The provider
+	// (Resend / SES) calls this on a hard bounce or spam complaint; the
+	// handler adds the address to email_suppressions so no future bulk send
+	// re-mails it (the hard block the digest builder consults independently of
+	// the recipient pref). Shared-secret authed (same posture as the Strava
+	// hook). Refuses with 503 when EMAIL_BOUNCE_WEBHOOK_SECRET is unset — the
+	// consistent fail-closed posture. *SupabaseClient satisfies bouncehook.Backend
+	// directly (InsertEmailSuppression already exists).
+	var bounceSrv *bouncehook.Server
+	if bounceSecret := os.Getenv("EMAIL_BOUNCE_WEBHOOK_SECRET"); bounceSecret != "" {
+		bounceSrv = &bouncehook.Server{
+			Secret:  bounceSecret,
+			Backend: client,
+			Log:     logger.With("component", "bouncehook"),
+		}
+		logger.Info("bouncehook: enabled (bounce/complaint webhook mounted at /v1/email/bounce)")
+	} else {
+		logger.Warn("bouncehook: DISABLED — EMAIL_BOUNCE_WEBHOOK_SECRET unset; bounce webhook returns 503 (suppression list won't grow from provider events)")
+	}
+
+	healthSrv := startHealthServer(logger, healthPort, &lastClaimAtUnix, workerID, hubSrv, stravaSrv, exportSrv, premiumSrv, unsubSrv, bounceSrv)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -597,7 +618,7 @@ func main() {
 // happens to take that long to handle; longer-running jobs would
 // trigger a restart, which is the correct response for "this job is
 // hung".
-func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server, prem *premium.Server, unsub *unsubscribe.Server) *http.Server {
+func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, workerID string, hub *livehub.Server, strava *stravahook.Server, export *dataexport.Server, prem *premium.Server, unsub *unsubscribe.Server, bounce *bouncehook.Server) *http.Server {
 	mux := http.NewServeMux()
 	if hub != nil {
 		hub.RegisterRoutes(mux)
@@ -613,6 +634,9 @@ func startHealthServer(log *slog.Logger, port string, lastClaim *atomic.Int64, w
 	}
 	if unsub != nil {
 		unsub.RegisterRoutes(mux)
+	}
+	if bounce != nil {
+		bounce.RegisterRoutes(mux)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		ageSec := time.Now().Unix() - lastClaim.Load()
