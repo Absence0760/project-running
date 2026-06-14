@@ -814,12 +814,37 @@ void main() {
       }
     });
 
+    // Publishing a club template requires the caller to be a club admin
+    // (migration 20270123 folded the is_club_admin gate into the
+    // training_plans owner policy). The publish + clone tests therefore
+    // create + own their own club — runner becomes its owner via the
+    // enroll_club_owner trigger, so they're guaranteed admin — rather
+    // than leaning on _seededClubId, whose owner membership the
+    // "joinClub on the seeded club is idempotent" test mutates earlier
+    // in the suite (leave + rejoin demotes runner owner → member).
+    Future<String> createOwnedClub(String tag) async {
+      final slug = 'it-$tag-${DateTime.now().microsecondsSinceEpoch}';
+      final row = await client
+          .from('clubs')
+          .insert({
+            'owner_id': client.auth.currentUser!.id,
+            'name': 'IT $slug',
+            'slug': slug,
+            'is_public': true,
+            'join_policy': 'open',
+          })
+          .select('id')
+          .single();
+      return row['id'] as String;
+    }
+
     test('clonePlanTemplate spawns a fresh plan from a template', () async {
       // Step 1: ensure a template exists. publishPlanAsTemplate already
       // has its own coverage; here we lean on it as a setup helper.
+      final clubId = await createOwnedClub('clone');
       final templateId = await training.publishPlanAsTemplate(
         planId: _seededPlanId,
-        clubId: _seededClubId,
+        clubId: clubId,
       );
       String? clonedId;
       try {
@@ -841,42 +866,53 @@ void main() {
             reason: 'a cloned plan must NOT itself be a template');
       } finally {
         // Cleanup: drop the cloned plan AND the template we created
-        // for setup so the seed doesn't accumulate cruft on re-runs.
+        // for setup, then the throwaway club, so the seed doesn't
+        // accumulate cruft on re-runs.
         if (clonedId != null) {
           await training.deletePlan(clonedId);
         }
         await training.deletePlan(templateId);
+        try {
+          await client.from('clubs').delete().eq('id', clubId);
+        } catch (_) {}
       }
     });
 
     test('publishPlanAsTemplate clones the source plan into the club', () async {
-      // Snapshot existing template count so we can assert the publish
-      // actually inserted a row, regardless of how many seeded
-      // templates already live on the club.
-      final before = await training.fetchClubTemplates(_seededClubId);
-      final beforeIds = before.map((t) => t.id).toSet();
+      final clubId = await createOwnedClub('pub');
+      try {
+        // A fresh club has no templates yet, so the publish must be the
+        // first (and only) one — proving it inserts rather than replaces.
+        final before = await training.fetchClubTemplates(clubId);
+        final beforeIds = before.map((t) => t.id).toSet();
 
-      final newId = await training.publishPlanAsTemplate(
-        planId: _seededPlanId,
-        clubId: _seededClubId,
-      );
-      expect(newId, isNotEmpty,
-          reason: 'RPC must return the new template id so the caller can '
-              'route to it or surface a confirmation');
-      expect(beforeIds.contains(newId), isFalse,
-          reason: 'publishPlanAsTemplate must insert a new row, not '
-              'replace an existing one');
+        final newId = await training.publishPlanAsTemplate(
+          planId: _seededPlanId,
+          clubId: clubId,
+        );
+        expect(newId, isNotEmpty,
+            reason: 'RPC must return the new template id so the caller can '
+                'route to it or surface a confirmation');
+        expect(beforeIds.contains(newId), isFalse,
+            reason: 'publishPlanAsTemplate must insert a new row, not '
+                'replace an existing one');
 
-      final after = await training.fetchClubTemplates(_seededClubId);
-      final fresh = after.firstWhere(
-        (t) => t.id == newId,
-        orElse: () => throw StateError('new template id not visible in '
-            'fetchClubTemplates'),
-      );
-      expect(fresh.isTemplate, isTrue,
-          reason: 'cloned row must carry is_template=true');
-      expect(fresh.clubId, _seededClubId,
-          reason: 'cloned row must belong to the publishing club');
+        final after = await training.fetchClubTemplates(clubId);
+        final fresh = after.firstWhere(
+          (t) => t.id == newId,
+          orElse: () => throw StateError('new template id not visible in '
+              'fetchClubTemplates'),
+        );
+        expect(fresh.isTemplate, isTrue,
+            reason: 'cloned row must carry is_template=true');
+        expect(fresh.clubId, clubId,
+            reason: 'cloned row must belong to the publishing club');
+        await training.deletePlan(newId);
+      } finally {
+        try {
+          await client.from('clubs').delete().eq('id', clubId);
+        } catch (_) {}
+      }
     });
   });
 }

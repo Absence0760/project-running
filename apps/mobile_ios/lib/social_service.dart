@@ -29,12 +29,17 @@ const String _clubSelectCols =
 // revoked from anon + authenticated (migrations 20260723_001 +
 // 20260806_001 + 20260818_001 redo). Same `select('*')` constraint
 // as clubs above; same arch-guard discipline.
+//
+// `host_user_id` (the paid-events payout recipient) is deliberately NOT
+// selected — it stays revoked from authenticated/anon (20261228_001 /
+// 20261230_001), so selecting it returns 42501 "permission denied for
+// table events". Mirrors web's EVENT_SELECT_COLS, which omits it too.
 const String _eventSelectCols =
     'id, club_id, title, description, starts_at, timezone, duration_min, '
     'meet_label, route_id, distance_m, pace_target_sec, capacity, '
     'author_id, created_at, updated_at, recurrence_freq, '
     'recurrence_byday, recurrence_until, recurrence_count, '
-    'category, discipline, host_user_id, gym_template';
+    'category, discipline, gym_template';
 
 /// Parse the `events.recurrence_byday` jsonb array (a list of weekday
 /// short-codes like `['MO','WE']`) into a list of `Weekday`s. Returns
