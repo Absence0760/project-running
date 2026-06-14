@@ -1883,6 +1883,7 @@ class PlanWorkoutRow {
   static const String colManuallyCompleted = 'manually_completed';
   static const String colUpdatedBy = 'updated_by';
   static const String colUpdatedAt = 'updated_at';
+  static const String colSkippedAt = 'skipped_at';
 
   final String id;
   final String weekId;
@@ -1901,6 +1902,7 @@ class PlanWorkoutRow {
   final bool manuallyCompleted;
   final String? updatedBy;
   final DateTime? updatedAt;
+  final DateTime? skippedAt;
 
   const PlanWorkoutRow({
     required this.id,
@@ -1920,6 +1922,7 @@ class PlanWorkoutRow {
     required this.manuallyCompleted,
     this.updatedBy,
     this.updatedAt,
+    this.skippedAt,
   });
 
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
@@ -1940,6 +1943,7 @@ class PlanWorkoutRow {
     manuallyCompleted: (json['manually_completed'] as bool?) ?? false,
     updatedBy: json['updated_by'] as String?,
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    skippedAt: json['skipped_at'] == null ? null : DateTime.parse(json['skipped_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1960,6 +1964,7 @@ class PlanWorkoutRow {
     colManuallyCompleted: manuallyCompleted,
     colUpdatedBy: updatedBy,
     colUpdatedAt: updatedAt?.toIso8601String(),
+    colSkippedAt: skippedAt?.toIso8601String(),
   };
 }
 

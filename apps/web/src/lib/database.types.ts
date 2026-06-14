@@ -1671,6 +1671,7 @@ export type Database = {
           notes: string | null
           pace_zone: string | null
           scheduled_date: string
+          skipped_at: string | null
           structure: Json | null
           target_distance_m: number | null
           target_duration_seconds: number | null
@@ -1690,6 +1691,7 @@ export type Database = {
           notes?: string | null
           pace_zone?: string | null
           scheduled_date: string
+          skipped_at?: string | null
           structure?: Json | null
           target_distance_m?: number | null
           target_duration_seconds?: number | null
@@ -1709,6 +1711,7 @@ export type Database = {
           notes?: string | null
           pace_zone?: string | null
           scheduled_date?: string
+          skipped_at?: string | null
           structure?: Json | null
           target_distance_m?: number | null
           target_duration_seconds?: number | null
