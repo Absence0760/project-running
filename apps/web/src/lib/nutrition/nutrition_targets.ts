@@ -152,7 +152,12 @@ export function computeNutritionTargets(input: BodyMetricsInput): NutritionTarge
 	if (weightKg > 500 || heightCm > 300 || ageYears > 120) return null;
 
 	const bmr = mifflinStJeorBmr(weightKg, heightCm, ageYears, sex);
-	const baseTdee = bmr * factorFor(activityLevel) + GOAL_KCAL_DELTA[goal];
+	// `goal` is a raw string off the user-settings jsonb bag (an unchecked
+	// cast), so a stale / future / typo'd value (e.g. 'recomp') would index the
+	// lose|maintain|gain table as undefined → NaN through every macro. Fall
+	// back to a 0 kcal delta (maintain) so an unknown goal yields a valid
+	// target, matching the Dart twin (`goalKcalDelta[input.goal] ?? 0`).
+	const baseTdee = bmr * factorFor(activityLevel) + (GOAL_KCAL_DELTA[goal] ?? 0);
 	const baseCalories = Math.max(MIN_CALORIE_TARGET, Math.round(baseTdee / 10) * 10);
 	// Workout calories add on top of the non-exercise base. Clamp to a
 	// non-negative whole number so a stray negative can't lower the goal.

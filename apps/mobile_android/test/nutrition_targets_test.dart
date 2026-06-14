@@ -65,6 +65,15 @@ void main() {
     expect(gain.calories, 2550 + goalKcalDelta['gain']!.round());
   });
 
+  test('computeNutritionTargets — an unknown goal falls back to maintain', () {
+    // `goal` is a raw string off the settings bag; an unknown value coalesces
+    // to a 0 kcal delta (maintain). Mirrors the web twin's `?? 0` fallback.
+    final maintain = computeNutritionTargets(baseWith())!;
+    final unknown = computeNutritionTargets(baseWith(goal: 'recomp'))!;
+    expect(unknown.calories.isFinite, isTrue);
+    expect(unknown.calories, maintain.calories);
+  });
+
   test('computeNutritionTargets — sedentary < very_active for the same body',
       () {
     final sed = computeNutritionTargets(baseWith(activityLevel: 'sedentary'))!;

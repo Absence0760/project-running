@@ -61,6 +61,19 @@ test('computeNutritionTargets — goal delta lowers/raises calories', () => {
 	assert.equal(gain.calories, 2550 + GOAL_KCAL_DELTA.gain);
 });
 
+test('computeNutritionTargets — an unknown goal falls back to maintain (no NaN)', () => {
+	// `goal` is a raw string off the settings bag; a stale/future value must
+	// not produce NaN macros (it did before the `?? 0` fallback). Mirrors the
+	// Dart twin, which already coalesces an unknown goal to a 0 delta.
+	const maintain = computeNutritionTargets(base)!;
+	const unknown = computeNutritionTargets({ ...base, goal: 'recomp' as typeof base.goal })!;
+	assert.ok(Number.isFinite(unknown.calories));
+	assert.ok(Number.isFinite(unknown.proteinG));
+	assert.ok(Number.isFinite(unknown.carbsG));
+	assert.ok(Number.isFinite(unknown.fatG));
+	assert.equal(unknown.calories, maintain.calories);
+});
+
 test('computeNutritionTargets — sedentary < very_active for the same body', () => {
 	const sed = computeNutritionTargets({ ...base, activityLevel: 'sedentary' })!;
 	const va = computeNutritionTargets({ ...base, activityLevel: 'very_active' })!;
