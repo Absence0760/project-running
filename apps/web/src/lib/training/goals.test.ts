@@ -97,6 +97,11 @@ test('formatPaceSecPerKm — rounds seconds half-up', () => {
 	assert.equal(formatPaceSecPerKm(330.6), '5:31/km');
 });
 
+test('formatPaceSecPerKm — rolls over instead of a malformed ":60"', () => {
+	assert.equal(formatPaceSecPerKm(299.6), '5:00/km');
+	assert.equal(formatPaceSecPerKm(359.7), '6:00/km');
+});
+
 // ─────────────── evaluateGoal ───────────────
 
 const NOW = new Date('2026-04-08T15:00:00');

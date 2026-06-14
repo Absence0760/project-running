@@ -686,8 +686,14 @@ class UnitFormat {
     final secondsPerUnit = unit == DistanceUnit.mi
         ? secondsPerKm * (_metresPerMile / 1000)
         : secondsPerKm;
-    final m = secondsPerUnit ~/ 60;
-    final s = (secondsPerUnit % 60).toInt();
+    // Round to whole seconds first, then split. Truncating the seconds field
+    // in isolation diverged from web's formatPace (which rounds) on a
+    // fractional pace; rounding first keeps both platforms on the same value
+    // and avoids a "x:60"-style rollover bug. Mirrors paceMinutesSeconds in
+    // apps/web/src/lib/format/pace_format.ts.
+    final total = secondsPerUnit.round();
+    final m = total ~/ 60;
+    final s = total % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 

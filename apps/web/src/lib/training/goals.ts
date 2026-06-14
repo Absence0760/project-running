@@ -12,6 +12,7 @@
 /// the bag as `run_goals` (array) with a new registered key.
 
 import type { Run } from '../types';
+import { paceMinutesSeconds } from '../format/pace_format';
 
 export type GoalPeriod = 'week' | 'month';
 
@@ -180,9 +181,7 @@ function formatMinutes(s: number): string {
 /// `secondsPerKm` -> `mm:ss/km` (or "—" if zero / negative).
 export function formatPaceSecPerKm(secPerKm: number): string {
 	if (!isFinite(secPerKm) || secPerKm <= 0) return '—';
-	const m = Math.floor(secPerKm / 60);
-	const s = Math.round(secPerKm % 60);
-	return `${m}:${s.toString().padStart(2, '0')}/km`;
+	return `${paceMinutesSeconds(secPerKm)}/km`;
 }
 
 /// Pure evaluator. Given a goal and the full run list, compute progress

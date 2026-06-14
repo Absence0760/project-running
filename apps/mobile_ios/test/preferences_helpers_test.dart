@@ -49,6 +49,16 @@ void main() {
       // 6:00 /km → 6 * 1.609344 = ~9:39 /mi
       expect(UnitFormat.pace(360, DistanceUnit.mi), '9:39');
     });
+
+    test('rounds to whole seconds first — never emits a ":60" field', () {
+      // A fractional pace just under a minute boundary must roll over to the
+      // next minute, not render a malformed "4:60". Matches web's
+      // paceMinutesSeconds so the same run reads identically on both.
+      expect(UnitFormat.pace(299.6, DistanceUnit.km), '5:00');
+      expect(UnitFormat.pace(359.7, DistanceUnit.km), '6:00');
+      expect(UnitFormat.pace(330.4, DistanceUnit.km), '5:30');
+      expect(UnitFormat.pace(330.5, DistanceUnit.km), '5:31');
+    });
   });
 
   group('UnitFormat.paceLabel', () {

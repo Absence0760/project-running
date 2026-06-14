@@ -22,6 +22,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
+	import { paceMinutesSeconds } from '$lib/format/pace_format';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	// Persona-hunt Round 3 finding Woman #3. Pull the runner's gender
@@ -168,9 +169,7 @@
 
 	function paceToInput(secPerKm: number | null): string {
 		if (secPerKm == null || secPerKm <= 0) return '';
-		const m = Math.floor(secPerKm / 60);
-		const s = Math.round(secPerKm % 60);
-		return `${m}:${String(s).padStart(2, '0')}`;
+		return paceMinutesSeconds(secPerKm);
 	}
 
 	function inputToPace(raw: string): number | null {

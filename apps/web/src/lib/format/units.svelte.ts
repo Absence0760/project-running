@@ -13,6 +13,7 @@
 import type { PreferredUnit } from '../types';
 import { currentLocale } from '../i18n/store.svelte';
 import { formatDecimal, formatInteger } from './number';
+import { paceMinutesSeconds } from './pace_format';
 import {
 	type WeightUnit,
 	parseWeightUnit,
@@ -101,11 +102,7 @@ export function formatPace(seconds: number, metres: number): string {
 	if (metres === 0) return '--:--';
 	const perKm = seconds / (metres / 1000);
 	const perUnit = unit.value === 'mi' ? perKm * (METRES_PER_MILE / 1000) : perKm;
-	const m = Math.floor(perUnit / 60);
-	const s = Math.round(perUnit % 60);
-	const mm = String(m);
-	const ss = String(s).padStart(2, '0');
-	return `${mm}:${ss} /${unit.value}`;
+	return `${paceMinutesSeconds(perUnit)} /${unit.value}`;
 }
 
 /// Variant for callers that want just the pace digits without a suffix
@@ -114,9 +111,7 @@ export function formatPaceNoSuffix(seconds: number, metres: number): string {
 	if (metres === 0) return '--:--';
 	const perKm = seconds / (metres / 1000);
 	const perUnit = unit.value === 'mi' ? perKm * (METRES_PER_MILE / 1000) : perKm;
-	const m = Math.floor(perUnit / 60);
-	const s = Math.round(perUnit % 60);
-	return `${m}:${String(s).padStart(2, '0')}`;
+	return paceMinutesSeconds(perUnit);
 }
 
 /// Convert a metre count into the user's preferred display unit
@@ -176,7 +171,5 @@ export function formatElevation(metres: number | null | undefined): string {
 export function fmtPace(secPerKm: number | null | undefined): string {
 	if (!secPerKm) return '—';
 	const sec = unit.value === 'mi' ? secPerKm * (METRES_PER_MILE / 1000) : secPerKm;
-	const m = Math.floor(sec / 60);
-	const s = Math.round(sec % 60);
-	return `${m}:${String(s).padStart(2, '0')}/${unit.value}`;
+	return `${paceMinutesSeconds(sec)}/${unit.value}`;
 }
