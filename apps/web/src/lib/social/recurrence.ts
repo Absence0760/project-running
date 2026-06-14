@@ -118,10 +118,15 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 			if (i >= max * 12) break;
 			const cursor = addMonthsClamped(start, i, !!event.timezone);
 			if (until && cursor > until) break;
+			// recurrence_count caps TOTAL occurrences from starts_at, not the
+			// ones that happen to fall inside [from, to]. Counting only in-window
+			// occurrences let a count-limited series resurrect phantom instances
+			// past its real end whenever it was viewed after it had started
+			// (from = now > starts_at).
+			produced++;
 			if (cursor > to) break;
 			if (cursor >= from) {
 				results.push(cursor);
-				produced++;
 				if (results.length >= max) break;
 			}
 		}
@@ -154,12 +159,15 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 		if (stamped > to) continue;
 		if (stamped < start) continue;
 
+		// Count every real occurrence toward recurrence_count — not just the
+		// in-window ones — so a count-limited series stops at its true end even
+		// when the window starts after starts_at (see the monthly branch above).
+		produced++;
 		if (stamped >= from) {
 			results.push(stamped);
-			produced++;
 			if (results.length >= max) break;
-			if (produced >= hardCap) break;
 		}
+		if (produced >= hardCap) break;
 	}
 	return results;
 }

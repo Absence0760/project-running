@@ -145,7 +145,8 @@ List<DateTime> expandInstances(
     // Read the anchor in the chosen clock so day-of-month + time-of-day match
     // the organiser's intended wall-clock (UTC) or the viewer's (legacy local).
     final base = useUtc ? e.startsAt.toUtc() : e.startsAt;
-    for (var i = 0; results.length < hardCap; i++) {
+    var produced = 0;
+    for (var i = 0; produced < hardCap; i++) {
       if (i >= max * 12) break;
       // Anchor on startsAt's day-of-month and step `i` whole months from it,
       // clamping to the target month's last day (Jan-31 → Feb-28/29). Stepping
@@ -153,6 +154,11 @@ List<DateTime> expandInstances(
       // day-of-month (Jan-31 → Feb-28 → Mar-28), drifting off the intended day.
       final cursor = _addMonthsClamped(base, i, useUtc);
       if (e.until != null && cursor.isAfter(e.until!)) break;
+      // count caps TOTAL occurrences from startsAt, not the ones inside
+      // [from, to]. Counting only in-window occurrences let a count-limited
+      // series resurrect phantom instances past its real end when viewed after
+      // it had started (from = now > startsAt).
+      produced++;
       if (cursor.isAfter(to)) break;
       if (!cursor.isBefore(from)) {
         results.add(cursor);
@@ -180,6 +186,7 @@ List<DateTime> expandInstances(
       : DateTime(start.year, start.month, start.day);
   final anchor = startDayOnly.subtract(Duration(days: start.weekday - 1));
 
+  var produced = 0;
   for (var dayOffset = 0; dayOffset < max * stepDays * 7; dayOffset++) {
     final d = anchor.add(Duration(days: dayOffset));
     if (d.isBefore(startDayOnly)) {
@@ -209,10 +216,16 @@ List<DateTime> expandInstances(
     if (e.until != null && stamped.isAfter(e.until!)) continue;
     if (stamped.isAfter(to)) continue;
     if (stamped.isBefore(e.startsAt)) continue;
+
+    // Count every real occurrence toward count — not just the in-window ones —
+    // so a count-limited series stops at its true end even when the window
+    // starts after startsAt (see the monthly branch above).
+    produced++;
     if (!stamped.isBefore(from)) {
       results.add(stamped);
-      if (results.length >= max || results.length >= hardCap) break;
+      if (results.length >= max) break;
     }
+    if (produced >= hardCap) break;
   }
   return results;
 }
