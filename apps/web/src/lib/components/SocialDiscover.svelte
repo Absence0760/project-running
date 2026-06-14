@@ -27,6 +27,7 @@
 
 	let results = $state<PublicEventResult[]>([]);
 	let loading = $state(true);
+	let error = $state(false);
 
 	const CATEGORIES: { v: '' | 'run' | 'cycle' | 'class' | 'social'; k: MessageKey }[] = [
 		{ v: '', k: 'discover.activityAll' },
@@ -49,6 +50,7 @@
 
 	async function run() {
 		loading = true;
+		error = false;
 		const f: PublicEventFilters = {};
 		if (query.trim()) f.query = query.trim();
 		if (category) f.category = category;
@@ -60,8 +62,13 @@
 			f.center = center;
 			if (radiusM != null) f.radiusM = radiusM;
 		}
-		results = await searchPublicEvents(f);
-		loading = false;
+		try {
+			results = await searchPublicEvents(f);
+		} catch {
+			error = true;
+		} finally {
+			loading = false;
+		}
 	}
 
 	// Debounced reactive search — reading the filter signals registers them as
@@ -306,6 +313,14 @@
 
 	{#if loading}
 		<p class="state-msg">{m('discover.loading')}</p>
+	{:else if error}
+		<div class="discover-error" role="alert" data-testid="discover-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<span>{m('discover.searchFailed')}</span>
+			<button type="button" class="btn btn-outline" onclick={run} data-testid="discover-retry">
+				{m('discover.retry')}
+			</button>
+		</div>
 	{:else if results.length === 0}
 		<p class="state-msg" data-testid="discover-empty">{m('discover.empty')}</p>
 	{:else}
@@ -445,6 +460,22 @@
 	.state-msg {
 		color: var(--color-text-secondary);
 		padding: var(--space-lg) 0;
+	}
+	.discover-error {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-md) 0;
+		color: var(--color-danger, #c0392b);
+	}
+	.discover-error span:not(.material-symbols) {
+		flex: 1 1 auto;
+	}
+	.discover-error .material-symbols {
+		flex-shrink: 0;
+	}
+	.discover-error .btn {
+		flex-shrink: 0;
 	}
 	.results {
 		list-style: none;

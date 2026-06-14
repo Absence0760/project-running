@@ -119,11 +119,23 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 			}
 			const atTop = completed.every((s) => (numericOrNull(s.reps) ?? 0) >= repsMax);
 			if (atTop) {
+				if (weight != null) {
+					// Weighted: add load and drop back to the bottom of the rep range.
+					return {
+						suggestedWeightKg: safeAdd(weight, step),
+						suggestedRepsMin: repsMin,
+						suggestedRepsMax: repsMin,
+						reason: 'increase_weight',
+					};
+				}
+				// Bodyweight: no load to add, so genuinely progress by raising the rep
+				// ceiling. Collapsing the range back to repsMin here used to suggest
+				// FEWER reps (e.g. 12 → 8) while labelling it "increase_reps".
 				return {
-					suggestedWeightKg: weight != null ? safeAdd(weight, step) : null,
+					suggestedWeightKg: null,
 					suggestedRepsMin: repsMin,
-					suggestedRepsMax: repsMin,
-					reason: weight != null ? 'increase_weight' : 'increase_reps',
+					suggestedRepsMax: repsMax + 1,
+					reason: 'increase_reps',
 				};
 			}
 			return {
@@ -144,11 +156,21 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 				completed.every((s) => (numericOrNull(s.reps) ?? 0) >= targetReps);
 
 			if (success) {
+				if (weight != null) {
+					return {
+						suggestedWeightKg: safeAdd(weight, step),
+						suggestedRepsMin: targetReps,
+						suggestedRepsMax: targetReps,
+						reason: 'increase_weight',
+					};
+				}
+				// Bodyweight: no load to add — progress by raising the rep target
+				// rather than re-prescribing the same count as "increase_reps".
 				return {
-					suggestedWeightKg: weight != null ? safeAdd(weight, step) : null,
-					suggestedRepsMin: targetReps,
-					suggestedRepsMax: targetReps,
-					reason: weight != null ? 'increase_weight' : 'increase_reps',
+					suggestedWeightKg: null,
+					suggestedRepsMin: targetReps + 1,
+					suggestedRepsMax: targetReps + 1,
+					reason: 'increase_reps',
 				};
 			}
 			if (misses >= maxMisses) {

@@ -2642,6 +2642,8 @@ export const messages = {
 	"discover.paid": "Pago",
 	"discover.loading": "Buscando…",
 	"discover.empty": "Nenhuma atividade pública corresponde a estes filtros ainda.",
+	"discover.searchFailed": "Não foi possível carregar as atividades. Verifique sua conexão e tente novamente.",
+	"discover.retry": "Tentar novamente",
 	"discover.nearLabel": "Perto de",
 	"discover.nearPlaceholder": "Perto de um lugar…",
 	"discover.useMyLocation": "Usar minha localização",

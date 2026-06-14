@@ -187,14 +187,18 @@
 
 	let showClearConfirm = $state(false);
 
-	function handleClear() {
+	function handleClear(): boolean {
 		// Confirm before discarding a route the user has actually started —
 		// Undo only steps back one waypoint, so a stray Clear is total loss.
+		// Returns true so the RouteBuilder's Esc shortcut treats this as the
+		// owner of the clear (and routes Esc through the same confirm gate as
+		// the Clear button) instead of clearing the canvas directly.
 		if (waypointCount >= 2) {
 			showClearConfirm = true;
-			return;
+			return true;
 		}
 		doClear();
+		return true;
 	}
 
 	function doClear() {
@@ -909,6 +913,7 @@
 			onbusy={(b) => (builderBusy = b)}
 			ongeneratemismatch={(achievedM, _targetM, largestLoopM) =>
 				(generateShortfall = { achievedM, largestLoopM })}
+			onrequestclear={handleClear}
 		/>
 
 		{#if waypointCount === 0 && !pickingPoint}

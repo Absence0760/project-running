@@ -4098,6 +4098,10 @@
   "@discoverEmpty": {
     "description": "Discover tab — empty state when no events match the filters"
   },
+  "discoverSearchFailed": "Couldn't load activities. Check your connection and try again.",
+  "@discoverSearchFailed": {
+    "description": "Discover tab — error state shown when the activity search fails (distinct from the empty state)"
+  },
   "clubsTitle": "Clubs",
   "@clubsTitle": {
     "description": "AppBar title for the standalone clubs screen"
@@ -6519,6 +6523,10 @@
   "@integrationsHrForget": {
     "description": "Tooltip on the forget-strap button"
   },
+  "integrationsHrForgetConfirm": "Forget this heart rate monitor? You'll need to pair it again to use it during a run.",
+  "@integrationsHrForgetConfirm": {
+    "description": "Confirm dialog body shown before unpairing a heart-rate strap"
+  },
   "integrationsHrScanTitle": "Scan for heart rate monitor",
   "@integrationsHrScanTitle": {
     "description": "Title of the HR scan bottom sheet"
@@ -6564,6 +6572,10 @@
   "integrationsTreadmillForget": "Forget",
   "@integrationsTreadmillForget": {
     "description": "Tooltip on the forget-treadmill button"
+  },
+  "integrationsTreadmillForgetConfirm": "Forget this treadmill? You'll need to pair it again to use it during a run.",
+  "@integrationsTreadmillForgetConfirm": {
+    "description": "Confirm dialog body shown before unpairing a treadmill"
   },
   "integrationsTreadmillScanTitle": "Scan for treadmill",
   "@integrationsTreadmillScanTitle": {

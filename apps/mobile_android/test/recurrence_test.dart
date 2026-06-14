@@ -105,6 +105,52 @@ void main() {
       expect(instances, hasLength(2));
     });
 
+    test('count-limited weekly is exhausted before a later window (no phantom occurrences)', () {
+      // Regression: count caps TOTAL occurrences, not in-window ones. A
+      // 3-occurrence weekly series (Apr 1/8/15) viewed in a LATER window must
+      // return nothing — the series ended before the window opened. The old
+      // code counted only in-window adds, so it walked past the real end and
+      // emitted phantom April-29-onward instances.
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 4, 1, 8, 0, 0),
+        freq: RecurrenceFreq.weekly,
+        count: 3,
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 5, 1),
+        DateTime.utc(2026, 12, 31),
+      );
+      expect(out, isEmpty);
+    });
+
+    test('count-limited weekly partially overlapping a window counts pre-window occurrences', () {
+      // Window opens after the 1st occurrence (Apr 1) but before the series
+      // end; Apr 1/8/15 with count 3 → only Apr 8 + Apr 15 in [Apr 8, …].
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 4, 1, 8, 0, 0),
+        freq: RecurrenceFreq.weekly,
+        count: 3,
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 4, 8),
+        DateTime.utc(2026, 12, 31),
+      );
+      final dates = out.map((d) => '${d.year}-${d.month}-${d.day}').toList();
+      expect(dates, ['2026-4-8', '2026-4-15']);
+    });
+
+    test('nextInstanceAfter — exhausted count-limited series returns null, not a phantom', () {
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 1, 7, 9, 0, 0),
+        freq: RecurrenceFreq.weekly,
+        count: 3, // Jan 7/14/21
+      );
+      final next = nextInstanceAfter(e, DateTime.utc(2026, 2, 1));
+      expect(next, isNull);
+    });
+
     test('until date stops expansion — no instance falls after until', () {
       final utcStart = DateTime.utc(2026, 4, 1, 8, 0, 0);
       final until = DateTime.utc(2026, 4, 22);
@@ -212,6 +258,20 @@ void main() {
 
       final instances = expandInstances(e, from, to);
       expect(instances, hasLength(3));
+    });
+
+    test('count-limited monthly is exhausted before a later window (no phantom occurrences)', () {
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 1, 5, 9, 0, 0),
+        freq: RecurrenceFreq.monthly,
+        count: 3, // Jan 5, Feb 5, Mar 5 — series ends after March
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 4, 1),
+        DateTime.utc(2026, 12, 31),
+      );
+      expect(out, isEmpty);
     });
   });
 

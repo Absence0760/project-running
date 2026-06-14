@@ -192,6 +192,39 @@ test('null weights (bodyweight) -> reps-only suggestion, never a weight', () => 
 	assert.equal(out.reason, 'increase_reps');
 });
 
+test('double_progression bodyweight at top of range raises the rep ceiling, never reduces it', () => {
+	// Regression: a maxed bodyweight range used to collapse to repsMin (12 → 8)
+	// while reporting "increase_reps" — a reduction mislabelled as progress. With
+	// no load to add, the suggestion must genuinely raise the rep target.
+	const out = nextPrescription(
+		input({
+			scheme: 'double_progression',
+			lastSets: [s(12, null), s(12, null)],
+			targetRepsMin: 8,
+			targetRepsMax: 12,
+		}),
+	);
+	assert.equal(out.suggestedWeightKg, null);
+	assert.equal(out.reason, 'increase_reps');
+	assert.equal(out.suggestedRepsMax, 13);
+	assert.ok((out.suggestedRepsMax ?? 0) > 12, 'must not reduce reps below the maxed range');
+});
+
+test('five_by_five bodyweight success raises the rep target, never re-prescribes the same count', () => {
+	const out = nextPrescription(
+		input({
+			scheme: 'five_by_five',
+			lastSets: [s(5, null), s(5, null), s(5, null), s(5, null), s(5, null)],
+			targetRepsMin: 5,
+			targetRepsMax: 5,
+		}),
+	);
+	assert.equal(out.suggestedWeightKg, null);
+	assert.equal(out.reason, 'increase_reps');
+	assert.equal(out.suggestedRepsMin, 6);
+	assert.equal(out.suggestedRepsMax, 6);
+});
+
 test('negative/zero params never suggest a negative weight', () => {
 	const out = nextPrescription(
 		input({

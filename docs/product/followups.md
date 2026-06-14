@@ -832,6 +832,36 @@ RPCs). One finding was **deferred, not dismissed**:
   CISO/counsel gate (no pg_cron wires it), and even once scheduled it's a weekly background pass where a
   ~2-minute enqueue burst is invisible. Fix it as part of the gated cron-wiring change, not standalone.
 
+## Pure-logic-helper hunt (2026-06-14) — verified findings deferred
+
+A 5-surface bug-hunt over the pure-logic helpers + their Dart twins (training-plan,
+gym, nutrition, pace/GAP/fitness, session/event/recurrence + Go worker). Five bugs
+were fixed + pinned the same day (recurrence `count` phantom occurrences, training
+zero-anchor paces, gym_adherence bodyweight `targetWeightKg:0`, gym_progression
+bodyweight rep regression, nutrition_week fractional-target delta — all mirrored
+web↔Dart↔iOS where they applied). The pace/GAP/fitness surface was clean. Three
+real-but-low-reach findings are **deferred, not dismissed**:
+
+- [ ] **[low, latent] `macroBudget` negative-tie rounding diverges TS↔Dart.** `nutrition_budget.ts`
+  uses `Math.round(target - consumed)` (rounds a negative `.5` toward +∞: `Math.round(-2.5) === -2`);
+  the Dart twin `nutrition_budget.dart` uses `(target - consumed).round()` (rounds half away from zero:
+  `-3`). So `macroBudget(2002.5, 2000, 'calories')` → web `-2`, mobile `-3`; and TS `macroBudget(2000.5,
+  2000)` self-contradicts (`remaining 0` yet `over 1, exceeded true`). **Latent in production**: `consumed`
+  comes from `sumMacros` (rounded int) and `target` from `NutritionTargets` (int), so `target - consumed`
+  is an exact integer and `.round()` is a no-op — only reachable via direct fractional calls. Pick one
+  rounding convention and align both twins when next touching this file.
+- [ ] **[low-med, unbuilt caller] `computeSessionAdherence` can report >100% adherence.** `session_steps.ts`
+  (+ `session_steps.dart`) compute `adherencePct = completedSteps / totalSteps` without clamping or
+  matching results to steps by `itemId`; a results array longer than the steps array (duplicate/extra
+  completed rows) yields `adherencePct > 1` and still verdicts `'completed'`. Lower confidence because the
+  P2 follow-along caller that would feed it isn't built yet. Clamp to `[0,1]` + key the match by `itemId`
+  when wiring the follow-along runner.
+- [ ] **[low, cosmetic] `gym_routine.prefillFromRoutine` RPE string diverges for whole-number doubles.**
+  `gym_routine.ts` uses `String(s.targetRpe)` → `"8"`; the Dart twin `'${s.targetRpe}'` → `"8.0"` because
+  `StoredRoutineSet.targetRpe` is `double?`. Display-only divergence (the consumer parses both fine, and a
+  fractional RPE like 8.5 stringifies identically); fix by formatting the Dart side to drop a trailing
+  `.0` when next touching routine prefill.
+
 Minor / not fixed (recorded for completeness): `workout_runner.dart` `rewindStep` re-anchors a duration
 step's elapsed clock to "now", stretching a rewound duration step (matches the distance-axis rewind
 design intent, untested for duration); `gym_workout_runner.dart` `adherence()` returns `abandoned` for a

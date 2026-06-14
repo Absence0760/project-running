@@ -24,6 +24,7 @@ import {
 	predictionConfidence,
 	pacesFromGoalPace,
 	resolveTrainingPaces,
+	resolveTrainingPacesWithMeta,
 	phaseFor,
 	generatePlan,
 	isMastersAge,
@@ -273,6 +274,24 @@ test('resolveTrainingPaces: a recent 5k beats a goal time as the anchor', () => 
 test('resolveTrainingPaces: fall-back produces a valid pace set', () => {
 	const p = resolveTrainingPaces({ goalDistanceM: 10_000 });
 	assert.ok(p.easy > 0 && p.interval > 0);
+});
+
+test('resolveTrainingPaces: a zero recent5kSec/goalTimeSec is treated as no anchor (twin parity)', () => {
+	// A 0 anchor is "no usable time", not a real one. Web's JS truthiness already
+	// fell through to the conservative fallback; the Dart twin used `!= null` and
+	// ran Riegel on 0 → every pace 0 + fallback flag suppressed. Pin the
+	// canonical contract on both: 0 → fallback pace set, isFallback true.
+	const zeroRecent = resolveTrainingPacesWithMeta({ goalDistanceM: 10_000, recent5kSec: 0 });
+	assert.equal(zeroRecent.isFallback, true);
+	assert.ok(zeroRecent.paces.easy > 0 && zeroRecent.paces.interval > 0);
+
+	const zeroGoal = resolveTrainingPacesWithMeta({ goalDistanceM: 10_000, goalTimeSec: 0 });
+	assert.equal(zeroGoal.isFallback, true);
+	assert.ok(zeroGoal.paces.easy > 0);
+
+	// Same numbers as the no-arg fallback.
+	const fallback = resolveTrainingPacesWithMeta({ goalDistanceM: 10_000 });
+	assert.equal(zeroRecent.paces.easy, fallback.paces.easy);
 });
 
 test('resolveTrainingPaces: marathon-only goal time yields valid pace set', () => {

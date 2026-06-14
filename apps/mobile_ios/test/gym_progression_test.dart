@@ -164,6 +164,34 @@ void main() {
     expect(out.reason, ProgressionReason.increaseReps);
   });
 
+  test('double_progression bodyweight at top of range raises the rep ceiling, never reduces it', () {
+    // Regression: a maxed bodyweight range used to collapse to repsMin (12 → 8)
+    // while reporting increaseReps — a reduction mislabelled as progress.
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.doubleProgression,
+      lastSets: [s(12, null), s(12, null)],
+      targetRepsMin: 8,
+      targetRepsMax: 12,
+    ));
+    expect(out.suggestedWeightKg, isNull);
+    expect(out.reason, ProgressionReason.increaseReps);
+    expect(out.suggestedRepsMax, 13);
+    expect((out.suggestedRepsMax ?? 0) > 12, isTrue);
+  });
+
+  test('five_by_five bodyweight success raises the rep target, never re-prescribes the same count', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [s(5, null), s(5, null), s(5, null), s(5, null), s(5, null)],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(out.suggestedWeightKg, isNull);
+    expect(out.reason, ProgressionReason.increaseReps);
+    expect(out.suggestedRepsMin, 6);
+    expect(out.suggestedRepsMax, 6);
+  });
+
   test('negative/zero params never suggest a negative weight', () {
     final out = nextPrescription(ProgressionInput(
       scheme: ProgressionScheme.linear,

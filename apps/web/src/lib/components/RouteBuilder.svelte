@@ -61,7 +61,8 @@
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
 		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
 		onbusy = (_busy: boolean) => {},
-		ongeneratemismatch = (_achievedM: number, _targetM: number, _largestLoopM?: number) => {}
+		ongeneratemismatch = (_achievedM: number, _targetM: number, _largestLoopM?: number) => {},
+		onrequestclear = (): boolean => false
 	}: {
 		mode?: 'road' | 'trail';
 		onupdate?: (data: {
@@ -105,6 +106,14 @@
 		 * explicit "generate that real loop" choice.
 		 */
 		ongeneratemismatch?: (achievedM: number, targetM: number, largestLoopM?: number) => void;
+		/**
+		 * Called when the Escape keyboard shortcut requests a clear. Return
+		 * `true` to signal the parent has taken ownership (e.g. opened a
+		 * confirm dialog), in which case the builder does NOT clear itself —
+		 * this keeps the Esc shortcut behind the same confirm gate as the
+		 * Clear button. Return `false` (the default) to let Esc clear directly.
+		 */
+		onrequestclear?: () => boolean;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -1820,7 +1829,18 @@
 				undoWaypoint();
 			}
 			if (e.key === 'Escape') {
-				clearWaypoints();
+				// Route Esc through the parent's clear-request hook so it sits
+				// behind the same confirm dialog as the Clear button. When the
+				// parent takes ownership (opens a confirm), stop the event here:
+				// the confirm dialog mounts a window-level Escape-to-close
+				// listener during this same keypress, and window is later in the
+				// bubble order than this document listener — without stopping it,
+				// the very keystroke that opens the dialog would also dismiss it.
+				if (onrequestclear()) {
+					e.stopPropagation();
+				} else {
+					clearWaypoints();
+				}
 			}
 		};
 		document.addEventListener('keydown', keyHandler);

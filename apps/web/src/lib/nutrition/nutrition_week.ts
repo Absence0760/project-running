@@ -29,9 +29,12 @@ export function weeklyIntakeSummary(
 	const loggedDays = logged.length;
 	const avgCalories =
 		loggedDays > 0 ? Math.round(logged.reduce((s, c) => s + c, 0) / loggedDays) : 0;
+	// Round the target so the delta is always a whole number of kcal (matches the
+	// Dart twin). A fractional target would otherwise surface as a long decimal in
+	// the "X under/over goal/day" chip — avgCalories is already rounded.
 	const deltaPerDay =
 		targetCalories != null && targetCalories > 0 && loggedDays > 0
-			? avgCalories - targetCalories
+			? avgCalories - Math.round(targetCalories)
 			: null;
 	return { loggedDays, avgCalories, deltaPerDay };
 }

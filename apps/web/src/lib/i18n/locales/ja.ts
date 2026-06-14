@@ -2639,6 +2639,8 @@ export const messages = {
 	"discover.paid": "有料",
 	"discover.loading": "検索中…",
 	"discover.empty": "この条件に一致する公開アクティビティはまだありません。",
+	"discover.searchFailed": "アクティビティを読み込めませんでした。接続を確認してもう一度お試しください。",
+	"discover.retry": "再試行",
 	"discover.nearLabel": "近く",
 	"discover.nearPlaceholder": "場所の近くで検索…",
 	"discover.useMyLocation": "現在地を使用",

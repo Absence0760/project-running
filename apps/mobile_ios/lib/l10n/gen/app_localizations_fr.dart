@@ -3387,6 +3387,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucune activité publique ne correspond à ces filtres pour l\'instant.';
 
   @override
+  String get discoverSearchFailed =>
+      'Impossible de charger les activités. Vérifiez votre connexion et réessayez.';
+
+  @override
   String get clubsTitle => 'Clubs';
 
   @override
@@ -5310,6 +5314,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get integrationsHrForget => 'Oublier';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'Oublier ce capteur cardiaque ? Vous devrez le réappairer pour l\'utiliser pendant une course.';
+
+  @override
   String get integrationsHrScanTitle => 'Rechercher un capteur cardiaque';
 
   @override
@@ -5342,6 +5350,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => 'Oublier';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'Oublier ce tapis de course ? Vous devrez le réappairer pour l\'utiliser pendant une course.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Rechercher un tapis de course';

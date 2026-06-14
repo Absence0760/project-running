@@ -111,6 +111,19 @@ test('weight at 79% of target -> missed', () => {
 	assert.equal(r.sets[0].status, 'missed');
 });
 
+test('bodyweight set planned with targetWeightKg 0 is hit on reps alone (not auto-missed)', () => {
+	// Regression: a literal 0 weight target (a bodyweight movement) must not fire
+	// the weight gate (`!= null` is true for 0), which would auto-miss a set the
+	// runner completed at full reps with no logged weight.
+	const r = computeRoutineAdherence(
+		[planned('pushup', 0, 5, 0)],
+		[actual('pushup', 0, 5, null)],
+	);
+	assert.equal(r.sets[0].status, 'hit');
+	assert.equal(r.completedCount, 1);
+	assert.equal(r.verdict, 'completed');
+});
+
 test('warmup set is excluded from the verdict denominator', () => {
 	const r = computeRoutineAdherence(
 		[planned('squat', 0, 5, 60, null, null, 'warmup'), planned('squat', 1, 5, 100)],

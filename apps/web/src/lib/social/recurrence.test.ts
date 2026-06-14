@@ -121,6 +121,70 @@ test('expandInstances — recurrence_count caps the number of instances', () => 
 	assert.equal(out.length, 3);
 });
 
+test('expandInstances — count-limited weekly is exhausted before a later window (no phantom occurrences)', () => {
+	// Regression: recurrence_count caps TOTAL occurrences, not in-window ones. A
+	// 3-occurrence weekly series (Apr 1/8/15) viewed in a LATER window must
+	// return nothing — the series ended before the window opened. The old code
+	// counted only in-window pushes, so it walked past the real end and emitted
+	// three phantom April-29-onward instances.
+	const e = ev({
+		starts_at: '2026-04-01T08:00:00Z', // Wed
+		recurrence_freq: 'weekly',
+		recurrence_count: 3,
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-05-01T00:00:00Z'),
+		new Date('2026-12-31T23:59:59Z'),
+	);
+	assert.equal(out.length, 0);
+});
+
+test('expandInstances — count-limited weekly partially overlapping a window counts pre-window occurrences', () => {
+	// Window opens after the 1st occurrence (Apr 1) but before the series end.
+	// Occurrences are Apr 1/8/15 (count 3); a window of [Apr 8, …] must yield
+	// only Apr 8 + Apr 15 — the Apr 1 occurrence still consumes one of the three.
+	const e = ev({
+		starts_at: '2026-04-01T08:00:00Z',
+		recurrence_freq: 'weekly',
+		recurrence_count: 3,
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-04-08T00:00:00Z'),
+		new Date('2026-12-31T23:59:59Z'),
+	);
+	const dates = out.map((d) => d.toISOString().slice(0, 10));
+	assert.deepEqual(dates, ['2026-04-08', '2026-04-15']);
+});
+
+test('expandInstances — count-limited monthly is exhausted before a later window (no phantom occurrences)', () => {
+	const e = ev({
+		starts_at: '2026-01-05T09:00:00Z',
+		recurrence_freq: 'monthly',
+		recurrence_count: 3, // Jan 5, Feb 5, Mar 5 — series ends after March
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-04-01T00:00:00Z'),
+		new Date('2026-12-31T23:59:59Z'),
+	);
+	assert.equal(out.length, 0);
+});
+
+test('nextInstanceAfter — exhausted count-limited series returns null, not a phantom', () => {
+	// nextInstanceAfter passes from = now; for a series that already ran out of
+	// its count it must report no upcoming instance (data.ts scopes RSVP keys to
+	// this — a phantom would arm a dead series).
+	const e = ev({
+		starts_at: '2026-01-07T09:00:00Z',
+		recurrence_freq: 'weekly',
+		recurrence_count: 3, // Jan 7/14/21
+	});
+	const next = nextInstanceAfter(e, new Date('2026-02-01T00:00:00Z'));
+	assert.equal(next, null);
+});
+
 test('expandInstances — recurrence_until stops the expansion', () => {
 	const until = '2026-04-22T08:00:00Z';
 	const e = ev({

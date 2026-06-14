@@ -3376,6 +3376,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Nenhuma atividade pública corresponde a esses filtros ainda.';
 
   @override
+  String get discoverSearchFailed =>
+      'Não foi possível carregar as atividades. Verifique sua conexão e tente novamente.';
+
+  @override
   String get clubsTitle => 'Clubes';
 
   @override
@@ -5294,6 +5298,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get integrationsHrForget => 'Esquecer';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'Esquecer este monitor de frequência cardíaca? Terá de o emparelhar novamente para o usar durante uma corrida.';
+
+  @override
   String get integrationsHrScanTitle => 'Buscar monitor de frequência cardíaca';
 
   @override
@@ -5326,6 +5334,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => 'Esquecer';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'Esquecer esta passadeira? Terá de a emparelhar novamente para a usar durante uma corrida.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Procurar passadeira';
@@ -12298,6 +12310,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Nenhuma atividade pública corresponde a esses filtros ainda.';
 
   @override
+  String get discoverSearchFailed =>
+      'Não foi possível carregar as atividades. Verifique sua conexão e tente novamente.';
+
+  @override
   String get clubsTitle => 'Clubes';
 
   @override
@@ -14216,6 +14232,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get integrationsHrForget => 'Esquecer';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'Esquecer este monitor de frequência cardíaca? Você precisará pareá-lo novamente para usá-lo durante uma corrida.';
+
+  @override
   String get integrationsHrScanTitle => 'Buscar monitor de frequência cardíaca';
 
   @override
@@ -14248,6 +14268,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get integrationsTreadmillForget => 'Esquecer';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'Esquecer esta esteira? Você precisará pareá-la novamente para usá-la durante uma corrida.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Procurar esteira';
