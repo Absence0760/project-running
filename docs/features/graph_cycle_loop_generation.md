@@ -329,12 +329,38 @@ quietness/distance instead of penalising the spur. Separate scoring path, off by
 default.
 
 **Some of this needs no v3.** The avoid-highways / prefer-residential pair is
-mostly a GraphHopper **custom profile** (weight by road class); a `round_trip`
-variant could honour it today as a cheap interim. The full set (scenic,
-elevation-aware, cul-de-sac mode, multi-objective ranking) needs the graph search,
-where we own the edges + the scoring.
+mostly a GraphHopper **custom model** (weight by road class); a `round_trip`
+variant honours it today as a cheap interim.
 
-**Effort:** ~2–3 days on top of a working graph-cycle generator — road-class /
-elevation weights are the easy half; scenic/park-adjacency and cul-de-sac mode the
-harder half. The natural-language front-end that *sets* these preferences from a
-plain-English request is its own proposal: [ai_route_assistant.md](ai_route_assistant.md).
+### Avoid-highways / prefer-residential — BUILT (2026-06-14, web-only)
+
+The cheap half shipped as a `round_trip` custom-model variant, no v3 required:
+
+- **UI** — a "Quiet roads (avoid highways)" checkbox in the distance panel on
+  `/routes/new`. Off → today's request; on → the page passes `'quiet'` as a fourth
+  `generateLoop(target, start, end, preference)` arg, which `RouteBuilder.svelte`
+  forwards as `preference` on the `POST /api/routes/generate` body.
+- **Server** — `handler.ts` threads the preference through `parseGenerateRequest`
+  (an unrecognised value is silently dropped, never a 400). When a known preference
+  is set it **skips the graph-cycle sidecar** (which doesn't yet honour preferences
+  and would return a clean-but-arterial loop) and runs a custom-model `round_trip`:
+  `graphhopper.ts#buildCustomModel('quiet')` emits a `priority` model that
+  multiplies `road_class` MOTORWAY/TRUNK/PRIMARY by 0.1/0.2/0.4 and
+  RESIDENTIAL/LIVING_STREET by 1.4/1.5. `fetchRoundTrip` then **POSTs**
+  `buildRoundTripBody` (with `ch.disable: true`, required for custom models)
+  instead of the plain GET.
+- **Graceful fallback** — soft weights only (never 0) so the model can't disconnect
+  the graph into a `no_route`; and if the preference-aware race still yields nothing
+  (engine rejects the model, or no loop), the handler **retries the whole race once
+  without the preference**. A preference is an enhancement, never a way to deny a
+  buildable route.
+- **Out of scope** — mobile (route generation is a web-canonical surface, no mobile
+  route builder); and the harder preference set below, which needs v3.
+
+**The full set (scenic, elevation-aware, cul-de-sac mode, multi-objective ranking)
+still needs the graph search**, where we own the edges + the scoring.
+
+**Remaining effort:** ~2–3 days on top of a working graph-cycle generator —
+scenic/park-adjacency and cul-de-sac mode are the harder half. The natural-language
+front-end that *sets* these preferences from a plain-English request is its own
+proposal: [ai_route_assistant.md](ai_route_assistant.md).
