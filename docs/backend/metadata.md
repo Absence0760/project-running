@@ -222,17 +222,18 @@ When a run's `is_public = true`, the row's `metadata` jsonb travels alongside it
 - `elevation_m` — total elevation gain
 - `sub_sport` — FIT discipline (trail / treadmill / track / road); reveals nothing the rendered track + distance don't already imply, so it passes through the view rather than being stripped (no migration needed — the projection is a denylist). Persona round-5 theme F.
 - `running_dynamics` — Garmin biomechanic averages (vertical oscillation / GCT / stride length / power / L-R balance); no geographic or identity signal, so kept public-safe. Persona round-5 theme F.
+- `indoor_source` — recorder hint for indoor runs (e.g. `'treadmill'`). **Currently leaks through the view** — it is NOT in the `public_runs` strip denylist (verified against the latest view migration `20261207_001`), despite being a recorder internal. Low sensitivity (no geographic or identity signal — just a "this was a treadmill" flag), so the leak is not a privacy incident, but it is classified here as public-safe to match reality. If it should be owner-only, add it to the denylist in the next `public_runs` projection migration.
 
 **Owner-only** (stripped by the view's projection — denylist in the migration body):
 
 - `imported_from`, `imported_at`, `health_connect_type`, `strava_activity_type`, `strava_id`, `garmin_id`, `source_file`, `max_bpm` — import provenance / third-party-id-cross-walks
 - `plan_workout_id`, `workout_step_results`, `workout_adherence` — training-plan linkage; leaks the runner's structured-workout paces and adherence
 - `last_modified_at` — sync-state internal; leaks device-upload cadence
-- `recovered_from_crash`, `in_progress_saved_at`, `in_progress`, `manual_entry`, `indoor_estimated`, `distance_source`, `indoor_source` — recorder internals
+- `recovered_from_crash`, `in_progress_saved_at`, `in_progress`, `manual_entry`, `indoor_estimated`, `distance_source` — recorder internals
 - `race_name`, `bib`, `overall_place`, `chip_time` — race-source identity link (added to the strip list in `20260714_001`)
 - `perceived_effort` — RPE on the Borg scale (seed-only today; classified owner-only when a real writer lands)
 
-When you add a new key, classify it explicitly — and update the strip list in the most recent `public_runs` projection migration (current head: `20260714_001_public_runs_strip_race_keys.sql`) if it lands on the owner-only side. The seed assertions in `apps/backend/supabase/seed.sql` for `public_runs` exercise the projection; an unclassified key that's accidentally dropped (or accidentally exposed) will fail the seed.
+When you add a new key, classify it explicitly — and update the strip list in the most recent `public_runs` projection migration (current head: `20261207_001_promote_activity_type_is_dnf.sql` — the view has been redefined several times since `20260714_001`: `20260724_001`, `20260807_001`, `20260924_001`, `20261105_001`, then `20261207_001`) if it lands on the owner-only side. The seed assertions in `apps/backend/supabase/seed.sql` for `public_runs` exercise the projection; an unclassified key that's accidentally dropped (or accidentally exposed) will fail the seed.
 
 ## Enforcement
 

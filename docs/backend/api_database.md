@@ -454,6 +454,8 @@ create table clubs (
                                                         -- after manual moderation. Events inherit
                                                         -- verification visually from their parent
                                                         -- club; no `events.is_verified` column.
+  join_policy   text not null default 'open',          -- 'open' | 'request' | 'invite' (migration 20260417_001)
+  invite_token  text unique,                           -- invite-link token; see join_club_by_token (20260417_001)
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
@@ -469,11 +471,14 @@ create table club_members (
   club_id     uuid references clubs on delete cascade not null,
   user_id     uuid references auth.users on delete cascade not null,
   role        text not null default 'member',         -- 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member' (CHECK: club_members_role_check)
+  status      text not null default 'active',          -- 'active' | 'pending' (request-to-join queue; migration 20260417_001)
   joined_at   timestamptz default now(),
   primary key (club_id, user_id)
 );
 
--- One-off events. Recurrence is Phase 2 (see roadmap).
+-- Events. Recurrence shipped (migration 20260417_001) — the
+-- recurrence_* columns below drive weekly/biweekly/monthly series;
+-- a null recurrence_freq is a one-off event.
 create table events (
   id              uuid primary key default gen_random_uuid(),
   club_id         uuid references clubs on delete cascade not null,
@@ -489,6 +494,10 @@ create table events (
   pace_target_sec integer,                            -- seconds per km
   capacity        integer,
   author_id      uuid references auth.users not null,
+  recurrence_freq  text,                               -- 'weekly' | 'biweekly' | 'monthly'; null = one-off (migration 20260417_001)
+  recurrence_byday text[],                             -- ISO codes 'MO'..'SU' for the weekly pattern
+  recurrence_until timestamptz,                        -- series end bound
+  recurrence_count integer,                            -- optional occurrence cap; null = no cap besides _until
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );
@@ -505,12 +514,14 @@ create table event_attendees (
 -- pinned to a specific event (shows on the event page) or general (shows on
 -- the club feed only).
 create table club_posts (
-  id          uuid primary key default gen_random_uuid(),
-  club_id     uuid references clubs on delete cascade not null,
-  event_id    uuid references events on delete cascade,
-  author_id   uuid references auth.users not null,
-  body        text not null,
-  created_at  timestamptz default now()
+  id                   uuid primary key default gen_random_uuid(),
+  club_id              uuid references clubs on delete cascade not null,
+  event_id             uuid references events on delete cascade,
+  event_instance_start timestamptz,                    -- pins a post to one occurrence of a recurring event (migration 20260417_001)
+  parent_post_id       uuid references club_posts on delete cascade,  -- threaded reply (migration 20260417_001)
+  author_id            uuid references auth.users not null,
+  body                 text not null,
+  created_at           timestamptz default now()
 );
 ```
 
@@ -1050,13 +1061,49 @@ create table rate_limits (
 
 #### pg_cron schedules
 
-| Job | Schedule | What it does |
-|---|---|---|
-| `refresh-mv-weekly-mileage` | `*/15 * * * *` | `refresh materialized view concurrently mv_weekly_mileage`. Original schedule was `*/5`; bumped to `*/15` in `20260706_001` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw. |
-| `cleanup-stale-live-run-pings` | every minute | Deletes `race_pings` older than the configured retention window — keeps the table from growing unbounded during a multi-hour event. |
-| `cleanup-stale-rate-limits` | hourly | Calls `cleanup_stale_rate_limits()` to GC old `rate_limits` rows so the table stays small for the per-user check. |
+| Job | Schedule | What it does | Migration |
+|---|---|---|---|
+| `refresh-mv-weekly-mileage` | `*/15 * * * *` | `refresh materialized view concurrently mv_weekly_mileage`. Original schedule was `*/5` (set in `20260602_001`); bumped to `*/15` in `20260706_001` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw. | `20260602_001` → `20260706_001` |
+| `cleanup-stale-live-run-pings` | `*/15 * * * *` | Calls `cleanup_stale_live_run_pings()` to delete `live_run_pings` rows older than the retention window — keeps the spectator feed table bounded during a multi-hour event. | `20260602_001` |
+| `cleanup-stale-rate-limits` | `0 * * * *` (hourly) | Calls `cleanup_stale_rate_limits()` to GC elapsed `rate_limits` rows. | `20260604_001` |
+| `cleanup-stale-webhook-events` | `17 4 * * *` | Deletes `webhook_events` rows older than 30 days (RevenueCat/Stripe replay-dedupe table). | `20260623_001` |
+| `cleanup-stale-export-blobs` | `23 4 * * *` | Calls `cleanup_stale_export_blobs()` to remove expired data-export artifacts. | `20260720_001` |
+| `jobs-stuck-alert` | `*/10 * * * *` | Calls `jobs_stuck_summary()` — surfaces wedged `running` jobs for the observability scraper. | `20260731_001` |
+| `enqueue-token-refresh` | `0 * * * *` | Inserts a `token_refresh` job into `jobs` for the Go worker (dedupe-safe: skips if a queued/running one exists). | `20260821_001` |
+| `purge-stale-coach-messages` | `17 3 * * *` | Calls `private.purge_stale_coach_messages()` (retention purge). | `20260922_001` |
+| `purge-stale-notifications` | `23 3 * * *` | Calls `private.purge_stale_notifications()`. | `20260922_001` |
+| `purge-stale-device-tokens` | `29 3 * * *` | Calls `private.purge_stale_device_tokens()`. | `20260922_001` |
+| `purge-stale-jobs` | `35 3 * * *` | Calls `private.purge_stale_jobs()` (GDPR DSAR close-out retention). | `20260928_001` |
+| `cleanup-stale-app-quota` | `15 4 * * *` | Deletes `app_quota` rows older than 2 days (Strava app-level rate-limit window). | `20261007_001` |
+| `purge-stale-direct-messages` | `41 3 * * *` | Calls `private.purge_stale_direct_messages()`. | `20261119_001` |
+| `enqueue-event-reminders` | `0 * * * *` | Calls `enqueue_event_reminders()` to fan out upcoming-event reminder emails. | `20261130_001` |
+| `jobs-failed-alert` | `*/10 * * * *` | Calls `jobs_failed_summary()` — surfaces terminally-failed jobs for the observability scraper. | `20261201_001` |
+| `cleanup-stale-race-pings` | `*/30 * * * *` | Calls `cleanup_stale_race_pings()` (race-mode ping retention). | `20261213_001` |
+| `cleanup-stale-user-coach-usage` | `17 * * * *` | Calls `cleanup_stale_user_coach_usage()` (coach-usage counter retention). | `20261215_001` |
 
-All three are EXECUTE-revoked from PUBLIC; the cron extension runs as superuser. Migrations: `20260602_001_mv_weekly_mileage_refresh.sql`, `20260604_001_cleanup_stale_rate_limits.sql`, plus the inline `select cron.schedule(...)` block in the live-run-pings migration.
+The scheduled functions are EXECUTE-revoked from PUBLIC where applicable; the cron extension runs as superuser. The mv-refresh + live-run-ping cleanup live in `20260602_001_pg_cron_schedules.sql` (the mv refresh is re-scheduled in `20260706_001_pg_cron_mv_refresh_15min.sql`); the rate-limit cleanup is in `20260604_001_rate_limits.sql`. Each remaining row's migration is listed in the table.
+
+---
+
+### Other shipped tables (summary)
+
+These tables ship in the live schema but don't have a full column-by-column block above. Each is listed with its purpose, defining migration, and a one-line column summary; read the migration for the exact DDL, constraints, and RLS.
+
+| Table | Migration | Purpose / column summary |
+|---|---|---|
+| `gym_workouts` | `20261204_001` | Phase-4 gym session header. `id, user_id, title, started_at, duration_s, notes, is_public, external_id, last_modified_at, created_at`. |
+| `gym_sets` | `20261204_001` | One row per logged set, child of `gym_workouts`. `id, workout_id, set_index, exercise_name, reps, weight_kg, rpe` (`duration_s` added later for timed holds — instructor_business.md M2). Weights canonical kg. |
+| `food_log` | `20261204_001` | Phase-4 nutrition entries. `id, user_id, logged_at, item_name, meal_slot ('breakfast'/'lunch'/'dinner'/'snack'), calories, protein_g, carbs_g, fat_g, is_public, external_id, last_modified_at, created_at`. |
+| `gear` | `20260827_001` | Shoes / bikes for wear tracking. `id, owner_id, kind ('shoe'/'bike'), name, brand, model, purchased_at, retired_at, target_distance_m, notes, created_at, updated_at`. |
+| `run_gear` | `20260827_001` | Many-to-many run↔gear link. `run_id, gear_id, created_at`, PK `(run_id, gear_id)`. |
+| `event_exceptions` | `20261019_001` | Cancelled occurrences of a recurring event. `event_id, instance_start, cancelled_by, reason, cancelled_at`, PK `(event_id, instance_start)`. |
+| `deletion_audit_log` | `20260917_001` | Tamper-evident account-deletion ledger keyed by the SHA-256 of the user id (no PII). `hashed_user_id, deleted_at, result (enum of outcomes), notes`. |
+| `app_quota` | `20261007_001` | App-level (not per-user) third-party rate-limit counter. `provider, window_kind ('short'/'day'), window_start, count`, PK `(provider, window_kind, window_start)`. |
+| `lifecycle_email_log` | `20261202_001` | Idempotency ledger for one-shot lifecycle emails (welcome, etc.). `user_id, template, sent_at`, PK `(user_id, template)`. |
+| `email_suppressions` | `20270108_001` | Do-not-send list. `email, reason ('bounce'/'complaint'/'unsubscribe'/'manual'), created_at`, PK `email`. |
+| `webhook_events` | `20260623_001` | Replay-dedupe ledger for inbound webhooks (RevenueCat, Stripe). `provider, event_id, received_at`, PK `(provider, event_id)`; GC'd by `cleanup-stale-webhook-events`. |
+| `user_blocks` | `20261012_001` | Per-user block list for the social layer. `blocker_id, blocked_id, created_at, reason`, PK `(blocker_id, blocked_id)`, CHECK `blocker_id <> blocked_id`. |
+| `coach_athletes` | `20261102_001` | Coach↔athlete roster (invite/accept). `id, coach_id, athlete_id, status ('pending'/'active'/'ended'), invite_token, note, created_at, accepted_at, ended_at`. See `redeem_coach_invite` + the coach-visibility note below. |
 
 ---
 
@@ -1146,7 +1193,7 @@ All Edge Functions are TypeScript running on the Deno runtime, deployed to Supab
 
 Base URL: `https://{project-ref}.supabase.co/functions/v1/`
 
-Authentication: all functions require a valid Supabase JWT in the `Authorization: Bearer {token}` header, except the Strava webhook which uses a shared secret.
+Authentication: most functions require a valid Supabase JWT in the `Authorization: Bearer {token}` header (the platform default `verify_jwt = true`). Four functions set `verify_jwt = false` in `config.toml` because they authenticate themselves another way: `strava-webhook` (URL-embedded shared secret + timing-safe HMAC — Strava signs nothing), `revenuecat-webhook` (HMAC over the raw body), `stripe-events-webhook` (Stripe-Signature HMAC over the raw body), and `refresh-tokens` (invoked by pg_cron with a shared bearer token). `clip-public-track` keeps `verify_jwt = true` but is anon-callable: it accepts the Supabase **anon** JWT and gates on the `runs.is_public = true` row check rather than the caller's identity.
 
 ---
 
@@ -1302,9 +1349,27 @@ Serves the clipped track JSON for a non-owner viewer of a public run. Replaces t
 GET /functions/v1/clip-public-track?run_id={uuid}
 ```
 
-Anon-callable (`verify_jwt = false`) — the function authenticates via the `runs.is_public = true` row check, not the caller's JWT. If a JWT is present, it's used to apply owner-visibility rules (owner sees their own raw track; non-owner gets the clipped version).
+Anon-callable — `config.toml` keeps `verify_jwt = true`, so the platform requires a Supabase **anon** (or user) JWT, but the function authenticates via the `runs.is_public = true` row check, not the caller's identity. If a JWT is present, it's used to apply owner-visibility rules (owner sees their own raw track; non-owner gets the clipped version).
 
 **Response:** track JSON identical in shape to `runs/{user_id}/{run_id}.json.gz`, with privacy-zone segments clipped.
+
+---
+
+### `POST /events-connect-onboard`
+
+Stripe Connect onboarding for an event host (paid in-person events — see [club_events.md](../features/club_events.md), slice P1). JWT-gated (`verify_jwt = true`). Creates (or reuses) a Stripe Express connected account for the host, persists its id on `instructor_payout_accounts`, and returns a hosted Account Link URL; the host completes KYC / bank / tax on Stripe's pages. The `charges_enabled` flag is never written here — it flips later via the `account.updated` webhook (`stripe-events-webhook`). Onboarding is fully Stripe-hosted (SAQ A); no card or banking data touches us. **Test mode only in P1** — fails closed (503) when `STRIPE_SECRET_KEY` is unset, and the key must be an `sk_test_` key.
+
+---
+
+### `POST /events-checkout`
+
+Buyer checkout for a paid in-person event (club_events.md slice P1). JWT-gated (`verify_jwt = true`) — a logged-out caller is 401'd. Opens a Stripe-hosted Checkout Session as a **destination charge** against the host's connected account and inserts a `pending` `event_orders` row holding a soft capacity reservation (~15 min). Validation gates each fail closed: caller signed in, event visible to the caller, `event_pricing` exists for the (event, instance) with modality `in_person`, the instance is not a cancelled occurrence (`event_exceptions`), the sales window is open, the host has a charges-enabled payout account (else 409), and capacity is not full counting `going` + non-expired `pending`. Idempotency: a stable key derived from (buyer, event, instance) makes a double-click reuse the same session. The `stripe-events-webhook` confirms the order and seats the attendee on `checkout.session.completed`; expiry releases the slot. **Test mode only in P1** (`sk_test_` key).
+
+---
+
+### `POST /stripe-events-webhook`
+
+Stripe Connect events webhook — the one idempotent writer of order status (club_events.md slice P1). `verify_jwt = false` (Stripe presents no Supabase JWT); authenticated by the `Stripe-Signature` HMAC over the **raw** body against `STRIPE_EVENTS_WEBHOOK_SECRET`. Handles exactly three event types (everything else is 200-ignored): `checkout.session.completed` (CAS `pending`→`paid`, confirm-time capacity recheck, seat the `going` attendee; if the class filled via another path the order is left paid + flagged for manual refund — P1 has no automated refund), `checkout.session.expired` (CAS `pending`→`canceled`, releasing the reservation), and `account.updated` (mirror `charges_enabled` / `payouts_enabled` / `details_submitted` into `instructor_payout_accounts`). Idempotency, defence in depth: insert-first into `webhook_events (provider='stripe', event_id)` (a duplicate 23505 → 200 ok-skipped) plus the CAS guard so a replayed `completed` can't re-grant a slot or double-count revenue. **Test mode only in P1** — fails closed (503) if the secret is unset.
 
 ---
 
@@ -1436,7 +1501,7 @@ select * from nearby_routes(51.5074, -0.1278, 50000, 50);
 - `radius_m` — search radius in metres (default 50000 = 50 km)
 - `max_results` — maximum rows returned (default 50)
 
-**Returns:** same columns as `routes` table, ordered by distance from the center point.
+**Returns:** `setof public_routes` — the narrowed public-safe view (not the full `routes` columns) — ordered by distance from the center point. Redefined to return the view in migration `20260703_001_public_routes_view.sql`.
 
 ---
 
@@ -1452,7 +1517,7 @@ select * from routes_within_box(-37.83, 144.94, -37.78, 144.99, 50);
 - `min_lat` / `min_lng` / `max_lat` / `max_lng` — bbox corners (WGS84 degrees). Convention is south-west to north-east.
 - `max_results` — maximum rows returned (default 50).
 
-**Returns:** same columns as `routes` table, ordered by distance from the box centre.
+**Returns:** `setof public_routes` — the narrowed public-safe view (not the full `routes` columns) — ordered by distance from the box centre. Redefined to return the view in migration `20260703_001_public_routes_view.sql`.
 
 **When to pick which:** `nearby_routes` answers "what's near me", `routes_within_box` answers "what's in this map viewport". A route whose start sits outside the visible viewport but whose body crosses it appears in the bbox query and *not* in the radius query — that's the whole reason both exist.
 
@@ -1481,21 +1546,21 @@ select * from routes_intersecting_track(
 
 ---
 
-### `search_public_routes(q text, max_results int)`
+### `search_public_routes(p_query text, p_min_distance_m numeric, p_max_distance_m numeric, p_surface text, p_tags text[], p_featured_only boolean, p_sort text, p_limit int, p_offset int)`
 
-Full-text search over `name` (using the `routes_name_search` GIN index over `to_tsvector('english', name)`) restricted to `is_public = true`. Granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Used by `RouteExplorer.svelte` via `apps/web/src/lib/core/data.ts:searchPublicRoutes`.
+Filtered + sorted search over public routes (`is_public = true`), all parameters optional with defaults (`p_featured_only false`, `p_sort 'newest'`, `p_limit 50`, `p_offset 0`). `p_query` does a case-insensitive `ilike` over `name`; the numeric/surface/tags args narrow the set (`p_tags` uses the `&&` array-overlap operator); `p_sort` ∈ `popular` / `featured` / `newest`. **Returns `setof public_routes`** — the narrowed public-safe view, not the full `routes` columns. SECURITY DEFINER, granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Latest signature in migration `20261217_001_f17_naming_uniformity.sql`; earlier it was the simpler `(q text, max_results int)`. Used by `RouteExplorer.svelte` via `apps/web/src/lib/core/data.ts:searchPublicRoutes`.
 
 ### `popular_route_tags(tag_limit int)`
 
 Returns the top-N most-used tag strings across `routes.tags` for the Explore tab's tag chips. Granted to `anon` + `authenticated`. Migration `20260502_001_popular_route_tags.sql`.
 
-### `recompute_event_ranks(event_uuid uuid, instance_start timestamptz)`
+### `recompute_event_ranks(p_event_id uuid, p_instance_start timestamptz)`
 
-SECURITY DEFINER recompute of `event_results.rank` for the given (event, instance) tuple. Triggered automatically on `event_results` insert/update/delete; also exposed as an RPC for the race-mode auto-finalize path and admin tooling. Migration `20260424_001_event_results.sql`.
+SECURITY DEFINER recompute of `event_results.rank` for the given (event, instance) tuple. Triggered automatically on `event_results` insert/update/delete; also exposed as an RPC for the race-mode auto-finalize path and admin tooling. Originally `20260424_001_event_results.sql`; latest definition (finishers-only ranking) in `20261222_001_event_rank_finishers_only.sql`. EXECUTE revoked from `public, anon`.
 
-### `approve_event_result(result_event_id, result_instance_start, result_user_id, approved boolean)`
+### `approve_event_result(p_event_id uuid, p_instance_start timestamptz, p_user_id uuid, p_approve boolean)`
 
-SECURITY DEFINER. Lets a club admin or event organiser flip an `event_results` row between approved + pending visibility. Permission is checked via `is_event_organiser(uuid)`. EXECUTE revoked from `public, anon` and granted only to `authenticated` (migration `20260814_001_definer_grant_hygiene_pt2.sql` — Supabase grants implicit PUBLIC EXECUTE on every new public-schema function, so the original targeted `authenticated` grant didn't actually narrow anything; the body's organiser guard would still reject anon callers but defence-in-depth wants the EXECUTE narrowed too). Migration `20260428_001_role_permissions.sql`.
+SECURITY DEFINER, returns the affected `event_results` row. Lets a club admin or event organiser flip an `event_results` row between approved + pending visibility. Permission is checked via `is_event_organiser(uuid)`. EXECUTE revoked from `public, anon` and granted only to `authenticated` (migration `20260814_001_definer_grant_hygiene_pt2.sql` — Supabase grants implicit PUBLIC EXECUTE on every new public-schema function, so the original targeted `authenticated` grant didn't actually narrow anything; the body's organiser guard would still reject anon callers but defence-in-depth wants the EXECUTE narrowed too). Created in `20260428_001_role_permissions.sql`; `search_path` moved to `public, private` in `20261120_001_membership_oracles_private_schema.sql`.
 
 ### `private.is_event_organiser(uuid)` / `private.is_race_director(uuid)`
 
@@ -1523,13 +1588,13 @@ SECURITY DEFINER (migration `20270106_001`, persona #46/#47). Lets an **active**
 
 Returns the caller's most recent `fitness_snapshots` row (VDOT, weekly mileage, ATL/CTL, etc.). Cached materialisation of the inputs the dashboard fitness card needs. Granted to `authenticated`. Migration `20260507_001_fitness_snapshots.sql`.
 
-### `get_integration_tokens(provider text)` / `set_integration_tokens(provider, access, refresh, expires_at)`
+### `get_integration_tokens(p_user_id uuid, p_provider text)` / `set_integration_tokens(p_user_id uuid, p_provider text, p_access_token text, p_refresh_token text, p_token_expiry timestamptz)`
 
-SECURITY DEFINER pair that brokers OAuth tokens through Supabase Vault rather than exposing the encrypted columns directly to the row. `set` writes the access + refresh + expiry into Vault and stores only the secret IDs on the `integrations` row; `get` round-trips them back to the calling Edge Function. Granted to `authenticated`. Decision: [decisions.md § 41](../architecture/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns). Migration `20260603_001_integrations_vault.sql`.
+SECURITY DEFINER pair that brokers OAuth tokens through Supabase Vault rather than exposing the encrypted columns directly to the row. `set` writes the access + refresh + expiry into Vault and stores only the secret IDs on the `integrations` row; `get` returns `table(access_token, refresh_token, token_expiry)` for the calling Edge Function. EXECUTE revoked from `public`, granted to `authenticated` + `service_role`. Both take an explicit `p_user_id` (the caller, re-derived in the function body). Decision: [decisions.md § 41](../architecture/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns). Created in `20260603_001_integrations_vault.sql`; current signatures in `20260919_001_get_integration_tokens_modern_claims.sql`. A compare-and-swap variant `set_integration_tokens_cas(p_user_id, p_provider, p_expected_refresh_token, p_access_token, p_refresh_token, p_token_expiry)` (migration `20261006_001_set_integration_tokens_cas.sql`) guards concurrent refreshes.
 
-### `check_rate_limit_tiered(bucket text, free_per_hour int, pro_per_hour int)`
+### `check_rate_limit_tiered(p_user_id uuid, p_bucket text, p_free_max int, p_pro_max int, p_window_seconds int)`
 
-SECURITY DEFINER. Atomic per-bucket per-user counter using `is_pro()` to pick the ceiling. Returns boolean (true = under limit, action allowed). Used by `/api/coach`, `parkrun-import`, `strava-import` to enforce paywall throttling without each Edge Function hand-rolling the logic. Granted to `authenticated`. Migration `20260605_001_rate_limit_tiered.sql`.
+SECURITY DEFINER. Atomic per-bucket per-user counter that picks the ceiling by reading `user_profiles.subscription_tier` **inline** (`pro` / `lifetime` → `p_pro_max`, else `p_free_max`) — it does NOT call `is_pro()`. Returns `table(allowed boolean, retry_after_seconds int, tier text)`. Gates on caller identity: a non-`service_role` caller whose `auth.uid()` ≠ `p_user_id` raises. Used by `/api/coach`, `parkrun-import`, `strava-import`, `export-data` to enforce paywall throttling without each Edge Function hand-rolling the logic. Granted to `authenticated`. Created in `20260605_001_rate_limits_tiered.sql`; current signature (explicit `p_user_id` + window + role-from-JWT-claims check) in `20260726_001_rate_limit_role_jwt_claims.sql`.
 
 ### `cleanup_stale_rate_limits()`
 
