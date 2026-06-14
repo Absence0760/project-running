@@ -67,7 +67,7 @@ User → SignInScreen                  apps/mobile_android/lib/screens/sign_in_s
   → GoogleSignIn().signIn()          native Google chooser
   → idToken from GoogleSignInAccount.authentication
   → ApiClient.signInWithGoogleIdToken(idToken, accessToken)
-                                     packages/api_client/lib/src/api_client.dart:43
+                                     packages/api_client/lib/src/api_client.dart
   → supabase.auth.signInWithIdToken(provider: google, idToken, accessToken)
   → Supabase session established; SupabaseClient.currentUser populated
   → navigator pushes HomeScreen
@@ -232,8 +232,8 @@ The track-preservation step is specifically because cloud rows have empty `track
 Runner (mobile or web) taps "Share live link" (pre-start or in-run)
   → run row created with is_live = true, run_id stable for the link
   → during recording, every GPS fix INSERTs into live_run_pings
-    (apps/mobile_android/lib/services/live_broadcast.dart,
-     apps/web/src/lib/live_broadcast.ts)
+    (mobile: apps/mobile_android/lib/live_broadcaster.dart;
+     web: inline in apps/web/src/routes/live/[id]/+page.svelte)
 
 Spectator → /live/{run_id}
   apps/web/src/routes/live/[id]/+page.svelte
@@ -250,14 +250,14 @@ Spectator → /live/{run_id}
 ```
 Runner client reads PUBLIC_LIVE_HUB_URL / LIVE_HUB_URL
   unset → Supabase Realtime (above)
-  set   → wss://<hub>/run/{run_id} (apps/job_worker/internal/livehub/)
+  set   → POST https://<hub>/v1/live/{run_id}/push (apps/job_worker/internal/livehub/)
             • SupabaseZoneFetcher fetches the runner's privacy zones once
               on join, applies clipping per ping before broadcasting
             • RedisHub (Upstash) fans out across hub replicas for late joiners
 
 Spectator client reads PUBLIC_LIVE_HUB_URL (same envs)
   unset → Supabase Realtime
-  set   → wss://<hub>/live/{run_id}
+  set   → wss://<hub>/v1/live/{run_id}/subscribe  (GET; /snapshot for last-known JSON)
 ```
 
 ### Switching transports

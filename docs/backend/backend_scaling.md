@@ -2,7 +2,7 @@
 
 How the backend evolves from a single Supabase project to a two-service architecture (Supabase + Go) that supports live spectator tracking, training intelligence, and hundreds of thousands of users.
 
-> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds plus the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.threkir.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
+> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds — plus the email / push / digest kinds added since (`notification_email`, `lifecycle_email`, `safety_email`, `web_push`, `weekly_digest`, with an inbound bounce/complaint webhook) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.threkir.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
 
 ---
 
@@ -460,7 +460,7 @@ Aligned with the existing product roadmap.
 **Database:**
 - [x] Add `personal_records` summary table with trigger (`20260508_001`)
 - [x] Create `mv_weekly_mileage` materialized view (`20260407_001`) — pg_cron refresh + read-path wrapper still TODO; revoked from public read in `20260517_001`
-- [ ] Add `jobs` table for Go worker queue
+- [x] Add `jobs` table for Go worker queue (`20260609_001_run_match_pipeline.sql`)
 
 ### Phase 2b — web app
 
