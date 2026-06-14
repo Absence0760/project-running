@@ -269,6 +269,42 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(pointsValue).toHaveText('0', { timeout: 5_000 });
 	});
 
+	test('Esc with 2+ waypoints confirms instead of wiping the route directly', async ({
+		page
+	}) => {
+		// Regression: the Escape keyboard shortcut called clearWaypoints()
+		// directly, bypassing the same confirm dialog the Clear button is
+		// gated behind — one keystroke discarded a multi-waypoint route. Esc
+		// now routes through the page's clear-request hook.
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: -0.05, dLng: 0.05 }
+		]);
+		const pointsValue = page.locator('.builder-stat-value').nth(2);
+		await expect(pointsValue).toHaveText('2', { timeout: 5_000 });
+
+		// Esc opens the confirm dialog — it does NOT clear the route.
+		await page.keyboard.press('Escape');
+		const dialog = page.locator('.modal', { hasText: 'Clear this route?' });
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		await expect(pointsValue).toHaveText('2');
+
+		// Cancel keeps the route; the work survives a stray keystroke.
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(pointsValue).toHaveText('2');
+
+		// Esc again → confirm → cleared.
+		await page.keyboard.press('Escape');
+		await page
+			.locator('.modal', { hasText: 'Clear this route?' })
+			.getByRole('button', { name: 'Clear' })
+			.click();
+		await expect(pointsValue).toHaveText('0', { timeout: 5_000 });
+	});
+
 	test('distance-target panel toggles open + the four presets set the slider', async ({
 		page
 	}) => {
@@ -922,7 +958,13 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await page.locator('.toolbar-group .btn', { hasText: 'Undo' }).click();
 		await expect(points).toHaveText('2');
 
+		// Clear at 2+ waypoints confirms first (a stray Clear is total loss) —
+		// step through the dialog, then assert the empty state.
 		await page.locator('.toolbar-group .btn', { hasText: 'Clear' }).click();
+		await page
+			.locator('.modal', { hasText: 'Clear this route?' })
+			.getByRole('button', { name: 'Clear' })
+			.click();
 		await expect(points).toHaveText('0');
 		// Empty-state onboarding card comes back once the route is cleared.
 		await expect(page.locator('.canvas-empty')).toBeVisible();
