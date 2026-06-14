@@ -25,6 +25,7 @@ import {
 	GraphHopperError,
 	type Fetcher,
 	type LoopCandidate,
+	type RoutePreference,
 } from './graphhopper';
 import { fetchGraphCycle } from './graph_cycle';
 import { pickBestLoop } from './select';
@@ -35,6 +36,11 @@ export interface GenerateRequest {
 	targetDistanceM: number;
 	/// How many round_trip seeds to race; clamped to [1, MAX_SEEDS].
 	seeds?: number;
+	/// Optional road-design preference. `'quiet'` biases the loop onto residential
+	/// streets and away from motorway/trunk/primary via a GraphHopper custom model
+	/// (the avoid-highways / prefer-residential half of route-design preferences).
+	/// Unset → today's behaviour. Any unrecognised value is dropped at parse time.
+	preference?: RoutePreference;
 }
 
 export interface GenerateConfig {
@@ -88,6 +94,51 @@ export const MAX_SEEDS = 8;
 /// while a start ~30 m away needs 1.1× the other way.
 export const REQUEST_MULTIPLIERS = [0.65, 0.8, 1.0, 1.2] as const;
 
+interface RoundTripRace {
+	candidates: LoopCandidate[];
+	lastError: unknown;
+}
+
+/// Race the REQUEST_MULTIPLIERS × seeds round_trip spread, optionally carrying a
+/// road-design preference (custom model). Every seed failure is caught and the
+/// last error retained so the caller can distinguish unconfigured (501) from
+/// engine-down (502). Extracted so the preference path can re-run it without the
+/// preference as a graceful fallback (a preference must never break generation).
+async function raceRoundTrip(
+	start: { lat: number; lng: number },
+	targetDistanceM: number,
+	seeds: number,
+	config: GenerateConfig,
+	fetcher: Fetcher,
+	preference?: RoutePreference,
+): Promise<RoundTripRace> {
+	let lastError: unknown;
+	const results = await Promise.all(
+		REQUEST_MULTIPLIERS.flatMap((mult) =>
+			Array.from({ length: seeds }, (_, i) =>
+				fetchRoundTrip(
+					{
+						baseUrl: config.graphhopperUrl,
+						start,
+						requestDistanceM: targetDistanceM * mult,
+						seed: i,
+						apiKey: config.graphhopperApiKey,
+						preference,
+					},
+					fetcher,
+				).catch((e) => {
+					lastError = e;
+					return null;
+				}),
+			),
+		),
+	);
+	return {
+		candidates: results.filter((c): c is LoopCandidate => c !== null),
+		lastError,
+	};
+}
+
 function isValidCoord(p: { lat: number; lng: number }): boolean {
 	return (
 		Number.isFinite(p.lat) &&
@@ -116,6 +167,9 @@ export function parseGenerateRequest(raw: unknown): GenerateRequest | null {
 		if (typeof r.seeds !== 'number' || !Number.isFinite(r.seeds)) return null;
 		out.seeds = r.seeds;
 	}
+	// An unrecognised preference is silently dropped (treated as "no preference")
+	// rather than 400'd: a stale/garbled knob must never block route generation.
+	if (r.preference === 'quiet') out.preference = 'quiet';
 	return out;
 }
 
@@ -146,7 +200,12 @@ export async function handleGenerate(
 	// loop-poor (or the sidecar is unreachable) and we fall through to round_trip.
 	// A sidecar error is never fatal — graph-cycle is a quality upgrade, not a
 	// hard dependency — so we swallow the throw and let round_trip serve.
-	if (config.graphCycleUrl) {
+	//
+	// Skipped when a road-design preference is set: the graph-cycle sidecar doesn't
+	// yet honour preferences (full edge-weighted search is the v3 § Extension work),
+	// and it would otherwise return a clean-but-arterial loop that ignores the
+	// "quiet roads" ask. The custom-model round_trip below carries the preference.
+	if (config.graphCycleUrl && !req.preference) {
 		try {
 			const result = await fetchGraphCycle(
 				{
@@ -182,28 +241,30 @@ export async function handleGenerate(
 	}
 
 	const seeds = Math.max(1, Math.min(MAX_SEEDS, Math.round(req.seeds ?? DEFAULT_SEEDS)));
-	let lastError: unknown;
-	const results = await Promise.all(
-		REQUEST_MULTIPLIERS.flatMap((mult) =>
-			Array.from({ length: seeds }, (_, i) =>
-				fetchRoundTrip(
-					{
-						baseUrl: config.graphhopperUrl,
-						start: req.start,
-						requestDistanceM: req.targetDistanceM * mult,
-						seed: i,
-						apiKey: config.graphhopperApiKey,
-					},
-					fetcher,
-				).catch((e) => {
-					lastError = e;
-					return null;
-				}),
-			),
-		),
+	let { candidates, lastError } = await raceRoundTrip(
+		req.start,
+		req.targetDistanceM,
+		seeds,
+		config,
+		fetcher,
+		req.preference,
 	);
 
-	const candidates: LoopCandidate[] = results.filter((c): c is LoopCandidate => c !== null);
+	// Graceful fallback: a preference-aware (custom_model) race that produced
+	// nothing — the engine rejected the model, or the down-weighting found no loop —
+	// must never deny a route the plain generator could build. Retry once without
+	// the preference. Layered resilience: the preference is an enhancement, the
+	// route itself is the contract.
+	if (req.preference && candidates.length === 0) {
+		({ candidates, lastError } = await raceRoundTrip(
+			req.start,
+			req.targetDistanceM,
+			seeds,
+			config,
+			fetcher,
+		));
+	}
+
 	if (candidates.length === 0) {
 		// Every seed failed. An unconfigured engine is an operator problem
 		// (501); anything else is the engine being down / unable to build a

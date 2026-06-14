@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+	buildCustomModel,
+	buildRoundTripBody,
 	buildRoundTripUrl,
 	fetchRoundTrip,
 	GraphHopperError,
@@ -332,4 +334,127 @@ test('handleGenerate races request multipliers and keeps the result closest to t
 			`expected the 0.8x result ~5200, got ${res.body.distanceM}`,
 		);
 	}
+});
+
+// --- route-design preference: avoid-highways / prefer-residential ---
+
+test('buildCustomModel returns null for no preference', () => {
+	assert.equal(buildCustomModel(undefined), null);
+});
+
+test("buildCustomModel('quiet') down-weights arterials, up-weights residential", () => {
+	const model = buildCustomModel('quiet');
+	assert.ok(model);
+	const rules = model.priority;
+	const motorway = rules.find((r) => r.if === 'road_class == MOTORWAY');
+	const residential = rules.find((r) => r.if === 'road_class == RESIDENTIAL');
+	assert.ok(motorway && motorway.multiply_by < 1, 'motorway must be penalised');
+	assert.ok(residential && residential.multiply_by > 1, 'residential must be favoured');
+	// Soft weights only — never 0, so the graph can't be disconnected into a
+	// no_route by the preference (the never-break-generation contract).
+	for (const r of rules) assert.ok(r.multiply_by > 0, 'no hard exclusion');
+});
+
+test('buildRoundTripBody carries the custom_model + ch.disable + round_trip params', () => {
+	const model = buildCustomModel('quiet')!;
+	const body = buildRoundTripBody(
+		{ baseUrl: BASE, start: { lat: 40, lng: -74 }, requestDistanceM: 5000.6, seed: 2 },
+		model,
+	);
+	assert.equal(body.profile, 'foot');
+	assert.deepEqual(body.points, [[-74, 40]]);
+	assert.equal(body['ch.disable'], true);
+	assert.equal(body.custom_model, model);
+	assert.equal(body.algorithm, 'round_trip');
+	assert.equal(body['round_trip.distance'], 5001);
+	assert.equal(body['round_trip.seed'], 2);
+});
+
+test('fetchRoundTrip POSTs a custom_model body when a preference is set', async () => {
+	let method: string | undefined;
+	let posted: Record<string, unknown> | undefined;
+	const fetcher: Fetcher = async (url, init) => {
+		method = init?.method;
+		assert.equal(new URL(url).pathname, '/route');
+		assert.equal(new URL(url).search, ''); // POST: params in the body, not the query
+		posted = JSON.parse(init?.body as string);
+		return ghResponse(squareLoop(0, 0, 0.01), 5000);
+	};
+	await fetchRoundTrip(
+		{ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0, preference: 'quiet' },
+		fetcher,
+	);
+	assert.equal(method, 'POST');
+	assert.ok(posted?.custom_model, 'body carries the custom model');
+});
+
+test('fetchRoundTrip stays a GET with no body when no preference is set', async () => {
+	let method: string | undefined;
+	let body: BodyInit | null | undefined;
+	const fetcher: Fetcher = async (url, init) => {
+		method = init?.method;
+		body = init?.body;
+		assert.ok(new URL(url).searchParams.has('round_trip.distance'), 'GET: params in the query');
+		return ghResponse(squareLoop(0, 0, 0.01), 5000);
+	};
+	await fetchRoundTrip(
+		{ baseUrl: BASE, start: { lat: 0, lng: 0 }, requestDistanceM: 5000, seed: 0 },
+		fetcher,
+	);
+	assert.equal(method, undefined); // default GET
+	assert.equal(body, undefined);
+});
+
+test('parseGenerateRequest keeps a known preference, drops an unknown one', () => {
+	assert.equal(
+		parseGenerateRequest({ start: { lat: 1, lng: 2 }, targetDistanceM: 5000, preference: 'quiet' })?.preference,
+		'quiet',
+	);
+	// Unrecognised preference is silently dropped (never a 400) so a stale knob
+	// can't block generation.
+	assert.equal(
+		parseGenerateRequest({ start: { lat: 1, lng: 2 }, targetDistanceM: 5000, preference: 'scenic' })?.preference,
+		undefined,
+	);
+});
+
+test('handleGenerate with a preference POSTs a custom model and skips graph-cycle', async () => {
+	let sawGraphCycle = false;
+	let postedModel = false;
+	const fetcher: Fetcher = async (url, init) => {
+		if (url.includes('gc.local')) sawGraphCycle = true;
+		if (init?.method === 'POST' && typeof init.body === 'string' && init.body.includes('custom_model')) {
+			postedModel = true;
+		}
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet', seeds: 1 },
+		{ graphCycleUrl: 'http://gc.local', graphhopperUrl: BASE },
+		{ fetcher },
+	);
+	assert.equal(res.status, 200);
+	assert.equal(sawGraphCycle, false, 'preference path must skip the graph-cycle sidecar');
+	assert.ok(postedModel, 'preference path must carry the custom model');
+});
+
+test('handleGenerate falls back to plain generation when the preference race finds nothing', async () => {
+	let plainServed = false;
+	const fetcher: Fetcher = async (_url, init) => {
+		const isPreferred =
+			init?.method === 'POST' && typeof init.body === 'string' && init.body.includes('custom_model');
+		if (isPreferred) {
+			// The engine rejects the custom model (e.g. ch not disabled server-side).
+			return new Response('bad custom model', { status: 400 });
+		}
+		plainServed = true;
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet', seeds: 2 },
+		OK_CFG,
+		{ fetcher },
+	);
+	assert.equal(res.status, 200, 'a rejected preference must never deny a buildable route');
+	assert.ok(plainServed, 'fallback must retry without the preference');
 });

@@ -41,9 +41,53 @@ export class GraphHopperError extends Error {
 	}
 }
 
+/// Optional road-design preference biasing the loop toward quieter streets.
+/// `'quiet'` down-weights motorway/trunk/primary (+ their `_link`s) and
+/// up-weights residential/living_street via a GraphHopper `custom_model`. Any
+/// other value (or none) → today's behaviour: a plain `round_trip` GET, no model.
+/// This is the cheap avoid-highways / prefer-residential half of the route-design
+/// preferences in graph_cycle_loop_generation.md § Extension.
+export type RoutePreference = 'quiet';
+
+/// GraphHopper Custom Model `priority` clause shape. Only the subset we emit.
+interface PriorityClause {
+	if?: string;
+	else_if?: string;
+	multiply_by: number;
+}
+
+interface CustomModel {
+	priority: PriorityClause[];
+}
+
+/// Build the GraphHopper `custom_model` for a preference. Returns null for any
+/// preference we don't model (caller then sends the plain GET round_trip). Pure +
+/// exported so the priority rules are unit-tested without a network round-trip.
+///
+/// `road_class` is GraphHopper's encoded-value name; the multipliers are soft
+/// weights (never 0) so the loop is biased onto residential streets but the graph
+/// can't be disconnected into a no_route — over-filtering would defeat the
+/// "a preference must never break generation" contract.
+export function buildCustomModel(pref: RoutePreference | undefined): CustomModel | null {
+	if (pref !== 'quiet') return null;
+	return {
+		priority: [
+			{ if: 'road_class == MOTORWAY', multiply_by: 0.1 },
+			{ else_if: 'road_class == TRUNK', multiply_by: 0.2 },
+			{ else_if: 'road_class == PRIMARY', multiply_by: 0.4 },
+			{ if: 'road_class == RESIDENTIAL', multiply_by: 1.4 },
+			{ else_if: 'road_class == LIVING_STREET', multiply_by: 1.5 },
+		],
+	};
+}
+
 export interface RoundTripRequest {
 	/// Raw `GRAPHHOPPER_URL` (may be undefined/empty → unconfigured error).
 	baseUrl: string | undefined;
+	/// Optional road-design preference (see RoutePreference). When set to a value
+	/// we model, the request becomes a POST carrying a `custom_model` (CH is
+	/// disabled engine-side for custom models); otherwise it's the plain GET.
+	preference?: RoutePreference;
 	start: { lat: number; lng: number };
 	/// The distance to ASK the engine for (`round_trip.distance`) — NOT
 	/// necessarily the user's target. The handler races a spread of these around
@@ -86,6 +130,25 @@ export function buildRoundTripUrl(req: RoundTripRequest): string {
 	return `${base}/route?${params.toString()}`;
 }
 
+/// JSON POST body for a custom-model round_trip. GraphHopper only honours a
+/// `custom_model` over POST with Contraction Hierarchies disabled (`ch.disable`),
+/// so the preference path can't reuse the GET URL — it carries every round_trip
+/// param as body fields instead. Pure + exported for unit testing.
+export function buildRoundTripBody(req: RoundTripRequest, model: CustomModel): Record<string, unknown> {
+	return {
+		profile: 'foot',
+		points: [[req.start.lng, req.start.lat]],
+		'ch.disable': true,
+		custom_model: model,
+		algorithm: 'round_trip',
+		'round_trip.distance': Math.round(req.requestDistanceM),
+		'round_trip.seed': req.seed,
+		points_encoded: false,
+		instructions: false,
+		elevation: false,
+	};
+}
+
 /// Parse a GraphHopper route response into a candidate. Pure. Returns null
 /// when the response carries no usable path (engine couldn't build a loop).
 export function parseRoundTrip(json: unknown): LoopCandidate | null {
@@ -120,13 +183,23 @@ export async function fetchRoundTrip(
 	if (!base) {
 		throw new GraphHopperError('unconfigured', 'GRAPHHOPPER_URL is not set');
 	}
-	const url = buildRoundTripUrl(req);
+	// A modelled preference posts a custom_model body to `/route`; everything else
+	// stays the plain GET so the default path is byte-for-byte today's request.
+	const model = buildCustomModel(req.preference);
+	const url = model ? `${base}/route` : buildRoundTripUrl(req);
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 	let res: Response;
 	try {
 		const init: RequestInit = { signal: controller.signal };
-		if (req.apiKey) init.headers = { 'X-Engine-Key': req.apiKey };
+		const headers: Record<string, string> = {};
+		if (req.apiKey) headers['X-Engine-Key'] = req.apiKey;
+		if (model) {
+			init.method = 'POST';
+			headers['content-type'] = 'application/json';
+			init.body = JSON.stringify(buildRoundTripBody(req, model));
+		}
+		if (Object.keys(headers).length > 0) init.headers = headers;
 		res = await fetcher(url, init);
 	} catch (e) {
 		throw new GraphHopperError(
