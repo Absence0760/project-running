@@ -34,6 +34,16 @@
 		mid: TrackPoint;
 	}
 
+	/// A course marker to paint on the map. `color` is the shared hex from
+	/// ROUTE_MARKER_KINDS so a pin matches the schedule list + the mobile twin.
+	export interface MapMarkerPin {
+		id: string;
+		label: string;
+		color: string;
+		lat: number;
+		lng: number;
+	}
+
 	interface Props {
 		track: TrackPoint[];
 		animatable?: boolean;
@@ -76,6 +86,17 @@
 		/// leave this false — those callers reach the component via a
 		/// signed-in session where consent is implicit.
 		requireExplicitConsent?: boolean;
+		/// Course markers (aid stations, cutoffs, …) to paint along the
+		/// route line as coloured pins with a label. Each carries its own
+		/// shared hex `color` (from ROUTE_MARKER_KINDS). Empty / absent =
+		/// no marker layer. Updates reactively as the editor adds/removes.
+		markers?: MapMarkerPin[];
+		/// When true, a map click reports its lng/lat up via `onMarkerPlace`
+		/// (the marker-editor "click to drop a pin" mode) instead of doing
+		/// segment selection.
+		markerEditable?: boolean;
+		onMarkerPlace?: (lngLat: { lng: number; lat: number }) => void;
+		onMarkerClick?: (id: string) => void;
 	}
 	let {
 		track = [],
@@ -86,6 +107,10 @@
 		hoverIdx = null,
 		previewLngLat = null,
 		requireExplicitConsent = false,
+		markers = [],
+		markerEditable = false,
+		onMarkerPlace,
+		onMarkerClick,
 	}: Props = $props();
 
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
@@ -111,6 +136,19 @@
 		const sinLng = Math.sin(dLng / 2);
 		const h = sinLat * sinLat + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * sinLng * sinLng;
 		return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+	}
+
+	function buildMarkerFeatures(
+		pins: MapMarkerPin[]
+	): GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; label: string; color: string }> {
+		return {
+			type: 'FeatureCollection',
+			features: pins.map((m) => ({
+				type: 'Feature',
+				properties: { id: m.id, label: m.label, color: m.color },
+				geometry: { type: 'Point', coordinates: [m.lng, m.lat] }
+			}))
+		};
 	}
 
 	/// Walk the polyline and emit a GeoJSON FeatureCollection of point
@@ -524,11 +562,11 @@
 			},
 		});
 
-		const markers = computeDistanceMarkers(coords);
-		if (markers.features.length > 0) {
+		const distanceMarkers = computeDistanceMarkers(coords);
+		if (distanceMarkers.features.length > 0) {
 			map.addSource('distance-markers', {
 				type: 'geojson',
-				data: markers,
+				data: distanceMarkers,
 			});
 			map.addLayer({
 				id: 'distance-marker-bg',
@@ -556,6 +594,43 @@
 				},
 			});
 		}
+
+		// Course markers (aid stations, cutoffs, …). Coloured pins above the
+		// trace with an optional label; updated reactively by the $effect
+		// below as the editor adds / removes them.
+		map.addSource('route-markers', {
+			type: 'geojson',
+			data: buildMarkerFeatures(markers),
+		});
+		map.addLayer({
+			id: 'route-marker-bg',
+			type: 'circle',
+			source: 'route-markers',
+			paint: {
+				'circle-radius': 8,
+				'circle-color': ['get', 'color'],
+				'circle-stroke-color': '#FFFFFF',
+				'circle-stroke-width': 2,
+			},
+		});
+		map.addLayer({
+			id: 'route-marker-label',
+			type: 'symbol',
+			source: 'route-markers',
+			layout: {
+				'text-field': ['get', 'label'],
+				'text-size': 11,
+				'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+				'text-offset': [0, 1.1],
+				'text-anchor': 'top',
+				'text-optional': true,
+			},
+			paint: {
+				'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
+				'text-halo-color': prefersDark ? '#0F172A' : '#FFFFFF',
+				'text-halo-width': 1.5,
+			},
+		});
 
 		if (animatable) {
 			map.addSource('animated-trace', {
@@ -663,8 +738,22 @@
 		// Repeat clicks update the highlight; clicking outside the
 		// trace area still snaps to whatever's closest, which matches
 		// the runner's likely intent ("show me the bit near here").
-		if (onSegmentSelect) {
+		if (onSegmentSelect || onMarkerPlace) {
 			map.on('click', (e) => {
+				// Marker-editor mode: a click either selects an existing pin
+				// (so the host can edit / delete it) or drops a new one.
+				// Takes priority over segment selection while editing.
+				if (markerEditable && onMarkerPlace) {
+					const hits = map.queryRenderedFeatures(e.point, { layers: ['route-marker-bg'] });
+					if (hits.length > 0) {
+						const id = hits[0].properties?.id;
+						if (id && onMarkerClick) onMarkerClick(String(id));
+						return;
+					}
+					onMarkerPlace({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+					return;
+				}
+				if (!onSegmentSelect) return;
 				if (trackCoords.length < 2) return;
 				const idx = nearestTrackIdx(e.lngLat.lng, e.lngLat.lat, trackCoords);
 				const seg = buildSegment(idx);
@@ -682,6 +771,14 @@
 			});
 		}
 	}
+
+	// Keep the route-markers source in sync as the editor adds / moves /
+	// removes pins. Reads `markers` so it re-runs on any change.
+	$effect(() => {
+		const data = buildMarkerFeatures(markers);
+		const src = map?.getSource('route-markers') as maplibregl.GeoJSONSource | undefined;
+		src?.setData(data);
+	});
 
 	// Reactive map-style swap. The first run after `map` is created is
 	// a no-op (the style URL already matches); subsequent runs swap the

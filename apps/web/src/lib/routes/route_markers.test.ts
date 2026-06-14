@@ -6,7 +6,7 @@ import {
 	kindSpec,
 	sortMarkers,
 	parseCutoff
-} from './route_markers.ts';
+} from './route_markers';
 
 test('every kind has a unique key, label key, and hex colour', () => {
 	const keys = new Set(ROUTE_MARKER_KINDS.map((k) => k.kind));

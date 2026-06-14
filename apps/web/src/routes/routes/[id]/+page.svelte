@@ -9,6 +9,8 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
+	import RouteMarkerEditor from '$lib/components/RouteMarkerEditor.svelte';
+	import type { MapMarkerPin } from '$lib/components/RunMap.svelte';
 	import RoutePhotos from '$lib/components/RoutePhotos.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
@@ -37,6 +39,12 @@
 	// view + clip_route_for_viewer). The wire-leak is closed there;
 	// the renderer just consumes what it gets.
 	let displayWaypoints = $state<{ lat: number; lng: number; ele?: number }[]>([]);
+	// Course-marker wiring between RouteMarkerEditor (owns the data) and
+	// RunMap (renders the pins + reports placement / pin clicks).
+	let markerPins = $state<MapMarkerPin[]>([]);
+	let markerEditing = $state(false);
+	let markerPendingPlacement = $state<{ lat: number; lng: number } | null>(null);
+	let markerSelectId = $state<string | null>(null);
 	let loading = $state(true);
 	let reviews = $state<any[]>([]);
 	let reviewsError = $state(false);
@@ -624,6 +632,17 @@
 			{/if}
 
 			<section class="section">
+				<RouteMarkerEditor
+					routeId={route.id}
+					{isOwner}
+					bind:pins={markerPins}
+					bind:placing={markerEditing}
+					bind:pendingPlacement={markerPendingPlacement}
+					bind:selectId={markerSelectId}
+				/>
+			</section>
+
+			<section class="section">
 				<SegmentsPanel
 					routeId={route.id}
 					routeDistanceM={route.distance_m}
@@ -713,6 +732,10 @@
 						totalDistanceM={route.distance_m}
 						hoverIdx={chartHoverIdx}
 						{previewLngLat}
+						markers={markerPins}
+						markerEditable={markerEditing}
+						onMarkerPlace={(ll) => (markerPendingPlacement = ll)}
+						onMarkerClick={(id) => (markerSelectId = id)}
 					/>
 				{:else}
 					<div class="map-placeholder">
