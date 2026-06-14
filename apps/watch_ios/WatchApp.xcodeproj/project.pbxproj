@@ -23,6 +23,15 @@
 		A1B2C3D4E5F60001000A0008 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0001 /* HealthKit.framework */; };
 		A1B2C3D4E5F60001000A0009 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0002 /* CoreLocation.framework */; };
 		A1B2C3D4E5F60001000A000A /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0003 /* WatchConnectivity.framework */; };
+		B2C3D4E5F6A70001000B0001 /* RunFormatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0001 /* RunFormatTests.swift */; };
+		B2C3D4E5F6A70001000B0002 /* ComplicationFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0002 /* ComplicationFormatterTests.swift */; };
+		B2C3D4E5F6A70001000B0003 /* ActiveRunBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0003 /* ActiveRunBridgeTests.swift */; };
+		B2C3D4E5F6A70001000B0004 /* RunCheckpointCodableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0004 /* RunCheckpointCodableTests.swift */; };
+		B2C3D4E5F6A70001000B0005 /* CheckpointStoreTrackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0005 /* CheckpointStoreTrackTests.swift */; };
+		B2C3D4E5F6A70001000B0006 /* WatchRunPayloadFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0006 /* WatchRunPayloadFixtureTests.swift */; };
+		B2C3D4E5F6A70001000B0007 /* WorkoutManagerTrackJSONTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0007 /* WorkoutManagerTrackJSONTests.swift */; };
+		B2C3D4E5F6A70001000B0008 /* WorkoutManagerRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0008 /* WorkoutManagerRecoveryTests.swift */; };
+		B2C3D4E5F6A70001000B0009 /* TransferStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +54,16 @@
 		A1B2C3D4E5F60003000A0002 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
 		A1B2C3D4E5F60003000A0003 /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = System/Library/Frameworks/WatchConnectivity.framework; sourceTree = SDKROOT; };
 		A1B2C3D4E5F60004000A0001 /* WatchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2C3D4E5F6A70002000B0001 /* RunFormatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunFormatTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0002 /* ComplicationFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationFormatterTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0003 /* ActiveRunBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveRunBridgeTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0004 /* RunCheckpointCodableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunCheckpointCodableTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0005 /* CheckpointStoreTrackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointStoreTrackTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0006 /* WatchRunPayloadFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRunPayloadFixtureTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0007 /* WorkoutManagerTrackJSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerTrackJSONTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0008 /* WorkoutManagerRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerRecoveryTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferStateTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70004000B0001 /* WatchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WatchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +77,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B2C3D4E5F6A70008000B0002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -65,9 +91,26 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F60006000A0002 /* WatchApp */,
+				B2C3D4E5F6A70006000B0001 /* WatchAppTests */,
 				A1B2C3D4E5F60006000A0003 /* Frameworks */,
 				A1B2C3D4E5F60006000A0004 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		B2C3D4E5F6A70006000B0001 /* WatchAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				B2C3D4E5F6A70002000B0001 /* RunFormatTests.swift */,
+				B2C3D4E5F6A70002000B0002 /* ComplicationFormatterTests.swift */,
+				B2C3D4E5F6A70002000B0003 /* ActiveRunBridgeTests.swift */,
+				B2C3D4E5F6A70002000B0004 /* RunCheckpointCodableTests.swift */,
+				B2C3D4E5F6A70002000B0005 /* CheckpointStoreTrackTests.swift */,
+				B2C3D4E5F6A70002000B0006 /* WatchRunPayloadFixtureTests.swift */,
+				B2C3D4E5F6A70002000B0007 /* WorkoutManagerTrackJSONTests.swift */,
+				B2C3D4E5F6A70002000B0008 /* WorkoutManagerRecoveryTests.swift */,
+				B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */,
+			);
+			path = WatchAppTests;
 			sourceTree = "<group>";
 		};
 		A1B2C3D4E5F60006000A0002 /* WatchApp */ = {
@@ -106,6 +149,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F60004000A0001 /* WatchApp.app */,
+				B2C3D4E5F6A70004000B0001 /* WatchAppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -130,7 +174,43 @@
 			productReference = A1B2C3D4E5F60004000A0001 /* WatchApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B2C3D4E5F6A70007000B0001 /* WatchAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2C3D4E5F6A70009000B0003 /* Build configuration list for PBXNativeTarget "WatchAppTests" */;
+			buildPhases = (
+				B2C3D4E5F6A70008000B0001 /* Sources */,
+				B2C3D4E5F6A70008000B0002 /* Frameworks */,
+				B2C3D4E5F6A70008000B0003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2C3D4E5F6A7000C000B0001 /* PBXTargetDependency */,
+			);
+			name = WatchAppTests;
+			productName = WatchAppTests;
+			productReference = B2C3D4E5F6A70004000B0001 /* WatchAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		B2C3D4E5F6A7000D000B0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D4E5F60006000A0005 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D4E5F60007000A0001;
+			remoteInfo = WatchApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		B2C3D4E5F6A7000C000B0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D4E5F60007000A0001 /* WatchApp */;
+			targetProxy = B2C3D4E5F6A7000D000B0001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		A1B2C3D4E5F60006000A0005 /* Project object */ = {
@@ -143,6 +223,10 @@
 				TargetAttributes = {
 					A1B2C3D4E5F60007000A0001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					B2C3D4E5F6A70007000B0001 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A1B2C3D4E5F60007000A0001;
 					};
 				};
 			};
@@ -165,6 +249,7 @@
 			projectRoot = "";
 			targets = (
 				A1B2C3D4E5F60007000A0001 /* WatchApp */,
+				B2C3D4E5F6A70007000B0001 /* WatchAppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -176,6 +261,13 @@
 			files = (
 				A1B2C3D4E5F60001000A0007 /* Assets.xcassets in Resources */,
 				A1B2C3D4E5F60001000A0010 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2C3D4E5F6A70008000B0003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,6 +289,22 @@
 				A1B2C3D4E5F60001000A000D /* HealthKitManager.swift in Sources */,
 				A1B2C3D4E5F60001000A000F /* ActiveRunBridge.swift in Sources */,
 				A1B2C3D4E5F60001000A0011 /* RunFormat.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2C3D4E5F6A70008000B0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B2C3D4E5F6A70001000B0001 /* RunFormatTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0002 /* ComplicationFormatterTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0003 /* ActiveRunBridgeTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0004 /* RunCheckpointCodableTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0005 /* CheckpointStoreTrackTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0006 /* WatchRunPayloadFixtureTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0007 /* WorkoutManagerTrackJSONTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0008 /* WorkoutManagerRecoveryTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0009 /* TransferStateTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -379,6 +487,44 @@
 			};
 			name = Release;
 		};
+		B2C3D4E5F6A70009000B0004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.runapp.watchapp.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WatchApp.app/WatchApp";
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		B2C3D4E5F6A7000A000B0004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.runapp.watchapp.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WatchApp.app/WatchApp";
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -396,6 +542,15 @@
 			buildConfigurations = (
 				A1B2C3D4E5F60009000A0004 /* Debug */,
 				A1B2C3D4E5F6000A000A0004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B2C3D4E5F6A70009000B0003 /* Build configuration list for PBXNativeTarget "WatchAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2C3D4E5F6A70009000B0004 /* Debug */,
+				B2C3D4E5F6A7000A000B0004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

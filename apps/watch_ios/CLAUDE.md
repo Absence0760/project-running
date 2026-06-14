@@ -148,12 +148,28 @@ xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
 
 This is exactly what `.github/workflows/ci.yml`'s `build-watch-swift` job runs on a macOS runner.
 
-**No automated tests today.** `apps/watch_ios/` ships ~11 `.swift` source files and zero XCTest files — `WatchApp.xcodeproj` has no `WatchAppTests` target. Consistent with the project's "deferred" status, but it leaves a known coverage gap:
+**Unit tests: `WatchAppTests` XCTest target.** `apps/watch_ios/WatchAppTests/`
+holds the first automated coverage for the watch app — a host-bundle unit-test
+target wired into `WatchApp.xcodeproj` (product type
+`com.apple.product-type.bundle.unit-test`, `TEST_HOST` = the WatchApp binary,
+depends on the WatchApp target). The app's Debug config already sets
+`ENABLE_TESTABILITY = YES`, so `@testable import WatchApp` works. The test files
+exercise the pure / serialisation surfaces (the Android-bound pieces —
+`HKWorkoutSession`, `CLLocationManager`, timers, WidgetKit — are not driven):
 
-- The cross-platform watch-run-payload fixture (`fixtures/watch_run_payload.json`) is pinned by Dart (`apps/mobile_android/test/watch_payload_fixture_test.dart` + its `mobile_ios` mirror), Kotlin (`apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`), and TS (`apps/web/src/lib/watch_payload_fixture.test.ts`). A Swift slice would close the loop — any drift in the payload shape would otherwise need on-device manual discovery on the Apple Watch path.
-- `WorkoutManager` state-machine transitions (`idle/recovering/recording/paused/finished`), `CheckpointStore` 15 s crash snapshot, `HealthKitManager` HR averaging math, `WatchConnectivityManager` `WCSession.transferFile` payload encoding, `ActiveRunBridge` App-Group UserDefaults shape, `SupabaseService.swift` (`#if DEBUG` direct path): all uncovered.
+- `RunFormatTests.swift` — `RunFormat.distance` / `.pace` km↔mi conversion, m:ss decomposition, `--:--` placeholder, fraction-digit handling.
+- `ComplicationFormatterTests.swift` — the complication's own copy of the formatters (`formatElapsed` / `formatDistanceKm` / `formatPaceSecPerKm`), kept in lockstep with `RunFormat`; mirrors Wear's `ActiveRunTileFormattersTest.kt`.
+- `ActiveRunBridgeTests.swift` — `ActiveRunSnapshot` Codable round-trip, App-Group write/read fallback to `.empty`, and the 24 h staleness ceiling the complication provider applies to a crash-orphaned snapshot.
+- `RunCheckpointCodableTests.swift` — the hand-written `RunCheckpoint.init(from:)` back/forward-compat decode (absent `version`→1, absent `averageBPM`→nil, `{}`→safe defaults, unknown future keys ignored); mirrors Wear's `CheckpointSerializationTest.kt`.
+- `CheckpointStoreTrackTests.swift` — NDJSON append/load round-trip, the crash-truncated-final-line skip, garbage-line tolerance, `clear()`, and metadata-checkpoint UserDefaults round-trip; mirrors Wear's `TrackWriterTest.kt`.
+- `WatchRunPayloadFixtureTests.swift` — the cross-platform `fixtures/watch_run_payload.json` contract (the Swift slice that closes the loop alongside the Dart / Kotlin / TS fixture tests), plus that the watch's `TrackPoint` encodes the canonical `lat/lng/ele/ts` field names with no stray keys.
+- `WorkoutManagerTrackJSONTests.swift` — `writeTrackJSON()` file naming + round-trip + empty-track validity + the no-finished-run guard, and `TrackPoint` codec edge cases (nil ts/ele, negative coords).
+- `WorkoutManagerRecoveryTests.swift` — `recoverRun()` rebuilds a `FinishedRun` keeping the same id end-to-end + restoring avg HR, and `formattedElapsed` mm:ss↔h:mm:ss crossover (the elapsed analogue of Wear's `ElapsedMathTest.kt`).
+- `TransferStateTests.swift` — `WatchConnectivityManager.TransferState` Equatable (two `.failed` with different messages must differ) + associated-value extraction.
 
-When the deferral lifts: add a `WatchAppTests` Xcode target, port the cross-platform fixture as the first test (closes the highest-value gap), then back-fill XCTest coverage for the Swift-only state machines.
+Run from a Mac: `xcodebuild test -project apps/watch_ios/WatchApp.xcodeproj -scheme WatchApp -destination 'platform=watchOS Simulator,name=Apple Watch Series 9'`. **These tests were authored on a Linux workstation with no Xcode — correct-by-construction against the source APIs but NOT yet compiled or run.** A Mac/Xcode `xcodebuild test` pass is the outstanding verification step (same situation as the localisation work above).
+
+Still uncovered (Android-bound, not unit-testable without a simulator/host harness): `WorkoutManager` live state transitions driven by `start/pause/resume/stop` (they spin timers + `CLLocationManager` + `HKWorkoutSession`), `HealthKitManager` HR averaging (driven by `HKLiveWorkoutBuilder` delegate callbacks), `WatchConnectivityManager`'s real `WCSession.transferFile`, and `SupabaseService.swift`'s network path. Follow Wear's extract-then-test pattern if those grow non-trivial branches.
 
 ## Conventions for Swift code
 
