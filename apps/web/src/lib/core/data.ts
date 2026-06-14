@@ -5537,28 +5537,27 @@ export async function computeSegmentEffortsForRun(input: {
 	const segments = await fetchSegmentsForRoute(input.route_id);
 	if (segments.length === 0) return 0;
 
-	const { computeEffortFromTrack } = await import('../segments/segments');
+	const { buildSegmentEffortRows } = await import('../segments/auto_segment_effort');
+	const rows = buildSegmentEffortRows(segments, input.track as import('$lib/types').TrackPoint[], {
+		run_id: input.run_id,
+		user_id: userId,
+	});
+	if (rows.length === 0) return 0;
 
-	let written = 0;
-	for (const seg of segments) {
-		const eff = computeEffortFromTrack(input.track as any, {
-			start_distance_m: Number(seg.start_distance_m),
-			end_distance_m: Number(seg.end_distance_m),
-		});
-		if (!eff) continue;
-		const { error } = await supabase.from(TABLES.segment_efforts).insert({
-			segment_id: seg.id,
-			run_id: input.run_id,
-			user_id: userId,
-			time_seconds: eff.time_seconds,
-			started_at: eff.started_at,
-		});
-		if (!error) written++;
-		else if (error.code !== '23505') {
-			console.warn('segment effort insert failed', seg.id, error);
-		}
+	// One batched upsert instead of an insert-per-segment loop — a run over a
+	// 30-segment route used to fire 30 serial round-trips on the run-detail
+	// view. `ignoreDuplicates` (ON CONFLICT DO NOTHING on unique(segment_id,
+	// run_id)) keeps the prior per-row 23505 idempotency: re-viewing a run
+	// re-inserts nothing and the RETURNING set counts only newly-written rows.
+	const { data: inserted, error } = await supabase
+		.from(TABLES.segment_efforts)
+		.upsert(rows, { onConflict: 'segment_id,run_id', ignoreDuplicates: true })
+		.select('id');
+	if (error) {
+		console.warn('segment effort batch upsert failed', input.run_id, error);
+		return 0;
 	}
-	return written;
+	return inserted?.length ?? 0;
 }
 
 // --- Notifications (decisions §38) ---
