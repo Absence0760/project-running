@@ -552,7 +552,28 @@ class TrainingService extends ChangeNotifier {
       'completed_run_id': runId,
       'manually_completed': manual,
       'completed_at': isCompleting ? DateTime.now().toIso8601String() : null,
+      // Completing clears any prior skip — the two states are mutually
+      // exclusive. Un-completing leaves the skip flag untouched.
+      if (isCompleting) 'skipped_at': null,
     }).eq('id', workoutId);
+    notifyListeners();
+  }
+
+  /// Toggle a planned workout's intentionally-skipped state. Marking it
+  /// skipped stamps `skipped_at` and clears any completion (a row is
+  /// never both skipped and done); un-skipping clears `skipped_at`.
+  /// Mirrors web `markWorkoutSkipped`.
+  Future<void> setSkipped(String workoutId, bool skipped) async {
+    await _c.from('plan_workouts').update(
+      skipped
+          ? {
+              'skipped_at': DateTime.now().toIso8601String(),
+              'completed_run_id': null,
+              'manually_completed': false,
+              'completed_at': null,
+            }
+          : {'skipped_at': null},
+    ).eq('id', workoutId);
     notifyListeners();
   }
 

@@ -581,6 +581,12 @@ void main() {
       expect(isMastersAge(null), isFalse);
     });
 
+    // Mirrors isWorkoutSkipped in apps/web/src/lib/training/training.test.ts.
+    test('isWorkoutSkipped: only a stamped skippedAt reads as skipped', () {
+      expect(isWorkoutSkipped(null), isFalse);
+      expect(isWorkoutSkipped(DateTime.utc(2026, 6, 13, 10)), isTrue);
+    });
+
     test('masters push the first quality day to 72h after the long run', () {
       const quality = {
         WorkoutKind.tempo,

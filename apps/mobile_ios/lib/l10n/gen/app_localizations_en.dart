@@ -4282,6 +4282,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get workoutUnlinkError => 'Couldn\'t unlink the run. Try again.';
 
   @override
+  String get workoutSkipped => 'Skipped';
+
+  @override
+  String get workoutSkip => 'Skip this workout';
+
+  @override
+  String get workoutUnskip => 'Un-skip';
+
+  @override
+  String get workoutSkipError => 'Couldn\'t update the skip. Try again.';
+
+  @override
   String get workoutRelink => 'Re-link';
 
   @override

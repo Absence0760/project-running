@@ -33,6 +33,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   PlanWorkoutRow? _workout;
   bool _loading = true;
   bool _unlinking = false;
+  bool _skipping = false;
   _WorkoutLoadError? _error;
 
   @override
@@ -129,6 +130,21 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       if (mounted) showTopBanner(context, l10n.workoutUnlinkError);
     } finally {
       if (mounted) setState(() => _unlinking = false);
+    }
+  }
+
+  Future<void> _toggleSkip(PlanWorkoutRow w) async {
+    if (_skipping) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _skipping = true);
+    try {
+      await widget.training.setSkipped(widget.workoutId, w.skippedAt == null);
+      await _load();
+    } catch (e, s) {
+      debugPrint('WorkoutDetailScreen._toggleSkip failed: $e\n$s');
+      if (mounted) showTopBanner(context, l10n.workoutSkipError);
+    } finally {
+      if (mounted) setState(() => _skipping = false);
     }
   }
 
@@ -231,6 +247,33 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 ],
               ),
             ),
+          ] else if (w.skippedAt != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.skip_next,
+                      size: 18, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(l10n.workoutSkipped,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: _skipping ? null : () => _toggleSkip(w),
+                    child: Text(l10n.workoutUnskip),
+                  ),
+                ],
+              ),
+            ),
           ] else if (w.kind != 'rest') ...[
             const SizedBox(height: 16),
             // Start workout — pops with the workout row so callers can
@@ -247,6 +290,15 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _skipping ? null : () => _toggleSkip(w),
+                icon: const Icon(Icons.skip_next, size: 18),
+                label: Text(l10n.workoutSkip),
               ),
             ),
           ],

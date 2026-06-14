@@ -4319,6 +4319,19 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível desvincular a corrida. Tente novamente.';
 
   @override
+  String get workoutSkipped => 'Ignorado';
+
+  @override
+  String get workoutSkip => 'Ignorar este treino';
+
+  @override
+  String get workoutUnskip => 'Desfazer ignorar';
+
+  @override
+  String get workoutSkipError =>
+      'Não foi possível atualizar o status de ignorado. Tente novamente.';
+
+  @override
   String get workoutRelink => 'Revincular';
 
   @override
@@ -13036,6 +13049,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get workoutUnlinkError =>
       'Não foi possível desvincular a corrida. Tente novamente.';
+
+  @override
+  String get workoutSkipped => 'Ignorado';
+
+  @override
+  String get workoutSkip => 'Ignorar este treino';
+
+  @override
+  String get workoutUnskip => 'Desfazer ignorar';
+
+  @override
+  String get workoutSkipError =>
+      'Não foi possível atualizar o status de ignorado. Tente novamente.';
 
   @override
   String get workoutRelink => 'Revincular';

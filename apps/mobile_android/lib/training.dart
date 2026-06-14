@@ -236,6 +236,14 @@ const int kMastersAge = 50;
 
 bool isMastersAge(int? age) => age != null && age >= kMastersAge;
 
+/// Web `isWorkoutSkipped` twin — a planned workout is "skipped" when the
+/// runner deliberately dropped it (`skippedAt` stamped). Skip and done
+/// are mutually exclusive at the write layer, so a skipped workout is
+/// neither a debt (it leaves the progress denominator) nor an
+/// achievement (it isn't done). Read sites that filter the active
+/// to-do set exclude skipped alongside completed.
+bool isWorkoutSkipped(DateTime? skippedAt) => skippedAt != null;
+
 TrainingPaces pacesFromGoalPace(
   double goalPaceSecPerKm, [
   TrainingGender gender,

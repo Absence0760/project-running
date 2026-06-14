@@ -4317,6 +4317,19 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo desvincular la carrera. Inténtalo de nuevo.';
 
   @override
+  String get workoutSkipped => 'Omitido';
+
+  @override
+  String get workoutSkip => 'Omitir este entrenamiento';
+
+  @override
+  String get workoutUnskip => 'Deshacer omisión';
+
+  @override
+  String get workoutSkipError =>
+      'No se pudo actualizar la omisión. Inténtalo de nuevo.';
+
+  @override
   String get workoutRelink => 'Revincular';
 
   @override

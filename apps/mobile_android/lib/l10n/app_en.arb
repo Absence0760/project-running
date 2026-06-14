@@ -5259,6 +5259,22 @@
   "@workoutUnlink": {
     "description": "Unlink-completed-run button"
   },
+  "workoutSkipped": "Skipped",
+  "@workoutSkipped": {
+    "description": "Skipped badge on workout detail"
+  },
+  "workoutSkip": "Skip this workout",
+  "@workoutSkip": {
+    "description": "Skip button on workout detail"
+  },
+  "workoutUnskip": "Un-skip",
+  "@workoutUnskip": {
+    "description": "Un-skip button on a skipped workout"
+  },
+  "workoutSkipError": "Couldn't update the skip. Try again.",
+  "@workoutSkipError": {
+    "description": "Error banner when toggling a workout skip fails"
+  },
   "workoutRelink": "Re-link",
   "@workoutRelink": {
     "description": "Re-link-to-a-different-run button on workout detail"

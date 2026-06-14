@@ -34,6 +34,9 @@ import 'workout_detail_screen.dart';
 bool _isWorkoutCompleted(PlanWorkoutRow wo) =>
     wo.completedRunId != null || wo.manuallyCompleted;
 
+/// Web `isWorkoutSkipped` twin — deliberately dropped, off the books.
+bool _isWorkoutSkipped(PlanWorkoutRow wo) => isWorkoutSkipped(wo.skippedAt);
+
 /// P2 fitness direction gate (gen v2, decisions §144). OFF by default — the
 /// health-derived-load → prescription path stays inert until this dotenv flag
 /// is flipped, which is the CISO/Security-Analyst sign-off-gated action
@@ -230,7 +233,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final missed = (_byWeek[week.id] ?? const <PlanWorkoutRow>[]).where((w) =>
         w.kind == 'long' &&
         toIsoDate(w.scheduledDate).compareTo(today) < 0 &&
-        !_isWorkoutCompleted(w));
+        !_isWorkoutCompleted(w) &&
+        !_isWorkoutSkipped(w));
     if (missed.isEmpty) return null;
     final next = idx + 1 < _weeks.length ? _weeks[idx + 1] : null;
     final nextVol = next?.targetVolumeM ?? 0;
@@ -514,8 +518,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         .where((w) => toIsoDate(w.scheduledDate) == today && w.kind != 'rest')
         .cast<PlanWorkoutRow?>()
         .firstOrNull;
-    final allActive =
-        _byWeek.values.expand((x) => x).where((w) => w.kind != 'rest').toList();
+    final allActive = _byWeek.values
+        .expand((x) => x)
+        .where((w) => w.kind != 'rest' && !_isWorkoutSkipped(w))
+        .toList();
     final done = allActive.where((w) => w.completedRunId != null).length;
     final pct =
         allActive.isEmpty ? 0 : (100 * done / allActive.length).round();
@@ -1027,6 +1033,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       PlanWorkoutRow wo, String today) {
     final kind = workoutKindFromDb(wo.kind);
     final isRest = kind == WorkoutKind.rest;
+    final isSkipped = _isWorkoutSkipped(wo);
     final isToday = toIsoDate(wo.scheduledDate) == today;
     final dow = formatDow(
         wo.scheduledDate, localeToTag(Localizations.localeOf(context)));
@@ -1054,8 +1061,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               child: Text(
                 workoutKindLabel(l10n, kind),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isRest ? theme.colorScheme.outline : null,
+                  color: (isRest || isSkipped) ? theme.colorScheme.outline : null,
                   fontWeight: isRest ? FontWeight.w400 : FontWeight.w600,
+                  decoration: isSkipped ? TextDecoration.lineThrough : null,
                 ),
               ),
             ),
@@ -1065,7 +1073,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               const SizedBox(width: 6),
             ],
             if (wo.completedRunId != null)
-              Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 16),
+              Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 16)
+            else if (isSkipped)
+              Icon(Icons.skip_next, color: theme.colorScheme.outline, size: 16),
             // Inline edit affordance — discoverable button alongside the
             // long-press gesture. Hidden on rest days; nothing to edit.
             if (!isRest)

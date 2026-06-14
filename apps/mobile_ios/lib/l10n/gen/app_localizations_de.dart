@@ -4324,6 +4324,19 @@ class AppLocalizationsDe extends AppLocalizations {
       'Lauf konnte nicht entkoppelt werden. Versuche es erneut.';
 
   @override
+  String get workoutSkipped => 'Übersprungen';
+
+  @override
+  String get workoutSkip => 'Diese Einheit überspringen';
+
+  @override
+  String get workoutUnskip => 'Überspringen aufheben';
+
+  @override
+  String get workoutSkipError =>
+      'Überspringen konnte nicht aktualisiert werden. Versuche es erneut.';
+
+  @override
   String get workoutRelink => 'Neu verknüpfen';
 
   @override
