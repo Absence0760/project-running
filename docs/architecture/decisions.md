@@ -3143,6 +3143,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 152. Route course markers are their own table with server-derived position and a redacting viewer RPC
+
+**Decided (2026-06-14, migration `20270129_001_route_markers.sql`).** A route can be annotated with course markers (aid stations, cut-offs, crew access, hazards, notes, climbs). Two shape choices: (1) markers live in their own `route_markers` table rather than as a field on `routes.waypoints`; (2) a marker's `position_m` (distance along the route) is **derived server-side** from the existing `routes.geom` LineString via a trigger (`ST_LineLocatePoint × ST_Length`), not computed client-side; (3) the canonical display read is a SECURITY DEFINER RPC `route_markers_for_viewer` that redacts in-privacy-zone markers for non-owners.
+
+**Why.** (1) A separate table gives each marker its own RLS, index, and a future per-marker photo without bloating the bulk `waypoints` UPDATE — and mirrors the `route_photos` precedent. (2) Server-deriving position means the client can't drift from the geometry and a stale client can't write a wrong distance; the trigger reuses the same `geom` column the spatial queries already maintain. (3) Markers follow route visibility, but a public course must not leak a pin dropped at the owner's home — so the read path mirrors `clip_route_for_viewer` (decisions §33): the RPC loads the owner's privacy zones and drops any marker inside one for a non-owner, fail-closed. Base-table RLS (`private.is_route_visible_to`) stays as defence in depth.
+
+**Trade-off.** Two reads on the detail page (route + markers RPC) instead of one inlined column. Acceptable — the markers list is a distinct surface and the RPC keeps the redaction server-side where the zones live.
+
+**Boundary / not-yet-done.** Club-defined custom marker kinds (a `club_marker_kinds` catalogue + `route_markers.club_marker_kind_id`) are specced but not built; markers can only be placed on the detail page (not the `/routes/new` builder) since they attach to a saved line. See [route_markers.md](../features/route_markers.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

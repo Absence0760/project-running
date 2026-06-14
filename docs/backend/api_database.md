@@ -195,6 +195,38 @@ create index route_reviews_route on route_reviews (route_id, created_at desc);
 
 ---
 
+#### `route_markers`
+
+Course markers along a route line — aid stations, cut-offs, crew/parking
+access, hazards, notes, climbs (migration `20270129_001`). Owner-writable;
+readable when the parent route is visible (`private.is_route_visible_to`).
+`position_m` is derived from `routes.geom` by a trigger. The canonical display
+read is the `route_markers_for_viewer(route_id)` RPC, which additionally
+redacts markers inside the owner's privacy zones for non-owners. See
+[../features/route_markers.md](../features/route_markers.md).
+
+```sql
+create table route_markers (
+  id          uuid primary key default gen_random_uuid(),
+  route_id    uuid references routes(id) on delete cascade not null,
+  user_id     uuid references auth.users(id) on delete cascade not null,
+  kind        text not null
+              check (kind in ('aid_station','cutoff','crew_access',
+                              'hazard','note','climb','custom')),
+  label       text not null check (length(label) between 1 and 120),
+  lat         double precision not null,
+  lng         double precision not null,
+  position_m  numeric(10,2),   -- derived from routes.geom by trigger
+  meta        jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index route_markers_route_pos on route_markers (route_id, position_m);
+```
+
+---
+
 #### `run_matched_tracks`
 
 Per-run map-match output state. One row per run, populated by a trigger when `runs.track_url` lands or changes.
