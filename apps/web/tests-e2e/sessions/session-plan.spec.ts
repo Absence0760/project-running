@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
-import { USER_A } from '../fixtures/users';
+import { USER_A, USER_B } from '../fixtures/users';
 
 /**
  * Session planner P1 (session_planner.md) — build + save + reuse a session
@@ -184,5 +184,31 @@ test.describe('/sessions — session plan build, read, attach', () => {
 			.eq('id', eventId)
 			.single();
 		expect(evRow?.session_plan_id).toBe(planId);
+	});
+
+	test('the list shows club-owned plans but not a stranger\'s public plan', async ({
+		page
+	}) => {
+		// Guards fetchSessionPlans' scope: own + member-club plans, NOT a
+		// stranger's public plan. USER_A is a member/admin of Richmond, so a
+		// Richmond-club plan authored by USER_B must appear via the club branch;
+		// a public plan authored by USER_B with no club must NOT (the old
+		// select('*') leaned on RLS, which surfaces is_public rows to everyone).
+		const stamp = Date.now();
+		const clubTitle = `e2e-club-session ${stamp}`;
+		const strangerTitle = `e2e-stranger-public ${stamp}`;
+		createdPlanTitles.push(clubTitle, strangerTitle);
+
+		const admin = getAdminClient();
+		await admin.from('session_plans').insert([
+			{ author_id: USER_B.id, title: clubTitle, is_public: false, club_id: RICHMOND_CLUB_ID },
+			{ author_id: USER_B.id, title: strangerTitle, is_public: true, club_id: null }
+		]);
+
+		await page.goto('/sessions');
+		// Club-owned plan is in scope (USER_A is a Richmond member).
+		await expect(page.getByRole('link', { name: clubTitle })).toBeVisible({ timeout: 10_000 });
+		// A stranger's public plan is out of scope for "my session plans".
+		await expect(page.getByText(strangerTitle)).toHaveCount(0);
 	});
 });
