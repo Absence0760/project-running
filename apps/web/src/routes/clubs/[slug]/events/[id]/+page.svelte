@@ -1039,12 +1039,14 @@
 	}
 
 	async function setAttendance(userId: string, current: EventAttendance | null, value: EventAttendance) {
-		if (!event || markingAttendance) return;
+		if (!event || !activeInstance || markingAttendance) return;
 		// Toggle off when the host taps the already-set state.
 		const next: EventAttendance | null = current === value ? null : value;
 		markingAttendance = userId;
 		try {
-			await markAttendance(event.id, userId, next);
+			// Scope the mark to the occurrence currently in view — the attendee has
+			// a distinct row per instance_start on a recurring event.
+			await markAttendance(event.id, userId, activeInstance, next);
 			attendees = attendees.map((a) => (a.user_id === userId ? { ...a, attendance: next } : a));
 		} catch (e: unknown) {
 			showToast(e instanceof Error ? e.message : m('clubEvent.attendanceFailed'), 'error');

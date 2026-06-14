@@ -451,12 +451,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _markAttendance(
       String userId, String? current, String value) async {
     final e = _event;
-    if (e == null || _markingAttendance != null) return;
+    final inst = _activeInstance;
+    if (e == null || inst == null || _markingAttendance != null) return;
     // Toggle off when the host taps the already-set state.
     final next = current == value ? null : value;
     setState(() => _markingAttendance = userId);
     try {
-      await widget.social.markAttendance(e.row.id, userId, next);
+      // Scope the mark to the occurrence in view — a recurring event keeps a
+      // distinct attendee row per instance_start.
+      await widget.social.markAttendance(e.row.id, userId, inst, next);
       if (mounted) {
         setState(() {
           _attendees = [

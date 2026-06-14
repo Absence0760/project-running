@@ -925,11 +925,12 @@ class SocialService extends ChangeNotifier {
 
   /// Host-only: mark whether an attendee actually showed up. Routes through
   /// the organiser-only mark_attendance RPC; pass null to clear a prior mark.
-  Future<void> markAttendance(
-      String eventId, String userId, String? attendance) async {
+  Future<void> markAttendance(String eventId, String userId, DateTime instance,
+      String? attendance) async {
     await _c.rpc('mark_attendance', params: {
       'p_event_id': eventId,
       'p_user_id': userId,
+      'p_instance_start': instance.toUtc().toIso8601String(),
       'p_attendance': attendance,
     });
     notifyListeners();

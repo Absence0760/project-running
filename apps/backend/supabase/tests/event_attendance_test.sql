@@ -17,7 +17,7 @@
 
 begin;
 
-select plan(7);
+select plan(9);
 
 -- ── Fixture ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -70,6 +70,7 @@ select lives_ok(
   $$ select mark_attendance(
        'dddddddd-dddd-dddd-dddd-dddddddd0b01',
        '00000000-0000-0000-0000-00000b000004',
+       '2026-06-23 18:00:00+00',
        'attended') $$,
   'organiser can mark an attendee attended (positive control on RPC)'
 );
@@ -90,6 +91,7 @@ select throws_ok(
   $$ select mark_attendance(
        'dddddddd-dddd-dddd-dddd-dddddddd0b01',
        '00000000-0000-0000-0000-00000b000004',
+       '2026-06-23 18:00:00+00',
        'no_show') $$,
   '42501',
   null,
@@ -112,6 +114,7 @@ select throws_ok(
   $$ select mark_attendance(
        'dddddddd-dddd-dddd-dddd-dddddddd0b01',
        '00000000-0000-0000-0000-00000b000004',
+       '2026-06-23 18:00:00+00',
        'maybe') $$,
   '23514',
   null,
@@ -142,6 +145,41 @@ select throws_ok(
   '42501',
   null,
   'attendee cannot self-write attendance via direct UPDATE (column revoke)'
+);
+
+-- 8. Per-instance scope: a recurring event keeps a distinct attendee row per
+--    instance_start. A second occurrence is seeded, then marked no_show.
+reset role;
+insert into event_attendees (event_id, user_id, status, instance_start)
+values
+  ('dddddddd-dddd-dddd-dddd-dddddddd0b01',
+   '00000000-0000-0000-0000-00000b000004',
+   'going',
+   '2026-06-30 18:00:00+00');
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000b000002"}';
+select lives_ok(
+  $$ select mark_attendance(
+       'dddddddd-dddd-dddd-dddd-dddddddd0b01',
+       '00000000-0000-0000-0000-00000b000004',
+       '2026-06-30 18:00:00+00',
+       'no_show') $$,
+  'organiser marks the attendee no_show on the second occurrence'
+);
+
+-- 9. The first occurrence stays 'attended'; only the second flipped to
+--    'no_show'. The mark is scoped to its instance_start — no cross-instance
+--    bleed (the bug this guards: an UPDATE keyed only on event_id + user_id).
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000b000001"}';
+select results_eq(
+  $$ select instance_start, attendance from event_attendees
+     where event_id = 'dddddddd-dddd-dddd-dddd-dddddddd0b01'
+       and user_id = '00000000-0000-0000-0000-00000b000004'
+     order by instance_start $$,
+  $$ values
+       ('2026-06-23 18:00:00+00'::timestamptz, 'attended'::text),
+       ('2026-06-30 18:00:00+00'::timestamptz, 'no_show'::text) $$,
+  'marking one occurrence does not bleed to the other (per-instance scope)'
 );
 
 select * from finish();
