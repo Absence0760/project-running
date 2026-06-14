@@ -23,7 +23,18 @@
 			goto('/coaching');
 		} catch (e: unknown) {
 			status = 'error';
-			errorMsg = e instanceof Error ? e.message : m('coachingAccept.inviteInvalidOrExpired');
+			// Surface the real reason the redeem RPC raised (self-coaching, already
+			// linked, already redeemed). A Supabase PostgrestError is a plain object,
+			// NOT an Error instance, so an `instanceof Error` gate alone always fell
+			// through to the misleading "invalid or expired" fallback — swallowing
+			// the accurate, user-actionable reason.
+			const raw =
+				e instanceof Error
+					? e.message
+					: e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string'
+						? (e as { message: string }).message
+						: '';
+			errorMsg = raw.trim() !== '' ? raw : m('coachingAccept.inviteInvalidOrExpired');
 		}
 	});
 
