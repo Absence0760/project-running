@@ -30,6 +30,7 @@ const PAIRS = [
 	{ tableColumn: 'runs.source', tsUnion: 'RunSource' },
 	{ tableColumn: 'runs.activity_type', tsUnion: 'ActivityType' },
 	{ tableColumn: 'routes.surface', tsUnion: 'RouteSurface' },
+	{ tableColumn: 'route_markers.kind', tsUnion: 'RouteMarkerKind' },
 	{ tableColumn: 'integrations.provider', tsUnion: 'IntegrationProvider' },
 	{ tableColumn: 'user_profiles.preferred_unit', tsUnion: 'PreferredUnit' },
 	{ tableColumn: 'user_profiles.subscription_tier', tsUnion: 'SubscriptionTier' },

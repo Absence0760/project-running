@@ -1900,6 +1900,63 @@ export type Database = {
         }
         Relationships: []
       }
+      route_markers: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          label: string
+          lat: number
+          lng: number
+          meta: Json
+          position_m: number | null
+          route_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          label: string
+          lat: number
+          lng: number
+          meta?: Json
+          position_m?: number | null
+          route_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          label?: string
+          lat?: number
+          lng?: number
+          meta?: Json
+          position_m?: number | null
+          route_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_markers_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_markers_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_photos: {
         Row: {
           caption: string | null
@@ -3705,7 +3762,12 @@ export type Database = {
         }
       }
       mark_attendance: {
-        Args: { p_attendance: string; p_event_id: string; p_user_id: string }
+        Args: {
+          p_attendance: string
+          p_event_id: string
+          p_instance_start: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       my_pending_safety_requests: {
@@ -3826,6 +3888,28 @@ export type Database = {
           p_target_kind: string
         }
         Returns: number
+      }
+      route_markers_for_viewer: {
+        Args: { p_route_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          kind: string
+          label: string
+          lat: number
+          lng: number
+          meta: Json
+          position_m: number | null
+          route_id: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "route_markers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       routes_intersecting_track: {
         Args: {
