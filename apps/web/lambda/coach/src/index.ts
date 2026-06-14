@@ -19,6 +19,7 @@ import { Buffer } from 'node:buffer';
 import { handleCoach } from '../../../src/lib/coach/handler';
 import type { CoachConfig } from '../../../src/lib/coach/types';
 import { handleRouteDescribe } from '../../../src/lib/routes/route_describe/handler';
+import { handleRouteRequest } from '../../../src/lib/routes/route_request/handler';
 
 // Provided by the Node.js managed Lambda runtime; declared inline
 // because @types/aws-lambda doesn't ship a definition for it (the API
@@ -68,6 +69,15 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		const rawPath = event.rawPath ?? '';
 		if (rawPath.includes('/route-describe')) {
 			await dispatchRouteDescribe(event, responseStream);
+			return;
+		}
+		// The route-request sub-path is the REQUEST half of the AI route
+		// assistant — a Pro-gated, non-streaming NL → constraints
+		// extractor. Same reasoning as route-describe: dispatch before the
+		// coach provider check so an unconfigured COACH_PROVIDER doesn't
+		// 503 a route-request call.
+		if (rawPath.includes('/route-request')) {
+			await dispatchRouteRequest(event, responseStream);
 			return;
 		}
 
@@ -204,6 +214,44 @@ async function dispatchRouteDescribe(
 		event.headers?.['X-Supabase-Authorization'] ??
 		null;
 	const result = await handleRouteDescribe(authHeader, rawBody, {
+		anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+		publicSupabaseUrl: requireEnv('PUBLIC_SUPABASE_URL'),
+		publicSupabaseAnonKey: requireEnv('PUBLIC_SUPABASE_ANON_KEY'),
+		bypassPaywallEnabled: false,
+	});
+	writeJson(responseStream, result.status, JSON.parse(result.body));
+}
+
+// Route-request sub-handler — the REQUEST half of the AI route assistant.
+// Non-streaming (one small constraint object via forced tool-use), so it
+// always writes a single JSON response. `bypassPaywallEnabled: false` is
+// hard-coded for the same reason as the coach config — the production
+// Lambda must never honour the dev paywall bypass.
+async function dispatchRouteRequest(
+	event: LambdaFunctionURLEvent,
+	responseStream: ResponseStream,
+): Promise<void> {
+	const decoded = decodeLambdaBody(
+		event.body,
+		event.isBase64Encoded === true,
+		16 * 1024,
+	);
+	if (!decoded.ok) {
+		writeJson(responseStream, decoded.status, { error: decoded.error });
+		return;
+	}
+	let rawBody: unknown;
+	try {
+		rawBody = decoded.body ? JSON.parse(decoded.body) : null;
+	} catch {
+		writeJson(responseStream, 400, { error: 'invalid JSON' });
+		return;
+	}
+	const authHeader =
+		event.headers?.['x-supabase-authorization'] ??
+		event.headers?.['X-Supabase-Authorization'] ??
+		null;
+	const result = await handleRouteRequest(authHeader, rawBody, {
 		anthropicApiKey: process.env.ANTHROPIC_API_KEY,
 		publicSupabaseUrl: requireEnv('PUBLIC_SUPABASE_URL'),
 		publicSupabaseAnonKey: requireEnv('PUBLIC_SUPABASE_ANON_KEY'),

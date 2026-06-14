@@ -13,6 +13,10 @@
 	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { env } from '$env/dynamic/public';
+	import {
+		requestRouteConstraints,
+		RouteRequestError,
+	} from '$lib/routes/route_request_client';
 
 	// True when the local Protomaps tile-style override is set —
 	// in that mode all three map-style buttons (streets/satellite/
@@ -309,6 +313,71 @@
 	}
 	function setTargetFromKm(km: number) {
 		targetKm = km;
+	}
+
+	// --- AI route request (NL → constraints) ---
+	// Purely additive: the box asks the Pro-gated extractor to turn a
+	// plain-English request into the generation constraints, then populates
+	// the manual form below for the user to review + adjust before
+	// generating. The LLM never routes — it only fills the form. On any
+	// failure (non-Pro, unconfigured, model error) the manual form is
+	// untouched and we show a one-line hint.
+	let nlRequest = $state('');
+	let nlBusy = $state(false);
+	let nlError = $state<string | null>(null);
+	// Set after a successful extraction so the user sees what was applied
+	// (incl. constraints the form can't render directly — shape /
+	// avoid-highways) and which fields were assumed from a default.
+	let nlApplied = $state<{
+		shape: 'loop' | 'out_and_back' | 'point_to_point';
+		avoidHighways: boolean;
+		assumptions: string[];
+	} | null>(null);
+
+	const METRES_PER_KM = 1000;
+
+	async function handleNlRequest() {
+		const text = nlRequest.trim();
+		if (text.length === 0 || nlBusy) return;
+		nlBusy = true;
+		nlError = null;
+		nlApplied = null;
+		try {
+			// Pass the picked start label as a location hint only (never raw
+			// coordinates — the handler takes a label and the start point
+			// stays the user's explicit pick / map centre on generate).
+			const locationLabel = startLabel || null;
+			const c = await requestRouteConstraints(text, locationLabel);
+
+			// Map the validated constraints onto the manual form. The user
+			// reviews these before pressing Generate — nothing auto-runs.
+			targetKm = Math.round((c.distanceM / METRES_PER_KM) * 10) / 10;
+			// surface trail → trail mode; road/mixed → road. (The form's
+			// Surface toggle is binary; "mixed" maps to road, the default.)
+			mode = c.surface === 'trail' ? 'trail' : 'road';
+			// Make the distance panel visible so the populated controls show.
+			showDistanceTarget = true;
+			nlApplied = {
+				shape: c.shape,
+				avoidHighways: c.avoidHighways,
+				assumptions: c.assumptions,
+			};
+		} catch (err) {
+			if (err instanceof RouteRequestError) {
+				nlError =
+					err.kind === 'upgrade'
+						? m('routeNew.aiRequestProOnly')
+						: err.kind === 'not_understood'
+							? m('routeNew.aiRequestNotUnderstood')
+							: err.kind === 'not_authenticated'
+								? m('routeNew.aiRequestSignedOut')
+								: m('routeNew.aiRequestUnavailable');
+			} else {
+				nlError = m('routeNew.aiRequestUnavailable');
+			}
+		} finally {
+			nlBusy = false;
+		}
 	}
 
 	let canSave = $derived(routed && routeName.trim().length > 0);
@@ -625,6 +694,59 @@
 			</button>
 			{#if showDistanceTarget}
 				<div class="target-panel">
+					<div class="ai-request">
+						<span class="section-label">{m('routeNew.aiRequestLabel')}</span>
+						<p class="ai-request-hint">{m('routeNew.aiRequestHint')}</p>
+						<form
+							class="ai-request-form"
+							onsubmit={(e) => { e.preventDefault(); handleNlRequest(); }}
+						>
+							<input
+								type="text"
+								class="ai-request-input"
+								bind:value={nlRequest}
+								placeholder={m('routeNew.aiRequestPlaceholder')}
+								aria-label={m('routeNew.aiRequestLabel')}
+								disabled={nlBusy}
+							/>
+							<button
+								type="submit"
+								class="btn btn-secondary btn-sm"
+								disabled={nlBusy || nlRequest.trim().length === 0}
+							>
+								{#if nlBusy}
+									<span class="btn-spinner" aria-hidden="true"></span>
+									{m('routeNew.aiRequestWorking')}
+								{:else}
+									{m('routeNew.aiRequestButton')}
+								{/if}
+							</button>
+						</form>
+						{#if nlError}
+							<p class="ai-request-error" role="alert">{nlError}</p>
+						{/if}
+						{#if nlApplied}
+							<div class="ai-request-applied" role="status">
+								<p class="ai-request-applied-title">{m('routeNew.aiRequestApplied')}</p>
+								<ul class="ai-request-applied-list">
+									{#if nlApplied.shape !== 'loop'}
+										<li>
+											{nlApplied.shape === 'out_and_back'
+												? m('routeNew.aiRequestShapeOutBack')
+												: m('routeNew.aiRequestShapePointToPoint')}
+										</li>
+									{/if}
+									{#if nlApplied.avoidHighways}
+										<li>{m('routeNew.aiRequestAvoidHighways')}</li>
+									{/if}
+									{#if nlApplied.assumptions.length > 0}
+										<li>{m('routeNew.aiRequestAssumed')}</li>
+									{/if}
+								</ul>
+							</div>
+						{/if}
+					</div>
+
 					<span class="section-label">{m('routeNew.start')}</span>
 					<div class="point-row">
 						{#if startPoint}
@@ -1227,6 +1349,61 @@
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
 	}
+
+	/* AI route-request box — additive NL input above the manual controls. */
+	.ai-request {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		padding-bottom: var(--space-sm);
+		margin-bottom: var(--space-xs);
+		border-bottom: 1px solid var(--color-border);
+	}
+	.ai-request-hint {
+		margin: 0;
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+		line-height: 1.4;
+	}
+	.ai-request-form {
+		display: flex;
+		gap: var(--space-xs);
+		align-items: stretch;
+	}
+	.ai-request-input {
+		flex: 1;
+		min-inline-size: 0;
+	}
+	.ai-request-form .btn {
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+	.ai-request-error {
+		margin: 0;
+		font-size: 0.72rem;
+		color: var(--color-danger);
+		line-height: 1.4;
+	}
+	.ai-request-applied {
+		padding: var(--space-xs) var(--space-sm);
+		background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+		border-radius: var(--radius-sm);
+	}
+	.ai-request-applied-title {
+		margin: 0 0 var(--space-2xs);
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.ai-request-applied-list {
+		margin: 0;
+		padding-inline-start: 1rem;
+		font-size: 0.7rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+
 	.point-row {
 		display: flex;
 		align-items: center;

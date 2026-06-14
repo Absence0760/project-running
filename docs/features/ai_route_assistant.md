@@ -1,13 +1,18 @@
 # AI route assistant — natural-language route requests + descriptions
 
+<<<<<<< HEAD
 **Status: Component B (description) SHIPPED — web + mobile. Component A (NL →
 constraints) is still a PROPOSAL.** A thin LLM layer that *bookends* the route
+=======
+**Status: BOTH HALVES BUILT (web).** A thin LLM layer that *bookends* the route
+>>>>>>> feat/ai-route-request
 generator: turn a plain-English request into generation constraints, and turn a
 generated route into a plain-English description. Written 2026-06-10. Pairs with
 the route generators ([route_loop_generation.md](route_loop_generation.md),
 [graph_cycle_loop_generation.md](graph_cycle_loop_generation.md)) and their
 preference layer.
 
+<<<<<<< HEAD
 ## What's shipped (Component B — route → description)
 
 The "Describe this route" affordance ships on **web and both mobile twins**.
@@ -30,6 +35,28 @@ paragraph that replaces the baseline, with an AI-attribution line. Gating is
   the endpoint via `route_describe_client.dart`. A non-Pro tap surfaces the
   upgrade hint over the templated text; a model failure keeps the templated
   baseline and shows a non-blocking error — the route view never breaks.
+=======
+- **Component B (description) — shipped (web).** `/routes/[id]` renders a
+  localised templated sentence instantly and, for Pro users, calls
+  `/api/coach/route-describe` (`claude-opus-4-8`) for an AI paragraph, falling
+  back to the template on every failure (`decisions.md § 151`). The
+  `route_describe/handler.ts` + `route_describe_client.ts` + Lambda
+  `/route-describe` dispatch.
+- **Component A (request) — shipped (web, 2026-06-14).** A "Describe the route
+  you want" box on `/routes/new` calls `/api/coach/route-request`
+  (`claude-opus-4-8`, **forced tool_choice**), which extracts a strictly
+  validated constraints object the existing generator consumes. The LLM never
+  routes; `route_request/constraints.ts` (`validateConstraints`) is the single
+  trust boundary — every field is clamped/whitelisted before it can reach the
+  generator. Pro-gated, fail-closed; the manual form is unaffected on any
+  failure. Files: `route_request/handler.ts` + `route_request/constraints.ts` +
+  `route_request_client.ts` + the `/api/coach/route-request` SvelteKit endpoint
+  + the coach Lambda `/route-request` dispatch. The NL box populates distance +
+  surface and surfaces shape / avoid-highways / assumed fields as a review hint.
+  Tests: `constraints.test.ts` (clamp/validate) + `handler.test.ts`
+  (pre-Supabase branches) + Playwright `route-request.spec.ts` (mocked
+  endpoint).
+>>>>>>> feat/ai-route-request
 
 ## Core principle: the LLM is the interface, not the router
 
