@@ -7,10 +7,11 @@
 	import {
 		fetchWorkout,
 		markWorkoutCompleted,
+		markWorkoutSkipped,
 		fetchRelinkCandidateRuns,
 		type RelinkCandidateRun
 	} from '$lib/core/data';
-	import { fmtHms, isWorkoutCompleted } from '$lib/training/training';
+	import { fmtHms, isWorkoutCompleted, isWorkoutSkipped } from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { formatDateShort } from '$lib/format/time';
@@ -95,6 +96,21 @@
 			relinkError = true;
 		} finally {
 			relinkLoading = false;
+		}
+	}
+
+	let skipping = $state(false);
+	async function toggleSkip() {
+		if (!workout || skipping) return;
+		skipping = true;
+		try {
+			await markWorkoutSkipped(workout.id, !isWorkoutSkipped(workout));
+			await load();
+		} catch (e) {
+			console.error('markWorkoutSkipped failed', e);
+			showToast(t('workoutDetail.skipFailed'), 'error');
+		} finally {
+			skipping = false;
 		}
 	}
 
@@ -285,6 +301,22 @@
 							{workout.completed_run_id ? t('workoutDetail.unlink') : t('workoutDetail.markNotDone')}
 						</button>
 					</div>
+				</div>
+			{:else if isWorkoutSkipped(workout)}
+				<div class="skipped-card">
+					<span class="material-symbols" aria-hidden="true">skip_next</span>
+					<span class="skipped-label">{t('workoutDetail.skipped')}</span>
+					<div class="completed-actions">
+						<button class="btn-ghost" onclick={toggleSkip} disabled={skipping}>
+							{t('workoutDetail.unskip')}
+						</button>
+					</div>
+				</div>
+			{:else if workout.kind !== 'rest'}
+				<div class="completed-actions skip-only">
+					<button class="btn-ghost" onclick={toggleSkip} disabled={skipping}>
+						{t('workoutDetail.skip')}
+					</button>
 				</div>
 			{/if}
 		</header>
@@ -584,6 +616,24 @@
 	}
 	.completed-card .material-symbols { font-size: 1.15rem; }
 	.completed-card .completed-label { font-size: 0.92rem; }
+	.skipped-card {
+		background: color-mix(in srgb, var(--color-text-tertiary) 12%, transparent);
+		color: var(--color-text-secondary);
+		padding: 0.55rem 0.85rem;
+		border: 1px solid color-mix(in srgb, var(--color-text-tertiary) 30%, transparent);
+		border-radius: var(--radius-md);
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+	.skipped-card .material-symbols { font-size: 1.15rem; }
+	.skipped-card .skipped-label { font-size: 0.92rem; }
+	.skipped-card .btn-ghost,
+	.skip-only .btn-ghost {
+		color: var(--color-text-secondary);
+	}
 	.completed-actions {
 		display: inline-flex;
 		gap: 0.65rem;

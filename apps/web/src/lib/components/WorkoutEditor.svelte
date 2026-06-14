@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/core/data';
+	import { markWorkoutCompleted, markWorkoutSkipped, updatePlanWorkout } from '$lib/core/data';
 	import {
 		isWorkoutCompleted,
+		isWorkoutSkipped,
 		type WorkoutKind,
 		type WorkoutStructure
 	} from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { getUnit } from '$lib/format/units.svelte';
+	import { paceParts } from '$lib/format/pace_format';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import Modal from './Modal.svelte';
@@ -46,22 +48,22 @@
 	));
 	let paceMin = $state<number | null>(untrack(() =>
 		workout.target_pace_sec_per_km != null
-			? Math.floor(paceFromCanonical(workout.target_pace_sec_per_km) / 60)
+			? paceParts(paceFromCanonical(workout.target_pace_sec_per_km)).minutes
 			: null
 	));
 	let paceSec = $state<number | null>(untrack(() =>
 		workout.target_pace_sec_per_km != null
-			? Math.round(paceFromCanonical(workout.target_pace_sec_per_km) % 60)
+			? paceParts(paceFromCanonical(workout.target_pace_sec_per_km)).seconds
 			: null
 	));
 	let paceEndMin = $state<number | null>(untrack(() =>
 		workout.target_pace_end_sec_per_km != null
-			? Math.floor(paceFromCanonical(workout.target_pace_end_sec_per_km) / 60)
+			? paceParts(paceFromCanonical(workout.target_pace_end_sec_per_km)).minutes
 			: null
 	));
 	let paceEndSec = $state<number | null>(untrack(() =>
 		workout.target_pace_end_sec_per_km != null
-			? Math.round(paceFromCanonical(workout.target_pace_end_sec_per_km) % 60)
+			? paceParts(paceFromCanonical(workout.target_pace_end_sec_per_km)).seconds
 			: null
 	));
 	let toleranceSec = $state<number | null>(
@@ -113,14 +115,14 @@
 	let repeatsPaceMin = $state<number | null>(
 		untrack(() =>
 			initialStructure?.repeats
-				? Math.floor(paceFromCanonical(initialStructure.repeats.pace_sec_per_km) / 60)
+				? paceParts(paceFromCanonical(initialStructure.repeats.pace_sec_per_km)).minutes
 				: null
 		)
 	);
 	let repeatsPaceSec = $state<number | null>(
 		untrack(() =>
 			initialStructure?.repeats
-				? Math.round(paceFromCanonical(initialStructure.repeats.pace_sec_per_km) % 60)
+				? paceParts(paceFromCanonical(initialStructure.repeats.pace_sec_per_km)).seconds
 				: null
 		)
 	);
@@ -144,14 +146,14 @@
 	let steadyPaceMin = $state<number | null>(
 		untrack(() =>
 			initialStructure?.steady
-				? Math.floor(paceFromCanonical(initialStructure.steady.pace_sec_per_km) / 60)
+				? paceParts(paceFromCanonical(initialStructure.steady.pace_sec_per_km)).minutes
 				: null
 		)
 	);
 	let steadyPaceSec = $state<number | null>(
 		untrack(() =>
 			initialStructure?.steady
-				? Math.round(paceFromCanonical(initialStructure.steady.pace_sec_per_km) % 60)
+				? paceParts(paceFromCanonical(initialStructure.steady.pace_sec_per_km)).seconds
 				: null
 		)
 	);
@@ -167,6 +169,7 @@
 	// the timestamp. These are read-only views of `workout`, so they
 	// derive (re-evaluate when the prop changes) rather than capture once.
 	const wasCompleted = $derived(isWorkoutCompleted(workout));
+	const wasSkipped = $derived(isWorkoutSkipped(workout));
 	const hasLinkedRun = $derived(workout.completed_run_id != null);
 	const showStructure = $derived(
 		!(['easy', 'long', 'recovery', 'rest'] as const).includes(
@@ -191,6 +194,21 @@
 			} else {
 				await markWorkoutCompleted(workout.id, null, { manual: true });
 			}
+			onSaved();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : t('workoutEditor.updateFailed');
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function toggleSkipped() {
+		busy = true;
+		error = null;
+		try {
+			// Skipping clears any manual completion server-side; un-skipping
+			// just drops the flag and leaves the workout as a plain to-do.
+			await markWorkoutSkipped(workout.id, !wasSkipped);
 			onSaved();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : t('workoutEditor.updateFailed');
@@ -507,6 +525,18 @@
 						: t('workoutEditor.markDoneTitle')}
 			>
 				{wasCompleted ? t('workoutEditor.markNotDone') : t('workoutEditor.markAsDone')}
+			</button>
+			<button
+				class="btn btn-outline"
+				onclick={toggleSkipped}
+				disabled={busy || hasLinkedRun}
+				title={hasLinkedRun
+					? t('workoutEditor.skipLinkedRunTitle')
+					: wasSkipped
+						? t('workoutEditor.unskipTitle')
+						: t('workoutEditor.skipTitle')}
+			>
+				{wasSkipped ? t('workoutEditor.unskip') : t('workoutEditor.skip')}
 			</button>
 			<button class="btn btn-primary" onclick={save} disabled={busy}>
 				{busy ? t('workoutEditor.saving') : t('workoutEditor.save')}

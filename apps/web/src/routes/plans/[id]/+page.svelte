@@ -43,6 +43,7 @@
 		addDays,
 		fmtHms,
 		isWorkoutCompleted,
+		isWorkoutSkipped,
 		parseISO,
 		todayISO
 	} from '$lib/training/training';
@@ -601,7 +602,11 @@
 		if (!plan || !isOwner || currentWeek == null || currentWeekIndex == null) return null;
 		const weekWorkouts = workoutsByWeek.get(currentWeek.id) ?? [];
 		const missed = weekWorkouts.find(
-			(w) => w.kind === 'long' && w.scheduled_date < today && !isWorkoutCompleted(w)
+			(w) =>
+				w.kind === 'long' &&
+				w.scheduled_date < today &&
+				!isWorkoutCompleted(w) &&
+				!isWorkoutSkipped(w)
 		);
 		if (!missed) return null;
 		const nextWeek = weeks[currentWeekIndex + 1] ?? null;
@@ -658,8 +663,12 @@
 		const dow = dayOfWeek(wo.scheduled_date);
 		const kind = workoutKindLabel(wo.kind);
 		const dist = wo.target_distance_m != null ? `, ${fmtKm(wo.target_distance_m)}` : '';
-		const done = isWorkoutCompleted(wo) ? m('planDetail.ariaCompletedSuffix') : '';
-		return `${dow}: ${kind}${dist}${done}`;
+		const status = isWorkoutCompleted(wo)
+			? m('planDetail.ariaCompletedSuffix')
+			: isWorkoutSkipped(wo)
+				? m('planDetail.ariaSkippedSuffix')
+				: '';
+		return `${dow}: ${kind}${dist}${status}`;
 	}
 </script>
 
@@ -1159,6 +1168,7 @@
 								class="day"
 								class:today={wo.scheduled_date === today}
 								class:completed={isWorkoutCompleted(wo)}
+								class:skipped={isWorkoutSkipped(wo)}
 								class:rest={wo.kind === 'rest'}
 								class:past={wo.scheduled_date < today}
 								style="--kind-color: {kindColor[wo.kind] ?? 'var(--color-text-secondary)'}"
@@ -1178,6 +1188,8 @@
 									{/if}
 									{#if isWorkoutCompleted(wo)}
 										<span class="material-symbols check" aria-hidden="true">check_circle</span>
+									{:else if isWorkoutSkipped(wo)}
+										<span class="material-symbols skip-glyph" aria-hidden="true">skip_next</span>
 									{/if}
 								</button>
 							</div>
@@ -1891,6 +1903,13 @@
 	.day.completed {
 		background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
 	}
+	.day.skipped {
+		opacity: 0.55;
+	}
+	.day.skipped .kind {
+		text-decoration: line-through;
+		color: var(--color-text-tertiary);
+	}
 	.day .dow {
 		font-size: 0.7rem;
 		color: var(--color-text-tertiary);
@@ -1910,6 +1929,13 @@
 		top: 0.3rem;
 		inset-inline-end: 0.3rem;
 		color: var(--color-success);
+		font-size: 1rem;
+	}
+	.day .skip-glyph {
+		position: absolute;
+		top: 0.3rem;
+		inset-inline-end: 0.3rem;
+		color: var(--color-text-tertiary);
 		font-size: 1rem;
 	}
 	.coach-link {

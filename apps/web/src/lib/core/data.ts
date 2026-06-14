@@ -3352,13 +3352,15 @@ export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | nu
 	const { weeks, workouts } = await fetchPlan(plan.id);
 	// Local-tz today — `toISOString().slice(0,10)` returns the UTC date,
 	// which rolls a calendar day early/late depending on the viewer's TZ.
-	const { todayISO } = await import('../training/training');
+	const { todayISO, isWorkoutSkipped } = await import('../training/training');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
 	const completed = workouts.filter(
 		(w) => w.manually_completed === true || w.completed_run_id != null
 	).length;
-	const total = workouts.filter((w) => w.kind !== 'rest').length;
+	// Skipped workouts are off the books — neither done nor an outstanding
+	// to-do — so they leave the progress denominator entirely.
+	const total = workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length;
 	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
 	return {
 		plan: plan as TrainingPlan,
@@ -3521,8 +3523,39 @@ export async function markWorkoutCompleted(
 		.update({
 			completed_run_id: runId,
 			manually_completed: manual,
-			completed_at: isCompleting ? new Date().toISOString() : null
+			completed_at: isCompleting ? new Date().toISOString() : null,
+			// Completing clears any prior skip — the two states are mutually
+			// exclusive. Un-completing (runId null + manual false) leaves the
+			// skip flag untouched so it isn't a back-door un-skip.
+			...(isCompleting ? { skipped_at: null } : {})
 		})
+		.eq('id', workoutId);
+	if (error) throw error;
+}
+
+/**
+ * Toggle a planned workout's intentionally-skipped state. Marking it
+ * skipped stamps `skipped_at` and clears any completion (a row is never
+ * both skipped and done); un-skipping clears `skipped_at`. Distinct from
+ * `markWorkoutCompleted(id, null)` — that path is "didn't do it / undo a
+ * tick", this one is "deliberately dropping this session".
+ */
+export async function markWorkoutSkipped(
+	workoutId: string,
+	skipped: boolean
+): Promise<void> {
+	const { error } = await supabase
+		.from('plan_workouts')
+		.update(
+			skipped
+				? {
+						skipped_at: new Date().toISOString(),
+						completed_run_id: null,
+						manually_completed: false,
+						completed_at: null
+					}
+				: { skipped_at: null }
+		)
 		.eq('id', workoutId);
 	if (error) throw error;
 }
@@ -6040,13 +6073,15 @@ export async function fetchAthletePlanOverview(
 		.maybeSingle();
 	if (!plan) return null;
 	const { weeks, workouts } = await fetchPlan(plan.id);
-	const { todayISO } = await import('../training/training');
+	const { todayISO, isWorkoutSkipped } = await import('../training/training');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
 	const completed = workouts.filter(
 		(w) => w.manually_completed === true || w.completed_run_id != null
 	).length;
-	const total = workouts.filter((w) => w.kind !== 'rest').length;
+	// Skipped workouts are off the books — neither done nor an outstanding
+	// to-do — so they leave the progress denominator entirely.
+	const total = workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length;
 	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
 	return {
 		plan: plan as TrainingPlan,
