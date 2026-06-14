@@ -45,6 +45,9 @@ run-app/                          # Monorepo root
 │   ├── mobile_android/           # Flutter Android app target
 │   ├── watch_ios/                # Native Swift + WatchKit (Xcode project)
 │   ├── watch_wear/               # Native Kotlin + Compose-for-Wear OS app (not Flutter)
+│   ├── watch_garmin/             # Native Monkey C / Connect IQ data field for existing Garmin watches (research-tier Vector 1 spike)
+│   ├── custom_watch/             # Rust + Embassy firmware for the ultra-marathon watch (research-tier, tier-1 bench prototype)
+│   ├── graph_cycle/              # Go street-graph cycle-search sidecar for route loop generation
 │   ├── web/                      # SvelteKit web app (TypeScript)
 │   │   ├── src/
 │   │   │   ├── routes/           # SvelteKit file-based routes
@@ -54,7 +57,8 @@ run-app/                          # Monorepo root
 │   │   │   │   └── settings/     # Integrations + account
 │   │   │   └── lib/              # Supabase client, API helpers, components
 │   │   └── package.json
-│   └── backend/                  # Supabase Edge Functions (Deno / TypeScript) + migrations + seed
+│   ├── backend/                  # Supabase Edge Functions (Deno / TypeScript) + migrations + seed
+│   └── job_worker/               # Go background-job worker + live-spectator hub (drains the jobs queue)
 ├── packages/
 │   ├── core_models/              # Shared Dart: Run, Route, Waypoint types
 │   ├── gpx_parser/               # GPX, KML, KMZ, GeoJSON parsing
@@ -63,7 +67,7 @@ run-app/                          # Monorepo root
 │   └── ui_kit/                   # Shared Flutter widgets + design tokens
 ├── infra/                        # Terraform stacks for AWS web hosting
 ├── melos.yaml                    # Flutter workspace config + scripts (root)
-├── package.json                  # npm workspaces — apps/web + apps/backend (root)
+├── package.json                  # JS workspaces — apps/web + apps/backend (pnpm locally, npm in CI) (root)
 ├── analysis_options.yaml         # Shared Dart lint rules (root)
 ├── .github/workflows/            # CI/CD pipelines
 └── README.md
@@ -260,7 +264,7 @@ class Waypoint {
 }
 ```
 
-**Generated row classes** (`src/generated/db_rows.dart`) — `RunRow`, `RouteRow`, `IntegrationRow`, `UserProfileRow`. Snake-case field names that mirror the Supabase schema exactly, plus column-name constants (e.g. `RunRow.colStartedAt = 'started_at'`). Produced by `scripts/gen_dart_models.dart`, which parses `apps/backend/supabase/migrations/*.sql` and must be rerun after every migration. `ApiClient` marshals between domain classes and row classes, so a column rename forces a recompile at the mapping site instead of silently serialising to a dead field. See [schema_codegen.md](schema_codegen.md) for the full flow.
+**Generated row classes** (`src/generated/db_rows.dart`) — one class per table in the `_tables` allowlist (~51 tables today, tracking most of the schema: `RunRow`, `RouteRow`, `IntegrationRow`, `UserProfileRow`, and ~47 more). Snake-case field names that mirror the Supabase schema exactly, plus column-name constants (e.g. `RunRow.colStartedAt = 'started_at'`). Produced by `scripts/gen_dart_models.dart`, which parses `apps/backend/supabase/migrations/*.sql` and must be rerun after every migration. `ApiClient` marshals between domain classes and row classes, so a column rename forces a recompile at the mapping site instead of silently serialising to a dead field. See [schema_codegen.md](schema_codegen.md) for the full flow.
 
 ### `gpx_parser`
 
@@ -418,6 +422,9 @@ Thin TypeScript functions deployed to Supabase Edge Functions (Deno runtime).
 | `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation | Active |
 | `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) | Active |
 | `clip-public-track` | GET (anon-callable) | Serve clipped track JSON for non-owner viewers (replaces the dropped bare-table Storage SELECT policy, migration `20260619_001`) | Active |
+| `events-connect-onboard` | POST (host action) | Create / reuse a Stripe Express connected account for a paid-event host, persist its id in `instructor_payout_accounts` (club_events.md P1) | Active (gated on Stripe keys + sign-off) |
+| `events-checkout` | POST (buyer action) | Open a Stripe-hosted Checkout Session as a destination charge against the host's connected account, insert a `pending` `event_orders` row holding a soft capacity reservation (club_events.md P1) | Active (gated on Stripe keys + sign-off) |
+| `stripe-events-webhook` | POST (Stripe push) | Idempotent writer of order status — CAS `pending`→`paid` on `checkout.session.completed`, etc. (club_events.md P1) | Active (gated on Stripe keys + sign-off) |
 
 User-facing functions (`parkrun-import`, `strava-import`, `export-data`, `delete-account`) gate on a per-user fixed-window rate limit via `check_rate_limit` and the shared `_shared/rate_limit.ts` helper — denials return 429 with `Retry-After`. Skipped on `refresh-tokens` (cron, no user.id), `revenuecat-webhook` (HMAC-validated server-to-server), and `strava-webhook` (URL-secret guarded server-to-server). See [decisions.md § 42](decisions.md#42-edge-function-rate-limits-live-in-a-postgres-counter-not-deno-kv-or-in-memory) and [api_database.md § rate_limits](../backend/api_database.md).
 
@@ -560,7 +567,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 
 Tests and analysis run via Melos scripts — see [testing.md](../testing/testing.md) for how to run the suite locally, what's covered today, and the patterns used to make platform-channel-heavy code unit-testable.
 
-`.github/workflows/ci.yml` runs twelve jobs on every PR + push to `main` (no PR-only vs. push-only split): `test-packages`, `parity-types`, `parity-matrix`, `build-watch-wear`, `build-firmware`, `build-mobile-android`, `twin-parity`, `schema-codegen-drift`, `api-client-integration`, `edge-functions`, `pgtap-rls`, and `e2e-web` (Playwright sharded 14-way). The per-job breakdown lives in [monorepo.md § CI/CD](monorepo.md#cicd); `ci.yml` itself is the source of truth.
+`.github/workflows/ci.yml` runs seventeen jobs on every PR + push to `main` (no PR-only vs. push-only split): `test-packages`, `test-worker`, `test-graph-cycle`, `parity-types`, `build-web`, `parity-matrix`, `build-watch-wear`, `build-firmware`, `build-mobile-android`, `twin-parity`, `schema-codegen-drift`, `api-client-integration`, `edge-functions`, `pgtap-rls`, `e2e-web` (Playwright sharded 14-way), `e2e-web-livehub`, and `e2e-web-sso`. The per-job breakdown lives in [monorepo.md § CI/CD](monorepo.md#cicd); `ci.yml` itself is the source of truth.
 
 iOS builds and Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag push — not on PR. See [releasing.md](../ops/releasing.md).
 
@@ -581,4 +588,4 @@ Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHu
 
 ---
 
-*Last updated: May 2026*
+*Last updated: 2026-06-14*

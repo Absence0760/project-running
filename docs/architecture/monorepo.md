@@ -49,6 +49,9 @@ run-app/
 │   ├── mobile_android/      # Flutter Android target
 │   ├── watch_ios/           # Native SwiftUI (Xcode project)
 │   ├── watch_wear/          # Native Kotlin + Compose-for-Wear (not Flutter)
+│   ├── watch_garmin/        # Native Monkey C / Connect IQ data field for existing Garmin watches (research-tier Vector 1 spike)
+│   ├── custom_watch/        # Rust + Embassy firmware for the ultra-marathon watch (research-tier, tier-1 bench prototype)
+│   ├── graph_cycle/         # Go street-graph cycle-search sidecar for route loop generation
 │   ├── web/                 # SvelteKit 2 + Svelte 5 runes
 │   ├── backend/             # Supabase project — migrations, functions, seed
 │   └── job_worker/          # Go background worker (Fly.io)
@@ -60,7 +63,7 @@ run-app/
 │   └── ui_kit/              # Shared Flutter widgets
 ├── infra/                   # Terraform stacks for AWS web hosting
 ├── melos.yaml               # root, governs Flutter workspace
-├── package.json             # root, npm workspaces for apps/web + apps/backend
+├── package.json             # root, JS workspaces for apps/web + apps/backend (pnpm locally, npm in CI)
 ├── analysis_options.yaml    # root Dart analyser config
 └── README.md
 ```
@@ -367,12 +370,13 @@ Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, `$props`) is used throug
 
 ## CI/CD
 
-Full pipeline defined in `.github/workflows/ci.yml`. Fifteen jobs run on every PR + push to `main`:
+Full pipeline defined in `.github/workflows/ci.yml`. Seventeen jobs run on every PR + push to `main`:
 
 | Job | Runner | What it does |
 |---|---|---|
-| `test-packages` | ubuntu-latest | `melos bootstrap` → scoped `flutter test` on `run_recorder` + `mobile_android` |
+| `test-packages` | ubuntu-latest | `melos bootstrap` → scoped `flutter test` on `run_recorder` + `mobile_android` + `api_client` + `gpx_parser` |
 | `test-worker` | ubuntu-latest | `go vet ./...` + `go test ./...` for `apps/job_worker` (incl. the GDPR Art 20 export-completeness guard) |
+| `test-graph-cycle` | ubuntu-latest | `go vet ./...` + `go test ./...` for the `apps/graph_cycle` street-graph cycle-search sidecar |
 | `parity-types` | ubuntu-latest | `supabase start` → `npm run gen:types:check` |
 | `build-web` | ubuntu-latest | `npm run build --workspace=apps/web` — SvelteKit compile check, no deploy |
 | `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` — keeps `docs/product/parity.md` honest |
@@ -380,12 +384,13 @@ Full pipeline defined in `.github/workflows/ci.yml`. Fifteen jobs run on every P
 | `build-firmware` | ubuntu-latest | `cargo build` + clippy + host tests of `apps/custom_watch` (Rust + Embassy, `thumbv7em-none-eabihf`) |
 | `build-mobile-android` | ubuntu-latest | `flutter build appbundle` |
 | `twin-parity` | ubuntu-latest | `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` + `test/` |
-| `schema-codegen-drift` | ubuntu-latest | re-run both generators, fail if working tree dirty |
+| `schema-codegen-drift` | ubuntu-latest | re-run `gen_dart_models.dart` (regenerates `db_rows.dart` + `DbRows.kt`), fail if working tree dirty |
 | `api-client-integration` | ubuntu-latest | `packages/api_client` integration suite against local Supabase |
 | `edge-functions` | ubuntu-latest | Deno test for every function in `apps/backend/supabase/functions/` |
 | `pgtap-rls` | ubuntu-latest | `supabase test db` for the pgtap RLS suite |
 | `e2e-web` | ubuntu-latest | Playwright sharded 14-way over `apps/web/tests-e2e/` |
 | `e2e-web-livehub` | ubuntu-latest | Playwright against the real Go live-hub WebSocket binary (unsharded) |
+| `e2e-web-sso` | ubuntu-latest | Playwright over the OAuth / SSO login path against a local mock OIDC server (unsharded) |
 
 iOS builds + Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag, not on PR. See [releasing.md](../ops/releasing.md) for the release-time pipeline.
 
@@ -403,7 +408,7 @@ pnpm test:flutter           # wraps `melos exec -- flutter test`
 melos exec --scope="run_recorder" --scope="mobile_android" -- flutter test
 
 # Web
-pnpm test:web:unit          # node:test on apps/web/src/lib/*.test.ts
+pnpm test:web:unit          # tsx --test on apps/web/src/lib/**/*.test.ts
 pnpm test:web:e2e           # Playwright
 pnpm test:web:e2e:ui        # Playwright in headed mode
 
@@ -450,8 +455,9 @@ pnpm gen:types:check
 
 ```bash
 # One per directory under apps/backend/supabase/functions/
-# (clip-public-track, delete-account, export-data, parkrun-import,
-#  refresh-tokens, revenuecat-webhook, strava-import, strava-webhook)
+# (clip-public-track, delete-account, events-checkout, events-connect-onboard,
+#  export-data, parkrun-import, refresh-tokens, revenuecat-webhook,
+#  strava-import, strava-webhook, stripe-events-webhook)
 for fn in apps/backend/supabase/functions/*/; do
   name=$(basename "$fn")
   [ "$name" = "_shared" ] && continue
@@ -486,10 +492,10 @@ git add apps/backend/supabase/migrations apps/web/src/lib/database.types.ts \
 cd apps/backend && supabase db push --project-ref {project-ref}
 ```
 
-CI runs `npm run gen:types:check` in the `parity-types` job; if you forget to regenerate, the build fails with a diff against the committed `database.types.ts`. There is no equivalent CI gate for the Dart generator yet — it's on the roadmap but, for now, `dart analyze` will flag any stale column references you left behind in `api_client`.
+CI runs `npm run gen:types:check` in the `parity-types` job; if you forget to regenerate, the build fails with a diff against the committed `database.types.ts`. The Dart side is gated too: the `schema-codegen-drift` job re-runs `gen_dart_models.dart` (which regenerates `db_rows.dart` and the Kotlin `DbRows.kt`) and fails the PR if the committed files drift. On top of that, `dart analyze` will flag any stale column references you left behind in `api_client`.
 
 See [schema_codegen.md](schema_codegen.md) for how the generators work, when they trip, and how to test drift detection.
 
 ---
 
-*Last updated: May 2026 — root-level `pnpm dev:*` script set*
+*Last updated: 2026-06-14 — root-level `pnpm dev:*` script set*
