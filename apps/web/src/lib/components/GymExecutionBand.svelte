@@ -71,9 +71,16 @@
 	}
 
 	function currentEntered(): EnteredSet {
-		const reps = repsStr.trim() === '' ? null : parseInt(repsStr, 10);
+		// A `<input type="number" bind:value>` coerces its bound value to a
+		// `number` the moment the user edits it, even though these fields are
+		// declared as strings — so guard before any string op or `.trim()` throws
+		// uncaught and Complete-set silently does nothing (the weight field already
+		// routes through `parseWeight`, which coerces; reps + rpe must too).
+		const repsRaw = typeof repsStr === 'number' ? String(repsStr) : repsStr;
+		const rpeRaw = typeof rpeStr === 'number' ? String(rpeStr) : rpeStr;
+		const reps = repsRaw.trim() === '' ? null : parseInt(repsRaw, 10);
 		const weightKg = parseWeight(weightStr);
-		const rpe = rpeStr.trim() === '' ? null : parseFloat(rpeStr);
+		const rpe = rpeRaw.trim() === '' ? null : parseFloat(rpeRaw);
 		return {
 			reps: reps != null && Number.isFinite(reps) ? reps : null,
 			weightKg,
