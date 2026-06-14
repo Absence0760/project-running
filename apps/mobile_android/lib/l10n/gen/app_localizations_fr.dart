@@ -5124,6 +5124,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get integrationsHrForget => 'Oublier';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'Oublier ce capteur cardiaque ? Vous devrez le réappairer pour l\'utiliser pendant une course.';
+
+  @override
   String get integrationsHrScanTitle => 'Rechercher un capteur cardiaque';
 
   @override
@@ -5156,6 +5160,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => 'Oublier';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'Oublier ce tapis de course ? Vous devrez le réappairer pour l\'utiliser pendant une course.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Rechercher un tapis de course';

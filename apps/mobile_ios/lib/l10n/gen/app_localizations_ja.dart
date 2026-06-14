@@ -4808,6 +4808,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get integrationsHrForget => '削除';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'この心拍計を削除しますか？ランニング中に使うには再度ペアリングが必要です。';
+
+  @override
   String get integrationsHrScanTitle => '心拍計をスキャン';
 
   @override
@@ -4838,6 +4842,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => '解除';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'このトレッドミルを解除しますか？ランニング中に使うには再度ペアリングが必要です。';
 
   @override
   String get integrationsTreadmillScanTitle => 'トレッドミルを検索';

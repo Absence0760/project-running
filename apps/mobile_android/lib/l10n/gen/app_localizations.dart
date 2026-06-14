@@ -8404,6 +8404,12 @@ abstract class AppLocalizations {
   /// **'Forget'**
   String get integrationsHrForget;
 
+  /// Confirm dialog body shown before unpairing a heart-rate strap
+  ///
+  /// In en, this message translates to:
+  /// **'Forget this heart rate monitor? You\'ll need to pair it again to use it during a run.'**
+  String get integrationsHrForgetConfirm;
+
   /// Title of the HR scan bottom sheet
   ///
   /// In en, this message translates to:
@@ -8457,6 +8463,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Forget'**
   String get integrationsTreadmillForget;
+
+  /// Confirm dialog body shown before unpairing a treadmill
+  ///
+  /// In en, this message translates to:
+  /// **'Forget this treadmill? You\'ll need to pair it again to use it during a run.'**
+  String get integrationsTreadmillForgetConfirm;
 
   /// Title of the treadmill scan bottom sheet
   ///

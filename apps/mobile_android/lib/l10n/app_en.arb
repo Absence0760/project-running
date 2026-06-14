@@ -6300,6 +6300,10 @@
   "@integrationsHrForget": {
     "description": "Tooltip on the forget-strap button"
   },
+  "integrationsHrForgetConfirm": "Forget this heart rate monitor? You'll need to pair it again to use it during a run.",
+  "@integrationsHrForgetConfirm": {
+    "description": "Confirm dialog body shown before unpairing a heart-rate strap"
+  },
   "integrationsHrScanTitle": "Scan for heart rate monitor",
   "@integrationsHrScanTitle": {
     "description": "Title of the HR scan bottom sheet"
@@ -6345,6 +6349,10 @@
   "integrationsTreadmillForget": "Forget",
   "@integrationsTreadmillForget": {
     "description": "Tooltip on the forget-treadmill button"
+  },
+  "integrationsTreadmillForgetConfirm": "Forget this treadmill? You'll need to pair it again to use it during a run.",
+  "@integrationsTreadmillForgetConfirm": {
+    "description": "Confirm dialog body shown before unpairing a treadmill"
   },
   "integrationsTreadmillScanTitle": "Scan for treadmill",
   "@integrationsTreadmillScanTitle": {

@@ -5116,6 +5116,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get integrationsHrForget => 'Entfernen';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'Diesen Herzfrequenzmesser entfernen? Du musst ihn neu koppeln, um ihn während eines Laufs zu verwenden.';
+
+  @override
   String get integrationsHrScanTitle => 'Nach Herzfrequenzmesser suchen';
 
   @override
@@ -5148,6 +5152,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => 'Entfernen';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'Dieses Laufband entfernen? Du musst es neu koppeln, um es während eines Laufs zu verwenden.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Nach Laufband suchen';

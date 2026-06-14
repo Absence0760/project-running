@@ -5060,6 +5060,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get integrationsHrForget => 'Forget';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      'Forget this heart rate monitor? You\'ll need to pair it again to use it during a run.';
+
+  @override
   String get integrationsHrScanTitle => 'Scan for heart rate monitor';
 
   @override
@@ -5092,6 +5096,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => 'Forget';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      'Forget this treadmill? You\'ll need to pair it again to use it during a run.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Scan for treadmill';

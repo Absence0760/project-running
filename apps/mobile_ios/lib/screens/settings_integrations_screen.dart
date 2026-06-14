@@ -444,6 +444,26 @@ class _HeartRateMonitorTileState extends State<HeartRateMonitorTile> {
   }
 
   Future<void> _forget() async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.integrationsHrTitle),
+            content: Text(l10n.integrationsHrForgetConfirm),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.integrationsCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(l10n.integrationsHrForget),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
     await widget.heartRate.forget();
     await _refresh();
   }
@@ -634,6 +654,26 @@ class _TreadmillTileState extends State<TreadmillTile> {
   }
 
   Future<void> _forget() async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.integrationsTreadmillTitle),
+            content: Text(l10n.integrationsTreadmillForgetConfirm),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.integrationsCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(l10n.integrationsTreadmillForget),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
     await _treadmill.forget();
     if (mounted) setState(() => _liveSpeedKmh = null);
     await _refresh();

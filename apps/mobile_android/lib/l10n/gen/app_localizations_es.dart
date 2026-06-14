@@ -5110,6 +5110,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get integrationsHrForget => 'Olvidar';
 
   @override
+  String get integrationsHrForgetConfirm =>
+      '¿Olvidar este monitor de frecuencia cardíaca? Tendrás que volver a emparejarlo para usarlo durante una carrera.';
+
+  @override
   String get integrationsHrScanTitle => 'Buscar monitor de frecuencia cardíaca';
 
   @override
@@ -5142,6 +5146,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get integrationsTreadmillForget => 'Olvidar';
+
+  @override
+  String get integrationsTreadmillForgetConfirm =>
+      '¿Olvidar esta cinta de correr? Tendrás que volver a emparejarla para usarla durante una carrera.';
 
   @override
   String get integrationsTreadmillScanTitle => 'Buscar cinta de correr';

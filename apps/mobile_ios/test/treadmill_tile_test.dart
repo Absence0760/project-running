@@ -43,4 +43,63 @@ void main() {
     expect(find.text('Paired: NordicTrack T9'), findsOneWidget);
     expect(find.byIcon(Icons.close), findsOneWidget);
   });
+
+  testWidgets('forget confirms first; Cancel keeps the treadmill paired',
+      (tester) async {
+    await tester.runAsync(() async {
+      SharedPreferences.setMockInitialValues({
+        'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
+        'treadmill_device_name': 'NordicTrack T9',
+      });
+    });
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+
+    // A confirm dialog appears — the unpair is NOT immediate.
+    expect(
+      find.text(
+          "Forget this treadmill? You'll need to pair it again to use it during a run."),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(TextButton, 'Cancel'),
+    ));
+    await tester.pumpAndSettle();
+
+    // Still paired — Cancel left the device alone.
+    expect(find.text('Paired: NordicTrack T9'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsOneWidget);
+  });
+
+  testWidgets('confirming forget unpairs the treadmill', (tester) async {
+    await tester.runAsync(() async {
+      SharedPreferences.setMockInitialValues({
+        'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
+        'treadmill_device_name': 'NordicTrack T9',
+      });
+    });
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+
+    // Confirming runs forget() — real SharedPreferences I/O, so anchor the
+    // tap that triggers it inside runAsync.
+    await tester.runAsync(() async {
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Forget'),
+      ));
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('No treadmill paired — tap to scan'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsNothing);
+  });
 }
