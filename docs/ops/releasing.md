@@ -33,7 +33,10 @@ web@1.2.3              → .github/workflows/release-web.yml
 backend@1.2.3          → .github/workflows/release-backend.yml
 worker@1.2.3           → .github/workflows/release-worker.yml
 osrm@1.2.3             → .github/workflows/release-osrm.yml
+graph-cycle@1.2.3      → .github/workflows/release-graph-cycle.yml
 ```
+
+(GraphHopper — the other Fly map sidecar at `apps/job_worker/graphhopper/` — has **no** release workflow yet; it's deployed by a hand-rolled `flyctl deploy`.)
 
 The glob is `<app>@*`, so any suffix works — `1.2.3`, `1.2.3-rc.1`,
 `2.0.0-beta.4`. The workflow parses the suffix as the `versionName` and
@@ -70,6 +73,7 @@ success — creates a GitHub Release with the built artifact(s) attached.
 | `backend@*` | ubuntu-latest | — | Supabase (migrations + functions on linked project) | — |
 | `worker@*` | ubuntu-latest | — | Fly.io `job_worker` app via `flyctl deploy --remote-only` | — |
 | `osrm@*` | ubuntu-latest | — | Fly.io `osrm` app (image only — graph on the volume rides along) | — |
+| `graph-cycle@*` | ubuntu-latest | — | Fly.io `graph-cycle` app (image only — OSM PBF stays on the `graph_cycle_data` volume; reparsed on boot) | — |
 
 Promoting Android + Wear from the Internal track to Beta or Production
 is done manually in the Play Console after you've smoke-tested the
@@ -176,11 +180,11 @@ For the AWS-side deploy + rotation flows (preflight, orchestrated apply, sops bo
 | `SENTRY_DSN` | Sentry backend project DSN. Set via `supabase secrets set` against the linked project; the EFs' `_shared/sentry.ts` no-ops when unset. |
 | `APP_RELEASE` | `backend@<version>` tag for Sentry release tagging. Set alongside `SENTRY_DSN` via `supabase secrets set`. |
 
-### Worker + OSRM (Fly.io)
+### Worker + OSRM + graph_cycle (Fly.io)
 
 | Secret | What |
 |---|---|
-| `FLY_API_TOKEN` | Fly.io API token scoped to the `runonward` org. Same token covers both `worker@*` and `osrm@*` workflows. |
+| `FLY_API_TOKEN` | Fly.io API token scoped to the `runonward` org (verify the current org name — the AWS account was renamed `runonward` → `project-running`; the Fly org may or may not have been renamed too). Same token covers the `worker@*`, `osrm@*`, and `graph-cycle@*` workflows. |
 
 ## Rollback
 

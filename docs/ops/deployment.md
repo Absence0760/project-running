@@ -14,8 +14,10 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 |---|---|---|---|
 | Web app (static + Coach SSR) | `apps/web/` | **AWS** — S3 + CloudFront + Lambda Function URL + Route 53 (Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed) — see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) | Plan |
 | Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | Plan |
-| Job worker (Go) | `apps/job_worker/` | **Fly.io** — single machine, distroless | Plan |
-| OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** — single machine + Volume | Plan |
+| Job worker (Go) | `apps/job_worker/` | **Fly.io** (`job_worker`, region `lhr`) — single machine, distroless | Plan |
+| OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** (`osrm`, region `lhr`) — single machine + Volume | Plan |
+| GraphHopper (`round_trip` route generator, `foot` profile) | `apps/job_worker/graphhopper/` | **Fly.io** (`graphhopper`, region `lhr`) — serves the "Generate a route by distance" loop endpoint; reached by the generate-route Lambda over public https with an `X-Engine-Key` Caddy guard | Plan |
+| graph_cycle (v3 loop generator map sidecar) | `apps/graph_cycle/` | **Fly.io** (`graph-cycle`, region `lhr`) — distroless Go service, parses an OSM PBF into an in-memory foot graph; in-process `X-Engine-Key` guard | Plan |
 | Coach LLM | `apps/web/src/routes/api/coach/+server.ts` (deployed as a Node 24 Lambda) | Anthropic Claude (default) — `OPENAI_BASE_URL` for self-host | Plan (web) |
 | Mobile Android | `apps/mobile_android/` | **Google Play** — Internal → Beta → Production tracks | Plan |
 | Mobile iOS | `apps/mobile_ios/` | **App Store Connect** — TestFlight → App Store | Plan |
@@ -225,13 +227,15 @@ Two orthogonal axes. **Release** is "we cut a tagged version of the product"; **
 |---|---|---|
 | Web | `web@*` | CI builds → `aws s3 sync` to the prod bucket → `aws cloudfront create-invalidation` → `aws lambda update-function-code` for the coach handler. Live within ~60 s of CI success. |
 | Backend (migrations + EF) | `backend@*` | Migrations applied + EFs uploaded to the linked Supabase project |
-| Job worker | `worker@*` (proposed) | `flyctl deploy` against the worker app |
-| OSRM | `osrm@*` (proposed) | `flyctl deploy` against the OSRM app — separate from the worker because it has different rebuild/restart cadences |
+| Job worker | `worker@*` | `release-worker.yml` → `flyctl deploy --remote-only` against the `job_worker` Fly app |
+| OSRM | `osrm@*` | `release-osrm.yml` → `flyctl deploy` against the `osrm` Fly app (image only — the graph rides along on the Volume); separate from the worker because it has different rebuild/restart cadences |
+| graph_cycle | `graph-cycle@*` | `release-graph-cycle.yml` → `flyctl deploy` against the `graph-cycle` Fly app (the OSM PBF persists on the `graph_cycle_data` Volume; redeploy reparses it on boot) |
+| GraphHopper | none | No release workflow yet — still a hand-rolled `flyctl deploy` against the `graphhopper` Fly app from a maintainer's laptop |
 | Mobile Android | `mobile_android@*` | `.aab` uploaded to Play Internal track; manual promotion to Beta/Production from the Console |
 | Mobile iOS | `mobile_ios@*` | `.ipa` uploaded to TestFlight; manual promotion to App Store from App Store Connect |
 | Wear OS | `watch_wear@*` | `.aab` uploaded to Play Internal track for the separate Wear listing |
 
-Tag → workflow → deploy is the canonical path for everything except the job worker and OSRM, which today still need a hand-rolled `flyctl deploy` from a maintainer's laptop. Adding `release-worker.yml` + `release-osrm.yml` workflows is a natural follow-up — see [`apps/job_worker/deployment.md`](../../apps/job_worker/deployment.md) § CI wiring.
+Tag → workflow → deploy is the canonical path for every Fly service except GraphHopper, which today still needs a hand-rolled `flyctl deploy` from a maintainer's laptop (no `release-graphhopper.yml` yet). See [`apps/job_worker/deployment.md`](../../apps/job_worker/deployment.md) § CI wiring.
 
 ---
 

@@ -127,9 +127,9 @@ File-level `buildTileUrl(z, x, y, template, maptilerKey, styleSlug)` does the sa
 
 ## Tests
 
-Eleven web + eight mobile + twelve Wear OS unit tests pin the URL builder behaviour against the empty/blank/non-empty override matrix. See:
+Roughly two dozen web + a dozen mobile + ~20 Wear OS unit tests pin the URL builder behaviour against the empty/blank/non-empty override matrix (counts drift — recompute with `grep -cE`). See:
 
-- `apps/web/src/lib/map-style.test.ts`
+- `apps/web/src/lib/routes/map-style.test.ts`
 - `apps/mobile_android/test/live_run_map_tile_url_test.dart` (+ iOS twin)
 - `apps/watch_wear/android/app/src/test/kotlin/com/runapp/watchwear/ui/TileUrlBuilderTest.kt`
 
@@ -137,12 +137,15 @@ Eleven web + eight mobile + twelve Wear OS unit tests pin the URL builder behavi
 
 ### Disk footprint
 
-| Region slug | Size | Worth running |
-|---|---:|---|
-| `monaco` (default) | ~10 MB | Smoke testing, CI, just-verify-the-wire |
-| `london` | ~150 MB | Realistic dev for runs in central London |
-| `bay-area` | ~250 MB | West Coast dev |
-| `north-america` | ~10 GB | Full continent — overkill for dev |
+`bin/protomaps-dev.sh` has **no region-slug concept**. Protomaps publishes daily *world* builds (~80 GB at `https://build.protomaps.com/<YYYYMMDD>.pmtiles`), not per-region pre-builds. You get a usable local file one of three ways, each driven by env vars on the script:
+
+| How | Knob | Size | Worth running |
+|---|---|---:|---|
+| `bin/protomaps-dev.sh fetch` | `DEFAULT_SAMPLE_URL` (defaults to the US-ZCTA sample on Protomaps' R2) | ~1 MB | Smoke testing, CI, just-verify-the-wire — renders a real polygon, **not** your actual run locations |
+| Regional extract from the world build via the `pmtiles` Go CLI (`pmtiles extract https://build.protomaps.com/$(date +%Y%m%d).pmtiles <file> --bbox=MIN_LON,MIN_LAT,MAX_LON,MAX_LAT`), then point `PMTILES_FILE` at it | `PMTILES_FILE` | tens of MB to a few GB depending on bbox | Realistic dev for the area you actually run in |
+| Drop the full daily world build (or any `.pmtiles`) at `$PROTOMAPS_HOME/world.pmtiles` | `PMTILES_FILE` | ~80 GB (world) | Overkill for dev |
+
+Defaults: `PROTOMAPS_HOME=${XDG_CACHE_HOME:-~/.cache}/protomaps-dev`, `PMTILES_FILE=$PROTOMAPS_HOME/world.pmtiles`, `PROTOMAPS_PORT=8080`, `DOCKER_IMAGE=maptiler/tileserver-gl:v5.6.0`. `fetch` will not auto-download a usable map — it only pulls the ~1 MB sample; `start` errors out with the `pmtiles extract` recipe if `PMTILES_FILE` is missing.
 
 ### CI
 
@@ -160,7 +163,7 @@ The web + mobile + Wear OS code in production calls the same URL builders — th
 | Container won't bind 8080 | Port collision (Supabase Studio uses 54323, the local Supabase API is 54321 — neither conflicts; check `lsof -i :8080`) | Set `PROTOMAPS_PORT=8081` and re-run `start` |
 | Web map renders but mobile is blank | Forgot the `10.0.2.2` alias inside the emulator | Update `TILE_URL_TEMPLATE` in mobile `.env.local` |
 | Wear OS doesn't pick up the override after editing `.env.local` | BuildConfig values are baked at compile time | `./gradlew installDebug -PPUBLIC_TILE_URL_TEMPLATE=…` rebuilds with the new value |
-| `PMTiles download failed` | Region slug doesn't exist, or build.protomaps.com is down | Try a different region or set `PMTILES_URL` to a known-good extract |
+| `PMTiles download failed` | `DEFAULT_SAMPLE_URL` unreachable, or build.protomaps.com is down | Override `DEFAULT_SAMPLE_URL` (used by `fetch`) to a known-good extract, or build your own extract and point `PMTILES_FILE` at it |
 
 ## Why not Vercel-style edge caching in dev
 

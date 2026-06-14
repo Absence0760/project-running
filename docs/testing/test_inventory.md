@@ -2,7 +2,9 @@
 
 The exhaustive, file-by-file list of what each test file covers, the Playwright spec layout, and the log of production bugs the e2e suite caught. Split out of [testing.md](testing.md) (the durable testing guide) because these per-file descriptions and counts drift fast. Regenerate live counts with `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` (Dart), `npx tsx --test` discovery (web), and `supabase test db --local` (pgTAP).
 
-### `apps/mobile_android/test/run_stats_test.dart` — 13 tests
+**The per-file counts below are approximate and lag the suite.** They're not regenerated on every commit — treat them as ballpark, and recompute the specific file with the `grep -cE` command above when an exact number matters.
+
+### `apps/mobile_android/test/run_stats_test.dart` — 15 tests
 
 Pure-function tests for two helpers in `lib/run_stats.dart`:
 
@@ -25,7 +27,7 @@ Pure-function tests for two helpers in `lib/run_stats.dart`:
 - Slow → fast → slow run → picks the fast middle 5 km
 - Regression: a 10 km in 1:14:34 does **not** surface as a 37:17 fastest 5k
 
-### `packages/run_recorder/test/run_recorder_test.dart` — 18 tests
+### `packages/run_recorder/test/run_recorder_test.dart` — 40 tests
 
 The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hooks (see below) to bypass the real geolocator stream and inject synthetic `Position` objects directly into `_onPosition`.
 
@@ -144,7 +146,7 @@ The `wear_routes_bridge_test.dart` adds three further groups beyond the basic at
 - **burst + lifecycle characterization (8 tests):** 5 starred saves of different routes → 5 pushes (no throttling today); 100 identical re-saves → ZERO additional pushes (diff cache catches all); 100 alternating star/unstar → 100 pushes; mixed starred + plain interleaved fires once per actual starred-set change; saveBatch with 50/50 starred+plain fires ONE push (notify-once contract); detach mid-burst stops all subsequent pushes; detach during in-flight push doesn't crash and stops further pushes after; hot-restart pattern (attach→detach→new bridge attach) works; two bridge instances on the same store push independently.
 - **end-to-end wire round-trip (4 tests):** the captured `routes_json` from the channel is structurally identical to `encodeRoutesForWatch` direct output; XML/JSON-special characters round-trip via jsonEncode's built-in escaping; `updated_at_ms` is monotonic non-decreasing across consecutive pushes (the watch's stale-push gate depends on this); every captured payload satisfies the wire-format contract — JSON array of objects with exactly `{id, name, distance_m, waypoints}` keys, and every waypoint with exactly `{lat, lng}`.
 
-### `apps/mobile_android/test/wear_routes_bridge_test.dart` — 54 tests
+### `apps/mobile_android/test/wear_routes_bridge_test.dart` — 65 tests
 
 Pin the listener-attach / push-on-change / starred-only filter contract on the phone-side `WearRoutesBridge`. Uses `TestDefaultBinaryMessengerBinding.setMockMethodCallHandler` to intercept the `run_app/wear_routes` `MethodChannel` — no DI seam needed.
 
@@ -190,7 +192,7 @@ Pure-logic coverage of the restore orchestrator extracted from `backup.ts`. The 
 
 Pluggable-fetcher coverage for `BackupServerClient.fetchBackupToFile`, the HTTP client that drives the Go service's `POST /v1/export?format=backup` path. Tests inject canned request + download fetchers so the round-trip is observable without sockets. Covers: isConfigured edges (empty vs non-empty baseUrl); preconditions (unconfigured / empty token throw `BackupServerError`); round-trip (POSTs `{format: 'backup'}` with the bearer token at the right URL, then downloads the signed URL to the supplied File; trims trailing slash on baseUrl); failure modes (non-200 export response, missing signed URL, empty-string signed URL, downloadFetcher exception propagation); and count extraction across int / num / missing JSON shapes. Backs the server-first → local-fallback dance in `BackupService.createBackup`.
 
-### `apps/mobile_android/test/backup_test.dart` — 41 tests
+### `apps/mobile_android/test/backup_test.dart` — 48 tests
 
 Round-trip + invariant coverage for `BackupService.createBackup` + `restore`. 24 existing manifest / offline-restore / progress / api:null tests; 7 **writeBackupZipStreaming** tests added with the streaming + parallel writer refactor in May 2026 (see `decisions.md § 66`); and a 10-test **tryServerBackup** orchestration group added with the server-first / local-fallback wiring.
 
@@ -402,7 +404,7 @@ Several private formatters were extracted from stateful classes into top-level p
 - **`watch_ingest_queue_helpers_test.dart` (10 tests):** `runFromWatchPayload` + `parseRunSource` — required-fields happy path, missing id / source defaults, optional track waypoints with elevation + timestamp, non-Map track entries skipped, avg_bpm + activity_type promoted into Run.metadata, metadata stays null when neither is set, non-numeric avg_bpm ignored, unknown source falls back to RunSource.watch.
 - **`watch_payload_fixture_test.dart` (5 tests):** Cross-platform contract test against `fixtures/watch_run_payload.json`. Decodes the same canonical fixture the Wear OS Kotlin test (`apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`) and the web test (`apps/web/src/lib/watch_payload_fixture.test.ts`) read; asserts row fields match `expectedRow`, `metadata.activity_type` / `avg_bpm` / `laps` round-trip, per-point `bpm` survives the decoder, and the canonical lap shape is preserved. Editing the fixture without updating all three platform tests is a deliberate hard-fail.
 
-### `apps/mobile_ios/test/` — same 83 files, byte-for-byte
+### `apps/mobile_ios/test/` — same 263 files, byte-for-byte
 
 After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too. Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
 
@@ -631,7 +633,7 @@ Pure tests for the universal + per-device prefs overlay helper extracted from `s
 
 Cross-platform contract test against `fixtures/watch_run_payload.json`. The same fixture is decoded by `apps/mobile_android/test/watch_payload_fixture_test.dart`, its `mobile_ios` mirror, and the Wear OS Kotlin test (`apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`). Editing the fixture without updating all three platform tests is a deliberate hard-fail. Web's slice asserts: source parses to a valid `RunSource`, `metadata.activity_type` is a registered value, `avg_bpm` is positive, laps use the canonical 1-based `index` + cumulative-BEFORE `start_offset_s` shape with deltas accumulating correctly, and the row + payload sources agree.
 
-### `apps/watch_wear/.../*Test.kt` — ~395 Wear OS Kotlin/JUnit tests across 32 files
+### `apps/watch_wear/.../*Test.kt` — ~530 Wear OS Kotlin/JUnit tests across 49 files
 
 Run with `cd apps/watch_wear/android && ./gradlew testDebugUnitTest`. Pure-JVM tests — no Android instrumentation, no Robolectric. The team deliberately avoided UI-test infrastructure (see `apps/watch_wear/CLAUDE.md`'s "layouts can't be unit-tested without Robolectric"); the pattern is to extract pure helpers from the Android-bound classes and exercise them at the JVM level.
 
@@ -670,7 +672,7 @@ Pure-unit coverage for the value classes and helpers exposed by `lib/social_serv
 
 The Supabase-touching surface of `SocialService` (`browseClubs`, `fetchMyClubs`, the enrichment pipelines, RSVP writes, post creation) is NOT covered here — the class resolves `Supabase.instance.client` inline, so meaningful unit coverage of those branches needs a DI seam refactor (constructor-injected `SupabaseClient`, mirroring the `ApiClient.withClient` pattern). Tracked in [What's not covered](testing.md#whats-not-covered-honest).
 
-### `apps/backend/supabase/tests/rls_*.sql` — pgtap RLS suite (330 tests across 46 files)
+### `apps/backend/supabase/tests/rls_*.sql` — pgtap RLS suite (~390 assertions across 49 files)
 
 pgTAP tests against the highest-blast-radius RLS policies, run by `cd apps/backend && supabase test db --local`. Gated in CI by the `pgtap-rls` job. Each file is wrapped in `begin; ... rollback;` so it's idempotent against the running local DB; tests filter to fixture user_ids so they don't trip on `seed.sql` rows. Pattern: insert two test users into `auth.users`, then `set local role authenticated; set local "request.jwt.claims" = '{"sub":"<uuid>"}';` to switch identity. Anon paths use `set local role anon`.
 
@@ -706,9 +708,9 @@ pgTAP tests against the highest-blast-radius RLS policies, run by `cd apps/backe
 
 These twenty-three files cover the tables + RPCs + triggers where a single-row leak / single-trigger bypass would be a privacy, impersonation, or revenue incident. They do NOT exhaustively cover every table (37 in total) — the original seven gaps (`clubs`, `club_members`, `club_posts`, `events`, `event_attendees`, `route_reviews`, `segments`) are now closed; remaining uncovered tables are lower-blast-radius (`run_kudos` / `run_comments` / `run_photos` are pinned indirectly via the `engagement_chain` helper, plus auxiliary tables like `webhook_events`, `rate_limits`, etc. that don't carry user content). Add a file when you touch a sensitive policy, or when an audit lands.
 
-### `apps/backend/supabase/functions/**/*.test.ts` — 54 deno tests across 4 files
+### `apps/backend/supabase/functions/**/*.test.ts` — ~210 deno tests across ~15 files
 
-Run all of them with `cd apps/backend && deno test --no-check supabase/functions/_shared/webhook_security.test.ts supabase/functions/_shared/body_limit.test.ts supabase/functions/revenuecat-webhook/lib.test.ts` and (with `SUPABASE_TEST_URL=http://127.0.0.1:54321 supabase functions serve --env-file .env.local`) `deno test --no-check --allow-net --allow-env supabase/functions/_shared/handler_envelope.test.ts`. The `edge-functions` CI job runs all four files on every PR.
+Run the pure-helper slices with `cd apps/backend && deno test --no-check supabase/functions/_shared/*.test.ts` plus the per-function `lib.test.ts` / `wiring.test.ts` files (`delete-account`, `events-checkout`, `events-connect-onboard`, `export-data`, `parkrun-import`, `revenuecat-webhook`, `stripe-events-webhook`); the network-touching ones (e.g. `_shared/handler_envelope.test.ts`) need `SUPABASE_TEST_URL=http://127.0.0.1:54321 supabase functions serve --env-file .env.local` and the `--allow-net --allow-env` flags. The `edge-functions` CI job runs all of them on every PR.
 
 - **`_shared/webhook_security.test.ts`** — 17 tests. `hmacHex` against the RFC 4868 §2.7.2 case 4 reference vector (with byte-exact `Uint8Array` inputs — the function accepts `string | Uint8Array` on both `secret` and `body`); `timingSafeEqual` (equal / unequal-same-length / length-mismatch / no-short-circuit-on-first-mismatch); `validateFreshness` (recent / 7-day boundary / too-old / clock-skew tolerance / custom window + skew args); `isValidUuid` (8-4-4-4-12 hex, rejects malformed); `isAnonymousAppUserId` (`$RCAnonymousID` prefix detected, others false). The `timingSafeEqual` and `validateFreshness` helpers were extracted out of the two webhook `index.ts` files so the production code path now imports the tested module directly — no duplicate definition can drift.
 - **`_shared/body_limit.test.ts`** — 9 tests for `readJsonWithLimit` and `readTextWithLimit` covering small / at-limit / over-limit bodies, chunked-transfer bypass, and the `tooLarge` response shape.
@@ -717,7 +719,7 @@ Run all of them with `cd apps/backend && deno test --no-check supabase/functions
 
 The happy-path 200s with valid HMAC / freshness / dedupe still need real secrets to drive and are exercised manually only — see [apps/backend/CLAUDE.md § Testing without real credentials](../../apps/backend/CLAUDE.md#testing-without-real-credentials).
 
-### `apps/web/tests-e2e/` — Playwright suite (~774 tests across ~142 files)
+### `apps/web/tests-e2e/` — Playwright suite (~1,130 tests across ~229 files)
 
 End-to-end browser tests that drive the real SvelteKit app against a real local Supabase. Unit tests pin pure helpers and SQL pins RLS at the database; this suite catches the next failure mode — **a UI fetch path that bypasses or misuses an otherwise-correct policy** (a wrong join, a dropped filter, a client-side lookup that trusts the URL, an optimistic update that never round-trips). Browser-only on purpose — mobile / watch don't have an equivalent harness (Flutter `integration_test` is too slow + flaky on CI to be worth the cycles right now).
 

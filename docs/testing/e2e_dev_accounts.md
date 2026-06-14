@@ -10,34 +10,34 @@ All of the following run in CI against the local Supabase stack. The seed user (
 
 | Surface | Spec file | What's pinned |
 |---|---|---|
-| Landing | `landing.spec.ts` | Page renders, footer present |
-| Sign in (email + password) | `login.spec.ts` | Rejects bad creds, happy-path resets password |
-| Sign up | `login.spec.ts` + `signup-age-gate.spec.ts` | 16+ + ToS gating, happy-path signup ends on /dashboard |
-| Password reset via Mailpit | `login.spec.ts` | Recovery email → reset → new password → re-sign-in |
-| /privacy, /terms, /cookie-notice | `legal-pages.spec.ts` | Pages render with draft banner |
-| Cookie consent banner | `cookie-consent.spec.ts` | Show / hide / persist / Sentry gate |
-| Pro pricing currency | `pricing-localization.spec.ts` | $ / £ / € per locale |
+| Landing | `landing/page.spec.ts` | Page renders, footer present |
+| Sign in (email + password) | `auth/login.spec.ts` | Rejects bad creds, happy-path resets password |
+| Sign up | `auth/login.spec.ts` + `auth/signup-age-gate.spec.ts` | 16+ + ToS gating, happy-path signup ends on /dashboard |
+| Password reset via Mailpit | `auth/reset.spec.ts` | Recovery email → reset → new password → re-sign-in |
+| /privacy, /terms, /cookie-notice | `legal/pages.spec.ts` | Pages render with draft banner |
+| Cookie consent banner | `cross-cutting/cookie-consent.spec.ts` | Show / hide / persist / Sentry gate |
+| Pro pricing currency | `settings/pricing-localization.spec.ts` | $ / £ / € per locale |
 
 ### Web — core product
 
 | Surface | Spec file | Notes |
 |---|---|---|
-| Dashboard | `dashboard.spec.ts`, `dashboard-period.spec.ts`, `cross-cutting/dashboard-journey.spec.ts` | Weekly mileage, PBs, goal cards |
+| Dashboard | `dashboard/page.spec.ts`, `dashboard/period.spec.ts`, `cross-cutting/dashboard-journey.spec.ts` | Weekly mileage, PBs, goal cards |
 | Runs (list / detail / new / photos / social / save-as-route) | `runs/*.spec.ts` | Full coverage of the run lifecycle |
 | Routes (list / detail / import) | `routes/*.spec.ts` | Including GPX import |
 | Plans (list / create / detail / workout-detail) | `plans/*.spec.ts` | Wizard + week grid |
 | Clubs (list / detail / posts / events / members / approval / invite / join) | `clubs/*.spec.ts` | Full social-layer suite |
-| Feed | `feed.spec.ts`, `cross-cutting/feed-journey.spec.ts` | Activity feed with author filter |
+| Feed | `social/feed.spec.ts`, `cross-cutting/feed-journey.spec.ts` | Activity feed with author filter |
 | Settings (account / devices / export / integrations / licenses / preferences / privacy-zones / upgrade / restore-backup) | `settings/*.spec.ts` | Almost every tab |
 | Share (run / route public pages) | `share/*.spec.ts` | Anon read-through |
 | Profile | `u/profile.spec.ts`, `u/notifications.spec.ts` | Follow toggle + notifications inbox |
-| Explore (public routes) | `explore.spec.ts` | Search + filters |
-| Live spectator (UI only) | `live.spec.ts`, `live-event.spec.ts` | Simulated pings |
-| Coach (with mocked SSE) | `coach.spec.ts` | Chat surface mounts; 429 path + happy-path mocked |
-| Compare | `compare.spec.ts` | Strava-comparison table |
-| Guided runs | `guided.spec.ts` | Library + detail |
-| Recap | `recap.spec.ts` | Year-in-running surface |
-| Sitemap | `sitemap.spec.ts` | XML + robots.txt |
+| Explore (public routes) | `explore/page.spec.ts` | Search + filters |
+| Live spectator (UI only) | `live/spectator.spec.ts`, `live/event.spec.ts` | Simulated pings |
+| Coach (with mocked SSE) | `coach/page.spec.ts` | Chat surface mounts; 429 path + happy-path mocked |
+| Compare | `compare/page.spec.ts` | Strava-comparison table |
+| Guided runs | `guided/page.spec.ts` | Library + detail |
+| Recap | `recap/page.spec.ts` | Year-in-running surface |
+| Sitemap | `sitemap/page.spec.ts` | XML + robots.txt |
 
 ### Cross-cutting
 
@@ -51,7 +51,7 @@ All of the following run in CI against the local Supabase stack. The seed user (
 
 ### Backend (not Playwright, but covered)
 
-- `apps/backend/supabase/functions/**/*.test.ts` — 45 Deno tests on shared helpers + webhook handlers.
+- `apps/backend/supabase/functions/**/*.test.ts` — ~210 Deno tests across ~15 files on shared helpers + webhook/checkout/export handlers.
 - `apps/backend/supabase/tests/*.sql` — pgtap suite for RLS / SECURITY DEFINER / triggers.
 - `apps/job_worker/internal/**/*_test.go` — Go tests for the worker, live-hub, dataexport, premium endpoints.
 

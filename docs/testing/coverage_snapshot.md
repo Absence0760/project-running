@@ -1,6 +1,6 @@
 # Coverage snapshot
 
-**Snapshot, not measured line coverage.** Each percentage answers: "would CI catch a regression in this surface before merge?" Last refreshed 2026-05-19.
+**Snapshot, not measured line coverage.** Each percentage answers: "would CI catch a regression in this surface before merge?" Last refreshed 2026-05-19 — the percentages are point-in-time and stale as of that date; the suite has grown roughly 2-3x since (see [test_inventory.md](test_inventory.md) for live aggregate counts). The hard assert counts cited in this chart (e.g. the architecture-guard count) are corrected on edit but the percentages are not re-measured.
 
 Two charts: roll-up by area, then per-feature. The roll-up averages the features inside each area; both views use the same underlying numbers.
 
@@ -38,7 +38,7 @@ AUTH + IDENTITY
   Apple OAuth                     ██░░░░░░░░░░░░░░░░░░  10%
 
 RECORDING + RUN PERSISTENCE
-  Architecture guards (54 asserts)███████████████████░  95%
+  Architecture guards (145 asserts)██████████████████░  95%
   LocalRunStore persistence       █████████████████░░░  85%
   run_stats helpers               █████████████████░░░  85%
   Live run screen widget (idle)   █████████████████░░░  85%
