@@ -38,6 +38,7 @@
 	import { relativeAge } from '$lib/runs/pr_recency';
 	import type { LoadedSettings } from '$lib/settings/settings';
 	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/format/units.svelte';
+	import { paceMinutesSeconds } from '$lib/format/pace_format';
 	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
@@ -1592,12 +1593,9 @@
 				pattern={'[0-9]{1,2}:[0-9]{2}'}
 				placeholder={preferredUnit === 'mi' ? '8:00' : '5:00'}
 				value={eg.paceSecPerKm != null
-					? (() => {
-						const perDisplay = preferredUnit === 'mi' ? eg.paceSecPerKm * 1.609344 : eg.paceSecPerKm;
-						const m = Math.floor(perDisplay / 60);
-						const s = Math.round(perDisplay % 60);
-						return `${m}:${s.toString().padStart(2, '0')}`;
-					})()
+					? paceMinutesSeconds(
+						preferredUnit === 'mi' ? eg.paceSecPerKm * 1.609344 : eg.paceSecPerKm
+					)
 					: ''}
 				oninput={(e) => {
 					const raw = (e.currentTarget as HTMLInputElement).value.trim();
