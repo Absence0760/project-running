@@ -133,6 +133,19 @@ void main() {
     expect(r.sets[0].status, SetAdherenceStatus.missed);
   });
 
+  test('bodyweight set planned with targetWeightKg 0 is hit on reps alone', () {
+    // Regression: a literal 0 weight target (bodyweight) must not fire the
+    // weight gate (`!= null` is true for 0), which would auto-miss a set the
+    // runner completed at full reps with no logged weight.
+    final r = computeRoutineAdherence(
+      [planned('pushup', 0, 5, 0)],
+      [actual('pushup', 0, 5)],
+    );
+    expect(r.sets[0].status, SetAdherenceStatus.hit);
+    expect(r.completedCount, 1);
+    expect(r.verdict, RoutineVerdict.completed);
+  });
+
   test('warmup set is excluded from the verdict denominator', () {
     final r = computeRoutineAdherence(
       [

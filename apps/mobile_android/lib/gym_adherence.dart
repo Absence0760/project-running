@@ -152,6 +152,7 @@ RoutineAdherence computeRoutineAdherence(
           ? SetAdherenceStatus.hit
           : SetAdherenceStatus.missed;
     } else if (p.targetWeightKg != null &&
+        p.targetWeightKg! > 0 &&
         (a.weightKg == null ||
             a.weightKg! < p.targetWeightKg! * _axisHitFraction)) {
       status = SetAdherenceStatus.missed;
