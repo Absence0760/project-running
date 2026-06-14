@@ -932,6 +932,18 @@ export function isWorkoutCompleted(
 	return wo.manually_completed === true || wo.completed_run_id != null;
 }
 
+/// A workout is "skipped" when the runner deliberately dropped it
+/// (`skipped_at` stamped). Skip and done are mutually exclusive: the
+/// write layer clears completion when skipping and clears the skip when
+/// completing, so a row is never both. A skipped workout is neither a
+/// debt (it doesn't count as outstanding in the progress ring's
+/// denominator) nor an achievement (it isn't "done") — it's off the
+/// books. Read sites that filter the active to-do set exclude skipped
+/// alongside completed.
+export function isWorkoutSkipped(wo: { skipped_at?: string | null }): boolean {
+	return wo.skipped_at != null;
+}
+
 // ─────────────────────── Date helpers ───────────────────────
 // Pure ISO date helpers (YYYY-MM-DD). Intentionally UTC-free — the caller
 // feeds the runner's local date; all internal math is in day counts.

@@ -33,6 +33,7 @@ import {
 	formatISO,
 	fmtHms,
 	isWorkoutCompleted,
+	isWorkoutSkipped,
 	type WorkoutStructure
 } from './training';
 
@@ -544,6 +545,27 @@ test("isWorkoutCompleted: true when manually marked", () => {
 test("isWorkoutCompleted: true when both set", () => {
 	assert.equal(
 		isWorkoutCompleted({ manually_completed: true, completed_run_id: "run-1" }),
+		true
+	);
+});
+
+// ─────────────────────── isWorkoutSkipped ───────────────────────
+
+test("isWorkoutSkipped: false when skipped_at absent or null", () => {
+	assert.equal(isWorkoutSkipped({}), false);
+	assert.equal(isWorkoutSkipped({ skipped_at: null }), false);
+});
+
+test("isWorkoutSkipped: true when skipped_at stamped", () => {
+	assert.equal(isWorkoutSkipped({ skipped_at: "2026-06-13T10:00:00.000Z" }), true);
+});
+
+test("isWorkoutSkipped is independent of completion flags", () => {
+	// The write layer keeps skip and done mutually exclusive, but the read
+	// helper only inspects skipped_at — a row that somehow carried both
+	// still reads as skipped here (defensive: the predicate is single-axis).
+	assert.equal(
+		isWorkoutSkipped({ skipped_at: "2026-06-13T10:00:00.000Z", completed_run_id: "run-1" }),
 		true
 	);
 });
