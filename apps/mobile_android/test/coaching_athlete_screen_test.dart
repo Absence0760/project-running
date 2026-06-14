@@ -65,6 +65,7 @@ TrainingPlanRow _plan(String id, String name, {String? assignedBy}) =>
       status: 'active',
       source: 'app',
       isTemplate: false,
+      isPublicTemplate: false,
       assignedByCoachId: assignedBy,
     );
 

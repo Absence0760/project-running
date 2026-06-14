@@ -308,6 +308,7 @@ class _CoachScreenState extends State<CoachScreen> {
                   source: 'manual',
                   createdAt: DateTime.now(),
                   isTemplate: false,
+                  isPublicTemplate: false,
                 ),
         );
         if (p.id == _planId) {

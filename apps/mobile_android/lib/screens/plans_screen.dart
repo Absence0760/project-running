@@ -14,6 +14,7 @@ import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
+import 'plan_library_screen.dart';
 import 'plan_new_screen.dart';
 
 class PlansScreen extends StatefulWidget {
@@ -110,7 +111,21 @@ class _PlansScreenState extends State<PlansScreen> {
     // applies when a bottomNavigationBar is present). Apply it manually.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.plansTitle)),
+      appBar: AppBar(
+        title: Text(l10n.plansTitle),
+        actions: [
+          if (signedIn)
+            IconButton(
+              icon: const Icon(Icons.public),
+              tooltip: l10n.plansBrowseLibrary,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PlanLibraryScreen(training: widget.training),
+                ),
+              ),
+            ),
+        ],
+      ),
       floatingActionButton: signedIn
           ? Padding(
               padding: EdgeInsets.only(bottom: bottomInset),

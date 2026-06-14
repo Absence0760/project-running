@@ -3816,6 +3816,112 @@ class AppLocalizationsJa extends AppLocalizations {
   String get planNewTemplatePickerCancel => 'キャンセル';
 
   @override
+  String get planLibraryTitle => '公開プランライブラリ';
+
+  @override
+  String get planLibrarySubheading =>
+      '他のランナーが公開したプラン。アカウントにクローンしてトレーニングを始めましょう。';
+
+  @override
+  String get planLibrarySearchHint => '名前でプランを検索';
+
+  @override
+  String get planLibraryLoadError => 'ライブラリを読み込めませんでした。再試行してください。';
+
+  @override
+  String get planLibraryRetry => '再試行';
+
+  @override
+  String get planLibraryEmpty => '公開されたプランはまだありません。';
+
+  @override
+  String planLibraryEmptySearch(String query) {
+    return '「$query」に一致するプランはありません。';
+  }
+
+  @override
+  String planLibraryByAuthor(String author) {
+    return '$author 作成';
+  }
+
+  @override
+  String get planLibraryAnonymous => 'あるランナー';
+
+  @override
+  String planLibraryWeeks(int weeks) {
+    return '$weeks 週間';
+  }
+
+  @override
+  String planLibraryDaysPerWeek(int days) {
+    return '週$days回';
+  }
+
+  @override
+  String get planLibraryClone => '自分のプランにクローン';
+
+  @override
+  String get planLibraryCloning => 'クローン中…';
+
+  @override
+  String get planLibraryCloneSuccess => 'プランをクローンしました。';
+
+  @override
+  String planLibraryCloneFailed(String error) {
+    return 'クローンに失敗しました: $error';
+  }
+
+  @override
+  String get planLibraryStartDate => '開始日';
+
+  @override
+  String get planLibraryNotFound => 'このプランは公開ライブラリにありません。';
+
+  @override
+  String get planLibraryPreviewWeeks => '週';
+
+  @override
+  String planLibraryPreviewWeek(int n) {
+    return '第$n週';
+  }
+
+  @override
+  String get planDetailPublishLibraryLabel => '公開プランライブラリ';
+
+  @override
+  String get planDetailPublishLibrary => 'ライブラリに公開';
+
+  @override
+  String get planDetailPublishLibraryHint =>
+      'このプランのコピーを共有して、誰でもクローンできるようにします。フィットネス数値は共有されません。';
+
+  @override
+  String get planDetailPublishLibrarySuccess =>
+      'プランを公開ライブラリに公開しました。あなた個人のプランは変わりません。';
+
+  @override
+  String planDetailPublishLibraryFailed(String error) {
+    return '公開に失敗しました: $error';
+  }
+
+  @override
+  String get planDetailUnpublishLibrary => '公開を取り消す';
+
+  @override
+  String get planDetailUnpublishSuccess => '公開ライブラリから削除しました。';
+
+  @override
+  String planDetailUnpublishFailed(String error) {
+    return '取り消しに失敗しました: $error';
+  }
+
+  @override
+  String get planDetailAlreadyPublished => 'このプランは公開ライブラリにあります。';
+
+  @override
+  String get plansBrowseLibrary => 'ライブラリを見る';
+
+  @override
   String get planNewStarterTitle => '組み込みプランから始める';
 
   @override

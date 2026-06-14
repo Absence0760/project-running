@@ -207,6 +207,7 @@ class _AdoptTraining extends TrainingService {
           status: 'active',
           source: 'generated',
           isTemplate: true,
+          isPublicTemplate: false,
         ),
       ];
 

@@ -71,6 +71,7 @@ TrainingPlanRow _plan(DateTime start) => TrainingPlanRow(
       status: 'active',
       source: 'generated',
       isTemplate: false,
+      isPublicTemplate: false,
     );
 
 PlanWeekRow _week(String id, int idx, String phase, double vol) =>

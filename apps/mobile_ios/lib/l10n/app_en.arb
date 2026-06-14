@@ -4994,6 +4994,130 @@
   "@planNewTemplatePickerCancel": {
     "description": "Plan-new club-template picker"
   },
+  "planLibraryTitle": "Public plan library",
+  "@planLibraryTitle": {
+    "description": "Public plan library"
+  },
+  "planLibrarySubheading": "Plans published by other runners. Clone one into your account to start training.",
+  "@planLibrarySubheading": {
+    "description": "Public plan library"
+  },
+  "planLibrarySearchHint": "Search plans by name",
+  "@planLibrarySearchHint": {
+    "description": "Public plan library"
+  },
+  "planLibraryLoadError": "Couldn’t load the library. Retry.",
+  "@planLibraryLoadError": {
+    "description": "Public plan library"
+  },
+  "planLibraryRetry": "Retry",
+  "@planLibraryRetry": {
+    "description": "Public plan library"
+  },
+  "planLibraryEmpty": "No published plans yet.",
+  "@planLibraryEmpty": {
+    "description": "Public plan library"
+  },
+  "planLibraryEmptySearch": "No plans match “{query}”.",
+  "@planLibraryEmptySearch": {
+    "description": "Public plan library",
+    "placeholders": {"query": {"type": "String"}}
+  },
+  "planLibraryByAuthor": "by {author}",
+  "@planLibraryByAuthor": {
+    "description": "Public plan library",
+    "placeholders": {"author": {"type": "String"}}
+  },
+  "planLibraryAnonymous": "a runner",
+  "@planLibraryAnonymous": {
+    "description": "Public plan library"
+  },
+  "planLibraryWeeks": "{weeks} weeks",
+  "@planLibraryWeeks": {
+    "description": "Public plan library",
+    "placeholders": {"weeks": {"type": "int"}}
+  },
+  "planLibraryDaysPerWeek": "{days}×/week",
+  "@planLibraryDaysPerWeek": {
+    "description": "Public plan library",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "planLibraryClone": "Clone into my plans",
+  "@planLibraryClone": {
+    "description": "Public plan library"
+  },
+  "planLibraryCloning": "Cloning…",
+  "@planLibraryCloning": {
+    "description": "Public plan library"
+  },
+  "planLibraryCloneSuccess": "Plan cloned.",
+  "@planLibraryCloneSuccess": {
+    "description": "Public plan library"
+  },
+  "planLibraryCloneFailed": "Failed to clone: {error}",
+  "@planLibraryCloneFailed": {
+    "description": "Public plan library",
+    "placeholders": {"error": {"type": "String"}}
+  },
+  "planLibraryStartDate": "Start date",
+  "@planLibraryStartDate": {
+    "description": "Public plan library"
+  },
+  "planLibraryNotFound": "This plan is no longer in the public library.",
+  "@planLibraryNotFound": {
+    "description": "Public plan library"
+  },
+  "planLibraryPreviewWeeks": "Weeks",
+  "@planLibraryPreviewWeeks": {
+    "description": "Public plan library"
+  },
+  "planLibraryPreviewWeek": "Week {n}",
+  "@planLibraryPreviewWeek": {
+    "description": "Public plan library",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "planDetailPublishLibraryLabel": "Public plan library",
+  "@planDetailPublishLibraryLabel": {
+    "description": "Public plan library"
+  },
+  "planDetailPublishLibrary": "Publish to library",
+  "@planDetailPublishLibrary": {
+    "description": "Public plan library"
+  },
+  "planDetailPublishLibraryHint": "Share a copy of this plan so anyone can clone it. Your fitness numbers are not shared.",
+  "@planDetailPublishLibraryHint": {
+    "description": "Public plan library"
+  },
+  "planDetailPublishLibrarySuccess": "Plan published to the public library. Your personal plan is unchanged.",
+  "@planDetailPublishLibrarySuccess": {
+    "description": "Public plan library"
+  },
+  "planDetailPublishLibraryFailed": "Failed to publish: {error}",
+  "@planDetailPublishLibraryFailed": {
+    "description": "Public plan library",
+    "placeholders": {"error": {"type": "String"}}
+  },
+  "planDetailUnpublishLibrary": "Unpublish",
+  "@planDetailUnpublishLibrary": {
+    "description": "Public plan library"
+  },
+  "planDetailUnpublishSuccess": "Removed from the public library.",
+  "@planDetailUnpublishSuccess": {
+    "description": "Public plan library"
+  },
+  "planDetailUnpublishFailed": "Failed to unpublish: {error}",
+  "@planDetailUnpublishFailed": {
+    "description": "Public plan library",
+    "placeholders": {"error": {"type": "String"}}
+  },
+  "planDetailAlreadyPublished": "This plan is in the public library.",
+  "@planDetailAlreadyPublished": {
+    "description": "Public plan library"
+  },
+  "plansBrowseLibrary": "Browse library",
+  "@plansBrowseLibrary": {
+    "description": "Public plan library"
+  },
   "planNewStarterTitle": "Start from a built-in plan",
   "@planNewStarterTitle": {
     "description": "Plan-new built-in starter-plan picker"

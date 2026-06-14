@@ -105,6 +105,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   _PlanDetailLoadError? _error;
   bool _publishing = false;
   bool _bulkBusy = false;
+  bool _libraryBusy = false;
+  String? _publishedTemplateId;
   List<RecentRunRow> _recentRuns = const [];
   List<ReplanChange>? _replanPreview;
   // Set only when the current preview came from the adaptive (trend-based)
@@ -142,6 +144,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         _loading = false;
       });
       _loadRecentRuns();
+      _loadPublishedState();
     } on TimeoutException catch (e) {
       debugPrint('PlanDetailScreen._load timed out: $e');
       if (mounted) {
@@ -483,6 +486,68 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     }
   }
 
+  Future<void> _loadPublishedState() async {
+    final plan = _plan;
+    if (plan == null || !_isOwner(plan) || plan.isTemplate) return;
+    try {
+      final published = await widget.training
+          .fetchMyPublishedPlans()
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _publishedTemplateId =
+            published.where((t) => t.name == plan.name).map((t) => t.id).firstOrNull;
+      });
+    } catch (_) {
+      /* L4 best-effort — leave the toggle in publish state. */
+    }
+  }
+
+  Future<void> _publishToLibrary(TrainingPlanRow plan) async {
+    if (_libraryBusy) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _libraryBusy = true);
+    try {
+      final newId = await widget.training
+          .publishPlanToLibrary(planId: plan.id)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _libraryBusy = false;
+        _publishedTemplateId = newId;
+      });
+      showTopBanner(context, l10n.planDetailPublishLibrarySuccess);
+    } catch (e, s) {
+      debugPrint('publishPlanToLibrary failed: $e\n$s');
+      if (!mounted) return;
+      setState(() => _libraryBusy = false);
+      showTopBanner(context, l10n.planDetailPublishLibraryFailed(e.toString()));
+    }
+  }
+
+  Future<void> _unpublishFromLibrary() async {
+    final templateId = _publishedTemplateId;
+    if (templateId == null || _libraryBusy) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _libraryBusy = true);
+    try {
+      await widget.training
+          .unpublishFromLibrary(templateId)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      setState(() {
+        _libraryBusy = false;
+        _publishedTemplateId = null;
+      });
+      showTopBanner(context, l10n.planDetailUnpublishSuccess);
+    } catch (e, s) {
+      debugPrint('unpublishFromLibrary failed: $e\n$s');
+      if (!mounted) return;
+      setState(() => _libraryBusy = false);
+      showTopBanner(context, l10n.planDetailUnpublishFailed(e.toString()));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -541,6 +606,24 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             tooltip: l10n.planDetailPublishTooltip,
             onPressed: _publishing ? null : () => _publishToClub(p),
           ),
+          if (_isOwner(p) && !p.isTemplate)
+            IconButton(
+              icon: _libraryBusy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(_publishedTemplateId != null ? Icons.public_off : Icons.public),
+              tooltip: _publishedTemplateId != null
+                  ? l10n.planDetailUnpublishLibrary
+                  : l10n.planDetailPublishLibrary,
+              onPressed: _libraryBusy
+                  ? null
+                  : (_publishedTemplateId != null
+                      ? _unpublishFromLibrary
+                      : () => _publishToLibrary(p)),
+            ),
         ],
       ),
       body: RefreshIndicator(

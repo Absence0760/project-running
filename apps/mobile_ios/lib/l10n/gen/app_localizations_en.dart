@@ -4026,6 +4026,114 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planNewTemplatePickerCancel => 'Cancel';
 
   @override
+  String get planLibraryTitle => 'Public plan library';
+
+  @override
+  String get planLibrarySubheading =>
+      'Plans published by other runners. Clone one into your account to start training.';
+
+  @override
+  String get planLibrarySearchHint => 'Search plans by name';
+
+  @override
+  String get planLibraryLoadError => 'Couldn’t load the library. Retry.';
+
+  @override
+  String get planLibraryRetry => 'Retry';
+
+  @override
+  String get planLibraryEmpty => 'No published plans yet.';
+
+  @override
+  String planLibraryEmptySearch(String query) {
+    return 'No plans match “$query”.';
+  }
+
+  @override
+  String planLibraryByAuthor(String author) {
+    return 'by $author';
+  }
+
+  @override
+  String get planLibraryAnonymous => 'a runner';
+
+  @override
+  String planLibraryWeeks(int weeks) {
+    return '$weeks weeks';
+  }
+
+  @override
+  String planLibraryDaysPerWeek(int days) {
+    return '$days×/week';
+  }
+
+  @override
+  String get planLibraryClone => 'Clone into my plans';
+
+  @override
+  String get planLibraryCloning => 'Cloning…';
+
+  @override
+  String get planLibraryCloneSuccess => 'Plan cloned.';
+
+  @override
+  String planLibraryCloneFailed(String error) {
+    return 'Failed to clone: $error';
+  }
+
+  @override
+  String get planLibraryStartDate => 'Start date';
+
+  @override
+  String get planLibraryNotFound =>
+      'This plan is no longer in the public library.';
+
+  @override
+  String get planLibraryPreviewWeeks => 'Weeks';
+
+  @override
+  String planLibraryPreviewWeek(int n) {
+    return 'Week $n';
+  }
+
+  @override
+  String get planDetailPublishLibraryLabel => 'Public plan library';
+
+  @override
+  String get planDetailPublishLibrary => 'Publish to library';
+
+  @override
+  String get planDetailPublishLibraryHint =>
+      'Share a copy of this plan so anyone can clone it. Your fitness numbers are not shared.';
+
+  @override
+  String get planDetailPublishLibrarySuccess =>
+      'Plan published to the public library. Your personal plan is unchanged.';
+
+  @override
+  String planDetailPublishLibraryFailed(String error) {
+    return 'Failed to publish: $error';
+  }
+
+  @override
+  String get planDetailUnpublishLibrary => 'Unpublish';
+
+  @override
+  String get planDetailUnpublishSuccess => 'Removed from the public library.';
+
+  @override
+  String planDetailUnpublishFailed(String error) {
+    return 'Failed to unpublish: $error';
+  }
+
+  @override
+  String get planDetailAlreadyPublished =>
+      'This plan is in the public library.';
+
+  @override
+  String get plansBrowseLibrary => 'Browse library';
+
+  @override
   String get planNewStarterTitle => 'Start from a built-in plan';
 
   @override

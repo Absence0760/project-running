@@ -51,6 +51,7 @@ TrainingPlanRow _activePlan() => TrainingPlanRow(
       status: 'active',
       source: 'generated',
       isTemplate: false,
+      isPublicTemplate: false,
     );
 
 Future<void> _pumpSignedIn(WidgetTester tester, _FakeTraining training) async {
