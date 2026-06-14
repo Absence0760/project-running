@@ -655,4 +655,40 @@ void main() {
       }
     });
   });
+
+  group('fmtHms', () {
+    test('zero/null/negative render the em-dash placeholder', () {
+      expect(fmtHms(0), '—');
+      expect(fmtHms(null), '—');
+      expect(fmtHms(-90), '—');
+    });
+
+    test('formats a positive duration', () {
+      expect(fmtHms(90), '1:30');
+      expect(fmtHms(3661), '1:01:01');
+    });
+  });
+
+  group('generatePlan zero anchor (parity guard)', () {
+    test('a zero anchor is treated as no anchor (no Infinity vdot)', () {
+      final base = GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 4,
+      );
+      final zero = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 4,
+        recent5kSec: 0,
+      ));
+      final noAnchor = generatePlan(base);
+      // Before the fix `0 != null` made this a real anchor: vdotFromRace(5000,
+      // 0) → velocity = distance/0 = Infinity → non-finite VDOT.
+      expect(zero.vdot, isNull);
+      double weekVol(GeneratedPlan p, int i) => p.weeks[i].workouts
+          .fold(0.0, (s, w) => s + (w.targetDistanceM ?? 0));
+      expect(weekVol(zero, 0), weekVol(noAnchor, 0));
+    });
+  });
 }

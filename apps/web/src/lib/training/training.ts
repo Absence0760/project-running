@@ -970,7 +970,10 @@ export function addDays(d: Date, n: number): Date {
 // them from `$lib/format/units.svelte` at the call site.
 
 export function fmtHms(sec: number | null | undefined): string {
-	if (!sec) return '—';
+	// `!sec` catches 0/null/NaN but a NEGATIVE is truthy and would format a
+	// nonsensical negative clock (e.g. -90 → "-2:-30"); guard <= 0 too, matching
+	// the Dart twin (`sec == null || sec <= 0`).
+	if (!sec || sec <= 0) return '—';
 	const h = Math.floor(sec / 3600);
 	const m = Math.floor((sec % 3600) / 60);
 	const s = Math.floor(sec % 60);

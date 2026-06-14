@@ -31,6 +31,7 @@ import {
 	walkRunDefaultWeeks,
 	GOAL_DISTANCES_M,
 	formatISO,
+	fmtHms,
 	isWorkoutCompleted,
 	type WorkoutStructure
 } from './training';
@@ -719,4 +720,32 @@ test('predictionConfidence: low + limited with no qualifying runs', () => {
 	});
 	assert.equal(q.confidence, 'low');
 	assert.equal(q.reason, 'limited');
+});
+
+test('fmtHms — zero/null/negative render the em-dash placeholder', () => {
+	assert.equal(fmtHms(0), '—');
+	assert.equal(fmtHms(null), '—');
+	assert.equal(fmtHms(undefined), '—');
+	// A negative is truthy in JS; the <= 0 guard must still placeholder it.
+	assert.equal(fmtHms(-90), '—');
+});
+
+test('fmtHms — formats a positive duration', () => {
+	assert.equal(fmtHms(90), '1:30');
+	assert.equal(fmtHms(3661), '1:01:01');
+});
+
+test('generatePlan: a zero anchor is treated as no anchor (no Infinity vdot)', () => {
+	const base = {
+		goalEvent: 'distance_5k' as const,
+		startDate: '2026-06-01',
+		daysPerWeek: 4
+	};
+	const zero = generatePlan({ ...base, recent5kSec: 0 });
+	const noAnchor = generatePlan(base);
+	assert.equal(zero.vdot, null);
+	const weekVol = (p: typeof zero, i: number) =>
+		p.weeks[i].workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0);
+	// A zero anchor scales volume identically to no anchor (0.6× peak).
+	assert.equal(weekVol(zero, 0), weekVol(noAnchor, 0));
 });

@@ -453,10 +453,15 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
   );
   final paces = resolved.paces;
   final pacesAreFallback = resolved.isFallback;
+  // Guard positivity, not just non-null: web uses JS truthiness here so a 0
+  // anchor is "no anchor", but `0 != null` is true in Dart — a zero recent-5k
+  // / goal-time would otherwise call vdotFromRace with time 0 (velocity =
+  // distance/0 = Infinity → non-finite VDOT) and scale peak volume as if a
+  // real anchor existed, diverging from web.
   double? vdot;
-  if (input.recent5kSec != null) {
+  if (input.recent5kSec != null && input.recent5kSec! > 0) {
     vdot = vdotFromRace(5000, input.recent5kSec!);
-  } else if (input.goalTimeSec != null) {
+  } else if (input.goalTimeSec != null && input.goalTimeSec! > 0) {
     vdot = vdotFromRace(goalDistance, input.goalTimeSec!);
   }
 
@@ -468,8 +473,11 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
   final masters = isMastersAge(input.age);
   for (var i = 0; i < totalWeeks; i++) {
     final phase = phaseFor(i, totalWeeks);
-    final peakKm = _peakVolumeKm(goalDistance, input.daysPerWeek,
-        input.goalTimeSec != null || input.recent5kSec != null);
+    final peakKm = _peakVolumeKm(
+        goalDistance,
+        input.daysPerWeek,
+        (input.goalTimeSec != null && input.goalTimeSec! > 0) ||
+            (input.recent5kSec != null && input.recent5kSec! > 0));
     final frac = _mileageFraction(i, totalWeeks, phase, masters);
     final weeklyKm = (peakKm * frac).round();
     final weekStart = input.startDate.add(Duration(days: i * 7));
