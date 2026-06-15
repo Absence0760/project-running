@@ -3442,6 +3442,7 @@ export const en = {
 	"gym.routine.title": "Routines",
 	"gym.routine.subtitle": "{count, plural, one {# routine} other {# routines}}",
 	"gym.routine.link": "Routines",
+	"gym.sessions.link": "Sessions",
 	"gym.routine.new": "New routine",
 	"gym.routine.loadError": "Couldn't load your routines.",
 	"gym.routine.retry": "Retry",

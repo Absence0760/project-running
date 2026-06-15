@@ -4,6 +4,7 @@
 	import {
 		fetchGymWorkouts,
 		fetchGymSetHistory,
+		fetchSessionPlans,
 		type GymWorkout,
 		type GymSetWithDate,
 	} from '$lib/core/data';
@@ -16,11 +17,22 @@
 
 	let workouts = $state<GymWorkout[]>([]);
 	let history = $state<GymSetWithDate[]>([]);
+	// Session-plan count gates the Sessions link. Session plans are authored
+	// independently of gym workouts (a yoga user may have plans but no logged
+	// workouts), so this self-hides on its own data presence, not workouts.length.
+	let sessionPlanCount = $state(0);
 	let loading = $state(true);
 	let showCreate = $state(false);
 
 	async function load() {
-		[workouts, history] = await Promise.all([fetchGymWorkouts(100), fetchGymSetHistory()]);
+		const [w, h, plans] = await Promise.all([
+			fetchGymWorkouts(100),
+			fetchGymSetHistory(),
+			fetchSessionPlans(),
+		]);
+		workouts = w;
+		history = h;
+		sessionPlanCount = plans.length;
 		loading = false;
 	}
 
@@ -118,6 +130,12 @@
 				<a class="btn btn-secondary" href="/gym/routines" data-testid="gym-routines-link">
 					<span class="material-symbols" aria-hidden="true">list_alt</span>
 					{t('gym.routine.link')}
+				</a>
+			{/if}
+			{#if !loading && sessionPlanCount > 0}
+				<a class="btn btn-secondary" href="/sessions" data-testid="gym-sessions-link">
+					<span class="material-symbols" aria-hidden="true">self_improvement</span>
+					{t('gym.sessions.link')}
 				</a>
 			{/if}
 			{#if !loading && hasWeightedRecords}

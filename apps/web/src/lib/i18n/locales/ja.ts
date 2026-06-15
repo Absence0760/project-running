@@ -3429,6 +3429,7 @@ export const messages = {
 	"gym.routine.title": "ルーティン",
 	"gym.routine.subtitle": "{count, plural, other {#件のルーティン}}",
 	"gym.routine.link": "ルーティン",
+	"gym.sessions.link": "セッション",
 	"gym.routine.new": "新しいルーティン",
 	"gym.routine.loadError": "ルーティンを読み込めませんでした。",
 	"gym.routine.retry": "再試行",

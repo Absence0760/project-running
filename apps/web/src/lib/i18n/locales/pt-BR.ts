@@ -3432,6 +3432,7 @@ export const messages = {
 	"gym.routine.title": "Rotinas",
 	"gym.routine.subtitle": "{count, plural, one {# rotina} other {# rotinas}}",
 	"gym.routine.link": "Rotinas",
+	"gym.sessions.link": "Sessões",
 	"gym.routine.new": "Nova rotina",
 	"gym.routine.loadError": "Não foi possível carregar suas rotinas.",
 	"gym.routine.retry": "Tentar novamente",

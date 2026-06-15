@@ -90,6 +90,33 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		expect(afterDelete?.length ?? 0).toBe(0);
 	});
 
+	test('Gym → Sessions link surfaces when the user has a session plan', async ({ page }) => {
+		// Session plans are otherwise undiscoverable from the main nav — the Gym
+		// header surfaces a Sessions link, self-hiding on session-plan presence
+		// (independent of gym-workout count). Seed one plan, assert the link
+		// appears and lands on /sessions.
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E session ${stamp}`;
+		const { data } = await admin
+			.from('session_plans')
+			.insert({ author_id: USER_A.id, title })
+			.select('id')
+			.single();
+		const planId = (data as { id: string }).id;
+
+		try {
+			await page.goto('/gym');
+			const link = page.getByTestId('gym-sessions-link');
+			await expect(link).toBeVisible({ timeout: 10_000 });
+			await link.click();
+			await expect(page).toHaveURL(/\/sessions$/, { timeout: 10_000 });
+			await expect(page.locator('.plan-row', { hasText: title })).toBeVisible({ timeout: 10_000 });
+		} finally {
+			await admin.from('session_plans').delete().eq('id', planId);
+		}
+	});
+
 	test('timed set: duration_s round-trips (plank hold)', async ({ page }) => {
 		// A timed hold (plank) carries duration_s with no weight (instructor M2).
 		// Log a 90 s plank, assert the stored row carries duration_s = 90, and
