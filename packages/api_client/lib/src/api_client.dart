@@ -3538,6 +3538,84 @@ class ApiClient {
         .toList();
   }
 
+  // ──────────────── Race-director checkpoints (race_director_ops.md) ──────
+
+  /// An event's ordered checkpoints (aid stations / cutoffs). Read directly —
+  /// RLS gates the rows to anyone who can see the event. Ordered by `ordinal`.
+  Future<List<EventCheckpointRow>> fetchEventCheckpoints(String eventId) async {
+    final data = await _client
+        .from(EventCheckpointRow.table)
+        .select()
+        .eq(EventCheckpointRow.colEventId, eventId)
+        .order(EventCheckpointRow.colOrdinal, ascending: true);
+    return (data as List)
+        .map<EventCheckpointRow>(
+            (r) => EventCheckpointRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Every crossing logged for one event instance, non-health columns only
+  /// (the Art 9 weigh-in fields are column-locked and reachable only via the
+  /// organiser RPC). Used to render who's already been stamped.
+  Future<List<CheckpointCrossingRow>> fetchCheckpointCrossings(
+    String eventId,
+    DateTime instanceStart,
+  ) async {
+    final data = await _client
+        .from(CheckpointCrossingRow.table)
+        .select(
+          'id, event_id, checkpoint_id, instance_start, user_id, bib, '
+          'runner_name, in_time, out_time, recorded_at, updated_at',
+        )
+        .eq(CheckpointCrossingRow.colEventId, eventId)
+        .eq(CheckpointCrossingRow.colInstanceStart,
+            instanceStart.toIso8601String());
+    return (data as List)
+        .map<CheckpointCrossingRow>(
+            (r) => CheckpointCrossingRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Stamp a runner IN / OUT at a checkpoint through the single-writer RPC. The
+  /// server authorises the caller as an organiser and MERGES two volunteers'
+  /// stamps (earliest in, latest out), so two phones' client-minted UUIDs
+  /// collapse onto one canonical row — no client-side conflict resolution.
+  ///
+  /// The Art 9 weigh-in fields persist server-side ONLY when the checkpoint
+  /// `requires_weigh_in` AND [healthConsent] is true (fail-closed, §150);
+  /// otherwise they are dropped even if passed.
+  Future<void> upsertCheckpointCrossing({
+    required String eventId,
+    required String checkpointId,
+    required DateTime instanceStart,
+    String? userId,
+    String? bib,
+    String? runnerName,
+    DateTime? inTime,
+    DateTime? outTime,
+    bool healthConsent = false,
+    double? bodyWeightKg,
+    double? bodyWeightPct,
+    bool? medicalHold,
+    String? medicalNote,
+  }) async {
+    await _client.rpc('upsert_checkpoint_crossing', params: {
+      'p_event_id': eventId,
+      'p_checkpoint_id': checkpointId,
+      'p_instance_start': instanceStart.toIso8601String(),
+      'p_user_id': userId,
+      'p_bib': bib,
+      'p_runner_name': runnerName,
+      'p_in_time': inTime?.toIso8601String(),
+      'p_out_time': outTime?.toIso8601String(),
+      'p_health_consent': healthConsent,
+      'p_body_weight_kg': bodyWeightKg,
+      'p_body_weight_pct': bodyWeightPct,
+      'p_medical_hold': medicalHold,
+      'p_medical_note': medicalNote,
+    });
+  }
+
   // ──────────────────── Plan templates (P1.D) ────────────────────
 
   /// Plan templates owned by `clubId` — visible to club members.
