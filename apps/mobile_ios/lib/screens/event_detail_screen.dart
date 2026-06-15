@@ -1163,6 +1163,8 @@ class EventDisciplineLabel extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   discipline,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: theme.colorScheme.onSecondaryContainer,
                     fontWeight: FontWeight.w600,

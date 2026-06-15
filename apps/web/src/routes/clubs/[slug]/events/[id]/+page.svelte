@@ -2257,6 +2257,10 @@
 		font-size: 1.15rem;
 		font-weight: 600;
 		color: var(--color-text);
+		/* discipline is user-controlled free text; a long single token would
+		   otherwise overflow the hero instead of wrapping. */
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.hero-tagline {
 		display: inline-flex;

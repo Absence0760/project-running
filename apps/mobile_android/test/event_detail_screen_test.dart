@@ -67,6 +67,76 @@ class _RsvpFailSocial extends SocialService {
   }
 }
 
+/// Configurable fake that drives the happy paths: a club (role configurable),
+/// an athletic event, a canned attendee list, and a recording RSVP write.
+class _EventSocial extends SocialService {
+  _EventSocial({
+    this.club,
+    this.category = 'run',
+    this.attendees = const [],
+    this.rsvpThrows = false,
+  });
+  ClubView? club;
+  String category;
+  List<AttendeeView> attendees;
+  bool rsvpThrows;
+  int rsvpCalls = 0;
+  int clearCalls = 0;
+  String? lastRsvpStatus;
+
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => club;
+  @override
+  Future<EventView?> fetchEventById(String eventId) async => EventView(
+        row: EventRow(
+          id: 'e1',
+          clubId: 'club-1',
+          title: 'Saturday Long Run',
+          startsAt: DateTime.utc(2026, 6, 20, 8),
+          authorId: 'host',
+          category: category,
+          distanceM: 21097,
+          isPublic: true,
+        ),
+        byday: null,
+        attendeeCount: attendees.length,
+        viewerRsvp: null,
+        nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
+      );
+  @override
+  Future<List<AttendeeView>> fetchAttendees(
+          String eventId, DateTime instance) async =>
+      attendees;
+  @override
+  Future<List<EventResultView>> fetchEventResults(
+          String eventId, DateTime instance) async =>
+      const [];
+  @override
+  Future<RaceSessionRow?> fetchRaceSession(
+          String eventId, DateTime instance) async =>
+      null;
+  @override
+  Future<({double lat, double lng})?> fetchEventMeetPoint(
+          String eventId) async =>
+      null;
+  @override
+  Future<void> rsvpEvent(String eventId, String status, DateTime instance) async {
+    rsvpCalls++;
+    lastRsvpStatus = status;
+    if (rsvpThrows) throw Exception('network down');
+  }
+
+  @override
+  Future<void> clearRsvp(String eventId, DateTime instance) async {
+    clearCalls++;
+  }
+
+  @override
+  RealtimeChannel subscribeToEvent(
+          String eventId, String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$eventId');
+}
+
 bool _supabaseReady = false;
 
 Future<void> _ensureSupabase() async {
@@ -170,6 +240,17 @@ void main() {
       expect(find.text('Submit my time'), findsNothing);
       expect(find.byType(EventResultsSection), findsNothing);
     });
+
+    testWidgets('a long discipline is bounded + ellipsised (no overflow)',
+        (tester) async {
+      const longDiscipline =
+          'Restorative candlelit Vinyasa flow with breathwork and '
+          'progressive myofascial release for deep recovery';
+      await pumpLabel(tester, longDiscipline);
+      final value = tester.widget<Text>(find.text(longDiscipline));
+      expect(value.maxLines, 2);
+      expect(value.overflow, TextOverflow.ellipsis);
+    });
   });
 
   group('slice E gating predicate', () {
@@ -178,6 +259,90 @@ void main() {
       expect(isAthleticEventCategory('social'), isFalse);
       expect(isAthleticEventCategory('run'), isTrue);
       expect(isAthleticEventCategory('cycle'), isTrue);
+    });
+  });
+
+  Future<void> pumpEvent(WidgetTester tester, _EventSocial social) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: EventDetailScreen(
+          social: social,
+          clubSlug: 'club-1',
+          eventId: 'e1',
+        ),
+      ),
+    );
+    // Two Future.wait batches in _load.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+
+  group('EventDetailScreen — RSVP success', () {
+    testWidgets('a successful RSVP calls rsvpEvent once + shows no banner',
+        (tester) async {
+      final social = _EventSocial(club: _club('member'));
+      await pumpEvent(tester, social);
+
+      final going = find.widgetWithText(OutlinedButton, "I'm in");
+      expect(going, findsOneWidget);
+      await tester.tap(going);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(social.rsvpCalls, 1);
+      expect(social.lastRsvpStatus, 'going');
+      expect(find.textContaining("Couldn't update your RSVP"), findsNothing);
+    });
+  });
+
+  group('EventDetailScreen — attendee rendering', () {
+    testWidgets('attendee names render in the attendees section',
+        (tester) async {
+      final social = _EventSocial(
+        club: _club('member'),
+        attendees: const [
+          AttendeeView(userId: 'a', status: 'going', displayName: 'Jamie'),
+          AttendeeView(userId: 'b', status: 'maybe', displayName: 'Riley'),
+        ],
+      );
+      await pumpEvent(tester, social);
+      expect(find.text('Jamie'), findsOneWidget);
+      expect(find.text('Riley'), findsOneWidget);
+    });
+
+    testWidgets('an event with no RSVPs shows the no-RSVPs hint',
+        (tester) async {
+      final social = _EventSocial(club: _club('member'), attendees: const []);
+      await pumpEvent(tester, social);
+      // eventNoRsvps copy.
+      expect(find.textContaining('No RSVPs'), findsOneWidget);
+    });
+  });
+
+  group('EventDetailScreen — Race control permission gating', () {
+    testWidgets('a race director sees the Race control panel on an athletic event',
+        (tester) async {
+      final social = _EventSocial(club: _club('owner'), category: 'run');
+      await pumpEvent(tester, social);
+      // The race-control status line shows "Not armed" for a fresh race.
+      expect(find.text('Not armed'), findsOneWidget);
+    });
+
+    testWidgets('a plain member does NOT see the Race control panel',
+        (tester) async {
+      final social = _EventSocial(club: _club('member'), category: 'run');
+      await pumpEvent(tester, social);
+      expect(find.text('Not armed'), findsNothing);
+    });
+
+    testWidgets('a class event hides Race control even for an organiser',
+        (tester) async {
+      // A class is attendance-only — no athletic affordances regardless of role.
+      final social = _EventSocial(club: _club('owner'), category: 'class');
+      await pumpEvent(tester, social);
+      expect(find.text('Not armed'), findsNothing);
     });
   });
 
