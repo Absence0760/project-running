@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { signOut } from '../fixtures/helpers';
+import { refreshStorageState, signOut } from '../fixtures/helpers';
 import { setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -120,29 +120,43 @@ test.describe('/dashboard — universal prefs cache', () => {
 
 	test('sign-out drops the cached prefs for the prior user (cross-user leak guard)', async ({
 		page,
+		browser,
+		baseURL,
 	}) => {
-		await page.goto('/dashboard');
-		await expect(
-			page.getByRole('heading', { name: /mileage/i, level: 2 }),
-		).toBeVisible();
-		await expect
-			.poll(
-				() => page.evaluate((key) => localStorage.getItem(key), PREFS_CACHE_KEY),
-				{ timeout: 5_000 },
-			)
-			.not.toBeNull();
+		try {
+			await page.goto('/dashboard');
+			await expect(
+				page.getByRole('heading', { name: /mileage/i, level: 2 }),
+			).toBeVisible();
+			await expect
+				.poll(
+					() => page.evaluate((key) => localStorage.getItem(key), PREFS_CACHE_KEY),
+					{ timeout: 5_000 },
+				)
+				.not.toBeNull();
 
-		// Driving the actual UI flow proves the store's logout() hook
-		// (which calls dropUserCache before nulling user/loggedIn) is
-		// wired correctly. Calling auth.logout() via window would
-		// bypass the affordance the user actually reaches for.
-		await signOut(page);
+			// Driving the actual UI flow proves the store's logout() hook
+			// (which calls dropUserCache before nulling user/loggedIn) is
+			// wired correctly. Calling auth.logout() via window would
+			// bypass the affordance the user actually reaches for.
+			await signOut(page);
 
-		// Cache for the signed-out user is gone.
-		const raw = await page.evaluate(
-			(key) => localStorage.getItem(key),
-			PREFS_CACHE_KEY,
-		);
-		expect(raw).toBeNull();
+			// Cache for the signed-out user is gone.
+			const raw = await page.evaluate(
+				(key) => localStorage.getItem(key),
+				PREFS_CACHE_KEY,
+			);
+			expect(raw).toBeNull();
+		} finally {
+			// The UI sign-out called supabase.auth.signOut({ scope: 'local' }),
+			// which revokes the refresh token of the SHARED session captured in
+			// .auth/user-a.json during globalSetup — not just this page's copy.
+			// Without re-minting it, the next USER_A spec sharded after this one
+			// loads a revoked session and bounces to /login (run 27567813578:
+			// week-strip.spec.ts saw the sign-in page, not the dashboard). Same
+			// hazard + same remedy as the password-rotation specs in
+			// auth/reset.spec.ts. Pinned by the e2e-session-hygiene guard.
+			await refreshStorageState(browser, baseURL ?? 'http://localhost:7777', USER_A);
+		}
 	});
 });
