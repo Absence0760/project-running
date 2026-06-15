@@ -5980,6 +5980,25 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get prefsSectionFueling => 'Reabastecimento de prova';
+
+  @override
+  String get prefsCarbsPerHour => 'Carboidratos por hora';
+
+  @override
+  String prefsCarbsPerHourValue(int grams) {
+    return '$grams g/h';
+  }
+
+  @override
+  String get prefsFluidPerHour => 'Líquido por hora';
+
+  @override
+  String prefsFluidPerHourValue(int ml) {
+    return '$ml ml/h';
+  }
+
+  @override
   String get prefsHrZones => 'Zonas de frequência cardíaca';
 
   @override
@@ -15217,6 +15236,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String prefsHrBpm(int bpm) {
     return '$bpm bpm';
+  }
+
+  @override
+  String get prefsSectionFueling => 'Reabastecimento de corrida';
+
+  @override
+  String get prefsCarbsPerHour => 'Carboidratos por hora';
+
+  @override
+  String prefsCarbsPerHourValue(int grams) {
+    return '$grams g/h';
+  }
+
+  @override
+  String get prefsFluidPerHour => 'Líquido por hora';
+
+  @override
+  String prefsFluidPerHourValue(int ml) {
+    return '$ml ml/h';
   }
 
   @override

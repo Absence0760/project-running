@@ -9823,6 +9823,36 @@ abstract class AppLocalizations {
   /// **'{bpm} bpm'**
   String prefsHrBpm(int bpm);
 
+  /// Settings section header for race-fueling intake rates
+  ///
+  /// In en, this message translates to:
+  /// **'Race fueling'**
+  String get prefsSectionFueling;
+
+  /// Tile and dialog title for the race-fueling carbohydrate rate
+  ///
+  /// In en, this message translates to:
+  /// **'Carbs per hour'**
+  String get prefsCarbsPerHour;
+
+  /// Carbohydrate intake rate value with unit
+  ///
+  /// In en, this message translates to:
+  /// **'{grams} g/h'**
+  String prefsCarbsPerHourValue(int grams);
+
+  /// Tile and dialog title for the race-fueling fluid rate
+  ///
+  /// In en, this message translates to:
+  /// **'Fluid per hour'**
+  String get prefsFluidPerHour;
+
+  /// Fluid intake rate value with unit
+  ///
+  /// In en, this message translates to:
+  /// **'{ml} ml/h'**
+  String prefsFluidPerHourValue(int ml);
+
   /// Tile title for heart-rate zones
   ///
   /// In en, this message translates to:

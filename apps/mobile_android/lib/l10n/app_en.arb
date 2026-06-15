@@ -7396,6 +7396,36 @@
       }
     }
   },
+  "prefsSectionFueling": "Race fueling",
+  "@prefsSectionFueling": {
+    "description": "Settings section header for race-fueling intake rates"
+  },
+  "prefsCarbsPerHour": "Carbs per hour",
+  "@prefsCarbsPerHour": {
+    "description": "Tile and dialog title for the race-fueling carbohydrate rate"
+  },
+  "prefsCarbsPerHourValue": "{grams} g/h",
+  "@prefsCarbsPerHourValue": {
+    "description": "Carbohydrate intake rate value with unit",
+    "placeholders": {
+      "grams": {
+        "type": "int"
+      }
+    }
+  },
+  "prefsFluidPerHour": "Fluid per hour",
+  "@prefsFluidPerHour": {
+    "description": "Tile and dialog title for the race-fueling fluid rate"
+  },
+  "prefsFluidPerHourValue": "{ml} ml/h",
+  "@prefsFluidPerHourValue": {
+    "description": "Fluid intake rate value with unit",
+    "placeholders": {
+      "ml": {
+        "type": "int"
+      }
+    }
+  },
   "prefsHrZones": "Heart-rate zones",
   "@prefsHrZones": {
     "description": "Tile title for heart-rate zones"

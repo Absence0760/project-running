@@ -184,6 +184,16 @@ class SettingsSyncService extends ChangeNotifier {
     if (bw is num) {
       preferences.setBodyWeightKg(bw > 0 ? bw.toDouble() : null);
     }
+    // Race-fueling intake rates — null / non-positive resets the local
+    // mirror to the documented default (60 g/hr · 500 ml/hr).
+    final cph = prefs[SettingsKeys.carbsPerHour];
+    if (cph is num) {
+      preferences.setCarbsPerHourG(cph > 0 ? cph.toDouble() : null);
+    }
+    final fph = prefs[SettingsKeys.fluidPerHour];
+    if (fph is num) {
+      preferences.setFluidPerHourMl(fph > 0 ? fph.toDouble() : null);
+    }
     // Default visibility for newly-saved runs. Public ⇒ is_public=true
     // on save, followers/private/unknown ⇒ false (no followers-only
     // column on `runs` today, conservative default).
@@ -250,6 +260,18 @@ class SettingsSyncService extends ChangeNotifier {
     if (keep is bool && keep != preferences.keepScreenOn) {
       preferences.setKeepScreenOn(keep);
     }
+  }
+
+  /// Push the user's race-fueling intake rates to the universal bag so they
+  /// roam across devices. Reads the current local [Preferences] values.
+  Future<void> pushFuelingPrefs() async {
+    final s = _settings;
+    if (s == null) return;
+    await s.updateUniversal(<String, dynamic>{
+      SettingsKeys.carbsPerHour: preferences.carbsPerHourG,
+      SettingsKeys.fluidPerHour: preferences.fluidPerHourMl,
+    });
+    notifyListeners();
   }
 
   /// Push the user's keep-screen-on toggle to the device bag.

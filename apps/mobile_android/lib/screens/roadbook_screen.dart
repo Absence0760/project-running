@@ -20,6 +20,10 @@ class RoadbookScreen extends StatefulWidget {
   final List<cm.Waypoint> waypoints;
   final ApiClient? api;
 
+  /// Source of the race-fueling carbs/fluid intake rates (mirrored from the
+  /// universal settings bag). Null falls back to the documented defaults.
+  final Preferences? preferences;
+
   /// Test seam: seed markers instead of fetching.
   @visibleForTesting
   final List<cm.RouteMarkerRow>? initialMarkers;
@@ -29,6 +33,7 @@ class RoadbookScreen extends StatefulWidget {
     required this.route,
     required this.waypoints,
     required this.api,
+    this.preferences,
     this.initialMarkers,
   });
 
@@ -108,8 +113,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
               services: leg.services,
             ),
         ],
-        carbsPerHourG: defaultCarbsPerHourG,
-        fluidPerHourMl: defaultFluidPerHourMl,
+        carbsPerHourG: widget.preferences?.carbsPerHourG ?? defaultCarbsPerHourG,
+        fluidPerHourMl: widget.preferences?.fluidPerHourMl ?? defaultFluidPerHourMl,
         heatFactor: _heat ? heatFluidFactor : 1.0,
       );
 

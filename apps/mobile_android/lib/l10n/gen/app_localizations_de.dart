@@ -5989,6 +5989,25 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get prefsSectionFueling => 'Wettkampfverpflegung';
+
+  @override
+  String get prefsCarbsPerHour => 'Kohlenhydrate pro Stunde';
+
+  @override
+  String prefsCarbsPerHourValue(int grams) {
+    return '$grams g/h';
+  }
+
+  @override
+  String get prefsFluidPerHour => 'Flüssigkeit pro Stunde';
+
+  @override
+  String prefsFluidPerHourValue(int ml) {
+    return '$ml ml/h';
+  }
+
+  @override
   String get prefsHrZones => 'Herzfrequenzzonen';
 
   @override

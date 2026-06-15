@@ -750,6 +750,38 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
   }
 
+  Future<void> _editCarbsPerHour() async {
+    final picked = await _pickInt(
+      title: AppLocalizations.of(context).prefsCarbsPerHour,
+      current:
+          (_bagValue<num>(SettingsKeys.carbsPerHour) ?? widget.preferences.carbsPerHourG)
+              .round(),
+      suffix: 'g/h',
+      minValue: 0,
+      maxValue: 200,
+    );
+    if (picked == null) return;
+    final value = picked == -1 ? null : picked;
+    await widget.preferences.setCarbsPerHourG(value?.toDouble());
+    await _putUniversal(SettingsKeys.carbsPerHour, value);
+  }
+
+  Future<void> _editFluidPerHour() async {
+    final picked = await _pickInt(
+      title: AppLocalizations.of(context).prefsFluidPerHour,
+      current:
+          (_bagValue<num>(SettingsKeys.fluidPerHour) ?? widget.preferences.fluidPerHourMl)
+              .round(),
+      suffix: 'ml/h',
+      minValue: 0,
+      maxValue: 3000,
+    );
+    if (picked == null) return;
+    final value = picked == -1 ? null : picked;
+    await widget.preferences.setFluidPerHourMl(value?.toDouble());
+    await _putUniversal(SettingsKeys.fluidPerHour, value);
+  }
+
   Future<void> _editHrZones() async {
     final l10n = AppLocalizations.of(context);
     final current = _bagValue<Map>(SettingsKeys.hrZones);
@@ -1137,6 +1169,30 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onChanged: _bagReady
                   ? (_) => _editExcludeGymFromReadiness()
                   : null,
+            ),
+
+            _sectionLabel(l10n.prefsSectionFueling),
+            ListTile(
+              title: Text(l10n.prefsCarbsPerHour),
+              subtitle: Text(l10n.prefsCarbsPerHourValue(
+                (_bagValue<num>(SettingsKeys.carbsPerHour) ??
+                        widget.preferences.carbsPerHourG)
+                    .round(),
+              )),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: _editCarbsPerHour,
+            ),
+            ListTile(
+              title: Text(l10n.prefsFluidPerHour),
+              subtitle: Text(l10n.prefsFluidPerHourValue(
+                (_bagValue<num>(SettingsKeys.fluidPerHour) ??
+                        widget.preferences.fluidPerHourMl)
+                    .round(),
+              )),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: _editFluidPerHour,
             ),
 
             _sectionLabel(l10n.prefsSectionPrivacySharing),

@@ -5644,6 +5644,25 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get prefsSectionFueling => 'レース補給';
+
+  @override
+  String get prefsCarbsPerHour => '1時間あたりの炭水化物';
+
+  @override
+  String prefsCarbsPerHourValue(int grams) {
+    return '$grams g/h';
+  }
+
+  @override
+  String get prefsFluidPerHour => '1時間あたりの水分';
+
+  @override
+  String prefsFluidPerHourValue(int ml) {
+    return '$ml ml/h';
+  }
+
+  @override
   String get prefsHrZones => '心拍ゾーン';
 
   @override

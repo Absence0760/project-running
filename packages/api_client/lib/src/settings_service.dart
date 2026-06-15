@@ -77,6 +77,13 @@ class SettingsKeys {
   /// `'lose' | 'maintain' (default) | 'gain'` (−500 / 0 / +300 kcal). Same
   /// placement rationale as [nutritionActivityLevel]. Phase 4 nutrition.
   static const nutritionGoal = 'nutrition_goal';
+  /// Target carbohydrate intake while racing, grams per hour. Backs the
+  /// roadbook fueling plan (`fuel_plan.ts`/`.dart`). Plain pref (not Art 9),
+  /// like [nutritionActivityLevel]. Default ~60 g/hr.
+  static const carbsPerHour = 'carbs_per_hour';
+  /// Target fluid intake while racing, millilitres per hour. Backs the
+  /// roadbook fueling plan. Plain pref. Default ~500 ml/hr.
+  static const fluidPerHour = 'fluid_per_hour';
   /// Opt-out (default false) that drops logged gym sessions from the run
   /// fitness/fatigue/form (CTL/ATL/TSB) curve, so a runner who wants a pure
   /// run-only readiness picture isn't dragged down by lifting. The gym cards

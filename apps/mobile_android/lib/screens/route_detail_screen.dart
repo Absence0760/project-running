@@ -1058,6 +1058,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         route: widget.route,
                         waypoints: _displayWaypoints,
                         api: widget.apiClient,
+                        preferences: widget.preferences,
                       ),
                     ),
                   ),

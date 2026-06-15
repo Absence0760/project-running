@@ -220,6 +220,13 @@ class Preferences extends ChangeNotifier {
   // the run-detail calorie estimate. 0 / unset = use the 70 kg
   // fallback (documented in `_estimatedCalories`).
   static const _kBodyWeightKg = 'body_weight_kg';
+  // Mirrors the universal `carbs_per_hour` / `fluid_per_hour` settings-bag
+  // keys — the race-fueling intake rates read by the roadbook fueling plan.
+  // Defaults match fuel_plan.dart's defaultCarbsPerHourG / defaultFluidPerHourMl.
+  static const _kCarbsPerHourG = 'carbs_per_hour';
+  static const _kFluidPerHourMl = 'fluid_per_hour';
+  static const _defaultCarbsPerHourG = 60.0;
+  static const _defaultFluidPerHourMl = 500.0;
   // Mirrors the universal `privacy_default` settings-bag key.
   // Drives the initial `is_public` flag on newly-saved runs. One of
   // 'public' / 'followers' / 'private'. Empty / unknown = 'private'
@@ -273,6 +280,8 @@ class Preferences extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
   Locale? _locale;
   double? _bodyWeightKg;
+  double _carbsPerHourG = _defaultCarbsPerHourG;
+  double _fluidPerHourMl = _defaultFluidPerHourMl;
   String _privacyDefault = 'private';
   WeightUnit _weightUnit = WeightUnit.kg;
   bool _keepRunPrimary = false;
@@ -314,6 +323,15 @@ class Preferences extends ChangeNotifier {
   /// a documented default. The web equivalent is the same key on
   /// `user_settings.prefs.body_weight_kg`.
   double? get bodyWeightKg => _bodyWeightKg;
+
+  /// Race-fueling carbohydrate intake rate (grams/hour), mirrored from
+  /// `user_settings.prefs.carbs_per_hour`. Drives the roadbook fueling plan.
+  /// Defaults to 60 g/hr when unset.
+  double get carbsPerHourG => _carbsPerHourG;
+
+  /// Race-fueling fluid intake rate (millilitres/hour), mirrored from
+  /// `user_settings.prefs.fluid_per_hour`. Defaults to 500 ml/hr when unset.
+  double get fluidPerHourMl => _fluidPerHourMl;
 
   /// Default visibility for newly-saved runs, mirrored from
   /// `user_settings.prefs.privacy_default`. One of `public` /
@@ -481,6 +499,10 @@ class Preferences extends ChangeNotifier {
     _locale = localeFromTag(_prefs.getString(_kLocale));
     final bw = _prefs.getDouble(_kBodyWeightKg);
     _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
+    final cph = _prefs.getDouble(_kCarbsPerHourG);
+    _carbsPerHourG = (cph != null && cph > 0) ? cph : _defaultCarbsPerHourG;
+    final fph = _prefs.getDouble(_kFluidPerHourMl);
+    _fluidPerHourMl = (fph != null && fph > 0) ? fph : _defaultFluidPerHourMl;
     _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
     _weightUnit = WeightFormat.unitFromWire(_prefs.getString(_kWeightUnit));
     _keepRunPrimary = _prefs.getBool(_kKeepRunPrimary) ?? false;
@@ -628,6 +650,35 @@ class Preferences extends ChangeNotifier {
       await _prefs.remove(_kBodyWeightKg);
     } else {
       await _prefs.setDouble(_kBodyWeightKg, next);
+    }
+    notifyListeners();
+  }
+
+  /// Set the race-fueling carbohydrate rate (g/hr). Null / non-positive resets
+  /// to the 60 g/hr default. Driven from the settings screen + mirrored from
+  /// the universal bag by [SettingsSyncService._applyUniversal].
+  Future<void> setCarbsPerHourG(double? v) async {
+    final next = (v != null && v > 0) ? v : _defaultCarbsPerHourG;
+    if (next == _carbsPerHourG) return;
+    _carbsPerHourG = next;
+    if (v != null && v > 0) {
+      await _prefs.setDouble(_kCarbsPerHourG, next);
+    } else {
+      await _prefs.remove(_kCarbsPerHourG);
+    }
+    notifyListeners();
+  }
+
+  /// Set the race-fueling fluid rate (ml/hr). Null / non-positive resets to
+  /// the 500 ml/hr default. See [setCarbsPerHourG].
+  Future<void> setFluidPerHourMl(double? v) async {
+    final next = (v != null && v > 0) ? v : _defaultFluidPerHourMl;
+    if (next == _fluidPerHourMl) return;
+    _fluidPerHourMl = next;
+    if (v != null && v > 0) {
+      await _prefs.setDouble(_kFluidPerHourMl, next);
+    } else {
+      await _prefs.remove(_kFluidPerHourMl);
     }
     notifyListeners();
   }
