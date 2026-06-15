@@ -769,6 +769,25 @@ Until those three are answered, treat this list as a menu, not a sequence. Rough
 | 12 | **Premium billing + feature gating** (Stripe Checkout, subscription webhook, `SubscriptionTier` honouring across web + mobile, customer portal) | 1–2 wk | All | `user_profiles.subscription_tier` already exists; add `stripe_customer_id`, `stripe_subscription_id` | Monthly vs annual; grandfather early users? |
 | 13 | **Treadmill (BLE FTMS)** ([~] **mobile partial, backlog C3** — FTMS `0x1826` / `0x2ACD` reader + `TreadmillSample` stream (`ble_treadmill.dart`), Settings → Integrations pairing tile, and an additive opt-in distance seam in `run_recorder` (belt overrides GPS only in treadmill mode; GPS L0/L1 path untouched; writes `metadata.indoor_source='treadmill'`). **Deferred:** the live run-screen mode toggle — UI wiring against the shipped seam, no recorder change needed) — real-time speed / distance / incline from a paired treadmill. Mobile-only (web is not a recording surface). Spec + scope: [integrations.md § Treadmills (BLE FTMS)](../features/integrations.md#treadmills-ble-ftms--deferred). | Partial | Garmin, Runna (indoor) | None — `prefs.treadmill_device` + `metadata.indoor_source = "treadmill"` | FTMS covers ~60 % of treadmills; Peloton / NordicTrack / Echelon need per-vendor work. Punt or scope per-brand follow-ups when v1 ships. |
 
+### Planned features — specced 2026-06-15
+
+Ten features were specced into full implementation-handoff plans under [docs/features/](../features/) (each: what exists to build on → migrations + codegen → web-canonical surface → mobile twin → parity helpers → tests → i18n → docs → gating → numbered build order). None are built yet. Ordering is a menu, not a sequence; suggested high-ROI-first order at the bottom.
+
+- [ ] **Challenges & competitions** — [challenges.md](../features/challenges.md) (~2-3 wk). Monthly/weekly mileage·vert·streak challenges; individual / club-vs-club / group-goal; read-time leaderboard over the `activities` view (no N+1); self-hiding panel. No compliance gate. *Flagship engagement bet.*
+- [ ] **Multi-athlete coach view** — [coach_roster.md](../features/coach_roster.md) (~1-1.5 wk). Coach roster dashboard on the existing `coach_athletes` consent model + a fail-closed SECURITY DEFINER roster RPC (7-day load, plan %, ACWR injury-risk, recency).
+- [ ] **Achievements / badges** — [achievements.md](../features/achievements.md) (~2-3 wk). Badge catalogue as code (guided-runs pattern), full-rebuild trigger mirroring `personal_records`; profile + feed + public share page. Pairs with Challenges.
+- [ ] **Fundraising / donation pages** — [fundraising.md](../features/fundraising.md) (~2-3 wk). Charity page (thermometer + donation feed) on a run/event, reusing the paid-events Stripe Connect rail. **Prod-gated**: fail-closed behind live Stripe keys + owner/CISO/counsel sign-off (write the full path now).
+- [ ] **Race calendar + results import** — [race_calendar.md](../features/race_calendar.md) (~3-4 wk). *Supersedes backlog row #10.* Discover races near me + entry links + auto-match-on-record (inform-tier). parkrun shipped; RunSignUp leg built fail-closed behind the missing API key.
+- [ ] **Year-in-review / "Wrapped" gap-closers** — [year_in_review.md](../features/year_in_review.md) (~1-1.5 wk). The annual recap is **already shipped**; this adds a public OG-unfurlable share snapshot, a monthly variant, and registers the missing `recap.ts`↔`recap.dart` parity pair.
+- [ ] **Native push (FCM/APNs)** — [native_push.md](../features/native_push.md) (~1-1.5 wk). *Same as the Phase 4b "native push" bullet.* Third consumer of the `notifications` rows copying the shipped `web_push` sibling + mobile token registration. Going live blocked on user-supplied Firebase/APNs credentials; all credential-independent code in scope.
+- [ ] **Treadmill live-mode toggle** — [treadmill_live_mode.md](../features/treadmill_live_mode.md) (~days). *Closes the deferred piece of backlog row #13.* Mobile-only run-screen toggle against the already-shipped FTMS reader + recorder seam; no recorder/schema change.
+- [ ] **Turn-by-turn offline nav + condition reports** — [trail_navigation.md](../features/trail_navigation.md) (~3-4 wk). *Advances backlog row #5.* `route_conditions` reports + offline tile-pack store + turn-cue generation (TS↔Dart parity helper). **Decision owed: routing engine for turn cues.**
+- [ ] **Public "Learn" / guides pages** — [learn_pages.md](../features/learn_pages.md) (~3-4 days). Evergreen new-runner guides (gear, how to sign up for a race, C25K) as prerendered MDsvex content alongside the landing page; web-only, SEO mirrors `/share/*`. New-user acquisition.
+
+**Cross-cutting before scheduling:** (1) migration numbers in the plans are placeholders — assign sequentially at landing (race_calendar and one other both penciled `20270203_001`); (2) the Learn "first race" guide and Year-in-review favourite-route card both want race-calendar links — interim CTA is `/social?tab=clubs`; (3) Year-in-review and Treadmill are gap-closers, not greenfield; (4) Fundraising / Native push / race_calendar's RunSignUp leg are *prod-gated, not code-blocked* — build behind the fail-closed gate per the compliance-sign-off house rule.
+
+**Suggested order (highest ROI, no gates first):** Challenges → Achievements → Learn pages → Coach view → (Year-in-review + Treadmill gap-closers) → Race calendar → Native push / Fundraising / Trail nav as credentials + the routing-engine decision land.
+
 ### Where each item lives in the repo
 
 For whichever items the user green-lights, here's where the new surface lands — so future sessions can pick one up without re-deriving the map:
@@ -781,4 +800,4 @@ For whichever items the user green-lights, here's where the new surface lands �
 - **Feature doc stub** in `docs/product/features.md` under a "Competitor-parity features" section (stubs added below, flesh out on delivery).
 - **Tests** — see `docs/testing/testing.md` for the per-feature-area test map.
 
-*Last updated: 2026-06-03*
+*Last updated: 2026-06-15 (added the "Planned features — specced 2026-06-15" subsection).*

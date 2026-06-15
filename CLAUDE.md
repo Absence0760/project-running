@@ -20,6 +20,7 @@ Start with whichever row below is closest to the task you've been given:
 |---|---|
 | Anything at all, first time in a session | [docs/architecture/architecture.md](docs/architecture/architecture.md) — the map |
 | Adding / changing a feature | [docs/product/roadmap.md](docs/product/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
+| Picking the next feature to build (handoff-ready specs) | [docs/product/roadmap.md § Planned features — specced 2026-06-15](docs/product/roadmap.md#planned-features--specced-2026-06-15) — 10 full implementation plans under [docs/features/](docs/features/) (challenges, coach roster, achievements, fundraising, race calendar, year-in-review, native push, treadmill toggle, trail nav, learn pages) |
 | Checking which platforms a feature ships on | [docs/product/parity.md](docs/product/parity.md) — feature × platform matrix, single source of truth for drift |
 | Touching the database or a client row type | [docs/architecture/schema_codegen.md](docs/architecture/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/backend/metadata.md](docs/backend/metadata.md) — the registry of known keys |
