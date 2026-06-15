@@ -13,6 +13,14 @@
 		type CutoffStatus
 	} from '$lib/routes/roadbook';
 	import { kindSpec } from '$lib/routes/route_markers';
+	import {
+		buildFuelPlan,
+		DEFAULT_CARBS_PER_HOUR_G,
+		DEFAULT_FLUID_PER_HOUR_ML,
+		HEAT_FLUID_FACTOR
+	} from '$lib/routes/fuel_plan';
+	import { auth } from '$lib/stores/auth.svelte';
+	import { loadSettings, effective } from '$lib/settings/settings';
 	import { fetchElevations } from '$lib/routes/elevation';
 	import { fmtSplitTime } from '$lib/runs/race_day';
 	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
@@ -22,6 +30,11 @@
 	let route = $state<Route | null>(null);
 	let markers = $state<RouteMarker[]>([]);
 	let loading = $state(true);
+	// The signed-in user's fueling-rate defaults (Settings → Preferences). The
+	// roadbook can override these per-page via ?carbs= / ?fluid= (shareable),
+	// falling back to these prefs, then the fuel_plan.ts constants when unset.
+	let carbsPrefG = $state(DEFAULT_CARBS_PER_HOUR_G);
+	let fluidPrefMl = $state(DEFAULT_FLUID_PER_HOUR_ML);
 	// Open-Meteo elevations fetched on demand when the route lacks stored ele.
 	let fetchedEle = $state<number[] | null>(null);
 	let fetchingEle = $state(false);
@@ -39,7 +52,20 @@
 		loading = true;
 		route = await fetchRouteById(data.id);
 		markers = route ? await fetchRouteMarkers(data.id) : [];
+		await loadFuelPrefs();
 		loading = false;
+	}
+
+	async function loadFuelPrefs() {
+		await auth.ready();
+		if (!auth.user) return;
+		try {
+			const settings = await loadSettings(auth.user.id);
+			carbsPrefG = effective<number>(settings, 'carbs_per_hour', DEFAULT_CARBS_PER_HOUR_G) ?? DEFAULT_CARBS_PER_HOUR_G;
+			fluidPrefMl = effective<number>(settings, 'fluid_per_hour', DEFAULT_FLUID_PER_HOUR_ML) ?? DEFAULT_FLUID_PER_HOUR_ML;
+		} catch {
+			// Keep the defaults — fueling figures are an auxiliary overlay.
+		}
 	}
 
 	// ---- URL-backed controls (shareable) ----
@@ -60,6 +86,24 @@
 	});
 
 	let model = $derived<PacingModel>(params.get('model') === 'even' ? 'even' : 'effort');
+
+	// Fueling overlay — off by default. `?fuel=1` shows per-leg carbs + fluid;
+	// `?heat=1` bumps fluid by the heat factor.
+	let fuelOn = $derived(params.get('fuel') === '1');
+	let heatOn = $derived(params.get('heat') === '1');
+
+	// Effective intake rates: a per-page ?carbs= / ?fluid= override wins, then
+	// the user's settings pref, then the fuel_plan.ts default.
+	let carbsPerHourG = $derived.by(() => {
+		const raw = params.get('carbs');
+		const n = raw ? Number(raw) : NaN;
+		return Number.isFinite(n) && n >= 0 ? n : carbsPrefG;
+	});
+	let fluidPerHourMl = $derived.by(() => {
+		const raw = params.get('fluid');
+		const n = raw ? Number(raw) : NaN;
+		return Number.isFinite(n) && n >= 0 ? n : fluidPrefMl;
+	});
 
 	function updateParam(key: string, value: string | null) {
 		const url = new URL($page.url);
@@ -91,6 +135,14 @@
 			),
 			{ goalSeconds, startClockMin, model }
 		)
+	);
+
+	const fuel = $derived(
+		buildFuelPlan(roadbook.legs, {
+			carbsPerHourG,
+			fluidPerHourMl,
+			heatFactor: heatOn ? HEAT_FLUID_FACTOR : 1
+		})
 	);
 
 	async function addElevation() {
@@ -239,6 +291,24 @@
 					{m('roadbook.modelEven')}
 				</button>
 			</div>
+			<div class="model-toggle" role="group" aria-label={m('roadbook.fuel')}>
+				<button
+					class:active={fuelOn}
+					aria-pressed={fuelOn}
+					onclick={() => updateParam('fuel', fuelOn ? null : '1')}
+				>
+					{m('roadbook.fuel')}
+				</button>
+				{#if fuelOn}
+					<button
+						class:active={heatOn}
+						aria-pressed={heatOn}
+						onclick={() => updateParam('heat', heatOn ? null : '1')}
+					>
+						{m('roadbook.heat')}
+					</button>
+				{/if}
+			</div>
 		</section>
 
 		{#if markers.length === 0}
@@ -265,6 +335,10 @@
 						<th class="num">{m('roadbook.colVert')}</th>
 						<th class="num">{m('roadbook.colArrival')}</th>
 						<th>{m('roadbook.colCutoff')}</th>
+						{#if fuelOn}
+							<th class="num">{m('roadbook.colCarbs')}</th>
+							<th class="num">{m('roadbook.colFluid')}</th>
+						{/if}
 						<th class="no-print">{m('roadbook.colServices')}</th>
 					</tr>
 				</thead>
@@ -294,6 +368,22 @@
 									</span>
 								{/if}
 							</td>
+							{#if fuelOn}
+								<td class="num fuel-cell" data-testid="fuel-carbs">
+									{m('roadbook.carbsValue', { grams: String(Math.round(fuel.legs[i].carbsG)) })}
+								</td>
+								<td class="num fuel-cell">
+									{m('roadbook.fluidValue', { ml: String(Math.round(fuel.legs[i].fluidMl)) })}
+									{#if (fuel.legs[i].carryToNextAid?.gels ?? 0) > 0}
+										<span class="carry-hint">
+											{m('roadbook.carryHint', {
+												gels: String(fuel.legs[i].carryToNextAid?.gels ?? 0),
+												fluid: String(Math.round(fuel.legs[i].carryToNextAid?.fluidMl ?? 0))
+											})}
+										</span>
+									{/if}
+								</td>
+							{/if}
 							<td class="no-print services">
 								{#each leg.services as s (s)}<span class="svc">{serviceLabel(s)}</span>{/each}
 							</td>
@@ -453,6 +543,15 @@
 		padding: 1px 6px;
 		margin: 0 4px 2px 0;
 		font-size: 0.78rem;
+	}
+	.fuel-cell {
+		white-space: nowrap;
+	}
+	.carry-hint {
+		display: block;
+		color: var(--text-secondary);
+		font-size: 0.75rem;
+		white-space: nowrap;
 	}
 	.empty {
 		margin-top: var(--space-md);

@@ -49,6 +49,10 @@
 	let mapStyle = $state<'streets' | 'satellite' | 'outdoors' | 'dark'>('streets');
 	let privacyDefault = $state<'public' | 'followers' | 'private'>('followers');
 	let weeklyMileageGoal = $state('');
+	// Race-fueling intake rates — the per-hour carbs + fluid the roadbook fuel
+	// plan scales onto each leg. Defaults 60 g/hr + 500 ml/hr (fuel_plan.ts).
+	let carbsPerHour = $state('60');
+	let fluidPerHour = $state('500');
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let emailNotifications = $state<'all' | 'important' | 'off'>('important');
 	// Independent of email_notifications — muting email must not mute web push.
@@ -276,6 +280,8 @@
 			setMapStyle(mapStyle);
 			privacyDefault = effective(settings, 'privacy_default', 'followers') ?? 'followers';
 			weeklyMileageGoal = (effective<number>(settings, 'weekly_mileage_goal_m') ?? '')?.toString() ?? '';
+			carbsPerHour = (effective<number>(settings, 'carbs_per_hour', 60) ?? 60).toString();
+			fluidPerHour = (effective<number>(settings, 'fluid_per_hour', 500) ?? 500).toString();
 			coachPersonality = effective(settings, 'coach_personality', 'supportive') ?? 'supportive';
 			emailNotifications = effective(settings, 'email_notifications', 'important') ?? 'important';
 			pushNotifications = effective(settings, 'push_notifications', 'important') ?? 'important';
@@ -638,6 +644,30 @@
 						bind:value={weeklyMileageGoal}
 						placeholder={m('prefs.weeklyMileageGoalPlaceholder')}
 						onblur={() => autoSave({ weekly_mileage_goal_m: weeklyMileageGoal ? parseInt(weeklyMileageGoal, 10) || null : null })}
+					/>
+				</label>
+				<label>
+					<span class="label-text">{m('prefs.carbsPerHour')}</span>
+					<input
+						type="number"
+						min="0"
+						max="200"
+						inputmode="numeric"
+						bind:value={carbsPerHour}
+						data-testid="carbs-per-hour"
+						onblur={() => autoSave({ carbs_per_hour: carbsPerHour ? parseInt(carbsPerHour, 10) || null : null })}
+					/>
+				</label>
+				<label>
+					<span class="label-text">{m('prefs.fluidPerHour')}</span>
+					<input
+						type="number"
+						min="0"
+						max="3000"
+						inputmode="numeric"
+						bind:value={fluidPerHour}
+						data-testid="fluid-per-hour"
+						onblur={() => autoSave({ fluid_per_hour: fluidPerHour ? parseInt(fluidPerHour, 10) || null : null })}
 					/>
 				</label>
 			</div>

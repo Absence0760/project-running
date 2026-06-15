@@ -86,6 +86,36 @@ test.describe('/routes/[id]/roadbook', () => {
 		await expect(rows.nth(2).locator('.cut-miss')).toHaveCount(0);
 	});
 
+	test('fueling overlay shows per-leg carbs + a carry hint, and ?carbs= re-scales', async ({ page }) => {
+		routeId = await seedRoute();
+
+		// 2h goal so the legs are long enough to carry meaningful fuel.
+		await page.goto(`/routes/${routeId}/roadbook?goal=7200&fuel=1`);
+
+		// The fueling columns appear when fuel=1.
+		await expect(page.getByRole('columnheader', { name: 'Carbs' })).toBeVisible();
+		await expect(page.getByRole('columnheader', { name: 'Fluid' })).toBeVisible();
+
+		// A per-leg carbs figure shows on the Aid 1 row, and a carry hint is
+		// rendered (the start leg carries fuel out to the first refill).
+		const carbsCells = page.locator('[data-testid="fuel-carbs"]');
+		await expect(carbsCells.first()).toContainText('g');
+		await expect(page.locator('.carry-hint').first()).toBeVisible();
+		await expect(page.locator('.carry-hint').first()).toContainText('gels');
+
+		// Capture the Aid 1 leg carbs at the default rate.
+		const aidCarbs = carbsCells.nth(1);
+		const before = (await aidCarbs.textContent())?.trim();
+
+		// Drive the rate via the shareable ?carbs= override — doubling it must
+		// raise the displayed carbs.
+		await page.goto(`/routes/${routeId}/roadbook?goal=7200&fuel=1&carbs=120`);
+		await expect(async () => {
+			const after = (await carbsCells.nth(1).textContent())?.trim();
+			expect(after).not.toBe(before);
+		}).toPass();
+	});
+
 	test('effort model re-paces vs even and updates the URL', async ({ page }) => {
 		routeId = await seedRoute();
 		await page.goto(`/routes/${routeId}/roadbook?goal=3600&model=even`);
