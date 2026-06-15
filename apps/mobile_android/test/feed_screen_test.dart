@@ -91,10 +91,13 @@ class _FakeApi extends ApiClient {
     return entries;
   }
 
+  int followingCalls = 0;
   @override
   Future<List<UserProfileRow>> fetchFollowing(String userId,
-          {int limit = 100, int offset = 0}) async =>
-      followees;
+      {int limit = 100, int offset = 0}) async {
+    followingCalls++;
+    return followees;
+  }
 
   @override
   Future<Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>>
@@ -202,6 +205,21 @@ void main() {
       expect(find.text('3'), findsOneWidget);
       // viewerHasKudos → filled heart.
       expect(find.byIcon(Icons.favorite), findsOneWidget);
+    });
+
+    testWidgets('signed-out viewer still loads the feed but skips fetchFollowing',
+        (tester) async {
+      final api = _FakeApi(
+        entries: [_runEntry(distanceM: 5000)],
+        followees: [_profileRow('u-1', 'Alex Runner')],
+        signedIn: false,
+      );
+      await _pump(tester, api);
+      await _settle(tester);
+      // The entry still renders (the null-userId load path works)...
+      expect(find.textContaining('5.00'), findsOneWidget);
+      // ...but the author-dropdown follow query is skipped when signed out.
+      expect(api.followingCalls, 0);
     });
   });
 

@@ -313,6 +313,25 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
+    testWidgets('a failed un-kudos rolls back the optimistic decrement + shows a banner',
+        (tester) async {
+      final api = _SocialApi(
+        kudosCount: 5,
+        viewerHasKudos: true,
+        throwOnRescind: true,
+      );
+      await _pumpApi(tester, api);
+
+      await tester.tap(find.byType(TextButton).first);
+      await tester.pumpAndSettle();
+      expect(api.rescindCalls, 1);
+      // Rolled back to the pre-tap count.
+      expect(find.text('5'), findsOneWidget);
+      expect(find.text('4'), findsNothing);
+      expect(find.textContaining('kudos'), findsWidgets);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
     testWidgets('owner viewing own run cannot kudos (pill disabled, no call)',
         (tester) async {
       final api = _SocialApi(viewer: 'owner-1', kudosCount: 1);

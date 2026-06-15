@@ -74,12 +74,10 @@ class _EventSocial extends SocialService {
     this.club,
     this.category = 'run',
     this.attendees = const [],
-    this.rsvpThrows = false,
   });
   ClubView? club;
   String category;
   List<AttendeeView> attendees;
-  bool rsvpThrows;
   int rsvpCalls = 0;
   int clearCalls = 0;
   String? lastRsvpStatus;
@@ -123,7 +121,6 @@ class _EventSocial extends SocialService {
   Future<void> rsvpEvent(String eventId, String status, DateTime instance) async {
     rsvpCalls++;
     lastRsvpStatus = status;
-    if (rsvpThrows) throw Exception('network down');
   }
 
   @override
