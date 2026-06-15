@@ -60,6 +60,7 @@
 	let showReviewForm = $state(false);
 	let reviewRating = $state(4);
 	let reviewComment = $state('');
+	let reviewSubmitting = $state(false);
 
 	let avgRating = $derived(
 		reviews.length > 0
@@ -95,7 +96,8 @@
 	});
 
 	async function submitReview() {
-		if (!route) return;
+		if (!route || reviewSubmitting) return;
+		reviewSubmitting = true;
 		try {
 			await upsertRouteReview({
 				route_id: route.id,
@@ -108,6 +110,8 @@
 			reviewComment = '';
 		} catch (e) {
 			showToast(m('routeDetail.reviewSubmitFailed', { error: `${e}` }), 'error');
+		} finally {
+			reviewSubmitting = false;
 		}
 	}
 
@@ -737,7 +741,7 @@
 							class="review-textarea"
 							rows="2"
 						></textarea>
-						<button class="btn btn-primary btn-sm" onclick={submitReview}>{m('routeDetail.submit')}</button>
+						<button class="btn btn-primary btn-sm" onclick={submitReview} disabled={reviewSubmitting}>{m('routeDetail.submit')}</button>
 					</div>
 				{/if}
 

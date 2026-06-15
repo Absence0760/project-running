@@ -116,4 +116,40 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 		).toHaveCount(0);
 		await expect(page.locator('.no-reviews')).toBeVisible();
 	});
+
+	test('Submit disables while the upsert is in flight (no double-submit)', async ({ page }) => {
+		const comment = `e2e double-submit ${Date.now()}`;
+
+		// Hold the upsert response open so the in-flight window stays
+		// observable, and count how many POSTs actually reach the server.
+		let postCount = 0;
+		let release: () => void = () => {};
+		const gate = new Promise<void>((r) => (release = r));
+		await page.route('**/rest/v1/route_reviews*', async (route) => {
+			if (route.request().method() === 'POST') {
+				postCount += 1;
+				await gate;
+			}
+			await route.continue();
+		});
+
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await page.getByRole('button', { name: 'Rate', exact: true }).click();
+		await page.locator('.review-textarea').fill(comment);
+
+		const submit = page.locator('.review-form').getByRole('button', { name: 'Submit' });
+		await submit.click();
+
+		// The guard flips the button disabled the moment the upsert starts,
+		// so a second tap can't fire a duplicate write.
+		await expect(submit).toBeDisabled();
+		expect(postCount).toBe(1);
+
+		release();
+		await expect(page.locator('.review-card', { hasText: comment })).toBeVisible({
+			timeout: 10_000
+		});
+		// Exactly one write reached the server across the whole flow.
+		expect(postCount).toBe(1);
+	});
 });
