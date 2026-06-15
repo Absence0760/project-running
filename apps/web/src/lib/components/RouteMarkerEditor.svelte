@@ -32,6 +32,17 @@
 		/// A marker id the host captured from a map pin click. In-bound;
 		/// opens that marker for editing.
 		selectId?: string | null;
+		/// The in-flight marker (being added or edited), published for the
+		/// map to render as a single draggable draft pin distinct from the
+		/// saved pins. Out-bound. Null when nothing is being placed.
+		draftPin?: MapMarkerPin | null;
+		/// Whether new placements + pin drags snap to the route line.
+		/// Out-bound so the map can apply it. Default on — course markers
+		/// belong on the course.
+		snapEnabled?: boolean;
+		/// A drag the host captured from an existing pin (id + new lng/lat).
+		/// In-bound; consumed once to persist the move.
+		pendingDrag?: { id: string; lat: number; lng: number } | null;
 	}
 	let {
 		routeId,
@@ -39,7 +50,10 @@
 		pins = $bindable([]),
 		placing = $bindable(false),
 		pendingPlacement = $bindable(null),
-		selectId = $bindable(null)
+		selectId = $bindable(null),
+		draftPin = $bindable(null),
+		snapEnabled = $bindable(true),
+		pendingDrag = $bindable(null)
 	}: Props = $props();
 
 	let markers = $state<RouteMarker[]>([]);
@@ -69,18 +83,38 @@
 		reload();
 	});
 
-	// Republish pins whenever the sorted markers change.
+	// Republish pins whenever the sorted markers change. The marker being
+	// edited is withheld — it renders as the draggable draft pin instead,
+	// so dragging it tweaks the open form rather than persisting straight
+	// away.
 	$effect(() => {
-		pins = sorted.map((mk) => ({
-			id: mk.id,
-			label: mk.label,
-			color: kindSpec(mk.kind).color,
-			lat: mk.lat,
-			lng: mk.lng
-		}));
+		pins = sorted
+			.filter((mk) => mk.id !== editingId)
+			.map((mk) => ({
+				id: mk.id,
+				label: mk.label,
+				color: kindSpec(mk.kind).color,
+				lat: mk.lat,
+				lng: mk.lng
+			}));
 	});
 
-	// A map click during add/edit fills the pin position.
+	// Publish the in-flight marker as the draft pin once it has a position.
+	$effect(() => {
+		draftPin =
+			formOpen && draftLat != null && draftLng != null
+				? {
+						id: editingId ?? '__draft__',
+						label: draftLabel.trim() || m('routeMarker.newMarker'),
+						color: kindSpec(draftKind).color,
+						lat: draftLat,
+						lng: draftLng
+					}
+				: null;
+	});
+
+	// A map click — or a drag of the draft pin — during add/edit fills the
+	// pin position.
 	$effect(() => {
 		if (pendingPlacement && formOpen) {
 			draftLat = pendingPlacement.lat;
@@ -88,6 +122,27 @@
 			pendingPlacement = null;
 		}
 	});
+
+	// A drag of an already-saved pin persists immediately (a quick reposition
+	// that doesn't need the form). The edited marker never reaches here — it
+	// is withheld from `pins` above.
+	$effect(() => {
+		if (pendingDrag) {
+			const { id, lat, lng } = pendingDrag;
+			pendingDrag = null;
+			void persistMove(id, lat, lng);
+		}
+	});
+
+	async function persistMove(id: string, lat: number, lng: number) {
+		try {
+			await updateRouteMarker(id, { lat, lng });
+			await reload();
+			showToast(m('routeMarker.moved'), 'success');
+		} catch (e) {
+			showToast(m('routeMarker.saveFailed', { error: `${e}` }), 'error');
+		}
+	}
 
 	// A map pin click opens that marker for editing.
 	$effect(() => {
@@ -243,6 +298,13 @@
 		<p class="markers-empty">{m('routeMarker.empty')}</p>
 	{/if}
 
+	{#if isOwner && sorted.length > 0 && !formOpen}
+		<p class="markers-drag-hint">
+			<span class="material-symbols" aria-hidden="true">drag_pan</span>
+			{m('routeMarker.dragHint')}
+		</p>
+	{/if}
+
 	{#if sorted.length > 0}
 		<ol class="markers-list">
 			{#each sorted as mk (mk.id)}
@@ -286,8 +348,15 @@
 	{#if formOpen}
 		<form class="editor-form marker-form" onsubmit={(e) => (e.preventDefault(), save())}>
 			<p class="marker-hint">
+				<span class="material-symbols" aria-hidden="true">
+					{draftLat == null ? 'ads_click' : 'open_with'}
+				</span>
 				{draftLat == null ? m('routeMarker.clickToPlace') : m('routeMarker.placed')}
 			</p>
+			<label class="toggle-row snap-row">
+				<input type="checkbox" bind:checked={snapEnabled} />
+				{m('routeMarker.snapToggle')}
+			</label>
 			<label>
 				{m('routeMarker.kindLabel')}
 				<select bind:value={draftKind}>
@@ -450,6 +519,28 @@
 		margin: 0 0 var(--space-xs);
 		font-size: 0.85rem;
 		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs);
+	}
+	.marker-hint .material-symbols {
+		font-size: 1.1rem;
+		color: var(--color-primary, #4f46e5);
+	}
+	.snap-row {
+		margin-bottom: var(--space-xs);
+		font-size: 0.85rem;
+	}
+	.markers-drag-hint {
+		margin: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+	.markers-drag-hint .material-symbols {
+		font-size: 1rem;
 	}
 	.services {
 		display: flex;

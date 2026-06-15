@@ -15,6 +15,7 @@
 		hasTrackTimestamps,
 		type ActivityKind,
 	} from '$lib/segments/pace_segments';
+	import { snapToPolyline } from '$lib/routes/route_snap';
 
 	/// Segment-detail callback. When set, clicks anywhere on the map
 	/// snap to the nearest track point, compute a small window (±150 m
@@ -97,6 +98,24 @@
 		markerEditable?: boolean;
 		onMarkerPlace?: (lngLat: { lng: number; lat: number }) => void;
 		onMarkerClick?: (id: string) => void;
+		/// When true, the pins in `markers` render as draggable DOM markers
+		/// (owner edit affordance) rather than the static GeoJSON circle
+		/// layer: grab a pin to reposition it, click to open it. The route
+		/// owner gets this; everyone else keeps the lightweight circle layer.
+		draggablePins?: boolean;
+		/// Fired when an existing pin's drag ends, with its new (possibly
+		/// snapped) position. The host persists it.
+		onMarkerDrag?: (id: string, lngLat: { lng: number; lat: number }) => void;
+		/// The marker being added / edited, rendered as a single distinct
+		/// pulsing draggable pin separate from the saved `markers`. Dragging
+		/// it (or clicking the map) reports up via `onMarkerPlace`. Null =
+		/// nothing in flight.
+		draftMarker?: MapMarkerPin | null;
+		/// When true, placement clicks + pin drags snap to the nearest point
+		/// on the route line so a course marker sticks to the course. The
+		/// snap is purely the rendered lng/lat; `position_m` is still derived
+		/// server-side from routes.geom.
+		snapToRoute?: boolean;
 	}
 	let {
 		track = [],
@@ -111,6 +130,10 @@
 		markerEditable = false,
 		onMarkerPlace,
 		onMarkerClick,
+		draggablePins = false,
+		onMarkerDrag,
+		draftMarker = null,
+		snapToRoute = false,
 	}: Props = $props();
 
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
@@ -750,7 +773,7 @@
 						if (id && onMarkerClick) onMarkerClick(String(id));
 						return;
 					}
-					onMarkerPlace({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+					onMarkerPlace(maybeSnap(e.lngLat.lng, e.lngLat.lat));
 					return;
 				}
 				if (!onSegmentSelect) return;
@@ -772,12 +795,146 @@
 		}
 	}
 
-	// Keep the route-markers source in sync as the editor adds / moves /
-	// removes pins. Reads `markers` so it re-runs on any change.
+	// ─────────────────── Draggable course-marker pins ───────────────────
+	// In owner edit mode the saved pins + the in-flight draft render as
+	// real DOM markers (draggable, clickable) instead of the static GeoJSON
+	// circle layer, so the owner can drag a pin to reposition it and the
+	// drop snaps to the route line. Read-only viewers keep the lightweight
+	// circle layer (cheaper, no per-pin DOM).
+
+	/// Snap a free lng/lat to the route line when snapping is on and there
+	/// is a line to snap to; otherwise pass it through untouched.
+	function maybeSnap(lng: number, lat: number): { lng: number; lat: number } {
+		if (snapToRoute && trackCoords.length >= 2) {
+			const s = snapToPolyline({ lng, lat }, trackCoords);
+			if (s) return { lng: s.lng, lat: s.lat };
+		}
+		return { lng, lat };
+	}
+
+	function buildPinElement(color: string, label: string, draft: boolean): HTMLDivElement {
+		const el = document.createElement('div');
+		el.className = draft ? 'course-pin draft' : 'course-pin';
+		const dot = document.createElement('span');
+		dot.className = 'course-pin-dot';
+		dot.style.background = color;
+		el.appendChild(dot);
+		const text = document.createElement('span');
+		text.className = 'course-pin-label';
+		text.textContent = label;
+		el.appendChild(text);
+		el.title = label;
+		return el;
+	}
+
+	function updatePinElement(el: HTMLElement, color: string, label: string): void {
+		const dot = el.querySelector('.course-pin-dot') as HTMLElement | null;
+		if (dot) dot.style.background = color;
+		const text = el.querySelector('.course-pin-label') as HTMLElement | null;
+		if (text) text.textContent = label;
+		el.title = label;
+	}
+
+	const pinMarkers = new Map<string, maplibregl.Marker>();
+
+	function wirePinEvents(mk: maplibregl.Marker, id: string, el: HTMLElement): void {
+		let dragged = false;
+		mk.on('dragstart', () => {
+			dragged = true;
+			el.classList.add('dragging');
+		});
+		mk.on('dragend', () => {
+			el.classList.remove('dragging');
+			const ll = mk.getLngLat();
+			const snapped = maybeSnap(ll.lng, ll.lat);
+			mk.setLngLat([snapped.lng, snapped.lat]);
+			onMarkerDrag?.(id, snapped);
+			// Let the post-drag synthetic click pass before re-enabling
+			// click-to-edit, so a drag never also opens the editor.
+			setTimeout(() => {
+				dragged = false;
+			}, 0);
+		});
+		el.addEventListener('click', (ev) => {
+			ev.stopPropagation();
+			if (dragged) return;
+			onMarkerClick?.(id);
+		});
+	}
+
+	function syncPinMarkers(pins: MapMarkerPin[]): void {
+		if (!map) return;
+		const seen = new Set<string>();
+		for (const pin of pins) {
+			seen.add(pin.id);
+			let mk = pinMarkers.get(pin.id);
+			if (!mk) {
+				const el = buildPinElement(pin.color, pin.label, false);
+				mk = new maplibregl.Marker({ element: el, draggable: true, anchor: 'center' });
+				mk.setLngLat([pin.lng, pin.lat]).addTo(map);
+				wirePinEvents(mk, pin.id, el);
+				pinMarkers.set(pin.id, mk);
+			} else {
+				mk.setLngLat([pin.lng, pin.lat]);
+				updatePinElement(mk.getElement(), pin.color, pin.label);
+			}
+		}
+		for (const [id, mk] of pinMarkers) {
+			if (!seen.has(id)) {
+				mk.remove();
+				pinMarkers.delete(id);
+			}
+		}
+	}
+
+	let draftMk: maplibregl.Marker | undefined;
+
+	function renderDraftMarker(pin: MapMarkerPin | null): void {
+		if (!map) return;
+		if (!pin || !Number.isFinite(pin.lng) || !Number.isFinite(pin.lat)) {
+			draftMk?.remove();
+			draftMk = undefined;
+			return;
+		}
+		if (!draftMk) {
+			const el = buildPinElement(pin.color, pin.label, true);
+			draftMk = new maplibregl.Marker({ element: el, draggable: true, anchor: 'center' });
+			draftMk.setLngLat([pin.lng, pin.lat]).addTo(map);
+			draftMk.on('dragend', () => {
+				const ll = draftMk!.getLngLat();
+				const s = maybeSnap(ll.lng, ll.lat);
+				draftMk!.setLngLat([s.lng, s.lat]);
+				onMarkerPlace?.(s);
+			});
+		} else {
+			draftMk.setLngLat([pin.lng, pin.lat]);
+			updatePinElement(draftMk.getElement(), pin.color, pin.label);
+		}
+	}
+
+	// Keep the route-markers layer in sync as the editor adds / moves /
+	// removes pins. Owner edit mode (draggablePins) renders the saved pins
+	// as DOM markers and empties the circle layer; read-only viewers keep
+	// the circle layer. Reads `markers` + `draggablePins` so it re-runs on
+	// any change.
 	$effect(() => {
-		const data = buildMarkerFeatures(markers);
-		const src = map?.getSource('route-markers') as maplibregl.GeoJSONSource | undefined;
-		src?.setData(data);
+		if (!map) return;
+		const circleData = buildMarkerFeatures(draggablePins ? [] : markers);
+		const src = map.getSource('route-markers') as maplibregl.GeoJSONSource | undefined;
+		src?.setData(circleData);
+		syncPinMarkers(draggablePins ? markers : []);
+	});
+
+	$effect(() => {
+		renderDraftMarker(draftMarker);
+	});
+
+	// Cursor hint while placing: a crosshair signals "click the map to drop
+	// the pin". Route detail has no segment-select handler so this never
+	// fights the trace-line pointer cursor.
+	$effect(() => {
+		if (!map) return;
+		map.getCanvas().style.cursor = markerEditable ? 'crosshair' : '';
 	});
 
 	// Reactive map-style swap. The first run after `map` is created is
@@ -797,6 +954,10 @@
 		stopResizeWatch?.();
 		previewMarker?.remove();
 		previewMarker = undefined;
+		for (const mk of pinMarkers.values()) mk.remove();
+		pinMarkers.clear();
+		draftMk?.remove();
+		draftMk = undefined;
 		map?.remove();
 	});
 </script>
@@ -949,5 +1110,71 @@
 	@keyframes hover-marker-pulse {
 		0%, 100% { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 1px 4px rgba(0, 0, 0, 0.3); }
 		50% { box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.12), 0 1px 4px rgba(0, 0, 0, 0.3); }
+	}
+
+	/* Draggable course-marker pins (owner edit mode). A coloured dot that
+	   matches the read-only circle layer, plus a label chip under it. The
+	   element wraps both so MapLibre's positioning transform stays on the
+	   wrapper and the grab cursor covers the whole hit area. */
+	/* The element's layout box is just the dot, so MapLibre's `anchor:
+	   center` lands the dot exactly on the coordinate (= on the route
+	   line). The label floats below via absolute positioning so it never
+	   shifts the dot. MapLibre owns the root element's inline `transform`,
+	   so the dot's hover-scale lives on the inner dot, not here. */
+	:global(.course-pin) {
+		position: relative;
+		width: 1rem;
+		height: 1rem;
+		cursor: grab;
+	}
+	:global(.course-pin.dragging),
+	:global(.course-pin:active) {
+		cursor: grabbing;
+	}
+	:global(.course-pin-dot) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		border: 2px solid #ffffff;
+		box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.35);
+		transition: transform 0.12s ease;
+	}
+	:global(.course-pin:hover .course-pin-dot) {
+		transform: scale(1.2);
+	}
+	:global(.course-pin-label) {
+		position: absolute;
+		top: calc(100% + 2px);
+		left: 50%;
+		transform: translateX(-50%);
+		max-width: 9rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: #1e293b;
+		text-shadow:
+			0 0 2px #ffffff, 0 0 2px #ffffff, 0 0 3px #ffffff, 0 0 4px #ffffff;
+		pointer-events: none;
+	}
+	:global(.course-pin.draft .course-pin-dot) {
+		animation: course-pin-pulse 1.5s ease-in-out infinite;
+	}
+	@keyframes course-pin-pulse {
+		0%, 100% {
+			box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+		}
+		50% {
+			box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.12), 0 2px 6px rgba(0, 0, 0, 0.35);
+		}
+	}
+	@media (prefers-color-scheme: dark) {
+		:global(.course-pin-label) {
+			color: #f1f5f9;
+			text-shadow:
+				0 0 2px #0f172a, 0 0 2px #0f172a, 0 0 3px #0f172a, 0 0 4px #0f172a;
+		}
 	}
 </style>

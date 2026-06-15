@@ -45,6 +45,9 @@
 	let markerEditing = $state(false);
 	let markerPendingPlacement = $state<{ lat: number; lng: number } | null>(null);
 	let markerSelectId = $state<string | null>(null);
+	let markerDraftPin = $state<MapMarkerPin | null>(null);
+	let markerSnap = $state(true);
+	let markerPendingDrag = $state<{ id: string; lat: number; lng: number } | null>(null);
 	let loading = $state(true);
 	let reviews = $state<any[]>([]);
 	let reviewsError = $state(false);
@@ -639,6 +642,9 @@
 					bind:placing={markerEditing}
 					bind:pendingPlacement={markerPendingPlacement}
 					bind:selectId={markerSelectId}
+					bind:draftPin={markerDraftPin}
+					bind:snapEnabled={markerSnap}
+					bind:pendingDrag={markerPendingDrag}
 				/>
 				{#if markerPins.length > 0}
 					<a class="btn btn-outline btn-sm roadbook-link" href={`/routes/${route.id}/roadbook`}>
@@ -740,8 +746,12 @@
 						{previewLngLat}
 						markers={markerPins}
 						markerEditable={markerEditing}
+						draggablePins={isOwner}
+						draftMarker={markerDraftPin}
+						snapToRoute={markerSnap}
 						onMarkerPlace={(ll) => (markerPendingPlacement = ll)}
 						onMarkerClick={(id) => (markerSelectId = id)}
+						onMarkerDrag={(id, ll) => (markerPendingDrag = { id, lat: ll.lat, lng: ll.lng })}
 					/>
 				{:else}
 					<div class="map-placeholder">

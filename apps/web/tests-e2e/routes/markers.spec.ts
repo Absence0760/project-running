@@ -132,6 +132,51 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(rows.first().locator('.marker-label')).toHaveText('Halfway aid');
 	});
 
+	test('owner sees draggable pins on the map and a drag-to-move hint', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {
+			services: ['water']
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		// The owner gets the drag affordance copy + a draggable DOM pin
+		// rendered over the map (not the static circle layer).
+		await expect(page.getByText('Tip: drag a pin on the map to move it.')).toBeVisible();
+		const pin = page.locator('.map-panel .course-pin');
+		await expect(pin).toHaveCount(1);
+		await expect(pin.locator('.course-pin-label')).toHaveText('Aid 1');
+	});
+
+	test('owner drags a pin to move it and the change persists', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {
+			services: ['water']
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		const pin = page.locator('.map-panel .course-pin');
+		await expect(pin).toBeVisible();
+		const from = await pin.boundingBox();
+		if (!from) throw new Error('pin has no bounding box');
+
+		// Drag the pin a little. MapLibre needs intermediate moves to treat
+		// it as a drag, not a click.
+		await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(from.x + 60, from.y + 40, { steps: 8 });
+		await page.mouse.move(from.x + 90, from.y + 70, { steps: 8 });
+		await page.mouse.up();
+
+		// The move persists immediately (no form) → confirmation toast.
+		await expect(page.getByText('Marker moved.')).toBeVisible({ timeout: 10_000 });
+
+		// And it survives a reload (server-side persisted, not just optimistic).
+		await page.reload();
+		await expect(page.locator('.map-panel .course-pin')).toHaveCount(1);
+	});
+
 	test('owner deletes a marker', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await insertMarker(routeId, 'note', 'Locked gate', 51.505, -0.125, {
