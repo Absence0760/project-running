@@ -184,9 +184,18 @@ test.describe('/routes/[id]', () => {
 
 		// Remove via the per-chip × button (aria-label "Remove tag <name>").
 		const removeBtn = page.getByRole('button', { name: `Remove tag ${tag}` });
+		// Wait for the delayed PATCH to actually complete before unrouting —
+		// unrouting while the 600ms handler is mid-flight makes its eventual
+		// route.continue() hit an already-abandoned route ("Route is already
+		// handled!", a timing flake on CI). Awaiting the response means the
+		// handler has finished before the mock is torn down.
+		const patchDone = page.waitForResponse(
+			(r) => r.request().method() === 'PATCH' && r.url().includes('/rest/v1/routes')
+		);
 		await removeBtn.click();
 		// While the PATCH is in flight the button is disabled (no double-fire).
 		await expect(removeBtn).toBeDisabled();
+		await patchDone;
 		await page.unroute('**/rest/v1/routes*');
 		await expect(page.locator('.tag-chip', { hasText: tag })).toHaveCount(0, {
 			timeout: 5_000
