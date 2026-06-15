@@ -891,9 +891,26 @@ jobs:
           # The provider must be live for the lane to drive it. If env()
           # substitution didn't reach GoTrue the OAuth specs would fail
           # opaquely later, so fail fast here.
-          got=$(docker exec supabase_auth_backend printenv GOTRUE_EXTERNAL_KEYCLOAK_URL 2>/dev/null || true)
+          #
+          # Resolve the auth container by its service-name prefix instead
+          # of hardcoding it. The CLI names it supabase_auth_<project_id>;
+          # project_id is "project-running" (config.toml). This check was
+          # first written against the dir-derived default "backend", and
+          # the project_id pin (de360e4e) silently renamed the container
+          # to supabase_auth_project-running — `docker exec` against the
+          # stale name then failed, and the `|| true` masked it as an
+          # empty value, so this guard reported a config problem that
+          # didn't exist. One auth container per stack, so the prefix
+          # filter is exact and survives any future project_id change.
+          auth_container=$(docker ps --filter "name=supabase_auth_" --format '{{.Names}}' | head -n1)
+          if [ -z "$auth_container" ]; then
+            echo "::error::no supabase_auth_* container is running"
+            docker ps --format '{{.Names}}' || true
+            exit 1
+          fi
+          got=$(docker exec "$auth_container" printenv GOTRUE_EXTERNAL_KEYCLOAK_URL 2>/dev/null || true)
           if [ "$got" != "$SSO_MOCK_OIDC_URL" ]; then
-            echo "::error::GoTrue keycloak url is '$got', expected '$SSO_MOCK_OIDC_URL' — config.toml env() did not reach the auth container"
+            echo "::error::GoTrue keycloak url is '$got', expected '$SSO_MOCK_OIDC_URL' — config.toml env() did not reach the auth container ($auth_container)"
             exit 1
           fi
       - name: Install workspace dependencies
