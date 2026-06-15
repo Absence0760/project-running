@@ -585,7 +585,7 @@
 						class:active={mode === 'road'}
 						onclick={() => (mode = 'road')}
 					>
-						<span class="material-symbols">directions_car</span>
+						<span class="material-symbols" aria-hidden="true">directions_car</span>
 						{m('routeNew.road')}
 					</button>
 					<button
@@ -593,7 +593,7 @@
 						class:active={mode === 'trail'}
 						onclick={() => (mode = 'trail')}
 					>
-						<span class="material-symbols">forest</span>
+						<span class="material-symbols" aria-hidden="true">forest</span>
 						{m('routeNew.trail')}
 					</button>
 				</div>
