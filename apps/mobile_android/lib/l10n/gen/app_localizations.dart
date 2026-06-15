@@ -15161,6 +15161,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{distance} · {vert} vert · goal {time}'**
   String roadbookSummary(String distance, String vert, String time);
+
+  /// Organiser action on event detail opening the aid-station check-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Checkpoint check-in'**
+  String get checkpointCheckinAction;
+
+  /// Title of the volunteer checkpoint check-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Aid-station check-in'**
+  String get checkpointCheckinTitle;
+
+  /// Tooltip for the manual sync action
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get checkpointSyncNow;
+
+  /// Badge shown when there are crossings not yet pushed to the server
+  ///
+  /// In en, this message translates to:
+  /// **'Unsynced'**
+  String get checkpointPending;
+
+  /// Error state title when checkpoints fail to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load checkpoints'**
+  String get checkpointLoadFailed;
+
+  /// Retry loading checkpoints
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get checkpointRetry;
+
+  /// Empty state when an event has no checkpoints
+  ///
+  /// In en, this message translates to:
+  /// **'This race has no checkpoints yet. Add them on the web before crews check runners in.'**
+  String get checkpointNone;
+
+  /// Label above the checkpoint dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'CHECKPOINT'**
+  String get checkpointPickLabel;
+
+  /// Label for the bib entry field
+  ///
+  /// In en, this message translates to:
+  /// **'Bib number'**
+  String get checkpointBibLabel;
+
+  /// Hint for the bib entry field
+  ///
+  /// In en, this message translates to:
+  /// **'Scan or type a bib'**
+  String get checkpointBibHint;
+
+  /// Validation banner when no bib is entered
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a bib number first'**
+  String get checkpointBibRequired;
+
+  /// Button to record a runner arriving at the checkpoint
+  ///
+  /// In en, this message translates to:
+  /// **'Stamp IN'**
+  String get checkpointStampIn;
+
+  /// Button to record a runner leaving the checkpoint
+  ///
+  /// In en, this message translates to:
+  /// **'Stamp OUT'**
+  String get checkpointStampOut;
+
+  /// Confirmation after stamping a runner in
+  ///
+  /// In en, this message translates to:
+  /// **'Bib {bib} stamped in'**
+  String checkpointStampedIn(String bib);
+
+  /// Confirmation after stamping a runner out
+  ///
+  /// In en, this message translates to:
+  /// **'Bib {bib} stamped out'**
+  String checkpointStampedOut(String bib);
+
+  /// Error banner when a stamp fails to persist
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save that stamp'**
+  String get checkpointStampFailed;
+
+  /// Header above the list of runners stamped at this checkpoint
+  ///
+  /// In en, this message translates to:
+  /// **'LOGGED HERE ({count})'**
+  String checkpointLoggedHere(int count);
+
+  /// Empty state for the per-checkpoint crossing list
+  ///
+  /// In en, this message translates to:
+  /// **'No runners logged at this checkpoint yet.'**
+  String get checkpointNoneLoggedHere;
+
+  /// Row label for a logged crossing identified by bib
+  ///
+  /// In en, this message translates to:
+  /// **'Bib {bib}'**
+  String checkpointBibRow(String bib);
+
+  /// Subtitle showing a crossing's in and out times
+  ///
+  /// In en, this message translates to:
+  /// **'In {inTime} · Out {outTime}'**
+  String checkpointInOut(String inTime, String outTime);
+
+  /// Title of the Art 9 weigh-in capture sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Weigh-in'**
+  String get checkpointWeighInTitle;
+
+  /// Explanatory text on the weigh-in consent sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Body weight and medical-hold notes are health data, recorded only with the runner\'s consent and visible only to race officials.'**
+  String get checkpointWeighInConsentBlurb;
+
+  /// Art 9 consent toggle on the weigh-in sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Runner consents to recording health data'**
+  String get checkpointWeighInConsent;
+
+  /// Body weight field label on the weigh-in sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Body weight (kg)'**
+  String get checkpointWeighInWeightKg;
+
+  /// Medical-hold toggle on the weigh-in sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Place on medical hold'**
+  String get checkpointMedicalHold;
+
+  /// Confirm button on the weigh-in sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Save & stamp'**
+  String get checkpointWeighInSave;
+
+  /// Cancel the weigh-in sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get checkpointCancel;
 }
 
 class _AppLocalizationsDelegate

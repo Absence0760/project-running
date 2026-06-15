@@ -8670,4 +8670,97 @@ class AppLocalizationsJa extends AppLocalizations {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · 獲得 $vert · 目標 $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'チェックポイント受付';
+
+  @override
+  String get checkpointCheckinTitle => 'エイドステーション受付';
+
+  @override
+  String get checkpointSyncNow => '今すぐ同期';
+
+  @override
+  String get checkpointPending => '未同期';
+
+  @override
+  String get checkpointLoadFailed => 'チェックポイントを読み込めませんでした';
+
+  @override
+  String get checkpointRetry => '再試行';
+
+  @override
+  String get checkpointNone =>
+      'このレースにはまだチェックポイントがありません。クルーがランナーを受付する前に、ウェブで追加してください。';
+
+  @override
+  String get checkpointPickLabel => 'チェックポイント';
+
+  @override
+  String get checkpointBibLabel => 'ゼッケン番号';
+
+  @override
+  String get checkpointBibHint => 'ゼッケンをスキャンまたは入力';
+
+  @override
+  String get checkpointBibRequired => 'まずゼッケン番号を入力してください';
+
+  @override
+  String get checkpointStampIn => 'IN を記録';
+
+  @override
+  String get checkpointStampOut => 'OUT を記録';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'ゼッケン $bib の入りを記録しました';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'ゼッケン $bib の出を記録しました';
+  }
+
+  @override
+  String get checkpointStampFailed => '記録を保存できませんでした';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'ここで記録済み ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere => 'このチェックポイントにはまだランナーの記録がありません。';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'ゼッケン $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return '入 $inTime · 出 $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => '体重測定';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      '体重とメディカルホールドのメモは健康データであり、ランナーの同意がある場合にのみ記録され、レース運営者のみが閲覧できます。';
+
+  @override
+  String get checkpointWeighInConsent => 'ランナーは健康データの記録に同意します';
+
+  @override
+  String get checkpointWeighInWeightKg => '体重 (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'メディカルホールドにする';
+
+  @override
+  String get checkpointWeighInSave => '保存して記録';
+
+  @override
+  String get checkpointCancel => 'キャンセル';
 }

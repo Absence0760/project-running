@@ -9129,4 +9129,99 @@ class AppLocalizationsDe extends AppLocalizations {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert Anstieg · Ziel $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'Checkpoint-Check-in';
+
+  @override
+  String get checkpointCheckinTitle => 'Verpflegungsstation-Check-in';
+
+  @override
+  String get checkpointSyncNow => 'Jetzt synchronisieren';
+
+  @override
+  String get checkpointPending => 'Nicht synchronisiert';
+
+  @override
+  String get checkpointLoadFailed => 'Checkpoints konnten nicht geladen werden';
+
+  @override
+  String get checkpointRetry => 'Erneut versuchen';
+
+  @override
+  String get checkpointNone =>
+      'Dieses Rennen hat noch keine Checkpoints. Lege sie im Web an, bevor die Crew Läufer eincheckt.';
+
+  @override
+  String get checkpointPickLabel => 'CHECKPOINT';
+
+  @override
+  String get checkpointBibLabel => 'Startnummer';
+
+  @override
+  String get checkpointBibHint => 'Startnummer scannen oder eingeben';
+
+  @override
+  String get checkpointBibRequired => 'Gib zuerst eine Startnummer ein';
+
+  @override
+  String get checkpointStampIn => 'EINGANG stempeln';
+
+  @override
+  String get checkpointStampOut => 'AUSGANG stempeln';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'Startnummer $bib eingestempelt';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'Startnummer $bib ausgestempelt';
+  }
+
+  @override
+  String get checkpointStampFailed => 'Stempel konnte nicht gespeichert werden';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'HIER ERFASST ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere =>
+      'An diesem Checkpoint wurden noch keine Läufer erfasst.';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'Startnummer $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return 'Ein $inTime · Aus $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => 'Wiegen';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      'Körpergewicht und Hinweise zum medizinischen Stopp sind Gesundheitsdaten und werden nur mit Einwilligung des Läufers erfasst und sind nur für Rennoffizielle sichtbar.';
+
+  @override
+  String get checkpointWeighInConsent =>
+      'Läufer willigt in die Erfassung von Gesundheitsdaten ein';
+
+  @override
+  String get checkpointWeighInWeightKg => 'Körpergewicht (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'Medizinischen Stopp anordnen';
+
+  @override
+  String get checkpointWeighInSave => 'Speichern & stempeln';
+
+  @override
+  String get checkpointCancel => 'Abbrechen';
 }

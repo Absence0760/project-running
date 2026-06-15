@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../event_category.dart';
 import '../event_gym_template.dart';
 import '../local_gym_store.dart';
+import 'checkpoint_checkin_screen.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -681,6 +682,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           if (athletic && _club?.isRaceDirector == true) ...[
             const SizedBox(height: 24),
             _buildRaceControl(theme, active),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => CheckpointCheckinScreen(
+                    eventId: e.row.id,
+                    instanceStart: active,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.where_to_vote_outlined),
+              label: Text(l10n.checkpointCheckinAction),
+            ),
           ],
           const SizedBox(height: 24),
           Text(

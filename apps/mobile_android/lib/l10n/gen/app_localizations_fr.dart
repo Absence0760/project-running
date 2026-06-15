@@ -9144,4 +9144,99 @@ class AppLocalizationsFr extends AppLocalizations {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert D+ · objectif $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'Pointage au checkpoint';
+
+  @override
+  String get checkpointCheckinTitle => 'Pointage au ravitaillement';
+
+  @override
+  String get checkpointSyncNow => 'Synchroniser maintenant';
+
+  @override
+  String get checkpointPending => 'Non synchronisé';
+
+  @override
+  String get checkpointLoadFailed => 'Impossible de charger les checkpoints';
+
+  @override
+  String get checkpointRetry => 'Réessayer';
+
+  @override
+  String get checkpointNone =>
+      'Cette course n\'a pas encore de checkpoints. Ajoutez-les sur le web avant que les bénévoles ne pointent les coureurs.';
+
+  @override
+  String get checkpointPickLabel => 'CHECKPOINT';
+
+  @override
+  String get checkpointBibLabel => 'Numéro de dossard';
+
+  @override
+  String get checkpointBibHint => 'Scannez ou saisissez un dossard';
+
+  @override
+  String get checkpointBibRequired => 'Saisissez d\'abord un numéro de dossard';
+
+  @override
+  String get checkpointStampIn => 'Pointer ENTRÉE';
+
+  @override
+  String get checkpointStampOut => 'Pointer SORTIE';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'Dossard $bib pointé à l\'entrée';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'Dossard $bib pointé à la sortie';
+  }
+
+  @override
+  String get checkpointStampFailed => 'Impossible d\'enregistrer ce pointage';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'ENREGISTRÉS ICI ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere =>
+      'Aucun coureur enregistré à ce checkpoint pour l\'instant.';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'Dossard $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return 'Entrée $inTime · Sortie $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => 'Pesée';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      'Le poids corporel et les notes de mise sous surveillance médicale sont des données de santé, enregistrées uniquement avec le consentement du coureur et visibles uniquement par les officiels de la course.';
+
+  @override
+  String get checkpointWeighInConsent =>
+      'Le coureur consent à l\'enregistrement de données de santé';
+
+  @override
+  String get checkpointWeighInWeightKg => 'Poids corporel (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'Mettre sous surveillance médicale';
+
+  @override
+  String get checkpointWeighInSave => 'Enregistrer et pointer';
+
+  @override
+  String get checkpointCancel => 'Annuler';
 }

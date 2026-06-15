@@ -9119,6 +9119,102 @@ class AppLocalizationsPt extends AppLocalizations {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert de ganho · meta $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'Check-in no ponto de controlo';
+
+  @override
+  String get checkpointCheckinTitle => 'Check-in no abastecimento';
+
+  @override
+  String get checkpointSyncNow => 'Sincronizar agora';
+
+  @override
+  String get checkpointPending => 'Por sincronizar';
+
+  @override
+  String get checkpointLoadFailed =>
+      'Não foi possível carregar os pontos de controlo';
+
+  @override
+  String get checkpointRetry => 'Tentar novamente';
+
+  @override
+  String get checkpointNone =>
+      'Esta prova ainda não tem pontos de controlo. Adicione-os na web antes de a equipa registar os corredores.';
+
+  @override
+  String get checkpointPickLabel => 'PONTO DE CONTROLO';
+
+  @override
+  String get checkpointBibLabel => 'Número de peito';
+
+  @override
+  String get checkpointBibHint => 'Digitalize ou escreva um número';
+
+  @override
+  String get checkpointBibRequired => 'Introduza primeiro um número de peito';
+
+  @override
+  String get checkpointStampIn => 'Registar ENTRADA';
+
+  @override
+  String get checkpointStampOut => 'Registar SAÍDA';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'Número $bib com entrada registada';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'Número $bib com saída registada';
+  }
+
+  @override
+  String get checkpointStampFailed => 'Não foi possível guardar esse registo';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'REGISTADOS AQUI ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere =>
+      'Ainda não há corredores registados neste ponto de controlo.';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'Número $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return 'Entrada $inTime · Saída $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => 'Pesagem';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      'O peso corporal e as notas de retenção médica são dados de saúde, registados apenas com o consentimento do corredor e visíveis apenas para os oficiais da prova.';
+
+  @override
+  String get checkpointWeighInConsent =>
+      'O corredor consente o registo de dados de saúde';
+
+  @override
+  String get checkpointWeighInWeightKg => 'Peso corporal (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'Colocar em retenção médica';
+
+  @override
+  String get checkpointWeighInSave => 'Guardar e registar';
+
+  @override
+  String get checkpointCancel => 'Cancelar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18236,4 +18332,100 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert de ganho · meta $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'Check-in no posto de controle';
+
+  @override
+  String get checkpointCheckinTitle => 'Check-in no posto de hidratação';
+
+  @override
+  String get checkpointSyncNow => 'Sincronizar agora';
+
+  @override
+  String get checkpointPending => 'Não sincronizado';
+
+  @override
+  String get checkpointLoadFailed =>
+      'Não foi possível carregar os postos de controle';
+
+  @override
+  String get checkpointRetry => 'Tentar novamente';
+
+  @override
+  String get checkpointNone =>
+      'Esta corrida ainda não tem postos de controle. Adicione-os na web antes de a equipe registrar os corredores.';
+
+  @override
+  String get checkpointPickLabel => 'POSTO DE CONTROLE';
+
+  @override
+  String get checkpointBibLabel => 'Número de peito';
+
+  @override
+  String get checkpointBibHint => 'Escaneie ou digite um número';
+
+  @override
+  String get checkpointBibRequired => 'Digite primeiro um número de peito';
+
+  @override
+  String get checkpointStampIn => 'Registrar ENTRADA';
+
+  @override
+  String get checkpointStampOut => 'Registrar SAÍDA';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'Número $bib com entrada registrada';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'Número $bib com saída registrada';
+  }
+
+  @override
+  String get checkpointStampFailed => 'Não foi possível salvar esse registro';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'REGISTRADOS AQUI ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere =>
+      'Ainda não há corredores registrados neste posto de controle.';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'Número $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return 'Entrada $inTime · Saída $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => 'Pesagem';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      'O peso corporal e as notas de retenção médica são dados de saúde, registrados apenas com o consentimento do corredor e visíveis apenas para os oficiais da corrida.';
+
+  @override
+  String get checkpointWeighInConsent =>
+      'O corredor consente o registro de dados de saúde';
+
+  @override
+  String get checkpointWeighInWeightKg => 'Peso corporal (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'Colocar em retenção médica';
+
+  @override
+  String get checkpointWeighInSave => 'Salvar e registrar';
+
+  @override
+  String get checkpointCancel => 'Cancelar';
 }

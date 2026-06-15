@@ -9123,4 +9123,99 @@ class AppLocalizationsEs extends AppLocalizations {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert desnivel · objetivo $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'Registro en checkpoint';
+
+  @override
+  String get checkpointCheckinTitle => 'Registro en avituallamiento';
+
+  @override
+  String get checkpointSyncNow => 'Sincronizar ahora';
+
+  @override
+  String get checkpointPending => 'Sin sincronizar';
+
+  @override
+  String get checkpointLoadFailed => 'No se pudieron cargar los checkpoints';
+
+  @override
+  String get checkpointRetry => 'Reintentar';
+
+  @override
+  String get checkpointNone =>
+      'Esta carrera aún no tiene checkpoints. Añádelos en la web antes de que los voluntarios registren a los corredores.';
+
+  @override
+  String get checkpointPickLabel => 'CHECKPOINT';
+
+  @override
+  String get checkpointBibLabel => 'Número de dorsal';
+
+  @override
+  String get checkpointBibHint => 'Escanea o escribe un dorsal';
+
+  @override
+  String get checkpointBibRequired => 'Introduce primero un número de dorsal';
+
+  @override
+  String get checkpointStampIn => 'Marcar ENTRADA';
+
+  @override
+  String get checkpointStampOut => 'Marcar SALIDA';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'Dorsal $bib marcado de entrada';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'Dorsal $bib marcado de salida';
+  }
+
+  @override
+  String get checkpointStampFailed => 'No se pudo guardar ese registro';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'REGISTRADOS AQUÍ ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere =>
+      'Aún no hay corredores registrados en este checkpoint.';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'Dorsal $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return 'Entrada $inTime · Salida $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => 'Pesaje';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      'El peso corporal y las notas de retención médica son datos de salud, registrados solo con el consentimiento del corredor y visibles solo para los oficiales de la carrera.';
+
+  @override
+  String get checkpointWeighInConsent =>
+      'El corredor consiente el registro de datos de salud';
+
+  @override
+  String get checkpointWeighInWeightKg => 'Peso corporal (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'Poner en retención médica';
+
+  @override
+  String get checkpointWeighInSave => 'Guardar y marcar';
+
+  @override
+  String get checkpointCancel => 'Cancelar';
 }

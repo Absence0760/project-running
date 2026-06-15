@@ -9030,4 +9030,99 @@ class AppLocalizationsEn extends AppLocalizations {
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert vert · goal $time';
   }
+
+  @override
+  String get checkpointCheckinAction => 'Checkpoint check-in';
+
+  @override
+  String get checkpointCheckinTitle => 'Aid-station check-in';
+
+  @override
+  String get checkpointSyncNow => 'Sync now';
+
+  @override
+  String get checkpointPending => 'Unsynced';
+
+  @override
+  String get checkpointLoadFailed => 'Couldn\'t load checkpoints';
+
+  @override
+  String get checkpointRetry => 'Retry';
+
+  @override
+  String get checkpointNone =>
+      'This race has no checkpoints yet. Add them on the web before crews check runners in.';
+
+  @override
+  String get checkpointPickLabel => 'CHECKPOINT';
+
+  @override
+  String get checkpointBibLabel => 'Bib number';
+
+  @override
+  String get checkpointBibHint => 'Scan or type a bib';
+
+  @override
+  String get checkpointBibRequired => 'Enter a bib number first';
+
+  @override
+  String get checkpointStampIn => 'Stamp IN';
+
+  @override
+  String get checkpointStampOut => 'Stamp OUT';
+
+  @override
+  String checkpointStampedIn(String bib) {
+    return 'Bib $bib stamped in';
+  }
+
+  @override
+  String checkpointStampedOut(String bib) {
+    return 'Bib $bib stamped out';
+  }
+
+  @override
+  String get checkpointStampFailed => 'Couldn\'t save that stamp';
+
+  @override
+  String checkpointLoggedHere(int count) {
+    return 'LOGGED HERE ($count)';
+  }
+
+  @override
+  String get checkpointNoneLoggedHere =>
+      'No runners logged at this checkpoint yet.';
+
+  @override
+  String checkpointBibRow(String bib) {
+    return 'Bib $bib';
+  }
+
+  @override
+  String checkpointInOut(String inTime, String outTime) {
+    return 'In $inTime · Out $outTime';
+  }
+
+  @override
+  String get checkpointWeighInTitle => 'Weigh-in';
+
+  @override
+  String get checkpointWeighInConsentBlurb =>
+      'Body weight and medical-hold notes are health data, recorded only with the runner\'s consent and visible only to race officials.';
+
+  @override
+  String get checkpointWeighInConsent =>
+      'Runner consents to recording health data';
+
+  @override
+  String get checkpointWeighInWeightKg => 'Body weight (kg)';
+
+  @override
+  String get checkpointMedicalHold => 'Place on medical hold';
+
+  @override
+  String get checkpointWeighInSave => 'Save & stamp';
+
+  @override
+  String get checkpointCancel => 'Cancel';
 }
