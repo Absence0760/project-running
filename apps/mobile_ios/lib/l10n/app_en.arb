@@ -4839,6 +4839,34 @@
     "description": "Spectator freshness — days since last ping",
     "placeholders": { "n": { "type": "int" } }
   },
+  "liveCutoffTitle": "Next cut-off",
+  "@liveCutoffTitle": {
+    "description": "Spectator next-cutoff card title / fallback checkpoint name"
+  },
+  "liveCutoffToGo": "{distance} to go",
+  "@liveCutoffToGo": {
+    "description": "Spectator next-cutoff card — distance remaining to the cutoff",
+    "placeholders": { "distance": { "type": "String" } }
+  },
+  "liveCutoffEta": "Projected arrival {eta}",
+  "@liveCutoffEta": {
+    "description": "Spectator next-cutoff card — projected arrival as elapsed time",
+    "placeholders": { "eta": { "type": "String" } }
+  },
+  "liveCutoffAhead": "{margin} to spare",
+  "@liveCutoffAhead": {
+    "description": "Spectator next-cutoff chip — projected to make the cutoff with margin to spare",
+    "placeholders": { "margin": { "type": "String" } }
+  },
+  "liveCutoffBehind": "{margin} behind",
+  "@liveCutoffBehind": {
+    "description": "Spectator next-cutoff chip — projected to miss the cutoff by margin",
+    "placeholders": { "margin": { "type": "String" } }
+  },
+  "liveCutoffWaitingSignal": "Waiting for a fresh signal to project arrival",
+  "@liveCutoffWaitingSignal": {
+    "description": "Spectator next-cutoff card — shown instead of a verdict when the position is stale"
+  },
   "plansTitle": "Training plans",
   "@plansTitle": {
     "description": "Plans list AppBar title"

@@ -3713,6 +3713,32 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get liveCutoffTitle => '次の関門';
+
+  @override
+  String liveCutoffToGo(String distance) {
+    return '残り$distance';
+  }
+
+  @override
+  String liveCutoffEta(String eta) {
+    return '到着予想 $eta';
+  }
+
+  @override
+  String liveCutoffAhead(String margin) {
+    return '$marginの余裕';
+  }
+
+  @override
+  String liveCutoffBehind(String margin) {
+    return '$marginの遅れ';
+  }
+
+  @override
+  String get liveCutoffWaitingSignal => '到着予想のため最新の信号を待っています';
+
+  @override
   String get plansTitle => 'トレーニングプラン';
 
   @override

@@ -3957,6 +3957,33 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get liveCutoffTitle => 'Próximo corte';
+
+  @override
+  String liveCutoffToGo(String distance) {
+    return 'Faltam $distance';
+  }
+
+  @override
+  String liveCutoffEta(String eta) {
+    return 'Chegada prevista $eta';
+  }
+
+  @override
+  String liveCutoffAhead(String margin) {
+    return '$margin de margem';
+  }
+
+  @override
+  String liveCutoffBehind(String margin) {
+    return '$margin de atraso';
+  }
+
+  @override
+  String get liveCutoffWaitingSignal =>
+      'À espera de um sinal recente para prever a chegada';
+
+  @override
   String get plansTitle => 'Planos de treino';
 
   @override
@@ -13218,6 +13245,33 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String liveUpdatedDays(int n) {
     return 'Atualizado há $n d';
   }
+
+  @override
+  String get liveCutoffTitle => 'Próximo corte';
+
+  @override
+  String liveCutoffToGo(String distance) {
+    return 'Faltam $distance';
+  }
+
+  @override
+  String liveCutoffEta(String eta) {
+    return 'Chegada prevista $eta';
+  }
+
+  @override
+  String liveCutoffAhead(String margin) {
+    return '$margin de margem';
+  }
+
+  @override
+  String liveCutoffBehind(String margin) {
+    return '$margin de atraso';
+  }
+
+  @override
+  String get liveCutoffWaitingSignal =>
+      'Aguardando um sinal recente para prever a chegada';
 
   @override
   String get plansTitle => 'Planos de treino';

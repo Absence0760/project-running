@@ -3961,6 +3961,33 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get liveCutoffTitle => 'Nächstes Zeitlimit';
+
+  @override
+  String liveCutoffToGo(String distance) {
+    return 'Noch $distance';
+  }
+
+  @override
+  String liveCutoffEta(String eta) {
+    return 'Voraussichtliche Ankunft $eta';
+  }
+
+  @override
+  String liveCutoffAhead(String margin) {
+    return '$margin Puffer';
+  }
+
+  @override
+  String liveCutoffBehind(String margin) {
+    return '$margin im Rückstand';
+  }
+
+  @override
+  String get liveCutoffWaitingSignal =>
+      'Warte auf ein frisches Signal für die Ankunftsprognose';
+
+  @override
   String get plansTitle => 'Trainingspläne';
 
   @override

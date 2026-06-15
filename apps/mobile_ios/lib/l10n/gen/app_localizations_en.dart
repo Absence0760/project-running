@@ -3921,6 +3921,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get liveCutoffTitle => 'Next cut-off';
+
+  @override
+  String liveCutoffToGo(String distance) {
+    return '$distance to go';
+  }
+
+  @override
+  String liveCutoffEta(String eta) {
+    return 'Projected arrival $eta';
+  }
+
+  @override
+  String liveCutoffAhead(String margin) {
+    return '$margin to spare';
+  }
+
+  @override
+  String liveCutoffBehind(String margin) {
+    return '$margin behind';
+  }
+
+  @override
+  String get liveCutoffWaitingSignal =>
+      'Waiting for a fresh signal to project arrival';
+
+  @override
   String get plansTitle => 'Training plans';
 
   @override

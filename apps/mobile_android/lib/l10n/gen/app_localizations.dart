@@ -6566,6 +6566,42 @@ abstract class AppLocalizations {
   /// **'Updated {n}d ago'**
   String liveUpdatedDays(int n);
 
+  /// Spectator next-cutoff card title / fallback checkpoint name
+  ///
+  /// In en, this message translates to:
+  /// **'Next cut-off'**
+  String get liveCutoffTitle;
+
+  /// Spectator next-cutoff card — distance remaining to the cutoff
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} to go'**
+  String liveCutoffToGo(String distance);
+
+  /// Spectator next-cutoff card — projected arrival as elapsed time
+  ///
+  /// In en, this message translates to:
+  /// **'Projected arrival {eta}'**
+  String liveCutoffEta(String eta);
+
+  /// Spectator next-cutoff chip — projected to make the cutoff with margin to spare
+  ///
+  /// In en, this message translates to:
+  /// **'{margin} to spare'**
+  String liveCutoffAhead(String margin);
+
+  /// Spectator next-cutoff chip — projected to miss the cutoff by margin
+  ///
+  /// In en, this message translates to:
+  /// **'{margin} behind'**
+  String liveCutoffBehind(String margin);
+
+  /// Spectator next-cutoff card — shown instead of a verdict when the position is stale
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a fresh signal to project arrival'**
+  String get liveCutoffWaitingSignal;
+
   /// Plans list AppBar title
   ///
   /// In en, this message translates to:
