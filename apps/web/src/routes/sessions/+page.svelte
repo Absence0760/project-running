@@ -35,7 +35,13 @@
 
 <div class="page">
 	<header class="page-head">
-		<h1>{t('session.title')}</h1>
+		<div class="head-text">
+			<a class="back-link" href="/gym">
+				<span class="material-symbols" aria-hidden="true">arrow_back</span>
+				{t('gym.back')}
+			</a>
+			<h1>{t('session.title')}</h1>
+		</div>
 		<button type="button" class="btn btn-primary" onclick={() => (showCreate = true)}>
 			{t('session.new')}
 		</button>
@@ -78,8 +84,16 @@
 	.page-head {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
+		align-items: flex-start;
+		gap: var(--space-md);
 		margin-bottom: var(--space-lg);
+	}
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		color: var(--text-muted);
+		font-size: 0.9rem;
 	}
 	.muted {
 		color: var(--text-muted);

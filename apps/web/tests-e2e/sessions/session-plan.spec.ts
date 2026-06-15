@@ -85,6 +85,12 @@ test.describe('/sessions — session plan build, read, attach', () => {
 		await page.unroute('**/rest/v1/session_plans*');
 	});
 
+	test('the list has a back link to /gym (its only nav parent)', async ({ page }) => {
+		await page.goto('/sessions');
+		await page.getByRole('link', { name: 'Back to gym' }).click();
+		await expect(page).toHaveURL(/\/gym$/);
+	});
+
 	test('build a 3-item plan with a per-side hold, reopen, attach to a class event', async ({
 		page
 	}) => {
