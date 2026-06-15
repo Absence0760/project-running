@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { repurposeTodayWorkout } from '../fixtures/plan-today';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -75,50 +76,19 @@ test.describe('Workout-runner surfaces (web)', () => {
 		}) => {
 			// The today-card branch on /plans/[id] is gated on
 			// `todayWorkout = workouts.find(w => w.scheduled_date === today)`.
-			// The seed has no workout for the current wall-clock; plant
-			// one via service role onto the current-week placeholder week
-			// and clean up after.
+			// The seed plan is now()-relative, so today already has a workout
+			// (a rest day on some days) — inserting another onto today trips the
+			// plan_workouts_one_per_day constraint. Repurpose today's existing
+			// workout into an Easy in place and restore it after.
 			const today = new Date().toISOString().slice(0, 10);
-			const admin = getAdminClient();
-			// Pick a week_id that contains today. The plan's plan_weeks
-			// rows are indexed week_index 0..11 from start_date.
-			const { data: plan } = await admin
-				.from('training_plans')
-				.select('start_date')
-				.eq('id', SYDNEY_HALF_PLAN_ID)
-				.maybeSingle();
-			expect(plan).not.toBeNull();
-			const startDate = (plan as { start_date: string }).start_date;
-			const dayIdx = Math.floor(
-				(new Date(today).getTime() - new Date(startDate).getTime()) /
-					(1000 * 60 * 60 * 24)
-			);
-			const weekIdx = Math.floor(dayIdx / 7);
-			const { data: weekRow } = await admin
-				.from('plan_weeks')
-				.select('id')
-				.eq('plan_id', SYDNEY_HALF_PLAN_ID)
-				.eq('week_index', weekIdx)
-				.maybeSingle();
-			expect(weekRow).not.toBeNull();
-
-			// Insert today's planted workout.
-			const { data: ins, error: insErr } = await admin
-				.from('plan_workouts')
-				.insert({
-					week_id: (weekRow as { id: string }).id,
-					scheduled_date: today,
-					kind: 'easy',
-					target_distance_m: 6000,
-					target_pace_sec_per_km: 330,
-					target_pace_tolerance_sec: 30,
-					pace_zone: 'E',
-					notes: 'planted-by-test'
-				})
-				.select('id')
-				.single();
-			expect(insErr).toBeNull();
-			const plantedId = (ins as { id: string }).id;
+			const { workoutId: plantedId, undo } = await repurposeTodayWorkout({
+				kind: 'easy',
+				target_distance_m: 6000,
+				target_pace_sec_per_km: 330,
+				target_pace_tolerance_sec: 30,
+				pace_zone: 'E',
+				notes: 'planted-by-test'
+			});
 
 			try {
 				await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
@@ -139,7 +109,7 @@ test.describe('Workout-runner surfaces (web)', () => {
 				await modal.locator('.modal-close').click();
 				await expect(modal).toHaveCount(0);
 			} finally {
-				await admin.from('plan_workouts').delete().eq('id', plantedId);
+				await undo();
 			}
 		});
 

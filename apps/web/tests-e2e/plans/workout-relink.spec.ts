@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { repurposeTodayWorkout, SYDNEY_HALF_PLAN_ID } from '../fixtures/plan-today';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -14,43 +15,6 @@ import { USER_A } from '../fixtures/users';
  * `src/lib/training/relink_candidates.test.ts`; here we pin the
  * end-to-end UI saga and that the link actually moves.
  */
-
-const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
-
-async function plantTodayWorkout(
-	excludeId?: string
-): Promise<{ workoutId: string; prevDate: string }> {
-	const admin = getAdminClient();
-	const { data: weeks } = await admin
-		.from('plan_weeks')
-		.select('id')
-		.eq('plan_id', SYDNEY_HALF_PLAN_ID);
-	const weekIds = (weeks ?? []).map((w) => (w as { id: string }).id);
-	const today = new Date().toISOString().slice(0, 10);
-	// `excludeId` lets a caller plant a SECOND distinct workout on today —
-	// without it the just-moved row (now at `today`) would be re-picked.
-	let query = admin
-		.from('plan_workouts')
-		.select('id, scheduled_date, target_distance_m')
-		.in('week_id', weekIds)
-		.neq('kind', 'rest')
-		.not('target_distance_m', 'is', null)
-		.gte('scheduled_date', today);
-	if (excludeId) query = query.neq('id', excludeId);
-	const { data: candidates } = await query
-		.order('scheduled_date', { ascending: true })
-		.limit(1);
-	const row = candidates?.[0] as
-		| { id: string; scheduled_date: string; target_distance_m: number }
-		| undefined;
-	if (!row) throw new Error('no candidate workout found to repurpose');
-	const { error } = await admin
-		.from('plan_workouts')
-		.update({ scheduled_date: today })
-		.eq('id', row.id);
-	if (error) throw error;
-	return { workoutId: row.id, prevDate: row.scheduled_date };
-}
 
 test.describe('Workout re-link picker', () => {
 	test.use({ storageState: USER_A.storageStatePath });
@@ -67,20 +31,13 @@ test.describe('Workout re-link picker', () => {
 	test('re-link a workout from one run to a different run', async ({ page }) => {
 		const admin = getAdminClient();
 		const today = new Date().toISOString().slice(0, 10);
-		const { workoutId, prevDate } = await plantTodayWorkout();
+		const { workoutId, undo } = await repurposeTodayWorkout();
 		const { data: workoutRow } = await admin
 			.from('plan_workouts')
-			.select('target_distance_m, completed_run_id, manually_completed, completed_at')
+			.select('target_distance_m')
 			.eq('id', workoutId)
 			.maybeSingle();
 		const target = (workoutRow as { target_distance_m: number }).target_distance_m;
-		const original = {
-			completed_run_id:
-				(workoutRow as { completed_run_id: string | null }).completed_run_id ?? null,
-			manually_completed:
-				(workoutRow as { manually_completed: boolean }).manually_completed ?? false,
-			completed_at: (workoutRow as { completed_at: string | null }).completed_at ?? null
-		};
 
 		let runA: string | null = null;
 		let runB: string | null = null;
@@ -149,32 +106,16 @@ test.describe('Workout re-link picker', () => {
 			await expect(modal).toBeHidden({ timeout: 10_000 });
 			await expect(page.locator('.completed-card')).toBeVisible({ timeout: 10_000 });
 		} finally {
-			await admin
-				.from('plan_workouts')
-				.update({
-					completed_run_id: original.completed_run_id,
-					manually_completed: original.manually_completed,
-					completed_at: original.completed_at
-				})
-				.eq('id', workoutId);
 			if (runA) await deleteRun(runA).catch(() => {});
 			if (runB) await deleteRun(runB).catch(() => {});
-			await admin
-				.from('plan_workouts')
-				.update({
-					scheduled_date: prevDate,
-					completed_run_id: null,
-					manually_completed: false,
-					completed_at: null
-				})
-				.eq('id', workoutId);
+			await undo();
 		}
 	});
 
 	test('a failed unlink surfaces an error toast and keeps the link', async ({ page }) => {
 		const admin = getAdminClient();
 		const today = new Date().toISOString().slice(0, 10);
-		const { workoutId, prevDate } = await plantTodayWorkout();
+		const { workoutId, undo } = await repurposeTodayWorkout();
 		const { data: w1Row } = await admin
 			.from('plan_workouts')
 			.select('target_distance_m')
@@ -226,12 +167,8 @@ test.describe('Workout re-link picker', () => {
 			await page.unroute('**/rest/v1/plan_workouts*');
 			await expect(page.locator('.completed-card')).toBeVisible();
 		} finally {
-			await admin
-				.from('plan_workouts')
-				.update({ completed_run_id: null, completed_at: null, manually_completed: false })
-				.eq('id', workoutId);
 			if (runA) await deleteRun(runA).catch(() => {});
-			await admin.from('plan_workouts').update({ scheduled_date: prevDate }).eq('id', workoutId);
+			await undo();
 		}
 	});
 
@@ -241,7 +178,7 @@ test.describe('Workout re-link picker', () => {
 
 		// Move TWO of the plan's workouts to today so we can link a run
 		// to one and verify it's hidden from the other's picker.
-		const { workoutId: workoutId1, prevDate: prev1 } = await plantTodayWorkout();
+		const { workoutId: workoutId1, undo: undo1 } = await repurposeTodayWorkout();
 		// workout2 only needs to OWN runFree (so runFree is excluded from
 		// workout1's picker) — it must NOT be moved to today as well, which would
 		// collide with workout1 on the (week_id, scheduled_date) one-per-day
@@ -321,11 +258,8 @@ test.describe('Workout re-link picker', () => {
 				.in('id', [workoutId1, workoutId2]);
 			if (runForW1) await deleteRun(runForW1).catch(() => {});
 			if (runFree) await deleteRun(runFree).catch(() => {});
-			// Only workout1 was moved; restore its date. workout2 kept its own.
-			await admin
-				.from('plan_workouts')
-				.update({ scheduled_date: prev1 })
-				.eq('id', workoutId1);
+			// Only workout1 was repurposed; restore it. workout2 was untouched.
+			await undo1();
 		}
 	});
 });
