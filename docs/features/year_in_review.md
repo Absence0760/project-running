@@ -50,7 +50,7 @@ parity pair into the house lockstep registry so it stops drifting.
   `fetchRecapExtras`.
 - **OG/share infra to copy:** `apps/web/src/lib/share/og_run_image.ts`
   (`buildRunOgSvg`), `og_run_png.ts` (`renderRunOgPng` via resvg),
-  `share_run_lookup.ts` (`fetchSharedRun` shape used by both the SvelteKit
+  `share_run_lookup.ts` (`lookupSharedRun`, the shape used by both the SvelteKit
   `+page.ts` and the prod Lambda), the route
   `apps/web/src/routes/og/run/[id].png/+server.ts` (request-time, `prerender =
   false`, 200-on-missing fallback), and the prod Lambda `apps/web/lambda/share-run/`.
@@ -71,7 +71,9 @@ registered in the parity-pair list in the root `CLAUDE.md` (grep: 0 hits for
    (fail-closed: private by default). Recommended durable shape — a new table:
 
    ```sql
-   -- migration: apps/backend/supabase/migrations/20270201_001_public_recap.sql
+   -- migration: apps/backend/supabase/migrations/<NEXT>_001_public_recap.sql
+   -- (placeholder — assign the next free YYYYMMDD_001 sequentially at landing;
+   --  do NOT hardcode a number, the migration tree advances daily)
    create table public_recaps (
      id           uuid primary key default gen_random_uuid(),
      user_id      uuid not null references auth.users(id) on delete cascade,
@@ -104,14 +106,18 @@ registered in the parity-pair list in the root `CLAUDE.md` (grep: 0 hits for
    `apps/web/src/lib/types.ts` and append the pair to the `PAIRS` array in
    `apps/web/scripts/check_constraint_unions.mjs`.
 
-   Migration number: follow the `YYYYMMDD_NNN` pattern (latest seen
-   `20270109_001`); use the next free `2027MMDD_001`.
+   Migration number: follow the `YYYYMMDD_NNN` pattern (latest at spec time was
+   `20270202_001`, but the tree advances daily — verify the real latest with
+   `ls apps/backend/supabase/migrations/ | sort | tail -1` and use the next free
+   `YYYYMMDD_001` at landing; do NOT hardcode `20270201_001`, it is already taken
+   by `race_director_checkpoints`).
 
 2. **Codegen — the two-regeneration rule (mandatory after the migration):**
-   - `npm run gen:types --workspace=apps/backend` (writes
-     `apps/web/src/lib/database.types.ts`, committed)
-   - `dart run scripts/gen_dart_models.dart` (writes
-     `packages/core_models/lib/src/generated/db_rows.dart`, committed)
+   - `cd apps/backend && npm run gen:types` (or `npm run gen:types` from the repo
+     root, which delegates to the backend workspace) — writes
+     `apps/web/src/lib/database.types.ts`, committed
+   - `dart run scripts/gen_dart_models.dart` from the repo root — writes
+     `packages/core_models/lib/src/generated/db_rows.dart`, committed
    Both in the same commit as the migration. CI `parity-types` enforces.
 
 **Alternative considered (cheaper, weaker):** skip the table and render the
@@ -266,7 +272,10 @@ mirror `lib/l10n/gen/` to the iOS twin. `l10n_parity_test.dart` enforces.
 2. Generalise the engine to monthly (`buildMonthInRunningRecap`) + extract
    `RecapView.svelte`; add the `[year]/[month]` route + tests (commit 2).
 3. Write the `public_recaps` migration; apply locally
-   (`cd apps/backend && supabase migration up`); run **both** codegen commands;
+   (`cd apps/backend && supabase db reset` — the repo's canonical replay-all idiom,
+   which also re-runs `seed.sql`); pick a date with no existing migration (the CLI
+   parses only the `YYYYMMDD` prefix as the version, so two same-day files collide —
+   see apps/backend/CLAUDE.md); run **both** codegen commands;
    add the `RecapPeriodKind` union + CHECK pair to `check_constraint_unions.mjs`;
    write the pgtap RLS test (commit 3).
 4. Build the web public-share page + og:image (copy the `share-run`/`og/run`

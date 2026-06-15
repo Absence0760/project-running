@@ -19,10 +19,11 @@ the surfaces mirror web → mobile twin.
   of typed entries + a pure dispatcher (`cuesDue`). The badge catalogue copies this shape exactly
   (typed entries + a pure `evaluate` dispatcher; titles/descriptions via the i18n `m(key)` /
   `AppLocalizations` lookup so the catalogue re-renders on locale switch).
-- **Trophy precedent**: `apps/web/src/lib/runs/recap.ts` already defines a `RecapTrophy` concept
-  (`earnedTrophies` at ~line 93, tiers high→low, `icon`/`label`/`detail`) for the year-in-running
-  recap. This is the *display* shape to model the badge tile on, but recap trophies are recomputed
-  per-recap and not persisted — badges ARE persisted (an award is a durable event).
+- **Trophy precedent**: `apps/web/src/lib/runs/recap.ts` already defines a `RecapBadge` concept
+  (the `RecapBadge` type with `icon`/`label`/`detail` at ~line 37; the pure `computeRecapBadges(i)`
+  dispatcher at ~line 99 picks the highest-tier earned per category, tiers high→low) for the
+  year-in-running recap. This is the *display* shape to model the badge tile on, but recap badges are
+  recomputed per-recap and not persisted — achievements ARE persisted (an award is a durable event).
 - **Data sources, all present**:
   - PRs: `personal_records` table (`apps/backend/supabase/migrations/20260508_001_personal_records_cache.sql`) —
     one row per `(user_id, distance ∈ 5k|10k|half_marathon|marathon|mile)`, trigger-maintained, in `TABLES`.
@@ -32,18 +33,28 @@ the surfaces mirror web → mobile twin.
   - Challenge/plan completion: `training_plans` (`status`, completion via `plan_workouts.manually_completed` /
     `completed_run_id`, the exact logic in `fetchActivePlanOverview` / `fetchAthletePlanOverview` in `data.ts`).
 - **Notifications spine** for the "you earned a badge" alert: `notifications` table
-  (`apps/backend/supabase/migrations/20260528000001_notifications.sql`) — `kind` CHECK currently
-  `('kudos','comment','comment_reply','follow')`, extended polymorphically in `20261212_001`. Adding an
-  `'achievement'` kind is the natural alert path. SECURITY DEFINER triggers are the only writers.
+  (`apps/backend/supabase/migrations/20260528000001_notifications.sql`) — the `kind` CHECK has been
+  widened several times and currently allows **12 values**
+  (`kudos, comment, comment_reply, follow, event_rsvp, event_cancel, plan_update, message, club_post,
+  run_completed, event_reminder, plan_assigned`), most recently re-stated in full by
+  `20270107_001_notify_plan_assigned.sql`. (`20261212_001_notifications_polymorphic_activity_ref.sql`
+  added the polymorphic `activity_kind`/`activity_ref` columns — it did NOT touch the `kind` CHECK.)
+  Adding an `'achievement'` kind is the natural alert path: re-emit the full latest CHECK body at the
+  chain end (the documented pattern). SECURITY DEFINER triggers are the only writers; the email/push
+  channels are opt-in allowlists, so a new in-app kind stays bell-only by default.
 - **Feed**: `apps/web/src/routes/feed/` → `/social?tab=feed` (`SocialFeed.svelte`), `fetchFollowingFeed` cursor
   shape in `data.ts`. Mobile `feed_screen.dart`.
 - **Profile**: `apps/web/src/routes/u/[id]/+page.svelte` (tabs runs/followers/following/notifications) ↔
   `apps/mobile_android/lib/screens/profile_screen.dart`.
 - **Share page precedent**: `apps/web/src/routes/share/run/[id]/` + the `lambda/share-run/` SSR/OG path — the exact
   pattern a public `share/badge/[id]` page + OG image follows.
-- **Schema registry**: add `achievements` (and any award table) to `TABLES` in `apps/web/src/lib/core/schema.ts`,
-  `metadata_keys.dart`, and the Go `schema.go` if the worker ever writes it (it won't in V1).
-- **Latest migration**: `20270202_001` — next free date is `20270203_001` (one per day).
+- **Schema registry**: add `achievements` (and any award table) to the `TABLES` registry in
+  `apps/web/src/lib/core/schema.ts` (the bare-`.from()` guard `core/schema.test.ts` derives from it), and to the Go
+  worker's `apps/job_worker/internal/schema/schema.go` only if the worker ever writes it (it won't in V1). There is no
+  Dart-side table registry to touch — mobile routes table access through `packages/api_client`.
+- **Latest migration at spec time**: `20270202_001` — the `20270203_001` filename below is a **placeholder; re-check
+  the tail of `apps/backend/supabase/migrations/` at landing and assign the next sequential date** (other sessions may
+  have landed migrations since).
 
 ## Data model / migrations
 
@@ -92,8 +103,11 @@ versionable/testable and avoids a DB round-trip to know what badges exist.
     (`kind='achievement'`) for each new award (and, optionally, a feed-visible marker — see Feed below).
   - **Notification kind**: extend the `notifications` kind CHECK to include `'achievement'` in the same migration
     (re-emit the full latest CHECK body — `grep` the latest `notifications` kind constraint first;
-    `20261212_001_notifications_polymorphic_activity_ref.sql` is the latest to touch it — and add `achievement_id uuid
-    references achievements(id) on delete cascade` if the polymorphic ref column doesn't already cover it).
+    `20270107_001_notify_plan_assigned.sql` is the latest to touch the `kind` CHECK, and it currently lists 12 values).
+    For linking the notification back to the award, prefer the existing polymorphic `activity_ref` columns added by
+    `20261212_001_notifications_polymorphic_activity_ref.sql` (`activity_kind` is currently CHECK-limited to
+    `run|lift|meal`, so either widen that CHECK to add an `achievement` activity_kind or add a dedicated
+    `achievement_id uuid references achievements(id) on delete cascade` nullable FK column).
 - **Two codegen commands** after the migration (mandatory): `cd apps/backend && npm run gen:types`, then
   `cd ../.. && dart run scripts/gen_dart_models.dart`. Add `achievements` to the `_tables` allowlist in
   `scripts/gen_dart_models.dart` so `AchievementRow` is generated.
@@ -142,8 +156,9 @@ Build after web ships + review (decisions §24). Byte-identical iOS twin in the 
 - **Feed**: render the badge-award card in `apps/mobile_android/lib/screens/feed_screen.dart` (mirror the web feed card).
 - **Notifications**: the existing notifications inbox + bell already render the `notifications` table; add an icon/label
   branch for `kind='achievement'` in `notification_bell` / `NotificationsList` mirror (web first).
-- **Nav placement**: none added (badges live inside Profile + Feed + Notifications — all existing surfaces). 5/6-tab
-  ceiling untouched. Share uses the OS share sheet (`Share.share` of the `/share/badge/[id]` URL).
+- **Nav placement**: none added (badges live inside Profile + Feed + Notifications — all existing surfaces). The
+  mobile bottom-nav (Home / Fitness / Log / Social / You in `home_screen.dart`) is untouched. Share uses the OS share
+  sheet (`Share.share` of the `/share/badge/[id]` URL).
 
 ## TS↔Dart parity helpers
 

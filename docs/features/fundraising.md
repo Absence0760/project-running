@@ -25,7 +25,7 @@ The Stripe Connect destination-charge marketplace rail is **already built and sh
 
 ## Data model / migrations
 
-One new migration. **Next free number: `20270203_001_fundraisers.sql`** (latest is `20270202_001`).
+One new migration. **Number is a placeholder — assign sequentially at landing** (e.g. `2027XXXX_001_fundraisers.sql`; latest on `main` at spec time is `20270202_001`, and the race-calendar plan also wants the next slot, so coordinate so the two don't collide).
 
 Two new tables + two narrow unions. A fundraiser is **polymorphic over (run | event)** via a nullable-FK-pair + CHECK (exactly one set), mirroring how `event_results.run_id` / `event_orders.event_id` coexist.
 
@@ -102,7 +102,7 @@ create index donations_fundraiser_paid_idx
 - `donations` SELECT: the **paid** rows of a publicly-visible fundraiser are readable by anyone (the donation feed is public), **but only the public-safe columns** — `display_name`, `message`, `amount_cents`, `currency`, `paid_at`. Donor identity (`donor_user_id`), Stripe ids, and `owner_user_id` are **revoked from client roles** (the `stripe_connect_account_id` column-lockdown precedent). Expose the feed via a `security definer` RPC `fundraiser_feed(p_fundraiser_id)` returning only the public-safe projection of paid rows (the `get_event_meet_point` / `host_can_take_payment` pattern), and a `fundraiser_totals(p_fundraiser_id)` RPC returning `{ raised_cents, donor_count, goal_cents }` for the thermometer (a `sum`, never per-row).
 - `donations` INSERT/UPDATE/DELETE: **no client policy** — service-role-only, written exclusively by the donation webhook. Copy `lock_event_order_status` verbatim as `lock_donation_status` (reject any non-service-role status write; idempotent CAS pending→paid).
 
-**Two new narrow unions** (TS union + CHECK in lockstep; append both to `apps/web/src/scripts/check_constraint_unions.mjs` `PAIRS`):
+**Two new narrow unions** (TS union + CHECK in lockstep; append both to `apps/web/scripts/check_constraint_unions.mjs` `PAIRS`):
 
 ```
 FundraiserStatus = 'open' | 'closed'
@@ -157,7 +157,7 @@ Per `decisions.md §39`, every Dart change lands **byte-identical** in `apps/mob
 
 - **Service** `apps/mobile_android/lib/social_service.dart` (+ iOS twin) — add `fetchFundraiserForRun/Event`, `fetchFundraiserById`, `fetchFundraiserTotals`, `fetchFundraiserFeed`. (No `createFundraiser` on mobile in this slice — authoring is web-canonical; mobile can come in a follow-up.)
 - **Screen** `apps/mobile_android/lib/screens/run_detail_screen.dart` + `event_detail_screen.dart` (+ iOS twins) — render a read-only fundraiser card (Dart `_FundraiserCard` widget: thermometer + donor feed + a "Donate on web" button that `url_launcher`-opens `/fundraisers/[id]` in a Custom Tab, the existing handoff pattern).
-- **Nav placement**: none. Fundraisers are sub-surfaces of existing run-detail / event-detail screens — **no new bottom-nav tab** (6-tab ceiling untouched).
+- **Nav placement**: none. Fundraisers are sub-surfaces of existing run-detail / event-detail screens — **no new bottom-nav destination** (the mobile shell has a hard ceiling of 4 nav tabs + the centre Log FAB = 5 slots; see `apps/mobile_android/CLAUDE.md` and `decisions.md §63` — clubs is a sub-tab of Social, not its own slot, so it does not count against the ceiling).
 
 ## TS↔Dart parity helpers
 
@@ -218,7 +218,7 @@ Web (`apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`) and mobile (`app
 ## Commit plan (ordered, path-scoped)
 
 1. `git commit -- apps/backend/supabase/migrations/20270203_001_fundraisers.sql apps/backend/supabase/tests/fundraisers_rls_test.sql apps/backend/supabase/tests/donations_status_lock_test.sql apps/backend/supabase/tests/fundraiser_pricing_requires_charges_test.sql` — schema + RLS + pgtap.
-2. `git commit -- apps/web/src/lib/database.types.ts packages/core_models/lib/src/generated/db_rows.dart apps/web/src/lib/types.ts apps/web/src/scripts/check_constraint_unions.mjs` — both regenerated type files + unions + PAIRS.
+2. `git commit -- apps/web/src/lib/database.types.ts packages/core_models/lib/src/generated/db_rows.dart apps/web/src/lib/types.ts apps/web/scripts/check_constraint_unions.mjs` — both regenerated type files + unions + PAIRS.
 3. `git commit -- apps/web/src/lib/social/fundraiser_progress.ts apps/web/src/lib/social/fundraiser_progress.test.ts apps/mobile_android/lib/fundraiser_progress.dart apps/mobile_android/test/fundraiser_progress_test.dart apps/mobile_ios/lib/fundraiser_progress.dart apps/mobile_ios/test/fundraiser_progress_test.dart` — parity pair + tests (one commit, both twins).
 4. `git commit -- apps/backend/supabase/functions/donations-checkout/ apps/backend/supabase/functions/stripe-events-webhook/` — checkout EF + webhook donation branch + Deno tests.
 5. `git commit -- apps/web/src/lib/core/data.ts` — data.ts helpers.
@@ -241,7 +241,7 @@ Web (`apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`) and mobile (`app
 
 ## Sequencing for the implementer
 
-1. Write `20270203_001_fundraisers.sql` (tables, CHECKs, partial unique indexes, RLS, the `lock_donation_status` trigger, the `enforce_fundraiser_requires_charges` trigger, the `fundraiser_feed` + `fundraiser_totals` SECURITY DEFINER RPCs). Apply locally via the `safe-migration` flow.
+1. Write the fundraisers migration (placeholder name `2027XXXX_001_fundraisers.sql` — assign the next free sequential number at landing, the `20270203_001` used in the commit-plan example is illustrative): tables, CHECKs, partial unique indexes, RLS, the `lock_donation_status` trigger, the `enforce_fundraiser_requires_charges` trigger, the `fundraiser_feed` + `fundraiser_totals` SECURITY DEFINER RPCs. Apply locally via the `safe-migration` flow.
 2. Add `FundraiserStatus` / `DonationStatus` to `types.ts`; append both to `check_constraint_unions.mjs` PAIRS. Run **both** codegen commands; commit the regenerated files. Write the pgtap tests; verify they pass.
 3. Build the `fundraiser_progress` parity pair (web + both Dart twins) with matched tests.
 4. Build `donations-checkout` (reusing `events-checkout/lib.ts` helpers) + extend `stripe-events-webhook` with the donation branch; add Deno tests (mocked Stripe).

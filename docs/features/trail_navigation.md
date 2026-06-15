@@ -81,7 +81,8 @@ mirror to mobile). Offline tile packs + turn-by-turn voice are device-led
 
 ## Mobile implementation (Android + iOS twin)
 All `lib/`+`test/` edits mirrored byte-identical to `apps/mobile_ios/` per commit
-(decisions §39). No new nav destination (6-tab ceiling untouched — everything
+(decisions §39). No new nav destination (the bottom nav's four tabs — Home /
+Fitness / Social / You, plus the docked Log FAB — stay untouched; everything
 hangs off route-detail and the run screen).
 
 ### A. Condition reports (mirror web)
@@ -119,7 +120,7 @@ Two new pure pairs (kept in lockstep, matching test counts; the
    "download size" preview if web ever offers pack management.
 
 ## Tests (same commit as the piece)
-- **Backend (pgtap):** `apps/backend/supabase/tests/route_conditions_test.sql` — RLS: owner reads own on a private route, non-owner can't INSERT on an enumerated private route id (the insert-gate), public route is reportable by any signed-in user, owner can delete a foreign condition on their route, `position_m` derived, `route_conditions_for_viewer` redacts an anchor inside an owner privacy zone for a non-owner. (Remember: `runs` fixtures need `metadata.activity_type`; `"request.jwt.claims"` double-quoted; valid hex UUIDs.)
+- **Backend (pgtap):** `apps/backend/supabase/tests/rls_route_conditions_test.sql` (mirror the existing `rls_route_markers_test.sql` / `rls_route_reviews_test.sql` naming) — RLS: owner reads own on a private route, non-owner can't INSERT on an enumerated private route id (the insert-gate), public route is reportable by any signed-in user, owner can delete a foreign condition on their route, `position_m` derived, `route_conditions_for_viewer` redacts an anchor inside an owner privacy zone for a non-owner. (Remember: `runs` fixtures need `metadata.activity_type`; `"request.jwt.claims"` double-quoted; valid hex UUIDs.)
 - **Web (Playwright):** `apps/web/tests-e2e/routes/route-conditions.spec.ts` (matching the existing `tests-e2e/clubs|social|messages` layout) — report a condition, see it in the panel, delete own; severity/age rendering; private-route negative (no report affordance when not visible).
 - **Parity unit tests (matching counts both sides):**
   - `apps/web/src/lib/routes/turn_cues.test.ts` ↔ `apps/mobile_android/test/turn_cues_test.dart` (+ iOS twin): straight line → no cues, a 90° left → one `left` cue at the vertex, sub-threshold wiggle suppressed, U-turn detected, coincident-vertex merge, empty/1-point input. Aim ~10 each, identical cases.
@@ -165,7 +166,7 @@ real translations, then `flutter gen-l10n` + mirror `lib/l10n/gen/`. Representat
   additive enhancement behind its own key.
 
 ## Commit plan (ordered, path-scoped)
-1. **Migration + codegen + pgtap** — `apps/backend/supabase/migrations/20270203_001_route_conditions.sql`, `apps/web/src/lib/database.types.ts`, `packages/core_models/lib/src/generated/db_rows.dart`, `apps/web/scripts/check_constraint_unions.mjs`, `apps/backend/supabase/tests/route_conditions_test.sql`. (Run `supabase db reset` + both generators first.)
+1. **Migration + codegen + pgtap** — `apps/backend/supabase/migrations/20270203_001_route_conditions.sql`, `apps/web/src/lib/database.types.ts`, `packages/core_models/lib/src/generated/db_rows.dart`, `apps/web/scripts/check_constraint_unions.mjs`, `apps/backend/supabase/tests/rls_route_conditions_test.sql`. (Run `supabase db reset` + both generators first.)
 2. **Web conditions** — `apps/web/src/lib/types.ts`, `apps/web/src/lib/core/data.ts`, `apps/web/src/lib/components/RouteConditions.svelte`, `apps/web/src/routes/routes/[id]/+page.svelte`, web i18n catalogues, `apps/web/tests-e2e/routes/route-conditions.spec.ts`.
 3. **`turn_cues` parity pair + tests** — `apps/web/src/lib/routes/turn_cues.ts` + `.test.ts`, `apps/mobile_android/lib/turn_cues.dart` + `apps/mobile_android/test/turn_cues_test.dart`, iOS twins.
 4. **`tile_pack` parity pair + tests** — `apps/web/src/lib/routes/tile_pack.ts` + `.test.ts`, `apps/mobile_android/lib/tile_pack.dart` + test, iOS twins.

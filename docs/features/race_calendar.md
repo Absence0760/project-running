@@ -10,7 +10,7 @@ Parity backlog item #10: let a runner **discover races near them** (a searchable
 
 - **`docs/features/integrations.md § Race results (RunSignUp + general scraping)`** — the design source. RunSignUp REST API (`GET runsignup.com/Rest/race/{race_id}/results/get-results`, API-key gated), parkrun scrape (shipped), general timing-platform URL patterns (ChronoTrack / RaceResult / UltraSignup), and the **race `external_id` format `race:{race-name}:{date}:{bib}`** + `source = 'race'`.
 - **`apps/backend/supabase/functions/parkrun-import/index.ts`** + its `lib.ts` — the **exact pattern to mirror** for a race-results importer EF: auth-before-parse, per-user tiered rate limit (`checkRateLimitTiered`), `readJsonWithLimit` / body caps, `withSentry`, fail-loud on non-2xx upstream, `privacy_default`-honouring `is_public`, upsert with `onConflict: external_id`, cap helpers in `lib.ts`.
-- **`runs` table + metadata race fields** — **already documented as reserved with no writer** in `docs/backend/metadata.md § Race fields`: `race_name`, `bib`, `overall_place`, `age_group_place`, `age_group`, `chip_time`, `gun_time` (all owner-only, stripped from `public_runs` by `20260714_001`). This plan **builds the writer**. `runs.source` CHECK already includes `'race'` (`20260505_001_narrow_union_check_constraints.sql`).
+- **`runs` table + metadata race fields** — `docs/backend/metadata.md § Race fields` **already reserves four owner-only keys with no writer**: `race_name`, `bib`, `overall_place`, `chip_time` (all stripped from `public_runs` by `20260714_001`). This plan **builds the writer**. The additional keys this plan introduces — `gun_time`, `age_group_place`, `age_group` — are **NOT yet in the registry**; this plan must add a registry row for each (same owner-only classification + `public_runs` strip) in the same turn it writes them, per the metadata-key registry rule. `runs.source` CHECK already includes `'race'` (`20260505_001_narrow_union_check_constraints.sql`).
 - **`runs.external_id`** unique-per-user index → dedupe via `ON CONFLICT (external_id) DO NOTHING` (the cross-source dedup strategy in integrations.md).
 - **`integrations` table** + `IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup'` (`apps/web/src/lib/types.ts:151`, CHECK in `20260505_001`) — **`runsignup` is already a permitted provider**. OAuth-style connect rows live here.
 - **`apps/web/src/routes/settings/integrations/+page.svelte`** + the mobile `settings_integrations_screen.dart` — where a "Connect RunSignUp" / "Import race results" card belongs (the parkrun card is here).
@@ -20,7 +20,7 @@ Parity backlog item #10: let a runner **discover races near them** (a searchable
 
 ## Data model / migrations
 
-One migration. **Next free number: `20270203_001_race_calendar.sql`** (latest is `20270202_001`; if the fundraising plan also claims `20270203_001`, bump this to `20270204_001` — coordinate at landing).
+One migration. **Number is a placeholder — assign the next free sequential number at landing** (e.g. `2027XXXX_001_race_calendar.sql`; latest on `main` at spec time is `20270202_001`). The fundraising plan also wants the next slot, so coordinate so the two don't collide.
 
 Two new tables: `races` (the calendar) and `race_results` is **already taken** by clubs (`20260424_001_event_results.sql` defines `event_results`, and there is no top-level `race_results`). Use **`race_listings`** for the calendar and **`race_result_imports`** for raw imported provider results — but the simplest durable design reuses the existing `runs` row as the result store (the integrations.md design maps a result straight onto a `run` with `source = 'race'`). So:
 
@@ -96,7 +96,7 @@ create or replace function search_race_listings(
 ) returns table (... race_listings cols + distance_m_away ...) ...
 ```
 
-**Two narrow unions** (TS union + CHECK in lockstep; append to `apps/web/src/scripts/check_constraint_unions.mjs` `PAIRS`):
+**Two narrow unions** (TS union + CHECK in lockstep; append to `apps/web/scripts/check_constraint_unions.mjs` `PAIRS`):
 
 ```
 RaceProvider = 'runsignup' | 'parkrun' | 'manual' | 'chronotrack' | 'raceresult' | 'ultrasignup'
@@ -158,7 +158,7 @@ When a run finishes recording, offer to match it to an official race result — 
 Byte-identical across `apps/mobile_android/lib/` and `apps/mobile_ios/lib/` (+ tests), `decisions.md §39`.
 
 - **Service** `apps/mobile_android/lib/` — add a `race_service.dart` (or extend an existing service) with `searchRaceListings`, `importRaceResult`, `findRaceMatchCandidates`, `fetchRaceResultForRun`.
-- **Discovery screen** `apps/mobile_android/lib/screens/races_screen.dart` — mirrors the web calendar (search, distance chips, near-me, register link via `url_launcher`). **Reuse, don't grow the bottom nav**: surface Races as an entry inside the existing discovery/social area or the Run-tab "explore" area — **do not add a 7th bottom-nav tab** (the 6-tab ceiling is hard; clubs already took the 6th). Place it as a sub-route reachable from the existing discovery surface.
+- **Discovery screen** `apps/mobile_android/lib/screens/races_screen.dart` — mirrors the web calendar (search, distance chips, near-me, register link via `url_launcher`). **Reuse, don't grow the bottom nav**: surface Races as an entry inside the existing Social area (where Clubs / Discover already live as sub-tabs) or the Fitness-hub "Runs" area — **do not add a new bottom-nav destination** (the shell is a hard 4 nav tabs + centre Log FAB = 5 slots; clubs is a sub-tab of Social, not its own slot — see `apps/mobile_android/CLAUDE.md` + `decisions.md §63`). Place it as a sub-route reachable from the existing discovery surface.
 - **Auto-match prompt** — the post-run summary / `run_detail_screen.dart` shows the non-blocking "Was this the {race}? Import result" card when `findRaceMatchCandidates` returns a hit. The recorder-side seam lives in the shared `packages/run_recorder` only as data (it does not call network); the network check runs in the app layer after save, `tester.runAsync`-friendly and try/catch-wrapped.
 - **Settings → Integrations** `apps/mobile_android/lib/screens/settings_integrations_screen.dart` — add the RunSignUp tile (web-checkout-free; results import runs through the same EF). Disabled-with-explainer when the provider key is unconfigured.
 - **iOS twin**: mirror every Dart file + test byte-for-byte.
@@ -196,7 +196,7 @@ Web `apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`; mobile `apps/mobi
 - `docs/product/roadmap.md` — tick item #10 (race discovery + results import), noting RunSignUp gated on the key + per-site scrapers deferred.
 - `docs/product/parity.md` — new rows: Race calendar (web ✓ / mobile ✓ / watch ✗); Race results import (web ✓ / mobile ✓ / watch ✗); auto-match (mobile-led, the recording platforms).
 - `docs/features/integrations.md` — update the RunSignUp + race-results section from "no writer in source today" to "shipped behind `RUNSIGNUP_API_KEY` gate"; document the `race_listings` table, the import EF, and the auto-match seam.
-- `docs/backend/metadata.md § Race fields` — flip the "no writer in source today" notes to point at `race-results-import` as the writer.
+- `docs/backend/metadata.md § Race fields` — flip the existing four keys' "no writer in source today" notes to point at `race-results-import` as the writer, AND add registry rows for the three new keys (`gun_time`, `age_group_place`, `age_group`) with the same owner-only + `public_runs`-stripped classification. Any new key the importer writes that should stay private must also be added to the `public_runs` strip denylist in this plan's migration (`20260714_001` only strips the original four).
 - `docs/backend/api_database.md` — `race_listings` table + RLS + the `runs.race_listing_id` column + `search_race_listings` RPC.
 - `docs/architecture/decisions.md` — ADR: *"Race results are stored on the `runs` row (`source='race'`), not a parallel results table; a `race_listings` calendar is publicly discoverable (one `security invoker` RPC, the search_public_events precedent); auto-match-on-record is an inform-tier, layered-resilience-wrapped post-save check that never writes without confirmation; RunSignUp is built fail-closed behind a missing API key, parkrun stays the shipped scraper, per-site scrapers are scoped follow-ups."*
 - Root `CLAUDE.md` — add `race_match` to the parity-pair lockstep list.
@@ -206,14 +206,14 @@ Web `apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`; mobile `apps/mobi
 
 - **RunSignUp API key is a genuine external blocker** (`integrations.md` says it's blocked on the key) → build the whole code path, gate it fail-closed: `race-results-import` and `race-listings-sync` return `503 provider_not_configured` when `RUNSIGNUP_API_KEY` is unset; the UI card is disabled with an explainer. parkrun + manual-paste paths work without it. This is the "build behind a default-off flag, don't stub" rule.
 - **No paywall gate** by default (race discovery + result import is a free, retention-positive feature) — but if it should be Pro, gate via the existing paywall registry (`paywall.md`), not a stub.
-- **Privacy**: imported race results carry owner-only metadata (`race_name`/`bib`/`chip_time`/`overall_place`) already stripped from `public_runs` (`20260714_001`); the auto-match seam writes only on user confirmation (inform tier). Verify the new `runs.race_listing_id` projection in `public_runs`.
+- **Privacy**: imported race results carry owner-only metadata. The four original keys (`race_name`/`bib`/`chip_time`/`overall_place`) are already stripped from `public_runs` (`20260714_001`); the three new keys this plan writes (`gun_time`/`age_group_place`/`age_group`) must be **added to the `public_runs` strip in this plan's migration** (they're not stripped today). The auto-match seam writes only on user confirmation (inform tier). Verify the new `runs.race_listing_id` projection in `public_runs`.
 - **Scraping hygiene**: reuse parkrun's politeness pattern (User-Agent env, per-user rate limit, body caps, fail-loud on non-2xx) for any URL-fetch path; per-site scrapers stay deferred to avoid brittle/abusive crawling.
 - **No compliance sign-off gate** (no money, no new PII sub-processor beyond the public results data the runner already published on the timing site) — unlike the fundraising feature.
 
 ## Commit plan (ordered, path-scoped)
 
 1. `git commit -- apps/backend/supabase/migrations/20270203_001_race_calendar.sql apps/backend/supabase/tests/race_listings_rls_test.sql apps/backend/supabase/tests/race_listing_link_test.sql` — schema + RPC + RLS + pgtap.
-2. `git commit -- apps/web/src/lib/database.types.ts packages/core_models/lib/src/generated/db_rows.dart apps/web/src/lib/types.ts apps/web/src/scripts/check_constraint_unions.mjs` — both regenerated type files + unions + PAIRS.
+2. `git commit -- apps/web/src/lib/database.types.ts packages/core_models/lib/src/generated/db_rows.dart apps/web/src/lib/types.ts apps/web/scripts/check_constraint_unions.mjs` — both regenerated type files + unions + PAIRS.
 3. `git commit -- apps/web/src/lib/integrations/race_match.ts apps/web/src/lib/integrations/race_match.test.ts apps/mobile_android/lib/race_match.dart apps/mobile_android/test/race_match_test.dart apps/mobile_ios/lib/race_match.dart apps/mobile_ios/test/race_match_test.dart` — parity pair + tests.
 4. `git commit -- apps/backend/supabase/functions/race-results-import/ apps/backend/supabase/functions/race-listings-sync/` — import EF (RunSignUp + paste) + sync stub + Deno tests.
 5. `git commit -- apps/web/src/lib/core/data.ts` — data.ts helpers.
@@ -229,12 +229,12 @@ Web `apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`; mobile `apps/mobi
 2. **Listing trust / moderation** — crowd-submitted listings need a report/verify path (reuse `20270115_001` report-posts infra?) to avoid spam/duplicate listings. How heavy a moderation layer for v1?
 3. **Auto-match radius + same-day rule** — is ~5 km from the start point + same date + distance-band the right confidence gate, or do we need bib-aware matching (the user enters their bib once)? Bib entry materially improves RunSignUp matching.
 4. **Per-site scrapers** — which timing platform (ChronoTrack? UltraSignup for the ultra persona?) is worth a real scraper next, given the fragility cost?
-5. **Should the race calendar be its own top-level nav on mobile**, accepting we can't add a 7th tab — confirm the placement (inside discovery vs Run-tab explore).
+5. **Mobile placement** — the bottom nav can't grow (hard 4 tabs + centre Log FAB = 5 slots), so Races must live as a sub-route. Confirm the placement: a Social sub-tab (alongside Clubs / Discover) vs the Fitness-hub Runs area.
 6. **Migration number collision** with the fundraising plan (both want `20270203_001`) — assign sequentially at landing.
 
 ## Sequencing for the implementer
 
-1. Write `20270203_001_race_calendar.sql` (`race_listings` table + CHECKs + GiST + trgm indexes + RLS + `search_race_listings` RPC + `runs.race_listing_id`). Apply via `safe-migration`.
+1. Write the race-calendar migration (placeholder name `2027XXXX_001_race_calendar.sql` — assign the next free sequential number at landing; the `20270203_001` used in the commit-plan example is illustrative and collides with the fundraising plan): `race_listings` table + CHECKs + GiST + trgm indexes + RLS + `search_race_listings` RPC + `runs.race_listing_id`, plus the `public_runs` strip additions for the three new race metadata keys. Apply via `safe-migration`.
 2. Add `RaceProvider` to `types.ts`; append to `check_constraint_unions.mjs` PAIRS. Run both codegen commands; commit regenerated files. Write + pass pgtap.
 3. Build the `race_match` parity pair (web + both Dart twins) with matched tests.
 4. Build `race-results-import` (mirror `parkrun-import`; RunSignUp + paste; fail-closed on missing key) + the `race-listings-sync` stub; Deno tests.

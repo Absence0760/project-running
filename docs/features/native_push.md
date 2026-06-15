@@ -19,14 +19,20 @@ pending), so a later credentialed deploy delivers the backlog.
   has its own `*_sent_at` idempotency column and its own preference gate.
 - **`device_tokens` table** — `apps/backend/supabase/migrations/20260506_001_device_tokens.sql`.
   Columns: `id, user_id, platform (check in ('ios','android','web')), token,
-  app_version, locale, notifications_enabled bool default true, last_seen_at,
-  created_at, updated_at, unique (user_id, token)`. The DDL comment already
-  describes the fan-out: "Fan-out sender queries by (user_id,
-  notifications_enabled=true)" and the device-changed-hands semantics. **It has
-  NO client write path today** (grep: only the generated `db_rows.dart`
-  references it). Renamed/touched again in `20261217_001_f17_naming_uniformity.sql`;
-  purge logic in `20260922_001_data_retention_purge_jobs.sql` (verify it already
-  purges stale `device_tokens`).
+  app_version, locale, is_notifications_enabled bool default true, last_seen_at,
+  created_at, updated_at, unique (user_id, token)`. **The opt-in flag was
+  renamed `notifications_enabled` → `is_notifications_enabled` in
+  `20261217_001_f17_naming_uniformity.sql` — use the `is_`-prefixed name in
+  all new SQL/Go/Dart; the original migration's column comment and the
+  `device_tokens_active` partial index still read the old name in their
+  text, but the live column is `is_notifications_enabled`.** The DDL comment
+  describes the fan-out and the device-changed-hands semantics. **It has NO
+  client write path today** (grep: only the generated `db_rows.dart`
+  references it). RLS + owner CRUD policies + the `device_tokens_active`
+  (partial, where `is_notifications_enabled`) and `device_tokens_platform`
+  indexes already exist in `20260506_001`. Stale-token purge already ships:
+  `private.purge_stale_device_tokens()` (60 days of `last_seen_at` inactivity)
+  in `20260922_001_data_retention_purge_jobs.sql`.
 - **The `web_push` kind — the exact pattern to copy:**
   - Migration `apps/backend/supabase/migrations/20261219_001_web_push_channel.sql`:
     adds `notifications.web_push_sent_at`, extends the `jobs_kind_chk` CHECK
@@ -49,7 +55,8 @@ pending), so a later credentialed deploy delivers the backlog.
   same shape as `email_notifications`, independent channel) — already the gate
   used by `web_push`; native push reuses the **same** pref (one "push" channel
   covers browser + native, per the docs). Toggle already exists on web
-  `/settings/preferences` + mobile `settings_preferences_screen.dart`.
+  `apps/web/src/routes/settings/preferences/+page.svelte` + mobile
+  `apps/mobile_android/lib/screens/settings_preferences_screen.dart`.
 - **Docs:** `docs/features/email.md` — the "Native push (FCM / APNs)" bullet
   under "Planned / not built" explicitly states the design ("Same notifications
   source of truth + sibling-consumer pattern the web_push kind now demonstrates;
@@ -61,8 +68,10 @@ pending), so a later credentialed deploy delivers the backlog.
   Supabase entry point (no `device_tokens` method yet).
 
 ## Data model / migrations
-One migration, mirroring `20261219_001` (use the next free `YYYYMMDD_NNN`, e.g.
-`2027MMDD_001`; latest seen is `20270109_001`):
+One migration, mirroring `20261219_001` (use the next free `YYYYMMDD_NNN` —
+**placeholder; assign sequentially at landing** by walking past the highest
+date in `ls apps/backend/supabase/migrations/`; latest seen at spec time is
+`20270202_001`):
 
 ```sql
 -- apps/backend/supabase/migrations/2027MMDD_001_native_push_channel.sql
@@ -84,7 +93,7 @@ alter table public.jobs add constraint jobs_kind_chk check (
 --  worker.go dispatch + any migration since this plan was written.)
 
 -- 3. enqueue trigger: notification → native_push job, gated on the recipient
---    having at least one device_tokens row (notifications_enabled = true).
+--    having at least one device_tokens row (is_notifications_enabled = true).
 --    Mirror enqueue_notification_web_push_job() exactly. Gating on token
 --    presence avoids a no-op job per notification for the push-less majority.
 create or replace function enqueue_notification_native_push_job()
@@ -92,39 +101,44 @@ returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if exists (
     select 1 from device_tokens d
-    where d.user_id = new.user_id and d.notifications_enabled = true
+    where d.user_id = new.user_id and d.is_notifications_enabled = true
   ) then
     insert into jobs (kind, payload)
     values ('native_push', jsonb_build_object('notification_id', new.id));
   end if;
   return new;
 end $$;
+revoke execute on function enqueue_notification_native_push_job() from public;
 create trigger trg_notification_native_push
   after insert on notifications
   for each row execute function enqueue_notification_native_push_job();
 
 -- 4. prune-dead-token RPC, sibling of clear_push_subscription. The FCM/APNs
 --    "unregistered"/410 response means the token is dead — delete that row.
+--    SECURITY DEFINER + service_role-only grant (mirror clear_push_subscription,
+--    which revokes from public and grants only to service_role — the worker is
+--    the sole caller).
 create or replace function clear_device_token(p_token text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   delete from device_tokens where token = p_token;
 end $$;
+revoke execute on function clear_device_token(text) from public;
+grant execute on function clear_device_token(text) to service_role;
 ```
 
-**RLS for the client write path:** `device_tokens` must allow a signed-in user
-to upsert/select/delete **their own** rows. Verify whether the original
-`20260506_001` already enabled RLS + owner policies; if not, add:
-
-```sql
-alter table device_tokens enable row level security;
-create policy device_tokens_owner on device_tokens
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-```
+**RLS for the client write path:** already in place — `20260506_001` enables
+RLS and ships four owner policies (`device_tokens_self_select` / `_self_insert`
+/ `_self_update` / `_self_delete`, each scoped to `user_id = auth.uid()`). The
+client upsert/select/delete write path is unblocked at the policy level today;
+this migration adds **no** new `device_tokens` policy. (If you nonetheless find
+RLS missing at write time — e.g. a future schema change dropped it — restore the
+four self-scoped policies, do not collapse them into a single permissive
+`for all`.)
 
 **Codegen (two-regeneration rule, same commit as the migration):**
-- `npm run gen:types --workspace=apps/backend` → `apps/web/src/lib/database.types.ts`
-- `dart run scripts/gen_dart_models.dart` → `packages/core_models/lib/src/generated/db_rows.dart`
+- `cd apps/backend && npm run gen:types` (or `pnpm gen:types` from repo root) → `apps/web/src/lib/database.types.ts`
+- `dart run scripts/gen_dart_models.dart` (from repo root) → `packages/core_models/lib/src/generated/db_rows.dart`
 Both committed; CI `parity-types` enforces. `platform` is already a CHECK union;
 the `IntegrationProvider`-style narrow-union TS overlay is optional here (clients
 write `'ios'/'android'`, no client enum needed — note it, don't force it).
@@ -148,7 +162,7 @@ Copy the `web_push` trio:
   `FetchNotificationForWebPush`), short-circuit if `native_push_sent_at` set,
   gate on `push_notifications` pref (reuse the same pref-resolution helper the
   web_push handler uses), load `device_tokens` for the user where
-  `notifications_enabled = true`, send to each, prune dead tokens via
+  `is_notifications_enabled = true`, send to each, prune dead tokens via
   `clear_device_token` (FCM `UNREGISTERED` / APNs 410), defer (return err) on
   transient 429/5xx, stamp `native_push_sent_at` on every terminal path except
   the nil-sender branch. Title/body come from the shared notification catalogue
@@ -214,12 +228,12 @@ The device-led leg — token registration + foreground/background display:
   (`android/`, `ios/`) so they are *not* twin-shared — each app owns its native
   side. Operator supplies the Firebase config files.
 - **Settings:** the `push_notifications` toggle already exists in
-  `settings_preferences_screen.dart`; ensure it also drives
-  `setDeviceNotificationsEnabled` on the local token (so the per-device DDL flag
-  tracks the pref) — keep the universal `push_notifications` pref as the channel
-  gate (worker-side) and `device_tokens.notifications_enabled` as the per-device
-  fan-out filter.
-- **Nav:** none — no new screen, no new tab (5-slot ceiling unaffected).
+  `apps/mobile_android/lib/screens/settings_preferences_screen.dart`; ensure it
+  also drives `setDeviceNotificationsEnabled` on the local token (so the
+  per-device DDL flag tracks the pref) — keep the universal `push_notifications`
+  pref as the channel gate (worker-side) and
+  `device_tokens.is_notifications_enabled` as the per-device fan-out filter.
+- **Nav:** none — no new screen, no new tab (the mobile bottom nav is unchanged).
 
 ## TS↔Dart parity helpers
 **None.** The push delivery is server-side Go + native platform SDKs; there is

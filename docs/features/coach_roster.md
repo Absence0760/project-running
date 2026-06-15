@@ -83,10 +83,13 @@ risk policy in one testable place).
 
 - **Route**: `apps/web/src/routes/coaching/+page.svelte` already exists as the coaching hub. Add the roster as a
   **new section / tab on that page** (the page already lists athletes as plain rows) — do NOT make a separate
-  top-level sidebar item (coaching is reached from Settings → Coaching, decisions; keep that entry point). Render the
+  top-level sidebar item (on web `/coaching` is reached from the profile/logout popover in `+layout.svelte`, distinct
+  from the standalone `/coach` chat sidebar item; keep that entry point). Render the
   roster as a sortable table when `athletes.length > 0`. Columns: Athlete (Avatar + name) · Last run (relative) ·
   7-day load · Plan % · Risk flag. Each row is a link to `/coaching/athletes/[id]`.
-  - Reuse the canonical `.card-elevated` panel and existing button classes. No local `.modal`/`.btn`/`.card` redefs.
+  - Reuse the page's existing flat `.card` panel (coaching is a flat-card page — there is deliberately no global
+    `.card`, and `.card-elevated` is for the dashboard-style elevated panels only; see conventions § Web cards) and the
+    global button classes. No local `.modal`/`.btn` redefs.
   - Sort defaults to "risk flag desc, then last-run-recency desc" so the athletes who need attention float up.
   - Empty / error / loading states mirror the existing page (it already has `loadError` + `loading`).
 - **data.ts helper**: add `fetchCoachRosterSummary(): Promise<CoachRosterRow[]>` to `apps/web/src/lib/core/data.ts`
@@ -145,8 +148,10 @@ agree):
   - Sign in as the seed coach (seed must gain an active athlete link — extend `seed.sql`, see below), assert the roster
     section renders a row, the load/plan/risk columns are present, and clicking a row navigates to
     `/coaching/athletes/[id]`. A cross-user isolation case: a non-coach account sees an empty roster.
-  - Seed change: add a second user + an active `coach_athletes` link in `apps/backend/supabase/seed.sql` so the e2e has
-    a populated roster (the seed currently provisions only `runner@test.com`). Keep ids fixed for idempotency.
+  - Seed change: add an active `coach_athletes` link in `apps/backend/supabase/seed.sql` so the e2e has a populated
+    roster. The seed already provisions several users (`runner@test.com`, `alex@test.com`, `morgan@test.com`, plus
+    others), so reuse two of those as coach + athlete rather than adding a fresh pair; there is no `coach_athletes`
+    row in the seed today. Keep ids fixed for idempotency.
 - **Web (unit)** — `coach_load.test.ts` (~10 cases, band boundaries).
 - **Mobile (Flutter)** — `apps/mobile_android/test/coach_load_test.dart` (~10 cases, mirrors web) + a widget test for the
   roster section in `coaching_screen_test.dart` (renders rows from a fake api). Mirror both to iOS twin.

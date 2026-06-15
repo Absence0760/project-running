@@ -15,9 +15,9 @@ backlog #13 (C3). **Mobile-only, no recorder change, no migration.**
   - `void setTreadmillSample(double speedMps, {double? totalDistanceMetres})` (line ~613) — first call flips `_treadmillMode = true`; belt distance overrides GPS; wrapped in its own try/catch (L1/L4 contract honoured inside the recorder); no-op until `begin()`; excludes paused advance.
   - `void clearTreadmillMode()` (line ~657) — reverts to the GPS distance path.
   - `bool get treadmillMode` (line ~218) — current mode.
-  - On `stop()` the recorder writes `metadata['indoor_source'] = 'treadmill'` + `metadata['distance_source'] = 'treadmill'` — already done, no UI work needed for persistence.
+  - On `stop()` the recorder (when it was in treadmill mode) writes `metadata['indoor'] = true` + `metadata['indoor_source'] = 'treadmill'` + `metadata['distance_source'] = 'treadmill'` — already done, no UI work needed for persistence. (`indoor: true` is what keeps a belt-measured run out of the VDOT ceiling, same as the pedometer-estimated path.)
 - **BLE reader (shipped).** `apps/mobile_android/lib/ble_treadmill.dart` — `BleTreadmill` with:
-  - `Stream<TreadmillSample> get stream` (sample carries `instantaneousSpeedKmh`, `totalDistanceM`).
+  - `Stream<TreadmillSample> get stream` (sample carries `instantaneousSpeedKmh`, `totalDistanceMetres`, plus the `speedMps` getter = `instantaneousSpeedKmh × 1000 / 3600`).
   - `Stream<BleTreadmillStatus> get statusStream` + `BleTreadmillStatus get status` (`disconnected`/`connecting`/`connected`/`reconnecting`/`connectFailed`).
   - `Future<String?> pairedName()`, `Future<bool> connectCached()`, `Future<bool> reconnect()`, `Future<void> disconnect()`, `Future<void> forget()`, `Future<void> dispose()`.
   - `TreadmillSample` exposes m/s via the same FTMS decode the tile already consumes (tile reads `s.instantaneousSpeedKmh`).
@@ -27,7 +27,7 @@ backlog #13 (C3). **Mobile-only, no recorder change, no migration.**
   - subscribed in `run_screen.dart` `_begin()` (lines 968–1031): a `StreamSubscription<int> _hrSub` feeds `_recorder?.setHeartRate(bpm)`, and a `StreamSubscription<BleHrStatus> _hrStatusSub` drives `_showTopBanner` drop/reconnect disclosure; both cancelled in the stop/discard paths.
 - **Settings tile (shipped).** `TreadmillTile` in `apps/mobile_android/lib/screens/settings_integrations_screen.dart` (line 595) currently constructs its **own** `final BleTreadmill _treadmill = BleTreadmill()` (line 603). `HeartRateMonitorTile` in the same file instead takes `widget.heartRate` (line 419) — the tile should be converted to the shared-instance pattern (see below).
 - **Banner primitive.** `showTopBanner` / `_showTopBanner` (the only allowed in-app notification; `architecture_guards_test.dart` forbids `ScaffoldMessenger`/`showSnackBar` under `lib/screens`).
-- **Existing tests:** `apps/mobile_android/test/ble_treadmill_test.dart` (20), `test/treadmill_tile_test.dart` (2), `test/run_screen_test.dart` (RunScreen widget tests).
+- **Existing tests:** `apps/mobile_android/test/ble_treadmill_test.dart` (20), `test/treadmill_tile_test.dart` (4 `testWidgets`), `test/run_screen_test.dart` (RunScreen widget tests).
 
 ## Data model / migrations
 **None.** No table, no column, no narrow union, no codegen pass. The metadata
@@ -69,12 +69,12 @@ BleTreadmillStatus _treadmillStatus = BleTreadmillStatus.disconnected;
 
 ### 3. The toggle + sample pump
 - `_toggleTreadmillMode(bool on)`:
-  - `on == true`: subscribe `_treadmillSub = widget.treadmill.stream.listen(...)` with an `onError` that `debugPrint`s (never rethrows — L4). In the listener call `_recorder?.setTreadmillSample(sample.speedMps, totalDistanceMetres: sample.totalDistanceM)`. Set `_treadmillMode = true` via `setState`. If `_treadmillStatus == connectFailed`, offer a one-tap `widget.treadmill.reconnect()` banner action (mirror `_reconnectHeartRate`, line 1071).
+  - `on == true`: subscribe `_treadmillSub = widget.treadmill.stream.listen(...)` with an `onError` that `debugPrint`s (never rethrows — L4). In the listener call `_recorder?.setTreadmillSample(sample.speedMps, totalDistanceMetres: sample.totalDistanceMetres)`. Set `_treadmillMode = true` via `setState`. If `_treadmillStatus == connectFailed`, offer a one-tap `widget.treadmill.reconnect()` banner action (mirror `_reconnectHeartRate`, line 1071).
   - `on == false`: `await _treadmillSub?.cancel(); _treadmillSub = null; _recorder?.clearTreadmillMode();` and `setState(_treadmillMode = false)`.
   - Wrap the BLE/recorder calls so a failure shows a banner and reverts the toggle — it must never tear down the recording (L4).
-- **Layering note (L0–L4 contract, the explicit ask):** the toggle and its subscription are an L4 auxiliary effect layered *on top of* the live recording. The recorder's `setTreadmillSample` already self-guards (own try/catch, drops bad samples, falls back to the L0 clock on a dropped link); the screen-side `onError` + try/catch around `_toggleTreadmillMode` is the second layer. A treadmill failure at any point must leave the L0 clock + L1 distance path intact. Never widen to a single outer catch; each effect (stream listen, status listen, recorder call) gets its own guard + `debugPrint`. Verify against `docs/features/run_recording.md § Layering` (belt distance is layer 14) before finishing.
+- **Layering note (L0–L4 contract, the explicit ask):** the toggle and its subscription are an L4 auxiliary effect layered *on top of* the live recording. The recorder's `setTreadmillSample` already self-guards (own try/catch, drops bad samples, falls back to the L0 clock on a dropped link); the screen-side `onError` + try/catch around `_toggleTreadmillMode` is the second layer. A treadmill failure at any point must leave the L0 clock + L1 distance path intact. Never widen to a single outer catch; each effect (stream listen, status listen, recorder call) gets its own guard + `debugPrint`. Verify against `docs/features/run_recording.md § Layering` before finishing — note the belt is **not** itself a numbered row in that table; it's an opt-in L1 distance-source override, and when the belt link drops the recorder degrades to the L0 clock and the pedometer-distance fallback (which **is** layer 14 in the table).
 
-### 4. UI placement (no nav change; 6-tab ceiling untouched)
+### 4. UI placement (no nav change; the mobile bottom nav is untouched)
 Render a `SwitchListTile` / compact chip-toggle inside `_buildLive` (the recording
 view begins at `run_screen.dart` line ~2411), shown only when `_treadmillPaired`.
 Put it near the existing recording controls (the same region the GPS-lost banner /
@@ -101,7 +101,7 @@ Flutter widget/unit tests only (mobile has no e2e by design;
   5. a `BleTreadmillStatus.reconnecting` transition shows the disclosure banner;
   6. a sample-stream `onError` does NOT crash the screen (L4 guard).
   - Gotchas to bake in (from CLAUDE.md): store I/O needs `tester.runAsync`; `showTopBanner` leaves a pending timer (pump with a finite duration / `tester.runAsync` + cancel); `pumpAndSettle` hangs on the `LiveRunMap`/cursor animations — pump fixed durations, don't `pumpAndSettle`. Use dialog/region-scoped finders given duplicate labels.
-- **`apps/mobile_android/test/treadmill_tile_test.dart`** (update): the 2 existing tests must now pass the shared `BleTreadmill` via the new constructor arg (the tile no longer self-constructs one). Keep the not-paired / paired assertions.
+- **`apps/mobile_android/test/treadmill_tile_test.dart`** (update): the 4 existing `testWidgets` must now pass the shared `BleTreadmill` via the new constructor arg (the tile no longer self-constructs one). Keep the not-paired / paired / forget-confirm / forget-confirmed assertions.
 - Run `flutter test` for the package; run `dart analyze` and confirm no new `warning`/`error`.
 
 ## i18n keys to add
@@ -144,7 +144,7 @@ Path-scope every commit (shared working tree; never `git add -A`).
 3. **Toggle placement** — confirm "near the recording controls in `_buildLive`" vs. surfacing it on the idle pre-run screen too (e.g. "Start on treadmill"). Plan assumes mid-run toggle only (the deferred item's literal scope).
 
 ## Sequencing for the implementer
-1. Read `run_recording.md § Layering` (belt = layer 14) and the HR wiring in `run_screen.dart` lines 968–1031 + `_reconnectHeartRate` (1071) — that's the template for everything below.
+1. Read `run_recording.md § Layering` (the belt is an L1 distance-source override that degrades to the pedometer fallback, layer 14 — not its own row) and the HR wiring in `run_screen.dart` (the `_hrSub` / `_hrStatusSub` block around lines 974–1031) + `_reconnectHeartRate` (1071) — that's the template for everything below.
 2. Build the shared `BleTreadmill` singleton: `main.dart` (construct + `connectCached`), thread through `home_screen.dart` → `RunScreen`, convert `TreadmillTile` to take it. Update `treadmill_tile_test.dart`. Mirror all to iOS twin. Commit (piece 1). Run `flutter test test/treadmill_tile_test.dart`.
 3. Add the run-screen state fields + `_begin` status subscription + cancel-in-stop/discard/dispose. Mirror to twin.
 4. Add `_toggleTreadmillMode` + the sample pump + the L4 guards.
