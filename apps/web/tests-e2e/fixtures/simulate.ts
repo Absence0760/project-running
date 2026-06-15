@@ -511,3 +511,56 @@ export async function clearUserSettingKey(userId: string, key: string): Promise<
 		throw new Error(`simulate.clearUserSettingKey failed: ${error.message}`);
 	}
 }
+
+export async function insertCheckpoint(opts: {
+	event_id: string;
+	created_by: string;
+	name: string;
+	ordinal: number;
+	position_m?: number | null;
+	cutoff_elapsed_s?: number | null;
+	requires_weigh_in?: boolean;
+}): Promise<string> {
+	const { data, error } = await getAdminClient()
+		.from('event_checkpoints')
+		.insert({
+			event_id: opts.event_id,
+			created_by: opts.created_by,
+			name: opts.name,
+			ordinal: opts.ordinal,
+			position_m: opts.position_m ?? null,
+			cutoff_elapsed_s: opts.cutoff_elapsed_s ?? null,
+			requires_weigh_in: opts.requires_weigh_in ?? false
+		})
+		.select('id')
+		.single();
+	if (error || !data) {
+		throw new Error(`simulate.insertCheckpoint failed: ${error?.message ?? 'no row'}`);
+	}
+	return data.id as string;
+}
+
+export async function insertCrossing(opts: {
+	event_id: string;
+	checkpoint_id: string;
+	instance_start: string;
+	user_id?: string | null;
+	bib?: string | null;
+	runner_name?: string | null;
+	in_time?: string | null;
+	out_time?: string | null;
+}): Promise<void> {
+	const { error } = await getAdminClient().from('checkpoint_crossings').insert({
+		event_id: opts.event_id,
+		checkpoint_id: opts.checkpoint_id,
+		instance_start: opts.instance_start,
+		user_id: opts.user_id ?? null,
+		bib: opts.bib ?? null,
+		runner_name: opts.runner_name ?? null,
+		in_time: opts.in_time ?? null,
+		out_time: opts.out_time ?? null
+	});
+	if (error) {
+		throw new Error(`simulate.insertCrossing failed: ${error.message}`);
+	}
+}
