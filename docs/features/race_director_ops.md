@@ -1,10 +1,60 @@
 # Race-director operations — offline aid-station check-in → live results
 
-> **STATUS: handoff spec, not built. LARGEST of the set — slice it.** Read
+> **STATUS: building.** The data foundation is shipped (migration
+> `20270201_001`): both tables, both RPCs, RLS + the column-lock, and the shared
+> `checkpoint_projection` helper. P1 schema + offline volunteer check-in, P2
+> organiser live-results / cutoff board (web), P3 weigh-in (Art 9, built
+> fail-closed per decisions §150), and P4 public results are landing on top of
+> it. Web canonical; mobile mirrors; iOS twin byte-identical. Read
 > [CLAUDE.md](../../CLAUDE.md) + [apps/backend/CLAUDE.md](../../apps/backend/CLAUDE.md)
-> for conventions. Web canonical; mobile mirrors; iOS twin byte-identical.
-> **Recommend building P1 (schema + offline check-in) as its own deliverable
-> before P2+.**
+> for conventions.
+
+## What shipped (data foundation — migration `20270201_001`)
+
+- **`event_checkpoints`** — a race's ordered checkpoints (aid stations /
+  cutoffs). Per-event `ordinal` (UNIQUE on `(event_id, ordinal)`), an optional
+  `route_marker_id` link, an optional position + cutoff (`cutoff_elapsed_s` /
+  `cutoff_clock`), and `requires_weigh_in` (default false) — the per-checkpoint
+  switch that arms the Art 9 health path. RLS: SELECT per `is_event_visible`,
+  writes gated on `private.is_event_organiser(club_id)`.
+- **`checkpoint_crossings`** — a runner's in/out stamp at one checkpoint for one
+  event instance, written offline by volunteers and synced in batches.
+  **Account-optional** identity (`user_id` OR `bib` + `runner_name`, CHECK +
+  two NULLs-distinct UNIQUE keys), mirroring `event_results`. SELECT per
+  `is_event_visible`; **no direct write policy — writes are RPC-only.** The Art
+  9 health columns (`body_weight_kg`, `body_weight_pct`, `medical_hold`,
+  `medical_note`) and `recorded_by` are **column-SELECT-locked**: the table
+  default is revoked and only the non-health columns are re-granted to
+  `anon` / `authenticated`, so the public results surface can never read them.
+- **`upsert_checkpoint_crossing(...)`** — the SOLE writer (SECURITY DEFINER).
+  Authorises the caller as an organiser (else 42501), validates the event
+  (42704) + that the checkpoint belongs to it (23503) + the identity rule
+  (23514), then inserts or **merges in/out**: a second call for the same
+  `(checkpoint, instance, identity)` reconciles to ONE row with
+  `in_time = least(existing, new)` and `out_time = greatest(existing, new)`
+  (Postgres `least`/`greatest` ignore NULLs → earliest-in, latest-out,
+  fill-the-gap). This is how two client-minted UUIDs on two volunteers' phones
+  collapse onto the canonical row.
+- **Fail-closed health gate** (decisions §150): the health fields persist ONLY
+  when the checkpoint's `requires_weigh_in = true` AND the caller passes
+  `p_health_consent = true`; otherwise they are dropped to NULL. Production
+  enablement is an owner + CISO + counsel deploy-checklist sign-off, not missing
+  code.
+- **`fetch_checkpoint_crossings_for_organiser(...)`** — the organiser read path
+  (SECURITY DEFINER, 42501 for non-organisers). Returns every crossing for an
+  event instance **including** the column-locked health fields, so health data
+  only ever reaches a race official.
+- **`checkpoint_projection`** — the shared cutoff-projection helper
+  (`apps/web/src/lib/runs/checkpoint_projection.ts` ↔
+  `apps/mobile_android/lib/checkpoint_projection.dart`). From a runner's actual
+  crossings it projects arrival at every remaining checkpoint and grades each
+  cutoff safe / tight / miss on the **same scale as `roadbook.ts`** (it imports
+  `CUTOFF_TIGHT_S` + `CutoffStatus` rather than redefining them). Backs the P2
+  organiser board and the predictive live tracker — one helper, two surfaces.
+- **pgtap:** `apps/backend/supabase/tests/checkpoint_crossings_test.sql`
+  (17 tests) pins organiser-only writes, event-visibility reads, the offline
+  merge dedupe, the identity rule, the health column-lock, the fail-closed
+  health gate, and the organiser read path.
 
 ## Context / why
 
@@ -71,17 +121,19 @@ with markers (which define the checkpoints) and the roadbook cutoff math.
   drain + conflict resolution.
 - Flutter: offline check-in survives a restart + syncs; Playwright for P2.
 
-## Open decisions for the implementer (ask the user — several are real forks)
+## Decisions (resolved — see ADR for the rationale)
 
-- **Bib model:** free-text bib vs link to a registered `event_attendees` row
-  (or both, like `event_results`).
-- **Offline conflict resolution:** two volunteers stamp the same bib at the same
-  checkpoint — last-write-wins vs merge in/out.
-- **Compliance:** P3 weigh-in/medical is Art 9 — confirm the consent + sign-off
-  gate before building it (build the code, gate it fail-closed, per §150).
+- **Bib model:** **both**, like `event_results` — a crossing names its runner by
+  an account (`user_id`) OR a `bib` + `runner_name`, never fully anonymous.
+- **Offline conflict resolution:** **merge in/out** (earliest-in, latest-out),
+  done inside the single `upsert_checkpoint_crossing` RPC so two client-minted
+  UUIDs collapse onto the canonical row. Not last-write-wins.
+- **Compliance:** P3 weigh-in/medical is Art 9 — **built fail-closed** per §150
+  (`requires_weigh_in` + `p_health_consent` gate + column-lock); prod enablement
+  is an owner + CISO + counsel deploy-checklist sign-off, not unwritten code.
 - **Overlap with [predictive_live_tracking.md](predictive_live_tracking.md):**
-  both project cutoffs — share the helper.
-- **Scope of P1** — recommend schema + offline check-in only; defer P2–P4.
+  **shared** — both project cutoffs through the one `checkpoint_projection`
+  helper, which grades on the same scale as `roadbook.ts`.
 
 ## Docs
 

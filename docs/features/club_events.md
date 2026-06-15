@@ -18,6 +18,8 @@ A **club is a generic container.** A club hosts events of different *types* — 
 
 The user's framing resolves both: **clubs hold generic, typed events; the type drives which fields exist; price is orthogonal to type; payout follows the instructor.**
 
+> **Related:** the race-director operations feature ([race_director_ops.md](race_director_ops.md), decisions §154) extends this same events layer in the other direction — turning "a club hosts an event" into "a race director runs a race" with offline aid-station check-in (`event_checkpoints` + `checkpoint_crossings`) feeding live results + cutoff projection, monetizable through the same Stripe Connect events rail.
+
 ## Product contract
 
 Persona-led, so the design stays honest about who's using it:

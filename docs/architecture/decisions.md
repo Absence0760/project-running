@@ -3169,6 +3169,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 154. Offline checkpoint check-in is account-optional with merge-in/out conflict resolution in one SECURITY DEFINER RPC; Art 9 weigh-in built fail-closed
+
+**Decided (2026-06-14, migration `20270201_001`).** Race-director operations (aid-station volunteers stamping each runner in/out → live results + cutoff board) is built on two tables — `event_checkpoints` + `checkpoint_crossings` — with three load-bearing choices. (1) A crossing's identity is **account-optional**, mirroring `event_results`: `user_id` OR `bib` + `runner_name`, never fully anonymous (CHECK + two NULLs-distinct UNIQUE keys). (2) Offline conflict resolution is **merge in/out**, not last-write-wins, performed inside a single `upsert_checkpoint_crossing` SECURITY DEFINER RPC that is the SOLE writer (no direct-write RLS policy): a second call for the same `(checkpoint, instance, identity)` reconciles to ONE row with `in_time = least(existing, new)`, `out_time = greatest(existing, new)`. (3) The P3 weigh-in / medical fields are Art 9 health data **built now but fail-closed** per §150 — they persist only when the checkpoint's `requires_weigh_in` is true AND the caller passes `p_health_consent`, the columns are SELECT-locked from anon/authenticated, and organisers read them only through `fetch_checkpoint_crossings_for_organiser`.
+
+**Why.** (1) Most ultra fields are bib-on-paper, not app accounts — requiring an account would make the volunteer surface useless; `event_results` already proved the account-optional shape. (2) Two volunteers on two phones with no signal each mint a UUID for the same runner; last-write-wins would lose an in_time or an out_time, while `least`/`greatest` (which ignore NULLs) give earliest-in / latest-out / fill-the-gap for free, and putting it in one SECURITY DEFINER writer means the merge can never be bypassed by a raw table write. (3) §150 says build the code behind a fail-closed gate rather than stub it — so the weigh-in path is complete and tested, and only the prod flip waits on owner + CISO + counsel. Cutoff projection reuses the one `checkpoint_projection` helper shared with the roadbook (§153) and the predictive tracker, grading on `roadbook.ts`'s scale so "tight" means the same thing everywhere.
+
+**Trade-off.** Merge-in/out can't represent a genuine double-pass (a runner who legitimately re-enters a checkpoint) — out-and-back loops needing that would need a per-pass key; not a P1 concern. The single-writer RPC means no bulk `COPY` import path for crossings yet. Health data behind a deploy-time sign-off means the weigh-in UI ships dark until counsel clears it.
+
+**Boundary / not-yet-done.** The P2 organiser live board, P4 public results page, the offline `local_crossings_store` drain, and grade-adjusting the projected remaining legs are tracked in [race_director_ops.md](../features/race_director_ops.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

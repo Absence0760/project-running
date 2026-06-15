@@ -4,6 +4,8 @@
 
 > **North star check.** Per [multi_modal.md](multi_modal.md) and [club_events.md](club_events.md), the instructor business is **a retention + community layer in service of the individual athlete, not a second business.** We are not building Mindbody/ClassPass. Every milestone below earns its place by deepening the core app — the payoff is that an attended class lands in the student's Train history and feeds the same cross-modal Coach context as their runs and lifts. If a slice doesn't serve that, it doesn't ship.
 
+> **Sibling feature.** Race-director operations ([race_director_ops.md](race_director_ops.md), decisions §154) is the race-side counterpart of this class-side path: it extends the same typed-events + Stripe Connect host-payout rail with offline aid-station check-in (`event_checkpoints` + `checkpoint_crossings`) → live results + cutoff projection, monetizable through the identical `events-*` functions.
+
 **Contents:** [The two personas](#the-two-personas) · [What "seamless" means](#what-seamless-means-the-business-journey) · [Current state — verified](#current-state--verified-in-code) · [The three tracks](#the-three-tracks) · [Milestone sequence](#milestone-sequence) · [The compliance gate](#the-compliance-gate-load-bearing) · [Cross-cutting requirements](#cross-cutting-requirements) · [Risks & open questions](#risks--open-questions) · [Rough sizing](#rough-sizing) · [Docs to update](#docs-to-update-as-each-milestone-lands)
 
 ## The two personas

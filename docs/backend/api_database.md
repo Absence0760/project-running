@@ -1121,6 +1121,62 @@ The scheduled functions are EXECUTE-revoked from PUBLIC where applicable; the cr
 
 ---
 
+### Race-director checkpoints
+
+#### `event_checkpoints` / `checkpoint_crossings`
+
+Offline aid-station check-in → live results + cutoff projection. Added in `20270201_001_race_director_checkpoints.sql`. See `docs/features/race_director_ops.md` and decisions §154.
+
+```sql
+create table event_checkpoints (
+  id                uuid primary key default gen_random_uuid(),
+  event_id          uuid not null references events(id) on delete cascade,
+  name              text not null,                       -- 1..120 chars (CHECK)
+  ordinal           integer not null,                    -- course order; UNIQUE (event_id, ordinal)
+  route_marker_id   uuid references route_markers(id) on delete set null,
+  position_m        numeric(10, 2),                      -- distance along course, optional
+  cutoff_elapsed_s  integer,                             -- cutoff as elapsed s from start; >= 0 (CHECK)
+  cutoff_clock      text,                                -- 'HH:MM' wall-clock cutoff (CHECK regex)
+  requires_weigh_in boolean not null default false,      -- arms the Art 9 health path at this checkpoint
+  created_by        uuid references auth.users not null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create table checkpoint_crossings (
+  id              uuid primary key default gen_random_uuid(),
+  event_id        uuid not null references events(id) on delete cascade,
+  checkpoint_id   uuid not null references event_checkpoints(id) on delete cascade,
+  instance_start  timestamptz not null,
+  user_id         uuid references auth.users on delete set null,  -- account-optional identity:
+  bib             text,                                           --   user_id OR bib+runner_name
+  runner_name     text,                                           --   (CHECK requires at least one)
+  in_time         timestamptz,
+  out_time        timestamptz,
+  -- Art 9 health columns — column-SELECT-locked from anon/authenticated:
+  body_weight_kg  numeric(5, 2),                          -- 20..400 (CHECK)
+  body_weight_pct numeric(5, 2),
+  medical_hold    boolean not null default false,
+  medical_note    text,
+  recorded_by     uuid references auth.users on delete set null,
+  recorded_at     timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  constraint checkpoint_crossings_identity_chk
+    check (user_id is not null or bib is not null),
+  constraint checkpoint_crossings_account_uniq
+    unique (event_id, checkpoint_id, instance_start, user_id),   -- NULLs-distinct
+  constraint checkpoint_crossings_bib_uniq
+    unique (event_id, checkpoint_id, instance_start, bib)        -- NULLs-distinct
+);
+```
+
+**RLS / grants.**
+- `event_checkpoints`: SELECT per `is_event_visible(event_id)`; INSERT/UPDATE/DELETE gated on `private.is_event_organiser(events.club_id)`.
+- `checkpoint_crossings`: SELECT per `is_event_visible(event_id)`. There is **no INSERT/UPDATE/DELETE policy — all writes go through `upsert_checkpoint_crossing`** (the single SECURITY DEFINER writer), so the merge logic can't be bypassed by a raw write.
+- **Column-SELECT-lock:** the table default is revoked and only the non-health columns (`id, event_id, checkpoint_id, instance_start, user_id, bib, runner_name, in_time, out_time, recorded_at, updated_at`) are re-granted to `anon, authenticated`. The Art 9 columns (`body_weight_kg, body_weight_pct, medical_hold, medical_note`) + `recorded_by` are then deny-by-default; organisers read them only through `fetch_checkpoint_crossings_for_organiser`.
+
+---
+
 ### Other shipped tables (summary)
 
 These tables ship in the live schema but don't have a full column-by-column block above. Each is listed with its purpose, defining migration, and a one-line column summary; read the migration for the exact DDL, constraints, and RLS.
@@ -1601,6 +1657,14 @@ SECURITY DEFINER, returns the affected `event_results` row. Lets a club admin or
 ### `private.is_event_organiser(uuid)` / `private.is_race_director(uuid)`
 
 SECURITY DEFINER booleans used by RLS policies and other RPCs to check whether `auth.uid()` is allowed to administer a specific event (organiser is broader; race-director is the in-event live-mode start/stop role). **Live in the `private` schema** (migration `20261120_001`) alongside `is_club_member` / `is_club_admin` — PostgREST does not expose `private`, so they are not anon-callable membership/role oracles (audit-findings 2026-05-30 Medium). EXECUTE granted to `anon, authenticated, service_role` so RLS still evaluates; the qualified `private.` call from a policy bypasses search_path. Same private-schema treatment as `is_run_visible_to` (`20260812_001`).
+
+### `upsert_checkpoint_crossing(p_event_id uuid, p_checkpoint_id uuid, p_instance_start timestamptz, p_user_id uuid default null, p_bib text default null, p_runner_name text default null, p_in_time timestamptz default null, p_out_time timestamptz default null, p_health_consent boolean default false, p_body_weight_kg numeric default null, p_body_weight_pct numeric default null, p_medical_hold boolean default null, p_medical_note text default null) → checkpoint_crossings`
+
+SECURITY DEFINER — the **sole writer** of `checkpoint_crossings` (there is no direct-write RLS policy). Authorises the caller as an organiser (`is_event_organiser(events.club_id)`, else `42501`), validates the event (`42704` if missing), that the checkpoint belongs to the event (`23503`), and the identity rule (`23514` if neither `user_id` nor `bib`). Then inserts or **merges in/out**: a second call for the same `(checkpoint_id, instance_start, identity)` UPDATEs the existing row with `in_time = least(existing, new)` and `out_time = greatest(existing, new)` (Postgres `least`/`greatest` ignore NULLs → earliest-in, latest-out, fill-the-gap), so two client-minted UUIDs on two volunteers' phones collapse onto the canonical row. **Fail-closed health gate (decisions §150):** the Art 9 fields persist only when the checkpoint's `requires_weigh_in = true` AND `p_health_consent = true`; otherwise they are dropped to NULL. EXECUTE revoked from `public, anon`, granted to `authenticated`. Migration `20270201_001`; pinned by `checkpoint_crossings_test.sql`. See [decisions.md § 154](../architecture/decisions.md).
+
+### `fetch_checkpoint_crossings_for_organiser(p_event_id uuid, p_instance_start timestamptz) → setof checkpoint_crossings`
+
+SECURITY DEFINER — the organiser read path for the live-results board. Returns every crossing for the event instance **including** the column-locked Art 9 health fields (which anon/authenticated cannot read off the base table). Raises `42501` for a non-organiser, `42704` for a missing event. EXECUTE revoked from `public, anon`, granted to `authenticated`. Migration `20270201_001`.
 
 ### `is_pro()`
 
