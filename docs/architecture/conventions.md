@@ -507,6 +507,26 @@ onMount(() => {
 
 Capture the heaviest stateful arrays (the items list, pagination cursors), not derived values — derived state recomputes from restored inputs. Filters that already live in `localStorage` don't need to be in the snapshot.
 
+## Web back links — pop to the referrer, don't hardcode a parent
+
+A detail / create page reachable from **more than one surface** must not send `back` to a hardcoded parent. A gym routine opened from a club's Templates tab, a session plan opened from a club event, a route builder launched from a club's Routes tab — each should return to where the user *came from*, not to `/gym/routines` / `/sessions` / `/routes`.
+
+Use the shared `smartBack` helper (`$lib/util/smart_back`): it registers an `afterNavigate` that latches whether there was an in-app referrer, and its `handle` pops history (`history.back()`) when there was one, falling through to the anchor's static `href` on a hard load / deep link. Because `history.back()` is a popstate, it also re-triggers the source list's `snapshot.restore` (see the section above) — so popping to the referrer is strictly better than a hardcoded `href` for scroll/filter preservation too.
+
+```svelte
+<script lang="ts">
+  import { smartBack } from '$lib/util/smart_back';
+  const back = smartBack(); // omit the arg to pop for ANY in-app referrer
+</script>
+
+<a class="back-link" href="/gym/routines" onclick={back.handle}>
+  <span class="material-symbols" aria-hidden="true">arrow_back</span>
+  {t('gym.routine.back')}
+</a>
+```
+
+Keep the `href` — it is the deep-link / hard-load fallback and the link's semantics. Pass a `match` predicate only when a page must keep its static parent for arrivals from unrelated surfaces; the default (no predicate) pops to any in-app referrer, which is what "back to where I came from" means. The helper is the single home for the `afterNavigate` + `history.back()` idiom that used to be copy-pasted into `runs/[id]`, `clubs/[slug]`, `routes/new`, etc.
+
 ## Commit and PR conventions
 
 - Branch: `main` is the working branch. PRs to `main` are still the path for anything that needs review; direct commits to `main` are fine when the user has asked for a sequence of work and wants each piece individually landable.
