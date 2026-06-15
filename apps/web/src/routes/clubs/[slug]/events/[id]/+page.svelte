@@ -58,6 +58,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
+	import CheckpointManager from '$lib/components/CheckpointManager.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
 	import { workoutDraftFromTemplate } from '$lib/social/event_gym_template';
@@ -1638,6 +1639,25 @@
 				{:else}
 					<p><span class="dot running-dot"></span><strong>{m('clubEvent.raceRunningLabel')}</strong> {m('clubEvent.raceRunningHint', { time: formatDuration(raceElapsedS) })}</p>
 				{/if}
+			</section>
+		{/if}
+
+		{#if isRaceDirector}
+			<CheckpointManager eventId={event.id} />
+			<section class="card checkpoint-board-link">
+				<div class="results-head">
+					<div>
+						<h3>{m('checkpoint.boardTitle')}</h3>
+						<p class="sub">{m('checkpoint.boardSub')}</p>
+					</div>
+					<a
+						class="btn btn-primary-sm"
+						href={`/clubs/${slug}/events/${event.id}/board?instance=${encodeURIComponent(activeInstance ?? event.starts_at)}`}
+						data-testid="open-board"
+					>
+						{m('checkpoint.boardOpen')}
+					</a>
+				</div>
 			</section>
 		{/if}
 
