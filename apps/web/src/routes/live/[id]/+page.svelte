@@ -1044,16 +1044,16 @@
 		padding: var(--space-md) var(--space-xl);
 		background: var(--color-surface);
 		border-bottom: 1px solid var(--color-border);
-		border-left: 4px solid var(--color-border);
+		border-inline-start: 4px solid var(--color-border);
 	}
 	.cutoff-card.on {
-		border-left-color: var(--color-success);
+		border-inline-start-color: var(--color-success);
 	}
 	.cutoff-card.tight {
-		border-left-color: var(--color-warning);
+		border-inline-start-color: var(--color-warning);
 	}
 	.cutoff-card.behind {
-		border-left-color: var(--color-danger);
+		border-inline-start-color: var(--color-danger);
 	}
 	.cutoff-head {
 		display: flex;

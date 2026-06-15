@@ -508,14 +508,14 @@
 	}
 	.rb-table th,
 	.rb-table td {
-		text-align: left;
+		text-align: start;
 		padding: 8px 10px;
 		border-bottom: 1px solid var(--border);
 		vertical-align: top;
 	}
 	.rb-table th.num,
 	.rb-table td.num {
-		text-align: right;
+		text-align: end;
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
@@ -524,7 +524,7 @@
 		width: 0.7rem;
 		height: 0.7rem;
 		border-radius: 999px;
-		margin-right: 6px;
+		margin-inline-end: 6px;
 		vertical-align: middle;
 	}
 	.vert .up {
@@ -532,7 +532,7 @@
 	}
 	.vert .down {
 		color: #2563eb;
-		margin-left: 4px;
+		margin-inline-start: 4px;
 	}
 	.clock {
 		display: block;

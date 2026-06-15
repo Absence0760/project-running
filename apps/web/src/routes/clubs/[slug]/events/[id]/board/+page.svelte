@@ -398,7 +398,7 @@
 	}
 	.board th,
 	.board td {
-		text-align: left;
+		text-align: start;
 		padding: 0.5rem 0.6rem;
 		border-bottom: 1px solid var(--border);
 		vertical-align: top;
@@ -412,11 +412,11 @@
 	}
 	.col-runner {
 		position: sticky;
-		left: 0;
+		inset-inline-start: 0;
 		background: var(--surface);
 	}
 	.bib-tag {
-		margin-left: 0.4rem;
+		margin-inline-start: 0.4rem;
 		color: var(--text-muted);
 		font-weight: 400;
 	}
@@ -467,7 +467,7 @@
 		color: var(--danger, #dc2626);
 	}
 	.status-chip.hold {
-		margin-left: 0.3rem;
+		margin-inline-start: 0.3rem;
 		background: color-mix(in srgb, var(--danger, #dc2626) 16%, transparent);
 		color: var(--danger, #dc2626);
 	}

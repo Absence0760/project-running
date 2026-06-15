@@ -180,7 +180,7 @@
 	}
 	.results th,
 	.results td {
-		text-align: left;
+		text-align: start;
 		padding: 0.5rem 0.6rem;
 		border-bottom: 1px solid var(--border);
 		white-space: nowrap;
@@ -196,7 +196,7 @@
 		color: var(--text-muted);
 	}
 	.bib-tag {
-		margin-left: 0.4rem;
+		margin-inline-start: 0.4rem;
 		color: var(--text-muted);
 		font-weight: 400;
 	}
