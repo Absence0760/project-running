@@ -45,6 +45,9 @@ export async function insertRun(opts: {
 	activity_type?: 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
 	is_dnf?: boolean;
 	metadata?: Record<string, unknown>;
+	/** Optional linked route (runs.route_id). The public_runs view only
+	 *  surfaces it back to a viewer when the route is itself public. */
+	route_id?: string;
 	/** Optional GPS track. When supplied, gzipped JSON is uploaded to
 	 *  the `runs` Storage bucket at `{user_id}/{run_id}.json.gz` and
 	 *  the row's `track_url` column is set to that path. Mirrors what
@@ -67,6 +70,7 @@ export async function insertRun(opts: {
 			is_public: opts.is_public ?? false,
 			activity_type: opts.activity_type ?? 'run',
 			is_dnf: opts.is_dnf ?? false,
+			route_id: opts.route_id ?? null,
 			metadata: opts.metadata ?? {}
 		})
 		.select('id')
@@ -181,6 +185,65 @@ export async function deleteRoute(routeId: string): Promise<void> {
 	if (error) {
 		throw new Error(`simulate.deleteRoute failed: ${error.message}`);
 	}
+}
+
+export async function insertRoute(opts: {
+	user_id: string;
+	name: string;
+	waypoints: Array<{ lat: number; lng: number; elevation_m?: number | null }>;
+	distance_m: number;
+	is_public?: boolean;
+	elevation_m?: number | null;
+}): Promise<string> {
+	// The routes_geom_trigger derives `geom` from `waypoints` on insert,
+	// which the route_markers_position_trigger needs to compute each
+	// marker's position_m along the line — so a route with >=2 waypoints
+	// inserted here yields markers with real position_m, the input the
+	// roadbook (and the spectator cut-off card) reads.
+	const { data, error } = await getAdminClient()
+		.from('routes')
+		.insert({
+			user_id: opts.user_id,
+			name: opts.name,
+			waypoints: opts.waypoints,
+			distance_m: opts.distance_m,
+			elevation_m: opts.elevation_m ?? null,
+			is_public: opts.is_public ?? false
+		})
+		.select('id')
+		.single();
+	if (error || !data) {
+		throw new Error(`simulate.insertRoute failed: ${error?.message ?? 'no row'}`);
+	}
+	return data.id as string;
+}
+
+export async function insertRouteMarker(opts: {
+	route_id: string;
+	user_id: string;
+	kind: 'aid_station' | 'cutoff' | 'crew_access' | 'hazard' | 'note' | 'climb' | 'custom';
+	label: string;
+	lat: number;
+	lng: number;
+	meta?: Record<string, unknown>;
+}): Promise<string> {
+	const { data, error } = await getAdminClient()
+		.from('route_markers')
+		.insert({
+			route_id: opts.route_id,
+			user_id: opts.user_id,
+			kind: opts.kind,
+			label: opts.label,
+			lat: opts.lat,
+			lng: opts.lng,
+			meta: opts.meta ?? {}
+		})
+		.select('id')
+		.single();
+	if (error || !data) {
+		throw new Error(`simulate.insertRouteMarker failed: ${error?.message ?? 'no row'}`);
+	}
+	return data.id as string;
 }
 
 /// Clear the seed's now()-relative "Morning easy 8K" run (and any other
