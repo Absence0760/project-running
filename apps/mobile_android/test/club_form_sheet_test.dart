@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +36,55 @@ class _FakeSocialService extends SocialService {
     String? facebookUrl,
   }) async {
     throw _throwOnCreate;
+  }
+}
+
+/// Captures the createClub call args + returns a stub ClubRow so the
+/// success-path (pop with slug) + validation guards can be asserted.
+class _CapturingSocialService extends SocialService {
+  bool createCalled = false;
+  String? capturedName;
+  String? capturedSlug;
+  String? capturedJoinPolicy;
+  bool? capturedIsPublic;
+  Completer<void>? gate;
+
+  @override
+  bool get isReady => true;
+
+  @override
+  Future<ClubRow> createClub({
+    required String name,
+    required String slug,
+    String? description,
+    String? locationLabel,
+    bool isPublic = true,
+    String joinPolicy = 'open',
+    String? websiteUrl,
+    String? instagramUrl,
+    String? stravaUrl,
+    String? facebookUrl,
+  }) async {
+    createCalled = true;
+    capturedName = name;
+    capturedSlug = slug;
+    capturedJoinPolicy = joinPolicy;
+    capturedIsPublic = isPublic;
+    if (gate != null) await gate!.future;
+    return ClubRow(
+      id: 'club-new',
+      slug: slug,
+      name: name,
+      description: description,
+      locationLabel: locationLabel,
+      isPublic: isPublic,
+      joinPolicy: joinPolicy,
+      ownerId: 'owner-1',
+      createdAt: DateTime(2026, 1, 1),
+      memberCount: 1,
+      isVerified: false,
+      requiresActivityWaiver: false,
+    );
   }
 }
 
@@ -252,6 +303,123 @@ void main() {
         );
       },
     );
+
+    testWidgets('blank name → Create is a no-op (no createClub call)',
+        (tester) async {
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      // Tap Create without typing a name.
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+      expect(fake.createCalled, isFalse);
+    });
+
+    testWidgets('a name with no alphanumerics surfaces the slug error',
+        (tester) async {
+      // "!!!" slugifies to empty → friendly inline error, no API call.
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      await tester.enterText(find.widgetWithText(TextField, 'Name'), '!!!');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+      expect(fake.createCalled, isFalse);
+      expect(find.textContaining('at least one letter or digit'),
+          findsOneWidget);
+    });
+
+    testWidgets('a valid create slugifies the name + pops with the slug',
+        (tester) async {
+      final fake = _CapturingSocialService();
+      await tester.binding.setSurfaceSize(const Size(600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: _Launcher(social: fake),
+      ));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'),
+        'Hackney Half Runners',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      expect(fake.createCalled, isTrue);
+      expect(fake.capturedName, 'Hackney Half Runners');
+      expect(fake.capturedSlug, 'hackney-half-runners');
+      // The launcher records the popped slug.
+      expect(find.text('result=hackney-half-runners'), findsOneWidget);
+    });
+
+    testWidgets(
+        'switching to Private forces the invite join policy + offers only '
+        'the Invite chip', (tester) async {
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      await tester.tap(find.text('Private'));
+      await tester.pumpAndSettle();
+      // Public-only chips are gone; the invite chip is the only option.
+      expect(find.text('Invite only'), findsOneWidget);
+      expect(find.text('Open — anyone joins'), findsNothing);
+      expect(find.text('Request — admins approve'), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'),
+        'Secret Club',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+      expect(fake.capturedIsPublic, isFalse);
+      expect(fake.capturedJoinPolicy, 'invite');
+    });
+
+    testWidgets('Private then back to Public reverts the policy to open',
+        (tester) async {
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      await tester.tap(find.text('Private'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Public'));
+      await tester.pumpAndSettle();
+      // Open + Request chips are back.
+      expect(find.text('Open — anyone joins'), findsOneWidget);
+      expect(find.text('Invite only'), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'),
+        'Open Club',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+      expect(fake.capturedIsPublic, isTrue);
+      expect(fake.capturedJoinPolicy, 'open');
+    });
+
+    testWidgets('Create shows a spinner + disables while the call is in flight',
+        (tester) async {
+      final fake = _CapturingSocialService()..gate = Completer<void>();
+      await _openSheet(tester, social: fake);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'),
+        'Slow Club',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pump();
+      // Busy spinner inside the Create button while the gated call runs.
+      expect(
+        find.descendant(
+          of: find.byType(FilledButton),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      // Release so teardown is clean.
+      fake.gate!.complete();
+      await tester.pumpAndSettle();
+    });
   });
 
   group('SocialService.isReady', () {

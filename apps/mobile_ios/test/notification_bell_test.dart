@@ -62,6 +62,28 @@ void main() {
       expect(api.fetchCalls, greaterThanOrEqualTo(1));
     });
 
+    testWidgets('fetches exactly once on mount (no render-loop refetch)',
+        (tester) async {
+      // A regression that called _refresh() from build() instead of
+      // initState would refetch on every rebuild — pin the single mount
+      // fetch so that can't slip in.
+      final api = _FakeApiClient()..unread = 4;
+      await _pump(tester, api);
+      await tester.pump();
+      await tester.pump();
+      expect(api.fetchCalls, 1);
+    });
+
+    testWidgets('badge is a colour-only dot, never a numeric count',
+        (tester) async {
+      // The dashboard surface stays a glance — the actual number lives
+      // on the Notifications tab. A regression that rendered "12" in the
+      // toolbar would clutter it.
+      final api = _FakeApiClient()..unread = 12;
+      await _pump(tester, api);
+      expect(find.text('12'), findsNothing);
+    });
+
     testWidgets('renders the red dot when unread > 0', (tester) async {
       // The bell uses a colour-only dot (not a count text) so it
       // stays minimal in the action toolbar. The full count surfaces
@@ -70,6 +92,20 @@ void main() {
       await _pump(tester, api);
       // The dot is the only Container with shape: BoxShape.circle
       // mounted inside the bell.
+      final dot = find.byWidgetPredicate((w) {
+        if (w is! Container) return false;
+        final dec = w.decoration;
+        return dec is BoxDecoration && dec.shape == BoxShape.circle;
+      });
+      expect(dot, findsOneWidget);
+    });
+
+    testWidgets('renders the dot at the boundary unread == 1', (tester) async {
+      // Boundary pin — `_unread > 0` must include exactly-one, not just
+      // "many". An off-by-one (`>= 1` vs a stray `> 1`) would hide the
+      // dot for a single unread notification.
+      final api = _FakeApiClient()..unread = 1;
+      await _pump(tester, api);
       final dot = find.byWidgetPredicate((w) {
         if (w is! Container) return false;
         final dec = w.decoration;

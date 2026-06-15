@@ -407,4 +407,231 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
   });
+
+  group('ClubDetailScreen — load failure / not-found', () {
+    testWidgets('a null club renders the not-found state with Retry',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _NotFoundSocial(),
+            training: _FakeTraining(),
+            slug: 'ghost-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text("Couldn't load this club."), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
+    testWidgets('a thrown load renders the error message + Retry',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _ThrowingSocial(),
+            training: _FakeTraining(),
+            slug: 'broken-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text("Couldn't load this club."), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    });
+  });
+
+  group('ClubDetailScreen — header + membership CTA', () {
+    testWidgets('a member club renders the name + the five tabs',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _FakeSocial(),
+            training: _FakeTraining(),
+            apiClient: _FakeApi(const []),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Track Club'), findsWidgets);
+      expect(find.text('Feed'), findsOneWidget);
+      expect(find.text('Events'), findsOneWidget);
+      expect(find.text('Members'), findsOneWidget);
+      expect(find.text('Routes'), findsOneWidget);
+      expect(find.text('Templates'), findsOneWidget);
+    });
+
+    testWidgets('an admin sees the Edit-club action in the AppBar',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _AdminSocial(),
+            training: _FakeTraining(),
+            apiClient: _FakeApi(const []),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    });
+
+    testWidgets('a plain member does NOT see the Edit-club action',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _FakeSocial(),
+            training: _FakeTraining(),
+            apiClient: _FakeApi(const []),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    });
+
+    testWidgets('an admin sees the Create-event button on the Events tab',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _AdminSocial(),
+            training: _FakeTraining(),
+            apiClient: _FakeApi(const []),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Events'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      // Empty events + admin → the create-event CTA renders.
+      expect(find.text('Create event'), findsWidgets);
+    });
+  });
+
+  group('ClubDetailScreen — join non-member', () {
+    testWidgets('a non-member sees Join and tapping it calls joinClub once',
+        (tester) async {
+      final social = _NonMemberSocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: social,
+            training: _FakeTraining(),
+            apiClient: _FakeApi(const []),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final join = find.widgetWithText(FilledButton, 'Join');
+      expect(join, findsOneWidget);
+      await tester.tap(join);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(social.joinCalls, 1);
+    });
+  });
+}
+
+ClubView _nonMemberClub() => ClubView(
+      row: ClubRow(
+        id: 'club-1',
+        ownerId: 'owner',
+        name: 'Track Club',
+        slug: 'track-club',
+        isPublic: true,
+        joinPolicy: 'open',
+        memberCount: 5,
+        isVerified: false,
+        requiresActivityWaiver: false,
+      ),
+      memberCount: 5,
+      viewerRole: null,
+      viewerStatus: null,
+      joinPolicy: 'open',
+    );
+
+class _NotFoundSocial extends SocialService {
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => null;
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
+class _ThrowingSocial extends SocialService {
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async =>
+      throw Exception('club load down');
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
+class _AdminSocial extends SocialService {
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _adminClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
+class _NonMemberSocial extends SocialService {
+  int joinCalls = 0;
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _nonMemberClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  @override
+  Future<String> joinClub(String clubId, String policy) async {
+    joinCalls++;
+    return 'active';
+  }
+
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
 }

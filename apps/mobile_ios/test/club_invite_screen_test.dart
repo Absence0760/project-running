@@ -4,6 +4,8 @@
 // navigates to the club detail on success. Failures surface the
 // RPC's own error string (those are written for end-user reading).
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,10 +32,15 @@ class _FakeSocialService extends SocialService {
   String? capturedToken;
   Object? errorToThrow;
   String returnSlug = 'richmond-run-club';
+  int joinCalls = 0;
+  // Gates the redeem future so the busy-spinner state can be observed.
+  Completer<void>? gate;
 
   @override
   Future<String> joinClubByToken(String token) async {
+    joinCalls++;
     capturedToken = token;
+    if (gate != null) await gate!.future;
     if (errorToThrow != null) throw errorToThrow!;
     return returnSlug;
   }
@@ -145,6 +152,84 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(social.capturedToken, isNull);
+    });
+
+    testWidgets('shows a spinner + disables Join while redemption is in flight',
+        (tester) async {
+      final social = _FakeSocialService()..gate = Completer<void>();
+      await _pump(tester, social: social);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Invite code'),
+        'slow-token',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pump();
+      // Spinner shown inside the Join button while the gated call runs.
+      expect(
+        find.descendant(
+          of: find.byType(FilledButton),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      // The disabled button has no onPressed.
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+      // Release; redemption fails (no real ClubDetailScreen nav needed).
+      social.errorToThrow = Exception('expired');
+      social.gate!.complete();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('expired'), findsOneWidget);
+    });
+
+    testWidgets('error then a fixed retry succeeds — second call fires',
+        (tester) async {
+      // After a failed redemption the user can correct the code and tap
+      // Join again; the button is re-enabled and the second attempt
+      // reaches the RPC.
+      final social = _FakeSocialService()
+        ..errorToThrow = Exception('invalid token');
+      await _pump(tester, social: social);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Invite code'),
+        'bad',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('invalid token'), findsOneWidget);
+      expect(social.joinCalls, 1);
+
+      // Fix the code; clear the error injection; retry.
+      social.errorToThrow = null;
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Invite code'),
+        'good-token',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pump();
+      expect(social.joinCalls, 2);
+      expect(social.capturedToken, 'good-token');
+      // Drain banner + ClubDetailScreen mount fetches so teardown is clean.
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('a token with internal spaces is trimmed at the edges only',
+        (tester) async {
+      // trim() strips leading/trailing whitespace; internal characters
+      // pass through verbatim (the RPC owns final validation).
+      final social = _FakeSocialService();
+      await _pump(tester, social: social);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Invite code'),
+        '  abc def  ',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pump();
+      expect(social.capturedToken, 'abc def');
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 }

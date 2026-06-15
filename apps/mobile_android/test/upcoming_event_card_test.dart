@@ -75,5 +75,84 @@ void main() {
       await tester.pump();
       expect(taps, 1);
     });
+
+    testWidgets('null onTap does not crash on tap', (tester) async {
+      await _pump(tester, _event());
+      await tester.tap(find.byType(UpcomingEventCard));
+      await tester.pump();
+      // No exception — InkWell with a null onTap is inert.
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('UpcomingEventCard — relative-time badge', () {
+    testWidgets('an imminent event (<=1 min out) reads "Starting now"',
+        (tester) async {
+      await _pump(
+        tester,
+        _event(
+          nextInstanceStart: DateTime.now().add(const Duration(seconds: 30)),
+        ),
+      );
+      expect(find.textContaining('Starting now'), findsOneWidget);
+    });
+
+    testWidgets('a few-minutes-out event reads "In N min"', (tester) async {
+      await _pump(
+        tester,
+        _event(
+          // +30 s buffer so the elapsed-during-test ms can't drop the
+          // whole-minute count below 20 (inMinutes truncates).
+          nextInstanceStart:
+              DateTime.now().add(const Duration(minutes: 20, seconds: 30)),
+        ),
+      );
+      expect(find.textContaining('In 20 min'), findsOneWidget);
+    });
+
+    testWidgets('exactly one hour out reads "In 1 hour"', (tester) async {
+      await _pump(
+        tester,
+        _event(
+          // A small buffer so the boundary lands cleanly on the 1h bucket.
+          nextInstanceStart:
+              DateTime.now().add(const Duration(hours: 1, seconds: 30)),
+        ),
+      );
+      expect(find.textContaining('In 1 hour'), findsOneWidget);
+    });
+
+    testWidgets('several hours out reads "In N hours"', (tester) async {
+      await _pump(
+        tester,
+        _event(
+          nextInstanceStart:
+              DateTime.now().add(const Duration(hours: 6, minutes: 1)),
+        ),
+      );
+      expect(find.textContaining('In 6 hours'), findsOneWidget);
+    });
+
+    testWidgets('between 24h and 48h reads "Tomorrow"', (tester) async {
+      await _pump(
+        tester,
+        _event(
+          nextInstanceStart:
+              DateTime.now().add(const Duration(hours: 30)),
+        ),
+      );
+      expect(find.textContaining('Tomorrow'), findsOneWidget);
+    });
+
+    testWidgets('more than 48h out reads "In N days"', (tester) async {
+      await _pump(
+        tester,
+        _event(
+          nextInstanceStart:
+              DateTime.now().add(const Duration(days: 3, hours: 1)),
+        ),
+      );
+      expect(find.textContaining('In 3 days'), findsOneWidget);
+    });
   });
 }

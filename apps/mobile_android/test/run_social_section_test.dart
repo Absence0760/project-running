@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
@@ -89,6 +91,139 @@ Future<void> _pump(WidgetTester tester) {
   );
 }
 
+/// Full-fidelity fake driving kudos + comment flows. Records the
+/// outbound calls + lets each test plant the engagement seed, comment
+/// list, and error injections for the optimistic-update / rollback /
+/// double-submit assertions.
+class _SocialApi extends ApiClient {
+  _SocialApi({
+    this.viewer = 'viewer-1',
+    this.kudosCount = 0,
+    this.viewerHasKudos = false,
+    this.commentCount = 0,
+    this.seedComments = const [],
+    this.throwOnGive = false,
+    this.throwOnRescind = false,
+    this.throwOnAdd = false,
+  });
+
+  final String? viewer;
+  final int kudosCount;
+  final bool viewerHasKudos;
+  final int commentCount;
+  final List<RunCommentWithAuthor> seedComments;
+  final bool throwOnGive;
+  final bool throwOnRescind;
+  final bool throwOnAdd;
+
+  int giveCalls = 0;
+  int rescindCalls = 0;
+  int addCalls = 0;
+  final List<String> addedBodies = [];
+  // Gates the addRunComment future so a test can fire a second submit
+  // while the first is in flight (double-submit guard).
+  Completer<void>? addGate;
+
+  @override
+  String? get userId => viewer;
+
+  @override
+  Future<Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>>
+      fetchEngagementSummaries(List<String> runIds) async => {
+            for (final id in runIds)
+              id: (
+                kudosCount: kudosCount,
+                viewerHasKudos: viewerHasKudos,
+                commentCount: commentCount,
+              ),
+          };
+
+  @override
+  Future<ProfileSummary?> fetchProfileSummary(String userId) async =>
+      ProfileSummary(
+        id: viewer ?? 'anon',
+        displayName: 'Me',
+        followerCount: 0,
+        followingCount: 0,
+        viewerFollows: false,
+      );
+
+  @override
+  Future<List<RunCommentWithAuthor>> fetchRunCommentsWithAuthors(
+      String runId,
+      {int limit = 200}) async => seedComments;
+
+  @override
+  Future<void> giveKudos(String runId) async {
+    giveCalls++;
+    if (throwOnGive) throw Exception('give-boom');
+  }
+
+  @override
+  Future<void> rescindKudos(String runId) async {
+    rescindCalls++;
+    if (throwOnRescind) throw Exception('rescind-boom');
+  }
+
+  @override
+  Future<RunCommentRow> addRunComment({
+    required String runId,
+    required String body,
+    String? parentCommentId,
+  }) async {
+    addCalls++;
+    addedBodies.add(body);
+    if (addGate != null) await addGate!.future;
+    if (throwOnAdd) throw Exception('add-boom');
+    return RunCommentRow(
+      id: 'new-${addCalls}',
+      runId: runId,
+      authorId: viewer ?? 'anon',
+      body: body,
+      parentCommentId: parentCommentId,
+      createdAt: DateTime(2026, 2, 1),
+      updatedAt: DateTime(2026, 2, 1),
+    );
+  }
+}
+
+Future<void> _pumpApi(WidgetTester tester, ApiClient api,
+    {String? runOwnerId}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: RunSocialSection(
+          api: api,
+          runId: 'fake-run-id',
+          runOwnerId: runOwnerId,
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+RunCommentWithAuthor _comment(
+  String id, {
+  String authorId = 'someone-else',
+  String body = 'nice run',
+  String? parentId,
+}) =>
+    RunCommentWithAuthor(
+      comment: RunCommentRow(
+        id: id,
+        runId: 'fake-run-id',
+        authorId: authorId,
+        body: body,
+        parentCommentId: parentId,
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+      ),
+      author: PublicProfile(id: authorId, displayName: authorId),
+    );
+
 void main() {
   setUpAll(_ensureSupabase);
 
@@ -98,6 +233,156 @@ void main() {
       // CircularProgressIndicator inside a centered Padding.
       await _pump(tester);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('empty thread renders the no-comments hint + composer',
+        (tester) async {
+      final api = _SocialApi();
+      await _pumpApi(tester, api);
+      expect(find.text('No comments yet.'), findsOneWidget);
+      // Composer is visible for a signed-in viewer.
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    testWidgets('renders seeded kudos count + comment bodies', (tester) async {
+      final api = _SocialApi(
+        kudosCount: 7,
+        commentCount: 1,
+        seedComments: [_comment('c1', body: 'great pace')],
+      );
+      await _pumpApi(tester, api);
+      expect(find.text('7'), findsOneWidget);
+      expect(find.text('great pace'), findsOneWidget);
+      expect(find.text('No comments yet.'), findsNothing);
+    });
+
+    testWidgets('signed-out viewer (userId == null) hides the composer',
+        (tester) async {
+      final api = _SocialApi(viewer: null);
+      await _pumpApi(tester, api);
+      // No composer TextField for anon.
+      expect(find.byType(TextField), findsNothing);
+    });
+  });
+
+  group('RunSocialSection — kudos', () {
+    testWidgets('tapping the pill optimistically increments + calls giveKudos',
+        (tester) async {
+      final api = _SocialApi(kudosCount: 2, viewerHasKudos: false);
+      await _pumpApi(tester, api);
+      expect(find.text('2'), findsOneWidget);
+
+      await tester.tap(find.byType(TextButton).first);
+      await tester.pump();
+      // Optimistic bump before the await resolves.
+      expect(find.text('3'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(api.giveCalls, 1);
+      expect(api.rescindCalls, 0);
+      expect(find.text('3'), findsOneWidget);
+    });
+
+    testWidgets('un-kudos calls rescindKudos and decrements', (tester) async {
+      final api = _SocialApi(kudosCount: 5, viewerHasKudos: true);
+      await _pumpApi(tester, api);
+      expect(find.text('5'), findsOneWidget);
+
+      await tester.tap(find.byType(TextButton).first);
+      await tester.pumpAndSettle();
+      expect(api.rescindCalls, 1);
+      expect(api.giveCalls, 0);
+      expect(find.text('4'), findsOneWidget);
+    });
+
+    testWidgets('a failed give rolls back the optimistic bump + shows a banner',
+        (tester) async {
+      final api = _SocialApi(
+        kudosCount: 2,
+        viewerHasKudos: false,
+        throwOnGive: true,
+      );
+      await _pumpApi(tester, api);
+
+      await tester.tap(find.byType(TextButton).first);
+      await tester.pumpAndSettle();
+      expect(api.giveCalls, 1);
+      // Rolled back to the pre-tap count.
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('3'), findsNothing);
+      expect(find.textContaining('kudos'), findsWidgets);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('owner viewing own run cannot kudos (pill disabled, no call)',
+        (tester) async {
+      final api = _SocialApi(viewer: 'owner-1', kudosCount: 1);
+      await _pumpApi(tester, api, runOwnerId: 'owner-1');
+      // The pill is disabled; tapping it does nothing.
+      await tester.tap(find.byType(TextButton).first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(api.giveCalls, 0);
+      expect(api.rescindCalls, 0);
+    });
+  });
+
+  group('RunSocialSection — comment post', () {
+    testWidgets('posting a comment appends it optimistically + bumps count',
+        (tester) async {
+      final api = _SocialApi(commentCount: 0);
+      await _pumpApi(tester, api);
+      await tester.enterText(find.byType(TextField), 'first comment');
+      await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+      await tester.pumpAndSettle();
+      expect(api.addCalls, 1);
+      expect(api.addedBodies.single, 'first comment');
+      expect(find.text('first comment'), findsOneWidget);
+      expect(find.text('No comments yet.'), findsNothing);
+    });
+
+    testWidgets('blank / whitespace comment does not call addRunComment',
+        (tester) async {
+      final api = _SocialApi();
+      await _pumpApi(tester, api);
+      await tester.enterText(find.byType(TextField), '   ');
+      await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+      await tester.pumpAndSettle();
+      expect(api.addCalls, 0);
+    });
+
+    testWidgets('double-submit guard — second tap while posting is a no-op',
+        (tester) async {
+      final api = _SocialApi()..addGate = Completer<void>();
+      await _pumpApi(tester, api);
+      await tester.enterText(find.byType(TextField), 'busy comment');
+      // First tap starts the (gated) post — _posting is now true.
+      await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+      await tester.pump();
+      // While posting, the button shows a spinner + is disabled, so a
+      // second tap can't fire a second addRunComment.
+      await tester.tap(find.byType(FilledButton), warnIfMissed: false);
+      await tester.pump();
+      expect(api.addCalls, 1);
+      // Release the gate; the single post completes.
+      api.addGate!.complete();
+      await tester.pumpAndSettle();
+      expect(api.addCalls, 1);
+      expect(find.text('busy comment'), findsOneWidget);
+    });
+
+    testWidgets('a failed post surfaces a banner and does not append',
+        (tester) async {
+      final api = _SocialApi(throwOnAdd: true);
+      await _pumpApi(tester, api);
+      await tester.enterText(find.byType(TextField), 'doomed');
+      await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+      await tester.pumpAndSettle();
+      expect(api.addCalls, 1);
+      // The optimistic append only happens after a successful insert, so
+      // the thread is still empty. (The draft text stays in the composer
+      // for retry, so we assert on the list state, not the raw string.)
+      expect(find.text('No comments yet.'), findsOneWidget);
+      expect(find.textContaining('Failed to post'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 
