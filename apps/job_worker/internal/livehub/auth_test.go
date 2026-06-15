@@ -190,16 +190,24 @@ func TestJWTAuthorizer_TamperedSignatureDenied(t *testing.T) {
 	}}
 	a := NewJWTAuthorizer(testJWTSecret, hub, f)
 	token := signTestToken(t, "user-A", 60)
-	// Flip the last character of the signature segment to invalidate it.
-	tampered := token[:len(token)-1] + flipLast(rune(token[len(token)-1]))
+	// Flip the FIRST character of the signature segment to invalidate it.
+	// Flipping the LAST base64url char is unreliable: a 32-byte HMAC
+	// signature's final base64url char carries only 4 meaningful bits (the
+	// low 2 are zero-padding the decoder discards), so ~1/16 of flips (when
+	// the char's high nibble is unchanged) decode to the SAME signature and
+	// the token stays valid — a 1-in-16 flake that took down CI run
+	// 27554982327. The first signature char's six bits are all meaningful,
+	// so a flip there always changes the decoded signature.
+	sigStart := strings.LastIndex(token, ".") + 1
+	tampered := token[:sigStart] + flipChar(rune(token[sigStart])) + token[sigStart+1:]
 
 	if err := a.Authorize(reqWith("Bearer "+tampered), "run-1", ActionPush); err == nil {
 		t.Fatal("tampered signature must be denied")
 	}
 }
 
-func flipLast(c rune) string {
-	// Map last character to a different valid base64url character.
+func flipChar(c rune) string {
+	// Map the character to a different valid base64url character.
 	if c == 'A' {
 		return "B"
 	}
