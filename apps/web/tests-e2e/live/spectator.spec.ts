@@ -78,7 +78,13 @@ test.describe('/live/[id] — anon spectator', () => {
 			await expect(page.locator('.live-stat-value').nth(1)).toContainText('22:30');
 			await expect(page.locator('.live-stat-value').nth(2)).not.toContainText('--');
 
-			await expect(page.locator('.live-runner-sub')).toContainText(/Live from the runner/i);
+			// The runner sub-line now carries ping freshness (the live_freshness
+			// feature): a just-arrived ping reads "Updated just now" / "Updated Ns
+			// ago", degrading to the static "Live from the runner's device" only
+			// when a ping carries no timestamp. These planted pings are fresh, so
+			// the freshness indicator is what surfaces — and the LIVE badge above
+			// already pins liveness.
+			await expect(page.locator('.live-runner-sub')).toContainText(/Updated/i);
 		} finally {
 			await deleteRun(runId);
 		}
