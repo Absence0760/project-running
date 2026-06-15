@@ -467,6 +467,37 @@ No new table; no narrow union to update; no codegen pass needed.
 
 ---
 
+## Course export to a watch (GPX with course markers)
+
+A route's course markers (aid stations, cutoffs, crew access, hazards) only
+matter when the runner is on a watch mid-race with no phone. The
+**GPX-with-course-markers** export bridges that: it emits the route line as a
+`<trk>` **plus one `<wpt>` per marker**, so a Garmin/Coros/Suunto (and
+eventually the `custom_watch`) surfaces "Aid 2 in 1.3 km" on the wrist. GPX is
+imported by every device, so this is the universal first cut. (FIT *Course*
+export with native `CoursePoint` records is the deferred v2 — see
+[course_waypoint_export.md](course_waypoint_export.md).)
+
+Each `<wpt>` carries the marker's `<name>`, its `<type>` (the raw
+`RouteMarkerKind`), a Garmin-recognised `<sym>` where one maps
+(`aid_station` → `Water Source`; `cutoff`/`hazard` → `Danger Area`;
+`crew_access` → `Parking Area`; `note` → `Information`; `climb` → `Summit`;
+`custom` → none), and a `<desc>` holding the cutoff time and the aid-station
+services. Waypoints are emitted before the `<trk>` per the GPX 1.1 schema and
+the exported markers are **privacy-clipped** (in-privacy-zone pins are
+redacted, same as the on-screen pins).
+
+Pure emitter: `apps/web/src/lib/routes/route_gpx.ts`
+(`toRouteGpxWithMarkers`) ↔ `apps/mobile_android/lib/route_gpx.dart`
+(`routeGpxFromRoute`, iOS twin), a TS↔Dart parity pair. Surfaces: the
+**"GPX + markers"** download on `/routes/[id]` + `/routes/[id]/roadbook`
+(web, shown only when the route has ≥1 marker) and the **"Share as GPX +
+markers"** route-detail action on mobile. Distinct from the plain
+[GPX route export](features.md#gpx--kml-import) (line only, no waypoints),
+which both still offer.
+
+---
+
 ## The `health` Flutter package
 
 The single most important integration library in the stack. One Dart package abstracts both Apple HealthKit (iOS) and Android Health Connect behind an identical API.

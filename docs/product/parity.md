@@ -88,6 +88,7 @@ See [features § Full-screen route builder](features.md#full-screen-route-builde
 | Shareable route link | ✓ | ✗ | ✓ | N/A | N/A | Web makes the route public and copies the link in one action. |
 | Export route as GPX | ✓ | ✗ | ✓ | N/A | N/A | Android: share button on `route_detail_screen.dart` writes the route's waypoints to a temp `.gpx` and hands it to the system share sheet. |
 | Export route as KML | ✓ | ✗ | ✓ | N/A | N/A | Android: share popup on `route_detail_screen` offers GPX or KML; KML emits a single `<Placemark>` `<LineString>` with `<coordinates>` lng,lat,ele. |
+| Course waypoint export (GPX + markers) | ✓ | ✓ | ✓ | ✗ | ✗ | The route line as a `<trk>` plus one `<wpt>` per course marker (name + raw kind in `<type>`, a Garmin `<sym>` where one maps, cutoff time + aid services in `<desc>`) so a watch surfaces "Aid 2 in 1.3 km" mid-race. Exported markers are privacy-clipped. Shown only when the route has ≥1 marker. Web: "GPX + markers" download on `/routes/[id]` + `/routes/[id]/roadbook` (`routeDetail.exportGpxMarkers`). Mobile: "Share as GPX + markers" on `route_detail_screen.dart` (`routeDetailShareAsGpxMarkers`). Shared `route_gpx.ts ↔ .dart` emitter (`toRouteGpxWithMarkers` / `routeGpxFromRoute`, 10 mirror tests). FIT Course (`CoursePoint`) export deferred to v2. See [course_waypoint_export.md](../features/course_waypoint_export.md). Watches have no route-detail surface. |
 
 ### Discovery
 

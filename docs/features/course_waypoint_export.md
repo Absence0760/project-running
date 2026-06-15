@@ -1,8 +1,23 @@
 # Course waypoint export — markers onto the watch (GPX, then FIT)
 
-> **STATUS: handoff spec, not built.** Self-contained brief for an implementing
-> session. Read [CLAUDE.md](../../CLAUDE.md) for conventions. Web is canonical;
-> mobile mirrors; iOS twin byte-identical.
+> **STATUS: GPX-with-waypoints (v1) SHIPPED; FIT Course (v2) DEFERRED.**
+> The GPX export — the route line plus one `<wpt>` per course marker — ships on
+> web (route-detail + roadbook download) and mobile (route-detail share, iOS
+> twin). The FIT Course file (§ v2 below) remains a follow-up; nothing in this
+> doc claims it's built. Read [CLAUDE.md](../../CLAUDE.md) for conventions. Web
+> is canonical; mobile mirrors; iOS twin byte-identical.
+>
+> **Shipped surfaces / names:**
+> - Pure emitter: `apps/web/src/lib/routes/route_gpx.ts`
+>   (`toRouteGpxWithMarkers(name, coordinates[lng,lat], elevations, markers)`)
+>   ↔ `apps/mobile_android/lib/route_gpx.dart` (`routeGpxFromRoute`), iOS twin —
+>   a TS↔Dart parity pair, 10 mirror tests each.
+> - Web download: `routeDetail.exportGpxMarkers` ("GPX + markers") action on
+>   `/routes/[id]` + `/routes/[id]/roadbook`, shown only when the route has ≥1
+>   marker; exports the privacy-clipped `displayWaypoints`. Playwright in
+>   `tests-e2e/routes/roadbook.spec.ts`.
+> - Mobile share: `routeDetailShareAsGpxMarkers` ("Share as GPX + markers")
+>   PopupMenu action on `route_detail_screen.dart`, 3 Flutter tests.
 
 ## Context / why
 
@@ -41,11 +56,11 @@ No new schema.
 
 ## Commit cadence
 
-1. `route_gpx.ts/.dart` waypoint emitter + unit/mirror tests.
-2. Web download actions (route detail + roadbook) + i18n + Playwright.
-3. Mobile share action (+ iOS twin) + Flutter test.
-4. Docs.
-5. (Later) FIT Course export.
+1. ✅ `route_gpx.ts/.dart` waypoint emitter + unit/mirror tests.
+2. ✅ Web download actions (route detail + roadbook) + i18n + Playwright.
+3. ✅ Mobile share action (+ iOS twin) + Flutter test.
+4. ✅ Docs.
+5. (Deferred) FIT Course export — v2 below.
 
 ## Tests
 
@@ -55,11 +70,22 @@ No new schema.
 - Playwright: the download action produces a file containing the waypoints.
 - Flutter: the share action builds the same GPX.
 
-## Open decisions for the implementer (ask the user if unsure)
+## Open decisions — resolved (v1)
 
-- GPX-only v1 vs also shipping FIT Course now (recommend GPX first — universal).
-- `kind` → GPX `<sym>` / FIT `CoursePoint` type mapping.
-- Whether to export the full line + waypoints, or waypoints-only.
+- **GPX-only v1; FIT Course deferred to v2.** Shipped the universal GPX path
+  first; the FIT Course file is the remaining follow-up below.
+- **`kind` → GPX `<sym>` mapping (shipped):** `aid_station` → `Water Source`,
+  `cutoff` → `Danger Area`, `hazard` → `Danger Area`, `crew_access` →
+  `Parking Area`, `note` → `Information`, `climb` → `Summit`; `custom` → no
+  `<sym>`. Source of truth is `SYM_BY_KIND` in `route_gpx.ts` (mirrored in the
+  Dart twin).
+- **Export the full route line + waypoints**, not waypoints-only — the `<trk>`
+  carries the line, one `<wpt>` per marker (waypoints emitted first per the
+  GPX 1.1 schema). The cutoff time + aid services land in each `<wpt>`'s
+  `<desc>` (`buildDesc`).
+- **Waypoints are privacy-clipped.** Web exports the privacy-clipped
+  `displayWaypoints` (markers inside a privacy zone are redacted by the
+  `route_markers_for_viewer` path); mobile exports against the clipped route.
 
 ## Docs
 

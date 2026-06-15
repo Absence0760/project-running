@@ -52,6 +52,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/training/relink_candidates.ts` (`filterRelinkCandidates`) | `apps/mobile_android/lib/relink_candidates.dart` | `training/relink_candidates.test.ts` ↔ `test/relink_candidates_test.dart` |
 | `apps/web/src/lib/gym/routine_editor_build.ts` (`assignSupersetGroups`) | `apps/mobile_android/lib/routine_editor_build.dart` | `gym/routine_editor_build.test.ts` ↔ `test/routine_editor_build_test.dart` |
 | `apps/web/src/lib/gym/progression_prefill.ts` (`lastSessionSets`) | `apps/mobile_android/lib/progression_prefill.dart` | `gym/progression_prefill.test.ts` ↔ `test/progression_prefill_test.dart` |
+| `apps/web/src/lib/routes/route_gpx.ts` (`toRouteGpxWithMarkers`) | `apps/mobile_android/lib/route_gpx.dart` (`routeGpxFromRoute`) | `routes/route_gpx.test.ts` ↔ `test/route_gpx_test.dart` |
 
 > The embedded factor tables `apps/web/src/lib/runs/age_grade_tables.ts` ↔ `apps/mobile_android/lib/age_grade_tables.dart` are part of the `age_grade` pair but are **generated** from `scripts/age_grade/` and stay identical by construction — never hand-edit them.
 

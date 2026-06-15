@@ -99,6 +99,10 @@ cut-off chip renders identically on both platforms.
 - **[Race roadbook](race_roadbook.md)** — the markers + a goal time produce a
   per-checkpoint crew sheet (projected arrival, cutoff margin, services). The
   markers' `position_m` + cutoff `meta` are the roadbook's spine.
+- **[Course waypoint export](course_waypoint_export.md)** — the markers are
+  what the GPX export emits: one `<wpt>` per marker (kind → `<sym>`, cutoff +
+  services in `<desc>`) alongside the route line, so a watch surfaces them
+  mid-race. Shipped on web (route-detail + roadbook download) + mobile share.
 
 ## Deferred
 
