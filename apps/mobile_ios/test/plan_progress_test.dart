@@ -70,6 +70,26 @@ void main() {
       expect(longestCompletedLongRunMetres(workouts, const {}), 30000);
     });
 
+    test('a zero-distance linked run falls back to the planned target', () {
+      final workouts = [
+        const LongRunWorkout(
+            kind: 'long', targetDistanceM: 30000, completedRunId: 'r1'),
+      ];
+      // r1 is linked but recorded 0 m — fall back to the 30 km target.
+      expect(longestCompletedLongRunMetres(workouts, {'r1': 0.0}), 30000);
+    });
+
+    test('a zero-distance linked run does not beat a real longer run', () {
+      final workouts = [
+        const LongRunWorkout(
+            kind: 'long', targetDistanceM: 18000, completedRunId: 'r1'),
+        const LongRunWorkout(
+            kind: 'long', targetDistanceM: 22000, completedRunId: 'r2'),
+      ];
+      final actual = {'r1': 0.0, 'r2': 24000.0};
+      expect(longestCompletedLongRunMetres(workouts, actual), 24000);
+    });
+
     test('ignores non-long completed workouts', () {
       final workouts = [
         const LongRunWorkout(

@@ -55,7 +55,10 @@ double? longestCompletedLongRunMetres(
     if (!completed) continue;
     final actual =
         w.completedRunId != null ? actualById[w.completedRunId] : null;
-    final dist = actual ?? w.targetDistanceM ?? 0;
+    // A non-positive actual (degenerate / distance-less linked run) is
+    // treated as missing, falling back to the planned target — `actual ??`
+    // would keep a 0 and drop the long run from the max entirely.
+    final dist = (actual != null && actual > 0) ? actual : (w.targetDistanceM ?? 0);
     if (dist > 0 && (max == null || dist > max)) max = dist;
   }
   return max;

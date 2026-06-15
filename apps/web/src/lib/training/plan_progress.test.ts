@@ -59,6 +59,24 @@ test('longestCompletedLongRunMetres: falls back to target when the run is off-wi
 	assert.equal(longestCompletedLongRunMetres(workouts, new Map()), 30_000);
 });
 
+test('longestCompletedLongRunMetres: a zero-distance linked run falls back to the planned target', () => {
+	const workouts = [
+		{ kind: 'long', target_distance_m: 30_000, completed_run_id: 'r1' },
+	];
+	// r1 is linked but recorded 0 m (distance-less / degenerate import) — it
+	// must not drop the long run; fall back to the 30 km planned target.
+	assert.equal(longestCompletedLongRunMetres(workouts, new Map([['r1', 0]])), 30_000);
+});
+
+test('longestCompletedLongRunMetres: a zero-distance linked run does not beat a real longer run', () => {
+	const workouts = [
+		{ kind: 'long', target_distance_m: 18_000, completed_run_id: 'r1' }, // recorded 0
+		{ kind: 'long', target_distance_m: 22_000, completed_run_id: 'r2' }, // recorded 24 km
+	];
+	const actual = new Map([['r1', 0], ['r2', 24_000]]);
+	assert.equal(longestCompletedLongRunMetres(workouts, actual), 24_000);
+});
+
 test('longestCompletedLongRunMetres: ignores non-long completed workouts', () => {
 	const workouts = [
 		{ kind: 'tempo', target_distance_m: 40_000, manually_completed: true },

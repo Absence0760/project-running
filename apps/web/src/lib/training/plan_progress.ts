@@ -40,7 +40,10 @@ export function longestCompletedLongRunMetres(
 		const completed = w.manually_completed === true || w.completed_run_id != null;
 		if (!completed) continue;
 		const actual = w.completed_run_id != null ? actualById.get(w.completed_run_id) : undefined;
-		const dist = actual ?? w.target_distance_m ?? 0;
+		// A non-positive actual (degenerate / distance-less linked run) is
+		// treated as missing, falling back to the planned target — `actual ??`
+		// would keep a 0 and drop the long run from the max entirely.
+		const dist = actual != null && actual > 0 ? actual : (w.target_distance_m ?? 0);
 		if (dist > 0 && (max == null || dist > max)) max = dist;
 	}
 	return max;
