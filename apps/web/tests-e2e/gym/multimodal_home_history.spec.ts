@@ -281,11 +281,19 @@ test.describe('multi-modal Home + History', () => {
 
 			// Wide: the first two day groups share a row (overlapping vertical
 			// spans) with the second to the right of the first — a real
-			// multi-column grid, not a single stranded column.
-			const a = (await groups.nth(0).boundingBox())!;
-			const b = (await groups.nth(1).boundingBox())!;
-			expect(b.x).toBeGreaterThan(a.x + a.width / 2);
-			expect(b.y).toBeLessThan(a.y + a.height);
+			// multi-column grid, not a single stranded column. Poll for the
+			// settled layout: /history paints a skeleton then re-renders when the
+			// activities feed resolves, so a bare boundingBox() can race that
+			// re-render and read null on a momentarily-detached group (the null
+			// the wide case threw on in CI). Mirrors the narrow-case poll below.
+			await expect
+				.poll(async () => {
+					const a = await groups.nth(0).boundingBox();
+					const b = await groups.nth(1).boundingBox();
+					if (!a || !b) return false;
+					return b.x > a.x + a.width / 2 && b.y < a.y + a.height;
+				})
+				.toBe(true);
 
 			// Narrow: the grid collapses to one column — the second group
 			// stacks below the first.
