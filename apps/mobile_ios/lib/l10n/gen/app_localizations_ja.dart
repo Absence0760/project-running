@@ -8672,6 +8672,33 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get roadbookFuel => '補給';
+
+  @override
+  String get roadbookHeat => '暑さ';
+
+  @override
+  String get roadbookCarbs => '炭水化物';
+
+  @override
+  String get roadbookFluid => '水分';
+
+  @override
+  String roadbookCarbsValue(String grams) {
+    return '$grams g';
+  }
+
+  @override
+  String roadbookFluidValue(String ml) {
+    return '$ml ml';
+  }
+
+  @override
+  String roadbookCarryHint(String gels, String fluid) {
+    return '携行: ジェル $gels 個 · $fluid ml';
+  }
+
+  @override
   String get checkpointCheckinAction => 'チェックポイント受付';
 
   @override

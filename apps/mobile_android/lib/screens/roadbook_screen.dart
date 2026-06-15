@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../elevation.dart';
+import '../fuel_plan.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../roadbook.dart';
@@ -44,6 +45,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
   late int _goalSeconds;
   int? _startClockMin;
   PacingModel _model = PacingModel.effort;
+  bool _fueling = false;
+  bool _heat = false;
   late final TextEditingController _goal;
 
   @override
@@ -94,6 +97,20 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
         goalSeconds: _goalSeconds.toDouble(),
         startClockMin: _startClockMin?.toDouble(),
         model: _model,
+      );
+
+  FuelPlan _fuelPlanFor(Roadbook rb) => buildFuelPlan(
+        [
+          for (final leg in rb.legs)
+            FuelLegInput(
+              projectedElapsedS: leg.projectedElapsedS,
+              legDistM: leg.legDistM,
+              services: leg.services,
+            ),
+        ],
+        carbsPerHourG: defaultCarbsPerHourG,
+        fluidPerHourMl: defaultFluidPerHourMl,
+        heatFactor: _heat ? heatFluidFactor : 1.0,
       );
 
   void _onGoalSubmit(String v) {
@@ -170,6 +187,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     final theme = Theme.of(context);
     final unit = activeDistanceUnit;
     final rb = _roadbook;
+    final fuel = _fueling ? _fuelPlanFor(rb) : null;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.roadbookTitle),
@@ -219,6 +237,28 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
             selected: {_model},
             onSelectionChanged: (s) => setState(() => _model = s.first),
           ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.roadbookFuel),
+                  value: _fueling,
+                  onChanged: (v) => setState(() => _fueling = v),
+                ),
+              ),
+              if (_fueling)
+                Expanded(
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.roadbookHeat),
+                    value: _heat,
+                    onChanged: (v) => setState(() => _heat = v),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (_markers.isEmpty)
             Text(l10n.roadbookNoMarkers, style: theme.textTheme.bodyMedium)
@@ -244,7 +284,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            for (final leg in rb.legs) _legRow(context, l10n, leg, unit),
+            for (var i = 0; i < rb.legs.length; i++)
+              _legRow(context, l10n, rb.legs[i], unit, fuel?.legs[i]),
           ],
         ],
       ),
@@ -252,7 +293,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
   }
 
   Widget _legRow(BuildContext context, AppLocalizations l10n, RoadbookLeg leg,
-      DistanceUnit unit) {
+      DistanceUnit unit, FuelLeg? fuelLeg) {
     final theme = Theme.of(context);
     final cutoff = leg.cutoff;
     return Padding(
@@ -313,12 +354,46 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                           ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ),
+                if (fuelLeg != null) ..._fuelLines(context, l10n, fuelLeg),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _fuelLines(
+      BuildContext context, AppLocalizations l10n, FuelLeg fuelLeg) {
+    final theme = Theme.of(context);
+    final carry = fuelLeg.carryToNextAid;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(
+          [
+            '${l10n.roadbookCarbs}: ${l10n.roadbookCarbsValue(fuelLeg.carbsG.round().toString())}',
+            '${l10n.roadbookFluid}: ${l10n.roadbookFluidValue(fuelLeg.fluidMl.round().toString())}',
+          ].join(' · '),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.primary),
+        ),
+      ),
+      if (carry != null && (carry.gels > 0 || carry.fluidMl > 0))
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            l10n.roadbookCarryHint(
+              carry.gels.toString(),
+              carry.fluidMl.round().toString(),
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+    ];
   }
 
   Color _cutoffColor(CutoffStatus s) => switch (s) {

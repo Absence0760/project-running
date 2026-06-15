@@ -9032,6 +9032,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get roadbookFuel => 'Fuel';
+
+  @override
+  String get roadbookHeat => 'Heat';
+
+  @override
+  String get roadbookCarbs => 'Carbs';
+
+  @override
+  String get roadbookFluid => 'Fluid';
+
+  @override
+  String roadbookCarbsValue(String grams) {
+    return '$grams g';
+  }
+
+  @override
+  String roadbookFluidValue(String ml) {
+    return '$ml ml';
+  }
+
+  @override
+  String roadbookCarryHint(String gels, String fluid) {
+    return 'carry $gels gels · $fluid ml';
+  }
+
+  @override
   String get checkpointCheckinAction => 'Checkpoint check-in';
 
   @override

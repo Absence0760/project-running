@@ -15162,6 +15162,48 @@ abstract class AppLocalizations {
   /// **'{distance} · {vert} vert · goal {time}'**
   String roadbookSummary(String distance, String vert, String time);
 
+  /// Toggle to show the per-leg fueling plan on the roadbook
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel'**
+  String get roadbookFuel;
+
+  /// Toggle that bumps fluid targets for hot conditions
+  ///
+  /// In en, this message translates to:
+  /// **'Heat'**
+  String get roadbookHeat;
+
+  /// Carbohydrate column/label on the fueling plan
+  ///
+  /// In en, this message translates to:
+  /// **'Carbs'**
+  String get roadbookCarbs;
+
+  /// Fluid column/label on the fueling plan
+  ///
+  /// In en, this message translates to:
+  /// **'Fluid'**
+  String get roadbookFluid;
+
+  /// Per-leg carbohydrate amount in grams
+  ///
+  /// In en, this message translates to:
+  /// **'{grams} g'**
+  String roadbookCarbsValue(String grams);
+
+  /// Per-leg fluid amount in millilitres
+  ///
+  /// In en, this message translates to:
+  /// **'{ml} ml'**
+  String roadbookFluidValue(String ml);
+
+  /// Hint for what fuel to carry out of an aid station to reach the next one
+  ///
+  /// In en, this message translates to:
+  /// **'carry {gels} gels · {fluid} ml'**
+  String roadbookCarryHint(String gels, String fluid);
+
   /// Organiser action on event detail opening the aid-station check-in screen
   ///
   /// In en, this message translates to:

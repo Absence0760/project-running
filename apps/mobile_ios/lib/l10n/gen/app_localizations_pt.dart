@@ -9121,6 +9121,33 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get roadbookFuel => 'Abastecimento';
+
+  @override
+  String get roadbookHeat => 'Calor';
+
+  @override
+  String get roadbookCarbs => 'Carboidratos';
+
+  @override
+  String get roadbookFluid => 'Líquido';
+
+  @override
+  String roadbookCarbsValue(String grams) {
+    return '$grams g';
+  }
+
+  @override
+  String roadbookFluidValue(String ml) {
+    return '$ml ml';
+  }
+
+  @override
+  String roadbookCarryHint(String gels, String fluid) {
+    return 'levar $gels géis · $fluid ml';
+  }
+
+  @override
   String get checkpointCheckinAction => 'Check-in no ponto de controlo';
 
   @override
@@ -18331,6 +18358,33 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String roadbookSummary(String distance, String vert, String time) {
     return '$distance · $vert de ganho · meta $time';
+  }
+
+  @override
+  String get roadbookFuel => 'Abastecimento';
+
+  @override
+  String get roadbookHeat => 'Calor';
+
+  @override
+  String get roadbookCarbs => 'Carboidratos';
+
+  @override
+  String get roadbookFluid => 'Líquido';
+
+  @override
+  String roadbookCarbsValue(String grams) {
+    return '$grams g';
+  }
+
+  @override
+  String roadbookFluidValue(String ml) {
+    return '$ml ml';
+  }
+
+  @override
+  String roadbookCarryHint(String gels, String fluid) {
+    return 'levar $gels géis · $fluid ml';
   }
 
   @override
