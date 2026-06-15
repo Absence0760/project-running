@@ -101,6 +101,38 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await admin.from('food_log').delete().eq('id', created![0].id);
 	});
 
+	test('a failed Open Food Facts search shows a retry state, not a misleading "no matches"', async ({
+		page
+	}) => {
+		// Force the OFF search to fail; the editor must NOT present this as an
+		// empty result set.
+		let failNext = true;
+		await page.route('**/world.openfoodfacts.org/**', async (route) => {
+			if (failNext) {
+				await route.fulfill({ status: 500, body: '' });
+			} else {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ products: [] })
+				});
+			}
+		});
+
+		await page.goto('/nutrition/log');
+		await page.getByTestId('food-search').fill('oats');
+
+		// The distinct failure state appears (not the no-results empty state).
+		await expect(page.getByTestId('search-failed')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('no-results')).toHaveCount(0);
+
+		// Retry after the network recovers resolves to the genuine empty state.
+		failNext = false;
+		await page.getByRole('button', { name: 'Retry search' }).click();
+		await expect(page.getByTestId('no-results')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('search-failed')).toHaveCount(0);
+	});
+
 	test('water tracker shows a daily goal + remaining, and flips to reached', async ({ page }) => {
 		await page.goto('/nutrition');
 

@@ -14112,6 +14112,18 @@ abstract class AppLocalizations {
   /// **'No matches. Try another term or enter it manually below.'**
   String get nutritionNoResults;
 
+  /// No description provided for @nutritionSearchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Search failed. Check your connection, then retry or enter it manually below.'**
+  String get nutritionSearchFailed;
+
+  /// No description provided for @nutritionSearchRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry search'**
+  String get nutritionSearchRetry;
+
   /// No description provided for @nutritionSaveFailed.
   ///
   /// In en, this message translates to:

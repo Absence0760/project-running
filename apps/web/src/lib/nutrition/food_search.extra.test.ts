@@ -112,7 +112,12 @@ test('searchFoods — trims the query before sending it', async () => {
 	assert.ok(!seen.includes('search_terms=++'));
 });
 
-test('searchFoods — a 200 response with malformed JSON yields [] (manual-entry fallback)', async () => {
+test('searchFoods — a 200 response with malformed JSON throws (a garbage body is a failure, not "no matches")', async () => {
 	const fetcher: Fetcher = async () => new Response('not json', { status: 200 });
+	await assert.rejects(() => searchFoods('oats', fetcher));
+});
+
+test('searchFoods — a 200 response with valid JSON but no products is genuinely empty (returns [])', async () => {
+	const fetcher: Fetcher = async () => new Response(JSON.stringify({ products: [] }), { status: 200 });
 	assert.deepEqual(await searchFoods('oats', fetcher), []);
 });

@@ -102,6 +102,43 @@ void main() {
     }
   });
 
+  testWidgets('a failed search shows a retry state, not a misleading "no matches"',
+      (tester) async {
+    final f = await _store('search_fail_');
+    try {
+      var failNext = true;
+      await tester.pumpWidget(_host(f.store, fetcher: (u) async {
+        if (failNext) throw const SocketException('network down');
+        return '{"products": []}';
+      }));
+      await tester.pump();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Search for a food'), 'oats');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+
+      // The distinct failure copy + retry button — NOT the no-results state.
+      expect(find.textContaining('Search failed'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Retry search'), findsOneWidget);
+      expect(find.text('No matches. Try another term or enter it manually below.'),
+          findsNothing);
+
+      // Retry after recovery resolves to the genuine empty state.
+      failNext = false;
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Retry search'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.textContaining('Search failed'), findsNothing);
+      expect(find.text('No matches. Try another term or enter it manually below.'),
+          findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('a failed save surfaces an error and keeps the sheet open',
       (tester) async {
     await tester.pumpWidget(_host(_ThrowingFoodStore()));

@@ -8529,6 +8529,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Sin coincidencias. Prueba otro término o introdúcelo manualmente abajo.';
 
   @override
+  String get nutritionSearchFailed =>
+      'La búsqueda falló. Comprueba tu conexión y vuelve a intentarlo o introdúcelo manualmente abajo.';
+
+  @override
+  String get nutritionSearchRetry => 'Reintentar búsqueda';
+
+  @override
   String get nutritionSaveFailed =>
       'No se pudo registrar la comida. Inténtalo de nuevo.';
 

@@ -8090,6 +8090,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionNoResults => '一致する項目がありません。別の語で検索するか、下から手動で入力してください。';
 
   @override
+  String get nutritionSearchFailed => '検索に失敗しました。接続を確認して再試行するか、下から手動で入力してください。';
+
+  @override
+  String get nutritionSearchRetry => '検索を再試行';
+
+  @override
   String get nutritionSaveFailed => '食事を記録できませんでした。もう一度お試しください。';
 
   @override

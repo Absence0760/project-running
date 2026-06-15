@@ -8549,6 +8549,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun résultat. Essaie un autre terme ou saisis-le manuellement ci-dessous.';
 
   @override
+  String get nutritionSearchFailed =>
+      'Échec de la recherche. Vérifie ta connexion, puis réessaie ou saisis-le manuellement ci-dessous.';
+
+  @override
+  String get nutritionSearchRetry => 'Réessayer la recherche';
+
+  @override
   String get nutritionSaveFailed =>
       'Impossible d\'enregistrer l\'aliment. Réessaie.';
 

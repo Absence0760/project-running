@@ -3349,6 +3349,8 @@ export const messages = {
 	"nutrition.searchPlaceholder": "Busca un alimento…",
 	"nutrition.searching": "Buscando…",
 	"nutrition.noResults": "Sin coincidencias. Prueba otro término o introdúcelo manualmente abajo.",
+	"nutrition.searchFailed": "La búsqueda falló. Comprueba tu conexión y vuelve a intentarlo o introdúcelo manualmente abajo.",
+	"nutrition.searchRetry": "Reintentar búsqueda",
 	"nutrition.mealSlot": "Comida",
 	"nutrition.manualEntry": "Introducir manualmente",
 	"nutrition.itemName": "Nombre del alimento",

@@ -3345,6 +3345,8 @@ export const messages = {
 	"nutrition.searchPlaceholder": "食品を検索…",
 	"nutrition.searching": "検索中…",
 	"nutrition.noResults": "一致する項目がありません。別の語で検索するか、下から手動で入力してください。",
+	"nutrition.searchFailed": "検索に失敗しました。接続を確認して再試行するか、下から手動で入力してください。",
+	"nutrition.searchRetry": "検索を再試行",
 	"nutrition.mealSlot": "食事区分",
 	"nutrition.manualEntry": "手動で入力",
 	"nutrition.itemName": "名称",

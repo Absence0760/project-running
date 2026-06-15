@@ -10223,6 +10223,8 @@
   "nutritionSearchHint": "Search for a food",
   "nutritionSearching": "Searching…",
   "nutritionNoResults": "No matches. Try another term or enter it manually below.",
+  "nutritionSearchFailed": "Search failed. Check your connection, then retry or enter it manually below.",
+  "nutritionSearchRetry": "Retry search",
   "nutritionSaveFailed": "Couldn't log food. Try again.",
   "nutritionMealSlot": "Meal",
   "nutritionManualEntry": "Enter manually",

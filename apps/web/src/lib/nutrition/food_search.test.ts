@@ -108,11 +108,14 @@ test('searchFoods parses a successful response via the injected fetcher', async 
 	assert.equal(out[0].name, 'Rolled Oats');
 });
 
-test('searchFoods returns [] on a non-OK response or a throw (manual-entry fallback)', async () => {
+test('searchFoods throws on a non-OK response (so the caller can show retry, not empty)', async () => {
 	const bad: Fetcher = async () => new Response('', { status: 500 });
-	assert.deepEqual(await searchFoods('oats', bad), []);
+	await assert.rejects(() => searchFoods('oats', bad));
+});
+
+test('searchFoods propagates a network throw (failure is distinct from empty)', async () => {
 	const thrower: Fetcher = async () => {
 		throw new Error('network down');
 	};
-	assert.deepEqual(await searchFoods('oats', thrower), []);
+	await assert.rejects(() => searchFoods('oats', thrower), /network down/);
 });

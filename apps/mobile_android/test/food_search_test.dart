@@ -119,10 +119,19 @@ void main() {
     expect(out[0].name, 'Rolled Oats');
   });
 
-  test('searchFoods returns [] on a throw (manual-entry fallback)', () async {
-    final out = await searchFoods('oats', fetcher: (u) async {
-      throw Exception('network down');
-    });
+  test('searchFoods rethrows a fetch failure (so the caller can show retry, not empty)',
+      () async {
+    expect(
+      () => searchFoods('oats', fetcher: (u) async {
+        throw Exception('network down');
+      }),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('searchFoods on valid-but-empty JSON is genuinely empty (returns [])',
+      () async {
+    final out = await searchFoods('oats', fetcher: (u) async => '{"products": []}');
     expect(out, isEmpty);
   });
 }

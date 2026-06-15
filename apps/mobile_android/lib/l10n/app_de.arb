@@ -2344,6 +2344,8 @@
   "nutritionSearchHint": "Nach einem Lebensmittel suchen",
   "nutritionSearching": "Suche läuft…",
   "nutritionNoResults": "Keine Treffer. Versuche einen anderen Begriff oder gib es unten manuell ein.",
+  "nutritionSearchFailed": "Suche fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut oder gib es unten manuell ein.",
+  "nutritionSearchRetry": "Suche wiederholen",
   "nutritionSaveFailed": "Essen konnte nicht protokolliert werden. Versuche es erneut.",
   "nutritionMealSlot": "Mahlzeit",
   "nutritionManualEntry": "Manuell eingeben",

@@ -2344,6 +2344,8 @@
   "nutritionSearchHint": "食品を検索",
   "nutritionSearching": "検索中…",
   "nutritionNoResults": "一致する項目がありません。別の語で検索するか、下から手動で入力してください。",
+  "nutritionSearchFailed": "検索に失敗しました。接続を確認して再試行するか、下から手動で入力してください。",
+  "nutritionSearchRetry": "検索を再試行",
   "nutritionSaveFailed": "食事を記録できませんでした。もう一度お試しください。",
   "nutritionMealSlot": "食事区分",
   "nutritionManualEntry": "手動で入力",

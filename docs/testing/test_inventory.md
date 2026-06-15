@@ -606,9 +606,9 @@ Pure bridge from the gym data layer (`GymSetWithDate` rows) to the training-load
 
 Pure tests for the Mifflin-St Jeor nutrition target engine (`nutrition_targets.ts`, TS↔Dart parity pair with `apps/mobile_android/lib/nutrition_targets.dart` — equal counts). `mifflinStJeorBmr` (+5 male / −161 female / −78 neutral offset), `computeNutritionTargets` (moderate activity factor, protein 1.8 g/kg, fat 30%, carbs fill the remainder, goal delta, sedentary<very_active, the 1200 kcal floor, null on missing/non-physical metrics), `ageFromDob` (whole-year age decremented before the birthday, null on malformed/out-of-range), and the activity-level factor ordering.
 
-### `apps/web/src/lib/nutrition/food_search.test.ts` — 7 tests
+### `apps/web/src/lib/nutrition/food_search.test.ts` — 9 tests
 
-Pure tests for the Open Food Facts client (`food_search.ts`, injectable-fetcher seam; Dart twin `food_search_test.dart`). `parseOffSearch` maps products + drops nameless/calorie-less ones + keeps the first brand, tolerates string-typed nutriments, returns `[]` on malformed input; `scalePortion` scales per-100g to a gram portion (rounded, 0 g → 0); `searchFoods` skips the fetcher on an empty query, parses a canned response, returns `[]` on a non-OK response or a throw (manual-entry fallback).
+Pure tests for the Open Food Facts client (`food_search.ts`, injectable-fetcher seam; Dart twin `food_search_test.dart`). `parseOffSearch` maps products + drops nameless/calorie-less ones + keeps the first brand, tolerates string-typed nutriments, returns `[]` on malformed input; `scalePortion` scales per-100g to a gram portion (rounded, 0 g → 0); `searchFoods` skips the fetcher on an empty query, parses a canned response, **throws on a non-OK response and propagates a network throw** (so the caller can show a retry state instead of a misleading empty), and treats valid-but-empty JSON as genuinely empty (`[]`). The failure-vs-empty UI split is e2e-pinned in `nutrition.spec.ts`.
 
 ### `apps/web/src/lib/nutrition/nutrition_totals.test.ts` — 4 tests
 

@@ -115,8 +115,10 @@ Future<String> _defaultFetcher(Uri url) async {
   }
 }
 
-/// Search Open Food Facts. Returns [] on a network/parse failure (the caller
-/// falls back to manual entry — logging never blocks on the API being up).
+/// Search Open Food Facts. Returns [] only for a genuinely empty result
+/// set; THROWS on a network / non-2xx / parse failure so the caller can
+/// tell "no matches" apart from "search failed" and offer a retry instead
+/// of a misleading empty state. (An empty query short-circuits to [].)
 Future<List<FoodSearchResult>> searchFoods(
   String query, {
   FoodFetcher? fetcher,
@@ -132,10 +134,6 @@ Future<List<FoodSearchResult>> searchFoods(
     'page_size': '$limit',
     'fields': 'code,product_name,brands,nutriments',
   });
-  try {
-    final body = await (fetcher ?? _defaultFetcher)(url);
-    return parseOffSearch(jsonDecode(body));
-  } catch (_) {
-    return const [];
-  }
+  final body = await (fetcher ?? _defaultFetcher)(url);
+  return parseOffSearch(jsonDecode(body));
 }

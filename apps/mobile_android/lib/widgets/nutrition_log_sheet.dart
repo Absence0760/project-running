@@ -43,6 +43,7 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
   String _mealSlot = 'breakfast';
   bool _searching = false;
   bool _searched = false;
+  bool _searchFailed = false;
   List<FoodSearchResult> _results = const [];
   Timer? _debounce;
   bool _manualOpen = false;
@@ -78,17 +79,33 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
       setState(() {
         _results = const [];
         _searched = false;
+        _searchFailed = false;
       });
       return;
     }
-    setState(() => _searching = true);
-    final res = await searchFoods(q, fetcher: widget.fetcher);
-    if (!mounted) return;
     setState(() {
-      _results = res;
-      _searching = false;
-      _searched = true;
+      _searching = true;
+      _searchFailed = false;
     });
+    try {
+      final res = await searchFoods(q, fetcher: widget.fetcher);
+      if (!mounted) return;
+      setState(() {
+        _results = res;
+        _searching = false;
+        _searched = true;
+      });
+    } catch (_) {
+      // Distinguish a failed search from a genuinely empty one so the user
+      // sees a retry affordance, not a misleading "no matches".
+      if (!mounted) return;
+      setState(() {
+        _results = const [];
+        _searching = false;
+        _searched = true;
+        _searchFailed = true;
+      });
+    }
   }
 
   Future<void> _pick(FoodSearchResult r) async {
@@ -203,6 +220,22 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
                   onTap: _saving ? null : () => _pick(r),
                 ),
               ))
+        else if (_searchFailed)
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.nutritionSearchFailed),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _runSearch,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: Text(l10n.nutritionSearchRetry),
+                ),
+              ],
+            ),
+          )
         else if (_searched)
           Padding(
             padding: const EdgeInsets.all(8),

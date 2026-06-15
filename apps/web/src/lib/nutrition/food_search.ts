@@ -89,8 +89,10 @@ export function scalePortion(per100g: FoodMacros, grams: number): FoodMacros {
 	};
 }
 
-/// Search Open Food Facts. Returns [] on a network/parse failure (the caller
-/// falls back to manual entry — never blocks logging on the DB being up).
+/// Search Open Food Facts. Returns [] only for a genuinely empty result
+/// set; THROWS on a network / non-2xx / parse failure so the caller can
+/// tell "no matches" apart from "search failed" and offer a retry instead
+/// of a misleading empty state. (An empty query short-circuits to [].)
 export async function searchFoods(
 	query: string,
 	fetcher: Fetcher = (u) => fetch(u),
@@ -106,12 +108,7 @@ export async function searchFoods(
 		page_size: String(limit),
 		fields: 'code,product_name,brands,nutriments',
 	});
-	try {
-		const res = await fetcher(`${SEARCH_URL}?${params.toString()}`);
-		if (!res.ok) return [];
-		return parseOffSearch(await res.json());
-	} catch (e) {
-		console.warn('searchFoods failed', e);
-		return [];
-	}
+	const res = await fetcher(`${SEARCH_URL}?${params.toString()}`);
+	if (!res.ok) throw new Error(`Open Food Facts search failed: ${res.status}`);
+	return parseOffSearch(await res.json());
 }

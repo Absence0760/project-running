@@ -14,6 +14,7 @@
 	let searching = $state(false);
 	let results = $state<FoodSearchResult[]>([]);
 	let searched = $state(false);
+	let searchFailed = $state(false);
 
 	// The picked result is confirmed in a portion step before logging. That
 	// step replaces the search view in place (rather than a nested modal) so
@@ -44,11 +45,18 @@
 		if (!q) {
 			results = [];
 			searched = false;
+			searchFailed = false;
 			return;
 		}
 		searching = true;
+		searchFailed = false;
 		try {
 			results = await searchFoods(q);
+		} catch {
+			// Distinguish a failed search from a genuinely empty one so the
+			// user sees a retry affordance, not a misleading "no matches".
+			results = [];
+			searchFailed = true;
 		} finally {
 			searching = false;
 			searched = true;
@@ -184,6 +192,14 @@
 					</li>
 				{/each}
 			</ul>
+		{:else if searchFailed}
+			<div class="results-state empty" data-testid="search-failed" role="status">
+				<span class="material-symbols empty-icon" aria-hidden="true">cloud_off</span>
+				<p class="muted">{m('nutrition.searchFailed')}</p>
+				<button type="button" class="btn btn-outline btn-sm" onclick={() => void runSearch()}>
+					{m('nutrition.searchRetry')}
+				</button>
+			</div>
 		{:else if searched}
 			<div class="results-state empty" data-testid="no-results">
 				<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>

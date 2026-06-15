@@ -8442,6 +8442,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'No matches. Try another term or enter it manually below.';
 
   @override
+  String get nutritionSearchFailed =>
+      'Search failed. Check your connection, then retry or enter it manually below.';
+
+  @override
+  String get nutritionSearchRetry => 'Retry search';
+
+  @override
   String get nutritionSaveFailed => 'Couldn\'t log food. Try again.';
 
   @override

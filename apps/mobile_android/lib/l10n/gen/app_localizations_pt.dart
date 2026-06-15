@@ -8526,6 +8526,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
 
   @override
+  String get nutritionSearchFailed =>
+      'A busca falhou. Verifique sua conexão e tente novamente ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionSearchRetry => 'Tentar busca novamente';
+
+  @override
   String get nutritionSaveFailed =>
       'Não foi possível registrar o alimento. Tente novamente.';
 
@@ -17814,6 +17821,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get nutritionNoResults =>
       'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionSearchFailed =>
+      'A busca falhou. Verifique sua conexão e tente novamente ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionSearchRetry => 'Tentar busca novamente';
 
   @override
   String get nutritionSaveFailed =>

@@ -8534,6 +8534,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Keine Treffer. Versuche einen anderen Begriff oder gib es unten manuell ein.';
 
   @override
+  String get nutritionSearchFailed =>
+      'Suche fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut oder gib es unten manuell ein.';
+
+  @override
+  String get nutritionSearchRetry => 'Suche wiederholen';
+
+  @override
   String get nutritionSaveFailed =>
       'Essen konnte nicht protokolliert werden. Versuche es erneut.';
 
