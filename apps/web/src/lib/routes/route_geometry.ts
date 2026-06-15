@@ -62,6 +62,54 @@ export function interpolateAlongRoute(
 }
 
 /**
+ * Inverse of interpolateAlongRoute: given an arbitrary point, find the
+ * nearest point on the polyline and return its cumulative
+ * distance-along-route in metres (0 = start). Returns null when the
+ * polyline has < 2 waypoints. The runner's live position is rarely
+ * exactly on the planned line (GPS drift, course offset), so we project
+ * onto the nearest segment rather than requiring an exact match.
+ */
+export function distanceAlongRoute(
+	point: { lat: number; lng: number },
+	waypoints: RouteWaypoint[],
+): number | null {
+	if (waypoints.length < 2) return null;
+	const deg = Math.PI / 180;
+	const rPerDeg = 6_371_000 * deg;
+	let seen = 0;
+	let best = 0;
+	let bestPerp = Infinity;
+	for (let i = 1; i < waypoints.length; i++) {
+		const a = waypoints[i - 1];
+		const b = waypoints[i];
+		const segLen = haversineM(a.lat, a.lng, b.lat, b.lng);
+		const cosLat = Math.cos(a.lat * deg);
+		const ax = 0;
+		const ay = 0;
+		const bx = (b.lng - a.lng) * cosLat * rPerDeg;
+		const by = (b.lat - a.lat) * rPerDeg;
+		const px = (point.lng - a.lng) * cosLat * rPerDeg;
+		const py = (point.lat - a.lat) * rPerDeg;
+		const abx = bx - ax;
+		const aby = by - ay;
+		const abLenSq = abx * abx + aby * aby;
+		const t =
+			abLenSq <= 0 ? 0 : Math.min(1, Math.max(0, (px * abx + py * aby) / abLenSq));
+		const projx = ax + abx * t;
+		const projy = ay + aby * t;
+		const dx = px - projx;
+		const dy = py - projy;
+		const perp = Math.sqrt(dx * dx + dy * dy);
+		if (perp < bestPerp) {
+			bestPerp = perp;
+			best = seen + t * segLen;
+		}
+		seen += segLen;
+	}
+	return Math.min(seen, Math.max(0, best));
+}
+
+/**
  * Total polyline length in metres via cumulative haversine. Cheap
  * O(n) — matches the recorder + run-stats helpers elsewhere in the
  * app.

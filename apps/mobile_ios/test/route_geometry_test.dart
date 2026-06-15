@@ -293,4 +293,82 @@ void main() {
       );
     });
   });
+
+  group('distanceAlongRoute — nearest-point inverse', () {
+    Waypoint distWp(double metres) => wp(0, metres / metresPerDegLngAtEquator);
+
+    test('null on < 2 waypoints', () {
+      expect(distanceAlongRoute((lat: 0, lng: 0), const []), isNull);
+      expect(distanceAlongRoute((lat: 0, lng: 0), [wp(0, 0)]), isNull);
+    });
+
+    test('point on a vertex returns its cumulative distance', () {
+      // Three 100-m legs along the equator. The 2nd vertex is at 200 m.
+      final wps = [distWp(0), distWp(100), distWp(200), distWp(300)];
+      final d = distanceAlongRoute((lat: wps[2].lat, lng: wps[2].lng), wps);
+      expect(d, isNotNull);
+      expect(d!, closeTo(200, 1));
+    });
+
+    test('point mid-segment returns the interpolated distance', () {
+      final wps = [distWp(0), distWp(100), distWp(200)];
+      final p = distWp(150);
+      final d = distanceAlongRoute((lat: p.lat, lng: p.lng), wps);
+      expect(d, isNotNull);
+      expect(d!, closeTo(150, 1));
+    });
+
+    test('perpendicular offset still maps to the right along-distance', () {
+      // 50 m north of the 150-m mark — projects back down to 150 m.
+      final wps = [distWp(0), distWp(100), distWp(200)];
+      final offset = (
+        lat: 50 / metresPerDegLngAtEquator,
+        lng: 150 / metresPerDegLngAtEquator,
+      );
+      final d = distanceAlongRoute(offset, wps);
+      expect(d, isNotNull);
+      expect(d!, closeTo(150, 1));
+    });
+
+    test('point near the end maps near totalLength', () {
+      final wps = [distWp(0), distWp(100), distWp(200)];
+      final total = polylineLengthMetres(wps);
+      final p = distWp(199);
+      final d = distanceAlongRoute((lat: p.lat, lng: p.lng), wps);
+      expect(d, isNotNull);
+      expect(d!, closeTo(199, 1));
+      expect(d, lessThanOrEqualTo(total + 1e-6));
+    });
+
+    test('picks the nearest of two close segments', () {
+      // An L: east 100 m then north 100 m. A point just south of the
+      // 50-m mark on the first (horizontal) leg — unambiguously
+      // nearest it, far from the vertical leg.
+      final corner = distWp(100);
+      final up = wp(
+        100 / metresPerDegLngAtEquator,
+        100 / metresPerDegLngAtEquator,
+      );
+      final wps = [distWp(0), corner, up];
+      final probe = (
+        lat: -2 / metresPerDegLngAtEquator,
+        lng: 50 / metresPerDegLngAtEquator,
+      );
+      final d = distanceAlongRoute(probe, wps);
+      expect(d, isNotNull);
+      expect(d!, lessThan(100),
+          reason: 'should project onto the first horizontal leg');
+      expect(d, closeTo(50, 2));
+    });
+
+    test('clamps to [0, totalLength]', () {
+      final wps = [distWp(0), distWp(100), distWp(200)];
+      final total = polylineLengthMetres(wps);
+      final far = distWp(10000);
+      final d = distanceAlongRoute((lat: far.lat, lng: far.lng), wps);
+      expect(d, isNotNull);
+      expect(d, greaterThanOrEqualTo(0));
+      expect(d, lessThanOrEqualTo(total + 1e-6));
+    });
+  });
 }
