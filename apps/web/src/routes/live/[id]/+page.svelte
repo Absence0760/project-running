@@ -8,6 +8,10 @@
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { formatPace, formatDistance } from '$lib/core/mock-data';
 	import { formatDuration } from '$lib/format/time';
+	import { fetchRouteById, fetchRouteMarkers } from '$lib/core/data';
+	import { buildRoadbook, type RoadbookLeg } from '$lib/routes/roadbook';
+	import { distanceAlongRoute, type RouteWaypoint } from '$lib/routes/route_geometry';
+	import { nextCutoffEta } from '$lib/runs/live_cutoff_eta';
 	import { supabase } from '$lib/core/supabase';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import {
@@ -59,6 +63,43 @@
 	let freshnessTicker: ReturnType<typeof setInterval> | null = null;
 	const freshness = $derived(lastPingAtMs != null ? freshnessFor(lastPingAtMs, nowMs) : null);
 	const isStale = $derived(freshness?.stale ?? false);
+
+	// Next cut-off card state. Only wired when the run links a PUBLIC route
+	// (public_runs nulls route_id otherwise) that carries >=1 cutoff marker.
+	// `routeWaypoints` + `cutoffLegs` are seeded once on load; the runner's
+	// latest position + a small recent-pings buffer drive the live ETA.
+	let routeWaypoints = $state<RouteWaypoint[]>([]);
+	let cutoffLegs = $state<RoadbookLeg[]>([]);
+	let latestPosition = $state<{ lat: number; lng: number } | null>(null);
+	let recentPings = $state<Array<{ distance_m: number; elapsed_s: number }>>([]);
+	const hasCutoffRoute = $derived(cutoffLegs.some((l) => l.cutoff != null));
+
+	const recentPaceSecPerKm = $derived.by((): number | null => {
+		if (recentPings.length < 2) return null;
+		const oldest = recentPings[0];
+		const newest = recentPings[recentPings.length - 1];
+		const dDist = newest.distance_m - oldest.distance_m;
+		const dElapsed = newest.elapsed_s - oldest.elapsed_s;
+		if (dDist <= 0) return null;
+		return dElapsed / (dDist / 1000);
+	});
+
+	const distAlongRouteM = $derived.by((): number | null => {
+		if (!latestPosition || routeWaypoints.length < 2) return null;
+		return distanceAlongRoute(latestPosition, routeWaypoints);
+	});
+
+	const eta = $derived(
+		hasCutoffRoute
+			? nextCutoffEta({
+					distAlongRouteM: distAlongRouteM ?? 0,
+					elapsedS: elapsed,
+					recentPaceSecPerKm,
+					legs: cutoffLegs,
+					stale: isStale,
+				})
+			: null,
+	);
 	let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 	// Go live-hub teardown handle. Held alongside `realtimeChannel`
 	// because exactly one of the two transports is active per session
@@ -142,6 +183,17 @@
 		if (ping.distance_m != null) distance = ping.distance_m;
 		if (ping.elapsed_s != null) elapsed = ping.elapsed_s;
 		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
+
+		// Feed the next-cut-off card: latest fix + a 5-ping recent buffer
+		// (only pings that carry both odometer fields, so the pace delta is
+		// real). Reassigned (not mutated) so the $derived ETA recomputes.
+		latestPosition = { lat: ping.lat, lng: ping.lng };
+		if (ping.distance_m != null && ping.elapsed_s != null) {
+			recentPings = [
+				...recentPings,
+				{ distance_m: ping.distance_m, elapsed_s: ping.elapsed_s },
+			].slice(-5);
+		}
 
 		if (!map) return;
 		ensureMarker(ping.lat, ping.lng);
@@ -300,6 +352,7 @@
 		started_at: string;
 		duration_s: number;
 		distance_m: number;
+		route_id: string | null;
 	};
 	let visibleRun: VisibleRun | null = null;
 
@@ -309,7 +362,7 @@
 		// exposes (decisions §33, migration 20260626_001).
 		const { data: row, error } = await supabase
 			.from('public_runs')
-			.select('id, user_id, started_at, duration_s, distance_m')
+			.select('id, user_id, started_at, duration_s, distance_m, route_id')
 			.eq('id', data.id)
 			.maybeSingle();
 		if (error || !row) {
@@ -321,6 +374,7 @@
 			started_at: row.started_at as string,
 			duration_s: Number(row.duration_s ?? 0),
 			distance_m: Number(row.distance_m ?? 0),
+			route_id: (row.route_id as string | null) ?? null,
 		};
 		if (row.user_id) {
 			// `public_profile_by_id` SECURITY DEFINER RPC — replaces
@@ -376,6 +430,52 @@
 		return true;
 	}
 
+	// Load the linked public route + its course markers and build the
+	// roadbook legs ONCE, so the live ETA can re-project against a stable
+	// cutoff timeline. The roadbook's cutoff `limitElapsedS` is independent
+	// of `goalSeconds`, so any positive goal works — we use the run's saved
+	// duration (the broadcaster's plan) and fall back to the elapsed-so-far
+	// or one hour. Start clock is the run's local start time. Auxiliary —
+	// wrapped so a failed route / marker fetch never disturbs the core
+	// spectator surface (layered-resilience contract).
+	async function loadRouteCutoffs(run: VisibleRun) {
+		if (!run.route_id) return;
+		try {
+			const [route, markers] = await Promise.all([
+				fetchRouteById(run.route_id),
+				fetchRouteMarkers(run.route_id),
+			]);
+			const waypoints = (route?.waypoints ?? []) as RouteWaypoint[];
+			if (waypoints.length < 2) return;
+			const start = new Date(run.started_at);
+			const startClockMin = Number.isFinite(start.getTime())
+				? start.getHours() * 60 + start.getMinutes()
+				: null;
+			const roadbook = buildRoadbook(
+				waypoints.map((w) => ({
+					lat: w.lat,
+					lng: w.lng,
+					ele: w.elevation_m ?? null,
+				})),
+				markers.map((mk) => ({
+					position_m: (mk as { position_m: number | null }).position_m ?? null,
+					kind: mk.kind,
+					label: mk.label,
+					meta: mk.meta,
+				})),
+				{
+					goalSeconds: run.duration_s || elapsed || 3600,
+					startClockMin,
+					model: 'even',
+				},
+			);
+			routeWaypoints = waypoints;
+			cutoffLegs = roadbook.legs;
+		} catch (err) {
+			console.warn('next cut-off card: route load failed', err);
+		}
+	}
+
 	// A run is treated as already finished if its saved duration places
 	// its end >2 minutes in the past. The 2 min slack covers the gap
 	// between the last ping and the recorder posting the final row +
@@ -409,6 +509,7 @@
 			currentAccessToken =
 				(await supabase.auth.getSession()).data.session?.access_token ?? null;
 			if (!(await ensureRunIsVisible())) return;
+			if (visibleRun) void loadRouteCutoffs(visibleRun);
 			if (visibleRun && runIsFinished(visibleRun)) {
 				distance = visibleRun.distance_m;
 				elapsed = visibleRun.duration_s;
@@ -596,6 +697,46 @@
 				</div>
 			</div>
 		</section>
+
+			{#if hasCutoffRoute && eta?.checkpoint}
+				<section
+					class="cutoff-card"
+					class:on={eta.status === 'on'}
+					class:tight={eta.status === 'tight'}
+					class:behind={eta.status === 'behind'}
+					aria-label={m('live.cutoffTitle')}
+				>
+					<div class="cutoff-head">
+						<span class="cutoff-title">{m('live.cutoffTitle')}</span>
+						<span class="cutoff-checkpoint">{eta.checkpoint.label}</span>
+					</div>
+					<div class="cutoff-body">
+						<div class="cutoff-metrics">
+							<span class="cutoff-togo"
+								>{m('live.cutoffToGo', { d: formatDistance(eta.distanceToM) })}</span
+							>
+							{#if eta.status !== 'unknown' && eta.projectedArrivalElapsedS != null}
+								<span class="cutoff-eta"
+									>{m('live.cutoffEta', {
+										t: formatDuration(eta.projectedArrivalElapsedS),
+									})}</span
+								>
+							{/if}
+						</div>
+						{#if eta.status === 'unknown'}
+							<span class="cutoff-waiting">{m('live.cutoffWaitingSignal')}</span>
+						{:else if eta.marginS != null}
+							<span class="cutoff-chip">
+								{#if eta.status === 'behind'}
+									{m('live.cutoffBehind', { n: formatDuration(Math.abs(eta.marginS)) })}
+								{:else}
+									{m('live.cutoffAhead', { n: formatDuration(Math.abs(eta.marginS)) })}
+								{/if}
+							</span>
+						{/if}
+					</div>
+				</section>
+			{/if}
 
 		<div class="live-map-wrap">
 			{#if mapConsented}
@@ -894,6 +1035,98 @@
 		.live-runner-name {
 			font-size: 0.9rem;
 		}
+	}
+
+	.cutoff-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		padding: var(--space-md) var(--space-xl);
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+		border-left: 4px solid var(--color-border);
+	}
+	.cutoff-card.on {
+		border-left-color: var(--color-success);
+	}
+	.cutoff-card.tight {
+		border-left-color: var(--color-warning);
+	}
+	.cutoff-card.behind {
+		border-left-color: var(--color-danger);
+	}
+	.cutoff-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
+	.cutoff-title {
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-weight: 700;
+		color: var(--color-text-tertiary);
+	}
+	.cutoff-checkpoint {
+		font-size: 1rem;
+		font-weight: 700;
+		color: var(--color-text);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.cutoff-body {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+	}
+	.cutoff-metrics {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-md);
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
+		font-size: 0.92rem;
+	}
+	.cutoff-togo {
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.cutoff-chip {
+		display: inline-flex;
+		align-items: center;
+		padding: var(--space-2xs) var(--space-md);
+		border-radius: 9999px;
+		font-size: 0.78rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
+		border: 1px solid var(--color-border);
+	}
+	.cutoff-card.on .cutoff-chip {
+		background: var(--color-success-light);
+		color: var(--color-success);
+		border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+	}
+	.cutoff-card.tight .cutoff-chip {
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning);
+		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+	}
+	.cutoff-card.behind .cutoff-chip {
+		background: var(--color-danger-light);
+		color: var(--color-danger);
+		border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+	}
+	.cutoff-waiting {
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+		font-style: italic;
 	}
 
 	.live-map-wrap {
