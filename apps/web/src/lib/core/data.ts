@@ -4413,7 +4413,13 @@ export async function fetchFollowingFeed(
 				`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
 			);
 		}
-		const { data } = await q;
+		// Surface the error: a swallowed `{ data: null }` (5xx, RLS, gateway
+		// in-clause overflow) is indistinguishable from a genuinely empty
+		// feed, so the caller's try/catch could never show the load-failed
+		// toast — a silent blank feed. Throw so SocialFeed / the profile feed
+		// render the error state instead.
+		const { data, error } = await q;
+		if (error) throw error;
 		return (data ?? []) as Run[];
 	};
 
@@ -4534,7 +4540,10 @@ async function fetchFollowingLifts(
 				`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
 			);
 		}
-		const { data } = await q;
+		// Surface the error rather than coercing a failed read to an empty
+		// page — see the matching note in fetchFollowingFeed's queryChunk.
+		const { data, error } = await q;
+		if (error) throw error;
 		return (data ?? []) as {
 			id: string;
 			user_id: string;
