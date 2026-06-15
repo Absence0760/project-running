@@ -97,6 +97,78 @@ export type Database = {
         }
         Relationships: []
       }
+      checkpoint_crossings: {
+        Row: {
+          bib: string | null
+          body_weight_kg: number | null
+          body_weight_pct: number | null
+          checkpoint_id: string
+          event_id: string
+          id: string
+          in_time: string | null
+          instance_start: string
+          medical_hold: boolean
+          medical_note: string | null
+          out_time: string | null
+          recorded_at: string
+          recorded_by: string | null
+          runner_name: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          bib?: string | null
+          body_weight_kg?: number | null
+          body_weight_pct?: number | null
+          checkpoint_id: string
+          event_id: string
+          id?: string
+          in_time?: string | null
+          instance_start: string
+          medical_hold?: boolean
+          medical_note?: string | null
+          out_time?: string | null
+          recorded_at?: string
+          recorded_by?: string | null
+          runner_name?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          bib?: string | null
+          body_weight_kg?: number | null
+          body_weight_pct?: number | null
+          checkpoint_id?: string
+          event_id?: string
+          id?: string
+          in_time?: string | null
+          instance_start?: string
+          medical_hold?: boolean
+          medical_note?: string | null
+          out_time?: string | null
+          recorded_at?: string
+          recorded_by?: string | null
+          runner_name?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_crossings_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "event_checkpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkpoint_crossings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_members: {
         Row: {
           activity_waiver_ack_at: string | null
@@ -485,6 +557,66 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "event_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_checkpoints: {
+        Row: {
+          created_at: string
+          created_by: string
+          cutoff_clock: string | null
+          cutoff_elapsed_s: number | null
+          event_id: string
+          id: string
+          name: string
+          ordinal: number
+          position_m: number | null
+          requires_weigh_in: boolean
+          route_marker_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          cutoff_clock?: string | null
+          cutoff_elapsed_s?: number | null
+          event_id: string
+          id?: string
+          name: string
+          ordinal: number
+          position_m?: number | null
+          requires_weigh_in?: boolean
+          route_marker_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          cutoff_clock?: string | null
+          cutoff_elapsed_s?: number | null
+          event_id?: string
+          id?: string
+          name?: string
+          ordinal?: number
+          position_m?: number | null
+          requires_weigh_in?: boolean
+          route_marker_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_checkpoints_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_checkpoints_route_marker_id_fkey"
+            columns: ["route_marker_id"]
+            isOneToOne: false
+            referencedRelation: "route_markers"
             referencedColumns: ["id"]
           },
         ]
@@ -3570,6 +3702,33 @@ export type Database = {
           going_count: number
         }[]
       }
+      fetch_checkpoint_crossings_for_organiser: {
+        Args: { p_event_id: string; p_instance_start: string }
+        Returns: {
+          bib: string | null
+          body_weight_kg: number | null
+          body_weight_pct: number | null
+          checkpoint_id: string
+          event_id: string
+          id: string
+          in_time: string | null
+          instance_start: string
+          medical_hold: boolean
+          medical_note: string | null
+          out_time: string | null
+          recorded_at: string
+          recorded_by: string | null
+          runner_name: string | null
+          updated_at: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "checkpoint_crossings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       fetch_pending_reports: {
         Args: never
         Returns: {
@@ -4153,6 +4312,47 @@ export type Database = {
         Returns: boolean
       }
       unblock_user: { Args: { p_target: string }; Returns: undefined }
+      upsert_checkpoint_crossing: {
+        Args: {
+          p_bib?: string
+          p_body_weight_kg?: number
+          p_body_weight_pct?: number
+          p_checkpoint_id: string
+          p_event_id: string
+          p_health_consent?: boolean
+          p_in_time?: string
+          p_instance_start: string
+          p_medical_hold?: boolean
+          p_medical_note?: string
+          p_out_time?: string
+          p_runner_name?: string
+          p_user_id?: string
+        }
+        Returns: {
+          bib: string | null
+          body_weight_kg: number | null
+          body_weight_pct: number | null
+          checkpoint_id: string
+          event_id: string
+          id: string
+          in_time: string | null
+          instance_start: string
+          medical_hold: boolean
+          medical_note: string | null
+          out_time: string | null
+          recorded_at: string
+          recorded_by: string | null
+          runner_name: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "checkpoint_crossings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       weekly_mileage: {
         Args: { weeks_back?: number }
         Returns: {

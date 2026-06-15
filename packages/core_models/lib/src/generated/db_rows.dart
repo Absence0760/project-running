@@ -47,6 +47,97 @@ class BodyMetricRow {
   };
 }
 
+/// Row shape for the `checkpoint_crossings` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class CheckpointCrossingRow {
+  static const String table = 'checkpoint_crossings';
+  static const String colId = 'id';
+  static const String colEventId = 'event_id';
+  static const String colInstanceStart = 'instance_start';
+  static const String colUserId = 'user_id';
+  static const String colBib = 'bib';
+  static const String colRunnerName = 'runner_name';
+  static const String colInTime = 'in_time';
+  static const String colOutTime = 'out_time';
+  static const String colBodyWeightKg = 'body_weight_kg';
+  static const String colBodyWeightPct = 'body_weight_pct';
+  static const String colMedicalHold = 'medical_hold';
+  static const String colMedicalNote = 'medical_note';
+  static const String colRecordedBy = 'recorded_by';
+  static const String colRecordedAt = 'recorded_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String eventId;
+  final DateTime instanceStart;
+  final String? userId;
+  final String? bib;
+  final String? runnerName;
+  final DateTime? inTime;
+  final DateTime? outTime;
+  final double? bodyWeightKg;
+  final double? bodyWeightPct;
+  final bool medicalHold;
+  final String? medicalNote;
+  final String? recordedBy;
+  final DateTime recordedAt;
+  final DateTime updatedAt;
+
+  const CheckpointCrossingRow({
+    required this.id,
+    required this.eventId,
+    required this.instanceStart,
+    this.userId,
+    this.bib,
+    this.runnerName,
+    this.inTime,
+    this.outTime,
+    this.bodyWeightKg,
+    this.bodyWeightPct,
+    required this.medicalHold,
+    this.medicalNote,
+    this.recordedBy,
+    required this.recordedAt,
+    required this.updatedAt,
+  });
+
+  factory CheckpointCrossingRow.fromJson(Map<String, dynamic> json) => CheckpointCrossingRow(
+    id: json['id'] as String,
+    eventId: json['event_id'] as String,
+    instanceStart: DateTime.parse(json['instance_start'] as String),
+    userId: json['user_id'] as String?,
+    bib: json['bib'] as String?,
+    runnerName: json['runner_name'] as String?,
+    inTime: json['in_time'] == null ? null : DateTime.parse(json['in_time'] as String),
+    outTime: json['out_time'] == null ? null : DateTime.parse(json['out_time'] as String),
+    bodyWeightKg: (json['body_weight_kg'] as num?)?.toDouble(),
+    bodyWeightPct: (json['body_weight_pct'] as num?)?.toDouble(),
+    medicalHold: (json['medical_hold'] as bool?) ?? false,
+    medicalNote: json['medical_note'] as String?,
+    recordedBy: json['recorded_by'] as String?,
+    recordedAt: DateTime.parse(json['recorded_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colEventId: eventId,
+    colInstanceStart: instanceStart.toIso8601String(),
+    colUserId: userId,
+    colBib: bib,
+    colRunnerName: runnerName,
+    colInTime: inTime?.toIso8601String(),
+    colOutTime: outTime?.toIso8601String(),
+    colBodyWeightKg: bodyWeightKg,
+    colBodyWeightPct: bodyWeightPct,
+    colMedicalHold: medicalHold,
+    colMedicalNote: medicalNote,
+    colRecordedBy: recordedBy,
+    colRecordedAt: recordedAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `club_members` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class ClubMemberRow {
@@ -496,6 +587,82 @@ class EventAttendeeRow {
     colInstanceStart: instanceStart.toIso8601String(),
     colOrderId: orderId,
     colAttendance: attendance,
+  };
+}
+
+/// Row shape for the `event_checkpoints` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class EventCheckpointRow {
+  static const String table = 'event_checkpoints';
+  static const String colId = 'id';
+  static const String colEventId = 'event_id';
+  static const String colName = 'name';
+  static const String colOrdinal = 'ordinal';
+  static const String colRouteMarkerId = 'route_marker_id';
+  static const String colPositionM = 'position_m';
+  static const String colCutoffElapsedS = 'cutoff_elapsed_s';
+  static const String colCutoffClock = 'cutoff_clock';
+  static const String colRequiresWeighIn = 'requires_weigh_in';
+  static const String colCreatedBy = 'created_by';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String eventId;
+  final String name;
+  final int ordinal;
+  final String? routeMarkerId;
+  final double? positionM;
+  final int? cutoffElapsedS;
+  final String? cutoffClock;
+  final bool requiresWeighIn;
+  final String createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const EventCheckpointRow({
+    required this.id,
+    required this.eventId,
+    required this.name,
+    required this.ordinal,
+    this.routeMarkerId,
+    this.positionM,
+    this.cutoffElapsedS,
+    this.cutoffClock,
+    required this.requiresWeighIn,
+    required this.createdBy,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory EventCheckpointRow.fromJson(Map<String, dynamic> json) => EventCheckpointRow(
+    id: json['id'] as String,
+    eventId: json['event_id'] as String,
+    name: json['name'] as String,
+    ordinal: (json['ordinal'] as num).toInt(),
+    routeMarkerId: json['route_marker_id'] as String?,
+    positionM: (json['position_m'] as num?)?.toDouble(),
+    cutoffElapsedS: (json['cutoff_elapsed_s'] as num?)?.toInt(),
+    cutoffClock: json['cutoff_clock'] as String?,
+    requiresWeighIn: (json['requires_weigh_in'] as bool?) ?? false,
+    createdBy: json['created_by'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colEventId: eventId,
+    colName: name,
+    colOrdinal: ordinal,
+    colRouteMarkerId: routeMarkerId,
+    colPositionM: positionM,
+    colCutoffElapsedS: cutoffElapsedS,
+    colCutoffClock: cutoffClock,
+    colRequiresWeighIn: requiresWeighIn,
+    colCreatedBy: createdBy,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
 

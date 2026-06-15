@@ -115,6 +115,8 @@ const _tables = <String>{
   'session_plans',
   'session_plan_blocks',
   'session_plan_items',
+  'event_checkpoints',
+  'checkpoint_crossings',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule
