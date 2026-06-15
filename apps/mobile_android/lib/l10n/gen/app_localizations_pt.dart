@@ -2334,6 +2334,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailShareAsKml => 'Compartilhar como KML';
 
   @override
+  String get routeDetailShareAsGpxMarkers =>
+      'Compartilhar como GPX + marcadores';
+
+  @override
   String get routeDetailRemoveOfflineSave => 'Remover salvamento offline';
 
   @override
@@ -11591,6 +11595,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeDetailShareAsKml => 'Compartilhar como KML';
+
+  @override
+  String get routeDetailShareAsGpxMarkers =>
+      'Compartilhar como GPX + marcadores';
 
   @override
   String get routeDetailRemoveOfflineSave => 'Remover salvamento offline';

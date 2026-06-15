@@ -2693,6 +2693,10 @@
   "@routeDetailShareAsKml": {
     "description": "Share-menu option to share the route as a KML file"
   },
+  "routeDetailShareAsGpxMarkers": "Share as GPX + markers",
+  "@routeDetailShareAsGpxMarkers": {
+    "description": "Share-menu option to share the route as a GPX file including the course markers (aid stations, cutoffs) as waypoints"
+  },
   "routeDetailRemoveOfflineSave": "Remove offline save",
   "@routeDetailRemoveOfflineSave": {
     "description": "Tooltip on the offline-pin button when the route is pinned"

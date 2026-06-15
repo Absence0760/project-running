@@ -635,6 +635,7 @@
   "routeDetailShareAsImage": "Als Bild teilen",
   "routeDetailShareAsGpx": "Als GPX teilen",
   "routeDetailShareAsKml": "Als KML teilen",
+  "routeDetailShareAsGpxMarkers": "Als GPX + Markierungen teilen",
   "routeDetailRemoveOfflineSave": "Offline-Speicherung entfernen",
   "routeDetailSaveForOffline": "Für offline speichern",
   "routeDetailUnstarRoute": "Markierung der Route entfernen",

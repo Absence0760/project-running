@@ -635,6 +635,7 @@
   "routeDetailShareAsImage": "Compartilhar como imagem",
   "routeDetailShareAsGpx": "Compartilhar como GPX",
   "routeDetailShareAsKml": "Compartilhar como KML",
+  "routeDetailShareAsGpxMarkers": "Compartilhar como GPX + marcadores",
   "routeDetailRemoveOfflineSave": "Remover salvamento offline",
   "routeDetailSaveForOffline": "Salvar para uso offline",
   "routeDetailUnstarRoute": "Remover estrela da rota",

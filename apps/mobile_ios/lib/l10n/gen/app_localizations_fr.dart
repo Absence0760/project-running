@@ -2342,6 +2342,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeDetailShareAsKml => 'Partager en KML';
 
   @override
+  String get routeDetailShareAsGpxMarkers => 'Partager en GPX + repères';
+
+  @override
   String get routeDetailRemoveOfflineSave =>
       'Supprimer l\'enregistrement hors ligne';
 

@@ -635,6 +635,7 @@
   "routeDetailShareAsImage": "Partager en image",
   "routeDetailShareAsGpx": "Partager en GPX",
   "routeDetailShareAsKml": "Partager en KML",
+  "routeDetailShareAsGpxMarkers": "Partager en GPX + repères",
   "routeDetailRemoveOfflineSave": "Supprimer l'enregistrement hors ligne",
   "routeDetailSaveForOffline": "Enregistrer pour une utilisation hors ligne",
   "routeDetailUnstarRoute": "Retirer l'itinéraire des favoris",

@@ -2336,6 +2336,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailShareAsKml => 'Compartir como KML';
 
   @override
+  String get routeDetailShareAsGpxMarkers => 'Compartir como GPX + marcadores';
+
+  @override
   String get routeDetailRemoveOfflineSave => 'Quitar guardado sin conexión';
 
   @override

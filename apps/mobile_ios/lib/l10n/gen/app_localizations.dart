@@ -3917,6 +3917,12 @@ abstract class AppLocalizations {
   /// **'Share as KML'**
   String get routeDetailShareAsKml;
 
+  /// Share-menu option to share the route as a GPX file including the course markers (aid stations, cutoffs) as waypoints
+  ///
+  /// In en, this message translates to:
+  /// **'Share as GPX + markers'**
+  String get routeDetailShareAsGpxMarkers;
+
   /// Tooltip on the offline-pin button when the route is pinned
   ///
   /// In en, this message translates to:

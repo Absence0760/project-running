@@ -18,6 +18,7 @@ import '../preferences.dart';
 import '../route_describe_client.dart';
 import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
+import '../route_gpx.dart';
 import '../social_service.dart' show ClubView, SocialService;
 import 'roadbook_screen.dart';
 import '../widgets/live_run_map.dart';
@@ -705,6 +706,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               PopupMenuItem(
                   value: 'image', child: Text(l10n.routeDetailShareAsImage)),
               PopupMenuItem(value: 'gpx', child: Text(l10n.routeDetailShareAsGpx)),
+              PopupMenuItem(
+                  value: 'gpx_markers',
+                  child: Text(l10n.routeDetailShareAsGpxMarkers)),
               PopupMenuItem(value: 'kml', child: Text(l10n.routeDetailShareAsKml)),
             ],
           ),
@@ -1215,9 +1219,35 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               .replaceAll(RegExp(r'\s+'), '_');
       final base = safe.isEmpty ? 'route' : safe;
       final isKml = format == 'kml';
-      final file = File('${tmp.path}/$base.${isKml ? 'kml' : 'gpx'}');
-      await file.writeAsString(
-          isKml ? _routeToKml(route) : _routeToGpx(route));
+      final withMarkers = format == 'gpx_markers';
+
+      // Fetch the raw course markers on demand so the waypoints land in
+      // the export. A failure (offline / RLS) must never sink the share —
+      // fall back to a line-only GPX.
+      var markers = <cm.RouteMarkerRow>[];
+      if (withMarkers) {
+        try {
+          markers =
+              await widget.apiClient?.fetchRouteMarkers(widget.route.id) ??
+                  <cm.RouteMarkerRow>[];
+        } catch (e) {
+          debugPrint('shareAs gpx_markers: fetchRouteMarkers failed: $e');
+        }
+      }
+
+      final fileName = withMarkers
+          ? '${base}_with_markers.gpx'
+          : '$base.${isKml ? 'kml' : 'gpx'}';
+      final file = File('${tmp.path}/$fileName');
+      final String contents;
+      if (isKml) {
+        contents = _routeToKml(route);
+      } else if (withMarkers) {
+        contents = routeGpxFromRoute(route, markers);
+      } else {
+        contents = _routeToGpx(route);
+      }
+      await file.writeAsString(contents);
       await Share.shareXFiles(
         [
           XFile(file.path,
@@ -1442,6 +1472,31 @@ String _routeToGpx(cm.Route route) {
   buf.writeln('  </trk>');
   buf.writeln('</gpx>');
   return buf.toString();
+}
+
+/// Build the course-waypoint GPX for a route: the (privacy-clipped) line
+/// plus one `<wpt>` per course marker. Pure composition over
+/// `toRouteGpxWithMarkers` so the share path stays testable without file
+/// IO. `[lng, lat]` order matches the shared emitter.
+String routeGpxFromRoute(cm.Route route, List<cm.RouteMarkerRow> markers) {
+  final coordinates = <List<double>>[];
+  final elevations = <double>[];
+  for (final w in route.waypoints) {
+    coordinates.add([w.lng, w.lat]);
+    elevations.add((w.elevationMetres ?? 0).toDouble());
+  }
+  final gpxMarkers = markers
+      .map((m) => RouteGpxMarker(
+            label: m.label,
+            lat: m.lat,
+            lng: m.lng,
+            kind: m.kind,
+            meta: m.meta is Map
+                ? (m.meta as Map).cast<String, dynamic>()
+                : <String, dynamic>{},
+          ))
+      .toList();
+  return toRouteGpxWithMarkers(route.name, coordinates, elevations, gpxMarkers);
 }
 
 /// Horizontal scrubber for previewing a route's direction. Hosted

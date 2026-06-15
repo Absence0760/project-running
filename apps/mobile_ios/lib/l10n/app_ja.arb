@@ -635,6 +635,7 @@
   "routeDetailShareAsImage": "画像として共有",
   "routeDetailShareAsGpx": "GPX として共有",
   "routeDetailShareAsKml": "KML として共有",
+  "routeDetailShareAsGpxMarkers": "GPX + マーカーとして共有",
   "routeDetailRemoveOfflineSave": "オフライン保存を解除",
   "routeDetailSaveForOffline": "オフライン用に保存",
   "routeDetailUnstarRoute": "ルートのスターを外す",

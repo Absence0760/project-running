@@ -2197,6 +2197,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailShareAsKml => 'KML として共有';
 
   @override
+  String get routeDetailShareAsGpxMarkers => 'GPX + マーカーとして共有';
+
+  @override
   String get routeDetailRemoveOfflineSave => 'オフライン保存を解除';
 
   @override
