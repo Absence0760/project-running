@@ -2697,3 +2697,90 @@ INSERT INTO food_log (user_id, started_at, item_name, meal_slot, calories, prote
 INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata) VALUES
   ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '3 hours', 1980, 8000.0, 'app', false,
     '{"activity_type":"run","title":"Morning easy 8K","avg_bpm":148,"steps":9800}'::jsonb);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Club templates for Richmond Run Club — so the Templates tab is populated.
+--
+-- runner@test.com owns Richmond Run Club, so these club-owned templates appear
+-- in the club's Templates tab (Training plan / Session / Gym routine sections),
+-- are adoptable by members, and (being authored by runner) also surface on the
+-- owner's own /plans, /sessions, and /gym/routines lists. Fixed ids keep the
+-- reset idempotent.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- ── Training plan template ──────────────────────────────────────────────────
+-- is_template = true + club_id set. status must not be 'active' (a template
+-- can't claim the per-user active-plan slot — migration 20260524_001).
+INSERT INTO training_plans (
+  id, user_id, name, goal_event, goal_distance_m, goal_time_seconds,
+  start_date, end_date, days_per_week, vdot, current_5k_seconds,
+  status, source, is_template, club_id, rules, notes
+) VALUES (
+  'a1a1eada-bbbb-0000-0000-000000000001',
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  'Beginner 5K — Club Plan',
+  'distance_5k', 5000, 1800,
+  '2026-01-05', '2026-02-15', 3, 40.0, 1800,
+  'completed', 'manual', true, 'c1111111-0000-0000-0000-000000000001',
+  '["Run/walk early, build to continuous","Two easy runs + one long run each week","Rest days are part of the plan"]'::jsonb,
+  'A gentle six-week introduction to 5K for new club members.'
+);
+
+INSERT INTO plan_weeks (id, plan_id, week_index, phase, target_volume_m, notes) VALUES
+  ('a1aa0b01-0000-0000-0000-000000000001', 'a1a1eada-bbbb-0000-0000-000000000001', 0, 'base',  9000, 'Run/walk intervals'),
+  ('a1aa0b02-0000-0000-0000-000000000002', 'a1a1eada-bbbb-0000-0000-000000000001', 1, 'base', 11000, 'Build continuous time on feet');
+
+INSERT INTO plan_workouts (week_id, scheduled_date, kind, target_distance_m, target_pace_sec_per_km, target_pace_tolerance_sec, pace_zone, notes) VALUES
+  ('a1aa0b01-0000-0000-0000-000000000001', '2026-01-06', 'easy', 3000, 420, 30, 'E', 'Run 2 min / walk 1 min x6'),
+  ('a1aa0b01-0000-0000-0000-000000000001', '2026-01-08', 'easy', 3000, 420, 30, 'E', 'Run 2 min / walk 1 min x6'),
+  ('a1aa0b01-0000-0000-0000-000000000001', '2026-01-10', 'long', 3500, 420, 45, 'E', 'Long run/walk, conversational'),
+  ('a1aa0b02-0000-0000-0000-000000000002', '2026-01-13', 'easy', 3500, 410, 30, 'E', 'Run 3 min / walk 1 min x5'),
+  ('a1aa0b02-0000-0000-0000-000000000002', '2026-01-15', 'easy', 3500, 410, 30, 'E', 'Run 3 min / walk 1 min x5'),
+  ('a1aa0b02-0000-0000-0000-000000000002', '2026-01-17', 'long', 4000, 410, 45, 'E', 'Long run/walk');
+
+-- ── Session plan template (yoga) ────────────────────────────────────────────
+-- item.position is plan-global (the flat insert index), not per-block; blocks
+-- carry their own 0..n position. Ordering below is the display order.
+INSERT INTO session_plans (id, author_id, club_id, title, discipline, equipment, est_duration_min, is_public) VALUES
+  ('5e551011-0000-0000-0000-000000000001',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'c1111111-0000-0000-0000-000000000001',
+   'Post-Run Recovery Flow', 'Vinyasa Yoga', 'Mat', 30, false);
+
+INSERT INTO session_plan_blocks (id, plan_id, position, name) VALUES
+  ('b10c0001-0000-0000-0000-000000000001', '5e551011-0000-0000-0000-000000000001', 0, 'Warm-up'),
+  ('b10c0002-0000-0000-0000-000000000002', '5e551011-0000-0000-0000-000000000001', 1, 'Standing'),
+  ('b10c0003-0000-0000-0000-000000000003', '5e551011-0000-0000-0000-000000000001', 2, 'Cool-down');
+
+INSERT INTO session_plan_items (plan_id, block_id, position, movement_name, kind, duration_s, reps, per_side, cue) VALUES
+  ('5e551011-0000-0000-0000-000000000001', 'b10c0001-0000-0000-0000-000000000001', 0, 'Child''s Pose', 'hold', 60, null, false, 'Breathe into the lower back'),
+  ('5e551011-0000-0000-0000-000000000001', 'b10c0001-0000-0000-0000-000000000001', 1, 'Cat-Cow', 'flow', 45, null, false, 'Move with the breath'),
+  ('5e551011-0000-0000-0000-000000000001', 'b10c0002-0000-0000-0000-000000000002', 2, 'Low Lunge', 'hold', 45, null, true, 'Sink the hips, lengthen the spine'),
+  ('5e551011-0000-0000-0000-000000000001', 'b10c0002-0000-0000-0000-000000000002', 3, 'Downward Dog', 'hold', 60, null, false, 'Pedal the heels to free the calves'),
+  ('5e551011-0000-0000-0000-000000000001', 'b10c0003-0000-0000-0000-000000000003', 4, 'Pigeon Pose', 'hold', 90, null, true, 'Glute + hip-flexor release'),
+  ('5e551011-0000-0000-0000-000000000001', 'b10c0003-0000-0000-0000-000000000003', 5, 'Savasana', 'hold', 120, null, false, 'Full rest, let the breath settle');
+
+-- ── Gym routine template (lower body) ───────────────────────────────────────
+INSERT INTO gym_routines (id, author_id, club_id, title, notes, periodisation, exercise_count) VALUES
+  ('61918001-0000-0000-0000-000000000001',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'c1111111-0000-0000-0000-000000000001',
+   'Club Strength — Lower Body', 'Pair with an easy run day. Leave 1-2 reps in reserve.', 'linear', 4);
+
+INSERT INTO gym_routine_exercises (id, routine_id, exercise_name, exercise_key, position, modality, progression) VALUES
+  ('e8e80001-0000-0000-0000-000000000001', '61918001-0000-0000-0000-000000000001', 'Back Squat', 'back squat', 0, 'weight_reps', 'linear'),
+  ('e8e80002-0000-0000-0000-000000000002', '61918001-0000-0000-0000-000000000001', 'Romanian Deadlift', 'romanian deadlift', 1, 'weight_reps', 'linear'),
+  ('e8e80003-0000-0000-0000-000000000003', '61918001-0000-0000-0000-000000000001', 'Walking Lunge', 'walking lunge', 2, 'weight_reps', 'none'),
+  ('e8e80004-0000-0000-0000-000000000004', '61918001-0000-0000-0000-000000000001', 'Plank', 'plank', 3, 'time', 'none');
+
+INSERT INTO gym_routine_sets (routine_exercise_id, set_index, set_type, target_reps_min, target_reps_max, target_weight_kg, rest_s, target_duration_s) VALUES
+  ('e8e80001-0000-0000-0000-000000000001', 0, 'working', 5, 5, 60, 150, null),
+  ('e8e80001-0000-0000-0000-000000000001', 1, 'working', 5, 5, 60, 150, null),
+  ('e8e80001-0000-0000-0000-000000000001', 2, 'working', 5, 5, 60, 150, null),
+  ('e8e80002-0000-0000-0000-000000000002', 0, 'working', 8, 10, 50, 120, null),
+  ('e8e80002-0000-0000-0000-000000000002', 1, 'working', 8, 10, 50, 120, null),
+  ('e8e80002-0000-0000-0000-000000000002', 2, 'working', 8, 10, 50, 120, null),
+  ('e8e80003-0000-0000-0000-000000000003', 0, 'working', 10, 12, 20, 90, null),
+  ('e8e80003-0000-0000-0000-000000000003', 1, 'working', 10, 12, 20, 90, null),
+  ('e8e80004-0000-0000-0000-000000000004', 0, 'working', null, null, null, 60, 45),
+  ('e8e80004-0000-0000-0000-000000000004', 1, 'working', null, null, null, 60, 45);
