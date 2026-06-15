@@ -141,11 +141,13 @@ test.describe('/routes/new — save round-trip', () => {
 			await submit.evaluate((el: HTMLButtonElement) => (el.disabled = false));
 			await submit.click();
 
-			// Friendly wording lands in a page-level error toast,
-			// not the modal's inline .save-error banner.
-			const errorToast = page.locator('.toast-error');
-			await expect(errorToast).toBeVisible({ timeout: 10_000 });
-			await expect(errorToast).toHaveText(/creating routes too quickly/i);
+			// Friendly wording lands in the save modal's persistent inline
+			// .save-error banner — handleSaveRoute's catch sets `saveError` so
+			// the modal stays open with the user's work intact (a transient
+			// toast would vanish and read as a half-navigated dead end).
+			const saveErr = modal.locator('.save-error');
+			await expect(saveErr).toBeVisible({ timeout: 10_000 });
+			await expect(saveErr).toHaveText(/creating routes too quickly/i);
 			// Negative pin: the generic "Failed to save route" fallback
 			// (and the raw "rate limit exceeded for create_route" leak)
 			// must NOT appear.
