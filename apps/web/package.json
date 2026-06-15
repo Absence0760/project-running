@@ -17,15 +17,15 @@
 		"test:e2e:sso": "playwright test --config=tests-e2e/playwright.sso.config.ts"
 	},
 	"devDependencies": {
-		"@iconify-json/material-symbols": "1.2.76",
+		"@iconify-json/material-symbols": "1.2.78",
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-static": "3.0.10",
 		"@sveltejs/adapter-vercel": "6.3.3",
-		"@sveltejs/kit": "2.64.0",
+		"@sveltejs/kit": "2.65.1",
 		"@sveltejs/vite-plugin-svelte": "7.1.2",
 		"@types/aws-lambda": "8.10.162",
-		"@types/node": "^25.9.2",
-		"esbuild": "0.28.0",
+		"@types/node": "^25.9.3",
+		"esbuild": "0.28.1",
 		"mdsvex": "^0.12.7",
 		"normalize.css": "8.0.1",
 		"oauth2-mock-server": "8.2.3",
@@ -37,19 +37,19 @@
 	},
 	"type": "module",
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.104.0",
+		"@anthropic-ai/sdk": "^0.104.1",
 		"@resvg/resvg-js": "^2.6.2",
-		"@revenuecat/purchases-js": "^1.42.2",
+		"@revenuecat/purchases-js": "^1.42.4",
 		"@sentry/sveltekit": "^10.57.0",
 		"@supabase/ssr": "^0.12.0",
 		"@supabase/supabase-js": "^2.107.0",
 		"@zip.js/zip.js": "^2.7.45",
 		"fit-file-parser": "^3.0.2",
 		"html-to-image": "^1.11.13",
-		"isomorphic-dompurify": "^3.16.0",
+		"isomorphic-dompurify": "^3.17.0",
 		"jszip": "^3.10.1",
 		"maplibre-gl": "^5.24.0",
 		"marked": "^18.0.5",
-		"material-symbols": "^0.44.12"
+		"material-symbols": "^0.45.1"
 	}
 }
