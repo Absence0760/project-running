@@ -3834,4 +3834,6 @@ export const en = {
 	"checkpoint.publicLoading": "Loading results…",
 	"checkpoint.publicFinishers": "{n} runners",
 	"checkpoint.backToEvent": "Back to event",
+	// Verified-club badge (VerifiedBadge.svelte)
+	"verifiedBadge.tooltip": "Official verified club",
 } satisfies Record<string, string>;

@@ -3815,4 +3815,6 @@ export const messages = {
 	"checkpoint.publicLoading": "結果を読み込み中…",
 	"checkpoint.publicFinishers": "{n}人のランナー",
 	"checkpoint.backToEvent": "イベントに戻る",
+	// Verified-club badge (VerifiedBadge.svelte)
+	"verifiedBadge.tooltip": "公式認証済みクラブ",
 } satisfies Messages;

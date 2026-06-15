@@ -14,18 +14,25 @@
 	mark.
 -->
 <script lang="ts">
+	import { m } from '$lib/i18n/store.svelte';
+
 	interface Props {
 		size?: number;
 		title?: string;
 	}
-	let { size = 16, title = 'Official verified club' }: Props = $props();
+	let { size = 16, title }: Props = $props();
+	// Default the accessible label to the localized standard copy when a
+	// caller doesn't pass one (which is every caller today) — the Flutter
+	// twin already does this, so web was the only side shipping a
+	// hardcoded-English label to screen readers.
+	const label = $derived(title ?? m('verifiedBadge.tooltip'));
 </script>
 
 <span
 	class="verified-badge"
 	style="--badge-size: {size}px"
-	{title}
-	aria-label={title}
+	title={label}
+	aria-label={label}
 	data-testid="verified-badge"
 >
 	<svg

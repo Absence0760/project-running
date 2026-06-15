@@ -3819,4 +3819,6 @@ export const messages = {
 	"checkpoint.publicLoading": "Ergebnisse werden geladen…",
 	"checkpoint.publicFinishers": "{n} Läufer",
 	"checkpoint.backToEvent": "Zurück zum Event",
+	// Verified-club badge (VerifiedBadge.svelte)
+	"verifiedBadge.tooltip": "Offiziell verifizierter Club",
 } satisfies Messages;

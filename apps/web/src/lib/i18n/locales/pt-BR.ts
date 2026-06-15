@@ -3818,4 +3818,6 @@ export const messages = {
 	"checkpoint.publicLoading": "Carregando resultados…",
 	"checkpoint.publicFinishers": "{n} corredores",
 	"checkpoint.backToEvent": "Voltar ao evento",
+	// Verified-club badge (VerifiedBadge.svelte)
+	"verifiedBadge.tooltip": "Clube verificado oficial",
 } satisfies Messages;
