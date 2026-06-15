@@ -58,8 +58,20 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
 
   Future<void> _reload() async {
     final api = widget.api;
-    final markers =
-        api == null ? <RouteMarkerRow>[] : await api.fetchRouteMarkers(widget.routeId);
+    List<RouteMarkerRow> fetched;
+    try {
+      fetched =
+          api == null ? const [] : await api.fetchRouteMarkers(widget.routeId);
+    } catch (e) {
+      // L4 auxiliary effect: a course-markers load failure must never break
+      // route detail (name / stats / map are the core). Log and show none.
+      debugPrint('route markers load failed for ${widget.routeId}: $e');
+      fetched = const [];
+    }
+    // Own a growable copy before sorting: fetchRouteMarkers returns an
+    // unmodifiable `const []` on its empty/error paths, and sort() mutates
+    // in place — sorting the borrowed list directly throws UnsupportedError.
+    final markers = [...fetched];
     markers.sort((a, b) {
       final ap = a.positionM, bp = b.positionM;
       if (ap == null && bp == null) return a.createdAt.compareTo(b.createdAt);
@@ -73,7 +85,13 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
       _markers = markers;
       _loaded = true;
     });
-    _publishPins();
+    // Defer to after the frame: with a null api this whole method runs
+    // synchronously inside initState (no await is reached), so publishing
+    // pins directly would call the parent's onPinsChanged -> setState while
+    // the parent is still building. Mirrors the initialMarkers path above.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _publishPins();
+    });
   }
 
   void _publishPins() {
