@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { smartBack } from '$lib/util/smart_back';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchGymRoutineDetail,
@@ -23,6 +24,7 @@
 	let publishingTo = $state('');
 	let publishBusy = $state(false);
 
+	const back = smartBack();
 	const routineId = $derived($page.params.id ?? '');
 	const isOwner = $derived(!!detail && !!auth.user && detail.routine.author_id === auth.user.id);
 
@@ -105,7 +107,7 @@
 <svelte:head><title>{detail?.routine.title ?? t('gym.routine.title')} — Threkir</title></svelte:head>
 
 <div class="page">
-	<a class="back-link" href="/gym/routines">
+	<a class="back-link" href="/gym/routines" onclick={back.handle}>
 		<span class="material-symbols" aria-hidden="true">arrow_back</span>
 		{t('gym.routine.back')}
 	</a>

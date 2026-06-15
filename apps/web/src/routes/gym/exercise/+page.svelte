@@ -6,8 +6,10 @@
 	import { exerciseProgress, type ExerciseProgress, type ExerciseSession } from '$lib/gym/exercise_history';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
+	import { smartBack } from '$lib/util/smart_back';
 	import { m as t } from '$lib/i18n/store.svelte';
 
+	const back = smartBack();
 	const name = $derived($page.url.searchParams.get('name') ?? '');
 
 	let progress = $state<ExerciseProgress | null>(null);
@@ -85,7 +87,7 @@
 <svelte:head><title>{progress?.exerciseName || name || t('gym.title')} — Threkir</title></svelte:head>
 
 <div class="page">
-	<a class="back" href="/gym/records">
+	<a class="back" href="/gym/records" onclick={back.handle}>
 		<span class="material-symbols">arrow_back</span>{t('gym.exercise.back')}
 	</a>
 
@@ -113,7 +115,7 @@
 		<div class="empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">monitoring</span>
 			<p class="empty-text">{t('gym.exercise.empty')}</p>
-			<a href="/gym/records" class="btn btn-outline">{t('gym.exercise.back')}</a>
+			<a href="/gym/records" class="btn btn-outline" onclick={back.handle}>{t('gym.exercise.back')}</a>
 		</div>
 	{:else}
 		<header class="head">

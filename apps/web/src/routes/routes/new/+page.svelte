@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto, afterNavigate } from '$app/navigation';
+	import { goto } from '$app/navigation';
+	import { smartBack } from '$lib/util/smart_back';
 	import { page } from '$app/stores';
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
@@ -109,24 +110,11 @@
 	let unitLabel = $derived(preferredUnit === 'mi' ? 'mi' : 'km');
 	let distanceDisp = $derived(distanceInPreferred(distance));
 
-	/// Same back-link contract as /plans/[id] and /guided — only pop the
-	/// history entry when we actually came from /routes (or one of its
-	/// tabs) so the parent's tab + filter snapshot survives. Otherwise
-	/// fall through to a normal soft-nav.
-	let cameFromRoutes = $state(false);
-	afterNavigate(({ from }) => {
-		if (cameFromRoutes || !from) return;
-		if (from.url.pathname === '/routes' || from.url.pathname.startsWith('/routes?')) {
-			cameFromRoutes = true;
-		}
-	});
-
-	function handleBack(e: MouseEvent): void {
-		if (cameFromRoutes) {
-			e.preventDefault();
-			history.back();
-		}
-	}
+	/// Pop history to wherever we actually came from — a /routes tab (its
+	/// filter + scroll snapshot survives the popstate) or the club whose
+	/// Routes tab launched "New route" via /routes/new?club=. A hard load
+	/// falls through to the static /routes parent.
+	const back = smartBack();
 
 	function handleUpdate(data: {
 		waypoints: number;
@@ -575,7 +563,7 @@
 	<SplitPane storageKey="route-builder-split" min={280} initialFraction={0.28}>
 		{#snippet left()}
 	<aside class="sidebar">
-		<a href="/routes" class="back-link" onclick={handleBack}>
+		<a href="/routes" class="back-link" onclick={back.handle}>
 			<span class="material-symbols">arrow_back</span>
 			{m('routeNew.myRoutes')}
 		</a>

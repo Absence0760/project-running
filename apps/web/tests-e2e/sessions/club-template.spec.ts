@@ -85,4 +85,31 @@ test.describe('/sessions — club session templates', () => {
 		// The original source + the adopted clone are both personal + club-less.
 		expect((personalClones?.length ?? 0)).toBeGreaterThanOrEqual(2);
 	});
+
+	test('opening a session template from the club, then Back, returns to the club', async ({
+		page
+	}) => {
+		// Regression: /sessions/[id] is reached from the club Templates tab
+		// (template link), but its Back control hardcoded /sessions — so Back
+		// dumped the user on the orphaned sessions list instead of the club.
+		// smartBack now pops the history entry the template link pushed.
+		const admin = getAdminClient();
+		const clubTitle = `e2e-club-session-link ${Date.now()}`;
+		const { data: clubPlan } = await admin
+			.from('session_plans')
+			.insert({ author_id: USER_A.id, title: clubTitle, club_id: RICHMOND_CLUB_ID })
+			.select('id')
+			.single();
+		const clubPlanId = (clubPlan as { id: string }).id;
+		try {
+			await page.goto('/clubs/richmond-run-club?tab=templates');
+			await page.getByRole('link', { name: clubTitle }).click();
+			await expect(page).toHaveURL(new RegExp(`/sessions/${clubPlanId}`), { timeout: 10_000 });
+
+			await page.getByRole('link', { name: 'Back to sessions' }).click();
+			await expect(page).toHaveURL(/\/clubs\/richmond-run-club/, { timeout: 10_000 });
+		} finally {
+			await admin.from('session_plans').delete().eq('id', clubPlanId);
+		}
+	});
 });

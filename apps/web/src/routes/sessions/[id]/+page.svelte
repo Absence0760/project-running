@@ -25,6 +25,7 @@
 	import SessionPlanEditor from '$lib/components/SessionPlanEditor.svelte';
 	import SessionRunner from '$lib/components/SessionRunner.svelte';
 	import { goto } from '$app/navigation';
+	import { smartBack } from '$lib/util/smart_back';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	let plan = $state<SessionPlanWithItems | null>(null);
@@ -41,6 +42,7 @@
 		null
 	);
 
+	const back = smartBack();
 	const planId = $derived($page.params.id ?? '');
 	const isOwner = $derived(!!plan && !!auth.user && plan.author_id === auth.user.id);
 
@@ -222,7 +224,7 @@
 <svelte:head><title>{plan?.title ?? t('session.title')}</title></svelte:head>
 
 <div class="page">
-	<a class="back" href="/sessions">&larr; {t('session.back')}</a>
+	<a class="back" href="/sessions" onclick={back.handle}>&larr; {t('session.back')}</a>
 
 	{#if loading}
 		<p class="muted">…</p>

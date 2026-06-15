@@ -91,5 +91,23 @@ test.describe('/gym/routines — club gym-routine templates', () => {
 			.eq('title', title);
 		// The original source + the adopted clone are both personal + club-less.
 		expect(personalClones?.length ?? 0).toBeGreaterThanOrEqual(2);
+
+		// Regression: the back control on the adopted clone must return to the
+		// CLUB it was adopted from (the page we soft-navigated from), not the
+		// generic /gym/routines list. smartBack pops the history entry the
+		// adopt goto pushed.
+		await page.getByRole('link', { name: 'Back to routines' }).click();
+		await expect(page).toHaveURL(/\/clubs\/richmond-run-club/, { timeout: 10_000 });
+	});
+
+	test('arriving at a routine directly (deep link) backs to the gym routines list', async ({
+		page
+	}) => {
+		// The other half of the smartBack contract: with no in-app referrer to
+		// pop, the back link falls through to its static /gym/routines parent.
+		await page.goto(`/gym/routines/${sourceRoutineId}`);
+		await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 10_000 });
+		await page.getByRole('link', { name: 'Back to routines' }).click();
+		await expect(page).toHaveURL(/\/gym\/routines$/, { timeout: 10_000 });
 	});
 });
