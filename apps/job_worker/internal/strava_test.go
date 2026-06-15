@@ -7,9 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-	"time"
 )
 
 // truncatedBodyServer returns a 200 promising a long body via
@@ -147,21 +145,33 @@ func TestIsTransient_UnexpectedEOF(t *testing.T) {
 }
 
 func TestStravaRefresh_DefaultsToProductionURL(t *testing.T) {
-	// We don't actually hit Strava; just confirm that an empty
-	// BaseURL doesn't crash. The DNS lookup or connection refusal
-	// produces a network error, which is fine — we just want to know
-	// the URL was constructed against the production host.
+	// Confirm an empty BaseURL builds the request against the production
+	// Strava host — WITHOUT a real network call. A capturing RoundTripper
+	// records the outgoing URL and returns a sentinel error, so this can't
+	// flake on Strava/CloudFront reachability or error-message shape: the
+	// old version POSTed to the real host with a 50 ms timeout and asserted
+	// the error string mentioned "strava.com", but a fast CloudFront 403
+	// returned an HTTPError whose body never named the host (run 27562156282).
+	var gotURL string
 	c := &StravaClient{
 		ClientID:     "id",
 		ClientSecret: "sec",
-		HTTP:         &http.Client{Timeout: 50 * time.Millisecond},
+		HTTP: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			gotURL = req.URL.String()
+			return nil, errors.New("captured")
+		})},
 	}
 	_, err := c.Refresh(context.Background(), "rt")
 	if err == nil {
-		t.Fatal("expected a transport error for the real Strava host under 50 ms")
+		t.Fatal("expected the captured transport error to propagate")
 	}
-	// The error message should mention strava.com to confirm we built the right URL.
-	if !strings.Contains(err.Error(), "strava.com") {
-		t.Errorf("error doesn't mention strava.com host: %v", err)
+	if gotURL != "https://www.strava.com/oauth/token" {
+		t.Errorf("empty BaseURL must POST to the production oauth/token URL; got %q", gotURL)
 	}
 }
+
+// roundTripFunc adapts a function to http.RoundTripper so tests can intercept
+// the outgoing request without a network call.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
