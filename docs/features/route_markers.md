@@ -70,15 +70,29 @@ cut-off chip renders identically on both platforms.
 
 - **Web** — `RouteMarkerEditor.svelte` on `/routes/[id]`: an ordered course-
   schedule list (kind, distance, aid services / cut-off detail) plus an owner-
-  only add/edit/delete flow. `RunMap.svelte` paints the pins (coloured circle +
-  label) and, in edit mode, a map click drops a pin or selects an existing one.
+  only add/edit/delete flow. `RunMap.svelte` paints the pins and, for the owner,
+  makes them **interactive**:
+  - **Click to place** — with the add/edit form open the map shows a crosshair
+    cursor; a click drops the pin (or moves the in-flight draft).
+  - **Snap to the route line** — a "Snap to route line" toggle (default on, in
+    the form) projects every placement + drag onto the nearest point of the
+    course so a marker sticks to the line. The snap is render-only: `position_m`
+    is still derived server-side from `routes.geom`. Pure projection in
+    `routes/route_snap.ts` (`snapToPolyline`, 10 unit tests); the perpendicular
+    foot on the closest segment, not the nearest vertex.
+  - **Drag to move** — saved pins render as draggable DOM markers (a coloured
+    dot + label, `grab`/`grabbing` cursor). Dragging one persists the new
+    position immediately ("Marker moved." toast); the marker being edited
+    renders instead as a single pulsing **draft** pin that the form tracks.
+    Non-owner viewers keep the lightweight static circle layer.
 - **Mobile** — `widgets/route_markers_panel.dart` on `route_detail_screen.dart`,
   same schedule list + owner editor sheet; `LiveRunMap` renders the pins +
-  tap-to-place. `api_client` exposes the marker CRUD.
+  tap-to-place. `api_client` exposes the marker CRUD. Snap-to-line + drag-to-move
+  are web-only so far (followups.md).
 - **Shared helper** — `route_markers.ts` ↔ `route_markers.dart` (parity pair):
   the kind catalogue (shared pin colour + i18n label key + which `meta` fields a
   kind carries), `sortMarkers` (schedule order), `parseCutoff`, and the
-  `AID_SERVICES` vocabulary.
+  `AID_SERVICES` vocabulary. `route_snap.ts` is web-only (no Dart twin yet).
 
 ## Consumers
 
