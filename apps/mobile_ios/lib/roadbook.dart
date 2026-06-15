@@ -288,7 +288,10 @@ int? _cutoffLimitS(dynamic meta, double? startClockMin) {
   if (cutoff.clock != null && startClockMin != null) {
     final parts = cutoff.clock!.split(':');
     var cutoffMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    if (cutoffMin < startClockMin) cutoffMin += _minutesPerDay;
+    // A cutoff clock at or before the start clock is the next day: a 24h+
+    // race expressing its overall limit as the start wall-clock one day on
+    // (e.g. start 06:00, cutoff '06:00') means 24h, never a 0-second window.
+    if (cutoffMin <= startClockMin) cutoffMin += _minutesPerDay;
     return ((cutoffMin - startClockMin) * 60).round();
   }
   return null;

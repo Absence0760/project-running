@@ -139,6 +139,22 @@ test('cutoff from cutoff_clock needs a start clock', () => {
 	assert.equal(noStart.legs[1].cutoff, undefined);
 });
 
+test('cutoff_clock equal to the start clock resolves to a 24h limit, not 0s', () => {
+	const wp = course();
+	const total = buildRoadbook(wp, [], { goalSeconds: 3600, model: 'even' }).totalDistM;
+	// Start 06:00, overall cutoff expressed as the same wall clock one day on
+	// ('06:00') — the natural way to write a 24h limit when the clock field
+	// carries no day. Must be 86400 s, not a 0-second window that misses
+	// every runner from the gun.
+	const rb = buildRoadbook(
+		wp,
+		[marker(total / 2, 'cutoff', 'Gate', { cutoff_clock: '06:00' })],
+		{ goalSeconds: 3600, startClockMin: 360, model: 'even' }
+	);
+	assert.equal(rb.legs[1].cutoff!.limitElapsedS, 86_400);
+	assert.equal(rb.legs[1].cutoff!.status, 'safe');
+});
+
 test('projected clock advances from the start and wraps past midnight', () => {
 	const wp = course();
 	const rb = buildRoadbook(wp, [], { goalSeconds: 3600, startClockMin: 23 * 60 + 30, model: 'even' });

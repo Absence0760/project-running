@@ -256,7 +256,10 @@ function cutoffLimitS(meta: unknown, startClockMin: number | null): number | nul
 	if (cutoff.clock !== undefined && startClockMin != null) {
 		const [h, m] = cutoff.clock.split(':').map(Number);
 		let cutoffMin = h * 60 + m;
-		if (cutoffMin < startClockMin) cutoffMin += MINUTES_PER_DAY; // next-day cutoff
+		// A cutoff clock at or before the start clock is the next day: a 24h+
+		// race expressing its overall limit as the start wall-clock one day on
+		// (e.g. start 06:00, cutoff '06:00') means 24h, never a 0-second window.
+		if (cutoffMin <= startClockMin) cutoffMin += MINUTES_PER_DAY;
 		return (cutoffMin - startClockMin) * 60;
 	}
 	return null;

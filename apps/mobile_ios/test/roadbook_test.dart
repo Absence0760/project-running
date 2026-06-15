@@ -115,6 +115,22 @@ void main() {
     expect(noStart.legs[1].cutoff, isNull);
   });
 
+  test('cutoff_clock equal to the start clock resolves to a 24h limit, not 0s',
+      () {
+    final wp = course();
+    final total =
+        buildRoadbook(wp, const [], goalSeconds: 3600, model: PacingModel.even)
+            .totalDistM;
+    // Start 06:00, overall cutoff expressed as the same wall clock one day on
+    // ('06:00') must be 86400 s, not a 0-second window that misses every
+    // runner from the gun.
+    final rb = buildRoadbook(
+        wp, [marker(total / 2, 'cutoff', 'Gate', {'cutoff_clock': '06:00'})],
+        goalSeconds: 3600, startClockMin: 360, model: PacingModel.even);
+    expect(rb.legs[1].cutoff!.limitElapsedS, 86400);
+    expect(rb.legs[1].cutoff!.status, CutoffStatus.safe);
+  });
+
   test('projected clock advances from the start and wraps past midnight', () {
     final wp = course();
     final rb = buildRoadbook(wp, const [],
