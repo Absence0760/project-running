@@ -20,7 +20,6 @@
 		"@iconify-json/material-symbols": "1.2.78",
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-static": "3.0.10",
-		"@sveltejs/adapter-vercel": "6.3.3",
 		"@sveltejs/kit": "2.65.1",
 		"@sveltejs/vite-plugin-svelte": "7.1.2",
 		"@types/aws-lambda": "8.10.162",
