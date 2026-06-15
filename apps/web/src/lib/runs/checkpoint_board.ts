@@ -112,7 +112,11 @@ export function buildBoard(
 		if (cov !== 0) return cov;
 		const al = a.projection.lastElapsedS ?? Infinity;
 		const bl = b.projection.lastElapsedS ?? Infinity;
-		return al - bl;
+		if (al !== bl) return al - bl;
+		// Final stable discriminator so two fully-tied runners hold a fixed
+		// rank across refreshes regardless of fetch/grouping order — the same
+		// jitter guard race_leaderboard.ts uses.
+		return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
 	});
 	return runners;
 }

@@ -118,3 +118,26 @@ test('marks finished when the last checkpoint is reached', () => {
 test('empty crossings yields an empty board', () => {
 	assert.deepEqual(buildBoard(checkpoints, [], START), []);
 });
+
+test('two fully-tied runners hold a deterministic order regardless of fetch order', () => {
+	// Both reached cp1 at the same elapsed time — a full tie on coveredM AND
+	// lastElapsedS. The board must not jitter when the underlying crossing
+	// list arrives in a different order between refreshes.
+	const tied = (order: ['aaa' | 'zzz', 'aaa' | 'zzz']) =>
+		buildBoard(
+			checkpoints,
+			order.map((id) => ({
+				checkpointId: 'cp1',
+				userId: id,
+				bib: null,
+				runnerName: id,
+				inTime: atElapsed(1800)
+			})),
+			START
+		).map((r) => r.userId);
+
+	const forward = tied(['aaa', 'zzz']);
+	const reversed = tied(['zzz', 'aaa']);
+	assert.deepEqual(forward, reversed); // identical on every client / refresh
+	assert.deepEqual(forward, ['aaa', 'zzz']); // ordered by the stable key tie-break
+});
