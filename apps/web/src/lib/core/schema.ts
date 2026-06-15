@@ -40,6 +40,8 @@ export const TABLES = {
 	club_posts: 'club_posts',
 	event_attendees: 'event_attendees',
 	event_results: 'event_results',
+	event_checkpoints: 'event_checkpoints',
+	checkpoint_crossings: 'checkpoint_crossings',
 	route_reviews: 'route_reviews',
 	route_photos: 'route_photos',
 	route_markers: 'route_markers',

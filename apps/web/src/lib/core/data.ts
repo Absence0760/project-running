@@ -7694,3 +7694,202 @@ export async function cloneGymRoutineTemplate(templateId: string): Promise<strin
 	if (error) throw error;
 	return data as string;
 }
+
+// ──────────────────── Race-director checkpoints (P1–P4) ────────────────────
+//
+// Aid-station checkpoint check-in → live results + cutoff board. The schema
+// (event_checkpoints + checkpoint_crossings) lives in migration 20270201_001;
+// see docs/features/race_director_ops.md. Crossings are written ONLY via the
+// upsert_checkpoint_crossing RPC (server-side merge of two volunteers' stamps),
+// never a direct table write. Health columns are column-locked from the public
+// read and only reachable through fetch_checkpoint_crossings_for_organiser.
+
+export interface EventCheckpoint {
+	id: string;
+	event_id: string;
+	name: string;
+	ordinal: number;
+	route_marker_id: string | null;
+	position_m: number | null;
+	cutoff_elapsed_s: number | null;
+	cutoff_clock: string | null;
+	requires_weigh_in: boolean;
+	created_by: string;
+	created_at: string;
+	updated_at: string;
+}
+
+/** Non-health subset of a crossing — what the column-locked public read returns
+ *  and what the board renders for everyone. Health fields live only on
+ *  OrganiserCrossing. */
+export interface PublicCrossing {
+	id: string;
+	event_id: string;
+	checkpoint_id: string;
+	instance_start: string;
+	user_id: string | null;
+	bib: string | null;
+	runner_name: string | null;
+	in_time: string | null;
+	out_time: string | null;
+	recorded_at: string;
+	updated_at: string;
+}
+
+/** Full crossing incl. Art 9 health columns — only ever returned by the
+ *  organiser RPC (42501 to anyone who isn't an event organiser). */
+export interface OrganiserCrossing extends PublicCrossing {
+	body_weight_kg: number | null;
+	body_weight_pct: number | null;
+	medical_hold: boolean;
+	medical_note: string | null;
+	recorded_by: string | null;
+}
+
+export async function fetchEventCheckpoints(eventId: string): Promise<EventCheckpoint[]> {
+	const { data, error } = await supabase
+		.from(TABLES.event_checkpoints)
+		.select(
+			'id, event_id, name, ordinal, route_marker_id, position_m, cutoff_elapsed_s, cutoff_clock, requires_weigh_in, created_by, created_at, updated_at'
+		)
+		.eq('event_id', eventId)
+		.order('ordinal', { ascending: true });
+	if (error) throw error;
+	return (data ?? []) as EventCheckpoint[];
+}
+
+export async function createEventCheckpoint(params: {
+	eventId: string;
+	name: string;
+	ordinal: number;
+	routeMarkerId?: string | null;
+	positionM?: number | null;
+	cutoffElapsedS?: number | null;
+	cutoffClock?: string | null;
+	requiresWeighIn?: boolean;
+}): Promise<EventCheckpoint> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const name = params.name.trim();
+	if (!name) throw new Error('Checkpoint name is required');
+	const { data, error } = await supabase
+		.from(TABLES.event_checkpoints)
+		.insert({
+			event_id: params.eventId,
+			name,
+			ordinal: params.ordinal,
+			route_marker_id: params.routeMarkerId ?? null,
+			position_m: params.positionM ?? null,
+			cutoff_elapsed_s: params.cutoffElapsedS ?? null,
+			cutoff_clock: params.cutoffClock ?? null,
+			requires_weigh_in: params.requiresWeighIn ?? false,
+			created_by: userId
+		})
+		.select(
+			'id, event_id, name, ordinal, route_marker_id, position_m, cutoff_elapsed_s, cutoff_clock, requires_weigh_in, created_by, created_at, updated_at'
+		)
+		.single();
+	if (error) throw error;
+	return data as EventCheckpoint;
+}
+
+export async function updateEventCheckpoint(
+	id: string,
+	patch: Partial<{
+		name: string;
+		ordinal: number;
+		routeMarkerId: string | null;
+		positionM: number | null;
+		cutoffElapsedS: number | null;
+		cutoffClock: string | null;
+		requiresWeighIn: boolean;
+	}>
+): Promise<void> {
+	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	if (patch.name !== undefined) row.name = patch.name.trim();
+	if (patch.ordinal !== undefined) row.ordinal = patch.ordinal;
+	if (patch.routeMarkerId !== undefined) row.route_marker_id = patch.routeMarkerId;
+	if (patch.positionM !== undefined) row.position_m = patch.positionM;
+	if (patch.cutoffElapsedS !== undefined) row.cutoff_elapsed_s = patch.cutoffElapsedS;
+	if (patch.cutoffClock !== undefined) row.cutoff_clock = patch.cutoffClock;
+	if (patch.requiresWeighIn !== undefined) row.requires_weigh_in = patch.requiresWeighIn;
+	const { error } = await supabase.from(TABLES.event_checkpoints).update(row).eq('id', id);
+	if (error) throw error;
+}
+
+export async function deleteEventCheckpoint(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.event_checkpoints).delete().eq('id', id);
+	if (error) throw error;
+}
+
+/** Single writer for crossings — calls the upsert_checkpoint_crossing RPC,
+ *  which authorises the caller as an organiser, merges two stamps (earliest
+ *  in / latest out), and persists health fields only when the checkpoint
+ *  requires_weigh_in AND p_health_consent=true. Pass health fields + consent
+ *  only from the gated weigh-in UI. */
+export async function upsertCheckpointCrossing(params: {
+	eventId: string;
+	checkpointId: string;
+	instanceStart: string;
+	userId?: string | null;
+	bib?: string | null;
+	runnerName?: string | null;
+	inTime?: string | null;
+	outTime?: string | null;
+	healthConsent?: boolean;
+	bodyWeightKg?: number | null;
+	bodyWeightPct?: number | null;
+	medicalHold?: boolean | null;
+	medicalNote?: string | null;
+}): Promise<OrganiserCrossing> {
+	const { data, error } = await supabase.rpc('upsert_checkpoint_crossing', {
+		p_event_id: params.eventId,
+		p_checkpoint_id: params.checkpointId,
+		p_instance_start: params.instanceStart,
+		p_user_id: params.userId ?? null,
+		p_bib: params.bib ?? null,
+		p_runner_name: params.runnerName ?? null,
+		p_in_time: params.inTime ?? null,
+		p_out_time: params.outTime ?? null,
+		p_health_consent: params.healthConsent ?? false,
+		p_body_weight_kg: params.bodyWeightKg ?? null,
+		p_body_weight_pct: params.bodyWeightPct ?? null,
+		p_medical_hold: params.medicalHold ?? null,
+		p_medical_note: params.medicalNote ?? null
+	});
+	if (error) throw error;
+	return data as OrganiserCrossing;
+}
+
+/** Organiser board read — every crossing incl. health columns. 42501 if the
+ *  caller isn't an event organiser. */
+export async function fetchOrganiserCrossings(
+	eventId: string,
+	instanceStart: string
+): Promise<OrganiserCrossing[]> {
+	const { data, error } = await supabase.rpc('fetch_checkpoint_crossings_for_organiser', {
+		p_event_id: eventId,
+		p_instance_start: instanceStart
+	});
+	if (error) throw error;
+	return (data ?? []) as OrganiserCrossing[];
+}
+
+/** Public results read — the column-locked non-health crossing columns, gated
+ *  by event-visibility RLS. Used by the account-optional public results page. */
+export async function fetchPublicCrossings(
+	eventId: string,
+	instanceStart: string
+): Promise<PublicCrossing[]> {
+	const { data, error } = await supabase
+		.from(TABLES.checkpoint_crossings)
+		.select(
+			'id, event_id, checkpoint_id, instance_start, user_id, bib, runner_name, in_time, out_time, recorded_at, updated_at'
+		)
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart)
+		.order('checkpoint_id', { ascending: true })
+		.order('in_time', { ascending: true });
+	if (error) throw error;
+	return (data ?? []) as PublicCrossing[];
+}
