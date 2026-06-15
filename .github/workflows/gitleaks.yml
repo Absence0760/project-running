@@ -19,8 +19,9 @@ name: gitleaks
 # The free open-source action covers everything we need; the paid
 # `gitleaks-pro` upgrade exists but adds little for this scale of repo.
 #
-# False positives go in `.gitleaks.toml` at the repo root (not yet
-# created — add it on first false hit rather than pre-empt).
+# False positives go in `.gitleaks.toml` at the repo root: deliberately-
+# fake test fixtures and documented dev placeholders, scoped to the exact
+# secret (not the file) so a real key in the same source still fails.
 
 on:
   push:

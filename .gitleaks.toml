@@ -26,8 +26,32 @@ paths = [
   '''apps/mobile_ios/\.env\.development''',
   '''apps/watch_wear/android/\.env\.development''',
   '''apps/watch_ios/WatchApp/SupabaseService\.swift''',
+  # tests-e2e/routes/heatmap.spec.ts pins a *supabase-demo* anon JWT whose
+  # claims are role-first, so the base64 of its body doesn't align with the
+  # iss-first regex below. Path-scoped to this one fixture file (not all of
+  # tests-e2e) so a real token elsewhere is still caught. Full history, so a
+  # plain `paths` (not commit) match keeps covering it after the line moves.
+  '''apps/web/tests-e2e/routes/heatmap\.spec\.ts''',
 ]
+# Deliberately-fake fixtures + documented dev placeholders. Each is matched on
+# the *secret* itself, not a file path, so the scanner stays live on the real
+# source these sit in (webpush.go, ci.yml, the Makefile) — a genuine key in any
+# of them is still a finding. These are stable literals, not random tokens.
 regexes = [
   # base64 of `{"iss":"supabase-demo"` — present only in the local demo JWTs.
   '''eyJpc3MiOiJzdXBhYmFzZS1kZW1v''',
+  # bouncehook/server_test.go: a 32-char "meets the floor" HMAC test constant.
+  '''0123456789abcdef0123456789abcdef''',
+  # graphhopper Makefile/compose/README: the local GraphHopper guard key, the
+  # same value apps/web/.env.development ships (a 403-guard for local /route).
+  '''dev-graphhopper-key''',
+  # webpush.go: the `vapidPrivateB64` *parameter name* in NewSender's signature
+  # (a real VAPID private scalar is base64 and never equals this identifier).
+  '''vapidPrivateB64''',
+  # ci.yml (history): the placeholder seed-user UUID an older revision queried
+  # by id before it switched to `where email = 'runner@test.com'`.
+  '''a1b2c3d4-e5f6-7890-abcd-ef1234567890''',
+  # env_isolation.test.mjs: the obviously-fake Stripe keys this security test
+  # feeds itself to prove a *live* key in a dev env is rejected.
+  '''(sk|pk)_(live|test)_abcdef0123456789''',
 ]
