@@ -199,9 +199,8 @@
 		if (adoptingSession) return;
 		adoptingSession = templateId;
 		try {
-			const newId = await cloneSessionTemplate(templateId);
+			await cloneSessionTemplate(templateId);
 			showToast(tr('clubHome.sessionAdopted'));
-			goto(`/sessions/${newId}`);
 		} catch (e) {
 			showToast(
 				tr('clubHome.toastFailed', { error: e instanceof Error ? e.message : String(e) }),

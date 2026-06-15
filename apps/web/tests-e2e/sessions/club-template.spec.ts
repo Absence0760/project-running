@@ -70,8 +70,12 @@ test.describe('/sessions — club session templates', () => {
 		await expect(adoptBtn).toBeVisible({ timeout: 10_000 });
 		await adoptBtn.click();
 
-		// Adopt navigates to the new personal clone's detail page.
-		await page.waitForURL(/\/sessions\/[0-9a-f-]+$/, { timeout: 10_000 });
+		// Adopt keeps the user on the club Templates tab (it does NOT yank them
+		// to the orphaned /sessions detail page) — the adopted copy lands in their
+		// own plans, reachable from the Gym → Sessions link.
+		await expect(page.getByText('Session added to your plans.')).toBeVisible({ timeout: 10_000 });
+		await expect(page).toHaveURL(/\/clubs\/richmond-run-club\?tab=templates$/);
+
 		const { data: personalClones } = await admin
 			.from('session_plans')
 			.select('id')
