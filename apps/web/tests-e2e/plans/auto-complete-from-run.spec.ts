@@ -44,14 +44,15 @@ interface PlantedFixture {
 
 async function plantTodayWorkout(): Promise<{
 	workoutId: string;
-	prevDate: string;
+	restore: { kind: string; target_distance_m: number | null };
 }> {
-	// Re-purpose an existing seeded plan_workouts row by moving it to
-	// today. Direct-inserting a fresh row collides with the migration
-	// CHECK that constrains scheduled_date inside the plan's date
-	// range — easier to just move one of the seeded rows. Use
-	// 2026-05-18 (an interval workout near the current wall clock)
-	// so the restoration after the test doesn't perturb other tests.
+	// Repurpose the plan's existing today-workout IN PLACE rather than moving
+	// a future row onto today. The seed plan's dates are now()-relative, so on
+	// days it lands a rest day on today, moving another workout onto today
+	// trips the unique(week_id, scheduled_date) constraint
+	// (plan_workouts_one_per_day). That same constraint means today has exactly
+	// one workout — so make THAT one a non-rest workout with a matchable
+	// target distance, no date move, no collision.
 	const admin = getAdminClient();
 	const { data: weeks } = await admin
 		.from('plan_weeks')
@@ -59,42 +60,39 @@ async function plantTodayWorkout(): Promise<{
 		.eq('plan_id', SYDNEY_HALF_PLAN_ID);
 	const weekIds = (weeks ?? []).map((w) => (w as { id: string }).id);
 	const today = new Date().toISOString().slice(0, 10);
-	// Pick any non-rest workout already scheduled near today that has
-	// a non-null target_distance_m (auto-match's threshold requires
-	// one). Sort by scheduled_date ascending so we always pick the
-	// same row deterministically.
-	const { data: candidates } = await admin
+	const { data: rows } = await admin
 		.from('plan_workouts')
-		.select('id, scheduled_date, target_distance_m')
+		.select('id, kind, target_distance_m')
 		.in('week_id', weekIds)
-		.neq('kind', 'rest')
-		.not('target_distance_m', 'is', null)
-		.gte('scheduled_date', today)
-		.order('scheduled_date', { ascending: true })
+		.eq('scheduled_date', today)
 		.limit(1);
-	const row = candidates?.[0] as
-		| { id: string; scheduled_date: string; target_distance_m: number }
+	const row = rows?.[0] as
+		| { id: string; kind: string; target_distance_m: number | null }
 		| undefined;
 	if (!row) {
-		throw new Error('no candidate workout found to repurpose');
+		throw new Error('no plan workout scheduled for today to repurpose');
 	}
 	const { error } = await admin
 		.from('plan_workouts')
-		.update({ scheduled_date: today })
+		.update({ kind: 'easy', target_distance_m: 5000 })
 		.eq('id', row.id);
 	if (error) throw error;
-	return { workoutId: row.id, prevDate: row.scheduled_date };
+	return {
+		workoutId: row.id,
+		restore: { kind: row.kind, target_distance_m: row.target_distance_m }
+	};
 }
 
-async function restoreWorkoutDate(
+async function restoreWorkout(
 	workoutId: string,
-	prevDate: string
+	restore: { kind: string; target_distance_m: number | null }
 ): Promise<void> {
 	const admin = getAdminClient();
 	await admin
 		.from('plan_workouts')
 		.update({
-			scheduled_date: prevDate,
+			kind: restore.kind,
+			target_distance_m: restore.target_distance_m,
 			completed_run_id: null,
 			manually_completed: false,
 			completed_at: null
@@ -118,7 +116,7 @@ test.describe('Plan auto-complete from linked run', () => {
 		page
 	}) => {
 		const admin = getAdminClient();
-		const { workoutId, prevDate } = await plantTodayWorkout();
+		const { workoutId, restore } = await plantTodayWorkout();
 		const { data: workoutRow } = await admin
 			.from('plan_workouts')
 			.select('target_distance_m, completed_run_id, manually_completed, completed_at')
@@ -188,7 +186,7 @@ test.describe('Plan auto-complete from linked run', () => {
 			if (newRunId) {
 				await deleteRun(newRunId).catch(() => {});
 			}
-			await restoreWorkoutDate(workoutId, prevDate);
+			await restoreWorkout(workoutId, restore);
 		}
 	});
 
@@ -204,9 +202,9 @@ test.describe('Plan auto-complete from linked run', () => {
 		const today = new Date().toISOString().slice(0, 10);
 		const admin = getAdminClient();
 
-		// Move one of the plan's already-scheduled non-rest workouts
-		// to today, then plant a matching run + service-role link.
-		const { workoutId, prevDate } = await plantTodayWorkout();
+		// Repurpose today's plan workout into a matchable target, then
+		// plant a matching run + service-role link.
+		const { workoutId, restore } = await plantTodayWorkout();
 		const { data: workoutRow } = await admin
 			.from('plan_workouts')
 			.select('target_distance_m, completed_run_id, manually_completed, completed_at')
@@ -293,7 +291,7 @@ test.describe('Plan auto-complete from linked run', () => {
 			if (planted.runId) {
 				await deleteRun(planted.runId).catch(() => {});
 			}
-			await restoreWorkoutDate(workoutId, prevDate);
+			await restoreWorkout(workoutId, restore);
 		}
 	});
 });
