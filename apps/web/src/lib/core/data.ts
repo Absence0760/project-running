@@ -7893,3 +7893,36 @@ export async function fetchPublicCrossings(
 	if (error) throw error;
 	return (data ?? []) as PublicCrossing[];
 }
+
+/** Record an organiser DNF for a runner on the live board. Crossings carry no
+ *  DNF flag (DNF derives from a blown cutoff in the projection), so an explicit
+ *  organiser DNF is written through the account-optional event_results rail the
+ *  public results + leaderboard already read. Supports both identities: an
+ *  account row (user_id) upserts on (event,instance,user_id); a bib row upserts
+ *  on (event,instance,bib). RLS gates the write to the event's organiser. */
+export async function markCheckpointDnf(params: {
+	eventId: string;
+	instanceStart: string;
+	userId?: string | null;
+	bib?: string | null;
+	runnerName?: string | null;
+}): Promise<void> {
+	if (!params.userId && !params.bib) throw new Error('DNF needs a user_id or a bib');
+	const base = {
+		event_id: params.eventId,
+		instance_start: params.instanceStart,
+		duration_s: 0,
+		distance_m: 0,
+		finisher_status: 'dnf' as const,
+		updated_at: new Date().toISOString()
+	};
+	const { error } = params.userId
+		? await supabase
+				.from(TABLES.event_results)
+				.upsert({ ...base, user_id: params.userId }, { onConflict: 'event_id,instance_start,user_id' })
+		: await supabase.from(TABLES.event_results).upsert(
+				{ ...base, bib: params.bib, finisher_name: params.runnerName ?? params.bib },
+				{ onConflict: 'event_id,instance_start,bib' }
+			);
+	if (error) throw error;
+}
