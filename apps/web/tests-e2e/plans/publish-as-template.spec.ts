@@ -86,7 +86,12 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		expect(srcBefore.is_template).toBe(false);
 
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		const publishRow = page.locator('.publish-row');
+		// Two `.publish-row` sections exist now (publish-to-club + the
+		// public-library publish). Scope to the club one via its unique
+		// "Club to publish to" select so the selector isn't ambiguous.
+		const publishRow = page
+			.locator('.publish-row')
+			.filter({ has: page.getByLabel('Club to publish to') });
 		await expect(publishRow).toBeVisible({ timeout: 10_000 });
 		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
 		await publishRow.getByRole('button', { name: 'Publish' }).click();
@@ -145,7 +150,12 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		// club-template picker (not leave it on the placeholder), so the
 		// member lands ready to clone the plan they actually clicked.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		const publishRow = page.locator('.publish-row');
+		// Two `.publish-row` sections exist now (publish-to-club + the
+		// public-library publish). Scope to the club one via its unique
+		// "Club to publish to" select so the selector isn't ambiguous.
+		const publishRow = page
+			.locator('.publish-row')
+			.filter({ has: page.getByLabel('Club to publish to') });
 		await expect(publishRow).toBeVisible({ timeout: 10_000 });
 		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
 		await publishRow.getByRole('button', { name: 'Publish' }).click();
@@ -181,7 +191,12 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		// Covers both entry points: clicking the template name (→
 		// /plans/[id]) and clicking Adopt (→ /plans/new).
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		const publishRow = page.locator('.publish-row');
+		// Two `.publish-row` sections exist now (publish-to-club + the
+		// public-library publish). Scope to the club one via its unique
+		// "Club to publish to" select so the selector isn't ambiguous.
+		const publishRow = page
+			.locator('.publish-row')
+			.filter({ has: page.getByLabel('Club to publish to') });
 		await expect(publishRow).toBeVisible({ timeout: 10_000 });
 		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
 		await publishRow.getByRole('button', { name: 'Publish' }).click();
@@ -222,7 +237,12 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		// `is_template && club_id`. Drive the publish, then load
 		// the cloned template's plan-detail page and pin the chip.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		const publishRow = page.locator('.publish-row');
+		// Two `.publish-row` sections exist now (publish-to-club + the
+		// public-library publish). Scope to the club one via its unique
+		// "Club to publish to" select so the selector isn't ambiguous.
+		const publishRow = page
+			.locator('.publish-row')
+			.filter({ has: page.getByLabel('Club to publish to') });
 		await expect(publishRow).toBeVisible({ timeout: 10_000 });
 		await publishRow.locator('select').selectOption(SYDNEY_RUN_CLUB_ID);
 		await publishRow.getByRole('button', { name: 'Publish' }).click();

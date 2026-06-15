@@ -87,10 +87,14 @@ test.describe('detail surface — plans', () => {
 		page
 	}) => {
 		// Runner owns the seeded Richmond Half plan and admins three
-		// clubs, so the publish-row renders.
+		// clubs, so the club-template publish-row renders. A second
+		// `.publish-row` (the public-library publish) also renders for the
+		// owner, so scope to the club one via its unique "Club to publish
+		// to" select to keep the selector unambiguous.
 		await page.goto('/plans/a1a1eada-aaaa-0000-0000-000000000001');
-		await expect(page.locator('.publish-row'))
-			.toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.locator('.publish-row').filter({ has: page.getByLabel('Club to publish to') })
+		).toBeVisible({ timeout: 10_000 });
 	});
 });
 
