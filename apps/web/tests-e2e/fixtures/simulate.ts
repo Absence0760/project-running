@@ -396,7 +396,11 @@ export async function insertComment(opts: {
 export async function setClubMemberStatus(
 	clubId: string,
 	userId: string,
-	status: 'active' | 'pending' | 'banned',
+	// Matches the club_members_status_check CHECK constraint
+	// (migration 20260416_001): there is no 'banned' state — 'rejected'
+	// is the terminal lockout status. Passing an unmodelled value would
+	// violate the CHECK and the service-role insert would silently fail.
+	status: 'active' | 'pending' | 'rejected',
 ): Promise<void> {
 	const { error } = await getAdminClient()
 		.from('club_members')
