@@ -116,6 +116,31 @@ test.describe('/routes/[id]/roadbook', () => {
 		}).toPass();
 	});
 
+	test('downloads a GPX with markers containing the waypoints + a marker name', async ({
+		page
+	}) => {
+		routeId = await seedRoute();
+		await page.goto(`/routes/${routeId}/roadbook`);
+
+		const downloadPromise = page.waitForEvent('download');
+		await page.getByRole('button', { name: 'GPX + markers' }).click();
+		const download = await downloadPromise;
+
+		expect(download.suggestedFilename()).toMatch(/_with_markers\.gpx$/);
+
+		const stream = await download.createReadStream();
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+		const gpx = Buffer.concat(chunks).toString('utf8');
+
+		// The route line is present as a track…
+		expect(gpx).toContain('<trkpt');
+		// …and the seeded markers are emitted as waypoints with their names.
+		expect(gpx).toContain('<wpt');
+		expect(gpx).toContain('<name>Aid 1</name>');
+		expect(gpx).toContain('<name>Gate</name>');
+	});
+
 	test('effort model re-paces vs even and updates the URL', async ({ page }) => {
 		routeId = await seedRoute();
 		await page.goto(`/routes/${routeId}/roadbook?goal=3600&model=even`);

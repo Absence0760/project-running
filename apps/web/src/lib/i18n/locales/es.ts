@@ -650,6 +650,7 @@ export const messages = {
 	"routeDetail.public": "Pública",
 	"routeDetail.private": "Privada",
 	"routeDetail.share": "Compartir",
+	"routeDetail.exportGpxMarkers": "GPX + marcadores",
 	"routeDetail.reportRoute": "Denunciar esta ruta",
 	"routeDetail.copied": "¡Copiado!",
 	"routeDetail.copy": "Copiar",

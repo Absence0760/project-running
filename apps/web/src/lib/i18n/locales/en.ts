@@ -659,6 +659,7 @@ export const en = {
 	"routeDetail.public": "Public",
 	"routeDetail.private": "Private",
 	"routeDetail.share": "Share",
+	"routeDetail.exportGpxMarkers": "GPX + markers",
 	"routeDetail.reportRoute": "Report this route",
 	"routeDetail.copied": "Copied!",
 	"routeDetail.copy": "Copy",

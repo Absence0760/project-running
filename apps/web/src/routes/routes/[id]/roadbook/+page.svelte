@@ -13,6 +13,8 @@
 		type CutoffStatus
 	} from '$lib/routes/roadbook';
 	import { kindSpec } from '$lib/routes/route_markers';
+	import { toRouteGpxWithMarkers, type RouteGpxMarker } from '$lib/routes/route_gpx';
+	import { downloadFile } from '$lib/routes/gpx';
 	import {
 		buildFuelPlan,
 		DEFAULT_CARBS_PER_HOUR_G,
@@ -235,6 +237,25 @@
 	function serviceLabel(s: string): string {
 		return m(`routeMarker.service.${s}` as 'routeMarker.service.water');
 	}
+
+	function handleExportGpxWithMarkers() {
+		if (!route) return;
+		const wps = route.waypoints ?? [];
+		if (!wps.length) return;
+		const coords: [number, number][] = wps.map((w) => [w.lng, w.lat]);
+		const eles = wps.map((w, i) => w.ele ?? fetchedEle?.[i] ?? 0);
+		const gpxMarkers: RouteGpxMarker[] = markers.map((mk) => ({
+			label: mk.label,
+			lat: mk.lat,
+			lng: mk.lng,
+			kind: mk.kind,
+			meta: mk.meta
+		}));
+		const gpx = toRouteGpxWithMarkers(route.name, coords, eles, gpxMarkers);
+		const filename =
+			route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '_with_markers.gpx';
+		downloadFile(gpx, filename, 'application/gpx+xml');
+	}
 </script>
 
 <svelte:head>
@@ -253,6 +274,12 @@
 				<h1>{m('roadbook.heading')}</h1>
 			</div>
 			<div class="rb-actions no-print">
+				{#if markers.length > 0}
+					<button class="btn btn-secondary btn-sm" onclick={handleExportGpxWithMarkers}>
+						<span class="material-symbols" aria-hidden="true">download</span>
+						{m('routeDetail.exportGpxMarkers')}
+					</button>
+				{/if}
 				<button class="btn btn-secondary btn-sm" onclick={copyAsText}>
 					<span class="material-symbols" aria-hidden="true">content_copy</span>
 					{m('roadbook.copy')}

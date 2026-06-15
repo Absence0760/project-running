@@ -2,7 +2,9 @@
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/core/data';
+	import { toRouteGpxWithMarkers, type RouteGpxMarker } from '$lib/routes/route_gpx';
+	import { fetchRouteById, fetchRouteMarkers, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/core/data';
+	import type { RouteMarker } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -39,6 +41,10 @@
 	// view + clip_route_for_viewer). The wire-leak is closed there;
 	// the renderer just consumes what it gets.
 	let displayWaypoints = $state<{ lat: number; lng: number; ele?: number }[]>([]);
+	// Course markers for the GPX-with-waypoints export. Loaded best-effort:
+	// a failure must not break the page or the line-only GPX/KML export, so
+	// it falls back to an empty list.
+	let routeMarkers = $state<RouteMarker[]>([]);
 	// Course-marker wiring between RouteMarkerEditor (owns the data) and
 	// RunMap (renders the pins + reports placement / pin clicks).
 	let markerPins = $state<MapMarkerPin[]>([]);
@@ -73,6 +79,12 @@
 		loading = false;
 		if (route) {
 			displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
+			try {
+				routeMarkers = await fetchRouteMarkers(route.id);
+			} catch (e) {
+				console.debug('fetchRouteMarkers failed; markers export disabled', e);
+				routeMarkers = [];
+			}
 			try {
 				reviews = await getRouteReviews(route.id);
 				reviewsError = false;
@@ -243,6 +255,25 @@
 		const kml = toKml(route.name, coords, eles);
 		const filename = route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
 		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
+	}
+
+	function handleExportGpxWithMarkers() {
+		if (!route || !displayWaypoints.length) return;
+		// displayWaypoints is privacy-clipped for non-owners, so a download
+		// can't leak hidden geometry.
+		const coords: [number, number][] = displayWaypoints.map((w) => [w.lng, w.lat]);
+		const eles = displayWaypoints.map((w) => w.ele ?? 0);
+		const gpxMarkers: RouteGpxMarker[] = routeMarkers.map((mk) => ({
+			label: mk.label,
+			lat: mk.lat,
+			lng: mk.lng,
+			kind: mk.kind,
+			meta: mk.meta
+		}));
+		const gpx = toRouteGpxWithMarkers(route.name, coords, eles, gpxMarkers);
+		const filename =
+			route.name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '_with_markers.gpx';
+		downloadFile(gpx, filename, 'application/gpx+xml');
 	}
 
 	async function handleShare() {
@@ -528,6 +559,11 @@
 				<div class="actions">
 					<button class="btn btn-outline btn-sm" onclick={handleExportGpx}>GPX</button>
 					<button class="btn btn-outline btn-sm" onclick={handleExportKml}>KML</button>
+					{#if routeMarkers.length > 0}
+						<button class="btn btn-outline btn-sm" onclick={handleExportGpxWithMarkers}>
+							{m('routeDetail.exportGpxMarkers')}
+						</button>
+					{/if}
 					{#if isOwner}
 						<button
 							class="btn btn-outline btn-sm"

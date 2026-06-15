@@ -646,6 +646,7 @@ export const messages = {
 	"routeDetail.public": "公開",
 	"routeDetail.private": "非公開",
 	"routeDetail.share": "共有",
+	"routeDetail.exportGpxMarkers": "GPX + マーカー",
 	"routeDetail.reportRoute": "このルートを報告",
 	"routeDetail.copied": "コピーしました!",
 	"routeDetail.copy": "コピー",
