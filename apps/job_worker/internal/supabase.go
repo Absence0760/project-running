@@ -1503,6 +1503,12 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		{name: "saved_routes.json", table: schema.TableSavedRoutes, filter: uidEq, sel: "*"},
 		// route_reviews authored by the user.
 		{name: "route_reviews.json", table: schema.TableRouteReviews, filter: uidEq, sel: "*"},
+		// route_markers — the subject's own course annotations (aid
+		// stations, cutoffs, crew access, hazards, notes, climbs) dropped
+		// on their saved routes. Authored content keyed by user_id = author;
+		// every column is the subject's own input or geometry-derived, so
+		// `*` leaks no third party. Same Art 15/20 footing as route_reviews.
+		{name: "route_markers.json", table: schema.TableRouteMarkers, filter: uidEq, sel: "*"},
 		// race_pings — live race GPS+HR at ~10s granularity. Personal
 		// health + location data; absent before audit/data-export-
 		// completeness (2026-05-25).
@@ -1578,6 +1584,20 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// rank, DNF/DNS, age-grade). Health-adjacent performance data.
 		// audit/data-export-completeness (2026-05-30) Critical.
 		{name: "event_results.json", table: schema.TableEventResults, filter: uidEq, sel: "*"},
+		// checkpoint_crossings — the subject's own race-checkpoint timing
+		// (in/out times) and, where a checkpoint weighs runners in, their
+		// Art 9 weigh-in body weight + medical hold/note. Recorded by a race
+		// official ABOUT the subject during their participation — same Art
+		// 15/20 footing as event_results / race_pings, and the subject is
+		// unconditionally entitled to their OWN health data. Filtered to the
+		// subject's account rows (user_id = me); bib-only crossings have no
+		// account to attach to. Projection omits `recorded_by` — that is the
+		// official who logged the crossing, a third-party uid we must not
+		// leak to the subject (mirrors the integrations secret-id strip).
+		{
+			name: "checkpoint_crossings.json", table: schema.TableCheckpointCrossings, filter: uidEq,
+			sel: "id,event_id,checkpoint_id,instance_start,user_id,bib,runner_name,in_time,out_time,body_weight_kg,body_weight_pct,medical_hold,medical_note,recorded_at,updated_at",
+		},
 		// event_result_claims — the subject's own "this result is me"
 		// claims (status + decision). `decided_by` belongs to the
 		// organiser who ruled on it, so the projection keeps it (it's a
@@ -2015,6 +2035,7 @@ func (c *SupabaseClient) SetWeeklyDigestPrefOff(ctx context.Context, userID stri
 //   - runs:                count + distance sum over runs.started_at >= since
 //   - kudos received:      notifications kind=kudos for the user, created_at >= since
 //   - new PBs:             personal_records achieved_at >= since
+//
 // Service role bypasses RLS; the userID filter is the access gate.
 func (c *SupabaseClient) BuildWeeklyDigest(ctx context.Context, userID string, since time.Time) (DigestSummary, error) {
 	var out DigestSummary
