@@ -440,6 +440,36 @@ jobs:
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
+      # Persist the Deno module cache across runs keyed on the committed
+      # deno.lock, so the common case (lockfile unchanged) restores every
+      # remote dep and the test steps below never touch the network.
+      - name: Cache Deno dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/deno
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+      # Pre-fetch every test file's deps so `deno test` resolves from the
+      # warm cache instead of cold-fetching esm.sh at test time. A transient
+      # esm.sh 5xx (CI run 27554982327: a 522 on @supabase/supabase-js)
+      # used to fail the pure-helper step opaquely mid-import; retry the
+      # FETCH here (not the tests) so a CDN blip is absorbed before any test
+      # runs, and fail loudly + early if the deps genuinely can't be had.
+      - name: Warm the Deno dependency cache
+        working-directory: apps/backend
+        run: |
+          files=$(find supabase/functions -name '*.test.ts' | sort)
+          for attempt in 1 2 3; do
+            if deno cache --no-check $files; then
+              echo "deno deps cached"
+              exit 0
+            fi
+            echo "::warning::deno cache attempt $attempt failed (esm.sh transient?); retrying"
+            sleep $((attempt * 5))
+          done
+          echo "::error::deno dependency fetch failed after 3 attempts"
+          exit 1
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
