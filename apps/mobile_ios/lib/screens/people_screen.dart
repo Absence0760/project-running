@@ -152,7 +152,10 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final l10n = AppLocalizations.of(context);
     final hasQuery = _query.isNotEmpty;
     final visible = hasQuery ? _results : _suggestions;
-    final searchField = TextField(
+    final searchField = Semantics(
+      textField: true,
+      label: l10n.peopleSearchHint,
+      child: TextField(
       controller: _searchCtl,
       autofocus: !widget.embedded,
       textInputAction: TextInputAction.search,
@@ -175,6 +178,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
             : null,
       ),
       onChanged: _onSearchChanged,
+    ),
     );
     final body = SafeArea(
       top: false,

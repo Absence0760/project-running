@@ -190,7 +190,10 @@ class ClubsScreenState extends State<ClubsScreen> {
           if (_tab == 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: TextField(
+              child: Semantics(
+                textField: true,
+                label: l10n.clubsSearchHint,
+                child: TextField(
                 controller: _searchCtrl,
                 onSubmitted: (_) => _load(),
                 decoration: InputDecoration(
@@ -204,6 +207,7 @@ class ClubsScreenState extends State<ClubsScreen> {
                     borderSide: BorderSide.none,
                   ),
                 ),
+              ),
               ),
             ),
         ],

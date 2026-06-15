@@ -184,6 +184,20 @@ void main() {
     expect(find.byTooltip('Clear search'), findsOneWidget);
   });
 
+  testWidgets('search field exposes a persistent accessible name',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: _FakeApi(const []), social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+    expect(
+      find.bySemanticsLabel(RegExp('Search yoga, pilates, HIIT, run clubs')),
+      findsAtLeastNWidgets(1),
+    );
+    handle.dispose();
+  });
+
   testWidgets('empty results render the empty state', (tester) async {
     final api = _FakeApi(const []);
     await tester.pumpWidget(_wrap(
@@ -256,5 +270,86 @@ void main() {
     await tester.tap(find.text('Class'));
     await _settle(tester);
     expect(api.lastArgs['category'], 'class');
+  });
+
+  testWidgets('selecting the Free chip re-queries with paid=free',
+      (tester) async {
+    final api = _FakeApi(const []);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+    expect(api.lastArgs['paid'], isNull);
+
+    // The price-filter row has its own "Free" chip (the empty-event card
+    // also shows one only when a result is free — here results are empty).
+    await tester.tap(find.text('Free'));
+    await _settle(tester);
+    expect(api.lastArgs['paid'], 'free');
+  });
+
+  testWidgets('selecting a cadence re-queries with that cadence',
+      (tester) async {
+    final api = _FakeApi(const []);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    // Open the cadence dropdown and pick Weekly.
+    await tester.tap(find.text('Any cadence'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Weekly').last);
+    await _settle(tester);
+    expect(api.lastArgs['cadence'], 'weekly');
+  });
+
+  testWidgets('selecting a weekday re-queries with that byday code',
+      (tester) async {
+    final api = _FakeApi(const []);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Any day'));
+    await tester.pumpAndSettle();
+    // "Sat" is the SA byday code's label.
+    await tester.tap(find.text('Sat').last);
+    await _settle(tester);
+    expect(api.lastArgs['byday'], 'SA');
+  });
+
+  testWidgets('selecting a time-of-day re-queries with that bucket',
+      (tester) async {
+    final api = _FakeApi(const []);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Any time'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Morning').last);
+    await _settle(tester);
+    expect(api.lastArgs['time'], 'morning');
+  });
+
+  testWidgets('typing a query debounces before forwarding it to the RPC',
+      (tester) async {
+    final api = _FakeApi(const []);
+    await tester.pumpWidget(_wrap(
+      DiscoverScreen(api: api, social: SocialService(), embedded: true),
+    ));
+    await _settle(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'pilates');
+    // Before the 250 ms debounce elapses, the query hasn't been forwarded.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(api.lastArgs['query'], isNull);
+    // After the debounce window it is.
+    await tester.pump(const Duration(milliseconds: 200));
+    await _settle(tester);
+    expect(api.lastArgs['query'], 'pilates');
   });
 }

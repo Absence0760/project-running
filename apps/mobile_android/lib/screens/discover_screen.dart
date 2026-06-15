@@ -186,7 +186,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
+          Semantics(
+            textField: true,
+            label: l10n.discoverSearchPlaceholder,
+            child: TextField(
             controller: _searchCtl,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
@@ -207,6 +210,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   : null,
             ),
             onChanged: _onQueryChanged,
+          ),
           ),
           const SizedBox(height: 10),
           Wrap(
