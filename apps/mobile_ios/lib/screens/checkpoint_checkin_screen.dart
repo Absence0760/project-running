@@ -155,7 +155,9 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
       // failure and drains on the next refresh / connectivity return.
       try {
         await _store.syncWithServer(_api);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('checkpoint check-in: immediate sync deferred: $e');
+      }
       if (!mounted) return;
       _bib.clear();
       showTopBanner(
