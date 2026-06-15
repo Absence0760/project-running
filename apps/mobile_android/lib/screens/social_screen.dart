@@ -134,7 +134,19 @@ class _SocialScreenState extends State<SocialScreen>
       case 2:
         return Builder(builder: (ctx) {
           final state = _clubsKey.currentState;
-          return state?.buildCreateClubFab(ctx) ?? const SizedBox.shrink();
+          if (state == null) {
+            // The ClubsScreen State binds to the GlobalKey during this same
+            // build pass (the page is mounting in the TabBarView), so its
+            // currentState is null on the first frame the Clubs tab is
+            // active. Without a follow-up rebuild the hoisted FAB would
+            // stay absent forever — schedule one once the element is laid
+            // out so the FAB resolves on the next frame.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _controller.index == 2) setState(() {});
+            });
+            return const SizedBox.shrink();
+          }
+          return state.buildCreateClubFab(ctx);
         });
       default:
         return null;

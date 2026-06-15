@@ -19,6 +19,7 @@ import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -72,7 +73,11 @@ Future<SocialScreen> _socialScreen({int initialTab = 0}) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(_ensureSupabase);
+  setUpAll(() async {
+    await _ensureSupabase();
+    // ClubsScreen (the Clubs sub-tab) reads dotenv['MAPTILER_KEY'] on load.
+    dotenv.loadFromString(isOptional: true);
+  });
 
   tearDown(() {
     if (_tmpDir.existsSync()) _tmpDir.deleteSync(recursive: true);
@@ -140,6 +145,49 @@ void main() {
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, lessThanOrEqualTo(3));
     expect(tabBar.controller!.index, greaterThanOrEqualTo(0));
+  });
+
+  testWidgets('the default Feed tab shows no FAB', (tester) async {
+    // Feed / People / Discover have no create surface — only the Clubs
+    // sub-tab hoists a FAB. The default landing (Feed) must show none.
+    await tester.pumpWidget(_wrap(await _socialScreen()));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('the Clubs tab hoists the "New club" FAB', (tester) async {
+    // The Clubs sub-tab (index 2) is the only one with a create surface;
+    // SocialScreen hoists its FAB. The FAB resolves off the ClubsScreen
+    // GlobalKey state, which binds via a scheduled post-frame rebuild.
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 2)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('New club'), findsOneWidget);
+  });
+
+  testWidgets('switching from Clubs to Discover drops the FAB',
+      (tester) async {
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 2)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+
+    // Tap the Discover tab and let the controller + Scaffold FAB
+    // exit-animation settle (the Scaffold animates the FAB out).
+    await tester.tap(find.text('Discover'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('the People tab shows no FAB', (tester) async {
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 1)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(FloatingActionButton), findsNothing);
   });
 
   testWidgets('AppBar has no toolbar title (only the TabBar)',
