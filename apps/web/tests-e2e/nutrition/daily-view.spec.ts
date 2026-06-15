@@ -25,6 +25,13 @@ test.describe('/nutrition — daily grouping + water decrement', () => {
 		const at = (h: number) =>
 			new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, 0).toISOString();
 
+		// USER_A is the seed user (runner@test.com), whose seed food_log carries
+		// today-relative items in every slot — they'd sum into these slot headers
+		// and break the exact-total assertions below. Clear the recent window
+		// first so the headers reflect only the items this test controls.
+		const since = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
+		await admin.from('food_log').delete().eq('user_id', USER_A.id).gte('started_at', since);
+
 		// Insert out of display order (dinner, breakfast, lunch) with two
 		// breakfast items so the header must SUM (not just show the last).
 		const rows = [

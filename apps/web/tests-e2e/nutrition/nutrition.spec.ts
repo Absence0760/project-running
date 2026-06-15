@@ -303,6 +303,11 @@ test.describe('/nutrition — manual log, render, water', () => {
 	test('a meal-slot header links to the per-meal detail route', async ({ page }) => {
 		const admin = getAdminClient();
 		const item = `E2E Detail ${Date.now()}`;
+		// USER_A is the seed user (runner@test.com) with today-relative seed
+		// food_log in every slot — clear the recent window so the breakfast
+		// roll-up on the detail page reflects only this test's 275-kcal item.
+		const since = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
+		await admin.from('food_log').delete().eq('user_id', USER_A.id).gte('started_at', since);
 		const { data: created } = await admin
 			.from('food_log')
 			.insert({

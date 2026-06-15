@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchFoodLog, type FoodEntry } from '$lib/core/data';
 	import { sumMacros, MEAL_SLOTS, type MealSlot } from '$lib/nutrition/nutrition_totals';
 	import {
@@ -25,6 +26,16 @@
 
 	async function load() {
 		loading = true;
+		// fetchFoodLog returns [] when there's no signed-in user, so the fetch
+		// must wait for the session to hydrate — otherwise onMount races auth
+		// readiness and the page renders an empty (0-kcal) slot. Mirrors the
+		// daily /nutrition page's auth.ready() gate.
+		await auth.ready();
+		if (!auth.user) {
+			allEntries = [];
+			loading = false;
+			return;
+		}
 		const start = new Date(`${date}T00:00:00`);
 		const end = new Date(start);
 		end.setDate(end.getDate() + 1);

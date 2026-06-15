@@ -35,6 +35,14 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 		const todayKey = isoDate(today);
 		const yesterday = new Date(today.getTime() - 24 * 3600 * 1000);
 
+		// USER_A is the seed user (runner@test.com), whose seed food_log carries
+		// today-relative items in every slot across the trailing week — they'd
+		// land in both the day roll-up and the 7-day trend and break the exact
+		// assertions below. Clear the recent window first so the roll-up + trend
+		// reflect only the items this test controls.
+		const since = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
+		await admin.from('food_log').delete().eq('user_id', USER_A.id).gte('started_at', since);
+
 		// Two breakfast items today + one breakfast item yesterday (in the 7-day
 		// trend window but not the day roll-up) + a lunch item today that must be
 		// excluded from the breakfast roll-up entirely.
