@@ -94,6 +94,14 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    // scrollUntilVisible stops as soon as the row's top edge enters the
+    // viewport, which can leave a SwitchListTile's tap centre just past the
+    // fold (the prefs list grew past the test viewport when fueling prefs
+    // landed). ensureVisible scrolls it fully on-screen so the tap lands.
+    await tester.ensureVisible(
+      find.widgetWithText(SwitchListTile, 'Weekly digest email'),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(SwitchListTile, 'Weekly digest email'));
     await tester.pumpAndSettle();
 
