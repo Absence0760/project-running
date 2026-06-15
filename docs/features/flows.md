@@ -264,8 +264,26 @@ Spectator client reads PUBLIC_LIVE_HUB_URL (same envs)
 
 Both runner + spectator must agree. Flip both envs (`PUBLIC_LIVE_HUB_URL` on web, `LIVE_HUB_URL` on mobile) in the same release. See `apps/job_worker/deployment.md § Live spectator hub` for the cutover walkthrough. The Realtime path is the rollback target — kept live until the hub deploy is stable.
 
+### Predictive next cut-off ("will they make it?")
+
+When the live run is linked to a **public route that carries cut-off markers** ([route_markers.md](route_markers.md)), the spectator page fuses the live feed with the roadbook cut-off math ([race_roadbook.md](race_roadbook.md)) and answers the spectator personas' real question — *"is my person going to make the next cut-off?"* — not just *"where is the dot?"*. Shipped web (`/live/[id]` next-cut-off card) + mobile (`live_spectator_screen.dart`), 2026-06-14.
+
+```
+each ping → project the runner onto the planned line
+  distanceAlongRoute(lastPos, waypoints)        (route_geometry pair)
+  recentPaceSecPerKm = Δdist / Δtime over the last ~5 pings
+  legs = buildRoadbook(waypoints, markers, …)   (cut-off limits only; goal-independent)
+  → nextCutoffEta({ distAlongRouteM, elapsedS, recentPaceSecPerKm, legs, stale })
+      (live_cutoff_eta pair)
+  → { checkpoint, distanceToM, projectedArrivalElapsedS, marginS, status }
+       status ∈ on | tight | behind | unknown
+```
+
+The card shows the next cut-off's name, distance to go, projected arrival, and a green/amber/red margin chip. **The staleness contract is the whole point:** when `live_freshness` flags the last fix as stale (or pace is unknown), the helper returns `status: 'unknown'` — the card still names the checkpoint + distance but shows "waiting for a fresh signal" and **suppresses the verdict**, never fabricating an ETA off an 18 h-old fix. Projection is flat recent pace (grade-adjusted remaining deferred, mirroring `checkpoint_projection`). All reads, works logged-out. See [predictive_live_tracking.md](predictive_live_tracking.md) + [decisions.md § 156](../architecture/decisions.md#156-predictive-live-tracking-reuses-the-roadbook-cutoff-legs-and-fails-to-unknown-when-the-fix-is-stale).
+
 ### Watch out
 
 - **Privacy-zone clipping must happen before the spectator sees the ping.** Realtime path: the RLS policy on `live_run_pings` invokes `clip_track_for_user`. WS path: `SupabaseZoneFetcher` clips on the hub before broadcast. Both routes are owner-blind by design (decisions §33).
+- **The next cut-off card fails to `unknown`, never to a guess.** A stale fix or unknown pace suppresses the verdict (see "Predictive next cut-off"). Don't "fix" a missing chip by defaulting it to on-pace — `unknown` is the correct, honest state.
 - **Live tracking battery drain** is the main risk of this feature. Every-3-second GPS → INSERT/send ≈ 5% extra battery per hour. Roadmap § "Open risks" says the feature must be opt-in per run, never on by default.
 - **The public `/live/{run_id}` page works without auth.** No user JWT, no session cookie. The hub treats `run_id` as a bearer token; the Realtime channel name is `live:{run_id}` (anyone with the run id can subscribe — shareability is the feature).

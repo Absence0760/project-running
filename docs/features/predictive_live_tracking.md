@@ -1,9 +1,16 @@
 # Predictive live tracking — "will they make the next cutoff?"
 
-> **STATUS: handoff spec, not built.** Self-contained brief for an implementing
-> session. Read [CLAUDE.md](../../CLAUDE.md) first for the web-first / twin /
-> i18n / commit-cadence conventions. Web is canonical; mobile mirrors; iOS twin
-> byte-identical.
+> **STATUS: shipped web + mobile (2026-06-14).** `/live/[id]` next-cut-off card +
+> `live_spectator_screen.dart`, backed by the `route_geometry` (`distanceAlongRoute`)
+> and `live_cutoff_eta` parity pairs. See [decisions.md § 156](../architecture/decisions.md#156-predictive-live-tracking-reuses-the-roadbook-cutoff-legs-and-fails-to-unknown-when-the-fix-is-stale)
+> for the staleness/ETA contract and the [flows.md spectator section](flows.md#predictive-next-cut-off-will-they-make-it).
+> The brief below is preserved as the design record.
+>
+> **Decisions taken vs the open questions below:** pace window = recent flat pace
+> over the last ~5 pings; **flat** pace (grade-adjusted remaining deferred, as on
+> `checkpoint_projection`); flip to `unknown` reuses `live_freshness`'s `stale`
+> bucket (and also when pace is unknown). Follow-ups: grade-adjusted remaining,
+> an EWMA pace window.
 
 ## Context / why
 

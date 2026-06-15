@@ -3193,6 +3193,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 156. Predictive live tracking reuses the roadbook cut-off legs and fails to `unknown` when the fix is stale
+
+**Decided (2026-06-14, `live_cutoff_eta.ts`/`.dart` + the next-cut-off card on `/live/[id]` + `live_spectator_screen.dart`).** The spectator personas (Moab 240 / UTMB / WS100 families following from home) don't want a dot — they want *"is my person going to make the next cut-off?"*. The card fuses three already-shipped pieces rather than adding a model or schema: (1) it projects the live runner onto the planned line with `distanceAlongRoute` (the nearest-point inverse added to the `route_geometry` pair), (2) it reads the cut-off **limits** straight off the roadbook legs (`buildRoadbook` — the limit is independent of the goal time used to build them, so any nominal goal works), and (3) `nextCutoffEta` grades the projected arrival (current elapsed + remaining distance ÷ recent pace) against that limit on the same `safe/tight/miss`→`on/tight/behind` scale as `checkpoint_projection`. Pace is **recent flat pace** (last ~5 pings); grade-adjusting the remaining legs is deferred exactly as it is on `checkpoint_projection`. No schema — all reads, works logged-out.
+
+**Why.** The honest-staleness rule is the load-bearing decision. The live feed already had to learn that a lost-signal runner must read *stale*, not a fresh green dot (§the `live_freshness` pair). A predictive ETA amplifies that risk: projecting an arrival off an 18 h-old fix would manufacture confidence exactly where the spectator is most anxious. So `nextCutoffEta` returns `status: 'unknown'` whenever the fix is stale **or** pace is unknown — the card still names the checkpoint + distance but suppresses the verdict and shows "waiting for a fresh signal". Reusing the roadbook legs (not a parallel cut-off model) keeps one source of truth for "what counts as a cut-off / tight", the same instinct as `checkpoint_projection` re-importing `CUTOFF_TIGHT_S` from `roadbook`.
+
+**Trade-off.** Flat recent pace over-/under-shoots on a big climb or descent ahead (grade-adjusted remaining would be better — deferred). The card only appears when the run is linked to a **public** route that carries cut-off markers, so a private route or a markerless route shows nothing; that is the correct fail-closed default (no route context → no claim) but means the feature lights up only for organised races with a marked course.
+
+**Boundary / not-yet-done.** Grade-adjusted remaining pace, an EWMA pace window, and surfacing the projection on the organiser board (it already shares `checkpoint_projection`) are the follow-ups. See [predictive_live_tracking.md](../features/predictive_live_tracking.md) + the spectator flow in [flows.md](../features/flows.md#predictive-next-cut-off-will-they-make-it).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
