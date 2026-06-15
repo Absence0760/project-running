@@ -103,6 +103,9 @@
 	let adoptingSession = $state('');
 	let gymRoutineTemplates = $state<GymRoutineSummary[]>([]);
 	let adoptingRoutine = $state('');
+	const templatesCount = $derived(
+		clubTemplates.length + sessionTemplates.length + gymRoutineTemplates.length
+	);
 
 	async function handleEventCreated(event: { id: string }) {
 		showEventModal = false;
@@ -981,7 +984,7 @@
 				tabindex={tab === 'templates' ? 0 : -1}
 				onclick={() => setTab('templates')}
 			>
-				{tr('clubHome.tabTemplates')}{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
+				{tr('clubHome.tabTemplates')}{templatesCount ? ` (${templatesCount})` : ''}
 			</button>
 		</div>
 
