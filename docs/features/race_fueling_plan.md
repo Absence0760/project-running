@@ -1,50 +1,58 @@
 # Race fueling plan — carbs/hr + fluids synced to the course
 
-> **STATUS: handoff spec, not built.** The deferred fueling half of the
-> roadbook ([race_roadbook.md](race_roadbook.md) § Deferred). Self-contained
-> brief; read [CLAUDE.md](../../CLAUDE.md) for conventions. Web canonical;
-> mobile mirrors; iOS twin byte-identical.
+> **STATUS: shipped (2026-06-14).** Web canonical (`/routes/[id]/roadbook`
+> Fueling toggle) + mobile (`RoadbookScreen`) + iOS twin byte-identical. The
+> fueling half of the roadbook ([race_roadbook.md](race_roadbook.md) §
+> Fueling). Read [CLAUDE.md](../../CLAUDE.md) for conventions. In-run
+> reminders are a deferred separate phase (see § Decisions made).
 
 ## Context / why
 
 The roadbook is pacing-only by design. This adds the fueling layer: a per-leg
 **carbs/hr** + **fluid** plan synced to the aid-station timeline — "carry 3 gels
-to Aid 2, refill 500 ml" — and (later) in-run reminders. It fuses the existing
-nutrition engine with the route, which no competitor does.
+to Aid 2, refill 500 ml". It fuses the nutrition rates with the route, which no
+competitor does. In-run reminders are a deferred separate phase.
 
-## Reuse (don't re-implement)
+## Reuse (it builds on, doesn't re-implement)
 
-- **Roadbook engine** `roadbook.ts ↔ roadbook.dart`: already produces per-leg
-  duration + the aid-station schedule. Wrap/extend it; don't fork it.
-- **Nutrition parity pairs:** `nutrition_targets.ts ↔ .dart` (BMR/TDEE),
-  `exercise_calories.ts ↔ .dart` (run/gym kcal from distance + duration). Use
-  the latter to estimate energy burn per leg.
-- **Body metrics:** weight from `body_metrics` / `user_profiles` (behind the
-  Art 9 health-consent gate — see settings_body_metrics). Used for fluid (~ml/kg)
-  + sweat-rate estimates.
+- **Roadbook engine** `roadbook.ts ↔ roadbook.dart`: produces the per-leg
+  duration + aid-station schedule. `fuel_plan` consumes its legs — it does not
+  fork the pacing model, so fueling inherits the grade-adjusted-effort
+  allocation for free (a long climb leg gets proportionally more fuel).
+- **`runCalories`** (run kcal from distance + duration) computes the optional
+  per-leg energy figure when a bodyweight is present.
 
-## Design
+## Design (as shipped)
 
-1. **New parity helper** `fuel_plan.ts ↔ .dart`:
-   `buildFuelPlan(roadbookLegs, { carbsPerHourG, fluidPerHourMl, heatFactor })`
-   → per-leg `{ carbsG, fluidMl, carryToNextAid: { gels, fluidMl } }` + a
-   total. Carbs/fluid scale with each leg's **duration** (from the roadbook);
-   `carryToNextAid` sums the need between consecutive aid stations (so the
-   runner knows what to carry out of each aid). Optionally surface est. kcal
-   burn per leg via `exercise_calories`.
-2. **Roadbook surface:** a "Fueling" toggle/column on the roadbook page (web)
-   + `RoadbookScreen` (mobile) adding the carb + fluid figures + the carry hint.
-3. **Settings:** `carbs_per_hour` + `fluid_per_hour` prefs in the universal
-   settings bag (defaults ~60–90 g/hr, ~500 ml/hr); a heat toggle bumps fluid.
+1. **Parity helper** `apps/web/src/lib/routes/fuel_plan.ts` ↔
+   `apps/mobile_android/lib/fuel_plan.dart` (iOS twin byte-identical):
+   `buildFuelPlan(roadbookLegs, { carbsPerHourG, fluidPerHourMl, heatFactor?,
+   gelCarbsG?, weightKg? })` → per-leg `{ carbsG, fluidMl, kcal, carryToNextAid?:
+   { carbsG, fluidMl, gels } }` + `{ totalCarbsG, totalFluidMl }`. Carbs/fluid
+   scale with each leg's **duration** (from the roadbook). `carryToNextAid` is
+   present on the start leg + each refill checkpoint whose services include
+   water/food, summing the fuel needed to reach the next refill (inclusive).
+   `heatFactor` (default 1; `HEAT_FLUID_FACTOR` = 1.5) multiplies fluid only.
+   `kcal` is computed via `runCalories` only when a bodyweight is passed.
+   Defaults: 60 g/hr carbs, 500 ml/hr fluid, 25 g/gel. 9 unit/mirror tests each
+   side.
+2. **Roadbook surface:** a "Fueling" toggle on the roadbook page (web,
+   URL-backed) + `RoadbookScreen` (mobile, screen-local) adding per-leg carb +
+   fluid columns + the carry hint, plus a "Heat" toggle. kcal is computed but
+   not shown.
+3. **Settings:** `carbs_per_hour` (g/hr) + `fluid_per_hour` (ml/hr) prefs in the
+   universal settings bag (defaults 60 / 500), editable on Settings →
+   Preferences. See [settings.md](../backend/settings.md).
 
 No new schema (prefs in the existing universal bag).
 
 ## Commit cadence
 
-1. `fuel_plan.ts/.dart` helper + unit/mirror tests.
-2. Web roadbook fueling column + settings prefs + i18n + Playwright.
-3. Mobile mirror (+ iOS twin) + Flutter test.
-4. Docs.
+1. ✅ `fuel_plan.ts/.dart` helper + unit/mirror tests.
+2. ✅ Web roadbook fueling toggle + Heat toggle + settings prefs + i18n (6
+   locales) + Playwright.
+3. ✅ Mobile mirror (+ iOS twin) + ARB keys (7 ARBs) + Flutter test.
+4. ✅ Docs.
 
 ## Tests
 
@@ -54,16 +62,29 @@ No new schema (prefs in the existing universal bag).
   hint; changing the carbs/hr pref updates the numbers.
 - Flutter widget test for the fueling section.
 
-## Open decisions for the implementer (ask the user if unsure)
+## Decisions made
 
-- Default carbs/hr + fluid/hr; whether fluid is weight-based (Art 9 gate) or a
-  flat default when consent is absent.
-- **In-run reminders are likely a separate phase** — they need the run recorder
-  + the live workout band (`workout_execution_band.dart`); recommend deferring
-  and keeping this feature plan-only.
-- Whether to show est. kcal burn per leg (nice, but adds clutter).
+- **Flat per-hour rates, not weight-derived.** `carbs_per_hour` / `fluid_per_hour`
+  are plain per-hour prefs (60 / 500 defaults), deliberately **not** a
+  weight-based sweat-rate / ml-per-kg model — that keeps the feature out of the
+  Art 9 health-special-category consent gate. The weight-derived fluid model
+  (behind the gate) is the deferred upgrade.
+- **Heat is a non-persisted toggle.** The "Heat" toggle multiplies fluid only
+  (`HEAT_FLUID_FACTOR` = 1.5); it is a screen/URL toggle, not a stored pref, so
+  the saved baseline stays moderate-conditions.
+- **kcal is computed but not shown.** `buildFuelPlan` returns a per-leg `kcal`
+  (via `runCalories`, only when a bodyweight is present) for a possible later
+  surface, but the UI omits it to avoid clutter.
+- **In-run reminders deferred to a separate phase.** They need the run recorder
+  + the live workout band (`workout_execution_band.dart`); this feature ships
+  plan-only.
+
+See [decisions.md § 155](../architecture/decisions.md#155-the-race-fueling-plan-extends-the-roadbook-engine-with-flat-per-hour-rate-prefs-not-weight-derived-sweat-estimates)
+for the full rationale.
 
 ## Docs
 
-Extend [race_roadbook.md](race_roadbook.md) (remove from § Deferred), the
-nutrition section, a parity row, and an ADR if the fuel model is non-obvious.
+Cross-references: [race_roadbook.md](race_roadbook.md) § Fueling,
+[settings.md](../backend/settings.md) (`carbs_per_hour` / `fluid_per_hour`),
+[parity.md](../product/parity.md) (Race fueling plan row), and
+[decisions.md § 155](../architecture/decisions.md).

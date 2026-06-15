@@ -3181,6 +3181,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 155. The race fueling plan extends the roadbook engine with flat per-hour rate prefs, not weight-derived sweat estimates
+
+**Decided (2026-06-14, `fuel_plan.ts`/`.dart` + the Fueling toggle on `/routes/[id]/roadbook`).** The fueling layer is the deferred half of the roadbook (§153). Four choices. (1) It **reuses the roadbook engine** rather than forking one: `buildFuelPlan` consumes the roadbook's already-allocated per-leg durations and scales carbs + fluid onto each leg from a per-hour rate, so fuelling inherits the grade-adjusted-effort allocation (a long climb leg gets proportionally more carbs/fluid) for free, plus a `carryToNextAid` roll-up per refill checkpoint. (2) Rates are **flat per-hour prefs** — `carbs_per_hour` (60 g/hr) + `fluid_per_hour` (500 ml/hr) in the universal settings bag — **not** weight-derived sweat-rate / ml-per-kg estimates, deliberately keeping the feature out of the Art 9 health-special-category consent gate (a per-hour strategy number is an effort label, not a body measurement, like `nutrition_activity_level`). (3) **Heat is a non-persisted multiplier** (`HEAT_FLUID_FACTOR` = 1.5, fluid only) — a screen/URL toggle, not a stored pref, so the saved baseline stays moderate-conditions. (4) kcal per leg is **computed but not shown** (via `runCalories` only when a bodyweight is present) — kept in the model for a later surface but omitted from the UI to avoid clutter.
+
+**Why.** Forking a second pacing model would have duplicated the effort-allocation logic and let the two drift; scaling onto the roadbook's existing leg durations is the single-source-of-truth path. The flat-rate choice is the §150 fail-closed instinct applied to scope: a weight-based sweat model is a genuinely better number but drags in consent plumbing for a v1 that crews can use today, so the durable-but-gated weight model is the deferred upgrade, not a blocker. Heat-as-toggle matches how a runner actually reasons ("it's hot today, carry more") without polluting the persisted plan.
+
+**Trade-off.** Flat per-hour rates ignore body mass and individual sweat rate, so the fluid figure is a planning baseline, not a physiological prescription. No in-run execution: the plan is read off the roadbook, not pushed to the recorder.
+
+**Boundary / not-yet-done.** In-run fueling reminders are a deferred separate phase — they need the run recorder + the live workout band (`workout_execution_band.dart`) and so ship later; weight-derived fluid (behind the Art 9 gate) and surfacing the computed kcal are the other follow-ups. See [race_fueling_plan.md](../features/race_fueling_plan.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

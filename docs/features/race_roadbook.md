@@ -61,13 +61,22 @@ share-sheet text dump.
 A "Roadbook (crew sheet)" link on `/routes/[id]` (web) and a button on
 `route_detail_screen` (mobile), shown only when the route has markers.
 
+## Fueling
+
+The roadbook also carries a **fueling layer** — see
+[race_fueling_plan.md](race_fueling_plan.md). A "Fueling" toggle adds per-leg
+**carbs** + **fluid** columns plus a "carry to next aid" hint, and a "Heat"
+toggle bumps fluid only. The `fuel_plan.ts ↔ .dart` engine scales each figure
+with the leg's duration off the roadbook timeline; rates come from the universal
+prefs `carbs_per_hour` (60 g/hr default) + `fluid_per_hour` (500 ml/hr). Web
+encodes the fueling toggle in the URL like the pacing controls; mobile keeps it
+screen-local. In-run reminders are a deferred separate phase.
+
 ## Deferred (follow-ups)
 
 - **Saved named race plans** — a `race_plans` table (route + goal + start +
   owner) so a runner saves "Moab 240 — sub-100h" and crew load it by name,
   instead of passing a URL. The clean next phase now that the engine + UI exist.
-- **Fueling column** — carbs/hr + per-aid fuel/fluid target, wiring in the
-  nutrition engine (`nutrition_targets` / `exercise_calories`).
 - **Riegel-seeded default goal** — seed the default from the runner's best
   recent effort + a `predictionConfidence` badge (the `RaceDayPanel` pattern),
   instead of a flat default pace.
