@@ -30,6 +30,20 @@ description: >
      re-running. If cleanup can't free them, it fails loudly with the
      holder dumped instead of letting `supabase start` emit its cryptic
      bind error a second time.
+
+     2b. The container force-remove is not enough on its own: a partial
+     start can also strand the stack's docker NETWORK with a dangling
+     endpoint that still reserves host port 54322 at the docker layer
+     even though NO container publishes it and NO socket is in LISTEN —
+     so the `ss`-based port probe reports every port free yet docker's
+     bind fails anyway. That is exactly what recurred in CI run
+     27567813578 (e2e shard 10): both attempts hit the identical 54322
+     bind error with the preflight gate reporting all ports free, so the
+     container-only cleanup had nothing to remove. The fix: cleanup also
+     removes any leftover `supabase_network_*` docker network (releasing
+     the reservation), and the gate treats a stranded stack network as a
+     holder the `ss` probe can't see, so it is cleaned + verified rather
+     than silently carried into the next attempt.
 runs:
   using: composite
   steps:
@@ -58,6 +72,25 @@ runs:
           printf '%s' "$busy"
         }
 
+        stack_networks() {
+          # A stranded `supabase_network_*` network keeps a dangling
+          # endpoint that reserves host port 54322 at the docker layer
+          # even with no container + nothing in LISTEN, so busy_ports
+          # (ss) can't see it. Its presence before a start means a prior
+          # attempt left the stack half-torn-down. See incident 2b above.
+          docker network ls --filter "name=supabase_network_" -q 2>/dev/null || true
+        }
+
+        # All holders busy_ports can't see on its own, as a single token
+        # the gate can test + print: ss-visible ports plus "stack-network"
+        # when a leftover supabase network is reserving a port.
+        stack_holders() {
+          local b n
+          b=$(busy_ports)
+          n=$(stack_networks)
+          printf '%s' "$b${n:+ stack-network}"
+        }
+
         free_ports() {
           # supabase stop is project-aware but does not reliably release
           # the host port a partial start orphaned (supabase/cli#3265),
@@ -74,21 +107,33 @@ runs:
             echo "force-removing leftover container(s) holding stack ports:"
             docker rm -f $cids >/dev/null 2>&1 || true
           fi
+          # Then drop any leftover stack network. With the containers gone
+          # it has no active endpoints, so `network rm` succeeds and frees
+          # the docker-layer port reservation that the ss probe is blind
+          # to (incident 2b). No-op when supabase stop already removed it.
+          local nets
+          nets=$(stack_networks)
+          if [ -n "$nets" ]; then
+            echo "removing leftover supabase network(s) reserving stack ports:"
+            docker network rm $nets >/dev/null 2>&1 || true
+          fi
         }
 
         for attempt in 1 2; do
-          # Gate on the real precondition — free ports — before each
-          # attempt. On attempt 1 of a fresh runner this is a no-op; on
-          # attempt 2 it proves the post-failure cleanup actually worked.
-          busy=$(busy_ports)
+          # Gate on the real precondition — no leftover holder — before
+          # each attempt. On attempt 1 of a fresh runner this is a no-op;
+          # on attempt 2 it proves the post-failure cleanup actually
+          # worked (ports AND the docker network it reserves through).
+          busy=$(stack_holders)
           if [ -n "$busy" ]; then
-            echo "::warning::stack ports in use before attempt $attempt:$busy"
+            echo "::warning::stack ports/network in use before attempt $attempt:$busy"
             docker ps --format '{{.Names}} {{.Ports}}' || true
             free_ports
-            busy=$(busy_ports)
+            busy=$(stack_holders)
             if [ -n "$busy" ]; then
-              echo "::error::stack ports still in use after cleanup:$busy"
+              echo "::error::stack ports/network still in use after cleanup:$busy"
               ss -ltnp 2>/dev/null | grep -E '5432[0-9]' || true
+              docker network ls --filter "name=supabase_network_" || true
               exit 1
             fi
           fi
