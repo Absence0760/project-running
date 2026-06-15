@@ -86,6 +86,24 @@ void main() {
       runner.dispose();
     });
 
+    test('skipping a step does NOT emit its trailing rest', () async {
+      final runner = GymWorkoutRunner(steps: [
+        _step(setIndex: 0, restS: 90),
+        _step(setIndex: 1),
+      ]);
+      final rests = <GymRestStartedEvent>[];
+      runner.events.listen((e) {
+        if (e is GymRestStartedEvent) rests.add(e);
+      });
+      runner.start();
+      runner.skipStep();
+      await Future<void>.delayed(Duration.zero);
+      // A skipped set wasn't performed, so no recovery rest — straight to set 2.
+      expect(rests, isEmpty);
+      expect(runner.currentStepIndex, 1);
+      runner.dispose();
+    });
+
     test('an empty step list completes instantly on start', () async {
       final runner = GymWorkoutRunner(steps: const []);
       var completed = 0;

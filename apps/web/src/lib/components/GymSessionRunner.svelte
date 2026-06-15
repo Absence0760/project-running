@@ -64,7 +64,9 @@
 
 	function onSkip() {
 		outcomes[currentIndex] = { kind: 'skipped' };
-		advance();
+		// A skipped set isn't performed, so its trailing rest doesn't apply —
+		// go straight to the next step rather than through advance()'s rest timer.
+		currentIndex += 1;
 	}
 
 	function onRewind() {

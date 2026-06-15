@@ -165,7 +165,9 @@ class GymWorkoutRunner {
       actualDurationS: null,
       status: GymRunnerStepStatus.skipped,
     ));
-    _advance();
+    // A skipped set isn't performed, so its trailing rest doesn't apply —
+    // advance straight to the next step (matches web GymSessionRunner.onSkip).
+    _advance(withRest: false);
   }
 
   bool rewindStep() {
@@ -235,7 +237,7 @@ class GymWorkoutRunner {
     _events.close();
   }
 
-  void _advance() {
+  void _advance({bool withRest = true}) {
     final prev = _idx;
     // rest_s is "rest after this set" (schema + web GymSessionRunner), so the
     // pause is authored on the just-completed step, not the one we move to.
@@ -247,7 +249,7 @@ class GymWorkoutRunner {
     }
     final next = steps[_idx];
     final rest = completed.restS;
-    if (rest != null && rest > 0) {
+    if (withRest && rest != null && rest > 0) {
       _events.add(GymRestStartedEvent(restS: rest, nextStep: next));
     }
     _events.add(GymStepTransitionEvent(
