@@ -148,8 +148,11 @@ test.describe('/compare — visitor conversion journey (anon, static marketing p
 			await page.waitForURL(/\/coach$/);
 			// coach/+page.svelte:161 → <title>{m('coachPage.documentTitle')}</title>
 			// = "Coach — Threkir" (en.ts:165). Proves we navigated to the
-			// real surface, not an error shell.
-			await expect(page).toHaveTitle(/Coach — Threkir/);
+			// real surface, not an error shell. The title is set client-side in
+			// <svelte:head> after hydration, which can lag the URL change under
+			// a loaded dev server — give it a generous window so the batch run
+			// isn't flaky.
+			await expect(page).toHaveTitle(/Coach — Threkir/, { timeout: 20_000 });
 		});
 
 		await test.step('the donate CTA routes an anon visitor into the sign-in funnel', async () => {
