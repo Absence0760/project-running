@@ -3227,6 +3227,16 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 159. Derived-count trigger functions must be SECURITY DEFINER or a club owner can't delete their account (Art-17 erasure)
+
+**Decided (2026-06-16, migration `20270205_001` + `club_owner_account_deletion_test.sql`).** `clubs_member_count_trigger()` — the AFTER INSERT/UPDATE/DELETE trigger on `club_members` that maintains `clubs.member_count` — was the lone derived-count trigger written `SECURITY INVOKER`; its siblings (`routes_run_count_trigger`, `refresh_personal_records_for_user`) are `SECURITY DEFINER`. That asymmetry made **any club owner undeletable**: GoTrue's `admin.deleteUser` (what the `delete-account` Edge Function calls) runs the `auth.users` delete as the `supabase_auth_admin` role, the `ON DELETE CASCADE` strips the owner's `club_members` row, and the trigger's `update clubs set member_count = …` then runs as `supabase_auth_admin` — which has no UPDATE privilege on `public.clubs`. The UPDATE raises permission-denied, GoTrue returns the generic "Database error deleting user", and the EF 500s. A GDPR Art-17 erasure failure for a whole class of users.
+
+**Why it stayed hidden.** A superuser delete — `supabase db reset`, raw `psql DELETE FROM auth.users` — cascades fine, because the privilege gap only bites under the `supabase_auth_admin` role GoTrue actually uses. So schema-drift checks, local resets, and even the e2e saga fixture (`saga-users.ts` pre-deletes owned clubs in `OWNER_TABLES` before the auth delete) all sailed past it. It surfaced only when an e2e journey (`tests-e2e/cross-cutting/account-data-rights-journey.spec.ts`) drove the real delete-account EF for a club-owning user and got a 500.
+
+**The rule.** Any trigger that writes a table during a cascade reachable from `auth.users` deletion must be `SECURITY DEFINER` (with a pinned `search_path`), so the cascade write runs as the function owner regardless of which role drives the delete — never `SECURITY INVOKER`. When adding a derived-state/count trigger, match the existing DEFINER siblings. pgtap can't assume the `supabase_auth_admin` role, so the regression is pinned at two layers: the `prosecdef = true` attribute (cheap, catches a revert) plus the full delete-account path in the web e2e journey.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
