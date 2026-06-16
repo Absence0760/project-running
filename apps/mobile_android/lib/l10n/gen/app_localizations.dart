@@ -8335,6 +8335,48 @@ abstract class AppLocalizations {
   /// **'Sign in'**
   String get settingsAccountSignIn;
 
+  /// Profile-photo (avatar) tile title in Account settings
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get settingsAccountAvatar;
+
+  /// Subtitle under the profile-photo tile listing accepted formats
+  ///
+  /// In en, this message translates to:
+  /// **'JPEG, PNG, or WebP, up to 2 MB.'**
+  String get settingsAccountAvatarHint;
+
+  /// Tooltip on the remove-avatar button
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get settingsAccountAvatarRemove;
+
+  /// Banner shown after the avatar uploads
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo updated.'**
+  String get settingsAccountAvatarSaved;
+
+  /// Banner shown after the avatar is removed
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo removed.'**
+  String get settingsAccountAvatarRemoved;
+
+  /// Banner shown when a picked image isn't a supported avatar format
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported image — choose a JPEG, PNG, or WebP.'**
+  String get settingsAccountAvatarUnsupported;
+
+  /// Banner shown when the avatar upload or removal fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update photo: {error}'**
+  String settingsAccountAvatarFailed(Object error);
+
   /// Tile title that opens the user's own profile
   ///
   /// In en, this message translates to:

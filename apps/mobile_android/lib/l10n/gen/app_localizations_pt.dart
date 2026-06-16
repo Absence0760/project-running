@@ -5061,6 +5061,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsAccountSignIn => 'Entrar';
 
   @override
+  String get settingsAccountAvatar => 'Foto de perfil';
+
+  @override
+  String get settingsAccountAvatarHint => 'JPEG, PNG ou WebP, até 2 MB.';
+
+  @override
+  String get settingsAccountAvatarRemove => 'Remover foto';
+
+  @override
+  String get settingsAccountAvatarSaved => 'Foto de perfil atualizada.';
+
+  @override
+  String get settingsAccountAvatarRemoved => 'Foto de perfil removida.';
+
+  @override
+  String get settingsAccountAvatarUnsupported =>
+      'Imagem não suportada — escolha JPEG, PNG ou WebP.';
+
+  @override
+  String settingsAccountAvatarFailed(Object error) {
+    return 'Não foi possível atualizar a foto: $error';
+  }
+
+  @override
   String get settingsAccountViewProfile => 'Ver perfil';
 
   @override
@@ -14356,6 +14380,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsAccountSignIn => 'Entrar';
+
+  @override
+  String get settingsAccountAvatar => 'Foto de perfil';
+
+  @override
+  String get settingsAccountAvatarHint => 'JPEG, PNG ou WebP, até 2 MB.';
+
+  @override
+  String get settingsAccountAvatarRemove => 'Remover foto';
+
+  @override
+  String get settingsAccountAvatarSaved => 'Foto de perfil atualizada.';
+
+  @override
+  String get settingsAccountAvatarRemoved => 'Foto de perfil removida.';
+
+  @override
+  String get settingsAccountAvatarUnsupported =>
+      'Imagem não suportada — escolha JPEG, PNG ou WebP.';
+
+  @override
+  String settingsAccountAvatarFailed(Object error) {
+    return 'Não foi possível atualizar a foto: $error';
+  }
 
   @override
   String get settingsAccountViewProfile => 'Ver perfil';

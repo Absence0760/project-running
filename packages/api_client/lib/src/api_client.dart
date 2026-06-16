@@ -2182,6 +2182,69 @@ class ApiClient {
     return UserProfileRow.fromJson(result as Map<String, dynamic>);
   }
 
+  /// Upload a profile avatar into the public `avatars` bucket and point
+  /// `user_profiles.avatar_url` at it. Mirrors web `uploadAvatar` (data.ts):
+  /// the caller strips EXIF/GPS before passing [bytes] (mobile strips in the
+  /// UI layer, like run/route photos). We remove-then-insert at the stable
+  /// `{uid}/avatar.{ext}` path rather than upsert — the avatars bucket grants
+  /// owner INSERT + DELETE but not the upsert WITH-CHECK path (see
+  /// decisions.md §157) — and a `?v=` cache-bust keeps an Image off the
+  /// previous picture. Returns the new public URL, already written to the row.
+  Future<String> uploadAvatar({
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    final ext = _avatarMimeToExt[contentType];
+    if (ext == null) {
+      throw Exception('Unsupported image type — JPEG, PNG, or WebP only');
+    }
+    if (bytes.length > _avatarMaxBytes) {
+      throw Exception('Image too large (2 MB max)');
+    }
+    // Clear any existing avatar (this ext + the others) so the upload is a
+    // clean INSERT, not an upsert. remove() on a missing path is a no-op.
+    await _client.storage
+        .from(StorageBuckets.avatars)
+        .remove(_avatarPaths(userId));
+    final path = '$userId/avatar.$ext';
+    await _client.storage.from(StorageBuckets.avatars).uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
+    final base = _client.storage.from(StorageBuckets.avatars).getPublicUrl(path);
+    final url = '$base?v=${DateTime.now().millisecondsSinceEpoch}';
+    await _client
+        .from('user_profiles')
+        .update({'avatar_url': url}).eq('id', userId);
+    return url;
+  }
+
+  /// Remove the user's avatar — drops every stored object for them and clears
+  /// `user_profiles.avatar_url` to null (renderers fall back to initials).
+  Future<void> removeAvatar() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    await _client.storage
+        .from(StorageBuckets.avatars)
+        .remove(_avatarPaths(userId));
+    await _client
+        .from('user_profiles')
+        .update({'avatar_url': null}).eq('id', userId);
+  }
+
+  static const _avatarMimeToExt = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  // Matches the avatars bucket file_size_limit (2 MB, migration 20260927_001).
+  static const _avatarMaxBytes = 2 * 1024 * 1024;
+  static List<String> _avatarPaths(String userId) =>
+      _avatarMimeToExt.values.map((e) => '$userId/avatar.$e').toList();
+
   /// Follower / following counts via `count: 'exact', head: true`.
   /// Returned as a `(followers, following)` tuple to keep the call
   /// sites readable.

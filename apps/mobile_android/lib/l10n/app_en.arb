@@ -6201,6 +6201,39 @@
   "@settingsAccountSignIn": {
     "description": "Sign-in button on the Account screen"
   },
+  "settingsAccountAvatar": "Profile photo",
+  "@settingsAccountAvatar": {
+    "description": "Profile-photo (avatar) tile title in Account settings"
+  },
+  "settingsAccountAvatarHint": "JPEG, PNG, or WebP, up to 2 MB.",
+  "@settingsAccountAvatarHint": {
+    "description": "Subtitle under the profile-photo tile listing accepted formats"
+  },
+  "settingsAccountAvatarRemove": "Remove photo",
+  "@settingsAccountAvatarRemove": {
+    "description": "Tooltip on the remove-avatar button"
+  },
+  "settingsAccountAvatarSaved": "Profile photo updated.",
+  "@settingsAccountAvatarSaved": {
+    "description": "Banner shown after the avatar uploads"
+  },
+  "settingsAccountAvatarRemoved": "Profile photo removed.",
+  "@settingsAccountAvatarRemoved": {
+    "description": "Banner shown after the avatar is removed"
+  },
+  "settingsAccountAvatarUnsupported": "Unsupported image — choose a JPEG, PNG, or WebP.",
+  "@settingsAccountAvatarUnsupported": {
+    "description": "Banner shown when a picked image isn't a supported avatar format"
+  },
+  "settingsAccountAvatarFailed": "Couldn't update photo: {error}",
+  "@settingsAccountAvatarFailed": {
+    "description": "Banner shown when the avatar upload or removal fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "settingsAccountViewProfile": "View profile",
   "@settingsAccountViewProfile": {
     "description": "Tile title that opens the user's own profile"

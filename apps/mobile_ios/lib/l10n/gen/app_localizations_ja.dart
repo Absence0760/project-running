@@ -4764,6 +4764,30 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountSignIn => 'サインイン';
 
   @override
+  String get settingsAccountAvatar => 'プロフィール写真';
+
+  @override
+  String get settingsAccountAvatarHint => 'JPEG、PNG、WebP、2 MB まで。';
+
+  @override
+  String get settingsAccountAvatarRemove => '写真を削除';
+
+  @override
+  String get settingsAccountAvatarSaved => 'プロフィール写真を更新しました。';
+
+  @override
+  String get settingsAccountAvatarRemoved => 'プロフィール写真を削除しました。';
+
+  @override
+  String get settingsAccountAvatarUnsupported =>
+      '対応していない画像です — JPEG、PNG、WebP を選んでください。';
+
+  @override
+  String settingsAccountAvatarFailed(Object error) {
+    return '写真を更新できませんでした: $error';
+  }
+
+  @override
   String get settingsAccountViewProfile => 'プロフィールを表示';
 
   @override

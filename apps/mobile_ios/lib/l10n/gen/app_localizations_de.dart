@@ -5068,6 +5068,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsAccountSignIn => 'Anmelden';
 
   @override
+  String get settingsAccountAvatar => 'Profilfoto';
+
+  @override
+  String get settingsAccountAvatarHint => 'JPEG, PNG oder WebP, bis zu 2 MB.';
+
+  @override
+  String get settingsAccountAvatarRemove => 'Foto entfernen';
+
+  @override
+  String get settingsAccountAvatarSaved => 'Profilfoto aktualisiert.';
+
+  @override
+  String get settingsAccountAvatarRemoved => 'Profilfoto entfernt.';
+
+  @override
+  String get settingsAccountAvatarUnsupported =>
+      'Nicht unterstütztes Bild — wähle JPEG, PNG oder WebP.';
+
+  @override
+  String settingsAccountAvatarFailed(Object error) {
+    return 'Foto konnte nicht aktualisiert werden: $error';
+  }
+
+  @override
   String get settingsAccountViewProfile => 'Profil ansehen';
 
   @override

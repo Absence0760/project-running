@@ -5013,6 +5013,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccountSignIn => 'Sign in';
 
   @override
+  String get settingsAccountAvatar => 'Profile photo';
+
+  @override
+  String get settingsAccountAvatarHint => 'JPEG, PNG, or WebP, up to 2 MB.';
+
+  @override
+  String get settingsAccountAvatarRemove => 'Remove photo';
+
+  @override
+  String get settingsAccountAvatarSaved => 'Profile photo updated.';
+
+  @override
+  String get settingsAccountAvatarRemoved => 'Profile photo removed.';
+
+  @override
+  String get settingsAccountAvatarUnsupported =>
+      'Unsupported image — choose a JPEG, PNG, or WebP.';
+
+  @override
+  String settingsAccountAvatarFailed(Object error) {
+    return 'Couldn\'t update photo: $error';
+  }
+
+  @override
   String get settingsAccountViewProfile => 'View profile';
 
   @override

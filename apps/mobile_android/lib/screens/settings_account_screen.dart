@@ -1,14 +1,17 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:api_client/api_client.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../backup.dart';
+import '../exif_strip.dart';
 import '../backup_server_client.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
@@ -51,11 +54,16 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   // builds / two share sheets / two restore loops.
   bool _accountBusy = false;
 
+  String? _avatarUrl;
+  bool _avatarBusy = false;
+  final ImagePicker _avatarPicker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
     _loadCoachConsent();
+    _loadAvatar();
   }
 
   @override
@@ -72,6 +80,100 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       if (mounted) setState(() => _coachConsentAt = at);
     } catch (_) {
       // Non-fatal: leave the withdrawal control hidden if the lookup fails.
+    }
+  }
+
+  Future<void> _loadAvatar() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final profile = await api.fetchMyProfile();
+      if (mounted) setState(() => _avatarUrl = profile?.avatarUrl);
+    } catch (_) {
+      // Non-fatal: the tile falls back to the email initial.
+    }
+  }
+
+  String? _avatarContentType(String filename) {
+    final dot = filename.lastIndexOf('.');
+    final ext = dot >= 0 ? filename.substring(dot + 1).toLowerCase() : '';
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    final api = widget.apiClient;
+    final l10n = AppLocalizations.of(context);
+    if (api == null || api.userId == null) {
+      showTopBanner(context, l10n.settingsAccountSignInToSync);
+      return;
+    }
+    XFile? f;
+    try {
+      f = await _avatarPicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, l10n.settingsAccountAvatarFailed('$e'));
+      return;
+    }
+    if (f == null) return;
+    final contentType = _avatarContentType(f.name);
+    if (contentType == null) {
+      if (!mounted) return;
+      showTopBanner(context, l10n.settingsAccountAvatarUnsupported);
+      return;
+    }
+    setState(() => _avatarBusy = true);
+    try {
+      final raw = await f.readAsBytes();
+      // Strip EXIF/GPS before the bytes leave the device — the avatars bucket
+      // is public with no server-side strip worker (mirrors web + run-photos).
+      final clean = stripJpegExif(Uint8List.fromList(raw));
+      final url = await api.uploadAvatar(bytes: clean, contentType: contentType);
+      if (!mounted) return;
+      setState(() {
+        _avatarUrl = url;
+        _avatarBusy = false;
+      });
+      showTopBanner(context, l10n.settingsAccountAvatarSaved);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _avatarBusy = false);
+      showTopBanner(context, l10n.settingsAccountAvatarFailed('$e'));
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    final api = widget.apiClient;
+    final l10n = AppLocalizations.of(context);
+    if (api == null) return;
+    setState(() => _avatarBusy = true);
+    try {
+      await api.removeAvatar();
+      if (!mounted) return;
+      setState(() {
+        _avatarUrl = null;
+        _avatarBusy = false;
+      });
+      showTopBanner(context, l10n.settingsAccountAvatarRemoved);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _avatarBusy = false);
+      showTopBanner(context, l10n.settingsAccountAvatarFailed('$e'));
     }
   }
 
@@ -449,6 +551,36 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                       child: Text(l10n.settingsAccountSignIn),
                     ),
             ),
+            if (signedIn)
+              ListTile(
+                leading: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  backgroundImage:
+                      (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                          ? NetworkImage(_avatarUrl!)
+                          : null,
+                  child: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                      ? Text(email.isNotEmpty ? email[0].toUpperCase() : '?')
+                      : null,
+                ),
+                title: Text(l10n.settingsAccountAvatar),
+                subtitle: Text(l10n.settingsAccountAvatarHint),
+                trailing: _avatarBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                        ? IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            tooltip: l10n.settingsAccountAvatarRemove,
+                            onPressed: _removeAvatar,
+                          )
+                        : const Icon(Icons.photo_camera_outlined),
+                onTap: _avatarBusy ? null : _pickAvatar,
+              ),
             if (signedIn)
               ListTile(
                 leading: const Icon(Icons.person_outline),
