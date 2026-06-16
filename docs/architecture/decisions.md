@@ -3237,6 +3237,14 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 160. Saved routes are read by id from the `public_routes` view, not embedded off `saved_routes`, so a bookmarked public route actually shows in My routes
+
+**Decided (2026-06-16, `fetchRoutesWithError` in `core/data.ts`).** My routes (`/routes` "My routes" tab) is the union of the caller's owned routes and their bookmarked (`saved_routes`) routes. It used a PostgREST embed — `saved_routes.select('saved_at, route:routes(*)')` — which resolves the route body through the **base `routes` table** under the caller's RLS. But the base `routes` SELECT policy only exposes the caller's **own + club** routes (public routes are read through the `public_routes` view + `clip_route_for_viewer`, mirroring the runs pattern from `20260701_001`). So a route the user bookmarked from **Explore** — i.e. another user's *public* route, which is the entire point of bookmarking — embedded to `null` and silently vanished from My routes. The bookmark feature was effectively dead for its primary use case; only a self-bookmark or a club route ever rendered.
+
+**Why this fix, not a base-table policy.** Adding a "public routes are selectable" policy to the base `routes` table would make the saved embed work, but it would also expose `routes.waypoints` (the full geometry) to every viewer, bypassing the `clip_route_for_viewer` privacy-clipping the view/RPC split exists to enforce. So the fix stays client-side: fetch the saved `route_id`s, then read their bodies **by id from the `public_routes` view** (public-route metadata — enough to render a My-routes card; waypoints stay behind the clip path) **unioned with the base table** (for own / club-visible saved routes), preferring the fuller base-table row. Found + pinned by `tests-e2e/routes/route-discover-save-review-journey.spec.ts` (a cross-user discover → save → review journey). Web-only — mobile has no `saved_routes` read path.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

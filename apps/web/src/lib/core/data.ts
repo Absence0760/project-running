@@ -1118,7 +1118,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 		return { routes: [], error: 'Not signed in — sign in to see your saved routes.' };
 	}
 
-	const [ownedRes, savedRes] = await Promise.all([
+	const [ownedRes, savedIdsRes] = await Promise.all([
 		supabase
 			.from('routes')
 			.select('*')
@@ -1126,7 +1126,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 			.order('created_at', { ascending: false }),
 		supabase
 			.from('saved_routes')
-			.select('saved_at, route:routes(*)')
+			.select('route_id, saved_at')
 			.eq('user_id', userId)
 			.order('saved_at', { ascending: false }),
 	]);
@@ -1140,9 +1140,37 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	}
 
 	const owned = (ownedRes.data ?? []) as Route[];
-	const saved = ((savedRes.data ?? []) as unknown as { route: Route | null }[])
-		.map(r => r.route)
-		.filter((r): r is Route => r != null);
+
+	// Saved routes can't be embedded as `route:routes(*)` off saved_routes:
+	// the base `routes` SELECT RLS only exposes the caller's own + club
+	// routes, so a bookmarked route owned by ANOTHER user (the dominant
+	// case — you save other people's routes from Explore) joins to null and
+	// silently vanishes from My routes. Read the saved bodies by id from the
+	// `public_routes` view (which exposes every public route's metadata,
+	// the same privacy-preserving path Explore uses — waypoints stay behind
+	// clip_route_for_viewer) AND the base table (for own / club-visible
+	// saved routes), then union, preferring the fuller base-table row.
+	const savedIds = ((savedIdsRes.data ?? []) as { route_id: string }[]).map(
+		(r) => r.route_id,
+	);
+	let saved: Route[] = [];
+	if (savedIds.length > 0) {
+		const [savedBaseRes, savedPublicRes] = await Promise.all([
+			supabase.from('routes').select('*').in('id', savedIds),
+			supabase.from('public_routes').select('*').in('id', savedIds),
+		]);
+		const byId = new Map<string, Route>();
+		for (const r of [
+			...((savedBaseRes.data ?? []) as Route[]),
+			...((savedPublicRes.data ?? []) as unknown as Route[]),
+		]) {
+			if (!byId.has(r.id)) byId.set(r.id, r);
+		}
+		// Preserve the saved_at-desc order the id list already carries.
+		saved = savedIds
+			.map((id) => byId.get(id))
+			.filter((r): r is Route => r != null);
+	}
 
 	const seen = new Set<string>();
 	const merged: Route[] = [];
