@@ -3,6 +3,7 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { fetchRuns } from '$lib/core/data';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { formatISO } from '$lib/training/training';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import type { Run } from '$lib/types';
@@ -50,6 +51,12 @@
 	}
 
 	onMount(async () => {
+		// Wait for the auth store to hydrate before the user-scoped fetch —
+		// on a cold load (this page is built to be bookmarked / shared, per
+		// the tagline) auth.user.id is null on first paint, so fetchRuns()
+		// would return [] and every period stat would render "—". Same
+		// pattern the dashboard / coach / plans routes use (auth_ready.ts).
+		await auth.ready();
 		runs = await fetchRuns();
 		loading = false;
 	});
