@@ -138,21 +138,18 @@ test.describe('/compare — visitor conversion journey (anon, static marketing p
 			expect(oursBg).not.toBe('transparent');
 		});
 
-		await test.step('drill into the AI Coach feature link → /coach', async () => {
+		await test.step('the AI Coach feature link routes an anon visitor into the sign-in funnel', async () => {
 			// The footer "Explore the features" strip links to the real
-			// product surfaces (compare/+page.svelte:104 a[href="/coach"]).
-			// Following it must land on the actual Coach page, not 404.
+			// product surfaces (compare/+page.svelte:104 a[href="/coach"]). But
+			// /coach is NOT in the +layout.svelte anon-allowed set, so the
+			// global auth guard bounces an unauthenticated visitor to /login
+			// (with a return_to=/coach so they land on Coach after signing in).
+			// The marketing link's job is to route into that funnel — the same
+			// auth-wall end the donate CTA hits below.
 			const coachLink = page.locator('.cmp-footer a[href="/coach"]');
 			await expect(coachLink).toBeVisible();
 			await coachLink.click();
-			await page.waitForURL(/\/coach$/);
-			// coach/+page.svelte:161 → <title>{m('coachPage.documentTitle')}</title>
-			// = "Coach — Threkir" (en.ts:165). Proves we navigated to the
-			// real surface, not an error shell. The title is set client-side in
-			// <svelte:head> after hydration, which can lag the URL change under
-			// a loaded dev server — give it a generous window so the batch run
-			// isn't flaky.
-			await expect(page).toHaveTitle(/Coach — Threkir/, { timeout: 20_000 });
+			await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
 		});
 
 		await test.step('the donate CTA routes an anon visitor into the sign-in funnel', async () => {
