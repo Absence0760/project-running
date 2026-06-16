@@ -271,10 +271,31 @@ test.describe('/nutrition — manual log, render, water', () => {
 	}) => {
 		const admin = getAdminClient();
 
-		// Seed a run earlier today so the page computes exercise calories. The
-		// seed user has body metrics, so targets are non-null and the breakdown
-		// line renders.
-		const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+		// Seed a run "today" so the page computes exercise calories. The seed
+		// user has body metrics, so targets are non-null and the breakdown line
+		// renders.
+		//
+		// The page buckets runs into "today" by the BROWSER's calendar day, and
+		// the Playwright browser is pinned to UTC (timezoneId in the config)
+		// while this Node process runs in the workstation's local zone. A
+		// past-offset timestamp ("2h ago") computed here could land on a
+		// *different* UTC calendar day than the browser's "today" — which is
+		// exactly how this flaked on shard 7 of run 27585503400 at 00:31 UTC:
+		// the run fell on the previous UTC day, was filtered out of todayRuns,
+		// exerciseKcal went to 0, and the breakdown never rendered. Seed at the
+		// current instant, which both Node and the UTC browser agree is today
+		// (and which the page never excludes), matching the other seeds here.
+		const nowMs = Date.now();
+		const startedAt = new Date(nowMs).toISOString();
+		const utcToday = new Date(nowMs).toISOString().slice(0, 10);
+		// Loud precondition: guard against a future edit reintroducing an offset
+		// that crosses the UTC midnight boundary — the seed must fall on the
+		// browser-UTC "today" the page filters on, or fail here with a clear
+		// message instead of a confusing 10s element-not-found timeout below.
+		expect(
+			startedAt.slice(0, 10),
+			'seeded run must fall on the browser-UTC "today" the page buckets exercise calories into',
+		).toBe(utcToday);
 		const { data: run } = await admin
 			.from('runs')
 			.insert({
