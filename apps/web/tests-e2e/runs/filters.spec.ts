@@ -410,6 +410,18 @@ test.describe('/runs — filters', () => {
 			// Hydrated state should be dateRange='today' + a hidden stale
 			// customFrom/To pair. Capture today's count as the baseline.
 			await expect(page.getByLabel('Date range')).toHaveValue('today');
+			// Wait for the initial client fetch to settle before reading the
+			// baseline. This is a cold open (sessionStorage cleared above), so
+			// the list mounts in the loading state — only `.run-list-skel`
+			// skeletons render, zero `.run-card`. Reading the count here
+			// without the gate samples a transient 0 (run 27647798183, shard
+			// 11/14: the now()-relative seed run is genuinely "today", so the
+			// fetch resolved during the selectOption round-trip and the
+			// post-Custom read saw 1 against a baseline of 0). The skeleton
+			// detaches exactly when `loading` flips false, so this is the
+			// count-agnostic settle signal (today may legitimately be empty if
+			// the seed's now()-3h run lands before local midnight).
+			await expect(page.locator('.run-list-skel')).toHaveCount(0);
 			const todayCount = await page.locator('.run-card').count();
 
 			// Select Custom. Picker auto-opens. The list MUST stay at
