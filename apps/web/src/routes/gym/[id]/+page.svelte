@@ -493,7 +493,11 @@
 			/>
 		{/if}
 
-		{#each blocks as block (block.name)}
+		<!-- Key on the first set's id, not block.name: a superset/circuit logs the
+		     same exercise in non-consecutive sets, so `blocks` can hold two groups
+		     with the same name — a name key throws each_key_duplicate and wedges the
+		     page on its loading state. -->
+		{#each blocks as block (block.sets[0].id)}
 			{@const lt = prevByExercise.get(block.name.trim().toLowerCase())}
 			<section class="card-elevated exercise-block">
 				<div class="block-head">
