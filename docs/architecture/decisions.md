@@ -3205,6 +3205,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 157. Avatar upload uses the public `avatars` bucket with owner-scoped writes + an owner SELECT policy; remove-then-insert, not upsert
+
+**Decided (2026-06-16, `data.ts uploadAvatar`/`removeAvatar` + `/settings/account` avatar control + migration `20270203_001`).** The `avatars` Storage bucket had existed since `20260927_001` (public, 2 MB, image-MIME-only, owner INSERT/UPDATE/DELETE) — created so `delete-account` had something to sweep — but nothing ever *wrote* to it: `user_profiles.avatar_url` was populated only from OAuth `identity_data` at sign-up, and `/settings/account` had no avatar control. This adds the missing in-app path. The bucket stays **public** (not signed-URL like run/route photos) because an avatar is public profile data: it renders on the logged-out `/u/[id]` profile, on share pages, and on the spectator live view as a bare `<img src={avatar_url}>`, and a public object URL is the only value that satisfies the existing `avatar_url ~* '^https?://'` CHECK (`20260808_001`) for owner **and** anonymous viewers without per-view signing.
+
+**Why remove-then-insert, not upsert.** A profile picture wants a stable path so the URL is predictable. The obvious `upload(..., { upsert: true })` is rejected by the bucket's RLS — Supabase's upsert path also requires the UPDATE policy's WITH-CHECK, which this bucket grants differently; a plain INSERT onto a freshly-cleared path is the write that passes. So `uploadAvatar` removes every `{uid}/avatar.{ext}` first, then does a clean INSERT, and a `?v=<ts>` cache-bust on the (stable) URL keeps an `<img>` off the previous picture. EXIF/GPS is stripped client-side via the existing `stripExifFromFile` before the upload — the bucket has no server-side strip worker, so on a public bucket the client strip is the only thing standing between a geotagged selfie and a world-readable GPS leak (same rationale as the run-photos pre-upload strip).
+
+**The non-obvious gap this surfaced.** The bucket shipped with no SELECT policy — the original reasoning (in `storage_bucket_privacy_test.sql`) was that a public bucket serves downloads via the CDN bypass, so a SELECT policy would be "dead code." That's true for the `/object/public/...` *download* path, but the authenticated Storage `.list()` and `.remove()` operations query `storage.objects` under RLS — so without a SELECT policy an owner can neither enumerate nor delete their own avatar: `.remove()` silently no-ops and a re-upload then collides with the stale object. Migration `20270203_001` adds an **owner-scoped** SELECT policy (`auth.uid() = foldername[1]`, not a bare `bucket_id` check that would leak every user's avatar rows), and the pgtap pin was inverted from "MUST have NO SELECT policy" to "MUST have exactly one owner-scoped SELECT policy."
+
+**Boundary / not-yet-done.** Web-only — mobile renders `avatar_url` but has no in-app upload yet (tracked mobile follow-up; the canonical-surface-first rule, §24). EXIF strip covers JPEG (the format that carries camera GPS); PNG/WebP pass through. No image resizing/cropping — the 2 MB cap + browser-native `<img>` scaling stand in. Pinned by `tests-e2e/settings/avatar-upload.spec.ts` (upload → owner + cross-user render → EXIF-stripped JPEG → remove).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

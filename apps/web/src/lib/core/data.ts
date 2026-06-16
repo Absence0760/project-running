@@ -5028,6 +5028,84 @@ export async function deleteRunPhoto(photoId: string): Promise<void> {
 	}
 }
 
+// ─────────────────────────────── Avatars ───────────────────────────────
+// Profile-picture upload into the PUBLIC `avatars` bucket (migration
+// 20260927_001). Unlike run/route photos, avatars are public profile data —
+// they render on the logged-out /u/[id] profile as a bare <img src> — so the
+// bucket is public and avatar_url holds a plain public URL.
+
+const AVATAR_MIME_TO_EXT: Record<string, string> = {
+	'image/jpeg': 'jpg',
+	'image/png': 'png',
+	'image/webp': 'webp',
+};
+// Matches the `avatars` bucket file_size_limit (2 MB, migration 20260927_001);
+// reject client-side so the user gets a friendly message instead of a 413.
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+// Every per-user avatar object lives at a stable path keyed by extension, so
+// the full set a user could own is enumerable for cleanup without a folder
+// `list` (which the public bucket's RLS doesn't grant authenticated callers).
+const avatarPathsFor = (userId: string): string[] =>
+	Object.values(AVATAR_MIME_TO_EXT).map((e) => `${userId}/avatar.${e}`);
+
+/// Upload a profile avatar and point `user_profiles.avatar_url` at it.
+/// EXIF/GPS is stripped client-side first — the bucket is public and has no
+/// server-side strip worker, so this is the only strip. We remove-then-insert
+/// at the stable `{uid}/avatar.{ext}` path rather than upsert: the avatars
+/// bucket grants owner INSERT + DELETE but not the upsert WITH-CHECK path, so a
+/// plain INSERT onto a freshly-cleared path is the only write that passes RLS.
+/// A `?v=` cache-bust keeps an <img> off the previous picture (the query still
+/// satisfies the avatar_url `^https?://` CHECK). Returns the new public URL,
+/// already written to the profile row.
+export async function uploadAvatar(file: File): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const ext = AVATAR_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	if (file.size > AVATAR_MAX_BYTES) throw new Error('Image too large (2 MB max)');
+
+	const clean = await stripExifFromFile(file);
+	const storagePath = `${userId}/avatar.${ext}`;
+
+	// Clear any existing avatar (this ext and the others) so the upload is a
+	// clean INSERT, not an upsert. remove() on a missing path is a no-op.
+	await supabase.storage.from(BUCKETS.avatars).remove(avatarPathsFor(userId));
+
+	const { error: upErr } = await supabase.storage
+		.from(BUCKETS.avatars)
+		.upload(storagePath, clean, { contentType: clean.type, upsert: false });
+	if (upErr) throw upErr;
+
+	const { data: pub } = supabase.storage.from(BUCKETS.avatars).getPublicUrl(storagePath);
+	const url = `${pub.publicUrl}?v=${Date.now()}`;
+
+	const { error: profErr } = await supabase
+		.from('user_profiles')
+		.update({ avatar_url: url })
+		.eq('id', userId);
+	if (profErr) {
+		// Roll back the blob so a failed profile write doesn't leave an
+		// orphaned avatar the UI never references.
+		await supabase.storage.from(BUCKETS.avatars).remove([storagePath]);
+		throw profErr;
+	}
+	return url;
+}
+
+/// Remove the user's avatar — drops every stored object for them and clears
+/// `user_profiles.avatar_url` to null (renderers fall back to initials).
+export async function removeAvatar(): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	await supabase.storage.from(BUCKETS.avatars).remove(avatarPathsFor(userId));
+	const { error } = await supabase
+		.from('user_profiles')
+		.update({ avatar_url: null })
+		.eq('id', userId);
+	if (error) throw error;
+}
+
 export async function updateRunPhotoCaption(
 	photoId: string,
 	caption: string | null,

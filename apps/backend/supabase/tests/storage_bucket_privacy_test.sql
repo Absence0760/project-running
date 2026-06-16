@@ -124,20 +124,24 @@ select ok(
   'any authenticated user could delete another users avatar'
 );
 
--- avatars is intentionally served via the public-bucket CDN bypass, so
--- there is deliberately NO SELECT policy on storage.objects for it.
--- Pin that absence: a future restrictive SELECT policy added without
--- flipping public=false would be silently dead code (the CDN bypass
--- keeps serving the bytes), masking the intended access model.
+-- avatars DOWNLOADS flow through the public-bucket CDN bypass, but the
+-- authenticated Storage .list()/.remove() operations query storage.objects
+-- under RLS — so the bucket needs exactly one OWNER-SCOPED SELECT policy for an
+-- owner to enumerate + delete their own avatar (without it .remove() silently
+-- no-ops and a re-upload collides; 20270203_001). Pin count = 1 AND owner-
+-- scoped: a bare `bucket_id = 'avatars'` SELECT would expose every user's
+-- avatar object rows, and zero re-breaks owner object management.
 select is(
   (select count(*) from pg_policies
      where schemaname = 'storage' and tablename = 'objects'
        and cmd = 'SELECT'
-       and (qual ilike '%avatars%' or with_check ilike '%avatars%'))::int,
-  0::int,
-  'avatars bucket MUST have NO SELECT policy — it relies on the '
-  'public=true CDN bypass; a SELECT policy here would be dead code '
-  'and signal a misunderstanding of the access model'
+       and (qual ilike '%avatars%' or with_check ilike '%avatars%')
+       and qual ilike '%auth.uid()%'
+       and qual ilike '%foldername%')::int,
+  1::int,
+  'avatars bucket MUST have exactly one owner-scoped SELECT policy '
+  '(auth.uid() = foldername[1]) — authenticated .list()/.remove() need it for '
+  'owner object management; a bare bucket_id check would leak every avatar row'
 );
 
 -- ─── 5. run-photos SELECT policy content pin ───────────────────────

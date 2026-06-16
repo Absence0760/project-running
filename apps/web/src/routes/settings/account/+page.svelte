@@ -5,11 +5,12 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/routes/gpx';
-	import { fetchRuns } from '$lib/core/data';
+	import { fetchRuns, uploadAvatar, removeAvatar } from '$lib/core/data';
 	import {
 		createBackup,
 		restoreBackup,
@@ -36,6 +37,9 @@
 	import { m } from '$lib/i18n/store.svelte';
 
 	let displayName = $state(auth.user?.display_name ?? '');
+	let avatarUrl = $state<string | null>(auth.user?.avatar_url ?? null);
+	let avatarBusy = $state(false);
+	let avatarFileInput: HTMLInputElement;
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
 	let dateOfBirth = $state('');
 	let restingHr = $state('');
@@ -182,6 +186,9 @@
 		// health_data_consent_at is deny-by-default for direct authenticated
 		// SELECTs (column lockdown, 20260707_001) — a direct select 403s.
 		const { data: prof } = await supabase.rpc('get_my_profile');
+		// Sync the avatar from the freshly-read profile — the $state was seeded
+		// from auth.user at component init, which may not have hydrated yet.
+		avatarUrl = (prof?.avatar_url as string | null) ?? null;
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
 		coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
 		// Pre-tick the box if consent is already on record so a user can
@@ -252,6 +259,48 @@
 			);
 		} finally {
 			pushBusy = false;
+		}
+	}
+
+	async function handleAvatarSelect(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = ''; // allow re-picking the same file after an error
+		if (!file) return;
+		avatarBusy = true;
+		try {
+			avatarUrl = await uploadAvatar(file);
+			// Re-hydrate the auth store so the sidebar + feed avatars update too.
+			await auth.fetchUser();
+			showToast(m('settingsAccount.avatarSaved'), 'success');
+		} catch (err) {
+			showToast(
+				m('settingsAccount.avatarFailed', {
+					error: err instanceof Error ? err.message : String(err),
+				}),
+				'error',
+			);
+		} finally {
+			avatarBusy = false;
+		}
+	}
+
+	async function handleAvatarRemove() {
+		avatarBusy = true;
+		try {
+			await removeAvatar();
+			avatarUrl = null;
+			await auth.fetchUser();
+			showToast(m('settingsAccount.avatarRemoved'), 'success');
+		} catch (err) {
+			showToast(
+				m('settingsAccount.avatarFailed', {
+					error: err instanceof Error ? err.message : String(err),
+				}),
+				'error',
+			);
+		} finally {
+			avatarBusy = false;
 		}
 	}
 
@@ -606,6 +655,40 @@
 	<!-- Profile -->
 	<section class="card">
 		<h2>{m('settingsAccount.profileHeading')}</h2>
+		<div class="avatar-row">
+			<Avatar url={avatarUrl} name={displayName} size="4rem" font="1.5rem" />
+			<div class="avatar-actions">
+				<input
+					bind:this={avatarFileInput}
+					type="file"
+					accept="image/jpeg,image/png,image/webp"
+					onchange={handleAvatarSelect}
+					style="display: none"
+					data-testid="avatar-file-input"
+				/>
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					onclick={() => avatarFileInput.click()}
+					disabled={avatarBusy}
+					data-testid="avatar-change"
+				>
+					{avatarBusy ? m('settingsAccount.avatarUploading') : m('settingsAccount.avatarChange')}
+				</button>
+				{#if avatarUrl}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm"
+						onclick={handleAvatarRemove}
+						disabled={avatarBusy}
+						data-testid="avatar-remove"
+					>
+						{m('settingsAccount.avatarRemove')}
+					</button>
+				{/if}
+				<p class="section-desc avatar-hint">{m('settingsAccount.avatarHint')}</p>
+			</div>
+		</div>
 		<div class="form-grid">
 			<label>
 				<span class="label-text">{m('settingsAccount.displayName')}</span>
@@ -1027,6 +1110,9 @@
 	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }
 	.card-danger { border-color: rgba(229, 57, 53, 0.3); }
+	.avatar-row { display: flex; align-items: flex-start; gap: var(--space-md); margin-bottom: var(--space-lg); }
+	.avatar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+	.avatar-hint { flex-basis: 100%; margin-bottom: 0; }
 	.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-lg); }
 	.label-text { display: block; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
 	input { width: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--color-bg); }

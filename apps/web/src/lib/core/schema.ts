@@ -67,6 +67,7 @@ export const BUCKETS = {
 	runs: 'runs',
 	run_photos: 'run-photos',
 	route_photos: 'route-photos',
+	avatars: 'avatars',
 } as const;
 
 /// Keys on the schema-less `runs.metadata` jsonb bag that the web client
