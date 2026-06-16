@@ -3217,6 +3217,16 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 158. The block gate on kudos / comment INSERT resolves the run owner in a SECURITY DEFINER predicate, not an RLS-visible subquery
+
+**Decided (2026-06-16, migration `20270204_001` + `block_kudos_comment_gate_test.sql`).** The `run_kudos` / `run_comments` INSERT policies added in `20261012_001` (the user-blocks self-defence primitive — persona-hunt Round 3 finding Woman #1) gated the write with `not is_blocked_either_way(auth.uid(), (select r.user_id from runs r where r.id = run_id))`. That owner subquery runs under the INSERTing user's RLS on `runs`, and since `20260701_001` dropped the public-runs SELECT policy on the base table (public reads go through the `public_runs` view), a kudoser/commenter can only see their **own** runs — so for anyone else's run (the only run you ever kudos or comment on) the subquery returns `NULL`, `not is_blocked_either_way(actor, NULL)` is always `true`, and the block predicate was satisfied for every cross-user write. The block silently failed to stop the exact harassment vector — kudos/comment notifications — it was built to stop, in both directions.
+
+**Why this fix.** It mirrors how `20260812_001` already solved "the actor can't see the run row under RLS" for the visibility check: resolve the owner inside a SECURITY DEFINER predicate (`private.is_blocked_for_run(actor, run_id)`) that joins `runs`→`user_blocks` in definer context, so the block check sees the real owner regardless of the caller's RLS-restricted view of `runs`. The other `is_blocked_either_way` call sites were already correct — `user_follows` / `direct_messages` evaluate it against columns on the inserted row, and `search_segment_leaderboard` / `public_profile_by_id` run in definer context — so only the two engagement-write policies needed the change.
+
+**Trade-off / boundary.** Found by an e2e journey (`tests-e2e/social/follow-engage-block-journey.spec.ts`) that drove a post-block kudos write through a real user JWT and expected the RLS denial. The bug shipped because `20261012_001`'s own pgtap (`user_blocks_test.sql`) pinned the follow-INSERT block path but never the kudos/comment one — the lesson restated in the backend `CLAUDE.md` "drop policy" gotchas: pin the *write* you're gating, against a real JWT, not just the helper. The read side is unchanged (a block is still a write/profile-unfurl gate, not a content-hide, as `20261012_001`'s comment notes); this fix only restores the write denial.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
