@@ -993,14 +993,48 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       # The WatchApp scheme is shared (xcshareddata/xcschemes), so the
       # test target is wired deterministically rather than relying on
-      # xcodebuild auto-generating a scheme. Series 9 matches the
-      # simulator used by release-watch.yml's build smoke.
+      # xcodebuild auto-generating a scheme.
+      #
+      # Resolve the simulator by UDID at runtime instead of hardcoding a
+      # device name. `xcodebuild test` needs a concrete bootable simulator
+      # (unlike `build`, which resolves to the generic placeholder), and the
+      # concrete watch-simulator model names rotate with every Xcode release
+      # — pinning "Apple Watch Series 9" exit-70'd on the macos-15 image
+      # (run 27659555491) because no device by that name existed. Querying
+      # simctl for whatever watchOS simulator the image ships is stable
+      # across image/Xcode bumps; the guard fails loudly with diagnostics if
+      # the image has no watchOS runtime at all, rather than a cryptic 70.
+      - name: Resolve a watchOS simulator
+        id: watch-sim
+        run: |
+          set -euo pipefail
+          udid="$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | select(.key | test("watchOS"))
+                      | .value[] | select(.isAvailable)] | .[0].udid // empty')"
+          if [ -z "$udid" ]; then
+            echo "No pre-created watchOS simulator; creating one."
+            runtime="$(xcrun simctl list runtimes --json \
+              | jq -r '[.runtimes[] | select(.identifier | test("watchOS"))
+                        | select(.isAvailable)] | .[-1].identifier // empty')"
+            devtype="$(xcrun simctl list devicetypes --json \
+              | jq -r '[.devicetypes[] | select(.identifier | test("Apple-Watch"))]
+                        | .[-1].identifier // empty')"
+            if [ -z "$runtime" ] || [ -z "$devtype" ]; then
+              echo "::error::No watchOS simulator runtime/device type on this runner image."
+              echo "--- runtimes ---";    xcrun simctl list runtimes
+              echo "--- watch devicetypes ---"; xcrun simctl list devicetypes | grep -i watch || true
+              exit 1
+            fi
+            udid="$(xcrun simctl create ci-watch "$devtype" "$runtime")"
+          fi
+          echo "Using watchOS simulator $udid"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - name: Run WatchAppTests
         run: |
           xcodebuild test \
             -project apps/watch_ios/WatchApp.xcodeproj \
             -scheme WatchApp \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
+            -destination "platform=watchOS Simulator,id=${{ steps.watch-sim.outputs.udid }}" \
             -resultBundlePath WatchAppTests.xcresult \
             CODE_SIGNING_ALLOWED=NO
       - name: Upload test result bundle on failure

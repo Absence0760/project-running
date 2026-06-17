@@ -38,10 +38,16 @@ jobs:
           echo "name=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build for simulator (smoke check)
+        # `build` resolves the generic simulator placeholder without a
+        # concrete device, so target it directly rather than a model name —
+        # concrete watch-simulator names rotate with Xcode releases (the
+        # hardcoded "Apple Watch Series 9" broke the test job in CI run
+        # 27659555491). For `test`, which needs a real bootable simulator,
+        # ci.yml's test-watch-ios job resolves a UDID via simctl.
         run: |
           xcodebuild -project apps/watch_ios/WatchApp.xcodeproj \
             -scheme WatchApp \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
+            -destination 'generic/platform=watchOS Simulator' \
             build
 
       - name: Create GitHub Release (audit record)
