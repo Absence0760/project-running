@@ -985,3 +985,28 @@ jobs:
             apps/web/playwright-report
             apps/web/test-results
           retention-days: 7
+
+  test-watch-ios:
+    name: Test watchOS app (Swift)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      # The WatchApp scheme is shared (xcshareddata/xcschemes), so the
+      # test target is wired deterministically rather than relying on
+      # xcodebuild auto-generating a scheme. Series 9 matches the
+      # simulator used by release-watch.yml's build smoke.
+      - name: Run WatchAppTests
+        run: |
+          xcodebuild test \
+            -project apps/watch_ios/WatchApp.xcodeproj \
+            -scheme WatchApp \
+            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' \
+            -resultBundlePath WatchAppTests.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Upload test result bundle on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: watch-ios-xcresult
+          path: WatchAppTests.xcresult
+          retention-days: 7
