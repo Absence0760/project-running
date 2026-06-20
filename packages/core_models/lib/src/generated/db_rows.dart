@@ -413,6 +413,62 @@ class ClubMemberRow {
   };
 }
 
+/// Row shape for the `club_photos` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ClubPhotoRow {
+  static const String table = 'club_photos';
+  static const String colId = 'id';
+  static const String colClubId = 'club_id';
+  static const String colOwnerId = 'owner_id';
+  static const String colStoragePath = 'storage_path';
+  static const String colThumb512Path = 'thumb_512_path';
+  static const String colCaption = 'caption';
+  static const String colPositionIdx = 'position_idx';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String clubId;
+  final String ownerId;
+  final String storagePath;
+  final String? thumb512Path;
+  final String? caption;
+  final int positionIdx;
+  final DateTime createdAt;
+
+  const ClubPhotoRow({
+    required this.id,
+    required this.clubId,
+    required this.ownerId,
+    required this.storagePath,
+    this.thumb512Path,
+    this.caption,
+    required this.positionIdx,
+    required this.createdAt,
+  });
+
+  factory ClubPhotoRow.fromJson(Map<String, dynamic> json) => ClubPhotoRow(
+    id: json['id'] as String,
+    clubId: json['club_id'] as String,
+    ownerId: json['owner_id'] as String,
+    storagePath: json['storage_path'] as String,
+    thumb512Path: json['thumb_512_path'] as String?,
+    caption: json['caption'] as String?,
+    positionIdx: (json['position_idx'] as num).toInt(),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colClubId: clubId,
+    colOwnerId: ownerId,
+    colStoragePath: storagePath,
+    colThumb512Path: thumb512Path,
+    colCaption: caption,
+    colPositionIdx: positionIdx,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `club_posts` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class ClubPostRow {

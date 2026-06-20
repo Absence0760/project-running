@@ -385,6 +385,47 @@ export type Database = {
           },
         ]
       }
+      club_photos: {
+        Row: {
+          caption: string | null
+          club_id: string
+          created_at: string
+          id: string
+          owner_id: string
+          position_idx: number
+          storage_path: string
+          thumb_512_path: string | null
+        }
+        Insert: {
+          caption?: string | null
+          club_id: string
+          created_at?: string
+          id?: string
+          owner_id: string
+          position_idx?: number
+          storage_path: string
+          thumb_512_path?: string | null
+        }
+        Update: {
+          caption?: string | null
+          club_id?: string
+          created_at?: string
+          id?: string
+          owner_id?: string
+          position_idx?: number
+          storage_path?: string
+          thumb_512_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_photos_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_posts: {
         Row: {
           author_id: string
@@ -1510,6 +1551,118 @@ export type Database = {
         }
         Relationships: []
       }
+      gear_rotation_members: {
+        Row: {
+          created_at: string
+          gear_id: string
+          rotation_id: string
+        }
+        Insert: {
+          created_at?: string
+          gear_id: string
+          rotation_id: string
+        }
+        Update: {
+          created_at?: string
+          gear_id?: string
+          rotation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_rotation_members_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gear_rotation_members_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear_with_distance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gear_rotation_members_rotation_id_fkey"
+            columns: ["rotation_id"]
+            isOneToOne: false
+            referencedRelation: "gear_rotations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gear_rotations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gear_wear_logs: {
+        Row: {
+          area: string | null
+          created_at: string
+          gear_id: string
+          id: string
+          logged_on: string
+          note: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          gear_id: string
+          id?: string
+          logged_on?: string
+          note: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          gear_id?: string
+          id?: string
+          logged_on?: string
+          note?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_wear_logs_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gear_wear_logs_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear_with_distance"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gym_routine_exercises: {
         Row: {
           exercise_key: string
@@ -1624,6 +1777,7 @@ export type Database = {
           exercise_count: number
           external_id: string | null
           id: string
+          is_public_template: boolean
           last_modified_at: string
           notes: string | null
           periodisation: string
@@ -1636,6 +1790,7 @@ export type Database = {
           exercise_count?: number
           external_id?: string | null
           id?: string
+          is_public_template?: boolean
           last_modified_at?: string
           notes?: string | null
           periodisation?: string
@@ -1648,6 +1803,7 @@ export type Database = {
           exercise_count?: number
           external_id?: string | null
           id?: string
+          is_public_template?: boolean
           last_modified_at?: string
           notes?: string | null
           periodisation?: string
@@ -5149,6 +5305,10 @@ export type Database = {
           time_seconds: number
           user_id: string
         }[]
+      }
+      set_gym_routine_public: {
+        Args: { p_public: boolean; p_routine_id: string }
+        Returns: undefined
       }
       set_integration_tokens: {
         Args: {
