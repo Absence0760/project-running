@@ -8,6 +8,9 @@ import { hmacHex } from '../_shared/webhook_security.ts';
 import {
   attendeeRowFromSession,
   capacityDecision,
+  donationIdFromSession,
+  donationStatusTransition,
+  isDonationSession,
   orderStatusTransition,
   parseStripeEventEnvelope,
   verifyStripeSignature,
@@ -179,4 +182,45 @@ Deno.test('capacityDecision — re-exported from the shared helper', () => {
   // source) — divergence here is an oversell bug.
   assertEquals(capacityDecision(9, 1, 10), 'full');
   assertEquals(capacityDecision(0, 0, null), 'available');
+});
+
+// ── donation branch (fundraising.md) ───────────────────────────────────────
+
+Deno.test('isDonationSession — keyed on metadata.kind', () => {
+  assertStrictEquals(isDonationSession({ metadata: { kind: 'donation' } }), true);
+  // an event seat session has no kind
+  assertStrictEquals(isDonationSession({ metadata: { order_id: 'o1' } }), false);
+  assertStrictEquals(isDonationSession({}), false);
+  assertStrictEquals(isDonationSession({ metadata: null }), false);
+});
+
+Deno.test('donationIdFromSession — extracts donation_id, null when absent', () => {
+  assertStrictEquals(
+    donationIdFromSession({ metadata: { kind: 'donation', donation_id: 'd1' } }),
+    'd1',
+  );
+  assertStrictEquals(donationIdFromSession({ metadata: { kind: 'donation' } }), null);
+  assertStrictEquals(donationIdFromSession({}), null);
+});
+
+Deno.test('donationStatusTransition — pending confirms to paid', () => {
+  assertStrictEquals(donationStatusTransition('pending', 'checkout.session.completed'), 'paid');
+});
+
+Deno.test('donationStatusTransition — a replayed completed on a paid donation is null (no double-count)', () => {
+  assertStrictEquals(donationStatusTransition('paid', 'checkout.session.completed'), null);
+});
+
+Deno.test('donationStatusTransition — pending expires to canceled', () => {
+  assertStrictEquals(donationStatusTransition('pending', 'checkout.session.expired'), 'canceled');
+});
+
+Deno.test('donationStatusTransition — paid refunds, pending does not', () => {
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded'), 'refunded');
+  assertStrictEquals(donationStatusTransition('pending', 'charge.refunded'), null);
+});
+
+Deno.test('donationStatusTransition — a terminal donation is immovable', () => {
+  assertStrictEquals(donationStatusTransition('refunded', 'charge.refunded'), null);
+  assertStrictEquals(donationStatusTransition('canceled', 'checkout.session.completed'), null);
 });

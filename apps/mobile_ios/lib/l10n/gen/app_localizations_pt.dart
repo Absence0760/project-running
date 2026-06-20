@@ -9491,6 +9491,34 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
+
+  @override
+  String fundraiserRaisedOfGoal(String raised, String goal) {
+    return '$raised de $goal angariados';
+  }
+
+  @override
+  String fundraiserDonorCount(int count) {
+    return '$count apoiantes';
+  }
+
+  @override
+  String get fundraiserOverGoal => 'Meta superada!';
+
+  @override
+  String get fundraiserClosed => 'Esta campanha está encerrada.';
+
+  @override
+  String get fundraiserFeedTitle => 'Apoiantes recentes';
+
+  @override
+  String get fundraiserFeedEmpty => 'Seja o primeiro a doar.';
+
+  @override
+  String get fundraiserAnonymous => 'Anónimo';
+
+  @override
+  String get fundraiserDonateOnWeb => 'Doar na web';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18979,4 +19007,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
+
+  @override
+  String fundraiserRaisedOfGoal(String raised, String goal) {
+    return '$raised de $goal arrecadados';
+  }
+
+  @override
+  String fundraiserDonorCount(int count) {
+    return '$count apoiadores';
+  }
+
+  @override
+  String get fundraiserOverGoal => 'Meta superada!';
+
+  @override
+  String get fundraiserClosed => 'Esta campanha está encerrada.';
+
+  @override
+  String get fundraiserFeedTitle => 'Apoiadores recentes';
+
+  @override
+  String get fundraiserFeedEmpty => 'Seja o primeiro a doar.';
+
+  @override
+  String get fundraiserAnonymous => 'Anônimo';
+
+  @override
+  String get fundraiserDonateOnWeb => 'Doar na web';
 }

@@ -2624,5 +2624,13 @@
   "challengesNotFound": "Diese Challenge ist nicht verfügbar.",
   "challengesJoinFailed": "Beitritt zur Challenge fehlgeschlagen.",
   "challengesLeaveFailed": "Verlassen der Challenge fehlgeschlagen.",
-  "challengesLoadFailed": "Challenges konnten nicht geladen werden."
+  "challengesLoadFailed": "Challenges konnten nicht geladen werden.",
+  "fundraiserRaisedOfGoal": "{raised} von {goal} gesammelt",
+  "fundraiserDonorCount": "{count} Unterstützer",
+  "fundraiserOverGoal": "Ziel übertroffen!",
+  "fundraiserClosed": "Diese Spendenaktion ist geschlossen.",
+  "fundraiserFeedTitle": "Neueste Unterstützer",
+  "fundraiserFeedEmpty": "Sei die erste Person, die spendet.",
+  "fundraiserAnonymous": "Anonym",
+  "fundraiserDonateOnWeb": "Im Web spenden"
 }

@@ -10809,5 +10809,21 @@
   "challengesLeaveFailed": "Couldn't leave the challenge.",
   "@challengesLeaveFailed": {"description": "Leave failure banner"},
   "challengesLoadFailed": "Couldn't load challenges.",
-  "@challengesLoadFailed": {"description": "Load failure banner"}
+  "@challengesLoadFailed": {"description": "Load failure banner"},
+  "fundraiserRaisedOfGoal": "{raised} of {goal} raised",
+  "@fundraiserRaisedOfGoal": {"description": "Thermometer raised-of-goal label", "placeholders": {"raised": {"type": "String"}, "goal": {"type": "String"}}},
+  "fundraiserDonorCount": "{count} supporters",
+  "@fundraiserDonorCount": {"description": "Donor count under the thermometer", "placeholders": {"count": {"type": "int"}}},
+  "fundraiserOverGoal": "Over goal!",
+  "@fundraiserOverGoal": {"description": "Shown when a fundraiser exceeds its goal"},
+  "fundraiserClosed": "This fundraiser is closed.",
+  "@fundraiserClosed": {"description": "Closed-fundraiser notice"},
+  "fundraiserFeedTitle": "Recent supporters",
+  "@fundraiserFeedTitle": {"description": "Donation feed heading"},
+  "fundraiserFeedEmpty": "Be the first to donate.",
+  "@fundraiserFeedEmpty": {"description": "Empty donation feed"},
+  "fundraiserAnonymous": "Anonymous",
+  "@fundraiserAnonymous": {"description": "Anonymous donor label"},
+  "fundraiserDonateOnWeb": "Donate on web",
+  "@fundraiserDonateOnWeb": {"description": "Mobile web-handoff donate button"}
 }

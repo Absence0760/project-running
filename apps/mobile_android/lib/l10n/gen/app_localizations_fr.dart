@@ -9513,4 +9513,32 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get challengesLoadFailed => 'Impossible de charger les défis.';
+
+  @override
+  String fundraiserRaisedOfGoal(String raised, String goal) {
+    return '$raised sur $goal collectés';
+  }
+
+  @override
+  String fundraiserDonorCount(int count) {
+    return '$count soutiens';
+  }
+
+  @override
+  String get fundraiserOverGoal => 'Objectif dépassé !';
+
+  @override
+  String get fundraiserClosed => 'Cette collecte est clôturée.';
+
+  @override
+  String get fundraiserFeedTitle => 'Soutiens récents';
+
+  @override
+  String get fundraiserFeedEmpty => 'Soyez le premier à faire un don.';
+
+  @override
+  String get fundraiserAnonymous => 'Anonyme';
+
+  @override
+  String get fundraiserDonateOnWeb => 'Faire un don sur le web';
 }

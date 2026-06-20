@@ -47,7 +47,11 @@ import type {
 	ChallengeScope,
 	ChallengeWithMeta,
 	ChallengeLeaderboardRow,
-	ActivityType
+	ActivityType,
+	Fundraiser,
+	FundraiserStatus,
+	FundraiserFeedEntry,
+	FundraiserTotals
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -8369,6 +8373,69 @@ export async function createChallenge(input: {
 			starts_at: input.starts_at,
 			ends_at: input.ends_at,
 			is_public: input.is_public ?? true
+// ─────────────────────── Charity fundraising (fundraising.md) ───────────────
+// A fundraiser is polymorphic over (run | event). The public page reads the
+// fundraiser row (RLS: visible when the anchor is public), the thermometer via
+// fundraiser_totals, and the donation feed via fundraiser_feed (public-safe
+// projection — donor identity / Stripe ids never reach the client). Donation
+// checkout is a Stripe-hosted handoff; the webhook confirms the donation.
+
+export interface CreateFundraiserInput {
+	charityName: string;
+	charityUrl?: string | null;
+	title: string;
+	story?: string | null;
+	goalCents: number;
+	currency?: string;
+	runId?: string | null;
+	eventId?: string | null;
+}
+
+function fundraiserFromRow(row: Record<string, unknown>): Fundraiser {
+	return { ...(row as Fundraiser), status: row.status as FundraiserStatus };
+}
+
+export async function fetchFundraiserById(id: string): Promise<Fundraiser | null> {
+	const { data, error } = await supabase.from('fundraisers').select('*').eq('id', id).maybeSingle();
+	if (error || !data) return null;
+	return fundraiserFromRow(data);
+}
+
+export async function fetchFundraiserForRun(runId: string): Promise<Fundraiser | null> {
+	const { data, error } = await supabase
+		.from('fundraisers')
+		.select('*')
+		.eq('run_id', runId)
+		.maybeSingle();
+	if (error || !data) return null;
+	return fundraiserFromRow(data);
+}
+
+export async function fetchFundraiserForEvent(eventId: string): Promise<Fundraiser | null> {
+	const { data, error } = await supabase
+		.from('fundraisers')
+		.select('*')
+		.eq('event_id', eventId)
+		.maybeSingle();
+	if (error || !data) return null;
+	return fundraiserFromRow(data);
+}
+
+export async function createFundraiser(input: CreateFundraiserInput): Promise<Fundraiser> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { data, error } = await supabase
+		.from('fundraisers')
+		.insert({
+			owner_user_id: userId,
+			run_id: input.runId ?? null,
+			event_id: input.eventId ?? null,
+			charity_name: input.charityName.trim(),
+			charity_url: input.charityUrl?.trim() || null,
+			title: input.title.trim(),
+			story: input.story?.trim() || null,
+			goal_cents: input.goalCents,
+			currency: input.currency ?? 'usd'
 		})
 		.select('*')
 		.single();
@@ -8464,4 +8531,76 @@ export async function recomputeChallengeCompletion(id: string): Promise<void> {
 	} catch (e) {
 		console.debug('recomputeChallengeCompletion threw', e);
 	}
+	return fundraiserFromRow(data);
+}
+
+export async function updateFundraiser(
+	id: string,
+	patch: Partial<Pick<CreateFundraiserInput, 'charityName' | 'charityUrl' | 'title' | 'story' | 'goalCents'>>
+): Promise<void> {
+	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	if (patch.charityName !== undefined) row.charity_name = patch.charityName.trim();
+	if (patch.charityUrl !== undefined) row.charity_url = patch.charityUrl?.trim() || null;
+	if (patch.title !== undefined) row.title = patch.title.trim();
+	if (patch.story !== undefined) row.story = patch.story?.trim() || null;
+	if (patch.goalCents !== undefined) row.goal_cents = patch.goalCents;
+	const { error } = await supabase.from('fundraisers').update(row).eq('id', id);
+	if (error) throw error;
+}
+
+export async function closeFundraiser(id: string): Promise<void> {
+	const { error } = await supabase
+		.from('fundraisers')
+		.update({ status: 'closed', updated_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+export async function fetchFundraiserTotals(id: string): Promise<FundraiserTotals | null> {
+	const { data, error } = await supabase.rpc('fundraiser_totals', { p_fundraiser_id: id });
+	if (error || !data || (data as unknown[]).length === 0) return null;
+	const row = (data as FundraiserTotals[])[0];
+	return {
+		raised_cents: Number(row.raised_cents) || 0,
+		donor_count: Number(row.donor_count) || 0,
+		goal_cents: Number(row.goal_cents) || 0,
+		currency: row.currency
+	};
+}
+
+export async function fetchFundraiserFeed(
+	id: string,
+	limit = 50
+): Promise<FundraiserFeedEntry[]> {
+	const { data, error } = await supabase.rpc('fundraiser_feed', {
+		p_fundraiser_id: id,
+		p_limit: limit
+	});
+	if (error || !data) return [];
+	return data as FundraiserFeedEntry[];
+}
+
+/// Begin a Stripe Checkout for a donation. The donations-checkout Edge Function
+/// validates the fundraiser is open + visible + the owner can take payment,
+/// inserts a pending donation row, and returns a hosted destination-charge
+/// Checkout URL. The caller redirects the browser there. The donor may be
+/// anonymous — no auth required.
+export async function startDonationCheckout(
+	fundraiserId: string,
+	amountCents: number,
+	opts: { displayName?: string | null; message?: string | null; isAnonymous?: boolean } = {}
+): Promise<{ url: string }> {
+	const { data, error } = await supabase.functions.invoke('donations-checkout', {
+		body: {
+			fundraiser_id: fundraiserId,
+			amount_cents: amountCents,
+			display_name: opts.displayName ?? null,
+			message: opts.message ?? null,
+			is_anonymous: opts.isAnonymous ?? false
+		}
+	});
+	if (error) throw error;
+	const url = (data as { checkout_url?: string } | null)?.checkout_url;
+	if (!url) throw new Error('No checkout URL returned');
+	return { url };
 }

@@ -2624,5 +2624,13 @@
   "challengesNotFound": "Este desafío no está disponible.",
   "challengesJoinFailed": "No se pudo unir al desafío.",
   "challengesLeaveFailed": "No se pudo salir del desafío.",
-  "challengesLoadFailed": "No se pudieron cargar los desafíos."
+  "challengesLoadFailed": "No se pudieron cargar los desafíos.",
+  "fundraiserRaisedOfGoal": "{raised} de {goal} recaudado",
+  "fundraiserDonorCount": "{count} colaboradores",
+  "fundraiserOverGoal": "¡Meta superada!",
+  "fundraiserClosed": "Esta campaña está cerrada.",
+  "fundraiserFeedTitle": "Colaboradores recientes",
+  "fundraiserFeedEmpty": "Sé el primero en donar.",
+  "fundraiserAnonymous": "Anónimo",
+  "fundraiserDonateOnWeb": "Donar en la web"
 }

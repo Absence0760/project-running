@@ -664,6 +664,71 @@ export type Database = {
         }
         Relationships: []
       }
+      donations: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          display_name: string | null
+          donor_user_id: string | null
+          fundraiser_id: string
+          id: string
+          is_anonymous: boolean
+          message: string | null
+          owner_user_id: string
+          paid_at: string | null
+          platform_fee_cents: number
+          refunded_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          display_name?: string | null
+          donor_user_id?: string | null
+          fundraiser_id: string
+          id?: string
+          is_anonymous?: boolean
+          message?: string | null
+          owner_user_id: string
+          paid_at?: string | null
+          platform_fee_cents?: number
+          refunded_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          display_name?: string | null
+          donor_user_id?: string | null
+          fundraiser_id?: string
+          id?: string
+          is_anonymous?: boolean
+          message?: string | null
+          owner_user_id?: string
+          paid_at?: string | null
+          platform_fee_cents?: number
+          refunded_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donations_fundraiser_id_fkey"
+            columns: ["fundraiser_id"]
+            isOneToOne: false
+            referencedRelation: "fundraisers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_suppressions: {
         Row: {
           created_at: string
@@ -1270,6 +1335,79 @@ export type Database = {
         }
         Relationships: []
       }
+      fundraisers: {
+        Row: {
+          charity_name: string
+          charity_url: string | null
+          created_at: string
+          currency: string
+          event_id: string | null
+          goal_cents: number
+          id: string
+          owner_user_id: string
+          platform_fee_bps: number
+          run_id: string | null
+          status: string
+          story: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          charity_name: string
+          charity_url?: string | null
+          created_at?: string
+          currency?: string
+          event_id?: string | null
+          goal_cents: number
+          id?: string
+          owner_user_id: string
+          platform_fee_bps?: number
+          run_id?: string | null
+          status?: string
+          story?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          charity_name?: string
+          charity_url?: string | null
+          created_at?: string
+          currency?: string
+          event_id?: string | null
+          goal_cents?: number
+          id?: string
+          owner_user_id?: string
+          platform_fee_bps?: number
+          run_id?: string | null
+          status?: string
+          story?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fundraisers_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fundraisers_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "public_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fundraisers_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gear: {
         Row: {
           brand: string | null
@@ -1809,6 +1947,7 @@ export type Database = {
           event_instance_start: string | null
           id: string
           kind: string
+          native_push_sent_at: string | null
           plan_id: string | null
           read_at: string | null
           run_id: string | null
@@ -1830,6 +1969,7 @@ export type Database = {
           event_instance_start?: string | null
           id?: string
           kind: string
+          native_push_sent_at?: string | null
           plan_id?: string | null
           read_at?: string | null
           run_id?: string | null
@@ -1851,6 +1991,7 @@ export type Database = {
           event_instance_start?: string | null
           id?: string
           kind?: string
+          native_push_sent_at?: string | null
           plan_id?: string | null
           read_at?: string | null
           run_id?: string | null
@@ -3810,6 +3951,7 @@ export type Database = {
       cleanup_stale_race_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       cleanup_stale_user_coach_usage: { Args: never; Returns: number }
+      clear_device_token: { Args: { p_token: string }; Returns: undefined }
       clear_push_subscription: {
         Args: { p_device_id: string; p_user_id: string }
         Returns: undefined
@@ -4040,6 +4182,30 @@ export type Database = {
       finish_job: {
         Args: { err?: string; job_id: number; result_status: string }
         Returns: undefined
+      }
+      fundraiser_anchor_visible: {
+        Args: { p_event_id: string; p_run_id: string }
+        Returns: boolean
+      }
+      fundraiser_feed: {
+        Args: { p_fundraiser_id: string; p_limit?: number }
+        Returns: {
+          amount_cents: number
+          currency: string
+          display_name: string
+          is_anonymous: boolean
+          message: string
+          paid_at: string
+        }[]
+      }
+      fundraiser_totals: {
+        Args: { p_fundraiser_id: string }
+        Returns: {
+          currency: string
+          donor_count: number
+          goal_cents: number
+          raised_cents: number
+        }[]
       }
       get_club_invite_token: { Args: { target_club: string }; Returns: string }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }

@@ -59,6 +59,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import CheckpointManager from '$lib/components/CheckpointManager.svelte';
+	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
 	import { workoutDraftFromTemplate } from '$lib/social/event_gym_template';
@@ -1948,6 +1949,8 @@
 				</div>
 			{/if}
 		</section>
+
+		<FundraiserSection eventId={event.id} isOwner={isEventOrganiser} />
 
 		<section class="card">
 			<h3>{m('clubEvent.attendeesTitle', { n: attendees.length })}</h3>

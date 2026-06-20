@@ -121,6 +121,8 @@ const _tables = <String>{
   'challenges',
   'challenge_participants',
   'challenge_badges',
+  'fundraisers',
+  'donations',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule

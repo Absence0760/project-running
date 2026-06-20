@@ -2624,5 +2624,13 @@
   "challengesNotFound": "Ce défi n'est pas disponible.",
   "challengesJoinFailed": "Impossible de rejoindre le défi.",
   "challengesLeaveFailed": "Impossible de quitter le défi.",
-  "challengesLoadFailed": "Impossible de charger les défis."
+  "challengesLoadFailed": "Impossible de charger les défis.",
+  "fundraiserRaisedOfGoal": "{raised} sur {goal} collectés",
+  "fundraiserDonorCount": "{count} soutiens",
+  "fundraiserOverGoal": "Objectif dépassé !",
+  "fundraiserClosed": "Cette collecte est clôturée.",
+  "fundraiserFeedTitle": "Soutiens récents",
+  "fundraiserFeedEmpty": "Soyez le premier à faire un don.",
+  "fundraiserAnonymous": "Anonyme",
+  "fundraiserDonateOnWeb": "Faire un don sur le web"
 }

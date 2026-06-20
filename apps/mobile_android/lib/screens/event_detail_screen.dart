@@ -20,6 +20,7 @@ import '../recurrence.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/fundraiser_section.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/top_banner.dart';
 
@@ -697,6 +698,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ],
           const SizedBox(height: 24),
+          FundraiserSection(social: widget.social, eventId: e.row.id),
           Text(
             l10n.eventAttendees(_attendees.length),
             style: theme.textTheme.labelSmall?.copyWith(

@@ -14,6 +14,7 @@
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
+	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
 	import RunGearChips from '$lib/components/RunGearChips.svelte';
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
 	import RouteHistory from '$lib/components/RouteHistory.svelte';
@@ -1484,6 +1485,8 @@
 		</section>
 
 		<RunPhotos runId={run.id} runOwnerId={run.user_id} wrapperClass="section" />
+
+		<FundraiserSection runId={run.id} isOwner={auth.user?.id === run.user_id} />
 
 		{#if run.route_id}
 			<section class="section">

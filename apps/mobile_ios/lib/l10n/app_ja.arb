@@ -2624,5 +2624,13 @@
   "challengesNotFound": "このチャレンジは利用できません。",
   "challengesJoinFailed": "チャレンジに参加できませんでした。",
   "challengesLeaveFailed": "チャレンジから退出できませんでした。",
-  "challengesLoadFailed": "チャレンジを読み込めませんでした。"
+  "challengesLoadFailed": "チャレンジを読み込めませんでした。",
+  "fundraiserRaisedOfGoal": "目標 {goal} のうち {raised} を達成",
+  "fundraiserDonorCount": "支援者 {count} 人",
+  "fundraiserOverGoal": "目標達成！",
+  "fundraiserClosed": "この募金は終了しました。",
+  "fundraiserFeedTitle": "最近の支援者",
+  "fundraiserFeedEmpty": "最初の寄付者になりましょう。",
+  "fundraiserAnonymous": "匿名",
+  "fundraiserDonateOnWeb": "ウェブで寄付する"
 }
