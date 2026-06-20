@@ -6,6 +6,7 @@
 		fetchPendingReports,
 		fetchReportsForTarget,
 		resolveTargetReports,
+		adminUnhideTarget,
 		type PendingReportTarget,
 		type TargetReport,
 		type ReportTargetKind,
@@ -25,7 +26,9 @@
 	let detailLoading = $state(false);
 	let resolution = $state('');
 	let resolving = $state(false);
+	let unhiding = $state(false);
 	let confirm = $state<{ status: 'reviewed' | 'dismissed' } | null>(null);
+	let confirmUnhide = $state(false);
 
 	function targetHref(kind: ReportTargetKind, id: string): string {
 		if (kind === 'user') return `/u/${id}`;
@@ -94,6 +97,26 @@
 		}
 	}
 
+	async function doUnhide() {
+		if (!selected || unhiding) return;
+		unhiding = true;
+		const target = selected;
+		try {
+			await adminUnhideTarget(target.target_kind, target.target_id);
+			showToast(t('admin.reports.unhidden'), 'success');
+			selected = { ...target, shadow_hidden: false };
+			queue = queue.map((q) =>
+				q.target_kind === target.target_kind && q.target_id === target.target_id
+					? { ...q, shadow_hidden: false }
+					: q,
+			);
+		} catch (e) {
+			showToast(t('admin.reports.unhideFailed', { error: String((e as Error)?.message ?? e) }), 'error');
+		} finally {
+			unhiding = false;
+		}
+	}
+
 	onMount(async () => {
 		await auth.ready();
 		isAdmin = await amIAdmin();
@@ -148,6 +171,9 @@
 										class="target-link"
 										onclick={(e) => e.stopPropagation()}
 									>{target.target_id.slice(0, 8)}</a>
+									{#if target.shadow_hidden}
+										<span class="hidden-badge" data-testid="admin-hidden-badge">{t('admin.reports.hiddenBadge')}</span>
+									{/if}
 								</td>
 								<td>{target.report_count}</td>
 								<td>{target.reporter_count}</td>
@@ -181,7 +207,23 @@
 				<a href={targetHref(selected.target_kind, selected.target_id)} class="target-link">
 					{t('admin.reports.viewTarget')}
 				</a>
+				{#if selected.shadow_hidden}
+					<span class="hidden-badge" data-testid="admin-detail-hidden-badge">{t('admin.reports.hiddenBadge')}</span>
+				{/if}
 			</div>
+
+			{#if selected.shadow_hidden}
+				<div class="hidden-notice" data-testid="admin-hidden-notice">
+					<p class="muted">{t('admin.reports.hiddenNotice')}</p>
+					<button
+						type="button"
+						class="btn btn-secondary"
+						disabled={unhiding}
+						data-testid="admin-unhide"
+						onclick={() => (confirmUnhide = true)}
+					>{t('admin.reports.unhide')}</button>
+				</div>
+			{/if}
 
 			{#if detailLoading}
 				<p class="muted">…</p>
@@ -250,6 +292,19 @@
 		if (status) doResolve(status);
 	}}
 	oncancel={() => (confirm = null)}
+/>
+
+<ConfirmDialog
+	open={confirmUnhide}
+	title={t('admin.reports.confirmUnhideTitle')}
+	message={t('admin.reports.confirmUnhideMessage')}
+	confirmLabel={t('admin.reports.unhide')}
+	data-testid="admin-unhide-confirm"
+	onconfirm={() => {
+		confirmUnhide = false;
+		doUnhide();
+	}}
+	oncancel={() => (confirmUnhide = false)}
 />
 
 <style>
@@ -330,6 +385,31 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+	.hidden-badge {
+		display: inline-block;
+		padding: 0.1rem 0.45rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-warning, #b45309);
+		color: #fff;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		margin-inline-start: 0.4rem;
+	}
+	.hidden-notice {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: var(--space-sm);
+		border: 1px solid var(--color-warning, #b45309);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-subtle, rgba(180, 83, 9, 0.08));
+	}
+	.hidden-notice p {
+		margin: 0;
+		font-size: 0.84rem;
 	}
 	.report-list {
 		list-style: none;
