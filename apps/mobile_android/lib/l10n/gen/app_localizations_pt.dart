@@ -8835,6 +8835,34 @@ class AppLocalizationsPt extends AppLocalizations {
       'Nenhum atleta ainda. Convide um para começar.';
 
   @override
+  String get coachingRosterTitle => 'Lista de atletas';
+
+  @override
+  String get coachingRosterSubtitle =>
+      'Todos os seus atletas num relance — carga, adesão ao plano e risco de lesão.';
+
+  @override
+  String get coachingRosterNeverRun => 'Nenhuma corrida ainda';
+
+  @override
+  String get coachingRosterNoPlan => 'Sem plano';
+
+  @override
+  String get coachingRosterRiskInsufficient => 'Novo';
+
+  @override
+  String get coachingRosterRiskLow => 'Baixo';
+
+  @override
+  String get coachingRosterRiskOptimal => 'Ótimo';
+
+  @override
+  String get coachingRosterRiskElevated => 'Elevado';
+
+  @override
+  String get coachingRosterRiskHigh => 'Alto';
+
+  @override
   String get coachingRunner => 'Corredor';
 
   @override
@@ -18154,6 +18182,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get coachingNoAthletes =>
       'Nenhum atleta ainda. Convide um para começar.';
+
+  @override
+  String get coachingRosterTitle => 'Lista de atletas';
+
+  @override
+  String get coachingRosterSubtitle =>
+      'Todos os seus atletas num relance — carga, adesão ao plano e risco de lesão.';
+
+  @override
+  String get coachingRosterNeverRun => 'Nenhuma corrida ainda';
+
+  @override
+  String get coachingRosterNoPlan => 'Sem plano';
+
+  @override
+  String get coachingRosterRiskInsufficient => 'Novo';
+
+  @override
+  String get coachingRosterRiskLow => 'Baixo';
+
+  @override
+  String get coachingRosterRiskOptimal => 'Ótimo';
+
+  @override
+  String get coachingRosterRiskElevated => 'Elevado';
+
+  @override
+  String get coachingRosterRiskHigh => 'Alto';
 
   @override
   String get coachingRunner => 'Corredor';

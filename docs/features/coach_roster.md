@@ -1,6 +1,6 @@
 # Multi-athlete coach view — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** Shipped 2026-06-19 — web (`/coaching` roster table) + mobile (`coaching_screen.dart` roster card), migration `20270206_001_coach_roster_summary.sql` (the spec's planned `20270203_001` slot was taken by the time of landing — next free sequential date assigned). The body below is the implementation handoff plan it was built from; the only deviations from spec are the migration number and that the roster table/card sort is in-memory client-side (no saved sort yet). Tracked in [roadmap.md](../product/roadmap.md).
 
 ## Goal & user value
 

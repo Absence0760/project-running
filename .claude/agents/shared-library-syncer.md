@@ -50,6 +50,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/training/current_week.ts` (`currentWeek`) | `apps/mobile_android/lib/current_week.dart` | `training/current_week.test.ts` ↔ `test/current_week_test.dart` |
 | `apps/web/src/lib/training/plan_progress.ts` (`orderedPlanPhases`, `longestCompletedLongRunMetres`) | `apps/mobile_android/lib/plan_progress.dart` | `training/plan_progress.test.ts` ↔ `test/plan_progress_test.dart` |
 | `apps/web/src/lib/training/relink_candidates.ts` (`filterRelinkCandidates`) | `apps/mobile_android/lib/relink_candidates.dart` | `training/relink_candidates.test.ts` ↔ `test/relink_candidates_test.dart` |
+| `apps/web/src/lib/training/coach_load.ts` (`acwr`, `injuryRiskBand`, `loadTrend`) | `apps/mobile_android/lib/coach_load.dart` | `training/coach_load.test.ts` ↔ `test/coach_load_test.dart` |
 | `apps/web/src/lib/gym/routine_editor_build.ts` (`assignSupersetGroups`) | `apps/mobile_android/lib/routine_editor_build.dart` | `gym/routine_editor_build.test.ts` ↔ `test/routine_editor_build_test.dart` |
 | `apps/web/src/lib/gym/progression_prefill.ts` (`lastSessionSets`) | `apps/mobile_android/lib/progression_prefill.dart` | `gym/progression_prefill.test.ts` ↔ `test/progression_prefill_test.dart` |
 | `apps/web/src/lib/routes/route_gpx.ts` (`toRouteGpxWithMarkers`) | `apps/mobile_android/lib/route_gpx.dart` (`routeGpxFromRoute`) | `routes/route_gpx.test.ts` ↔ `test/route_gpx_test.dart` |
