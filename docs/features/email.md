@@ -8,7 +8,7 @@ transactional / lifecycle mail.
 ## Architecture
 
 All email is sent **server-side by the Go worker** (`apps/job_worker/`), never
-from a client. Three job kinds on the `jobs` queue drive it:
+from a client. These job kinds on the `jobs` queue drive it:
 
 - **`notification_email`** — mirrors a row in the `notifications` table (the
   same row the in-app bell renders). An AFTER-INSERT trigger on `notifications`
@@ -31,8 +31,24 @@ from a client. Three job kinds on the `jobs` queue drive it:
   recency guard `run_completed` uses). Crucially **not** gated on the runner's
   `email_notifications` preference — a safety contact opted in explicitly and
   must not be silenced by the runner's social-email setting. `decisions.md § 131`.
+- **`weekly_digest`** — the opt-in weekly engagement summary
+  (`{user_id}`). Enqueued by a Monday pg_cron over opted-in recipients;
+  the handler gates on the opt-IN `email_weekly_digest` pref + the
+  `email_suppressions` hard-block, then sends a bounded localized summary with
+  an RFC 8058 one-click unsubscribe. `decisions.md § 174`.
+- **`lifecycle_drip`** — staged engagement nudges keyed off the user's own
+  activity timeline (`{user_id, template}` — `drip_onboarding`,
+  `drip_reengagement`, `drip_streak`). The third engagement stream, built on the
+  SAME rails as the digest. A daily `enqueue_lifecycle_drip()` pg_cron does ALL
+  the cohort selection in SQL (onboarding = account 2–6 days old with no run;
+  re-engagement = had a run >30 d ago, no cross-modal activity in 30 d; streak =
+  ran the last two days, not yet today), writing the chosen template into the
+  payload. The handler gates on a **separate** opt-IN `email_lifecycle_drip`
+  pref (default off, never inferred from the digest opt-in) + the same
+  `email_suppressions` hard-block, then renders the fixed per-template copy with
+  an RFC 8058 one-click unsubscribe scoped to the drip stream. `decisions.md § 177`.
 
-A fourth, **non-email** job kind reuses the same notifications rows over a
+A **non-email** job kind reuses the same notifications rows over a
 different transport:
 
 - **`web_push`** — the browser Web Push channel (migration `20261219_001`). The
@@ -107,6 +123,7 @@ Shared pieces:
 | **Account-deletion receipt** | `lifecycle_email` (`account_deleted`) | `delete-account` EF enqueues it **inline** (address + locale in payload, no `user_id`) AFTER the cascade; send-once via the non-cascading `account_deletion_receipts` table | ✓ | §121 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | **Native push** (locked-phone FCM/APNs, same notification rows) | `native_push` | `notifications` AFTER INSERT, gated on an enabled `device_tokens` row + the same `push_notifications` pref | gated on operator FCM/APNs creds (title/body from the shared catalogue) | §166 |
+| **Lifecycle drip** (onboarding / re-engagement / streak nudges) | `lifecycle_drip` (`drip_onboarding`, `drip_reengagement`, `drip_streak`) | daily pg_cron `enqueue_lifecycle_drip()` selects the cohort in SQL; handler gates on the opt-IN `email_lifecycle_drip` pref + `email_suppressions`; RFC 8058 one-click unsubscribe (`/unsubscribe/lifecycle-drip`). **SEND fail-closed on the unset SMTP credential + CISO/counsel sign-off** (built, migration `20270223_001`) | ✓ | §177 |
 | Branded HTML + inbox preview text | — | all email of the above | ✓ | — |
 
 All shipped emails are end-to-end tested against the local Docker Mailpit
@@ -146,9 +163,28 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
   **gated on CISO + counsel sign-off** (bulk/promotional mail under CAN-SPAM +
   GDPR/ePrivacy, unlike the transactional kinds) — the only remaining work for
   an enabled send is that operator-side `pg_cron` schedule + the sign-off.
-- [ ] **Lifecycle drip** (engagement) — re-engagement, onboarding drip,
-  streak/goal nudges. Reuse the `lifecycle_email` kind + the digest's opt-in /
-  suppression / unsubscribe rails. Not built. Same CISO/counsel gate.
+- [~] **Lifecycle drip** (engagement) — **FULLY BUILT INCL. SCHEDULER, SEND STILL
+  GATED ON SMTP + CISO/COUNSEL (2026-06-20, migration `20270223_001`; decisions
+  §177).** Onboarding / re-engagement / streak nudges on the SAME rails as the
+  weekly digest — a new `lifecycle_drip` jobs.kind carrying `{user_id, template}`
+  (`drip_onboarding`, `drip_reengagement`, `drip_streak`). A daily
+  `enqueue_lifecycle_drip()` pg_cron (09:00 UTC) does ALL the cohort selection in
+  SQL — onboarding = opted-in account 2–6 days old with no run yet;
+  re-engagement = had a run >30 d ago but no cross-modal `activities` row in 30 d;
+  streak = ran the last two calendar days but not yet today — writing the chosen
+  template into the payload, dedupe-safe per `(user_id, template)`. The worker
+  handler (`handler_lifecycle_drip.go`) gates on a **separate** opt-IN
+  `email_lifecycle_drip` pref (default off — NEVER folded into the digest opt-in;
+  opting into one engagement stream is not consent to the other) + the shared
+  `email_suppressions` hard-block, then renders the fixed per-template localized
+  copy with an RFC 8058 one-click unsubscribe at `/unsubscribe/lifecycle-drip`.
+  The unsubscribe endpoint + the stateless HMAC token are now **stream-aware**
+  (one mechanism, one `WEEKLY_DIGEST_UNSUB_SECRET`, the token scope namespaces
+  the streams so one stream's link can't unsubscribe another); a suppression row
+  blocks every stream to that address. **Fail-closed on the unset SMTP
+  credential** (jobs drain to `done` without `SMTP_HOST`); enabling an actual
+  send is the operator's SMTP provisioning + the CISO/counsel sign-off (the cron
+  is harmless no-op churn until then).
 - [x] **Account-deletion receipt** — SHIPPED 2026-06-20 (migration
   `20270217_001`, `account_deleted` template). Built as **enqueue-with-inline-
   address + a non-cascading send-once record** (not inline-send-from-EF — that
@@ -199,7 +235,10 @@ None of this sends in prod until an operator:
    + `APP_BASE_URL` (Resend or SES). Until then `notification_email` /
    `lifecycle_email` jobs finish without sending.
 2. **Confirms the pg_cron schedules** are live in the deployed Supabase
-   (`enqueue-event-reminders`).
+   (`enqueue-event-reminders`, `enqueue-weekly-digest`, `enqueue-lifecycle-drip`).
+   The two engagement crons (`enqueue-weekly-digest`, `enqueue-lifecycle-drip`)
+   enqueue harmless no-op jobs until SMTP is provisioned — the send leg is the
+   gate, not the schedule.
 2b. (For **web push**) sets `VAPID_PUBLIC_KEY` (the same key the browser
    subscribed with — apps/web's `PUBLIC_VAPID_PUBLIC_KEY`), `VAPID_PRIVATE_KEY`,
    and `VAPID_SUBJECT` (`mailto:` contact) on the worker. Until then `web_push`
@@ -216,11 +255,20 @@ None of this sends in prod until an operator:
    configured-but-invalid credential fails the worker loudly at startup.
 3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
    spam-filed.
-4. (Before any **bulk/engagement** mail) the RFC 8058 one-click unsubscribe
-   endpoint (set `WEEKLY_DIGEST_UNSUB_SECRET`) + the bounce/complaint
-   suppression webhook (set `EMAIL_BOUNCE_WEBHOOK_SECRET`, ≥32 chars, and point
-   the provider's bounce/complaint webhook at `POST /v1/email/bounce?secret=…`).
-   Both are built behind their secrets; unset → the endpoints return 503.
+4. (Before any **bulk/engagement** mail — the weekly digest AND the lifecycle
+   drip) the RFC 8058 one-click unsubscribe endpoints (set
+   `WEEKLY_DIGEST_UNSUB_SECRET` — the one shared secret keys both
+   `/unsubscribe/weekly-digest` and `/unsubscribe/lifecycle-drip`) + the
+   bounce/complaint suppression webhook (set `EMAIL_BOUNCE_WEBHOOK_SECRET`,
+   ≥32 chars, and point the provider's bounce/complaint webhook at
+   `POST /v1/email/bounce?secret=…`). Both are built behind their secrets;
+   unset → the endpoints return 503.
+5. (For the **lifecycle drip** + **weekly digest** specifically) **CISO +
+   counsel sign-off** — bulk/promotional mail under CAN-SPAM + GDPR/ePrivacy,
+   unlike the transactional kinds. This is a pre-deploy checklist item; the
+   code path is built and fail-closed (SMTP unset → nothing sends, and even
+   with SMTP every recipient is hard-gated on the per-stream opt-IN pref + the
+   suppression block).
 
 ## Where the code lives
 
@@ -234,10 +282,16 @@ None of this sends in prod until an operator:
   `internal/nativepush/` FCM HTTP v1 + APNs HTTP/2 sender (stdlib + `golang-jwt`).
   Weekly digest (behind the gate): `handler_weekly_digest.go` (gate + render),
   `digest_builder.go` (`EnqueueAllWeeklyDigests` — UNSCHEDULED),
-  `internal/digesttoken/` (the stateless RFC 8058 HMAC token),
-  `internal/unsubscribe/` (the unauth `/unsubscribe/weekly-digest` endpoint),
-  and `internal/bouncehook/` (the provider bounce/complaint webhook at
-  `POST /v1/email/bounce` that writes `bounce`/`complaint` suppression rows).
+  `internal/digesttoken/` (the stateless RFC 8058 HMAC token, now **stream-aware**:
+  `Mint(secret, stream, userID)` / `Verify(...)` over the `weekly_digest` /
+  `lifecycle_drip` scopes), `internal/unsubscribe/` (the unauth endpoint, now
+  **stream-aware** — mounts `/unsubscribe/weekly-digest` AND
+  `/unsubscribe/lifecycle-drip` off one shared secret), and `internal/bouncehook/`
+  (the provider bounce/complaint webhook at `POST /v1/email/bounce` that writes
+  `bounce`/`complaint` suppression rows). Lifecycle drip (behind the same gate):
+  `handler_lifecycle_drip.go` (the digest's sibling — opt-in `email_lifecycle_drip`
+  + suppression gate, per-template render via `renderLifecycleDrip` in `mailer.go`;
+  cohort selection is in SQL, not the handler).
 - Migrations: `20261130_001` (notification channel + reminders), `20261202_001`
   (welcome), `20261203_001` (subscription emails), `20261218_001` (safety
   contacts + the `safety_email` kind), `20261219_001` (web-push channel + the
@@ -247,7 +301,12 @@ None of this sends in prod until an operator:
   `native_push` kind + `native_push_sent_at` + the device-token-gated enqueue
   trigger + `clear_device_token`), `20270217_001` (account-deletion receipt — the
   non-cascading `account_deletion_receipts` send-once table; the `account_deleted`
-  template rides the existing `lifecycle_email` kind, so no jobs.kind CHECK change).
+  template rides the existing `lifecycle_email` kind, so no jobs.kind CHECK change),
+  `20270220_001` (weekly-digest scheduler — the `enqueue-weekly-digest` pg_cron),
+  `20270223_001` (lifecycle drip — the `lifecycle_drip` jobs.kind + the
+  `enqueue_lifecycle_drip()` cohort-selection function + the daily
+  `enqueue-lifecycle-drip` pg_cron; the opt-in `email_lifecycle_drip` pref is a
+  jsonb key with no migration, like the digest pref).
 - Native-push client leg: the mobile device-token registration —
   `apps/mobile_android/lib/push_messaging_bridge.dart` +
   `firebase_push_messaging.dart` (byte-identical iOS twins), wired in `main.dart`,
