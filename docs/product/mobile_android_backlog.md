@@ -20,7 +20,6 @@ Of the 16 `✗` Android rows, several are **not Android gaps**: they're web-cano
 | Gap | Section in parity.md | Note |
 |---|---|---|
 | Post-signup setup wizard | Auth and onboarding | Web ships the 7-step `/onboarding` wizard gated on `user_profiles.onboarded_at`; the mobile twin is deferred. |
-| Personal run-track heatmap (geographic) | Run history and analytics | Web `/runs/heatmap`; mobile read-path deferred. |
 | Event photo gallery (multi-attendee) | Clubs and events | Web ships the per-event gallery; mobile mirror deferred. |
 | Finisher certificate (downloadable) | Clubs and events | Web ships the downloadable cert; mobile deferred. |
 | Direct messages (1:1) | Following and feed | Web `/messages`; mobile deferred. |
@@ -50,7 +49,7 @@ The structural foundations (`api_client`, `core_models`, stores, `ui_kit`) all e
 
 1. **Treadmill C3 run-screen wiring** — smallest, highest-confidence: thread a shared `BleTreadmill` through `RunApp` → `run_screen`, add a treadmill-mode toggle that subscribes the belt stream and calls the already-shipped `setTreadmillSample`. No new plumbing.
 2. **Per-device "+ Add override" editor** — bounded Settings change on top of the existing write-path.
-3. **The read-path screens** (personal run-track heatmap, event photo gallery, finisher certificate, direct messages, matched-track on run detail) — each is one screen composing existing `api_client` methods; mirror the web shape.
+3. **The read-path screens** (event photo gallery, finisher certificate, direct messages, matched-track on run detail) — each is one screen composing existing `api_client` methods; mirror the web shape. (Personal run-track heatmap shipped — `run_heatmap_screen.dart` + the pure `run_heatmap.dart` twin.)
 4. **Post-signup setup wizard** — the largest of the screen items (multi-step flow + the `onboarded_at` gate).
 5. **Native Strava OAuth + native paywall sheets** — land the code behind the existing env-gates; the paywall sheets only *go live* once RevenueCat credentials are provisioned (fail-closed until then, per the compliance/credential-gate rule).
 
