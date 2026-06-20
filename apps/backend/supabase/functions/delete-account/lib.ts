@@ -150,3 +150,50 @@ export interface ThirdPartyOutcomes {
 	revenuecat_delete: ThirdPartyOutcome;
 	fcm_remove: ThirdPartyOutcome;
 }
+
+// ─── account-deletion receipt enqueue ───
+
+// normalizeReceiptLocale mirrors the worker's normalizeEmailLocale
+// (apps/job_worker/internal/email_i18n.go): map an arbitrary BCP-47-ish
+// `user_settings.prefs.locale` to one of the six supported email locales,
+// else 'en'. Doing it here keeps a junk pref value out of the job payload;
+// the worker normalizes again defensively.
+export function normalizeReceiptLocale(tag: unknown): string {
+	if (typeof tag !== 'string') return 'en';
+	const t = tag.trim().toLowerCase();
+	if (t === '') return 'en';
+	if (t.startsWith('pt')) return 'pt-BR';
+	const base = t.split(/[-_]/)[0];
+	switch (base) {
+		case 'en':
+		case 'de':
+		case 'fr':
+		case 'es':
+		case 'ja':
+			return base;
+		default:
+			return 'en';
+	}
+}
+
+// accountDeletionReceiptJobPayload builds the `lifecycle_email` job the
+// delete-account handler enqueues AFTER the auth-row cascade, carrying the
+// address + locale INLINE (the user is gone — the worker can't look the
+// address up via GoTrue). Crucially it carries NO `user_id`: the handler's
+// job-drain filters on `payload->>user_id`, so a payload without that key is
+// naturally exempt and won't be swept by a concurrent re-run. The worker
+// dedups on a hash of the address (account_deletion_receipts), not the
+// now-gone user id. decisions §121.
+export function accountDeletionReceiptJobPayload(
+	email: string,
+	locale: string,
+): { kind: string; payload: Record<string, string> } {
+	return {
+		kind: 'lifecycle_email',
+		payload: {
+			template: 'account_deleted',
+			email,
+			locale: normalizeReceiptLocale(locale),
+		},
+	};
+}

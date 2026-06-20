@@ -11,6 +11,7 @@ import {
   STRAVA_DEAUTHORIZE_URL,
   type ThirdPartyOutcome,
   type ThirdPartyOutcomes,
+  accountDeletionReceiptJobPayload,
   fcmBatchRemoveBody,
   formatDeletedCounts,
   hashUserIdForAudit,
@@ -480,6 +481,30 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   // (see formatDeletedCounts).
   const deletedCounts: Record<string, number> = {};
 
+  // Capture the address + locale for the deletion-receipt email BEFORE the
+  // cascade — both are unreadable afterwards (the worker can't resolve the
+  // address post-deletion: GoTrue 404s, and user_settings cascades away). The
+  // receipt is enqueued AFTER admin.deleteUser succeeds, so a failed delete
+  // never sends a premature "your account was deleted". decisions §121.
+  const receiptEmail = user.email ?? '';
+  let receiptLocale = 'en';
+  try {
+    const { data: settings } = await adminClient
+      .from('user_settings')
+      .select('prefs')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const prefs = (settings?.prefs ?? {}) as Record<string, unknown>;
+    if (typeof prefs.locale === 'string') receiptLocale = prefs.locale;
+  } catch (e) {
+    // Locale is best-effort — fall back to English rather than fail the
+    // delete over a non-critical detail.
+    console.error(
+      'delete-account: locale read failed (defaulting en):',
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+
   // ─── Mandatory cleanups before the cascade ───
   // These leak personal data past the auth-row cascade, so failure
   // must abort + leave the auth row intact (the user can retry).
@@ -646,6 +671,32 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
       { error: 'delete failed' },
       { status: 500, headers: { 'content-type': 'application/json' } },
     );
+  }
+
+  // Enqueue the account-deletion receipt — AFTER the cascade (so we never
+  // send a premature receipt for a delete that failed) and AFTER the job
+  // drain (the drained jobs all carried this user_id; this one deliberately
+  // does NOT, so it isn't swept). The address + locale ride in the payload
+  // because the worker can't resolve them now that the user is gone; the
+  // worker dedups on a hash of the address via the non-cascading
+  // account_deletion_receipts table. Best-effort: a failure here cannot undo
+  // the (already-completed) erasure, so log + continue. decisions §121.
+  if (receiptEmail !== '') {
+    try {
+      const job = accountDeletionReceiptJobPayload(receiptEmail, receiptLocale);
+      const { error: enqueueErr } = await adminClient.from('jobs').insert(job);
+      if (enqueueErr) {
+        console.error(
+          'delete-account: receipt enqueue failed:',
+          enqueueErr.message,
+        );
+      }
+    } catch (e) {
+      console.error(
+        'delete-account: receipt enqueue failed:',
+        e instanceof Error ? e.message : String(e),
+      );
+    }
   }
 
   await recordAudit(
