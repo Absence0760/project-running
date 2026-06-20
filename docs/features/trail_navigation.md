@@ -1,6 +1,6 @@
 # Turn-by-turn offline trail navigation + condition reports — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** Shipped 2026-06-19 (backlog row #5). All three pieces landed: community **condition reports** (web canonical + mobile, migration `20270212_001`, privacy-redacting `route_conditions_for_viewer` RPC, `decisions.md § 168`); **offline tile packs** (mobile, sibling on-disk cache + read-through live map, `decisions.md § 167`); **turn-by-turn voice cues** (mobile, self-contained geometric generator over the route polyline — open question #1 resolved in favour of the geometric generator, no external routing engine, `decisions.md § 166`). The rest of this doc is the original implementation plan, kept for reference. **Prod gates** (code shipped, deploy-gated): `/audit/privacy-zones` on the conditions surface; MapTiler-ToS confirmation for bulk tile persistence (open question #3) before offline packs ship against the prod tile source (else use self-hosted Protomaps). Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 ## Goal & user value
 Three deferred pieces of parity backlog #5 ("Trail / offline navigation"). For a
