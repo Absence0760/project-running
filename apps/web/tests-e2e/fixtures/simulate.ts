@@ -631,3 +631,37 @@ export async function insertCrossing(opts: {
 		throw new Error(`simulate.insertCrossing failed: ${error.message}`);
 	}
 }
+
+/**
+ * Achievement awards are written only by the SECURITY DEFINER award function
+ * in prod (no client insert path), so seed a deterministic badge for an e2e
+ * via the service-role client. Returns the inserted row id.
+ */
+export async function insertAchievement(opts: {
+	user_id: string;
+	badge_key: string;
+	tier?: string;
+	source_kind?: string;
+	value_num?: number;
+	is_public?: boolean;
+}): Promise<string> {
+	const { data, error } = await getAdminClient()
+		.from('achievements')
+		.insert({
+			user_id: opts.user_id,
+			badge_key: opts.badge_key,
+			tier: opts.tier ?? 'bronze',
+			source_kind: opts.source_kind ?? 'distance',
+			value_num: opts.value_num ?? null,
+			is_public: opts.is_public ?? true
+		})
+		.select('id')
+		.single();
+	if (error) throw new Error(`simulate.insertAchievement failed: ${error.message}`);
+	return data.id as string;
+}
+
+export async function deleteAchievement(id: string): Promise<void> {
+	const { error } = await getAdminClient().from('achievements').delete().eq('id', id);
+	if (error) throw new Error(`simulate.deleteAchievement failed: ${error.message}`);
+}

@@ -7,18 +7,21 @@
 	import {
 		fetchFollowingActivityFeed,
 		fetchEngagementSummaries,
+		fetchFollowingBadgeAwards,
 		giveKudos,
 		rescindKudos,
 		FEED_WINDOW_DAYS,
 		type ActivityFeedEntry,
 		type RunFeedEntry,
 		type LiftFeedEntry,
+		type BadgeAwardFeedEntry,
 	} from '$lib/core/data';
 
 	import { formatDistance, formatPace, formatWeight } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
+	import { tierFor, type AchievementTier } from '$lib/social/badges';
 
 	const FEED_ACTIVITIES: { value: string; labelKey: MessageKey; icon: string }[] = [
 		{ value: 'all', labelKey: 'socialFeed.activityAll', icon: 'apps' },
@@ -41,6 +44,7 @@
 	let activityFilter = $state<string>('all');
 	let followingCount = $state(0);
 	let followsAnyone = $derived(followingCount > 0);
+	let badgeAwards = $state<BadgeAwardFeedEntry[]>([]);
 
 	let mounted = false;
 
@@ -48,9 +52,26 @@
 		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
-		await Promise.all([refreshFollowingCount(), load()]);
+		await Promise.all([refreshFollowingCount(), load(), loadBadgeAwards()]);
 		mounted = true;
 	});
+
+	async function loadBadgeAwards() {
+		try {
+			badgeAwards = await fetchFollowingBadgeAwards({ limit: 6 });
+		} catch {
+			badgeAwards = [];
+		}
+	}
+
+	function badgeLabel(b: BadgeAwardFeedEntry): string {
+		const t = tierFor(b.badge.badge_key, b.badge.tier as AchievementTier);
+		return t ? m(t.labelKey) : b.badge.badge_key;
+	}
+	function badgeIcon(b: BadgeAwardFeedEntry): string {
+		const t = tierFor(b.badge.badge_key, b.badge.tier as AchievementTier);
+		return t?.icon ?? 'military_tech';
+	}
 
 	$effect(() => {
 		const _ = activityFilter;
@@ -236,6 +257,21 @@
 			{/if}
 		</div>
 	{:else}
+		{#if badgeAwards.length > 0}
+			<section class="badge-strip" aria-label={m('badges.section.title')}>
+				{#each badgeAwards as b (b.badge.id)}
+					<a class="badge-chip tier-{b.badge.tier}" href="/share/badge/{b.badge.id}">
+						<span class="material-symbols" aria-hidden="true">{badgeIcon(b)}</span>
+						<span class="badge-chip-text">
+							{m('badges.feedEarned', {
+								name: b.authorName ?? m('badges.aRunner'),
+								badge: badgeLabel(b)
+							})}
+						</span>
+					</a>
+				{/each}
+			</section>
+		{/if}
 		<div class="feed">
 			{#each entries as entry (entry.id)}
 				<article class="entry">
@@ -599,5 +635,40 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+	.badge-strip {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs);
+		margin-bottom: var(--space-md);
+	}
+	.badge-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-pill, 999px);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--tier-color, var(--color-border));
+		font-size: 0.8125rem;
+		color: var(--color-text);
+		text-decoration: none;
+	}
+	.badge-chip .material-symbols {
+		font-size: 1.1rem;
+		color: var(--tier-color, var(--color-text-secondary));
+	}
+	.badge-chip.tier-bronze {
+		--tier-color: #b08d57;
+	}
+	.badge-chip.tier-silver {
+		--tier-color: #9aa3ad;
+	}
+	.badge-chip.tier-gold {
+		--tier-color: #d4af37;
+	}
+	.badge-chip.tier-platinum {
+		--tier-color: #7fd3e0;
 	}
 </style>

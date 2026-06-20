@@ -23,6 +23,7 @@
 
 import type { MessageKey } from '$lib/i18n/messages';
 import type { AchievementTier, AchievementSourceKind } from '$lib/types';
+import { en } from '../i18n/locales/en';
 
 export type { AchievementTier, AchievementSourceKind };
 
@@ -186,4 +187,19 @@ export function tierFor(badgeKey: string, tier: AchievementTier): BadgeTier | nu
 	const badge = BADGE_CATALOGUE.find((b) => b.id === badgeKey);
 	if (!badge) return null;
 	return badge.tiers.find((t) => t.tier === tier) ?? null;
+}
+
+/**
+ * Server-safe English label/desc for a stored award — used by the share page
+ * meta + OG card, which run under SSR/Lambda with no i18n runtime. Reads the
+ * static English catalogue directly so the wire output is locale-independent
+ * (the live grid still localises via `m(labelKey)`).
+ */
+export function englishBadge(
+	badgeKey: string,
+	tier: AchievementTier,
+): { label: string; desc: string; icon: string } | null {
+	const t = tierFor(badgeKey, tier);
+	if (!t) return null;
+	return { label: en[t.labelKey] ?? badgeKey, desc: en[t.descKey] ?? '', icon: t.icon };
 }

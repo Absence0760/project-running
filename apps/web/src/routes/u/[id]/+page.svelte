@@ -22,10 +22,14 @@
 		giveKudos,
 		rescindKudos,
 		FEED_WINDOW_DAYS,
+		fetchUserBadges,
+		setBadgeVisibility,
 		type FeedEntry,
 		type ProfileSummary,
 		type PublicProfile,
 	} from '$lib/core/data';
+	import BadgeGrid from '$lib/components/BadgeGrid.svelte';
+	import type { Achievement } from '$lib/types';
 	
 	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -51,7 +55,9 @@
 	let followingLoadingMore = $state(false);
 	let loading = $state(true);
 	let busy = $state(false);
-	let tab = $state<'runs' | 'followers' | 'following' | 'notifications' | 'feed'>('runs');
+	let tab = $state<
+		'runs' | 'achievements' | 'followers' | 'following' | 'notifications' | 'feed'
+	>('runs');
 
 	let isSelf = $derived(auth.user?.id === userId);
 	let openRunId = $state<string | null>(null);
@@ -71,6 +77,41 @@
 	let viewerHasBlocked = $state(false);
 	let blockBusy = $state(false);
 	let showBlockConfirm = $state(false);
+
+	// ── Achievements state ─────────────────────────────────────────
+	// RLS returns all of the owner's rows (incl. private) and only public
+	// rows for a non-owner; the query is identical either way. Hydrates
+	// lazily when the viewer first lands on the Achievements tab.
+	let badges = $state<Achievement[]>([]);
+	let badgesLoaded = $state(false);
+
+	async function loadBadges() {
+		if (badgesLoaded) return;
+		try {
+			badges = await fetchUserBadges(userId);
+		} catch {
+			badges = [];
+		}
+		badgesLoaded = true;
+	}
+
+	async function toggleBadgeVisibility(b: Achievement) {
+		const next = !b.is_public;
+		try {
+			await setBadgeVisibility(b.id, next);
+			badges = badges.map((x) => (x.id === b.id ? { ...x, is_public: next } : x));
+		} catch {
+			showToast(m('badges.toggleError'), 'error');
+		}
+	}
+
+	function shareBadge(b: Achievement) {
+		const url = `${location.origin}/share/badge/${b.id}`;
+		navigator.clipboard?.writeText(url).then(
+			() => showToast(m('badges.shareLinkCopied'), 'success'),
+			() => showToast(m('profile.copyLinkError'), 'error')
+		);
+	}
 
 	// ── Feed state (self-only tab) ─────────────────────────────────
 	// Mirrors the shape /feed used to render: 14-day window over runs
@@ -200,8 +241,14 @@
 			queueMicrotask(() => goto('/social?tab=feed', { replaceState: true }));
 			return;
 		}
-		if (t === 'followers' || t === 'following' || t === 'runs') tab = t;
+		if (t === 'followers' || t === 'following' || t === 'runs' || t === 'achievements') tab = t;
 		else if (t === 'notifications' && isSelf) tab = 'notifications';
+	});
+
+	// Lazy-load badges when the viewer first lands on the Achievements tab.
+	$effect(() => {
+		if (tab !== 'achievements') return;
+		loadBadges();
 	});
 
 	// Lazy-load the feed when the self-viewer first switches to the tab.
@@ -585,6 +632,16 @@
 			<button
 				role="tab"
 				class="tab"
+				class:active={tab === 'achievements'}
+				aria-selected={tab === 'achievements'}
+				tabindex={tab === 'achievements' ? 0 : -1}
+				onclick={() => setTab('achievements')}
+			>
+				{m('badges.section.title')}
+			</button>
+			<button
+				role="tab"
+				class="tab"
 				class:active={tab === 'followers'}
 				aria-selected={tab === 'followers'}
 				tabindex={tab === 'followers' ? 0 : -1}
@@ -683,6 +740,13 @@
 					{/each}
 				</div>
 			{/if}
+		{:else if tab === 'achievements'}
+			<BadgeGrid
+				{badges}
+				isOwner={isSelf}
+				onToggleVisibility={toggleBadgeVisibility}
+				onShare={shareBadge}
+			/>
 		{:else if tab === 'followers'}
 			{#if followers.length === 0}
 				<div class="empty-card">
