@@ -171,6 +171,12 @@ Two Strava accounts (one as the "user", one as a "buddy" to exercise the privacy
 
 **Test strategy:** mock the upstream fetch in the Edge Function via dependency injection (the function is already structured for this; `apps/backend/CLAUDE.md` § Testing without real credentials documents the pattern).
 
+### 12. RunSignUp API key — for live race-results import
+
+**What's needed:** a RunSignUp REST API key + secret (`RUNSIGNUP_API_KEY` / `RUNSIGNUP_API_SECRET`), set as Edge-Function secrets on the deployed Supabase project (and in `apps/backend/.env.local` for local manual testing). Apply at <https://runsignup.com> → partner/API access.
+
+**Status today:** the race-calendar + results-import feature is **shipped fail-closed** (migration `20270214_001`, race_calendar.md). With the key unset — the dev/CI default — `race-results-import` + `race-listings-sync` return `503 provider_not_configured` and the UI shows the unavailable explainer. The e2e suite covers exactly this gated state: `races/runsignup-gate.spec.ts` asserts the Settings card shows the explainer (no crash), and `races/race-calendar-discover.spec.ts` + `races/race-result-import-manual.spec.ts` cover the calendar discovery + **manual paste** import + auto-match-on-record paths, which need no RunSignUp key. The live RunSignUp pull is the only un-e2e'd leg; provisioning the key is a deploy-time checklist item, not a code blocker.
+
 ## Summary — what to create first
 
 If your goal is "get the e2e suite to cover everything", the **best ROI** is:

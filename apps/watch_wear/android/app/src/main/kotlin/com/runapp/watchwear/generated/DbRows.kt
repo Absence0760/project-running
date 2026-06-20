@@ -40,7 +40,8 @@ data class RunRow(
     val eventId: String? = null,
     val hrSeriesUrl: String? = null,
     val activityType: String,
-    val isDnf: Boolean
+    val isDnf: Boolean,
+    val raceListingId: String? = null
 ) {
     companion object {
         const val TABLE = "runs"
@@ -61,6 +62,7 @@ data class RunRow(
         const val COL_HR_SERIES_URL = "hr_series_url"
         const val COL_ACTIVITY_TYPE = "activity_type"
         const val COL_IS_DNF = "is_dnf"
+        const val COL_RACE_LISTING_ID = "race_listing_id"
 
         fun fromJson(json: JsonObject): RunRow = RunRow(
             id = json["id"]!!.jsonPrimitive.content,
@@ -79,7 +81,8 @@ data class RunRow(
             eventId = json["event_id"]?.jsonPrimitive?.contentOrNull,
             hrSeriesUrl = json["hr_series_url"]?.jsonPrimitive?.contentOrNull,
             activityType = json["activity_type"]!!.jsonPrimitive.content,
-            isDnf = json["is_dnf"]!!.jsonPrimitive.boolean
+            isDnf = json["is_dnf"]!!.jsonPrimitive.boolean,
+            raceListingId = json["race_listing_id"]?.jsonPrimitive?.contentOrNull
         )
     }
 
@@ -100,7 +103,8 @@ data class RunRow(
         COL_EVENT_ID to eventId,
         COL_HR_SERIES_URL to hrSeriesUrl,
         COL_ACTIVITY_TYPE to activityType,
-        COL_IS_DNF to isDnf
+        COL_IS_DNF to isDnf,
+        COL_RACE_LISTING_ID to raceListingId
     )
 }
 

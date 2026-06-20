@@ -15833,6 +15833,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Donate on web'**
   String get fundraiserDonateOnWeb;
+
+  /// Title of the race calendar / discovery screen
+  ///
+  /// In en, this message translates to:
+  /// **'Race calendar'**
+  String get racesTitle;
+
+  /// Placeholder for the race name search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search races by name…'**
+  String get racesSearchPlaceholder;
+
+  /// Placeholder for the near-a-place geocode field
+  ///
+  /// In en, this message translates to:
+  /// **'Near a place…'**
+  String get racesNearPlace;
+
+  /// Distance-from-you label on a race card
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} away'**
+  String racesKmAway(String distance);
+
+  /// Distance-band chip: no filter
+  ///
+  /// In en, this message translates to:
+  /// **'Any distance'**
+  String get racesDistanceAny;
+
+  /// Distance-band chip: 5K
+  ///
+  /// In en, this message translates to:
+  /// **'5K'**
+  String get racesDistance5k;
+
+  /// Distance-band chip: 10K
+  ///
+  /// In en, this message translates to:
+  /// **'10K'**
+  String get racesDistance10k;
+
+  /// Distance-band chip: half marathon
+  ///
+  /// In en, this message translates to:
+  /// **'Half'**
+  String get racesDistanceHalf;
+
+  /// Distance-band chip: marathon
+  ///
+  /// In en, this message translates to:
+  /// **'Marathon'**
+  String get racesDistanceMarathon;
+
+  /// Distance-band chip: ultra
+  ///
+  /// In en, this message translates to:
+  /// **'Ultra'**
+  String get racesDistanceUltra;
+
+  /// Link to a race's registration page
+  ///
+  /// In en, this message translates to:
+  /// **'Register'**
+  String get racesRegister;
+
+  /// Link to a race's results page
+  ///
+  /// In en, this message translates to:
+  /// **'View results'**
+  String get racesViewResults;
+
+  /// Action to import a runner's official race result
+  ///
+  /// In en, this message translates to:
+  /// **'Import my result'**
+  String get racesImportResult;
+
+  /// Action to submit a crowd-sourced race listing
+  ///
+  /// In en, this message translates to:
+  /// **'Add a race'**
+  String get racesSubmitRace;
+
+  /// Badge on a user-submitted, not-yet-verified listing
+  ///
+  /// In en, this message translates to:
+  /// **'Unverified'**
+  String get racesUnverified;
+
+  /// Empty state for the race calendar
+  ///
+  /// In en, this message translates to:
+  /// **'No races match these filters yet.'**
+  String get racesEmpty;
+
+  /// Error state when the race search fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load races. Check your connection and try again.'**
+  String get racesSearchFailed;
+
+  /// Inform-tier auto-match prompt on run detail
+  ///
+  /// In en, this message translates to:
+  /// **'Was this the {name}? Import your official result.'**
+  String racesMatchPrompt(String name);
+
+  /// Confirm importing a matched race result
+  ///
+  /// In en, this message translates to:
+  /// **'Import result'**
+  String get racesMatchConfirm;
+
+  /// Dismiss the auto-match prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Not this race'**
+  String get racesMatchDismiss;
+
+  /// Toast after a result is imported
+  ///
+  /// In en, this message translates to:
+  /// **'Official result imported.'**
+  String get racesImported;
+
+  /// Heading for the imported official-result panel
+  ///
+  /// In en, this message translates to:
+  /// **'Official result'**
+  String get racesOfficialResult;
+
+  /// Chip-time field label
+  ///
+  /// In en, this message translates to:
+  /// **'Chip time'**
+  String get racesChipTime;
+
+  /// Gun-time field label
+  ///
+  /// In en, this message translates to:
+  /// **'Gun time'**
+  String get racesGunTime;
+
+  /// Overall-place field label
+  ///
+  /// In en, this message translates to:
+  /// **'Overall place'**
+  String get racesOverallPlace;
+
+  /// Age-group-place field label
+  ///
+  /// In en, this message translates to:
+  /// **'Age-group place'**
+  String get racesAgeGroupPlace;
+
+  /// Age-group field label
+  ///
+  /// In en, this message translates to:
+  /// **'Age group'**
+  String get racesAgeGroup;
+
+  /// Bib field label
+  ///
+  /// In en, this message translates to:
+  /// **'Bib'**
+  String get racesBib;
+
+  /// Hint above the manual result paste form
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your finishing details from the race\'s results page.'**
+  String get racesPasteResultHint;
+
+  /// Save a race listing
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get racesSave;
+
+  /// Cancel a race form
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get racesCancel;
+
+  /// Title of the submit-listing form
+  ///
+  /// In en, this message translates to:
+  /// **'Add a race'**
+  String get racesEditorTitle;
+
+  /// Race name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Race name'**
+  String get racesFieldName;
+
+  /// Race date field label
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get racesFieldDate;
+
+  /// Race distance field label
+  ///
+  /// In en, this message translates to:
+  /// **'Distance (metres)'**
+  String get racesFieldDistance;
+
+  /// Race location field label
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get racesFieldLocation;
+
+  /// Registration link field label
+  ///
+  /// In en, this message translates to:
+  /// **'Registration link'**
+  String get racesFieldEntryUrl;
+
+  /// Results link field label
+  ///
+  /// In en, this message translates to:
+  /// **'Results link'**
+  String get racesFieldResultsUrl;
+
+  /// Error when submitting a listing fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the race. Please try again.'**
+  String get racesSubmitFailed;
+
+  /// Error when importing a result fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t import the result. Please try again.'**
+  String get racesImportFailed;
+
+  /// Nav label for the races surface
+  ///
+  /// In en, this message translates to:
+  /// **'Races'**
+  String get navRaces;
+
+  /// RunSignUp integration name
+  ///
+  /// In en, this message translates to:
+  /// **'RunSignUp'**
+  String get integrationsRunsignup;
+
+  /// RunSignUp integration description
+  ///
+  /// In en, this message translates to:
+  /// **'Import race results from RunSignUp.'**
+  String get integrationsRunsignupConnect;
+
+  /// Action linking to the race calendar from the RunSignUp tile
+  ///
+  /// In en, this message translates to:
+  /// **'Open the race calendar'**
+  String get integrationsRunsignupOpen;
+
+  /// Explainer when the RunSignUp key is unconfigured
+  ///
+  /// In en, this message translates to:
+  /// **'RunSignUp import isn\'t available yet. parkrun and manual paste still work.'**
+  String get integrationsRunsignupUnavailable;
 }
 
 class _AppLocalizationsDelegate

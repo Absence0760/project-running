@@ -66,6 +66,8 @@ insert into runs (
     'race_name', 'parkrun #1', 'bib', '777',
     'overall_place', 12, 'chip_time', '24:18',
     'perceived_effort', 7,
+    -- New race-results-import owner-only keys (20270214_001)
+    'gun_time', '24:30', 'age_group_place', 3, 'age_group', 'M35-39',
     -- parkrun attendance counter (20260724_001)
     'run_number', 100,
     -- Public-safe bag keys included to confirm they DO survive the view
@@ -95,6 +97,7 @@ declare
     'in_progress_saved_at', 'in_progress', 'manual_entry',
     'indoor_estimated', 'distance_source',
     'race_name', 'bib', 'overall_place', 'chip_time', 'perceived_effort',
+    'gun_time', 'age_group_place', 'age_group',
     'run_number'
   ];
 begin

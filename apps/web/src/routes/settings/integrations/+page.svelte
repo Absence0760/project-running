@@ -6,7 +6,12 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchIntegrations, connectIntegration, disconnectIntegration } from '$lib/core/data';
+	import {
+		fetchIntegrations,
+		connectIntegration,
+		disconnectIntegration,
+		isRunSignUpConfigured,
+	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import {
 		stravaAuthUrl,
@@ -47,6 +52,11 @@
 	let pageLoading = $state(true);
 	let confirmingDisconnect = $state<number | null>(null);
 
+	// RunSignUp race-results import runs through the race-results-import EF (no
+	// stored integration row). The whole leg is gated on a server-side API key;
+	// probe it once so the card can show the unavailable explainer fail-closed.
+	let runSignUpAvailable = $state(false);
+
 	async function refreshIntegrations() {
 		const saved = await fetchIntegrations();
 		for (const ui of integrations) {
@@ -85,6 +95,12 @@
 				// Remove the OAuth params from history so a refresh is clean.
 				goto('/settings/integrations', { replaceState: true, noScroll: true });
 			}
+		}
+
+		try {
+			runSignUpAvailable = await isRunSignUpConfigured();
+		} catch {
+			runSignUpAvailable = false;
 		}
 
 		pageLoading = false;
@@ -423,6 +439,25 @@
 				</div>
 			{/if}
 		</section>
+
+		<section class="card runsignup-card" data-testid="runsignup-card">
+			<div class="integration-icon" data-provider="runsignup" aria-hidden="true">
+				<span class="material-symbols">flag</span>
+			</div>
+			<div class="runsignup-body">
+				<h2>{m('integrations.runsignup')}</h2>
+				<p class="card-sub">{m('integrations.runsignupConnect')}</p>
+				{#if runSignUpAvailable}
+					<a class="btn btn-connect" href="/races" data-testid="runsignup-open">
+						{m('integrations.runsignupOpen')}
+					</a>
+				{:else}
+					<p class="runsignup-unavailable" data-testid="runsignup-unavailable" role="status">
+						{m('integrations.runsignupUnavailable')}
+					</p>
+				{/if}
+			</div>
+		</section>
 	{/if}
 </div>
 
@@ -604,6 +639,28 @@
 	.integration-icon[data-provider="healthkit"] {
 		background: rgba(252, 61, 90, 0.12);
 		color: #fc3d5a;
+	}
+	.integration-icon[data-provider="runsignup"] {
+		background: rgba(217, 142, 207, 0.14);
+		color: #b85aad;
+	}
+
+	.runsignup-card {
+		display: flex;
+		gap: var(--space-md);
+		align-items: flex-start;
+	}
+	.runsignup-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		align-items: flex-start;
+	}
+	.runsignup-body h2 { margin: 0; }
+	.runsignup-unavailable {
+		color: var(--color-text-tertiary);
+		font-size: 0.85rem;
+		margin: 0;
 	}
 
 	.integration-info {

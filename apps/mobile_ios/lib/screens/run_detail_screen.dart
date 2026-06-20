@@ -29,7 +29,9 @@ import '../social_service.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/track_segment.dart';
+import '../race_service.dart';
 import '../widgets/run_gear_chips.dart';
+import '../widgets/run_race_section.dart';
 import '../widgets/run_photos.dart';
 import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_share_card.dart';
@@ -78,6 +80,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     with SingleTickerProviderStateMixin {
   late Run run = widget.run;
   late final SocialService _social = SocialService();
+  final RaceService _raceService = RaceService();
   bool _loadingTrack = false;
   bool _trackFetchFailed = false;
   /// Indoor/treadmill HR sidecar samples (bpm + timestamp, no coordinates),
@@ -1158,6 +1161,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           // Local RunDetail only opens runs owned by the viewer, so the
           // viewer is also the run owner — gates "delete any comment".
           if (widget.apiClient != null && widget.apiClient!.userId != null) ...[
+            RunRaceSection(
+              service: _raceService,
+              runId: run.id,
+              startedAt: run.startedAt.toIso8601String(),
+              distanceM: run.distanceMetres,
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: RunGearChips(

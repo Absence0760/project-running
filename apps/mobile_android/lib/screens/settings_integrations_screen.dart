@@ -13,8 +13,10 @@ import '../ble_treadmill.dart';
 import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
+import '../race_service.dart';
 import '../strava.dart';
 import '../widgets/top_banner.dart';
+import 'races_screen.dart';
 
 class SettingsIntegrationsScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -39,11 +41,23 @@ class _SettingsIntegrationsScreenState
     extends State<SettingsIntegrationsScreen> {
   List<IntegrationRow> _integrations = const [];
   bool _stravaBusy = false;
+  final RaceService _raceService = RaceService();
+  bool _runSignUpAvailable = false;
 
   @override
   void initState() {
     super.initState();
     _refreshIntegrations();
+    _probeRunSignUp();
+  }
+
+  Future<void> _probeRunSignUp() async {
+    try {
+      final ok = await _raceService.isRunSignUpConfigured();
+      if (mounted) setState(() => _runSignUpAvailable = ok);
+    } catch (_) {
+      if (mounted) setState(() => _runSignUpAvailable = false);
+    }
   }
 
   Future<void> _refreshIntegrations() async {
@@ -208,6 +222,12 @@ class _SettingsIntegrationsScreenState
     }
   }
 
+  void _openRaces() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => RacesScreen(service: _raceService),
+    ));
+  }
+
   Future<void> _importParkrun() async {
     final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
@@ -348,6 +368,16 @@ class _SettingsIntegrationsScreenState
                 subtitle: Text(l10n.integrationsParkrunTileSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _importParkrun,
+              ),
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(l10n.integrationsRunsignup),
+                subtitle: Text(_runSignUpAvailable
+                    ? l10n.integrationsRunsignupConnect
+                    : l10n.integrationsRunsignupUnavailable),
+                trailing:
+                    _runSignUpAvailable ? const Icon(Icons.chevron_right) : null,
+                onTap: _runSignUpAvailable ? _openRaces : null,
               ),
             ] else
               ListTile(

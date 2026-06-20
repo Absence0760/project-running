@@ -364,9 +364,11 @@ Two paths today, both unblocked:
 
 ## Race results (RunSignUp + general scraping)
 
+> **Status: shipped (2026-06-20, migration `20270214_001`, race_calendar.md).** The race calendar (`race_listings`) + the `race-results-import` / `race-listings-sync` Edge Functions + the auto-match-on-record seam are live on web (`/races`, run-detail) and mobile (`RacesScreen`, run-detail). The **RunSignUp leg is prod-gated, fail-closed**: with `RUNSIGNUP_API_KEY`/`RUNSIGNUP_API_SECRET` unset (the dev/CI default) both EFs return `503 provider_not_configured` and the UI shows the unavailable explainer — provisioning the key on the deployed project is the only remaining go-live step (record it on the deploy checklist). **parkrun** stays the shipped scraper; **manual paste** is the durable non-API path for every other timing platform. Per-site scrapers (ChronoTrack / RaceResult / UltraSignup) remain scoped follow-ups — the URL-pattern table below is the reference for when one is built, not a description of shipped behaviour. See [decisions.md § 168](../architecture/decisions.md#168-race-results-live-on-the-runs-row-sourcerace-a-public-race_listings-calendar-is-its-own-table-and-auto-match-on-record-is-an-inform-tier-layered-resilience-wrapped-post-save-check).
+
 ### RunSignUp
 
-RunSignUp powers a large portion of US road races and has an official REST API.
+RunSignUp powers a large portion of US road races and has an official REST API. The shipped importer calls the results endpoint server-side from `race-results-import/index.ts` (key from the Edge-only `RUNSIGNUP_API_KEY`/`_SECRET` env), maps each finisher through `lib.ts` (`mapRunSignUpResult` → a `source='race'` run with `external_id=race:{name}:{date}:{bib}` + the owner-only race metadata), and upserts with per-user `external_id` dedup. Until the key is provisioned the leg is inert (503).
 
 ```
 GET https://runsignup.com/Rest/race/{race_id}/results/get-results

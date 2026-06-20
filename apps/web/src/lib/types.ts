@@ -7,6 +7,7 @@ import type { EventGymTemplate } from './social/event_gym_template';
 type RunRow = Database['public']['Tables']['runs']['Row'];
 type RouteRow = Database['public']['Tables']['routes']['Row'];
 type RouteMarkerRow = Database['public']['Tables']['route_markers']['Row'];
+type RaceListingRow = Database['public']['Tables']['race_listings']['Row'];
 type IntegrationRow = Database['public']['Tables']['integrations']['Row'];
 type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
 type ClubRow = Database['public']['Tables']['clubs']['Row'];
@@ -112,6 +113,20 @@ export type RouteMarkerKind =
 export type RouteMarker = Omit<RouteMarkerRow, 'kind' | 'meta'> & {
 	kind: RouteMarkerKind;
 	meta: Record<string, unknown>;
+};
+
+// A discoverable race calendar entry (migration 20270214_001). `provider` is
+// the narrow union enforced by the CHECK constraint + check_constraint_unions.mjs.
+export type RaceProvider =
+	| 'runsignup'
+	| 'parkrun'
+	| 'manual'
+	| 'chronotrack'
+	| 'raceresult'
+	| 'ultrasignup';
+
+export type RaceListing = Omit<RaceListingRow, 'provider'> & {
+	provider: RaceProvider;
 };
 
 export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_tier'> & {

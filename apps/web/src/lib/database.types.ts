@@ -2244,6 +2244,54 @@ export type Database = {
           period_kind?: string
           snapshot?: Json
           user_id?: string
+      race_listings: {
+        Row: {
+          created_at: string
+          distance_m: number | null
+          entry_url: string | null
+          id: string
+          is_verified: boolean
+          location_label: string | null
+          location_point: unknown
+          name: string
+          provider: string
+          provider_race_id: string | null
+          race_date: string
+          results_url: string | null
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          distance_m?: number | null
+          entry_url?: string | null
+          id?: string
+          is_verified?: boolean
+          location_label?: string | null
+          location_point?: unknown
+          name: string
+          provider: string
+          provider_race_id?: string | null
+          race_date: string
+          results_url?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          distance_m?: number | null
+          entry_url?: string | null
+          id?: string
+          is_verified?: boolean
+          location_label?: string | null
+          location_point?: unknown
+          name?: string
+          provider?: string
+          provider_race_id?: string | null
+          race_date?: string
+          results_url?: string | null
+          submitted_by?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2891,6 +2939,7 @@ export type Database = {
           is_dnf: boolean
           is_public: boolean | null
           metadata: Json | null
+          race_listing_id: string | null
           route_id: string | null
           source: string
           started_at: string
@@ -2910,6 +2959,7 @@ export type Database = {
           is_dnf?: boolean
           is_public?: boolean | null
           metadata?: Json | null
+          race_listing_id?: string | null
           route_id?: string | null
           source: string
           started_at: string
@@ -2929,6 +2979,7 @@ export type Database = {
           is_dnf?: boolean
           is_public?: boolean | null
           metadata?: Json | null
+          race_listing_id?: string | null
           route_id?: string | null
           source?: string
           started_at?: string
@@ -2942,6 +2993,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_race_listing_id_fkey"
+            columns: ["race_listing_id"]
+            isOneToOne: false
+            referencedRelation: "race_listings"
             referencedColumns: ["id"]
           },
           {
@@ -3723,6 +3781,7 @@ export type Database = {
           is_dnf: boolean | null
           is_public: boolean | null
           metadata: Json | null
+          race_listing_id: string | null
           route_id: string | null
           source: string | null
           started_at: string | null
@@ -3739,6 +3798,7 @@ export type Database = {
           is_dnf?: boolean | null
           is_public?: boolean | null
           metadata?: never
+          race_listing_id?: string | null
           route_id?: never
           source?: string | null
           started_at?: string | null
@@ -3755,12 +3815,21 @@ export type Database = {
           is_dnf?: boolean | null
           is_public?: boolean | null
           metadata?: never
+          race_listing_id?: string | null
           route_id?: never
           source?: string | null
           started_at?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "runs_race_listing_id_fkey"
+            columns: ["race_listing_id"]
+            isOneToOne: false
+            referencedRelation: "race_listings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       race_sessions_redacted: {
         Row: {
@@ -4698,6 +4767,31 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      search_race_listings: {
+        Args: {
+          p_center_lat?: number
+          p_center_lng?: number
+          p_distance?: string
+          p_from?: string
+          p_limit?: number
+          p_query?: string
+          p_radius_m?: number
+          p_to?: string
+        }
+        Returns: {
+          distance_m: number
+          distance_m_away: number
+          entry_url: string
+          id: string
+          is_verified: boolean
+          location_label: string
+          name: string
+          provider: string
+          provider_race_id: string
+          race_date: string
+          results_url: string
+        }[]
       }
       search_user_profiles: {
         Args: { p_limit?: number; p_query: string }

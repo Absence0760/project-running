@@ -1,0 +1,157 @@
+import {
+  assert,
+  assertEquals,
+} from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import {
+  capField,
+  extractRunSignUpResults,
+  mapRunSignUpResult,
+  MAX_FIELD_LEN,
+  MAX_RESULTS_ROWS,
+  parseClockToSeconds,
+  parseRaceResultRow,
+  raceExternalId,
+  runSignUpResultsUrl,
+} from './lib.ts';
+
+const OPTS = {
+  userId: 'u-1',
+  listingId: 'L-1',
+  raceName: 'Richmond Half Marathon',
+  raceDate: '2025-09-21',
+  distanceM: 21097,
+  isPublic: false,
+};
+
+Deno.test('capField trims and truncates', () => {
+  assertEquals(capField('  hi  '), 'hi');
+  assertEquals(capField('x'.repeat(MAX_FIELD_LEN + 50)).length, MAX_FIELD_LEN);
+  assertEquals(capField(42), '');
+  assertEquals(capField(null), '');
+});
+
+Deno.test('parseClockToSeconds handles H:MM:SS / MM:SS / SS', () => {
+  assertEquals(parseClockToSeconds('1:47:23'), 1 * 3600 + 47 * 60 + 23);
+  assertEquals(parseClockToSeconds('24:31'), 24 * 60 + 31);
+  assertEquals(parseClockToSeconds('45'), 45);
+});
+
+Deno.test('parseClockToSeconds rejects garbage as 0', () => {
+  assertEquals(parseClockToSeconds('abc'), 0);
+  assertEquals(parseClockToSeconds(''), 0);
+  assertEquals(parseClockToSeconds('-1:00'), 0);
+});
+
+Deno.test('raceExternalId is race:name:date:bib and colon-safe', () => {
+  assertEquals(
+    raceExternalId('Richmond Half', '2025-09-21', '1234'),
+    'race:Richmond Half:2025-09-21:1234',
+  );
+  // Embedded colons in a scraped value are replaced so they can't break the
+  // delimiter (only the four leading literal colons remain).
+  const id = raceExternalId('A:B', '2025-01-01', '7:7');
+  assertEquals(id, 'race:A B:2025-01-01:7 7');
+});
+
+Deno.test('mapRunSignUpResult maps a finisher onto a race run', () => {
+  const run = mapRunSignUpResult(
+    {
+      bib_num: '1234',
+      chip_time: '1:47:23',
+      clock_time: '1:48:01',
+      place: 142,
+      age_group_place: 12,
+      age_group: 'M35-39',
+    },
+    OPTS,
+  );
+  assert(run !== null);
+  assertEquals(run!.source, 'race');
+  assertEquals(run!.activity_type, 'run');
+  assertEquals(run!.distance_m, 21097);
+  assertEquals(run!.duration_s, 1 * 3600 + 47 * 60 + 23);
+  assertEquals(run!.external_id, 'race:Richmond Half Marathon:2025-09-21:1234');
+  assertEquals(run!.race_listing_id, 'L-1');
+  assertEquals(run!.started_at, '2025-09-21T10:00:00Z');
+  assertEquals(run!.metadata.race_name, 'Richmond Half Marathon');
+  assertEquals(run!.metadata.bib, '1234');
+  assertEquals(run!.metadata.chip_time, '1:47:23');
+  assertEquals(run!.metadata.gun_time, '1:48:01');
+  assertEquals(run!.metadata.overall_place, 142);
+  assertEquals(run!.metadata.age_group_place, 12);
+  assertEquals(run!.metadata.age_group, 'M35-39');
+});
+
+Deno.test('mapRunSignUpResult falls back to gun time when chip is absent', () => {
+  const run = mapRunSignUpResult({ bib_num: '5', clock_time: '0:30:00' }, OPTS);
+  assert(run !== null);
+  assertEquals(run!.duration_s, 30 * 60);
+  assertEquals(run!.metadata.chip_time, undefined);
+  assertEquals(run!.metadata.gun_time, '0:30:00');
+});
+
+Deno.test('mapRunSignUpResult returns null when there is no usable time', () => {
+  assertEquals(mapRunSignUpResult({ bib_num: '9' }, OPTS), null);
+  assertEquals(mapRunSignUpResult({ chip_time: 'DNS' }, OPTS), null);
+});
+
+Deno.test('mapRunSignUpResult honours isPublic from privacy_default', () => {
+  const priv = mapRunSignUpResult({ chip_time: '20:00' }, OPTS);
+  assertEquals(priv!.is_public, false);
+  const pub = mapRunSignUpResult({ chip_time: '20:00' }, { ...OPTS, isPublic: true });
+  assertEquals(pub!.is_public, true);
+});
+
+Deno.test('mapRunSignUpResult drops non-positive places', () => {
+  const run = mapRunSignUpResult(
+    { chip_time: '20:00', place: 0, age_group_place: -1 },
+    OPTS,
+  );
+  assertEquals(run!.metadata.overall_place, undefined);
+  assertEquals(run!.metadata.age_group_place, undefined);
+});
+
+Deno.test('parseRaceResultRow maps a pasted result with the same shape/id', () => {
+  const run = parseRaceResultRow(
+    { bib: '77', chip_time: '0:55:10', gun_time: '0:55:40', overall_place: 9, age_group: 'F40-44' },
+    OPTS,
+  );
+  assert(run !== null);
+  assertEquals(run!.external_id, 'race:Richmond Half Marathon:2025-09-21:77');
+  assertEquals(run!.duration_s, 55 * 60 + 10);
+  assertEquals(run!.metadata.age_group, 'F40-44');
+});
+
+Deno.test('runSignUpResultsUrl includes key/secret/format and encodes raceId', () => {
+  const url = runSignUpResultsUrl({
+    raceId: '9001',
+    apiKey: 'KEY',
+    apiSecret: 'SECRET',
+    runSignUpUserId: 'rs-42',
+  });
+  assert(url.startsWith('https://runsignup.com/Rest/race/9001/results/get-results'));
+  assert(url.includes('format=json'));
+  assert(url.includes('api_key=KEY'));
+  assert(url.includes('api_secret=SECRET'));
+  assert(url.includes('user_id=rs-42'));
+});
+
+Deno.test('extractRunSignUpResults reads the nested results sets envelope', () => {
+  const payload = {
+    individual_results_sets: [
+      { results: [{ bib_num: '1', chip_time: '20:00' }, { bib_num: '2', chip_time: '21:00' }] },
+      { results: [{ bib_num: '3', chip_time: '22:00' }] },
+    ],
+  };
+  const rows = extractRunSignUpResults(payload);
+  assertEquals(rows.length, 3);
+  assertEquals(rows[2].bib_num, '3');
+});
+
+Deno.test('extractRunSignUpResults tolerates a top-level results array + caps', () => {
+  assertEquals(extractRunSignUpResults({ results: [{ bib_num: 'a' }] }).length, 1);
+  assertEquals(extractRunSignUpResults(null).length, 0);
+  assertEquals(extractRunSignUpResults({}).length, 0);
+  const big = { results: Array.from({ length: MAX_RESULTS_ROWS + 100 }, () => ({ bib_num: 'x' })) };
+  assertEquals(extractRunSignUpResults(big).length, MAX_RESULTS_ROWS);
+});

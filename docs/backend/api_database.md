@@ -1264,6 +1264,7 @@ These tables ship in the live schema but don't have a full column-by-column bloc
 | `webhook_events` | `20260623_001` | Replay-dedupe ledger for inbound webhooks (RevenueCat, Stripe). `provider, event_id, received_at`, PK `(provider, event_id)`; GC'd by `cleanup-stale-webhook-events`. |
 | `user_blocks` | `20261012_001` | Per-user block list for the social layer. `blocker_id, blocked_id, created_at, reason`, PK `(blocker_id, blocked_id)`, CHECK `blocker_id <> blocked_id`. |
 | `coach_athletes` | `20261102_001` | Coach↔athlete roster (invite/accept). `id, coach_id, athlete_id, status ('pending'/'active'/'ended'), invite_token, note, created_at, accepted_at, ended_at`. See `redeem_coach_invite` + the coach-visibility note below. |
+| `race_listings` | `20270214_001` | Public race calendar (race_calendar.md). `id, provider ('runsignup'/'parkrun'/'manual'/'chronotrack'/'raceresult'/'ultrasignup' CHECK), provider_race_id, name, race_date, distance_m, location_label, location_point geography(Point,4326), entry_url, results_url (both http(s)-CHECKed), submitted_by (→auth.users on delete set null), is_verified, created_at, updated_at`. Indexes: `(provider, provider_race_id)` partial-unique, `(race_date)`, GiST on `location_point`, GIN trgm on `name`. **RLS: public read** (`using (true)`, anon incl.); authenticated INSERT (`submitted_by = auth.uid()`); submitter UPDATE only while `is_verified=false`. A `before insert or update` trigger (`force_unverified_listing`) forces `is_verified=false` on any non-service-role write — only `service_role` (the import EF / admin) may verify. Read via the `search_race_listings` RPC (below). Also adds `runs.race_listing_id uuid → race_listings on delete set null` (partial index) — links a matched run to its calendar entry; passes through `public_runs` (non-sensitive). |
 
 ---
 
@@ -1434,6 +1435,33 @@ Fetches and imports a user's full parkrun history.
 ```json
 { "imported": 23, "skipped": 0 }
 ```
+
+---
+
+### `POST /race-results-import`
+
+Imports an official race result onto a `source='race'` run, or enriches an existing recorded run via the auto-match-on-record seam (race_calendar.md). Mirrors `parkrun-import` (auth-before-parse, `checkRateLimitTiered`, `readJsonWithLimit` body cap, `withSentry`, `privacy_default`-honouring `is_public`, per-user `external_id` dedup).
+
+**Request:**
+```json
+{ "provider": "runsignup", "listingId": "<race_listings.id>", "runSignUpUserId": "optional",
+  "matchRunId": "optional — enrich THIS run in place",
+  "result": { "bib": "128", "chip_time": "1:47:23", "gun_time": "1:48:01", "overall_place": 128, "age_group_place": 4, "age_group": "M40-44" } }
+```
+
+**Flow:**
+1. Auth (`auth.getUser`) → 401; tiered rate limit; resolve the public `race_listings` row (name/date/distance) for the metadata stamp.
+2. `provider='runsignup'`: **fail closed** — if `RUNSIGNUP_API_KEY`/`_SECRET` are unset return `503 {error:'provider_not_configured'}`; else call the RunSignUp results endpoint, map each finisher to a run row (`source='race'`, `external_id=race:{name}:{date}:{bib}`, the owner-only race metadata). Fail-loud on a non-2xx upstream (502).
+3. `provider='paste'`: map the single pasted result row.
+4. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
+
+**Response:** `{ "imported": 1, "skipped": 0, "enriched": 0 }` (the `matchRunId` path returns `enriched: 1`).
+
+### `POST /race-listings-sync`
+
+Pulls upcoming RunSignUp races near a region into `race_listings` (v1 seam — the actual fetch+upsert is a scoped follow-up). **Fail closed**: returns `503 {error:'provider_not_configured'}` when `RUNSIGNUP_API_KEY`/`_SECRET` are unset; the web + mobile UIs probe it to decide whether to show the RunSignUp affordance or the unavailable explainer.
+
+**Env:** `RUNSIGNUP_API_KEY`, `RUNSIGNUP_API_SECRET` (both required for the RunSignUp legs — unset → 503), `RACE_IMPORT_USER_AGENT` (optional, defaults `RunApp/1.0`).
 
 ---
 
@@ -1717,6 +1745,10 @@ Filtered + sorted search over public routes (`is_public = true`), all parameters
 ### `popular_route_tags(tag_limit int)`
 
 Returns the top-N most-used tag strings across `routes.tags` for the Explore tab's tag chips. Granted to `anon` + `authenticated`. Migration `20260502_001_popular_route_tags.sql`.
+
+### `search_race_listings(p_query text, p_distance text, p_from date, p_to date, p_center_lng double precision, p_center_lat double precision, p_radius_m double precision, p_limit int)`
+
+Proximity + soonest-first race-calendar discovery over `race_listings` (race_calendar.md). `security invoker` — the table's `for select using (true)` policy already permits anon reads, so this adds no exposure. All args optional: `p_query` ILIKEs `name`; `p_distance` ∈ `5k`/`10k`/`half`/`marathon`/`ultra` buckets `distance_m` into a tolerance window (mirrors the `race_match` bands); `p_from`/`p_to` window the date (default: upcoming, `race_date >= current_date`); when `p_center_lng`/`p_center_lat` are supplied it gates on `ST_DWithin(location_point, center, p_radius_m)` (default 50 km, GiST index) and returns `distance_m_away`, ordering nearest-first then soonest. `p_limit` clamped to 1–200 (default 60). Granted to `anon` + `authenticated`. Migration `20270214_001`. Used by web `searchRaceListings` (`core/data.ts`) + mobile `RaceService.searchRaceListings`.
 
 ### `recompute_event_ranks(p_event_id uuid, p_instance_start timestamptz)`
 
