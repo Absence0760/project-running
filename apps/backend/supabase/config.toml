@@ -58,6 +58,12 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # Without these blocks the platform 401s the requests before our code
 # runs, so the secrets we *do* check would never get the chance.
 #
+# donations-checkout also opts out: a charity donor may be logged out
+# (a donation has no seat, unlike a paid registration), so the platform
+# JWT gate would block legitimate anonymous donations. The function still
+# attributes a donation when a JWT IS present; the visibility read is done
+# as the caller so a private-anchor fundraiser stays unreachable.
+#
 # The other functions (strava-import, parkrun-import, export-data,
 # delete-account, clip-public-track, events-connect-onboard,
 # events-checkout) all need a Supabase JWT (anon for clip-public-track,
@@ -65,6 +71,9 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # verify_jwt = true.
 
 [functions.strava-webhook]
+verify_jwt = false
+
+[functions.donations-checkout]
 verify_jwt = false
 
 [functions.revenuecat-webhook]

@@ -32,6 +32,9 @@ import { withSentry } from '../_shared/sentry.ts';
 import { capacityDecision } from '../events-checkout/lib.ts';
 import {
   attendeeRowFromSession,
+  donationIdFromSession,
+  donationStatusTransition,
+  isDonationSession,
   orderStatusTransition,
   parseStripeEventEnvelope,
   verifyStripeSignature,
@@ -85,13 +88,24 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
   const obj = event.data.object;
 
   if (event.type === 'checkout.session.completed') {
-    return await handleCompleted(service, obj);
+    // One webhook, one secret. A donation session (metadata.kind='donation')
+    // confirms a donations row; a seat session confirms an event_orders row.
+    return isDonationSession(obj)
+      ? await handleDonationCompleted(service, obj)
+      : await handleCompleted(service, obj);
   }
   if (event.type === 'checkout.session.expired') {
-    return await handleExpired(service, obj);
+    return isDonationSession(obj)
+      ? await handleDonationExpired(service, obj)
+      : await handleExpired(service, obj);
   }
   if (event.type === 'account.updated') {
     return await handleAccountUpdated(service, obj);
+  }
+  if (event.type === 'charge.refunded') {
+    // Donations only — a paid-event refund is manual via the Stripe dashboard
+    // in P1 (no event_orders refund path). The donation row CAS paid->refunded.
+    return await handleDonationRefunded(service, obj);
   }
 
   // Unhandled types — recorded (dedupe) but no side effect.
@@ -99,6 +113,130 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
 }));
 
 type Service = ReturnType<typeof createClient>;
+
+// ── donation handlers (fundraising.md) ─────────────────────────────────────
+// The donation ledger mirrors event_orders: status is CAS-only, the webhook is
+// the sole writer. A donation has no seat, so the completed handler just marks
+// it paid (no capacity recheck, no attendee seat).
+
+async function handleDonationCompleted(
+  service: Service,
+  session: Record<string, unknown>,
+): Promise<Response> {
+  const donationId = donationIdFromSession(session);
+  if (!donationId) {
+    console.error('donation checkout.session.completed missing donation_id');
+    return Response.json({ ok: true, skipped: 'missing_metadata' });
+  }
+
+  const { data: donation, error: readErr } = await service
+    .from('donations')
+    .select('id, status')
+    .eq('id', donationId)
+    .maybeSingle();
+  if (readErr) {
+    console.error('donation read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_read_failed' }, { status: 500 });
+  }
+  if (!donation) {
+    console.error('donation checkout.session.completed for unknown donation');
+    return Response.json({ ok: true, skipped: 'unknown_donation' });
+  }
+
+  if (donationStatusTransition(donation.status as string, 'checkout.session.completed') === null) {
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+
+  const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+
+  // Compound match on status='pending' makes the UPDATE itself the CAS — a
+  // replayed delivery can't double-count.
+  const { data: updated, error: updErr } = await service
+    .from('donations')
+    .update({
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+      stripe_payment_intent_id: paymentIntent,
+    })
+    .eq('id', donationId)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+  if (updErr) {
+    console.error('donation paid update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    // Lost the CAS race to a concurrent delivery — that one recorded it.
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+  return Response.json({ ok: true, donation_paid: true, donation_id: donationId });
+}
+
+async function handleDonationExpired(
+  service: Service,
+  session: Record<string, unknown>,
+): Promise<Response> {
+  const donationId = donationIdFromSession(session);
+  if (!donationId) {
+    return Response.json({ ok: true, skipped: 'missing_donation_id' });
+  }
+  const { data: donation } = await service
+    .from('donations')
+    .select('status')
+    .eq('id', donationId)
+    .maybeSingle();
+  if (!donation) {
+    return Response.json({ ok: true, skipped: 'unknown_donation' });
+  }
+  if (donationStatusTransition(donation.status as string, 'checkout.session.expired') === null) {
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+  const { error: updErr } = await service
+    .from('donations')
+    .update({ status: 'canceled' })
+    .eq('id', donationId)
+    .eq('status', 'pending');
+  if (updErr) {
+    console.error('donation cancel update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
+  }
+  return Response.json({ ok: true, donation_canceled: true });
+}
+
+async function handleDonationRefunded(
+  service: Service,
+  charge: Record<string, unknown>,
+): Promise<Response> {
+  // A charge.refunded object carries the payment_intent; resolve the donation
+  // through stripe_payment_intent_id (set when the donation was marked paid).
+  const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+  if (!paymentIntent) {
+    return Response.json({ ok: true, skipped: 'missing_payment_intent' });
+  }
+  const { data: donation } = await service
+    .from('donations')
+    .select('id, status')
+    .eq('stripe_payment_intent_id', paymentIntent)
+    .maybeSingle();
+  if (!donation) {
+    // Not a donation charge (could be a paid-event charge — manual refund in P1).
+    return Response.json({ ok: true, skipped: 'no_donation_for_charge' });
+  }
+  if (donationStatusTransition(donation.status as string, 'charge.refunded') === null) {
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+  const { error: updErr } = await service
+    .from('donations')
+    .update({ status: 'refunded', refunded_at: new Date().toISOString() })
+    .eq('id', donation.id)
+    .eq('status', 'paid');
+  if (updErr) {
+    console.error('donation refund update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
+  }
+  return Response.json({ ok: true, donation_refunded: true, donation_id: donation.id });
+}
 
 async function handleCompleted(
   service: Service,

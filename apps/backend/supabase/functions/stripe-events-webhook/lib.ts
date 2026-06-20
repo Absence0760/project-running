@@ -134,6 +134,50 @@ export function orderStatusTransition(
   return null;
 }
 
+/// Is this Checkout Session a donation (vs a paid-event seat)? The
+/// donations-checkout EF stamps metadata.kind='donation'; events-checkout does
+/// not set `kind`. One webhook, one secret — the branch is keyed on this.
+export function isDonationSession(session: Record<string, unknown>): boolean {
+  const md = session.metadata;
+  if (typeof md !== 'object' || md === null) return false;
+  return (md as Record<string, unknown>).kind === 'donation';
+}
+
+/// Extract the donation id from a Checkout Session's metadata (set by
+/// donations-checkout). Returns null if absent — the caller treats that as a
+/// malformed session it can't confirm.
+export function donationIdFromSession(session: Record<string, unknown>): string | null {
+  const md = session.metadata;
+  if (typeof md !== 'object' || md === null) return null;
+  const id = (md as Record<string, unknown>).donation_id;
+  return typeof id === 'string' ? id : null;
+}
+
+export type DonationStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'canceled';
+
+/// The legal CAS transitions for a donation, keyed on the Stripe event type.
+/// The idempotency backbone (mirrors orderStatusTransition): a replayed
+/// `checkout.session.completed` finds the donation already `paid` and gets
+/// `null`, so it cannot double-count. A `paid` donation may move to `refunded`
+/// (charge.refunded); a still-`pending` donation expires to `canceled`.
+///
+///   pending + checkout.session.completed -> paid
+///   pending + checkout.session.expired   -> canceled
+///   paid    + charge.refunded            -> refunded
+///   everything else                      -> null
+export function donationStatusTransition(
+  currentStatus: string,
+  eventType: string,
+): DonationStatus | null {
+  if (currentStatus === 'pending') {
+    if (eventType === 'checkout.session.completed') return 'paid';
+    if (eventType === 'checkout.session.expired') return 'canceled';
+    return null;
+  }
+  if (currentStatus === 'paid' && eventType === 'charge.refunded') return 'refunded';
+  return null;
+}
+
 export interface AttendeeRow {
   event_id: string;
   user_id: string;
