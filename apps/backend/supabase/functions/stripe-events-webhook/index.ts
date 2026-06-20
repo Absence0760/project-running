@@ -103,9 +103,13 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
     return await handleAccountUpdated(service, obj);
   }
   if (event.type === 'charge.refunded') {
-    // Donations only — a paid-event refund is manual via the Stripe dashboard
-    // in P1 (no event_orders refund path). The donation row CAS paid->refunded.
-    return await handleDonationRefunded(service, obj);
+    // One charge.refunded handler for both ledgers, resolved by payment
+    // intent. A donation refund CAS's the donations row (fundraising.md); a
+    // paid-event refund (P2 buyer self-cancel) CAS's the event_orders row and
+    // releases the seat. Try the donation ledger first; null = "this charge is
+    // not a donation" -> fall through to the event-order refund path.
+    const donationRes = await handleDonationRefunded(service, obj);
+    return donationRes ?? await handleOrderRefunded(service, obj);
   }
 
   // Unhandled types — recorded (dedupe) but no side effect.
@@ -204,10 +208,14 @@ async function handleDonationExpired(
   return Response.json({ ok: true, donation_canceled: true });
 }
 
+/// Returns a Response when the charge IS a donation (handled, terminally),
+/// or `null` when the charge is not a donation — the dispatcher then falls
+/// through to handleOrderRefunded. (A missing payment_intent is a donation-
+/// ledger no-op AND an event-ledger no-op, so it's terminal here too.)
 async function handleDonationRefunded(
   service: Service,
   charge: Record<string, unknown>,
-): Promise<Response> {
+): Promise<Response | null> {
   // A charge.refunded object carries the payment_intent; resolve the donation
   // through stripe_payment_intent_id (set when the donation was marked paid).
   const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
@@ -220,8 +228,8 @@ async function handleDonationRefunded(
     .eq('stripe_payment_intent_id', paymentIntent)
     .maybeSingle();
   if (!donation) {
-    // Not a donation charge (could be a paid-event charge — manual refund in P1).
-    return Response.json({ ok: true, skipped: 'no_donation_for_charge' });
+    // Not a donation charge — fall through to the paid-event refund path.
+    return null;
   }
   if (donationStatusTransition(donation.status as string, 'charge.refunded') === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
@@ -236,6 +244,81 @@ async function handleDonationRefunded(
     return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
   }
   return Response.json({ ok: true, donation_refunded: true, donation_id: donation.id });
+}
+
+/// Paid-event refund coupling (P2). A charge.refunded for a paid event order
+/// (resolved by payment intent): CAS the order paid->refunded, stamp
+/// refunded_at, and DELETE the buyer's going seat so the freed mat is
+/// available for waitlist promotion (the enforce_event_capacity machinery
+/// promotes a waitlisted attendee when a going row is removed). The webhook
+/// stays the sole, idempotent status writer: a replayed charge.refunded finds
+/// the order already `refunded` (orderStatusTransition -> null) and no-ops, so
+/// it can't double-release a seat or double-promote the waitlist.
+async function handleOrderRefunded(
+  service: Service,
+  charge: Record<string, unknown>,
+): Promise<Response> {
+  const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+  if (!paymentIntent) {
+    return Response.json({ ok: true, skipped: 'missing_payment_intent' });
+  }
+  const { data: order, error: readErr } = await service
+    .from('event_orders')
+    .select('id, status, event_id, instance_start, buyer_user_id')
+    .eq('stripe_payment_intent_id', paymentIntent)
+    .maybeSingle();
+  if (readErr) {
+    console.error('order refund read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_read_failed' }, { status: 500 });
+  }
+  if (!order) {
+    // Neither a donation nor a known event order — log + 200 so Stripe stops
+    // retrying (a refund issued from the dashboard for an unknown charge).
+    return Response.json({ ok: true, skipped: 'no_order_for_charge' });
+  }
+  if (orderStatusTransition(order.status as string, 'charge.refunded') === null) {
+    // Not paid (already refunded / canceled) — idempotent no-op.
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+
+  // CAS paid->refunded (compound match on status='paid' makes the UPDATE the
+  // CAS — a replayed delivery can't re-run the seat release).
+  const { data: updated, error: updErr } = await service
+    .from('event_orders')
+    .update({ status: 'refunded', refunded_at: new Date().toISOString() })
+    .eq('id', order.id)
+    .eq('status', 'paid')
+    .select('id')
+    .maybeSingle();
+  if (updErr) {
+    console.error('order refund update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    // Lost the CAS race to a concurrent delivery — that one released the seat.
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+
+  // Release the seat: delete the buyer's attendee row for this instance that
+  // points at this order. Deleting the going row frees capacity and triggers
+  // waitlist promotion (enforce_event_capacity / promote_event_waitlist).
+  // Scoped by order_id so we only remove the seat THIS order granted.
+  const { error: seatErr } = await service
+    .from('event_attendees')
+    .delete()
+    .eq('event_id', order.event_id)
+    .eq('user_id', order.buyer_user_id)
+    .eq('instance_start', order.instance_start)
+    .eq('order_id', order.id);
+  if (seatErr) {
+    // The order is refunded but the seat removal failed — log for
+    // reconciliation. Don't 500 (Stripe would retry and the CAS would no-op,
+    // never re-attempting the delete). A stale going row on a refunded order
+    // is a reconciliation item, not a money error.
+    console.error('seat release after refund failed (code):', seatErr?.code ?? 'unknown', 'order:', order.id);
+  }
+
+  return Response.json({ ok: true, order_refunded: true, order_id: order.id });
 }
 
 async function handleCompleted(

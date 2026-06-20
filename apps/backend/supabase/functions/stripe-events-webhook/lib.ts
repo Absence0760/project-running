@@ -120,17 +120,26 @@ export type OrderStatus =
 ///
 ///   pending  + checkout.session.completed -> paid
 ///   pending  + checkout.session.expired   -> canceled
+///   paid     + charge.refunded            -> refunded
 ///   everything else                       -> null (no transition)
 ///
-/// Only the `pending` source state transitions; any terminal state
-/// (paid / canceled / refunded / failed) is immovable here.
+/// Only `pending` (the unpaid states) and `paid` (the refund) transition;
+/// every terminal state (refunded / canceled / failed) is immovable. The
+/// paid->refunded arm is the P2 automated-refund coupling: the
+/// events-cancel EF initiates the Stripe refund, and this webhook — still
+/// the sole, idempotent status writer — flips the order on charge.refunded
+/// and releases the seat. A replayed charge.refunded finds the order
+/// already `refunded` and gets `null`, so it cannot double-release a seat.
 export function orderStatusTransition(
   currentStatus: string,
   eventType: string,
 ): OrderStatus | null {
-  if (currentStatus !== 'pending') return null;
-  if (eventType === 'checkout.session.completed') return 'paid';
-  if (eventType === 'checkout.session.expired') return 'canceled';
+  if (currentStatus === 'pending') {
+    if (eventType === 'checkout.session.completed') return 'paid';
+    if (eventType === 'checkout.session.expired') return 'canceled';
+    return null;
+  }
+  if (currentStatus === 'paid' && eventType === 'charge.refunded') return 'refunded';
   return null;
 }
 
