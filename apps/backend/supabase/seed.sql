@@ -2784,3 +2784,18 @@ INSERT INTO gym_routine_sets (routine_exercise_id, set_index, set_type, target_r
   ('e8e80003-0000-0000-0000-000000000003', 1, 'working', 10, 12, 20, 90, null),
   ('e8e80004-0000-0000-0000-000000000004', 0, 'working', null, null, null, 60, 45),
   ('e8e80004-0000-0000-0000-000000000004', 1, 'working', null, null, null, 60, 45);
+
+-- ── Coach roster (coach_roster.md) ──────────────────────────────────────────
+-- runner@test.com coaches alex + morgan via two ACTIVE links so the /coaching
+-- roster dashboard renders populated when the auto-login seed user signs in.
+-- Both athletes carry recent runs from the seeding above, so the 7-day load /
+-- recency columns are non-empty. Fixed ids → idempotent across resets.
+INSERT INTO coach_athletes (id, coach_id, athlete_id, status, invite_token, accepted_at) VALUES
+  ('ca000001-0000-0000-0000-000000000001',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'b2c3d4e5-f6a7-8901-bcde-f23456789012',
+   'active', 'seed-coach-roster-alex', now() - interval '30 days'),
+  ('ca000002-0000-0000-0000-000000000002',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'c3d4e5f6-a7b8-9012-cdef-345678901234',
+   'active', 'seed-coach-roster-morgan', now() - interval '20 days');

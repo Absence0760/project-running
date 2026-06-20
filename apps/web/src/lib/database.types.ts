@@ -3605,6 +3605,21 @@ export type Database = {
           slug: string
         }[]
       }
+      coach_roster_summary: {
+        Args: never
+        Returns: {
+          active_plan_id: string
+          athlete_id: string
+          avatar_url: string
+          display_name: string
+          distance_7d_m: number
+          last_run_at: string
+          load_acute: number
+          load_chronic: number
+          plan_completion_pct: number
+          runs_7d: number
+        }[]
+      }
       confirm_age_and_terms: { Args: never; Returns: undefined }
       confirm_safety_contact: { Args: { p_id: string }; Returns: boolean }
       confirm_safety_contact_by_token: {
