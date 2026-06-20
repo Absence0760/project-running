@@ -301,6 +301,46 @@ test.describe('/settings/preferences', () => {
 		await expect(page.getByTestId('email-weekly-digest')).not.toBeChecked();
 	});
 
+	test('Lifecycle drip opt-in toggle save round-trip persists across reload', async ({
+		page
+	}) => {
+		// email_lifecycle_drip is OPT-IN consent for the lifecycle drip (onboarding
+		// / re-engagement / streak nudges — bulk/promotional mail), stored as
+		// 'on'|'off' (default 'off'), a SEPARATE key from both email_notifications
+		// (transactional) and email_weekly_digest (the other engagement stream).
+		// The Go worker's lifecycle_drip handler reads it server-side, so the
+		// load-bearing assertion is that the toggle writes the bag with the
+		// 'on'/'off' string and survives a reload.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const toggle = page.getByTestId('email-lifecycle-drip');
+		// Default when the key is absent: off (unchecked).
+		await expect(toggle).not.toBeChecked();
+
+		// Opt in. The bag write must be the literal 'on' string.
+		const optInPatch = page.waitForRequest(
+			(req) =>
+				req.method() === 'PATCH' &&
+				req.url().includes('/rest/v1/user_settings') &&
+				(req.postData() ?? '').includes('"email_lifecycle_drip":"on"'),
+			{ timeout: 8_000 }
+		);
+		await toggle.check();
+		await optInPatch; // throws if the opt-in write never fires
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+
+		await page.reload();
+		await expect(page.getByTestId('email-lifecycle-drip')).toBeChecked();
+
+		// Opt back out so later specs see the default; the write is 'off'.
+		const optOutToggle = page.getByTestId('email-lifecycle-drip');
+		await optOutToggle.uncheck();
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+		await page.reload();
+		await expect(page.getByTestId('email-lifecycle-drip')).not.toBeChecked();
+	});
+
 	test('changing language writes locale to the settings bag (email localization)', async ({
 		page
 	}) => {

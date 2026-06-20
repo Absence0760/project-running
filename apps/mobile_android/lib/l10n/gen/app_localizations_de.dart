@@ -6238,6 +6238,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Abonniere eine wöchentliche Übersicht über dein Training und Community-Highlights. Standardmäßig aus; getrennt von deinen Benachrichtigungs-E-Mails.';
 
   @override
+  String get prefsEmailLifecycleDrip => 'E-Mail mit Tipps & Motivation';
+
+  @override
+  String get prefsEmailLifecycleDripHint =>
+      'Erhalte gelegentliche Einstiegs-, Reaktivierungs- und Serien-Erinnerungen. Standardmäßig aus; getrennt von deiner wöchentlichen Zusammenfassung und deinen Benachrichtigungs-E-Mails.';
+
+  @override
   String get prefsWeekStart => 'Woche beginnt am';
 
   @override

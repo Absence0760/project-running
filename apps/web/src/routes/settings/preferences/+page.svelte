@@ -61,6 +61,9 @@
 	// Default off — marketing consent is never inferred from the transactional
 	// email_notifications key, so it's a deliberately separate toggle.
 	let emailWeeklyDigest = $state(false);
+	// Opt-IN consent for the lifecycle drip — a SEPARATE engagement stream from
+	// the weekly digest. Opting into one is never consent to the other.
+	let emailLifecycleDrip = $state(false);
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(false);
 	// 'full' (default) speaks every cue; 'minimal' drops the chatty in-rep
@@ -286,6 +289,7 @@
 			emailNotifications = effective(settings, 'email_notifications', 'important') ?? 'important';
 			pushNotifications = effective(settings, 'push_notifications', 'important') ?? 'important';
 			emailWeeklyDigest = effective<string>(settings, 'email_weekly_digest', 'off') === 'on';
+			emailLifecycleDrip = effective<string>(settings, 'email_lifecycle_drip', 'off') === 'on';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
 			voiceFeedbackEnabled = effective(settings, 'voice_feedback_enabled', false) ?? false;
 			voiceFeedbackVerbosity =
@@ -966,6 +970,18 @@
 				<span>
 					{m('prefs.emailWeeklyDigest')}
 					<span class="hint">{m('prefs.emailWeeklyDigestHint')}</span>
+				</span>
+			</label>
+			<label class="checkbox-row">
+				<input
+					type="checkbox"
+					bind:checked={emailLifecycleDrip}
+					onchange={() => autoSave({ email_lifecycle_drip: emailLifecycleDrip ? 'on' : 'off' })}
+					data-testid="email-lifecycle-drip"
+				/>
+				<span>
+					{m('prefs.emailLifecycleDrip')}
+					<span class="hint">{m('prefs.emailLifecycleDripHint')}</span>
 				</span>
 			</label>
 		</section>

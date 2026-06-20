@@ -184,7 +184,11 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
   blocks every stream to that address. **Fail-closed on the unset SMTP
   credential** (jobs drain to `done` without `SMTP_HOST`); enabling an actual
   send is the operator's SMTP provisioning + the CISO/counsel sign-off (the cron
-  is harmless no-op churn until then).
+  is harmless no-op churn until then). The **opt-in preference toggle** ships on
+  web Settings → Preferences (`email-lifecycle-drip` checkbox) + mobile
+  Settings → Preferences (`prefsEmailLifecycleDrip` switch, default off),
+  i18n'd across all six locales — the in-app equivalent of the one-click
+  unsubscribe, mirroring the digest toggle.
 - [x] **Account-deletion receipt** — SHIPPED 2026-06-20 (migration
   `20270217_001`, `account_deleted` template). Built as **enqueue-with-inline-
   address + a non-cascading send-once record** (not inline-send-from-EF — that

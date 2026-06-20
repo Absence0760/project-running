@@ -5881,6 +5881,13 @@ class AppLocalizationsJa extends AppLocalizations {
       'トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。';
 
   @override
+  String get prefsEmailLifecycleDrip => 'ヒントと応援メール';
+
+  @override
+  String get prefsEmailLifecycleDripHint =>
+      'オンボーディング、再開、連続記録のリマインダーを時々受け取ります。初期設定はオフで、週刊ダイジェストや通知メールとは別です。';
+
+  @override
   String get prefsWeekStart => '週の開始曜日';
 
   @override

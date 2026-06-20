@@ -3465,6 +3465,8 @@ export const messages = {
 	"prefs.pushNotifHint": "Choisissez les notifications envoyées en alertes push vers vos navigateurs abonnés. La cloche dans l'application affiche toujours tout.",
 	"prefs.emailWeeklyDigest": "E-mail récapitulatif hebdomadaire",
 	"prefs.emailWeeklyDigestHint": "Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.",
+	"prefs.emailLifecycleDrip": "E-mail de conseils et encouragements",
+	"prefs.emailLifecycleDripHint": "Inscrivez-vous pour recevoir occasionnellement des rappels de prise en main, de réengagement et de série. Désactivé par défaut ; distinct de votre récapitulatif hebdomadaire et de vos e-mails de notification.",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "Muscu",
 	"nav.nutrition": "Nutrition",

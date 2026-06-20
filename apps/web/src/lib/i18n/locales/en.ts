@@ -3475,6 +3475,8 @@ export const en = {
 	"prefs.pushNotifHint": "Choose which notifications are sent as push alerts to your subscribed browsers. The in-app bell always shows everything.",
 	"prefs.emailWeeklyDigest": "Weekly digest email",
 	"prefs.emailWeeklyDigestHint": "Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.",
+	"prefs.emailLifecycleDrip": "Tips & encouragement email",
+	"prefs.emailLifecycleDripHint": "Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "Gym",
 	"nav.nutrition": "Nutrition",

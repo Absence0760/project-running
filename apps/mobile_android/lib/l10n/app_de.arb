@@ -1689,6 +1689,8 @@
   "prefsPushNotifOff": "Aus",
   "prefsEmailWeeklyDigest": "Wöchentliche Zusammenfassung per E-Mail",
   "prefsEmailWeeklyDigestHint": "Abonniere eine wöchentliche Übersicht über dein Training und Community-Highlights. Standardmäßig aus; getrennt von deinen Benachrichtigungs-E-Mails.",
+  "prefsEmailLifecycleDrip": "E-Mail mit Tipps & Motivation",
+  "prefsEmailLifecycleDripHint": "Erhalte gelegentliche Einstiegs-, Reaktivierungs- und Serien-Erinnerungen. Standardmäßig aus; getrennt von deiner wöchentlichen Zusammenfassung und deinen Benachrichtigungs-E-Mails.",
   "prefsWeekStart": "Woche beginnt am",
   "prefsWeekStartMonday": "Montag",
   "prefsWeekStartSunday": "Sonntag",

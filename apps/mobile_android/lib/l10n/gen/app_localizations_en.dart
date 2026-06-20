@@ -6168,6 +6168,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.';
 
   @override
+  String get prefsEmailLifecycleDrip => 'Tips & encouragement email';
+
+  @override
+  String get prefsEmailLifecycleDripHint =>
+      'Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.';
+
+  @override
   String get prefsWeekStart => 'Week starts on';
 
   @override

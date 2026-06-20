@@ -678,6 +678,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     await _putUniversal(SettingsKeys.emailWeeklyDigest, on ? 'off' : 'on');
   }
 
+  Future<void> _editEmailLifecycleDrip() async {
+    // Opt-IN consent stored as 'on'|'off' (default 'off'); a separate key from
+    // both email_notifications and email_weekly_digest — one engagement stream
+    // opt-in is never consent to the other.
+    final on = _bagValue<String>(SettingsKeys.emailLifecycleDrip) == 'on';
+    await _putUniversal(SettingsKeys.emailLifecycleDrip, on ? 'off' : 'on');
+  }
+
   Future<void> _editWeekStartDay() async {
     final l10n = AppLocalizations.of(context);
     const opts = ['monday', 'sunday'];
@@ -1286,6 +1294,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                   _bagValue<String>(SettingsKeys.emailWeeklyDigest) == 'on',
               onChanged:
                   _bagReady ? (_) => _editEmailWeeklyDigest() : null,
+            ),
+            SwitchListTile(
+              title: Text(l10n.prefsEmailLifecycleDrip),
+              subtitle: Text(l10n.prefsEmailLifecycleDripHint),
+              value:
+                  _bagValue<String>(SettingsKeys.emailLifecycleDrip) == 'on',
+              onChanged:
+                  _bagReady ? (_) => _editEmailLifecycleDrip() : null,
             ),
           ],
         ),

@@ -6247,6 +6247,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.';
 
   @override
+  String get prefsEmailLifecycleDrip => 'E-mail de conseils et encouragements';
+
+  @override
+  String get prefsEmailLifecycleDripHint =>
+      'Inscrivez-vous pour recevoir occasionnellement des rappels de prise en main, de réengagement et de série. Désactivé par défaut ; distinct de votre récapitulatif hebdomadaire et de vos e-mails de notification.';
+
+  @override
   String get prefsWeekStart => 'La semaine commence le';
 
   @override
