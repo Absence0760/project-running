@@ -2936,6 +2936,46 @@ class AppLocalizationsEs extends AppLocalizations {
   String get heatmapLensHiddenGems => 'Joyas ocultas';
 
   @override
+  String get runHeatmapTitle => 'Tu mapa de calor';
+
+  @override
+  String get runHeatmapTooltip => 'Mapa de calor de carreras';
+
+  @override
+  String get runHeatmapLoading => 'Cargando tus carreras…';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'Cargando tus carreras… $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'Aún no hay carreras mapeadas';
+
+  @override
+  String get runHeatmapEmptyBody =>
+      'Graba o importa carreras con rutas de GPS y se iluminarán aquí.';
+
+  @override
+  String get runHeatmapLegendTitle => 'Tu mapa de calor';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return '$n carrera mapeada: más brillante donde más corres.';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return '$n carreras mapeadas: más brillante donde más corres.';
+  }
+
+  @override
+  String get runHeatmapScaleLess => 'menos';
+
+  @override
+  String get runHeatmapScaleMore => 'más';
+
+  @override
   String get publicRouteFallbackTitle => 'Ruta';
 
   @override

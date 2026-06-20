@@ -3475,6 +3475,68 @@
   "@heatmapLensHiddenGems": {
     "description": "Discovery-lens label for hidden-gem routes on the heatmap"
   },
+  "runHeatmapTitle": "Your heatmap",
+  "@runHeatmapTitle": {
+    "description": "AppBar title for the personal run-track heatmap screen"
+  },
+  "runHeatmapTooltip": "Run heatmap",
+  "@runHeatmapTooltip": {
+    "description": "Tooltip on the run-list action that opens the personal run-track heatmap"
+  },
+  "runHeatmapLoading": "Loading your runs…",
+  "@runHeatmapLoading": {
+    "description": "Status pill shown while the personal heatmap downloads tracks"
+  },
+  "runHeatmapLoadingProgress": "Loading your runs… {n}/{total}",
+  "@runHeatmapLoadingProgress": {
+    "description": "Status pill with track download progress on the personal heatmap",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "runHeatmapEmptyTitle": "No mapped runs yet",
+  "@runHeatmapEmptyTitle": {
+    "description": "Empty-state title on the personal run-track heatmap"
+  },
+  "runHeatmapEmptyBody": "Record or import runs with GPS tracks and they'll light up here.",
+  "@runHeatmapEmptyBody": {
+    "description": "Empty-state body on the personal run-track heatmap"
+  },
+  "runHeatmapLegendTitle": "Your heatmap",
+  "@runHeatmapLegendTitle": {
+    "description": "Legend title on the personal run-track heatmap"
+  },
+  "runHeatmapLegendSummaryOne": "{n} mapped run — brighter where you run most.",
+  "@runHeatmapLegendSummaryOne": {
+    "description": "Legend summary on the personal heatmap for a single mapped run",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runHeatmapLegendSummaryMany": "{n} mapped runs — brighter where you run most.",
+  "@runHeatmapLegendSummaryMany": {
+    "description": "Legend summary on the personal heatmap for multiple mapped runs",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runHeatmapScaleLess": "less",
+  "@runHeatmapScaleLess": {
+    "description": "Low end of the colour-scale legend on the personal heatmap"
+  },
+  "runHeatmapScaleMore": "more",
+  "@runHeatmapScaleMore": {
+    "description": "High end of the colour-scale legend on the personal heatmap"
+  },
   "publicRouteFallbackTitle": "Route",
   "@publicRouteFallbackTitle": {
     "description": "AppBar title for the public route view before the route name loads"

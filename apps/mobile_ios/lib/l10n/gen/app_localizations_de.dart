@@ -2946,6 +2946,46 @@ class AppLocalizationsDe extends AppLocalizations {
   String get heatmapLensHiddenGems => 'Geheimtipps';
 
   @override
+  String get runHeatmapTitle => 'Deine Heatmap';
+
+  @override
+  String get runHeatmapTooltip => 'Lauf-Heatmap';
+
+  @override
+  String get runHeatmapLoading => 'Deine Läufe werden geladen …';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'Deine Läufe werden geladen … $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'Noch keine erfassten Läufe';
+
+  @override
+  String get runHeatmapEmptyBody =>
+      'Zeichne Läufe mit GPS-Strecken auf oder importiere sie – dann leuchten sie hier auf.';
+
+  @override
+  String get runHeatmapLegendTitle => 'Deine Heatmap';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return '$n erfasster Lauf – heller, wo du am häufigsten läufst.';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return '$n erfasste Läufe – heller, wo du am häufigsten läufst.';
+  }
+
+  @override
+  String get runHeatmapScaleLess => 'weniger';
+
+  @override
+  String get runHeatmapScaleMore => 'mehr';
+
+  @override
   String get publicRouteFallbackTitle => 'Route';
 
   @override

@@ -2756,6 +2756,45 @@ class AppLocalizationsJa extends AppLocalizations {
   String get heatmapLensHiddenGems => '隠れた名所';
 
   @override
+  String get runHeatmapTitle => 'あなたのヒートマップ';
+
+  @override
+  String get runHeatmapTooltip => 'ランのヒートマップ';
+
+  @override
+  String get runHeatmapLoading => 'ランを読み込み中…';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'ランを読み込み中… $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'まだマップ化されたランがありません';
+
+  @override
+  String get runHeatmapEmptyBody => 'GPSトラック付きのランを記録またはインポートすると、ここに表示されます。';
+
+  @override
+  String get runHeatmapLegendTitle => 'あなたのヒートマップ';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return 'マップ化されたラン$n件 — よく走る場所ほど明るく表示されます。';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return 'マップ化されたラン$n件 — よく走る場所ほど明るく表示されます。';
+  }
+
+  @override
+  String get runHeatmapScaleLess => '少ない';
+
+  @override
+  String get runHeatmapScaleMore => '多い';
+
+  @override
   String get publicRouteFallbackTitle => 'ルート';
 
   @override
