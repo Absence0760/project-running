@@ -6,6 +6,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/route_conditions.dart';
 import '../widgets/route_photos.dart';
 import '../widgets/segments_panel.dart';
 
@@ -187,6 +188,14 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: RoutePhotos(
+            api: widget.api,
+            routeId: route.id,
+            routeOwnerId: route.userId,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: RouteConditions(
             api: widget.api,
             routeId: route.id,
             routeOwnerId: route.userId,
