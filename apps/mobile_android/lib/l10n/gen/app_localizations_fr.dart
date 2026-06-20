@@ -849,6 +849,155 @@ class AppLocalizationsFr extends AppLocalizations {
   String get onboardingNext => 'Suivant';
 
   @override
+  String get setupPageTitle => 'Configurez votre compte';
+
+  @override
+  String get setupSkip => 'Ignorer la configuration';
+
+  @override
+  String get setupSkipStep => 'Ignorer';
+
+  @override
+  String get setupBack => 'Retour';
+
+  @override
+  String get setupContinue => 'Continuer';
+
+  @override
+  String get setupSaving => 'Enregistrement…';
+
+  @override
+  String get setupOpenDashboard => 'Ouvrir le tableau de bord';
+
+  @override
+  String get setupWelcomeToast => 'Bienvenue sur Threkir !';
+
+  @override
+  String setupSaveError(String message) {
+    return 'Impossible d\'enregistrer votre configuration : $message';
+  }
+
+  @override
+  String get setupNameTitle => 'Comment doit-on vous appeler ?';
+
+  @override
+  String get setupNameHint =>
+      'C\'est le nom que les autres coureurs voient sur votre profil et vos courses partagées.';
+
+  @override
+  String get setupNameLabel => 'Nom affiché';
+
+  @override
+  String get setupNamePlaceholder => 'ex. Alex Coureur';
+
+  @override
+  String get setupUnitsTitle => 'Kilomètres ou miles ?';
+
+  @override
+  String get setupUnitsHint =>
+      'Nous l\'utiliserons partout où des distances et des allures sont affichées. Modifiable à tout moment dans les Réglages.';
+
+  @override
+  String get setupUnitKm => 'Kilomètres';
+
+  @override
+  String get setupUnitKmSample => '5,0 km · 5:00 /km';
+
+  @override
+  String get setupUnitMi => 'Miles';
+
+  @override
+  String get setupUnitMiSample => '3,1 mi · 8:03 /mi';
+
+  @override
+  String get setupGoalTitle => 'Quel est votre objectif principal ?';
+
+  @override
+  String get setupGoalHint =>
+      'Nous l\'utiliserons pour suggérer un plan d\'entraînement adapté. Facultatif — vous pouvez l\'ignorer.';
+
+  @override
+  String get setupGoalGeneralFitness => 'Rester en forme + en bonne santé';
+
+  @override
+  String get setupGoalWeightLoss => 'Perdre du poids';
+
+  @override
+  String get setupGoal5k => 'Courir un 5 km';
+
+  @override
+  String get setupGoal10k => 'Courir un 10 km';
+
+  @override
+  String get setupGoalHalf => 'Courir un semi-marathon';
+
+  @override
+  String get setupGoalMarathon => 'Courir un marathon';
+
+  @override
+  String get setupAboutTitle => 'Un peu sur vous';
+
+  @override
+  String get setupAboutHint =>
+      'Facultatif. Aide à personnaliser les estimations d\'allure et de calories. Vous choisissez de partager ou non des données de santé.';
+
+  @override
+  String get setupGenderLabel => 'Genre';
+
+  @override
+  String get setupGenderPreferNot => 'Préfère ne pas répondre';
+
+  @override
+  String get setupGenderFemale => 'Femme';
+
+  @override
+  String get setupGenderMale => 'Homme';
+
+  @override
+  String get setupGenderNonbinary => 'Non binaire';
+
+  @override
+  String get setupDobLabel => 'Date de naissance';
+
+  @override
+  String get setupDobNote =>
+      'Sert à exclure les comptes de moins de 18 ans de la recherche de personnes, et pour les résultats ajustés à l\'âge si vous partagez des données de santé.';
+
+  @override
+  String get setupDobPlaceholder => 'Touchez pour choisir';
+
+  @override
+  String get setupWeightLabel => 'Poids (kg)';
+
+  @override
+  String get setupWeightPlaceholder => 'ex. 70';
+
+  @override
+  String get setupHealthConsent =>
+      'J\'autorise Threkir à utiliser mon genre et ma date de naissance pour personnaliser les estimations d\'allure, de fréquence cardiaque et de calories (données de santé sensibles, RGPD art. 9).';
+
+  @override
+  String get setupPrivacyTitle => 'Qui voit vos courses ?';
+
+  @override
+  String get setupPrivacyHint =>
+      'Choisissez une valeur par défaut pour les nouvelles courses. Modifiable à tout moment et remplaçable course par course.';
+
+  @override
+  String get setupNotificationsTitle => 'Restez informé';
+
+  @override
+  String get setupNotificationsHint =>
+      'Choisissez le nombre de notifications push souhaitées. Réglage affiné plus tard dans les Réglages.';
+
+  @override
+  String get setupDoneTitle => 'Tout est prêt';
+
+  @override
+  String get setupDoneHint =>
+      'C\'est tout. Touchez « Ouvrir le tableau de bord » pour commencer à courir.';
+
+  @override
   String get privacyPrivateTitle => 'Privé';
 
   @override

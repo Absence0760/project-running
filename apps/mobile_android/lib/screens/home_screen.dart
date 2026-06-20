@@ -25,6 +25,7 @@ import 'fitness_hub_screen.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'run_screen.dart';
+import 'setup_wizard_screen.dart';
 import 'social_screen.dart';
 import 'you_screen.dart';
 
@@ -138,6 +139,51 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       });
     }
+    // Post-signup setup-wizard gate (mobile twin of web's
+    // `/onboarding` redirect). A signed-in user whose
+    // `user_profiles.onboarded_at` is still null is a fresh signup that
+    // hasn't seen the wizard yet — push it once, over the dashboard, so
+    // the same fields web collects get set. Skipped offline / signed out
+    // (the fetch returns null and we never push). Fires after the first
+    // frame so the dashboard is mounted underneath.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _maybeShowSetupWizard();
+    });
+  }
+
+  bool _setupWizardShown = false;
+
+  Future<void> _maybeShowSetupWizard() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    if (_setupWizardShown) return;
+    cm.UserProfileRow? profile;
+    try {
+      profile = await api.fetchMyProfile();
+    } catch (e) {
+      debugPrint('setup-wizard gate: fetchMyProfile failed: $e');
+      return;
+    }
+    if (!mounted) return;
+    // Only a fresh signup with a materialised row but no onboarded_at
+    // stamp gets the wizard. A null profile (offline / RLS) is left alone
+    // — better to skip than to block a signed-in user behind a wizard we
+    // can't persist.
+    if (profile == null || profile.onboardedAt != null) return;
+    _setupWizardShown = true;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => SetupWizardScreen(
+          apiClient: api,
+          preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
+          initialDisplayName: profile!.displayName,
+          initialPreferredUnit: profile.preferredUnit,
+        ),
+      ),
+    );
   }
 
   /// Bring the user to the Run tab when something deeper in the nav

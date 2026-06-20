@@ -820,6 +820,148 @@ class AppLocalizationsJa extends AppLocalizations {
   String get onboardingNext => '次へ';
 
   @override
+  String get setupPageTitle => 'アカウントを設定';
+
+  @override
+  String get setupSkip => '設定をスキップ';
+
+  @override
+  String get setupSkipStep => 'スキップ';
+
+  @override
+  String get setupBack => '戻る';
+
+  @override
+  String get setupContinue => '続ける';
+
+  @override
+  String get setupSaving => '保存中…';
+
+  @override
+  String get setupOpenDashboard => 'ダッシュボードを開く';
+
+  @override
+  String get setupWelcomeToast => 'Threkir へようこそ！';
+
+  @override
+  String setupSaveError(String message) {
+    return '設定を保存できませんでした: $message';
+  }
+
+  @override
+  String get setupNameTitle => '何とお呼びしましょうか？';
+
+  @override
+  String get setupNameHint => 'これはプロフィールや共有したランで他のランナーに表示される名前です。';
+
+  @override
+  String get setupNameLabel => '表示名';
+
+  @override
+  String get setupNamePlaceholder => '例: Alex Runner';
+
+  @override
+  String get setupUnitsTitle => 'キロメートルとマイル、どちら？';
+
+  @override
+  String get setupUnitsHint => '距離やペースの表示すべてに使用します。設定でいつでも変更できます。';
+
+  @override
+  String get setupUnitKm => 'キロメートル';
+
+  @override
+  String get setupUnitKmSample => '5.0 km · 5:00 /km';
+
+  @override
+  String get setupUnitMi => 'マイル';
+
+  @override
+  String get setupUnitMiSample => '3.1 mi · 8:03 /mi';
+
+  @override
+  String get setupGoalTitle => '主な目標は？';
+
+  @override
+  String get setupGoalHint => 'これに合ったトレーニングプランを提案します。任意です。スキップできます。';
+
+  @override
+  String get setupGoalGeneralFitness => '健康・フィットネスの維持';
+
+  @override
+  String get setupGoalWeightLoss => '減量';
+
+  @override
+  String get setupGoal5k => '5Kを走る';
+
+  @override
+  String get setupGoal10k => '10Kを走る';
+
+  @override
+  String get setupGoalHalf => 'ハーフマラソンを走る';
+
+  @override
+  String get setupGoalMarathon => 'フルマラソンを走る';
+
+  @override
+  String get setupAboutTitle => 'あなたについて少し';
+
+  @override
+  String get setupAboutHint => '任意です。ペースやカロリーの推定を最適化します。健康データを共有するかはあなたが選べます。';
+
+  @override
+  String get setupGenderLabel => '性別';
+
+  @override
+  String get setupGenderPreferNot => '回答しない';
+
+  @override
+  String get setupGenderFemale => '女性';
+
+  @override
+  String get setupGenderMale => '男性';
+
+  @override
+  String get setupGenderNonbinary => 'ノンバイナリー';
+
+  @override
+  String get setupDobLabel => '生年月日';
+
+  @override
+  String get setupDobNote =>
+      '18歳未満のアカウントを人物検索から除外するため、また健康データを共有する場合は年齢補正結果のために使用します。';
+
+  @override
+  String get setupDobPlaceholder => 'タップして選択';
+
+  @override
+  String get setupWeightLabel => '体重 (kg)';
+
+  @override
+  String get setupWeightPlaceholder => '例: 70';
+
+  @override
+  String get setupHealthConsent =>
+      'ペース・心拍・カロリーの推定をパーソナライズするために、Threkir が性別と生年月日を使用することに同意します（特別な区分の健康データ、GDPR 第9条）。';
+
+  @override
+  String get setupPrivacyTitle => 'ランは誰が見られる？';
+
+  @override
+  String get setupPrivacyHint => '新しいランの既定を選びます。いつでも変更でき、個々のランで上書きできます。';
+
+  @override
+  String get setupNotificationsTitle => '最新情報を受け取る';
+
+  @override
+  String get setupNotificationsHint => 'プッシュ通知の量を選びます。あとで設定で細かく調整できます。';
+
+  @override
+  String get setupDoneTitle => '準備完了';
+
+  @override
+  String get setupDoneHint => '以上です。「ダッシュボードを開く」をタップしてランを始めましょう。';
+
+  @override
   String get privacyPrivateTitle => '非公開';
 
   @override
