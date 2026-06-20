@@ -41,6 +41,8 @@ import type {
 	GymSetType,
 	GymExerciseModality,
 	GymProgressionScheme,
+	Exercise,
+	ExerciseCategory,
 	RouteMarker,
 	RouteMarkerKind,
 	Achievement,
@@ -70,7 +72,7 @@ import {
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
-import type { RecapPeriodKind, Exercise, ExerciseCategory, GymExerciseModality } from '../types';
+import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
 import type { YearInRunningRecap } from '../runs/recap';
 import type {
