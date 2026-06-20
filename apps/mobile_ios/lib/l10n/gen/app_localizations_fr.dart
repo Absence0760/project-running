@@ -8917,6 +8917,72 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get nutritionRecipes => 'Recettes';
+
+  @override
+  String get nutritionSaveAsRecipe => 'Enregistrer comme recette';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'Enregistrer comme recette';
+
+  @override
+  String get nutritionRecipeName => 'Nom de la recette';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => 'ex. Bol poulet et riz';
+
+  @override
+  String get nutritionRecipeServings => 'Portions';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      'Les ingrédients sont additionnés puis divisés par le nombre de portions. Enregistrer une portion ajoute une seule entrée avec les macros combinés.';
+
+  @override
+  String get nutritionSaveRecipe => 'Enregistrer la recette';
+
+  @override
+  String get nutritionRecipeSaved => 'Recette enregistrée.';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'Impossible d’enregistrer la recette : $error';
+  }
+
+  @override
+  String get nutritionLogRecipe => 'Enregistrer';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return '$name enregistrée ($n portion).';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'Impossible d’enregistrer la recette : $error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '$n ingrédients · $servingsString portions';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => 'Supprimer';
+
+  @override
+  String get nutritionDeleteRecipeTitle => 'Supprimer cette recette ?';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name sera supprimée. Les repas déjà enregistrés à partir d’elle restent dans ton journal.';
+  }
+
+  @override
   String get sessionTitle => 'Séances';
 
   @override

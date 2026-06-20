@@ -8900,6 +8900,72 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get nutritionRecipes => 'Recetas';
+
+  @override
+  String get nutritionSaveAsRecipe => 'Guardar como receta';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'Guardar como receta';
+
+  @override
+  String get nutritionRecipeName => 'Nombre de la receta';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => 'p. ej. Bol de pollo y arroz';
+
+  @override
+  String get nutritionRecipeServings => 'Raciones';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      'Los ingredientes se suman y luego se dividen entre las raciones. Registrar una ración añade una sola entrada con los macros combinados.';
+
+  @override
+  String get nutritionSaveRecipe => 'Guardar receta';
+
+  @override
+  String get nutritionRecipeSaved => 'Receta guardada.';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'No se pudo guardar la receta: $error';
+  }
+
+  @override
+  String get nutritionLogRecipe => 'Registrar';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return '$name registrada ($n ración).';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'No se pudo registrar la receta: $error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '$n ingredientes · $servingsString raciones';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => 'Eliminar';
+
+  @override
+  String get nutritionDeleteRecipeTitle => '¿Eliminar esta receta?';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name se eliminará. Las comidas ya registradas a partir de ella permanecen en tu diario.';
+  }
+
+  @override
   String get sessionTitle => 'Sesiones';
 
   @override

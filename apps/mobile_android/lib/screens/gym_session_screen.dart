@@ -335,6 +335,9 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
         weightKg: e.weightKg,
         rpe: e.rpe,
         durationS: e.durationS,
+        // Routine steps bind to logged sets by normalised name, not a catalogue
+        // id, so a routine-run set logs free-text (exercise_id null).
+        exerciseId: null,
       ));
     }
     _runner.completeSet(

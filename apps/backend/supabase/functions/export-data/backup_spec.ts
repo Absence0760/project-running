@@ -202,6 +202,17 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: `author_id=eq.${uid}`,
 			select: '*,exercises:gym_routine_exercises(*,sets:gym_routine_sets(*))',
 		},
+		// exercises — ONLY the subject's own custom catalogue entries
+		// (author_id = uid, migration 20270222_001). The seeded global rows
+		// (author_id NULL) are read-only reference data shared by everyone, not
+		// the subject's personal data, so the filter excludes them. Author-scoped
+		// (NOT user_id); mirrors the Go worker's exportPersonalDataSpecs entry.
+		{
+			entry: 'exercises.json',
+			table: 'exercises',
+			filter: `author_id=eq.${uid}`,
+			select: '*',
+		},
 		// food_log — Phase 4 nutrition diary (calories + macros per item,
 		// migration 20261204_001). Owner-scoped Art 20 personal data.
 		{ entry: 'food_log.json', table: 'food_log', filter: uidEq, select: '*' },
@@ -215,6 +226,18 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			table: 'meal_templates',
 			filter: uidEq,
 			select: '*,items:meal_template_items(*)',
+		},
+		// recipes (+ their ingredients via a nested embed). N ingredients
+		// summed into one logged meal (multi_modal.md Nutrition mid tier,
+		// migration 20270221_001). Owner-scoped (user_id); recipe_ingredients
+		// have no user_id of their own (they cascade from the parent recipe),
+		// so the export nests them — mirroring the meal_templates + gym_routines
+		// embeds. Keep the shape in lockstep with the Go twin in supabase.go.
+		{
+			entry: 'recipes.json',
+			table: 'recipes',
+			filter: uidEq,
+			select: '*,ingredients:recipe_ingredients(*)',
 		},
 		// body_metrics — Phase 4 nutrition weight time-series (migration
 		// 20261216_001). Special-category health data, owner-scoped, squarely

@@ -8806,6 +8806,72 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get nutritionRecipes => 'Recipes';
+
+  @override
+  String get nutritionSaveAsRecipe => 'Save as recipe';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'Save as a recipe';
+
+  @override
+  String get nutritionRecipeName => 'Recipe name';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => 'e.g. Chicken & rice bowl';
+
+  @override
+  String get nutritionRecipeServings => 'Servings';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      'The ingredients are summed, then divided by servings. Logging one serving adds a single entry with the combined macros.';
+
+  @override
+  String get nutritionSaveRecipe => 'Save recipe';
+
+  @override
+  String get nutritionRecipeSaved => 'Recipe saved.';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'Couldn’t save the recipe: $error';
+  }
+
+  @override
+  String get nutritionLogRecipe => 'Log';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return 'Logged $name ($n serving).';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'Couldn’t log the recipe: $error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '$n ingredients · $servingsString servings';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => 'Delete';
+
+  @override
+  String get nutritionDeleteRecipeTitle => 'Delete this recipe?';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name will be removed. Meals already logged from it stay in your diary.';
+  }
+
+  @override
   String get sessionTitle => 'Sessions';
 
   @override

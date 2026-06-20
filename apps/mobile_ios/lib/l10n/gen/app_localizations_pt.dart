@@ -8895,6 +8895,72 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get nutritionRecipes => 'Receitas';
+
+  @override
+  String get nutritionSaveAsRecipe => 'Guardar como receita';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'Guardar como receita';
+
+  @override
+  String get nutritionRecipeName => 'Nome da receita';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => 'ex. Tigela de frango com arroz';
+
+  @override
+  String get nutritionRecipeServings => 'Porções';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      'Os ingredientes são somados e depois divididos pelas porções. Registar uma porção adiciona uma única entrada com os macros combinados.';
+
+  @override
+  String get nutritionSaveRecipe => 'Guardar receita';
+
+  @override
+  String get nutritionRecipeSaved => 'Receita guardada.';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'Não foi possível guardar a receita: $error';
+  }
+
+  @override
+  String get nutritionLogRecipe => 'Registar';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return '$name registada ($n porção).';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'Não foi possível registar a receita: $error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '$n ingredientes · $servingsString porções';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => 'Eliminar';
+
+  @override
+  String get nutritionDeleteRecipeTitle => 'Eliminar esta receita?';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name será removida. As refeições já registadas a partir dela permanecem no seu diário.';
+  }
+
+  @override
   String get sessionTitle => 'Sessões';
 
   @override
@@ -19127,6 +19193,72 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String nutritionDeleteTemplateMessage(String name) {
     return '$name será removido. As refeições já registradas a partir dele permanecem no seu diário.';
+  }
+
+  @override
+  String get nutritionRecipes => 'Receitas';
+
+  @override
+  String get nutritionSaveAsRecipe => 'Salvar como receita';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'Salvar como receita';
+
+  @override
+  String get nutritionRecipeName => 'Nome da receita';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => 'ex. Tigela de frango com arroz';
+
+  @override
+  String get nutritionRecipeServings => 'Porções';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      'Os ingredientes são somados e depois divididos pelas porções. Registrar uma porção adiciona uma única entrada com os macros combinados.';
+
+  @override
+  String get nutritionSaveRecipe => 'Salvar receita';
+
+  @override
+  String get nutritionRecipeSaved => 'Receita salva.';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'Não foi possível salvar a receita: $error';
+  }
+
+  @override
+  String get nutritionLogRecipe => 'Registrar';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return '$name registrada ($n porção).';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'Não foi possível registrar a receita: $error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '$n ingredientes · $servingsString porções';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => 'Excluir';
+
+  @override
+  String get nutritionDeleteRecipeTitle => 'Excluir esta receita?';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name será removida. As refeições já registradas a partir dela permanecem no seu diário.';
   }
 
   @override

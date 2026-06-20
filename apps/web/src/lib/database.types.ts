@@ -1260,6 +1260,42 @@ export type Database = {
           },
         ]
       }
+      exercises: {
+        Row: {
+          author_id: string | null
+          category: string
+          created_at: string
+          external_id: string | null
+          id: string
+          last_modified_at: string
+          modality: string
+          name: string
+          name_key: string
+        }
+        Insert: {
+          author_id?: string | null
+          category?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_modified_at?: string
+          modality?: string
+          name: string
+          name_key: string
+        }
+        Update: {
+          author_id?: string | null
+          category?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_modified_at?: string
+          modality?: string
+          name?: string
+          name_key?: string
+        }
+        Relationships: []
+      }
       fitness_snapshots: {
         Row: {
           acute_load: number | null
@@ -1630,6 +1666,7 @@ export type Database = {
       gym_sets: {
         Row: {
           duration_s: number | null
+          exercise_id: string | null
           exercise_name: string
           id: string
           reps: number | null
@@ -1640,6 +1677,7 @@ export type Database = {
         }
         Insert: {
           duration_s?: number | null
+          exercise_id?: string | null
           exercise_name: string
           id?: string
           reps?: number | null
@@ -1650,6 +1688,7 @@ export type Database = {
         }
         Update: {
           duration_s?: number | null
+          exercise_id?: string | null
           exercise_name?: string
           id?: string
           reps?: number | null
@@ -1659,6 +1698,13 @@ export type Database = {
           workout_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "gym_sets_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gym_sets_workout_id_fkey"
             columns: ["workout_id"]
@@ -2502,6 +2548,89 @@ export type Database = {
           count?: number
           user_id?: string
           window_start?: string
+        }
+        Relationships: []
+      }
+      recipe_ingredients: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          external_id: string | null
+          fat_g: number | null
+          id: string
+          item_name: string
+          position: number
+          protein_g: number | null
+          quantity: number
+          recipe_id: string
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          external_id?: string | null
+          fat_g?: number | null
+          id?: string
+          item_name: string
+          position: number
+          protein_g?: number | null
+          quantity?: number
+          recipe_id: string
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          external_id?: string | null
+          fat_g?: number | null
+          id?: string
+          item_name?: string
+          position?: number
+          protein_g?: number | null
+          quantity?: number
+          recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_ingredients_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          id: string
+          ingredient_count: number
+          last_modified_at: string
+          meal_slot: string | null
+          name: string
+          servings: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          ingredient_count?: number
+          last_modified_at?: string
+          meal_slot?: string | null
+          name: string
+          servings?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          ingredient_count?: number
+          last_modified_at?: string
+          meal_slot?: string | null
+          name?: string
+          servings?: number
+          user_id?: string
         }
         Relationships: []
       }
@@ -4333,6 +4462,7 @@ export type Database = {
       }
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
+      enqueue_weekly_digests: { Args: never; Returns: number }
       event_is_athletic: { Args: { target_event: string }; Returns: boolean }
       event_next_instance_going_counts: {
         Args: { p_event_ids: string[]; p_next_starts: string[] }

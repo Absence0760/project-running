@@ -42,7 +42,7 @@ Future<({LocalGymStore store, Directory dir, String id})> _seed() async {
     title: 'Push day',
     startedAt: DateTime.now().toUtc(),
     sets: const [
-      (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
+      (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null, exerciseId: null),
     ],
   );
   return (store: store, dir: dir, id: stored.id);
@@ -110,7 +110,7 @@ void main() {
         title: 'Leg day',
         startedAt: DateTime.utc(2026, 6, 1, 8),
         sets: const [
-          (exerciseName: 'Squat', reps: 5, weightKg: 100.0, rpe: null, durationS: null),
+          (exerciseName: 'Squat', reps: 5, weightKg: 100.0, rpe: null, durationS: null, exerciseId: null),
         ],
       );
       // The earlier Bench session — the one the hint should compare against.
@@ -118,7 +118,7 @@ void main() {
         title: 'Push day',
         startedAt: DateTime.utc(2026, 6, 3, 8),
         sets: const [
-          (exerciseName: 'Bench', reps: 8, weightKg: 50.0, rpe: null, durationS: null),
+          (exerciseName: 'Bench', reps: 8, weightKg: 50.0, rpe: null, durationS: null, exerciseId: null),
         ],
       );
       // The current (most recent) Bench session being viewed: 60 kg, +10 kg.
@@ -126,7 +126,7 @@ void main() {
         title: 'Push day',
         startedAt: DateTime.utc(2026, 6, 10, 8),
         sets: const [
-          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null, exerciseId: null),
         ],
       );
       store = s;
@@ -159,7 +159,7 @@ void main() {
         title: 'Push day',
         startedAt: DateTime.now().toUtc(),
         sets: const [
-          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null, exerciseId: null),
         ],
       );
       store = s;

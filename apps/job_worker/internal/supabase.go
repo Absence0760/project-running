@@ -1789,6 +1789,18 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			filter: "author_id=eq." + uid,
 			sel:    "*,exercises:gym_routine_exercises(*,sets:gym_routine_sets(*))",
 		},
+		// exercises — ONLY the subject's own custom catalogue entries
+		// (author_id = uid, migration 20270222_001). The seeded global rows
+		// (author_id NULL) are read-only reference data shared by everyone, not
+		// the subject's personal data, so the filter excludes them. Keyed by
+		// author_id (NOT user_id), so the export-completeness guard's
+		// user_id-column scan can't flag it — it is wired in explicitly. Keep
+		// the shape in lockstep with the TS twin in backup_spec.ts.
+		{
+			name: "exercises.json", table: schema.TableExercises,
+			filter: "author_id=eq." + uid,
+			sel:    "*",
+		},
 		// food_log — Phase 4 nutrition diary (per-item calories + macros,
 		// migration 20261204_001). Owner-scoped personal data the subject
 		// has an Art 20 right to receive.
@@ -1803,6 +1815,18 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			name: "meal_templates.json", table: schema.TableMealTemplates,
 			filter: uidEq,
 			sel:    "*,items:meal_template_items(*)",
+		},
+		// recipes (+ their ingredients via a nested embed). N ingredients
+		// summed into one logged meal (multi_modal.md Nutrition mid tier,
+		// migration 20270221_001). Owner-scoped (user_id); recipe_ingredients
+		// have no user_id of their own (they cascade from the parent recipe),
+		// so the export nests them — mirroring the meal_templates +
+		// gym_routines embeds. Keep the shape in lockstep with the TS twin in
+		// backup_spec.ts.
+		{
+			name: "recipes.json", table: schema.TableRecipes,
+			filter: uidEq,
+			sel:    "*,ingredients:recipe_ingredients(*)",
 		},
 		// body_metrics — Phase 4 nutrition weight time-series (migration
 		// 20261216_001). GDPR special-category health data; owner-scoped and

@@ -4895,6 +4895,22 @@ class ApiClient {
     );
   }
 
+  /// The exercise catalogue visible to the signed-in user: every seeded
+  /// global (author_id null) plus their own custom entries (RLS scopes the
+  /// read). Migration 20270222_001. Returns the rows ordered by name so the
+  /// composer can merge them into its autocomplete + bind a typed name to an
+  /// exercise_id. Additive — a user who never picks a catalogue entry logs
+  /// exactly as before (exercise_id stays null).
+  Future<List<ExerciseRow>> fetchExerciseCatalogue() async {
+    final rows = await _client
+        .from(ExerciseRow.table)
+        .select()
+        .order(ExerciseRow.colName, ascending: true);
+    return (rows as List)
+        .map((r) => ExerciseRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
   /// The signed-in user's recent workouts each paired with their sets,
   /// newest-started first. Two round-trips (workouts, then every set whose
   /// `workout_id` is in that page) grouped client-side — the shape
@@ -5156,6 +5172,7 @@ class ApiClient {
           GymSetRow.colWeightKg: sets[i].weightKg,
           GymSetRow.colRpe: sets[i].rpe,
           GymSetRow.colDurationS: sets[i].durationS,
+          GymSetRow.colExerciseId: sets[i].exerciseId,
         },
     ]);
   }
@@ -5602,6 +5619,110 @@ class ApiClient {
         .from(MealTemplateRow.table)
         .delete()
         .eq(MealTemplateRow.colId, id);
+  }
+
+  // ─────────────────── Recipes (multi_modal.md mid tier) ──────────────────
+  //
+  // N ingredients summed into one logged meal (migration 20270221_001,
+  // owner-scoped RLS). Sibling of meal templates: same reusable-plan shape, but
+  // logging a recipe sums its ingredients into ONE food_log entry (per-serving
+  // combined macros) rather than one entry per item — see the recipe.dart
+  // parity pair. last_modified_at + ingredient_count are client-stamped. A
+  // recipe is NOT a dated activity, so it never feeds the activities view.
+
+  /// Saved recipes for the signed-in user, most-recently-modified first.
+  Future<List<RecipeRow>> fetchRecipes({int limit = 100}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final data = await _client
+        .from(RecipeRow.table)
+        .select()
+        .eq(RecipeRow.colUserId, uid)
+        .order(RecipeRow.colLastModifiedAt, ascending: false)
+        .limit(limit);
+    return (data as List)
+        .map((r) => RecipeRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// A single recipe with its ingredients (by position). Null when the id
+  /// doesn't resolve (RLS hides others').
+  Future<({RecipeRow recipe, List<RecipeIngredientRow> ingredients})?>
+      fetchRecipeDetail(String id) async {
+    final r = await _client
+        .from(RecipeRow.table)
+        .select()
+        .eq(RecipeRow.colId, id)
+        .maybeSingle();
+    if (r == null) return null;
+    final recipe = RecipeRow.fromJson(r);
+    final ingredientRows = await _client
+        .from(RecipeIngredientRow.table)
+        .select()
+        .eq(RecipeIngredientRow.colRecipeId, id)
+        .order(RecipeIngredientRow.colPosition, ascending: true);
+    final ingredients = (ingredientRows as List)
+        .map((r) => RecipeIngredientRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+    return (recipe: recipe, ingredients: ingredients);
+  }
+
+  /// Insert a recipe + its ingredients. Blank-named ingredients are dropped;
+  /// ingredient_count is stamped client-side from the survivors. The caller may
+  /// mint [id] (offline-create path) — `recipes.id` accepts a client value, so
+  /// the local id IS the server id, matching the meal-template/gym/food pattern.
+  Future<RecipeRow> createRecipe({
+    String? id,
+    required String name,
+    double servings = 1,
+    String? mealSlot,
+    DateTime? lastModifiedAt,
+    List<RecipeIngredientInput> ingredients = const [],
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    final kept = ingredients
+        .where((it) => it.itemName.trim().isNotEmpty)
+        .toList(growable: false);
+    final row = await _client
+        .from(RecipeRow.table)
+        .insert({
+          if (id != null) RecipeRow.colId: id,
+          RecipeRow.colUserId: uid,
+          RecipeRow.colName: name.trim(),
+          RecipeRow.colServings: servings >= 1 ? servings : 1,
+          RecipeRow.colMealSlot: mealSlot,
+          RecipeRow.colIngredientCount: kept.length,
+          if (lastModifiedAt != null)
+            RecipeRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
+        })
+        .select()
+        .single();
+    final recipe = RecipeRow.fromJson(row);
+    if (kept.isNotEmpty) {
+      await _client.from(RecipeIngredientRow.table).insert([
+        for (var i = 0; i < kept.length; i++)
+          {
+            RecipeIngredientRow.colRecipeId: recipe.id,
+            RecipeIngredientRow.colPosition: i,
+            RecipeIngredientRow.colItemName: kept[i].itemName.trim(),
+            RecipeIngredientRow.colQuantity:
+                kept[i].quantity >= 0 ? kept[i].quantity : 1,
+            RecipeIngredientRow.colCalories: kept[i].calories,
+            RecipeIngredientRow.colProteinG: kept[i].proteinG,
+            RecipeIngredientRow.colCarbsG: kept[i].carbsG,
+            RecipeIngredientRow.colFatG: kept[i].fatG,
+            RecipeIngredientRow.colExternalId: kept[i].externalId,
+          },
+      ]);
+    }
+    return recipe;
+  }
+
+  /// Delete a recipe; its ingredients cascade via FK (migration 20270221_001).
+  /// Logged food_log entries are untouched (the recipe is a parallel plan).
+  Future<void> deleteRecipe(String id) async {
+    await _client.from(RecipeRow.table).delete().eq(RecipeRow.colId, id);
   }
 
   /// Insert many food_log rows in one round-trip. Used by the one-tap
@@ -6225,6 +6346,9 @@ typedef GymSetInput = ({
   double? weightKg,
   double? rpe,
   int? durationS,
+  // Optional link to a public.exercises catalogue entry (migration
+  // 20270222_001). null for a free-text set — the default offline path.
+  String? exerciseId,
 });
 
 /// One planned set in a [ApiClient.createGymRoutine] call (targets only).
@@ -6265,6 +6389,19 @@ typedef GymRoutineExerciseInput = ({
 typedef MealTemplateItemInput = ({
   String itemName,
   String? mealSlot,
+  double? calories,
+  double? proteinG,
+  double? carbsG,
+  double? fatG,
+  String? externalId,
+});
+
+/// One ingredient in a [ApiClient.createRecipe] call. Mirrors a food_log row's
+/// macro shape plus a `quantity` multiplier; `position` is assigned positionally
+/// on insert.
+typedef RecipeIngredientInput = ({
+  String itemName,
+  double quantity,
   double? calories,
   double? proteinG,
   double? carbsG,

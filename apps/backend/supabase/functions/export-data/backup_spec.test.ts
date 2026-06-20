@@ -29,8 +29,13 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// The 2026-06-20 widened-guard pass then surfaced route_conditions
 	// (migration 20270215_001) as a further user_id gap and wired it in.
 	// The 2026-06-20 nutrition saved-meals batch added meal_templates
-	// (+ nested items) as a further owner-scoped Art 20 table.
-	assertEquals(specs.length, 52, `expected 52 specs, got ${specs.length}`);
+	// (+ nested items) as a further owner-scoped Art 20 table; the recipe
+	// builder (migration 20270221_001) then added recipes (+ nested
+	// ingredients), and the exercise-catalogue batch (migration
+	// 20270222_001) added exercises filtered to the subject's OWN custom
+	// entries (author_id = uid) — seeded global rows are shared reference
+	// data, not personal data.
+	assertEquals(specs.length, 54, `expected 54 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -70,8 +75,10 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'event_exceptions.json',
 		'gym_workouts.json',
 		'gym_routines.json',
+		'exercises.json',
 		'food_log.json',
 		'meal_templates.json',
+		'recipes.json',
 		'body_metrics.json',
 		'instructor_payout_accounts.json',
 		'safety_contacts_owned.json',
@@ -105,6 +112,20 @@ Deno.test('session_plans exported author-scoped with blocks + items nested (GDPR
 	assertEquals(plans.filter, `author_id=eq.${TEST_UID}`);
 	assertEquals(plans.select.includes('session_plan_blocks'), true);
 	assertEquals(plans.select.includes('session_plan_items'), true);
+});
+
+Deno.test('recipes exported user-scoped with ingredients nested (GDPR Art 20)', () => {
+	// Recipe builder (migration 20270221_001). Owner-scoped (user_id);
+	// recipe_ingredients have no user_id of their own (they cascade from the
+	// parent recipe), so the spec nests them, mirroring the meal_templates +
+	// gym_routines embeds. A regression that drops the nested ingredients
+	// silently strips them from every DSAR.
+	const specs = buildBackupSpecs(TEST_UID);
+	const recipes = specs.find((s) => s.entry === 'recipes.json');
+	assertExists(recipes);
+	assertEquals(recipes.table, 'recipes');
+	assertEquals(recipes.filter, `user_id=eq.${TEST_UID}`);
+	assertEquals(recipes.select.includes('recipe_ingredients'), true);
 });
 
 Deno.test('route_photos exported owner-scoped (GDPR Art 20)', () => {

@@ -171,6 +171,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               weightKg: null,
               rpe: null,
               durationS: s.durationS,
+              exerciseId: null,
             ),
         ],
         metadata: {

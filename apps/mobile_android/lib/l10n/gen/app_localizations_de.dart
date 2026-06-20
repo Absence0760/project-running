@@ -8902,6 +8902,72 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get nutritionRecipes => 'Rezepte';
+
+  @override
+  String get nutritionSaveAsRecipe => 'Als Rezept speichern';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'Als Rezept speichern';
+
+  @override
+  String get nutritionRecipeName => 'Rezeptname';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => 'z. B. Hähnchen-Reis-Bowl';
+
+  @override
+  String get nutritionRecipeServings => 'Portionen';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      'Die Zutaten werden summiert und dann durch die Portionen geteilt. Eine Portion zu protokollieren fügt einen einzigen Eintrag mit den kombinierten Makros hinzu.';
+
+  @override
+  String get nutritionSaveRecipe => 'Rezept speichern';
+
+  @override
+  String get nutritionRecipeSaved => 'Rezept gespeichert.';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'Rezept konnte nicht gespeichert werden: $error';
+  }
+
+  @override
+  String get nutritionLogRecipe => 'Erfassen';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return '$name erfasst ($n Portion).';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'Rezept konnte nicht erfasst werden: $error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '$n Zutaten · $servingsString Portionen';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => 'Löschen';
+
+  @override
+  String get nutritionDeleteRecipeTitle => 'Dieses Rezept löschen?';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name wird entfernt. Bereits daraus erfasste Mahlzeiten bleiben in deinem Tagebuch.';
+  }
+
+  @override
   String get sessionTitle => 'Sessions';
 
   @override

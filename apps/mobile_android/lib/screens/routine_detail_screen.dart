@@ -159,6 +159,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           weightKg: s.weightKg?.toDouble(),
           rpe: s.rpe.isEmpty ? null : double.tryParse(s.rpe),
           durationS: null,
+          exerciseId: null,
         ));
       }
     }

@@ -97,7 +97,7 @@ void main() {
           title: 'Push day',
           startedAt: DateTime.now(),
           sets: const [
-            (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null),
+            (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, durationS: null, exerciseId: null),
           ],
         );
       });

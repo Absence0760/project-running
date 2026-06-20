@@ -14760,6 +14760,108 @@ abstract class AppLocalizations {
   /// **'{name} will be removed. Meals already logged from it stay in your diary.'**
   String nutritionDeleteTemplateMessage(String name);
 
+  /// No description provided for @nutritionRecipes.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipes'**
+  String get nutritionRecipes;
+
+  /// AppBar action: save today’s logged meals as a reusable recipe (summed into one entry)
+  ///
+  /// In en, this message translates to:
+  /// **'Save as recipe'**
+  String get nutritionSaveAsRecipe;
+
+  /// No description provided for @nutritionSaveAsRecipeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as a recipe'**
+  String get nutritionSaveAsRecipeTitle;
+
+  /// No description provided for @nutritionRecipeName.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipe name'**
+  String get nutritionRecipeName;
+
+  /// No description provided for @nutritionRecipeNamePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Chicken & rice bowl'**
+  String get nutritionRecipeNamePlaceholder;
+
+  /// No description provided for @nutritionRecipeServings.
+  ///
+  /// In en, this message translates to:
+  /// **'Servings'**
+  String get nutritionRecipeServings;
+
+  /// No description provided for @nutritionRecipeServingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The ingredients are summed, then divided by servings. Logging one serving adds a single entry with the combined macros.'**
+  String get nutritionRecipeServingsHint;
+
+  /// No description provided for @nutritionSaveRecipe.
+  ///
+  /// In en, this message translates to:
+  /// **'Save recipe'**
+  String get nutritionSaveRecipe;
+
+  /// No description provided for @nutritionRecipeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipe saved.'**
+  String get nutritionRecipeSaved;
+
+  /// Banner when saving a recipe fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save the recipe: {error}'**
+  String nutritionRecipeSaveFailed(String error);
+
+  /// No description provided for @nutritionLogRecipe.
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get nutritionLogRecipe;
+
+  /// Banner after logging a recipe: n servings of the named recipe
+  ///
+  /// In en, this message translates to:
+  /// **'Logged {name} ({n} serving).'**
+  String nutritionRecipeLogged(int n, String name);
+
+  /// Banner when logging a recipe fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t log the recipe: {error}'**
+  String nutritionRecipeLogFailed(String error);
+
+  /// Subtitle on a recipe row: ingredient count + servings
+  ///
+  /// In en, this message translates to:
+  /// **'{n} ingredients · {servings} servings'**
+  String nutritionRecipeMeta(int n, num servings);
+
+  /// No description provided for @nutritionDeleteRecipe.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get nutritionDeleteRecipe;
+
+  /// No description provided for @nutritionDeleteRecipeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this recipe?'**
+  String get nutritionDeleteRecipeTitle;
+
+  /// Confirm dialog body before deleting a recipe
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be removed. Meals already logged from it stay in your diary.'**
+  String nutritionDeleteRecipeMessage(String name);
+
   /// App bar title for the session-plans list (yoga/pilates/class sequences)
   ///
   /// In en, this message translates to:

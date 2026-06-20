@@ -8443,6 +8443,72 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get nutritionRecipes => 'レシピ';
+
+  @override
+  String get nutritionSaveAsRecipe => 'レシピとして保存';
+
+  @override
+  String get nutritionSaveAsRecipeTitle => 'レシピとして保存';
+
+  @override
+  String get nutritionRecipeName => 'レシピ名';
+
+  @override
+  String get nutritionRecipeNamePlaceholder => '例：チキンライスボウル';
+
+  @override
+  String get nutritionRecipeServings => '人前';
+
+  @override
+  String get nutritionRecipeServingsHint =>
+      '材料を合計し、人前で割ります。1人前を記録すると、合算したマクロで1件の記録が追加されます。';
+
+  @override
+  String get nutritionSaveRecipe => 'レシピを保存';
+
+  @override
+  String get nutritionRecipeSaved => 'レシピを保存しました。';
+
+  @override
+  String nutritionRecipeSaveFailed(String error) {
+    return 'レシピを保存できませんでした：$error';
+  }
+
+  @override
+  String get nutritionLogRecipe => '記録';
+
+  @override
+  String nutritionRecipeLogged(int n, String name) {
+    return '$name を記録しました（$n人前）。';
+  }
+
+  @override
+  String nutritionRecipeLogFailed(String error) {
+    return 'レシピを記録できませんでした：$error';
+  }
+
+  @override
+  String nutritionRecipeMeta(int n, num servings) {
+    final intl.NumberFormat servingsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String servingsString = servingsNumberFormat.format(servings);
+
+    return '材料$n件・$servingsString人前';
+  }
+
+  @override
+  String get nutritionDeleteRecipe => '削除';
+
+  @override
+  String get nutritionDeleteRecipeTitle => 'このレシピを削除しますか？';
+
+  @override
+  String nutritionDeleteRecipeMessage(String name) {
+    return '$name を削除します。これまでに記録済みの食事は日記に残ります。';
+  }
+
+  @override
   String get sessionTitle => 'セッション';
 
   @override
