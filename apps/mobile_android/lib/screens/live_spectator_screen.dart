@@ -64,6 +64,13 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   int _nowMs = DateTime.now().millisecondsSinceEpoch;
   Timer? _freshnessTimer;
 
+  // True once the latest ingested ping carries the privacy-zone `coarse`
+  // flag (migration 20270121_001): a ~1 km-coarsened in-zone last-seen
+  // fix the DB keeps for SAR. When set, the map dot renders approximate
+  // and an "approximate" badge + sub-line surface — a SAR watcher must
+  // not read it as a precise current position.
+  bool _lastPingCoarse = false;
+
   RealtimeChannel? _channel;
 
   // Predictive next-cutoff projection (mirror web `/live/[id]`). The route's
@@ -235,6 +242,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       timestamp: parsedAt,
     ));
     _latestPos = (lat: lat, lng: lng);
+    _lastPingCoarse = row['coarse'] == true;
     final dist = (row['distance_m'] as num?)?.toDouble();
     if (dist != null) _distanceM = dist;
     final elapsed = (row['elapsed_s'] as num?)?.toInt();
@@ -289,6 +297,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
         ? null
         : freshnessFor(_lastPingAtMs!, _nowMs);
     final stale = fresh?.stale ?? false;
+    // Coarse is a *live*-tracking property; a terminal run is frozen on
+    // its saved totals, so we never surface the approximate treatment for
+    // one.
+    final coarse = !terminal && _lastPingCoarse;
     final cutoff = _cutoffEta(stale);
     return Scaffold(
       appBar: AppBar(
@@ -296,7 +308,13 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(child: _StatusBadge(status: _status, stale: stale)),
+            child: Center(
+              child: _StatusBadge(
+                status: _status,
+                stale: stale,
+                coarse: coarse,
+              ),
+            ),
           ),
         ],
       ),
@@ -326,6 +344,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                               plannedRoute: const [],
                               followRunner: true,
                               currentPosition: _trace.last,
+                              coarsePosition: coarse,
                             ),
                     ),
                     Container(
@@ -334,6 +353,19 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (coarse) ...[
+                            Text(
+                              l10n.liveSpectatorApproximateSub,
+                              key: const Key('coarse-sub'),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: const Color(0xFFF59E0B),
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           if (fresh != null) ...[
                             Text(
                               _freshnessLabel(l10n, fresh),
@@ -438,7 +470,12 @@ String _freshnessLabel(AppLocalizations l10n, Freshness f) {
 class _StatusBadge extends StatelessWidget {
   final String status;
   final bool stale;
-  const _StatusBadge({required this.status, this.stale = false});
+  final bool coarse;
+  const _StatusBadge({
+    required this.status,
+    this.stale = false,
+    this.coarse = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -447,11 +484,15 @@ class _StatusBadge extends StatelessWidget {
     // Terminal states win over the live/stale axis: a finished or
     // race-marked-DNF run is over, so we never show "Live"/"Delayed" for
     // it. "Delayed" (amber) is a *live* runner whose last ping went
-    // stale — distinct from "Finished" (neutral) and "DNF" (danger).
+    // stale — distinct from "Finished" (neutral) and "DNF" (danger). A
+    // live coarse (privacy-zone last-seen) fix outranks the live/stale
+    // label so the badge reads "Approximate", never a precise "Live".
     final (label, color) = switch (status) {
       'dnf' => (l10n.liveSpectatorBadgeDnf, theme.colorScheme.error),
       'finished' =>
         (l10n.liveSpectatorBadgeFinished, theme.colorScheme.outline),
+      'live' when coarse =>
+        (l10n.liveSpectatorBadgeApproximate, const Color(0xFFF59E0B)),
       'live' when stale =>
         (l10n.liveSpectatorBadgeStale, const Color(0xFFF59E0B)),
       'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),

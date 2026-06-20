@@ -3963,6 +3963,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get liveSpectatorBadgeStale => 'Retardé';
 
   @override
+  String get liveSpectatorBadgeApproximate => 'Approximatif';
+
+  @override
+  String get liveSpectatorApproximateSub =>
+      'Vu pour la dernière fois près d\'ici — approximatif';
+
+  @override
   String get liveSpectatorBadgeFinished => 'Terminé';
 
   @override

@@ -3957,6 +3957,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorBadgeStale => 'Atrasado';
 
   @override
+  String get liveSpectatorBadgeApproximate => 'Aproximado';
+
+  @override
+  String get liveSpectatorApproximateSub =>
+      'Visto pela última vez perto daqui — aproximado';
+
+  @override
   String get liveSpectatorBadgeFinished => 'Concluído';
 
   @override
@@ -13443,6 +13450,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeStale => 'Atrasado';
+
+  @override
+  String get liveSpectatorBadgeApproximate => 'Aproximado';
+
+  @override
+  String get liveSpectatorApproximateSub =>
+      'Visto pela última vez perto daqui — aproximado';
 
   @override
   String get liveSpectatorBadgeFinished => 'Concluído';
