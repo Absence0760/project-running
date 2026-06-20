@@ -100,6 +100,7 @@ const _tables = <String>{
   'notifications',
   'run_matched_tracks',
   'gear',
+  'gear_wear_logs',
   'run_gear',
   'coach_athletes',
   'gym_workouts',

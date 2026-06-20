@@ -1510,6 +1510,54 @@ export type Database = {
         }
         Relationships: []
       }
+      gear_wear_logs: {
+        Row: {
+          area: string | null
+          created_at: string
+          gear_id: string
+          id: string
+          logged_on: string
+          note: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          gear_id: string
+          id?: string
+          logged_on?: string
+          note: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          gear_id?: string
+          id?: string
+          logged_on?: string
+          note?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_wear_logs_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gear_wear_logs_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear_with_distance"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gym_routine_exercises: {
         Row: {
           exercise_key: string

@@ -1795,6 +1795,62 @@ class GearRow {
   };
 }
 
+/// Row shape for the `gear_wear_logs` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GearWearLogRow {
+  static const String table = 'gear_wear_logs';
+  static const String colId = 'id';
+  static const String colGearId = 'gear_id';
+  static const String colOwnerId = 'owner_id';
+  static const String colLoggedOn = 'logged_on';
+  static const String colArea = 'area';
+  static const String colNote = 'note';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String gearId;
+  final String ownerId;
+  final DateTime loggedOn;
+  final String? area;
+  final String note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const GearWearLogRow({
+    required this.id,
+    required this.gearId,
+    required this.ownerId,
+    required this.loggedOn,
+    this.area,
+    required this.note,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory GearWearLogRow.fromJson(Map<String, dynamic> json) => GearWearLogRow(
+    id: json['id'] as String,
+    gearId: json['gear_id'] as String,
+    ownerId: json['owner_id'] as String,
+    loggedOn: DateTime.parse(json['logged_on'] as String),
+    area: json['area'] as String?,
+    note: json['note'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colGearId: gearId,
+    colOwnerId: ownerId,
+    colLoggedOn: loggedOn.toIso8601String(),
+    colArea: area,
+    colNote: note,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `gym_routine_exercises` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class GymRoutineExerciseRow {
