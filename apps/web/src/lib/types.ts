@@ -7,6 +7,7 @@ import type { EventGymTemplate } from './social/event_gym_template';
 type RunRow = Database['public']['Tables']['runs']['Row'];
 type RouteRow = Database['public']['Tables']['routes']['Row'];
 type RouteMarkerRow = Database['public']['Tables']['route_markers']['Row'];
+type RouteConditionRow = Database['public']['Tables']['route_conditions']['Row'];
 type IntegrationRow = Database['public']['Tables']['integrations']['Row'];
 type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
 type ClubRow = Database['public']['Tables']['clubs']['Row'];
@@ -93,6 +94,27 @@ export type RouteMarkerKind =
 export type RouteMarker = Omit<RouteMarkerRow, 'kind' | 'meta'> & {
 	kind: RouteMarkerKind;
 	meta: Record<string, unknown>;
+};
+
+// Community condition reports on a route (migration 20270212_001). `condition`
+// + `severity` are narrow unions enforced by CHECK constraints +
+// check_constraint_unions.mjs. Distinct from RouteMarker: any viewer (not just
+// the owner) can file a report, and the anchor (lat/lng) is optional.
+export type RouteConditionKind =
+	| 'clear'
+	| 'muddy'
+	| 'flooded'
+	| 'snow_ice'
+	| 'overgrown'
+	| 'closed'
+	| 'hazard'
+	| 'other';
+
+export type RouteConditionSeverity = 'info' | 'caution' | 'impassable';
+
+export type RouteCondition = Omit<RouteConditionRow, 'condition' | 'severity'> & {
+	condition: RouteConditionKind;
+	severity: RouteConditionSeverity;
 };
 
 export type UserProfile = Omit<UserProfileRow, 'preferred_unit' | 'subscription_tier'> & {
