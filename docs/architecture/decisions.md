@@ -3245,6 +3245,16 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 161. Learn guides are repo-committed markdown/MDsvex prerendered to static HTML, not a DB-backed CMS
+
+**Decided (2026-06-19, `apps/web/src/lib/learn/`, `learn_pages.md`).** The public Learn surface (`/learn` hub + `/learn/<slug>` articles + `/learn/category/<id>`) authors each guide as a `.md` file with YAML frontmatter under `src/lib/learn/guides/`, indexed at build time by `import.meta.glob` and compiled by the already-wired mdsvex preprocessor. Every Learn route sets `prerender = true` (+ `entries()` over the guide slugs / categories), so the whole surface bakes to static HTML in `build/learn/` and rides the S3 + CloudFront path (§53) with **zero runtime cost and no Lambda** — unlike `/share/*`, whose per-id, mutable content needs the share Lambda. Guides are version-controlled, reviewed in PRs, and diffable: a solo dev's "CMS" is the repo.
+
+**Why not a DB-backed CMS.** A `guides` table would add RLS policies, an editor UI, and a runtime read path on a page that is meant to be public, cacheable, and crawlable without JS — all avoided. The trade-off is honest: adding or editing a guide is a code change + deploy, not a web form. For evergreen, low-churn marketing content that is a feature (review gate, no drift), not a cost. If non-engineer live authoring is ever needed, revisit with a headless CMS feeding the *same* prerender step — do not build that speculatively.
+
+**Web-only, no twin.** Like the landing page, `/privacy`, `/compare`, this is acquisition/SEO content, which is a web property (§24) — there is no App Store SEO benefit to native guide screens and a Flutter twin would only create three-surface content drift. SEO mirrors `/share/route` exactly (title / canonical / Open Graph `og:type=article` / Twitter card / escaped `Article` + `BreadcrumbList` JSON-LD via `learn_meta.ts`); the sitemap gets hub/category/guide entries from the build-time index, so they ship even when the Supabase routes/runs fetch fails. Localization: chrome strings ship in all six locales now; guide *prose* is English-only with a `<slug>.<locale>.md` fallback resolver wired in `guides.ts` for later translation (scope still owed — see `learn_pages.md § i18n`). The "your first race" guide's CTA points at `/social?tab=clubs` pending a public race-calendar feature.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

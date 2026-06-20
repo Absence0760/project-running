@@ -114,6 +114,7 @@ src/
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)
+    learn/          # Public, no-auth, PRERENDERED Learn/guides surface (decisions §161, features/learn.md). /learn hub + /learn/[slug] articles (mdsvex .md bodies) + /learn/category/[category]. All prerender=true (+ entries()); SEO mirrors share/route (canonical / OG / Article+BreadcrumbList JSON-LD via lib/learn/learn_meta.ts). Shell-less + anon in +layout.svelte (path.startsWith('/learn')). Content authored in lib/learn/guides/*.md, indexed by import.meta.glob in lib/learn/guides.ts. Web-only (no twin).
     live/[id]/      # Live spectator tracking. Real Go live-hub WebSocket path via lib/runs/live_hub.ts when PUBLIC_LIVE_HUB_URL is set; Supabase Realtime channel as fallback when unset; the demo animation is only the no-signal filler. WS path e2e-tested by tests-e2e/live/spectator_websocket.spec.ts (dedicated playwright.livehub.config.ts — boots the real hub binary).
     login/          # Email/password + OAuth sign-in
     auth/callback/  # OAuth redirect handler
