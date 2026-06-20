@@ -79,6 +79,12 @@ variable "share_recap_lambda_zip_path" {
   default     = null
 }
 
+variable "share_badge_lambda_zip_path" {
+  description = "Optional path to a pre-built share-badge Lambda zip (apps/web/lambda/share-badge/dist/share-badge.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Per-badge achievement share parity with share-run/share-route/share-recap — handles /share/badge/* + /og/badge/*.png with per-request SSR over the public, milestone-safe badge columns."
+  type        = string
+  default     = null
+}
+
 variable "generate_route_lambda_zip_path" {
   description = "Optional path to a pre-built generate-route Lambda zip (apps/web/lambda/generate-route/dist/generate-route.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Handles /api/routes/generate* — server-side round-trip route generation against the self-hosted GraphHopper engine."
   type        = string

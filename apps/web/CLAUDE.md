@@ -151,6 +151,15 @@ lambda/
                     # the path in dev. infra/ CloudFront+OIDC+release wiring landed
                     # (mirrors share-run/share-route); only terraform apply + first deploy
                     # remain. See lambda/share-recap/README.md.
+  share-badge/      # Same shape as share-run for /share/badge/* + /og/badge/*.png — the
+                    # public per-badge achievement share. Renders the public,
+                    # milestone-safe badge columns (numeric milestone + date, no
+                    # track/location) via the share_badge_lookup / og_badge_png path;
+                    # 404 HTML but 200 branded-card PNG on a missing/private badge. The
+                    # SvelteKit /share/badge/[id] + /og/badge/[id].png routes
+                    # (prerender=false) own the path in dev. infra/ CloudFront+OIDC+release
+                    # wiring landed (mirrors share-run/share-route/share-recap); only
+                    # terraform apply + first deploy remain. See lambda/share-badge/README.md.
 ```
 
 ## Development
