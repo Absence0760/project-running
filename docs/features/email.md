@@ -44,8 +44,20 @@ different transport:
   (404/410) is pruned via the `clear_push_subscription` RPC; a 429/5xx defers.
   `web_push_sent_at` is the per-channel idempotency guard. The crypto is
   stdlib + the worker's existing `golang-jwt` (package `internal/webpush/`) —
-  no third-party web-push library. Native FCM/APNs is a further sibling, still
-  operator-credential-blocked (below).
+  no third-party web-push library.
+- **`native_push`** — the locked-phone leg (migration `20270212_001`). The
+  THIRD device-delivery sibling: the SAME notifications AFTER-INSERT fan-out, a
+  DIFFERENT enqueue trigger (gated on the recipient having an enabled
+  `device_tokens` row), the SAME `push_notifications` preference web-push gates on
+  (one "push" channel covers browser + native — no separate pref), and a SEPARATE
+  `native_push_sent_at` send-state guard. The handler (`handler_native_push.go`)
+  fans out over the user's enabled device tokens, routing on
+  `device_tokens.platform`: `android` → FCM HTTP v1, `ios` → APNs HTTP/2 (sender
+  package `internal/nativepush/`, stdlib + `golang-jwt`, no Firebase Admin SDK).
+  A dead token (FCM `UNREGISTERED` 404 / APNs 410) is pruned via
+  `clear_device_token`; a 429/5xx defers. Gated on operator-supplied
+  Firebase/APNs credentials (below) — unset → jobs finish done, rows stay
+  pending. `decisions.md § 161`.
 
 Shared pieces:
 
@@ -86,6 +98,7 @@ Shared pieces:
 | **Safety-contact confirm** (opt-in request) | `safety_email` (`confirm`) | `safety_contacts` AFTER INSERT | ✓ | §131 |
 | **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` AFTER INSERT, per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
+| **Native push** (locked-phone FCM/APNs, same notification rows) | `native_push` | `notifications` AFTER INSERT, gated on an enabled `device_tokens` row + the same `push_notifications` pref | gated on operator FCM/APNs creds (title/body from the shared catalogue) | §161 |
 | Branded HTML + inbox preview text | — | all email of the above | ✓ | — |
 
 All shipped emails are end-to-end tested against the local Docker Mailpit
@@ -137,11 +150,16 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
   third-party credential); unset → jobs finish done, rows stay pending. A
   `push_notifications` category UI toggle (web + mobile) is the small remaining
   follow-up — gating works on the `important` default without it.
-- [ ] **Native push (FCM / APNs)** — the remaining device-delivery leg (push to a
-  locked phone). Same `notifications` source of truth + sibling-consumer pattern
-  the `web_push` kind now demonstrates; an FCM/APNs sender is another sibling.
-  Blocked on operator-supplied Firebase/APNs credentials + mobile
-  `firebase_messaging` token registration. roadmap Phase 4b.
+- [~] **Native push (FCM / APNs)** — backend + client BUILT 2026-06-19 (migration
+  `20270212_001`, `native_push` kind), **send gated on operator credentials**. Same
+  `notifications` source of truth + sibling-consumer pattern the `web_push` kind
+  demonstrates; the FCM/APNs sender (`internal/nativepush/`) + handler
+  (`handler_native_push.go`) + the mobile `firebase_messaging` device-token
+  registration (`push_messaging_bridge.dart`, both twins) all ship. Going live is
+  blocked only on operator-supplied Firebase/APNs credentials on the worker
+  (`FCM_*` / `APNS_*`) + the per-app config files (`google-services.json` /
+  `GoogleService-Info.plist`); unset → jobs finish done, rows stay pending. roadmap
+  Phase 4b. See the architecture sibling note above + `decisions.md § 161`.
 
 ### Not planned (with reason)
 
@@ -165,6 +183,16 @@ None of this sends in prod until an operator:
    subscribed with — apps/web's `PUBLIC_VAPID_PUBLIC_KEY`), `VAPID_PRIVATE_KEY`,
    and `VAPID_SUBJECT` (`mailto:` contact) on the worker. Until then `web_push`
    jobs finish done while leaving the notification rows pending.
+2c. (For **native push**) provisions a Firebase project + an APNs auth key, then:
+   on the **worker**, sets `FCM_SERVICE_ACCOUNT_JSON` + `FCM_PROJECT_ID` (Android)
+   and/or `APNS_KEY_P8` + `APNS_KEY_ID` + `APNS_TEAM_ID` + `APNS_TOPIC`
+   (+ `APNS_SANDBOX=1` for dev builds) (iOS); on the **mobile apps**, drops
+   `google-services.json` into `apps/mobile_android/android/` and
+   `GoogleService-Info.plist` + the APNs push entitlement into
+   `apps/mobile_ios/ios/`. Either credential group alone enables that platform;
+   neither set → `native_push` jobs finish done while leaving the rows pending,
+   and the mobile bridge no-ops (compiles + runs without the config files). A
+   configured-but-invalid credential fails the worker loudly at startup.
 3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
    spam-filed.
 4. (Before any **bulk/engagement** mail) the RFC 8058 one-click unsubscribe
@@ -180,6 +208,9 @@ None of this sends in prod until an operator:
   `handler_notification_email.go`, `handler_lifecycle_email.go`,
   `handler_safety_email.go`. Web push: `handler_web_push.go`, `push_render.go`
   (pref gate + payload), and the `internal/webpush/` RFC 8291/8292 sender.
+  Native push: `handler_native_push.go` (reuses `push_render.go`'s `pushMode` /
+  `shouldPush` pref gate + the shared title/body catalogue), and the
+  `internal/nativepush/` FCM HTTP v1 + APNs HTTP/2 sender (stdlib + `golang-jwt`).
   Weekly digest (behind the gate): `handler_weekly_digest.go` (gate + render),
   `digest_builder.go` (`EnqueueAllWeeklyDigests` — UNSCHEDULED),
   `internal/digesttoken/` (the stateless RFC 8058 HMAC token),
@@ -191,7 +222,15 @@ None of this sends in prod until an operator:
   contacts + the `safety_email` kind), `20261219_001` (web-push channel + the
   `web_push` kind + `clear_push_subscription`), `20270108_001` (weekly-digest
   foundation — `weekly_digest` kind + `email_suppressions` + the opt-in pref +
-  the stateless-HMAC unsubscribe design).
+  the stateless-HMAC unsubscribe design), `20270212_001` (native-push channel —
+  `native_push` kind + `native_push_sent_at` + the device-token-gated enqueue
+  trigger + `clear_device_token`).
+- Native-push client leg: the mobile device-token registration —
+  `apps/mobile_android/lib/push_messaging_bridge.dart` +
+  `firebase_push_messaging.dart` (byte-identical iOS twins), wired in `main.dart`,
+  with the `device_tokens` upsert/enable/remove methods on `packages/api_client`.
+  The `device_tokens` table (platform-checked rows, the `is_notifications_enabled`
+  per-device flag, owner-scoped RLS) shipped in migration `20260506_001`.
 - Web push client leg: `apps/web/src/lib/util/push.ts` (subscribe/unsubscribe) +
   `apps/web/static/sw.js` (service worker render). The subscription lives on
   `user_device_settings.prefs.push_subscription` — `docs/backend/settings.md`.
