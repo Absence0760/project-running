@@ -3680,6 +3680,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubDetailTabTemplates => 'Vorlagen';
 
   @override
+  String get clubDetailTabPhotos => 'Fotos';
+
+  @override
   String get clubDetailReportClub => 'Club melden';
 
   @override
@@ -6944,6 +6947,73 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'Bildunterschrift konnte nicht aktualisiert werden: $error';
+  }
+
+  @override
+  String get clubPhotosLoading => 'Fotos werden geladen…';
+
+  @override
+  String get clubPhotosTitle => 'Fotos';
+
+  @override
+  String get clubPhotosAdd => 'Foto hinzufügen';
+
+  @override
+  String get clubPhotosEmpty => 'Noch keine Fotos in diesem Club.';
+
+  @override
+  String get clubPhotosCaptionPendingHint =>
+      'Bildunterschrift (optional, 280 Zeichen)';
+
+  @override
+  String get clubPhotosCaptionHint => 'Bildunterschrift…';
+
+  @override
+  String get clubPhotosCancel => 'Abbrechen';
+
+  @override
+  String get clubPhotosSave => 'Speichern';
+
+  @override
+  String get clubPhotosUpload => 'Hochladen';
+
+  @override
+  String get clubPhotosUploading => 'Wird hochgeladen…';
+
+  @override
+  String get clubPhotosEditCaption => 'Bildunterschrift bearbeiten';
+
+  @override
+  String get clubPhotosDeleteTooltip => 'Foto löschen';
+
+  @override
+  String get clubPhotosDeleteTitle => 'Foto löschen?';
+
+  @override
+  String get clubPhotosDeleteBody =>
+      'Dies entfernt das Foto dauerhaft aus dem Club.';
+
+  @override
+  String get clubPhotosDeleteConfirm => 'Löschen';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'Auswahl konnte nicht geöffnet werden: $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'Hochladen fehlgeschlagen: $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return 'Löschen fehlgeschlagen: $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'Bildunterschrift konnte nicht aktualisiert werden: $error';
   }
 

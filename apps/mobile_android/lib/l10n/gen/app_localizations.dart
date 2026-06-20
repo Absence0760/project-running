@@ -6152,6 +6152,12 @@ abstract class AppLocalizations {
   /// **'Templates'**
   String get clubDetailTabTemplates;
 
+  /// Club detail tab — photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get clubDetailTabPhotos;
+
   /// Tooltip on the report-club button
   ///
   /// In en, this message translates to:
@@ -11441,6 +11447,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not update caption: {error}'**
   String routePhotosCaptionError(String error);
+
+  /// Loading state for the club photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Loading photos…'**
+  String get clubPhotosLoading;
+
+  /// Header for the club photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get clubPhotosTitle;
+
+  /// Button to add a photo to a club
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get clubPhotosAdd;
+
+  /// Empty state for the club photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'No photos in this club yet.'**
+  String get clubPhotosEmpty;
+
+  /// Hint in the caption field for a club photo about to be uploaded
+  ///
+  /// In en, this message translates to:
+  /// **'Caption (optional, 280 chars)'**
+  String get clubPhotosCaptionPendingHint;
+
+  /// Hint in the inline caption-edit field for a club photo
+  ///
+  /// In en, this message translates to:
+  /// **'Caption…'**
+  String get clubPhotosCaptionHint;
+
+  /// Cancel button in the club photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get clubPhotosCancel;
+
+  /// Save button for an edited club-photo caption
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get clubPhotosSave;
+
+  /// Button to upload the pending club photo
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get clubPhotosUpload;
+
+  /// Button label while a club photo is uploading
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get clubPhotosUploading;
+
+  /// Tooltip on the edit-caption button for a club photo
+  ///
+  /// In en, this message translates to:
+  /// **'Edit caption'**
+  String get clubPhotosEditCaption;
+
+  /// Tooltip on the delete-photo button for a club photo
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo'**
+  String get clubPhotosDeleteTooltip;
+
+  /// Title of the club delete-photo confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo?'**
+  String get clubPhotosDeleteTitle;
+
+  /// Body of the club delete-photo confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the photo from the club permanently.'**
+  String get clubPhotosDeleteBody;
+
+  /// Confirm button in the club delete-photo dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get clubPhotosDeleteConfirm;
+
+  /// Banner when the image picker can't be opened for a club photo
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open picker: {error}'**
+  String clubPhotosPickerError(String error);
+
+  /// Banner when a club photo upload fails
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed: {error}'**
+  String clubPhotosUploadError(String error);
+
+  /// Banner when deleting a club photo fails
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failed: {error}'**
+  String clubPhotosDeleteError(String error);
+
+  /// Banner when updating a club-photo caption fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update caption: {error}'**
+  String clubPhotosCaptionError(String error);
 
   /// Loading state while segment efforts are computed
   ///

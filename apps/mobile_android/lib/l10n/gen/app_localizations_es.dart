@@ -3670,6 +3670,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get clubDetailTabTemplates => 'Plantillas';
 
   @override
+  String get clubDetailTabPhotos => 'Fotos';
+
+  @override
   String get clubDetailReportClub => 'Reportar club';
 
   @override
@@ -6938,6 +6941,73 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'No se pudo actualizar el pie de foto: $error';
+  }
+
+  @override
+  String get clubPhotosLoading => 'Cargando fotos…';
+
+  @override
+  String get clubPhotosTitle => 'Fotos';
+
+  @override
+  String get clubPhotosAdd => 'Añadir foto';
+
+  @override
+  String get clubPhotosEmpty => 'Aún no hay fotos en este club.';
+
+  @override
+  String get clubPhotosCaptionPendingHint =>
+      'Pie de foto (opcional, 280 caracteres)';
+
+  @override
+  String get clubPhotosCaptionHint => 'Pie de foto…';
+
+  @override
+  String get clubPhotosCancel => 'Cancelar';
+
+  @override
+  String get clubPhotosSave => 'Guardar';
+
+  @override
+  String get clubPhotosUpload => 'Subir';
+
+  @override
+  String get clubPhotosUploading => 'Subiendo…';
+
+  @override
+  String get clubPhotosEditCaption => 'Editar pie de foto';
+
+  @override
+  String get clubPhotosDeleteTooltip => 'Eliminar foto';
+
+  @override
+  String get clubPhotosDeleteTitle => '¿Eliminar foto?';
+
+  @override
+  String get clubPhotosDeleteBody =>
+      'Esto elimina la foto del club de forma permanente.';
+
+  @override
+  String get clubPhotosDeleteConfirm => 'Eliminar';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'No se pudo abrir el selector: $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'Error al subir: $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return 'Error al eliminar: $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'No se pudo actualizar el pie de foto: $error';
   }
 

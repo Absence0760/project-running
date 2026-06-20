@@ -3682,6 +3682,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubDetailTabTemplates => 'Modèles';
 
   @override
+  String get clubDetailTabPhotos => 'Photos';
+
+  @override
   String get clubDetailReportClub => 'Signaler le club';
 
   @override
@@ -6952,6 +6955,73 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'Impossible de mettre à jour la légende : $error';
+  }
+
+  @override
+  String get clubPhotosLoading => 'Chargement des photos…';
+
+  @override
+  String get clubPhotosTitle => 'Photos';
+
+  @override
+  String get clubPhotosAdd => 'Ajouter une photo';
+
+  @override
+  String get clubPhotosEmpty => 'Aucune photo dans ce club pour l\'instant.';
+
+  @override
+  String get clubPhotosCaptionPendingHint =>
+      'Légende (facultatif, 280 caractères)';
+
+  @override
+  String get clubPhotosCaptionHint => 'Légende…';
+
+  @override
+  String get clubPhotosCancel => 'Annuler';
+
+  @override
+  String get clubPhotosSave => 'Enregistrer';
+
+  @override
+  String get clubPhotosUpload => 'Téléverser';
+
+  @override
+  String get clubPhotosUploading => 'Téléversement…';
+
+  @override
+  String get clubPhotosEditCaption => 'Modifier la légende';
+
+  @override
+  String get clubPhotosDeleteTooltip => 'Supprimer la photo';
+
+  @override
+  String get clubPhotosDeleteTitle => 'Supprimer la photo ?';
+
+  @override
+  String get clubPhotosDeleteBody =>
+      'La photo sera définitivement retirée du club.';
+
+  @override
+  String get clubPhotosDeleteConfirm => 'Supprimer';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'Impossible d\'ouvrir le sélecteur : $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'Échec du téléversement : $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return 'Échec de la suppression : $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'Impossible de mettre à jour la légende : $error';
   }
 

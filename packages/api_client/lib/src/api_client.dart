@@ -2857,6 +2857,93 @@ class ApiClient {
     }
   }
 
+  // ──────────────────── Club photos (gallery) ────────────────────
+  //
+  // The route_photos shape re-keyed to club membership (migration
+  // 20270301_001). Metadata in `club_photos`; bytes in the private
+  // `club-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}`. Any
+  // active member uploads; a photo's owner OR a club admin deletes; the
+  // Storage SELECT policy joins through `club_photos` → club visibility so
+  // a private club's gallery is members-only and a public club's is open.
+
+  /// Photos for a club, ordered by position then created_at. Capped.
+  Future<List<ClubPhotoRow>> fetchClubPhotos(
+    String clubId, {
+    int limit = 50,
+  }) async {
+    final data = await _client
+        .from(ClubPhotoRow.table)
+        .select()
+        .eq(ClubPhotoRow.colClubId, clubId)
+        .order(ClubPhotoRow.colPositionIdx, ascending: true)
+        .order(ClubPhotoRow.colCreatedAt, ascending: true)
+        .limit(limit);
+    return data.map<ClubPhotoRow>((r) => ClubPhotoRow.fromJson(r)).toList();
+  }
+
+  Future<ClubPhotoRow> addClubPhoto({
+    required String clubId,
+    required Uint8List bytes,
+    required String contentType,
+    required String extension,
+    String? caption,
+    int positionIdx = 0,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final inserted = await _client
+        .from(ClubPhotoRow.table)
+        .insert({
+          ClubPhotoRow.colClubId: clubId,
+          ClubPhotoRow.colOwnerId: viewerId,
+          ClubPhotoRow.colStoragePath: '', // placeholder; updated below
+          ClubPhotoRow.colCaption: normaliseRoutePhotoCaption(caption),
+          ClubPhotoRow.colPositionIdx: positionIdx,
+        })
+        .select()
+        .single();
+    final photoId = inserted[ClubPhotoRow.colId] as String;
+    final path = '$viewerId/$photoId.$extension';
+    await _client.storage.from(StorageBuckets.clubPhotos).uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
+    await _client
+        .from(ClubPhotoRow.table)
+        .update({ClubPhotoRow.colStoragePath: path})
+        .eq(ClubPhotoRow.colId, photoId);
+    return ClubPhotoRow.fromJson(
+        {...inserted, ClubPhotoRow.colStoragePath: path});
+  }
+
+  Future<void> updateClubPhotoCaption({
+    required String photoId,
+    String? caption,
+  }) async {
+    await _client
+        .from(ClubPhotoRow.table)
+        .update({ClubPhotoRow.colCaption: normaliseRoutePhotoCaption(caption)})
+        .eq(ClubPhotoRow.colId, photoId);
+  }
+
+  /// Delete a photo. Removes the metadata row (RLS gates owner / club-admin
+  /// permissions) and the underlying Storage objects — the original upload
+  /// AND the worker-generated 512-wide thumbnail.
+  Future<void> deleteClubPhoto(ClubPhotoRow photo) async {
+    await _client
+        .from(ClubPhotoRow.table)
+        .delete()
+        .eq(ClubPhotoRow.colId, photo.id);
+    final paths = <String>[];
+    if (photo.storagePath.isNotEmpty) paths.add(photo.storagePath);
+    final thumb = photo.thumb512Path;
+    if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
+    if (paths.isNotEmpty) {
+      await _client.storage.from(StorageBuckets.clubPhotos).remove(paths);
+    }
+  }
+
   // ──────────────────── Segments (P1.B) ────────────────────
   //
   // Route-anchored segments + per-run efforts. Auto-effort generation
