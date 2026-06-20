@@ -42,12 +42,13 @@ RunRow _run({
   isDnf: isDnf,
 );
 
-Map<String, dynamic> _ping(DateTime at) => {
+Map<String, dynamic> _ping(DateTime at, {bool coarse = false}) => {
   'lat': -37.8136,
   'lng': 144.9631,
   'distance_m': 2000,
   'elapsed_s': 600,
   'at': at.toUtc().toIso8601String(),
+  'coarse': coarse,
 };
 
 bool _supabaseReady = false;
@@ -377,6 +378,30 @@ void main() {
         expect(find.text('Live'), findsNothing);
         expect(find.text('Finished'), findsNothing);
         expect(find.text('DNF'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+      });
+    });
+
+    testWidgets('a live run whose last ping is coarse shows Approximate', (tester) async {
+      // The privacy-zone last-seen carve-out (migration 20270121_001):
+      // the latest ping is a ~1 km-coarsened in-zone fix flagged
+      // coarse=true. The badge must read "Approximate" (not "Live") and
+      // the approximate sub-line must surface, so a SAR watcher can't
+      // read the dot as a precise current position.
+      final api = _FakeApi(
+        run: _run(
+          durationS: 0,
+          startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+        ),
+        pings: [_ping(DateTime.now(), coarse: true)],
+      );
+      await tester.runAsync(() async {
+        await _pumpApi(tester, api);
+        await tester.pump(); // resolve _hydrate
+        await tester.pump();
+        expect(find.text('Approximate'), findsOneWidget);
+        expect(find.byKey(const Key('coarse-sub')), findsOneWidget);
+        expect(find.text('Live'), findsNothing);
         await tester.pumpWidget(const SizedBox());
       });
     });

@@ -1076,6 +1076,8 @@
   "liveSpectatorBadgeIdle": "Inactivo",
   "liveSpectatorBadgeConnecting": "Conectando",
   "liveSpectatorBadgeStale": "Retrasado",
+  "liveSpectatorBadgeApproximate": "Aproximado",
+  "liveSpectatorApproximateSub": "Visto por última vez cerca de aquí — aproximado",
   "liveSpectatorBadgeFinished": "Finalizado",
   "liveSpectatorBadgeDnf": "DNF",
   "liveUpdatedNow": "Actualizado ahora mismo",

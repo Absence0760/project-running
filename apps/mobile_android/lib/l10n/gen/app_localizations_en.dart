@@ -3919,6 +3919,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveSpectatorBadgeStale => 'Delayed';
 
   @override
+  String get liveSpectatorBadgeApproximate => 'Approximate';
+
+  @override
+  String get liveSpectatorApproximateSub => 'Last seen near here — approximate';
+
+  @override
   String get liveSpectatorBadgeFinished => 'Finished';
 
   @override

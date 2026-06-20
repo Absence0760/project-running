@@ -5347,6 +5347,14 @@
   "@liveSpectatorBadgeStale": {
     "description": "Status badge — last ping is stale, position may not be current"
   },
+  "liveSpectatorBadgeApproximate": "Approximate",
+  "@liveSpectatorBadgeApproximate": {
+    "description": "Status badge — last position is a coarse privacy-zone last-seen fix, not a precise location"
+  },
+  "liveSpectatorApproximateSub": "Last seen near here — approximate",
+  "@liveSpectatorApproximateSub": {
+    "description": "Sub-line shown when the latest position is a coarse privacy-zone last-seen fix"
+  },
   "liveSpectatorBadgeFinished": "Finished",
   "@liveSpectatorBadgeFinished": {
     "description": "Status badge — the run has finished (terminal state, distinct from a stale signal)"

@@ -6572,6 +6572,18 @@ abstract class AppLocalizations {
   /// **'Delayed'**
   String get liveSpectatorBadgeStale;
 
+  /// Status badge — last position is a coarse privacy-zone last-seen fix, not a precise location
+  ///
+  /// In en, this message translates to:
+  /// **'Approximate'**
+  String get liveSpectatorBadgeApproximate;
+
+  /// Sub-line shown when the latest position is a coarse privacy-zone last-seen fix
+  ///
+  /// In en, this message translates to:
+  /// **'Last seen near here — approximate'**
+  String get liveSpectatorApproximateSub;
+
   /// Status badge — the run has finished (terminal state, distinct from a stale signal)
   ///
   /// In en, this message translates to:

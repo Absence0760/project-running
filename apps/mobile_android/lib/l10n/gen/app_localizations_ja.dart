@@ -3710,6 +3710,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveSpectatorBadgeStale => '遅延';
 
   @override
+  String get liveSpectatorBadgeApproximate => 'おおよその位置';
+
+  @override
+  String get liveSpectatorApproximateSub => 'この付近で最後に確認 — おおよその位置';
+
+  @override
   String get liveSpectatorBadgeFinished => '終了';
 
   @override

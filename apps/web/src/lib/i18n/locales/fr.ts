@@ -2001,6 +2001,8 @@ export const messages = {
 	"live.badgeConnecting": "Connexion…",
 	"live.badgeLive": "EN DIRECT",
 	"live.badgeStale": "RETARDÉ",
+	"live.approximateBadge": "Vu pour la dernière fois près d'ici · approximatif",
+	"live.approximateSub": "Approximatif — vu pour la dernière fois près d'une zone de confidentialité",
 	"live.updatedNow": "Mis à jour à l'instant",
 	"live.updatedSeconds": "Mis à jour il y a {n}s",
 	"live.updatedMinutes": "Mis à jour il y a {n} min",

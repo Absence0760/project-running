@@ -90,6 +90,50 @@ test.describe('/live/[id] — anon spectator', () => {
 		}
 	});
 
+	test('coarse last-seen ping renders the approximate badge + approximate sub-line', async ({
+		page
+	}) => {
+		// Migration 20270121_001 keeps a single ~1 km-coarsened in-zone
+		// last-seen ping flagged `coarse=true` for SAR. The spectator must
+		// label it as approximate, never present it as a precise current
+		// position. Plant a fresh coarse ping and assert the dedicated
+		// badge + the "approximate" sub-line surface.
+		const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 5_000,
+			duration_s: 3_600,
+			is_public: true
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [
+					{ ...MELBOURNE_NEARBY_OUT_OF_ZONE[0], distance_m: 1_000, elapsed_s: 300 },
+					{
+						...MELBOURNE_NEARBY_OUT_OF_ZONE[1],
+						distance_m: 2_000,
+						elapsed_s: 600,
+						coarse: true
+					}
+				]
+			});
+
+			await page.goto(`/live/${runId}`);
+
+			await expect(page.locator('.live-badge')).toHaveClass(/active/, {
+				timeout: 10_000
+			});
+			await expect(page.getByTestId('coarse-badge')).toBeVisible();
+			await expect(page.getByTestId('coarse-badge')).toContainText(/approximate/i);
+			await expect(page.locator('.live-runner-sub')).toContainText(/Approximate/i);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
 	test('crew joining mid-run hydrates the full backlog on load, not just the latest point', async ({
 		page
 	}) => {

@@ -29,7 +29,12 @@ over-claiming when the position is stale** (the personas' core complaint).
 - **Live feed + staleness:** `/live/[id]/+page.svelte`, `lib/runs/live_hub.ts`,
   the `live_freshness.ts ↔ live_freshness.dart` parity pair (`freshnessFor` —
   age clamp + stale flag), `live_run_pings` / `race_sessions`. A live run links
-  to its route via `runs.route_id`.
+  to its route via `runs.route_id`. When the latest `live_run_pings` row carries
+  `coarse=true` (the privacy-zone last-seen carve-out, migration
+  `20270121_001`), the dot renders as an approximate hollow amber ring + an
+  "Approximate / last seen near here" badge on both clients so a SAR watcher
+  reads it as a ~1 km cell, not a precise fix — distinct from, and orthogonal
+  to, the staleness badge.
 - **Route + cutoffs:** `fetchRouteMarkers` (RPC `route_markers_for_viewer`,
   already anon-readable on public routes) + `roadbook.ts` cutoff parsing
   (`parseCutoff`, the `cutoff` leg shape).
