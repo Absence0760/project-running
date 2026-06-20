@@ -8392,6 +8392,33 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachingNoAthletes => 'まだアスリートがいません。招待して始めましょう。';
 
   @override
+  String get coachingRosterTitle => 'アスリート一覧';
+
+  @override
+  String get coachingRosterSubtitle => '負荷・プラン達成率・けがリスクをひと目で確認できます。';
+
+  @override
+  String get coachingRosterNeverRun => 'ランの記録なし';
+
+  @override
+  String get coachingRosterNoPlan => 'プランなし';
+
+  @override
+  String get coachingRosterRiskInsufficient => '新規';
+
+  @override
+  String get coachingRosterRiskLow => '低';
+
+  @override
+  String get coachingRosterRiskOptimal => '最適';
+
+  @override
+  String get coachingRosterRiskElevated => 'やや高';
+
+  @override
+  String get coachingRosterRiskHigh => '高';
+
+  @override
   String get coachingRunner => 'ランナー';
 
   @override

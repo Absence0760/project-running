@@ -5418,6 +5418,31 @@ class ApiClient {
         (rows as List).cast<Map<String, dynamic>>(), CoachAthleteRow.colCoachId);
   }
 
+  /// The whole coach roster in one consent-gated round-trip
+  /// (coach_roster.md). Calls the SECURITY DEFINER `coach_roster_summary` RPC,
+  /// which re-checks the active link per athlete inside its body — a non-coach
+  /// gets zero rows, an unauthenticated caller raises. Returns no track bytes.
+  Future<List<CoachRosterRow>> fetchCoachRosterSummary() async {
+    if (userId == null) return const [];
+    final data = await _client.rpc('coach_roster_summary');
+    return (data as List).cast<Map<String, dynamic>>().map((r) {
+      return CoachRosterRow(
+        athleteId: r['athlete_id'] as String,
+        displayName: r['display_name'] as String?,
+        avatarUrl: r['avatar_url'] as String?,
+        lastRunAt: r['last_run_at'] == null
+            ? null
+            : DateTime.parse(r['last_run_at'] as String),
+        runs7d: (r['runs_7d'] as num?)?.toInt() ?? 0,
+        distance7dM: (r['distance_7d_m'] as num?)?.toDouble() ?? 0,
+        loadAcute: (r['load_acute'] as num?)?.toDouble() ?? 0,
+        loadChronic: (r['load_chronic'] as num?)?.toDouble() ?? 0,
+        activePlanId: r['active_plan_id'] as String?,
+        planCompletionPct: (r['plan_completion_pct'] as num?)?.toInt() ?? 0,
+      );
+    }).toList();
+  }
+
   Future<List<CoachAthleteLink>> _linksWithProfiles(
       List<Map<String, dynamic>> rows, String otherIdCol) async {
     if (rows.isEmpty) return const [];
@@ -5645,6 +5670,36 @@ class CoachAthleteLink {
     required this.userId,
     required this.displayName,
     required this.avatarUrl,
+  });
+}
+
+/// One row of the multi-athlete coach roster (coach_roster.md) — the bespoke
+/// `coach_roster_summary` RPC projection, mirror of web's `CoachRosterRow`.
+/// loadAcute / loadChronic are RAW distance-proxy stress sums; the UI derives
+/// the ACWR risk band + load trend from them via the coach_load helper.
+class CoachRosterRow {
+  final String athleteId;
+  final String? displayName;
+  final String? avatarUrl;
+  final DateTime? lastRunAt;
+  final int runs7d;
+  final double distance7dM;
+  final double loadAcute;
+  final double loadChronic;
+  final String? activePlanId;
+  final int planCompletionPct;
+
+  const CoachRosterRow({
+    required this.athleteId,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.lastRunAt,
+    required this.runs7d,
+    required this.distance7dM,
+    required this.loadAcute,
+    required this.loadChronic,
+    required this.activePlanId,
+    required this.planCompletionPct,
   });
 }
 

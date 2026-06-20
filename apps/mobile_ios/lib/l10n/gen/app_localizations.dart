@@ -14652,6 +14652,60 @@ abstract class AppLocalizations {
   /// **'No athletes yet. Invite one to get started.'**
   String get coachingNoAthletes;
 
+  /// Athlete roster card title
+  ///
+  /// In en, this message translates to:
+  /// **'Athlete roster'**
+  String get coachingRosterTitle;
+
+  /// Athlete roster card subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Every athlete at a glance — load, plan compliance, and injury risk.'**
+  String get coachingRosterSubtitle;
+
+  /// Roster cell when athlete has no runs
+  ///
+  /// In en, this message translates to:
+  /// **'No runs yet'**
+  String get coachingRosterNeverRun;
+
+  /// Roster cell when athlete has no active plan
+  ///
+  /// In en, this message translates to:
+  /// **'No plan'**
+  String get coachingRosterNoPlan;
+
+  /// Injury-risk band: insufficient history
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get coachingRosterRiskInsufficient;
+
+  /// Injury-risk band: low
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get coachingRosterRiskLow;
+
+  /// Injury-risk band: optimal
+  ///
+  /// In en, this message translates to:
+  /// **'Optimal'**
+  String get coachingRosterRiskOptimal;
+
+  /// Injury-risk band: elevated
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated'**
+  String get coachingRosterRiskElevated;
+
+  /// Injury-risk band: high
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get coachingRosterRiskHigh;
+
   /// Fallback name for an athlete with no display name
   ///
   /// In en, this message translates to:

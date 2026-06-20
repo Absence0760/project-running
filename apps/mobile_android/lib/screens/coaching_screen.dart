@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../coach_load.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
 import '../l10n/locale_support.dart';
@@ -50,6 +51,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
   List<CoachAthleteLink> _athletes = const [];
   List<PendingCoachInvite> _pending = const [];
   List<CoachAthleteLink> _coaches = const [];
+  List<CoachRosterRow> _roster = const [];
 
   @override
   void initState() {
@@ -64,12 +66,17 @@ class _CoachingScreenState extends State<CoachingScreen> {
         widget.api.fetchMyAthletes(),
         widget.api.fetchPendingCoachInvites(),
         widget.api.fetchMyCoaches(),
+        // Roster failure is non-fatal — the rest of the screen still loads, the
+        // roster card just stays hidden (mirrors the web fail-soft section).
+        widget.api.fetchCoachRosterSummary().catchError(
+            (_) => const <CoachRosterRow>[]),
       ]);
       if (!mounted) return;
       setState(() {
         _athletes = results[0] as List<CoachAthleteLink>;
         _pending = results[1] as List<PendingCoachInvite>;
         _coaches = results[2] as List<CoachAthleteLink>;
+        _roster = results[3] as List<CoachRosterRow>;
         _loading = false;
       });
     } catch (e) {
@@ -201,12 +208,139 @@ class _CoachingScreenState extends State<CoachingScreen> {
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                           )),
                   const SizedBox(height: 20),
+                  if (_roster.isNotEmpty) ...[
+                    _rosterCard(l10n),
+                    const SizedBox(height: 16),
+                  ],
                   _athletesCard(l10n),
                   const SizedBox(height: 16),
                   _coachesCard(l10n),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _rosterCard(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final unit = widget.preferences.unit;
+    // Risk-first, then most-stale last-run first, so the athletes who need
+    // attention float to the top (mirrors the web roster sort default).
+    const rank = {
+      InjuryRiskBand.high: 4,
+      InjuryRiskBand.elevated: 3,
+      InjuryRiskBand.optimal: 2,
+      InjuryRiskBand.low: 1,
+      InjuryRiskBand.insufficient: 0,
+    };
+    final rows = [..._roster];
+    rows.sort((a, b) {
+      final byRisk = (rank[injuryRiskBand(b.loadAcute, b.loadChronic)] ?? 0) -
+          (rank[injuryRiskBand(a.loadAcute, a.loadChronic)] ?? 0);
+      if (byRisk != 0) return byRisk;
+      final aMs = a.lastRunAt?.millisecondsSinceEpoch ?? 0;
+      final bMs = b.lastRunAt?.millisecondsSinceEpoch ?? 0;
+      return bMs.compareTo(aMs);
+    });
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.coachingRosterTitle,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text(l10n.coachingRosterSubtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                )),
+            const SizedBox(height: 8),
+            for (final r in rows) _rosterRow(r, unit, l10n),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rosterRow(CoachRosterRow r, DistanceUnit unit, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final band = injuryRiskBand(r.loadAcute, r.loadChronic);
+    final lastRun = r.lastRunAt == null
+        ? l10n.coachingRosterNeverRun
+        : formatDateShort(r.lastRunAt!, activeLocaleTag);
+    final plan = r.activePlanId == null
+        ? l10n.coachingRosterNoPlan
+        : '${r.planCompletionPct}%';
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      leading: CircleAvatar(child: Text(_initial(r.displayName))),
+      title: Text(r.displayName ?? l10n.coachingRunner,
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        '$lastRun · ${UnitFormat.distance(r.distance7dM, unit)} · $plan',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: _riskChip(band, l10n),
+      onTap: () => _openAthleteById(r.athleteId, r.displayName),
+    );
+  }
+
+  Widget _riskChip(InjuryRiskBand band, AppLocalizations l10n) {
+    final scheme = Theme.of(context).colorScheme;
+    final (Color bg, Color fg, String label) = switch (band) {
+      InjuryRiskBand.high => (
+          scheme.errorContainer,
+          scheme.onErrorContainer,
+          l10n.coachingRosterRiskHigh
+        ),
+      InjuryRiskBand.elevated => (
+          const Color(0xFFFDE9C8),
+          const Color(0xFFB45309),
+          l10n.coachingRosterRiskElevated
+        ),
+      InjuryRiskBand.optimal => (
+          const Color(0xFFD9F2E0),
+          const Color(0xFF15803D),
+          l10n.coachingRosterRiskOptimal
+        ),
+      InjuryRiskBand.low => (
+          const Color(0xFFDCE8FB),
+          const Color(0xFF1D4ED8),
+          l10n.coachingRosterRiskLow
+        ),
+      InjuryRiskBand.insufficient => (
+          scheme.surfaceContainerHighest,
+          scheme.onSurfaceVariant,
+          l10n.coachingRosterRiskInsufficient
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              color: fg, fontWeight: FontWeight.w700, fontSize: 12)),
+    );
+  }
+
+  void _openAthleteById(String athleteId, String? displayName) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CoachingAthleteScreen(
+          api: widget.api,
+          preferences: widget.preferences,
+          athleteId: athleteId,
+          displayName: displayName,
+          acceptedAt: null,
+        ),
+      ),
     );
   }
 

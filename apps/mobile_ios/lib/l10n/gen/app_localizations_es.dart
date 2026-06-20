@@ -8837,6 +8837,34 @@ class AppLocalizationsEs extends AppLocalizations {
       'Aún no hay atletas. Invita a uno para empezar.';
 
   @override
+  String get coachingRosterTitle => 'Lista de atletas';
+
+  @override
+  String get coachingRosterSubtitle =>
+      'Todos tus atletas de un vistazo: carga, cumplimiento del plan y riesgo de lesión.';
+
+  @override
+  String get coachingRosterNeverRun => 'Sin carreras todavía';
+
+  @override
+  String get coachingRosterNoPlan => 'Sin plan';
+
+  @override
+  String get coachingRosterRiskInsufficient => 'Nuevo';
+
+  @override
+  String get coachingRosterRiskLow => 'Bajo';
+
+  @override
+  String get coachingRosterRiskOptimal => 'Óptimo';
+
+  @override
+  String get coachingRosterRiskElevated => 'Elevado';
+
+  @override
+  String get coachingRosterRiskHigh => 'Alto';
+
+  @override
   String get coachingRunner => 'Corredor';
 
   @override
