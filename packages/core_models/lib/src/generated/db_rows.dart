@@ -3940,6 +3940,7 @@ class RunRow {
   static const String colActivityType = 'activity_type';
   static const String colIsDnf = 'is_dnf';
   static const String colRaceListingId = 'race_listing_id';
+  static const String colElevationGainM = 'elevation_gain_m';
 
   final String id;
   final String userId;
@@ -3959,6 +3960,7 @@ class RunRow {
   final String activityType;
   final bool isDnf;
   final String? raceListingId;
+  final double? elevationGainM;
 
   const RunRow({
     required this.id,
@@ -3979,6 +3981,7 @@ class RunRow {
     required this.activityType,
     required this.isDnf,
     this.raceListingId,
+    this.elevationGainM,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -4000,6 +4003,7 @@ class RunRow {
     activityType: json['activity_type'] as String,
     isDnf: (json['is_dnf'] as bool?) ?? false,
     raceListingId: json['race_listing_id'] as String?,
+    elevationGainM: (json['elevation_gain_m'] as num?)?.toDouble(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4021,6 +4025,7 @@ class RunRow {
     colActivityType: activityType,
     colIsDnf: isDnf,
     colRaceListingId: raceListingId,
+    colElevationGainM: elevationGainM,
   };
 }
 
