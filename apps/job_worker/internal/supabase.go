@@ -2229,15 +2229,27 @@ func (c *SupabaseClient) InsertEmailSuppression(ctx context.Context, email, reas
 	return err
 }
 
-// SetWeeklyDigestPrefOff flips the recipient's opt-in pref to 'off' in
-// user_settings.prefs, via the merge-aware `set_user_setting` RPC if present.
-// We instead PATCH the jsonb key directly with `prefs = prefs || '{...}'`
-// using a PostgREST jsonb merge so the rest of the bag is preserved. Service
-// role bypasses RLS. Used by the unsubscribe endpoint alongside the
-// suppression insert (belt-and-braces: pref off AND address blocked).
+// SetWeeklyDigestPrefOff flips the recipient's weekly-digest opt-in to 'off'.
+// Used by the unsubscribe endpoint alongside the suppression insert
+// (belt-and-braces: pref off AND address blocked).
 func (c *SupabaseClient) SetWeeklyDigestPrefOff(ctx context.Context, userID string) error {
-	// PostgREST can't express `prefs = prefs || jsonb` in a PATCH body, so
-	// read-merge-write: fetch the current bag, set the one key, write it back.
+	return c.setUserPrefStringOff(ctx, userID, schema.PrefsEmailWeeklyDigest)
+}
+
+// SetLifecycleDripPrefOff flips the recipient's lifecycle-drip opt-in to 'off'.
+// The sibling of SetWeeklyDigestPrefOff for the lifecycle-drip unsubscribe
+// stream — same belt-and-braces contract, a SEPARATE pref key.
+func (c *SupabaseClient) SetLifecycleDripPrefOff(ctx context.Context, userID string) error {
+	return c.setUserPrefStringOff(ctx, userID, schema.PrefsEmailLifecycleDrip)
+}
+
+// setUserPrefStringOff sets a single user_settings.prefs string key to 'off',
+// preserving the rest of the bag. PostgREST can't express `prefs = prefs ||
+// jsonb` in a PATCH body, so read-merge-write: fetch the current bag, set the
+// one key, upsert it back. Service role bypasses RLS; the upsert on the
+// user_id conflict target means a user with no settings row yet still gets one
+// with the key explicitly off.
+func (c *SupabaseClient) setUserPrefStringOff(ctx context.Context, userID, key string) error {
 	prefs, err := c.FetchUserSettingsPrefs(ctx, userID)
 	if err != nil {
 		return err
@@ -2245,7 +2257,7 @@ func (c *SupabaseClient) SetWeeklyDigestPrefOff(ctx context.Context, userID stri
 	if prefs == nil {
 		prefs = map[string]interface{}{}
 	}
-	prefs[schema.PrefsEmailWeeklyDigest] = "off"
+	prefs[key] = "off"
 	payload, err := json.Marshal(map[string]any{
 		"user_id": userID,
 		"prefs":   prefs,
@@ -2253,8 +2265,6 @@ func (c *SupabaseClient) SetWeeklyDigestPrefOff(ctx context.Context, userID stri
 	if err != nil {
 		return err
 	}
-	// Upsert on the user_id conflict target so a user with no settings row
-	// yet still gets one with the digest explicitly off.
 	u := c.BaseURL + "/rest/v1/" + schema.TableUserSettings + "?on_conflict=user_id"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
 	if err != nil {

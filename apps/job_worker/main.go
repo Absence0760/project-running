@@ -166,6 +166,10 @@ func (b *unsubscribeBackend) SetWeeklyDigestPrefOff(ctx context.Context, userID 
 	return b.client.SetWeeklyDigestPrefOff(ctx, userID)
 }
 
+func (b *unsubscribeBackend) SetLifecycleDripPrefOff(ctx context.Context, userID string) error {
+	return b.client.SetLifecycleDripPrefOff(ctx, userID)
+}
+
 func (b *unsubscribeBackend) InsertEmailSuppression(ctx context.Context, email, reason string) error {
 	return b.client.InsertEmailSuppression(ctx, email, reason)
 }
@@ -586,13 +590,15 @@ func main() {
 		logger.Warn("premium: DISABLED — SUPABASE_JWT_SECRET unset; Pro endpoints return 503")
 	}
 
-	// Weekly-digest unsubscribe endpoint — unauthenticated RFC 8058 one-click
-	// opt-out at /unsubscribe/weekly-digest. The stateless HMAC token is the
-	// credential (no session); verifying it flips the opt-in pref to 'off' and
-	// inserts an email_suppressions row. Refuses with 503 when the secret is
-	// unset — same fail-closed posture as the JWT-gated endpoints. This is the
-	// opt-OUT side; it is safe to enable independently of any digest SEND
-	// (which stays gated on no scheduled builder existing).
+	// Engagement-mail unsubscribe endpoints — unauthenticated RFC 8058
+	// one-click opt-out at /unsubscribe/weekly-digest and
+	// /unsubscribe/lifecycle-drip. The stateless HMAC token is the credential
+	// (no session); verifying it flips that stream's opt-in pref to 'off' and
+	// inserts an email_suppressions row. One shared secret keys both streams;
+	// the token scope namespaces them so one stream's link can't unsubscribe
+	// another. Refuses with 503 when the secret is unset — same fail-closed
+	// posture as the JWT-gated endpoints. This is the opt-OUT side; it is safe
+	// to enable independently of any engagement SEND.
 	var unsubSrv *unsubscribe.Server
 	if digestUnsubSecret != "" {
 		unsubSrv = &unsubscribe.Server{
@@ -600,7 +606,7 @@ func main() {
 			Backend: &unsubscribeBackend{client: client},
 			Log:     logger.With("component", "unsubscribe"),
 		}
-		logger.Info("unsubscribe: enabled (weekly-digest opt-out mounted at /unsubscribe/weekly-digest)")
+		logger.Info("unsubscribe: enabled (weekly-digest + lifecycle-drip opt-out mounted at /unsubscribe/weekly-digest + /unsubscribe/lifecycle-drip)")
 	} else {
 		logger.Warn("unsubscribe: DISABLED — WEEKLY_DIGEST_UNSUB_SECRET unset; unsubscribe endpoint returns 503 + digest renders without a List-Unsubscribe link")
 	}

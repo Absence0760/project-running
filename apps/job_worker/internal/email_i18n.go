@@ -30,6 +30,7 @@ type emailShared struct {
 	footerTransactional   string // service-message footer for billing/account lifecycle mail
 	footerSafety          string // footer for safety-contact mail (opted-in alert)
 	footerDigest          string // footer for the opt-in weekly engagement digest
+	footerDrip            string // footer for the opt-in lifecycle drip (onboarding/re-engagement/streak)
 	footerAccountDeleted  string // footer for the account-deletion receipt (no account left to manage)
 	safetyDefaultOwner    string // fallback owner name when display_name is unset
 	managePrefsLabel      string // HTML footer link text
@@ -115,6 +116,7 @@ var emailSharedByLocale = map[string]emailShared{
 		footerTransactional:   "This is a service message about your Threkir account.",
 		footerSafety:          "You're receiving this because you're listed as a safety contact for this runner on Threkir.",
 		footerDigest:          "You're receiving this weekly summary because you opted in. Unsubscribe any time:",
+		footerDrip:            "You're receiving this nudge because you opted in to occasional reminders. Unsubscribe any time:",
 		footerAccountDeleted:  "This is a one-time confirmation that your Threkir account was deleted. You won't receive any further email from us.",
 		safetyDefaultOwner:    "A Threkir runner",
 		managePrefsLabel:      "Manage email preferences",
@@ -131,6 +133,7 @@ var emailSharedByLocale = map[string]emailShared{
 		footerTransactional:   "Dies ist eine Service-Nachricht zu deinem Threkir-Konto.",
 		footerSafety:          "Du erhältst diese E-Mail, weil du bei Threkir als Sicherheitskontakt für diese Person eingetragen bist.",
 		footerDigest:          "Du erhältst diese wöchentliche Zusammenfassung, weil du sie abonniert hast. Jederzeit abbestellbar:",
+		footerDrip:            "Du erhältst diese Erinnerung, weil du gelegentliche Hinweise abonniert hast. Jederzeit abbestellbar:",
 		footerAccountDeleted:  "Dies ist eine einmalige Bestätigung, dass dein Threkir-Konto gelöscht wurde. Du erhältst keine weiteren E-Mails von uns.",
 		safetyDefaultOwner:    "Ein Threkir-Läufer",
 		managePrefsLabel:      "E-Mail-Einstellungen verwalten",
@@ -147,6 +150,7 @@ var emailSharedByLocale = map[string]emailShared{
 		footerTransactional:   "Ceci est un message de service concernant votre compte Threkir.",
 		footerSafety:          "Vous recevez cet e-mail car vous êtes inscrit comme contact de sécurité de cette personne sur Threkir.",
 		footerDigest:          "Vous recevez ce résumé hebdomadaire car vous y êtes inscrit. Désinscription à tout moment :",
+		footerDrip:            "Vous recevez ce rappel car vous êtes inscrit aux rappels occasionnels. Désinscription à tout moment :",
 		footerAccountDeleted:  "Ceci est une confirmation unique que votre compte Threkir a été supprimé. Vous ne recevrez plus d'e-mail de notre part.",
 		safetyDefaultOwner:    "Un coureur Threkir",
 		managePrefsLabel:      "Gérer les préférences e-mail",
@@ -163,6 +167,7 @@ var emailSharedByLocale = map[string]emailShared{
 		footerTransactional:   "Este es un mensaje de servicio sobre tu cuenta de Threkir.",
 		footerSafety:          "Recibes este correo porque figuras como contacto de seguridad de esta persona en Threkir.",
 		footerDigest:          "Recibes este resumen semanal porque te suscribiste. Puedes darte de baja cuando quieras:",
+		footerDrip:            "Recibes este recordatorio porque te suscribiste a recordatorios ocasionales. Puedes darte de baja cuando quieras:",
 		footerAccountDeleted:  "Esta es una confirmación única de que tu cuenta de Threkir se ha eliminado. No recibirás más correos de nuestra parte.",
 		safetyDefaultOwner:    "Una persona de Threkir",
 		managePrefsLabel:      "Gestionar preferencias de correo",
@@ -179,6 +184,7 @@ var emailSharedByLocale = map[string]emailShared{
 		footerTransactional:   "これは Threkir アカウントに関するサービス通知です。",
 		footerSafety:          "Threkir でこのランナーの緊急連絡先として登録されているため、このメールをお送りしています。",
 		footerDigest:          "週間サマリーの配信に登録されているため、このメールをお送りしています。配信はいつでも停止できます:",
+		footerDrip:            "ときどきのリマインダーに登録されているため、このメールをお送りしています。配信はいつでも停止できます:",
 		footerAccountDeleted:  "これは Threkir アカウントが削除されたことをお知らせする一度限りの確認メールです。今後、当社からのメールが届くことはありません。",
 		safetyDefaultOwner:    "Threkir のランナー",
 		managePrefsLabel:      "メール設定を管理",
@@ -195,6 +201,7 @@ var emailSharedByLocale = map[string]emailShared{
 		footerTransactional:   "Esta é uma mensagem de serviço sobre a sua conta no Threkir.",
 		footerSafety:          "Você está recebendo este e-mail porque está cadastrado como contato de segurança desta pessoa no Threkir.",
 		footerDigest:          "Você está recebendo este resumo semanal porque se inscreveu. Cancele a inscrição quando quiser:",
+		footerDrip:            "Você está recebendo este lembrete porque se inscreveu para lembretes ocasionais. Cancele a inscrição quando quiser:",
 		footerAccountDeleted:  "Esta é uma confirmação única de que sua conta do Threkir foi excluída. Você não receberá mais e-mails da nossa parte.",
 		safetyDefaultOwner:    "Um corredor do Threkir",
 		managePrefsLabel:      "Gerenciar preferências de e-mail",
@@ -228,6 +235,9 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"safety_finish":  {"%s finished a run", "A run you're a safety contact for has finished.", "%s finished a run", "Open Threkir", []string{"Distance %s · time %s.", "You're a safety contact for this runner, so you're alerted when they finish — even on a private run. No action needed."}},
 		"safety_confirm": {"%s wants you as a safety contact", "Confirm to be alerted when they finish a run.", "%s wants you as a safety contact", "Confirm", []string{"%s added you as a safety contact on Threkir. Confirm and you'll get an email whenever they finish a run — even a private one — so you know they got back safely.", "If you don't recognise this, just ignore this email. Nothing is sent unless you confirm."}},
 		"weekly_digest":  {"Your week on Threkir", "Here's how your running week went.", "Your week in review", "Open Threkir", []string{"Here's a quick look at your week.", "Keep the streak going — log your next run and see how the week ahead shapes up."}},
+		"drip_onboarding":   {"Ready for your first run?", "Your first run is the hardest — and the most rewarding.", "Let's get your first run in", "Record a run", []string{"You're all set up, but you haven't recorded a run yet. The first one is always the hardest step — after that, it gets easier.", "Open Threkir, hit record, and head out the door. Even a short walk-run counts."}},
+		"drip_reengagement": {"We've missed you on Threkir", "It's been a while — your shoes are waiting.", "Time to lace up again", "Open Threkir", []string{"It's been a while since your last run. No pressure — every runner takes a break.", "When you're ready, we're here. A short, easy run is a great way back in."}},
+		"drip_streak":       {"Keep your run streak alive", "You're on a roll — don't let it slip today.", "Don't break the streak", "Record a run", []string{"You've run two days running. One more keeps the streak alive.", "A quick, easy effort is all it takes today. Open Threkir and bank it."}},
 		"account_deleted": {"Your Threkir account has been deleted", "Your account and personal data have been erased.", "Your account has been deleted", "Visit Threkir", []string{"Your Threkir account has been deleted, and your runs, routes, and personal data have been erased from our systems.", "We've also asked the third-party services connected to your account (such as your payment provider) to remove your data. If you didn't request this, contact us right away.", "Thanks for running with us. You're welcome back any time."}},
 	},
 	"de": {
@@ -248,6 +258,9 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"safety_finish":  {"%s hat einen Lauf beendet", "Ein Lauf, für den du Sicherheitskontakt bist, wurde beendet.", "%s hat einen Lauf beendet", "Threkir öffnen", []string{"Distanz %s · Zeit %s.", "Du bist Sicherheitskontakt für diese Person und wirst daher benachrichtigt, wenn sie einen Lauf beendet — auch bei einem privaten Lauf. Es ist nichts weiter zu tun."}},
 		"safety_confirm": {"%s möchte dich als Sicherheitskontakt", "Bestätige, um benachrichtigt zu werden, wenn sie einen Lauf beendet.", "%s möchte dich als Sicherheitskontakt", "Bestätigen", []string{"%s hat dich bei Threkir als Sicherheitskontakt hinzugefügt. Wenn du bestätigst, erhältst du eine E-Mail, sobald diese Person einen Lauf beendet — auch einen privaten — damit du weißt, dass sie sicher zurück ist.", "Falls dir das nichts sagt, ignoriere diese E-Mail einfach. Ohne deine Bestätigung wird nichts gesendet."}},
 		"weekly_digest":  {"Deine Woche bei Threkir", "So lief deine Laufwoche.", "Deine Woche im Rückblick", "Threkir öffnen", []string{"Hier ein kurzer Blick auf deine Woche.", "Bleib dran — zeichne deinen nächsten Lauf auf und sieh, wie die kommende Woche wird."}},
+		"drip_onboarding":   {"Bereit für deinen ersten Lauf?", "Der erste Lauf ist der schwerste — und der lohnendste.", "Lass uns deinen ersten Lauf starten", "Lauf aufzeichnen", []string{"Alles ist eingerichtet, aber du hast noch keinen Lauf aufgezeichnet. Der erste Schritt ist immer der schwerste — danach wird es leichter.", "Öffne Threkir, tippe auf Aufzeichnen und geh los. Auch ein kurzer Geh-Lauf zählt."}},
+		"drip_reengagement": {"Wir haben dich bei Threkir vermisst", "Es ist eine Weile her — deine Schuhe warten.", "Zeit, wieder die Schuhe zu schnüren", "Threkir öffnen", []string{"Dein letzter Lauf ist eine Weile her. Kein Druck — jede Läuferin und jeder Läufer macht mal Pause.", "Wenn du bereit bist, sind wir da. Ein kurzer, lockerer Lauf ist ein guter Wiedereinstieg."}},
+		"drip_streak":       {"Halte deine Lauf-Serie am Leben", "Du bist in Schwung — lass es heute nicht abreißen.", "Brich die Serie nicht ab", "Lauf aufzeichnen", []string{"Du bist zwei Tage hintereinander gelaufen. Noch einer hält die Serie am Leben.", "Heute reicht ein kurzer, lockerer Lauf. Öffne Threkir und sichere ihn dir."}},
 		"account_deleted": {"Dein Threkir-Konto wurde gelöscht", "Dein Konto und deine personenbezogenen Daten wurden gelöscht.", "Dein Konto wurde gelöscht", "Threkir besuchen", []string{"Dein Threkir-Konto wurde gelöscht, und deine Läufe, Routen und personenbezogenen Daten wurden aus unseren Systemen entfernt.", "Wir haben außerdem die mit deinem Konto verbundenen Drittanbieter-Dienste (etwa deinen Zahlungsanbieter) gebeten, deine Daten zu löschen. Falls du das nicht angefordert hast, melde dich bitte umgehend bei uns.", "Danke, dass du mit uns gelaufen bist. Du bist jederzeit wieder willkommen."}},
 	},
 	"fr": {
@@ -268,6 +281,9 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"safety_finish":  {"%s a terminé une course", "Une course pour laquelle vous êtes contact de sécurité est terminée.", "%s a terminé une course", "Ouvrir Threkir", []string{"Distance %s · temps %s.", "Vous êtes contact de sécurité de cette personne, vous êtes donc averti lorsqu'elle termine une course — même privée. Aucune action requise."}},
 		"safety_confirm": {"%s vous veut comme contact de sécurité", "Confirmez pour être averti lorsqu'elle termine une course.", "%s vous veut comme contact de sécurité", "Confirmer", []string{"%s vous a ajouté comme contact de sécurité sur Threkir. Confirmez et vous recevrez un e-mail chaque fois que cette personne termine une course — même privée — pour savoir qu'elle est bien rentrée.", "Si cela ne vous dit rien, ignorez simplement cet e-mail. Rien n'est envoyé sans votre confirmation."}},
 		"weekly_digest":  {"Votre semaine sur Threkir", "Voici comment s'est passée votre semaine de course.", "Votre semaine en revue", "Ouvrir Threkir", []string{"Voici un aperçu rapide de votre semaine.", "Gardez le rythme — enregistrez votre prochaine course et voyez comment s'annonce la semaine."}},
+		"drip_onboarding":   {"Prêt pour votre première course ?", "La première course est la plus difficile — et la plus gratifiante.", "Lançons votre première course", "Enregistrer une course", []string{"Tout est prêt, mais vous n'avez pas encore enregistré de course. Le premier pas est toujours le plus dur — ensuite, ça devient plus facile.", "Ouvrez Threkir, appuyez sur enregistrer et sortez. Même une courte marche-course compte."}},
+		"drip_reengagement": {"Vous nous avez manqué sur Threkir", "Ça fait un moment — vos chaussures vous attendent.", "Il est temps de relacer vos chaussures", "Ouvrir Threkir", []string{"Votre dernière course remonte à un moment. Sans pression — chaque coureur fait une pause.", "Quand vous serez prêt, nous serons là. Une course courte et facile est une belle façon de reprendre."}},
+		"drip_streak":       {"Gardez votre série de courses en vie", "Vous êtes lancé — ne laissez pas filer aujourd'hui.", "Ne brisez pas la série", "Enregistrer une course", []string{"Vous avez couru deux jours de suite. Une de plus garde la série en vie.", "Un effort court et facile suffit aujourd'hui. Ouvrez Threkir et validez-le."}},
 		"account_deleted": {"Votre compte Threkir a été supprimé", "Votre compte et vos données personnelles ont été effacés.", "Votre compte a été supprimé", "Visiter Threkir", []string{"Votre compte Threkir a été supprimé, et vos courses, itinéraires et données personnelles ont été effacés de nos systèmes.", "Nous avons également demandé aux services tiers liés à votre compte (comme votre prestataire de paiement) de supprimer vos données. Si vous n'êtes pas à l'origine de cette demande, contactez-nous immédiatement.", "Merci d'avoir couru avec nous. Vous êtes le bienvenu à tout moment."}},
 	},
 	"es": {
@@ -288,6 +304,9 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"safety_finish":  {"%s terminó una carrera", "Ha terminado una carrera de la que eres contacto de seguridad.", "%s terminó una carrera", "Abrir Threkir", []string{"Distancia %s · tiempo %s.", "Eres contacto de seguridad de esta persona, así que recibes un aviso cuando termina una carrera, incluso si es privada. No tienes que hacer nada."}},
 		"safety_confirm": {"%s te quiere como contacto de seguridad", "Confirma para recibir un aviso cuando termine una carrera.", "%s te quiere como contacto de seguridad", "Confirmar", []string{"%s te añadió como contacto de seguridad en Threkir. Si confirmas, recibirás un correo cada vez que esta persona termine una carrera, incluso una privada, para que sepas que volvió a salvo.", "Si no reconoces esto, ignora este correo. No se envía nada a menos que confirmes."}},
 		"weekly_digest":  {"Tu semana en Threkir", "Así fue tu semana de carrera.", "Tu semana en resumen", "Abrir Threkir", []string{"Aquí tienes un vistazo rápido a tu semana.", "Mantén el ritmo: registra tu próxima carrera y mira cómo se presenta la semana."}},
+		"drip_onboarding":   {"¿Listo para tu primera carrera?", "La primera carrera es la más difícil y la más gratificante.", "Vamos con tu primera carrera", "Registrar una carrera", []string{"Ya está todo listo, pero aún no has registrado ninguna carrera. El primer paso siempre es el más difícil; después se hace más fácil.", "Abre Threkir, pulsa registrar y sal a la calle. Hasta un corto caminar-correr cuenta."}},
+		"drip_reengagement": {"Te hemos echado de menos en Threkir", "Ha pasado un tiempo: tus zapatillas te esperan.", "Hora de volver a atarte las zapatillas", "Abrir Threkir", []string{"Ha pasado un tiempo desde tu última carrera. Sin presión: todo corredor se toma un descanso.", "Cuando estés listo, aquí estamos. Una carrera corta y suave es una gran forma de volver."}},
+		"drip_streak":       {"Mantén viva tu racha de carreras", "Vas con buen ritmo: no lo dejes escapar hoy.", "No rompas la racha", "Registrar una carrera", []string{"Has corrido dos días seguidos. Una más mantiene viva la racha.", "Hoy basta con un esfuerzo corto y suave. Abre Threkir y guárdalo."}},
 		"account_deleted": {"Tu cuenta de Threkir se ha eliminado", "Tu cuenta y tus datos personales se han borrado.", "Tu cuenta se ha eliminado", "Visitar Threkir", []string{"Tu cuenta de Threkir se ha eliminado, y tus carreras, rutas y datos personales se han borrado de nuestros sistemas.", "También hemos pedido a los servicios de terceros vinculados a tu cuenta (como tu proveedor de pago) que eliminen tus datos. Si no solicitaste esto, contáctanos de inmediato.", "Gracias por correr con nosotros. Puedes volver cuando quieras."}},
 	},
 	"ja": {
@@ -308,6 +327,9 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"safety_finish":  {"%s さんがランを終えました", "緊急連絡先になっているランが終了しました。", "%s さんがランを終えました", "Threkir を開く", []string{"距離 %s ・タイム %s。", "あなたはこのランナーの緊急連絡先のため、ランの終了時に通知されます（非公開のランでも）。対応は不要です。"}},
 		"safety_confirm": {"%s さんがあなたを緊急連絡先にしたいそうです", "確認すると、ランの終了時に通知を受け取れます。", "%s さんがあなたを緊急連絡先にしたいそうです", "確認する", []string{"%s さんが Threkir であなたを緊急連絡先に追加しました。確認すると、この方がランを終えるたびに（非公開のランでも）メールが届き、無事に戻ったことが分かります。", "心当たりがない場合は、このメールを無視してください。確認しない限り何も送信されません。"}},
 		"weekly_digest":  {"今週の Threkir", "今週のランの記録をまとめました。", "今週のふり返り", "Threkir を開く", []string{"今週の記録をかんたんにご紹介します。", "この調子で続けましょう。次のランを記録して、来週の調子を見てみましょう。"}},
+		"drip_onboarding":   {"最初のランを始めませんか？", "最初のランがいちばん大変で、いちばん達成感があります。", "最初のランを始めましょう", "ランを記録", []string{"準備は整っていますが、まだランを記録していません。最初の一歩がいつもいちばん大変です。そのあとは楽になります。", "Threkir を開いて記録をタップし、外へ出かけましょう。短いウォーク＆ランでもカウントされます。"}},
+		"drip_reengagement": {"Threkir はあなたを待っています", "しばらくぶりですね。シューズが待っています。", "もう一度シューズを履きましょう", "Threkir を開く", []string{"前回のランからしばらく経ちました。プレッシャーは不要です。誰でも休む時期があります。", "準備ができたら、私たちはここにいます。短くゆるやかなランは、再開にぴったりです。"}},
+		"drip_streak":       {"ランの連続記録を絶やさないで", "いい流れです。今日で途切れさせないようにしましょう。", "連続記録を途切れさせない", "ランを記録", []string{"2 日連続で走りました。あと 1 回で連続記録が続きます。", "今日は短くゆるやかな一本で十分です。Threkir を開いて記録しましょう。"}},
 		"account_deleted": {"Threkir アカウントが削除されました", "アカウントと個人データが消去されました。", "アカウントが削除されました", "Threkir を見る", []string{"Threkir アカウントが削除され、ラン・ルート・個人データが当社のシステムから消去されました。", "アカウントに連携されていた外部サービス（お支払いプロバイダーなど）にも、データの削除を依頼しました。心当たりがない場合は、すぐに当社までご連絡ください。", "ご利用ありがとうございました。いつでもまた戻ってきてください。"}},
 	},
 	"pt-BR": {
@@ -328,6 +350,9 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"safety_finish":  {"%s concluiu uma corrida", "Uma corrida da qual você é contato de segurança foi concluída.", "%s concluiu uma corrida", "Abrir Threkir", []string{"Distância %s · tempo %s.", "Você é contato de segurança desta pessoa, então é avisado quando ela conclui uma corrida — mesmo uma privada. Nenhuma ação é necessária."}},
 		"safety_confirm": {"%s quer você como contato de segurança", "Confirme para ser avisado quando concluir uma corrida.", "%s quer você como contato de segurança", "Confirmar", []string{"%s adicionou você como contato de segurança no Threkir. Se confirmar, você receberá um e-mail sempre que essa pessoa concluir uma corrida — mesmo uma privada — para saber que ela voltou em segurança.", "Se você não reconhece isso, basta ignorar este e-mail. Nada é enviado a menos que você confirme."}},
 		"weekly_digest":  {"Sua semana no Threkir", "Veja como foi sua semana de corrida.", "Sua semana em resumo", "Abrir Threkir", []string{"Aqui está um resumo rápido da sua semana.", "Mantenha o ritmo — registre sua próxima corrida e veja como será a semana que vem."}},
+		"drip_onboarding":   {"Pronto para a sua primeira corrida?", "A primeira corrida é a mais difícil — e a mais gratificante.", "Vamos registrar sua primeira corrida", "Registrar uma corrida", []string{"Está tudo configurado, mas você ainda não registrou nenhuma corrida. O primeiro passo é sempre o mais difícil — depois fica mais fácil.", "Abra o Threkir, toque em registrar e saia. Até uma curta caminhada-corrida conta."}},
+		"drip_reengagement": {"Sentimos sua falta no Threkir", "Já faz um tempo — seus tênis estão esperando.", "Hora de calçar os tênis de novo", "Abrir Threkir", []string{"Já faz um tempo desde a sua última corrida. Sem pressão — todo corredor faz uma pausa.", "Quando estiver pronto, estamos aqui. Uma corrida curta e leve é um ótimo jeito de voltar."}},
+		"drip_streak":       {"Mantenha viva a sua sequência de corridas", "Você está embalado — não deixe escapar hoje.", "Não quebre a sequência", "Registrar uma corrida", []string{"Você correu dois dias seguidos. Mais uma mantém a sequência viva.", "Hoje basta um esforço curto e leve. Abra o Threkir e garanta."}},
 		"account_deleted": {"Sua conta do Threkir foi excluída", "Sua conta e seus dados pessoais foram apagados.", "Sua conta foi excluída", "Visitar o Threkir", []string{"Sua conta do Threkir foi excluída, e suas corridas, rotas e dados pessoais foram apagados dos nossos sistemas.", "Também pedimos aos serviços de terceiros vinculados à sua conta (como o seu provedor de pagamento) que removam seus dados. Se você não solicitou isso, entre em contato conosco imediatamente.", "Obrigado por correr com a gente. Você é bem-vindo de volta a qualquer momento."}},
 	},
 }

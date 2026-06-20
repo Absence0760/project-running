@@ -115,10 +115,20 @@ func digestOptedIn(prefs map[string]interface{}) bool {
 // the List-Unsubscribe header + footer link rather than emit a forgeable
 // one.
 func (w *Worker) digestUnsubURL(userID string) string {
+	return w.engagementUnsubURL(digesttoken.StreamWeeklyDigest, "/unsubscribe/weekly-digest", userID)
+}
+
+// engagementUnsubURL builds the token-bearing one-click unsubscribe URL for an
+// engagement-mail stream (the weekly digest, the lifecycle drip). The token is
+// scoped to the stream so one stream's link can't unsubscribe another. Returns
+// "" when the operator secret is unset so the renderer omits the
+// List-Unsubscribe header + footer link rather than emit a forgeable one (the
+// single shared unsubscribe secret keys every stream — WEEKLY_DIGEST_UNSUB_SECRET).
+func (w *Worker) engagementUnsubURL(stream, path, userID string) string {
 	if w.DigestUnsubSecret == "" {
 		return ""
 	}
-	tok := digesttoken.Mint(w.DigestUnsubSecret, userID)
+	tok := digesttoken.Mint(w.DigestUnsubSecret, stream, userID)
 	if tok == "" {
 		return ""
 	}
@@ -126,5 +136,5 @@ func (w *Worker) digestUnsubURL(userID string) string {
 	q := url.Values{}
 	q.Set("u", userID)
 	q.Set("t", tok)
-	return base + "/unsubscribe/weekly-digest?" + q.Encode()
+	return base + path + "?" + q.Encode()
 }

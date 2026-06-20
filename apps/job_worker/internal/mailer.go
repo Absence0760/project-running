@@ -536,6 +536,55 @@ func renderWeeklyDigest(s DigestSummary, baseURL, locale, unsubURL string) Email
 	})
 }
 
+// ─────────────────── lifecycle-drip templates (pure) ───────────────────
+
+// dripTemplates is the closed set of lifecycle-drip template keys. Membership
+// gates renderLifecycleDrip — an unknown template returns ok=false so the
+// handler skips rather than sending a generic email. These are the SAME keys
+// the enqueue_lifecycle_drip() SQL function writes into the job payload
+// (migration 20270223_001).
+var dripTemplates = map[string]bool{
+	"drip_onboarding":   true,
+	"drip_reengagement": true,
+	"drip_streak":       true,
+}
+
+// renderLifecycleDrip renders an opt-in lifecycle-drip nudge (onboarding /
+// re-engagement / streak). Returns ok=false for an unknown template so the
+// handler skips rather than sending a blank email. The copy is fixed per
+// template from the catalogue (no per-recipient stats — a drip is a single
+// nudge, unlike the digest's summary). Like the digest it carries an RFC 8058
+// one-click unsubscribe (the recipient opted in); a "" unsubURL omits the
+// header + footer link (a misconfigured secret) rather than emit a forgeable
+// one. The CTA lands on the app home, which is where recording starts on
+// every platform (the same target the welcome / digest use) — no template
+// links a record path that doesn't exist on web.
+func renderLifecycleDrip(template, baseURL, locale, unsubURL string) (Email, bool) {
+	if !dripTemplates[template] {
+		return Email{}, false
+	}
+	base := strings.TrimRight(baseURL, "/")
+	loc := normalizeEmailLocale(locale)
+	cat := lookupEmailStrings(loc, template)
+	shared := lookupEmailShared(loc)
+
+	return composeEmail(emailContent{
+		lang:              loc,
+		subject:           cat.subject,
+		preheader:         cat.preheader,
+		heading:           cat.heading,
+		body:              cat.body,
+		ctaLabel:          cat.cta,
+		ctaURL:            base,
+		footer:            shared.footerDrip,
+		prefsURL:          unsubURL,
+		prefsLabel:        shared.managePrefsLabel,
+		prefsTextPrefix:   "",
+		listUnsub:         unsubURL,
+		listUnsubOneClick: true,
+	}), true
+}
+
 // digestStatsLine joins the non-trivial weekly stats into one human line,
 // e.g. "3 runs · 21.40 km total · 5 kudos · 1 new personal bests". Each
 // label is a localized format string from emailShared. Zero-valued stats

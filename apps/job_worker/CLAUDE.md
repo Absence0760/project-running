@@ -105,6 +105,14 @@ Function moves per
   (not `lifecycle_email_log`, which cascades away with the user). All templates
   live in `email_i18n.go`, localized across six locales. A future digest reuses
   the kind with a cron enqueue + its own opt-in preference.
+  `lifecycle_drip` (`handler_lifecycle_drip.go`) is the engagement sibling of
+  `weekly_digest`: a NEW kind (`{user_id, template}` — `drip_onboarding` /
+  `drip_reengagement` / `drip_streak`), but the SAME opt-in/suppression/
+  unsubscribe rails. Cohort selection lives in SQL (`enqueue_lifecycle_drip()`,
+  migration `20270223_001`, a daily pg_cron) — the handler honours a SEPARATE
+  opt-IN pref (`email_lifecycle_drip`) + the `email_suppressions` hard-block,
+  then renders the per-template copy with a stream-scoped RFC 8058 unsubscribe.
+  Fail-closed on the unset SMTP credential, like the digest.
   `web_push` (`handler_web_push.go` + `push_render.go` + `internal/webpush/`)
   is the worked example for "second transport over the same notifications
   rows": the SAME notifications AFTER-INSERT fan-out, but a DIFFERENT enqueue
@@ -178,16 +186,18 @@ apps/job_worker/
 │   ├── webpush/             # dependency-light Web Push sender (RFC 8291 aes128gcm + RFC 8292 VAPID)
 │   │   ├── webpush.go       # Sender.Send: ECDH+HKDF+AES-GCM encrypt + ES256 VAPID JWT + POST
 │   │   └── webpush_test.go  # round-trip decrypt + VAPID-JWT verify + status classification
-│   ├── handler_weekly_digest.go # kind='weekly_digest' — opt-in + suppression gate, bounded summary render (GATED: no scheduled send)
+│   ├── handler_weekly_digest.go # kind='weekly_digest' — opt-in + suppression gate, bounded summary render (GATED on SMTP); engagementUnsubURL helper shared with the drip
 │   ├── handler_weekly_digest_test.go # 13 tests on opt-in / suppression hard-block / fail-closed / quiet-week / unsubscribe header
+│   ├── handler_lifecycle_drip.go # kind='lifecycle_drip' — onboarding/re-engagement/streak nudges; opt-IN email_lifecycle_drip + suppression gate (GATED on SMTP); cohort selection is in SQL, not here
+│   ├── handler_lifecycle_drip_test.go # 14 tests on opt-in / digest-opt-in-does-not-imply-drip / suppression / per-template / fail-closed / unsubscribe
 │   ├── digest_builder.go    # EnqueueAllWeeklyDigests — selects opted-in recipients, chunked bulk-enqueues jobs (UNSCHEDULED; pg_cron is the CISO/counsel-gated step)
 │   ├── digest_builder_test.go # 5 tests on enqueue / no-candidates / select-error / chunking / failing-chunk skip
-│   ├── digesttoken/         # stateless keyed-HMAC RFC 8058 unsubscribe token (no PII, no table, constant-time verify)
-│   │   ├── token.go         # Mint / Verify over (user_id, 'weekly_digest')
-│   │   └── token_test.go    # 8 tests: round-trip / wrong-user / wrong-secret / tamper / fail-closed / no-PII
-│   ├── unsubscribe/         # unauth RFC 8058 one-click opt-out endpoint (/unsubscribe/weekly-digest)
-│   │   ├── server.go        # verify token → flip pref off + insert suppression; fail-closed on bad/missing token
-│   │   └── server_test.go   # 10 tests: valid GET/POST / bad / missing / cross-user / no-secret 503 / no-address / 500
+│   ├── digesttoken/         # stateless keyed-HMAC RFC 8058 unsubscribe token (no PII, no table, constant-time verify); STREAM-AWARE
+│   │   ├── token.go         # Mint(secret, stream, userID) / Verify over (stream, userID) — scopes: StreamWeeklyDigest, StreamLifecycleDrip
+│   │   └── token_test.go    # 9 tests: round-trip / wrong-user / wrong-secret / wrong-STREAM / tamper / fail-closed / no-PII
+│   ├── unsubscribe/         # unauth RFC 8058 one-click opt-out endpoints; STREAM-AWARE (/unsubscribe/weekly-digest + /unsubscribe/lifecycle-drip off one shared secret)
+│   │   ├── server.go        # per-stream verify → flip that stream's pref off + insert suppression; fail-closed on bad/missing/cross-stream token
+│   │   └── server_test.go   # 13 tests: valid GET/POST / drip / cross-stream / RegisterRoutes / bad / missing / cross-user / no-secret 503 / no-address / 500
 │   ├── bouncehook/          # provider bounce/complaint webhook (POST /v1/email/bounce → email_suppressions)
 │   │   ├── server.go        # shared-secret + rate-limited; classify Resend/SES event → suppress hard bounce + complaint (soft bounce no-op)
 │   │   └── server_test.go   # 16 tests: resend/ses bounce+complaint / soft-bounce no-op / dedupe / 503 / 403 / 405 / 400 / 500 / classify branches
