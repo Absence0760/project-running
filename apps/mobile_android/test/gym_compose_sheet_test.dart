@@ -103,7 +103,7 @@ void main() {
     final f = await _store('catalogue_');
     try {
       const catalogue = <GymCatalogueEntry>[
-        (name: 'Bench Press', id: 'cat-bench-1'),
+        (name: 'Bench Press', id: 'cat-bench-1', category: 'chest', authorId: null),
       ];
       await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -145,7 +145,7 @@ void main() {
     final f = await _store('catalogue_free_');
     try {
       const catalogue = <GymCatalogueEntry>[
-        (name: 'Bench Press', id: 'cat-bench-1'),
+        (name: 'Bench Press', id: 'cat-bench-1', category: 'chest', authorId: null),
       ];
       await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -174,6 +174,85 @@ void main() {
       expect(sets, hasLength(1));
       expect(sets.first['exercise_name'], 'Made-up Lift');
       expect(sets.first['exercise_id'], isNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'catalogue browse/picker: search + pick fills the name and binds exercise_id (decisions §176)',
+      (tester) async {
+    // The browse/picker UI: open the catalogue, search, tap an entry — the
+    // block name fills and the saved set binds the picked exercise_id by
+    // normalised key. No api needed for the browse-and-pick path.
+    final f = await _store('picker_');
+    try {
+      const catalogue = <GymCatalogueEntry>[
+        (name: 'Deadlift', id: 'cat-dead-1', category: 'legs', authorId: null),
+        (name: 'Bench Press', id: 'cat-bench-1', category: 'chest', authorId: null),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(store: f.store, catalogue: catalogue),
+        ),
+      ));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).at(0), 'Pull day');
+
+      // Open the catalogue picker for the first (only) exercise block.
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('Exercise catalogue'), findsOneWidget);
+
+      // The picker's search field is the first TextField on the picker route.
+      await tester.enterText(find.byType(TextField).first, 'Deadlift');
+      await tester.pumpAndSettle();
+      // Tap the result row, scoped to the ListTile (the search field also
+      // shows the "Deadlift" text, so a bare text finder is ambiguous).
+      await tester.tap(
+        find.descendant(of: find.byType(ListTile), matching: find.text('Deadlift')),
+      );
+      await tester.pumpAndSettle();
+
+      // Back on the composer, the block name field carries the picked name.
+      expect(find.text('Deadlift'), findsOneWidget);
+
+      // Reps + save → the set binds the picked exercise_id.
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(2), '3');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      await tester.tap(find.text('Save workout'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(f.store.workouts, hasLength(1));
+      final sets = f.store.workouts.first.sets;
+      expect(sets, hasLength(1));
+      expect(sets.first['exercise_name'], 'Deadlift');
+      expect(sets.first['exercise_id'], 'cat-dead-1');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('catalogue browse button hides when no catalogue is supplied',
+      (tester) async {
+    final f = await _store('picker_hidden_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: f.store)),
+      ));
+      await tester.pump();
+      expect(find.byIcon(Icons.menu_book_outlined), findsNothing);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

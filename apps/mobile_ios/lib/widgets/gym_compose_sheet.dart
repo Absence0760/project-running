@@ -5,12 +5,20 @@ import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../preferences.dart';
+import 'exercise_catalogue_picker.dart';
 import 'full_screen_form.dart';
 
 /// One exercise-catalogue entry surfaced to the composer (migration
 /// 20270222_001): the display name plus the catalogue row id that gets bound to
-/// a logged set when the typed name matches by normalised key.
-typedef GymCatalogueEntry = ({String name, String id});
+/// a logged set when the typed name matches by normalised key. [category] is
+/// the muscle-group bucket the browse/picker groups + filters by; [authorId]
+/// is null for a seeded global, set for an owner custom.
+typedef GymCatalogueEntry = ({
+  String name,
+  String id,
+  String category,
+  String? authorId,
+});
 
 /// Open the gym-workout composer as a fullscreen dialog. Pass [existing] to
 /// edit a stored workout in place; omit for a new one. Pass [seedSets] /
@@ -34,6 +42,7 @@ Future<bool?> showGymComposeSheet({
   List<String> suggestions = const [],
   List<GymCatalogueEntry> catalogue = const [],
   String? prefillTitle,
+  ApiClient? api,
 }) {
   final l10n = AppLocalizations.of(context);
   return showFullScreenForm<bool>(
@@ -47,6 +56,7 @@ Future<bool?> showGymComposeSheet({
       suggestions: suggestions,
       catalogue: catalogue,
       prefillTitle: prefillTitle,
+      api: api,
     ),
   );
 }
@@ -69,6 +79,11 @@ class GymComposeSheet extends StatefulWidget {
   /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
   /// stay empty for the user to fill. Ignored when [existing] is set.
   final String? prefillTitle;
+
+  /// Optional API client — present online, null offline / signed-out. Powers
+  /// the catalogue browse/picker's create-custom path; the picker hides the
+  /// create affordance when it's null.
+  final ApiClient? api;
   const GymComposeSheet({
     super.key,
     required this.store,
@@ -78,6 +93,7 @@ class GymComposeSheet extends StatefulWidget {
     this.suggestions = const [],
     this.catalogue = const [],
     this.prefillTitle,
+    this.api,
   });
 
   @override
@@ -91,28 +107,34 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   String? _error;
   bool _saving = false;
 
+  /// Local, growable catalogue copy. Seeded from the prop; a custom created
+  /// from the picker is appended so it binds + autocompletes immediately,
+  /// without waiting for the host to reload from the server.
+  late List<GymCatalogueEntry> _catalogue;
+
   /// normalised name -> catalogue id, for binding a typed name at save time.
-  late final Map<String, String> _catalogueByKey;
+  Map<String, String> get _catalogueByKey => {
+        for (final e in _catalogue) normaliseExerciseName(e.name): e.id,
+      };
 
   /// History suggestions ∪ catalogue names, de-duplicated by normalised key.
-  late final List<String> _datalistNames;
-
-  @override
-  void initState() {
-    super.initState();
-    _catalogueByKey = {
-      for (final e in widget.catalogue) normaliseExerciseName(e.name): e.id,
-    };
+  List<String> get _datalistNames {
     final seenKeys = <String>{};
-    _datalistNames = [
+    return [
       for (final n in [
         ...widget.suggestions,
-        ...widget.catalogue.map((e) => e.name),
+        ..._catalogue.map((e) => e.name),
       ])
         if (normaliseExerciseName(n).isNotEmpty &&
             seenKeys.add(normaliseExerciseName(n)))
           n,
     ];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _catalogue = [...widget.catalogue];
     final existing = widget.existing;
     _titleCtl = TextEditingController(
         text:
@@ -183,6 +205,30 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     setState(() {
       _exercises.removeAt(i).dispose();
       if (_exercises.isEmpty) _exercises.add(_EditExercise());
+    });
+  }
+
+  /// Open the catalogue browse/picker for [ex]. A pick fills the block's name
+  /// (the normalised key binds its exercise_id at save); a created custom is
+  /// merged into the local catalogue so it binds without a reload.
+  Future<void> _openPicker(_EditExercise ex) async {
+    final picked = await Navigator.of(context).push<GymCatalogueEntry>(
+      MaterialPageRoute<GymCatalogueEntry>(
+        builder: (_) => ExerciseCataloguePickerScreen(
+          catalogue: _catalogue,
+          api: widget.api,
+          onCreated: (created) {
+            if (!_catalogue.any((e) => e.id == created.id)) {
+              _catalogue = [..._catalogue, created];
+            }
+          },
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      ex.name.text = picked.name;
+      if (_error != null) _error = null;
     });
   }
 
@@ -340,6 +386,13 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
             Row(
               children: [
                 Expanded(child: _nameField(ex, l10n)),
+                if (_catalogue.isNotEmpty)
+                  IconButton(
+                    tooltip: l10n.gymCatalogueBrowse,
+                    icon: const Icon(Icons.menu_book_outlined),
+                    color: theme.colorScheme.primary,
+                    onPressed: () => _openPicker(ex),
+                  ),
                 IconButton(
                   tooltip: l10n.gymEditorRemoveExercise,
                   icon: const Icon(Icons.delete_outline),

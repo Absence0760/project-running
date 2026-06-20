@@ -4963,6 +4963,42 @@ class ApiClient {
         .toList();
   }
 
+  /// Create an owner-scoped custom catalogue entry (migration 20270222_001).
+  /// [nameKey] is `normaliseExerciseName(name)`, stamped by the caller so this
+  /// package stays decoupled from the gym_prs helper — it's the frozen identity
+  /// a logged set binds by. RLS rejects any author_id other than the caller, so
+  /// the returned row is always owned by the signed-in user. Returns null when
+  /// signed out or on conflict/error (e.g. a duplicate name_key in the user's
+  /// own customs).
+  Future<ExerciseRow?> createCustomExercise({
+    required String name,
+    required String nameKey,
+    String category = 'other',
+    String modality = 'weight_reps',
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return null;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final row = await _client
+          .from(ExerciseRow.table)
+          .insert(<String, dynamic>{
+            ExerciseRow.colAuthorId: uid,
+            ExerciseRow.colName: trimmed,
+            ExerciseRow.colNameKey: nameKey,
+            ExerciseRow.colCategory: category,
+            ExerciseRow.colModality: modality,
+            ExerciseRow.colLastModifiedAt: DateTime.now().toIso8601String(),
+          })
+          .select()
+          .single();
+      return ExerciseRow.fromJson(row as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The signed-in user's recent workouts each paired with their sets,
   /// newest-started first. Two round-trips (workouts, then every set whose
   /// `workout_id` is in that page) grouped client-side — the shape

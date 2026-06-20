@@ -8485,6 +8485,62 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ajoute au moins un exercice avec un nom.';
 
   @override
+  String get gymCatalogueBrowse => 'Parcourir le catalogue';
+
+  @override
+  String get gymCatalogueTitle => 'Catalogue d’exercices';
+
+  @override
+  String get gymCatalogueSearchPlaceholder => 'Rechercher des exercices';
+
+  @override
+  String get gymCatalogueCategoryLabel => 'Catégorie';
+
+  @override
+  String get gymCatalogueEmpty => 'Aucun exercice ne correspond.';
+
+  @override
+  String get gymCatalogueCustomBadge => 'Perso';
+
+  @override
+  String gymCatalogueCreate(String name) {
+    return 'Ajouter « $name » comme exercice personnalisé';
+  }
+
+  @override
+  String get gymCatalogueCreateFailed => 'Impossible d’ajouter cet exercice.';
+
+  @override
+  String get gymCatalogueCategoryAll => 'Tous';
+
+  @override
+  String get gymCatalogueCategoryChest => 'Pectoraux';
+
+  @override
+  String get gymCatalogueCategoryBack => 'Dos';
+
+  @override
+  String get gymCatalogueCategoryShoulders => 'Épaules';
+
+  @override
+  String get gymCatalogueCategoryLegs => 'Jambes';
+
+  @override
+  String get gymCatalogueCategoryArms => 'Bras';
+
+  @override
+  String get gymCatalogueCategoryCore => 'Gainage';
+
+  @override
+  String get gymCatalogueCategoryCardio => 'Cardio';
+
+  @override
+  String get gymCatalogueCategoryFullBody => 'Corps entier';
+
+  @override
+  String get gymCatalogueCategoryOther => 'Autre';
+
+  @override
   String get gymSaveFailed => 'Impossible d\'enregistrer la séance.';
 
   @override

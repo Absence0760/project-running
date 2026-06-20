@@ -8379,6 +8379,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymEditorNeedExercise => 'Add at least one exercise with a name.';
 
   @override
+  String get gymCatalogueBrowse => 'Browse catalogue';
+
+  @override
+  String get gymCatalogueTitle => 'Exercise catalogue';
+
+  @override
+  String get gymCatalogueSearchPlaceholder => 'Search exercises';
+
+  @override
+  String get gymCatalogueCategoryLabel => 'Category';
+
+  @override
+  String get gymCatalogueEmpty => 'No exercises match.';
+
+  @override
+  String get gymCatalogueCustomBadge => 'Custom';
+
+  @override
+  String gymCatalogueCreate(String name) {
+    return 'Add “$name” as a custom exercise';
+  }
+
+  @override
+  String get gymCatalogueCreateFailed => 'Couldn\'t add that exercise.';
+
+  @override
+  String get gymCatalogueCategoryAll => 'All';
+
+  @override
+  String get gymCatalogueCategoryChest => 'Chest';
+
+  @override
+  String get gymCatalogueCategoryBack => 'Back';
+
+  @override
+  String get gymCatalogueCategoryShoulders => 'Shoulders';
+
+  @override
+  String get gymCatalogueCategoryLegs => 'Legs';
+
+  @override
+  String get gymCatalogueCategoryArms => 'Arms';
+
+  @override
+  String get gymCatalogueCategoryCore => 'Core';
+
+  @override
+  String get gymCatalogueCategoryCardio => 'Cardio';
+
+  @override
+  String get gymCatalogueCategoryFullBody => 'Full body';
+
+  @override
+  String get gymCatalogueCategoryOther => 'Other';
+
+  @override
   String get gymSaveFailed => 'Couldn\'t save workout.';
 
   @override
