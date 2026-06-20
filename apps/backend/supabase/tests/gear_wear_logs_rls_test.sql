@@ -1,4 +1,4 @@
--- Pins migration 20270224_001 (gear_wear_logs — per-shoe wear-pattern logging).
+-- Pins migration 20270225_001 (gear_wear_logs — per-shoe wear-pattern logging).
 --
 -- gear_wear_logs is owner-private end to end: only the owner reads/writes their
 -- wear observations, and an INSERT must own BOTH the log row (owner_id = me)
