@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { buildYearInRunningRecap, recapHeadline } from './recap';
+import { buildYearInRunningRecap, buildMonthInRunningRecap, recapHeadline } from './recap';
 import type { Run } from '../types';
 
 function mkRun(opts: {
@@ -329,4 +329,72 @@ test('badges: an early start before 06:00 earns the Early bird trophy', () => {
 test('badges: an empty year earns no trophies', () => {
 	const r = buildYearInRunningRecap([], 2026);
 	assert.equal(r.badges.length, 0);
+});
+
+// ─────────── Monthly recap (buildMonthInRunningRecap) ───────────
+
+test('buildMonthInRunningRecap: projects out a single month', () => {
+	const runs = [
+		mkRun({ startedAt: '2026-03-05T10:00:00', distance_m: 5000, duration_s: 1500 }),
+		mkRun({ startedAt: '2026-03-20T10:00:00', distance_m: 7000, duration_s: 2100 }),
+		mkRun({ startedAt: '2026-06-01T10:00:00', distance_m: 10000, duration_s: 2700 }),
+	];
+	const r = buildMonthInRunningRecap(runs, 2026, 3);
+	assert.equal(r.month, 3);
+	assert.equal(r.runCount, 2);
+	assert.equal(r.totalDistanceM, 12000);
+	assert.equal(r.totalDurationS, 3600);
+	assert.equal(r.longestRunM, 7000);
+});
+
+test('buildMonthInRunningRecap: empty month → zeros, keeps the 12-month strip', () => {
+	const runs = [mkRun({ startedAt: '2026-06-01T10:00:00', distance_m: 10000, duration_s: 2700 })];
+	const r = buildMonthInRunningRecap(runs, 2026, 3);
+	assert.equal(r.month, 3);
+	assert.equal(r.runCount, 0);
+	assert.equal(r.totalDistanceM, 0);
+	assert.equal(r.longestRunM, 0);
+	assert.equal(r.monthly.length, 12);
+	// June still carries its data on the strip even on a March recap.
+	assert.equal(r.monthly[5].distanceM, 10000);
+});
+
+test('buildMonthInRunningRecap: a cycle ride is not the month longest run / fastest pace', () => {
+	const runs = [
+		mkRun({ startedAt: '2026-04-01T10:00:00', distance_m: 5000, duration_s: 1500 }),
+		mkRun({
+			startedAt: '2026-04-02T10:00:00',
+			distance_m: 40000,
+			duration_s: 4800,
+			activity: 'cycle',
+		}),
+	];
+	const r = buildMonthInRunningRecap(runs, 2026, 4);
+	assert.equal(r.longestRunM, 5000);
+	assert.equal(r.fastestPaceSecPerKm, 300);
+	// Totals stay all-inclusive.
+	assert.equal(r.totalDistanceM, 45000);
+});
+
+test('buildMonthInRunningRecap: extras flow through to month badges', () => {
+	const r = buildMonthInRunningRecap(
+		[mkRun({ startedAt: '2026-05-01T10:00:00', distance_m: 5000, duration_s: 1500 })],
+		2026,
+		5,
+		{ photoCount: 30, personalRecordCount: 6 },
+	);
+	assert.equal(r.photoCount, 30);
+	assert.equal(r.personalRecordCount, 6);
+	assert.equal(r.badges.find((b) => b.id.startsWith('photo'))?.id, 'photo-25');
+	assert.equal(r.badges.find((b) => b.id.startsWith('pr'))?.id, 'pr-5');
+});
+
+test('buildMonthInRunningRecap: out-of-range month is zero, never throws', () => {
+	const r = buildMonthInRunningRecap(
+		[mkRun({ startedAt: '2026-05-01T10:00:00', distance_m: 5000, duration_s: 1500 })],
+		2026,
+		13,
+	);
+	assert.equal(r.runCount, 0);
+	assert.equal(r.totalDistanceM, 0);
 });
