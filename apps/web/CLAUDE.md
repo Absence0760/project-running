@@ -114,6 +114,7 @@ src/
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)
+    share/badge/[id]/ # Public achievement-badge share page (no auth). Mirrors share/run: +page.ts SSR via lib/share/share_badge_lookup (public-row-safe columns only, is_public=true), og/badge/[id].png renders the card via lib/share/og_badge_png; the lambda/share-badge/ handler owns it in prod. Badge catalogue + thresholds live in lib/social/badges.ts (the TS source of truth the SQL award fn duplicates). See features/achievements.md + decisions §161.
     live/[id]/      # Live spectator tracking. Real Go live-hub WebSocket path via lib/runs/live_hub.ts when PUBLIC_LIVE_HUB_URL is set; Supabase Realtime channel as fallback when unset; the demo animation is only the no-signal filler. WS path e2e-tested by tests-e2e/live/spectator_websocket.spec.ts (dedicated playwright.livehub.config.ts — boots the real hub binary).
     login/          # Email/password + OAuth sign-in
     auth/callback/  # OAuth redirect handler

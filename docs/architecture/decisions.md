@@ -3245,6 +3245,14 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 161. The badge catalogue is code; awards are a persisted `achievements` table derived by a `personal_records`-style full-rebuild trigger, with thresholds duplicated into SQL and pinned
+
+**Decided (2026-06-19, migration `20270206_001`, `apps/web/src/lib/social/badges.ts`).** Achievements ship as two halves. (1) The **catalogue** — which badges exist, their tiers, and their numeric thresholds — lives in a pure code module (`badges.ts` ↔ a future `badges.dart`), the guided-runs "library as code" pattern. It is versionable, unit-testable, and re-renders on locale switch because entries carry i18n keys, not strings. (2) **Awards** — which user earned which badge/tier, when, off which numeric — are persisted rows in an `achievements` table, because an award is a durable event (unlike the recap's recomputed-per-view trophies). Derivation is a SECURITY DEFINER `award_achievements_for_user(p_user)` that **fully re-derives** the user's earned set from `personal_records` + `runs` aggregates + completed plans and `insert ... on conflict do nothing`s the new ones — mirroring `personal_records`' "a full rebuild is simpler to reason about and flat-cost at per-user scale" choice. The function returns only the newly-inserted rows so an AFTER-INSERT trigger writes the `'achievement'` notification exactly once per new badge, never on a re-derive.
+
+**The threshold duplication is deliberate.** The numeric thresholds live in BOTH the `badges.ts` catalogue AND the SQL award function (rather than reading the JS catalogue from SQL, which would lose the testable pure helper). The contract is held by tests on both sides — `badges.test.ts` pins the helper, `achievements_test.sql` pins the SQL — so a drift in either fails CI. **Trade-off:** a threshold change is a two-file edit; the alternative (single SQL definition) trades that for an untestable, locale-coupled catalogue. **Privacy:** badges default `is_public = true` (they're meant to be shared) with an owner-only per-badge visibility flip; non-owner reads are RLS-gated to `is_public = true` (fail-closed — no public policy means no leak), and the share page / OG card embed only a milestone + a date, never track/location data, so no CISO gate is required. **Segment badges deferred** (leaderboard rank is too volatile for a durable award); the `segment` `source_kind` is reserved. Web shipped; mobile twin deferred. See [features/achievements.md](../features/achievements.md).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

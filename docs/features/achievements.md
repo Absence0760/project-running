@@ -1,6 +1,18 @@
-# Achievements / badges — implementation plan
+# Achievements / badges
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** **Web shipped 2026-06-19** (migration `20270206_001_achievements.sql`; the spec's `20270203_001` placeholder collided with landed migrations, so the next free sequential date was used). Mobile twin deferred to follow-up. The rest of this file is the original implementation-handoff plan; the **Shipped state** section below records what actually landed and where it diverged. Tracked in [roadmap.md](../product/roadmap.md).
+>
+> ## Shipped state (web)
+>
+> - **Catalogue (code):** `apps/web/src/lib/social/badges.ts` — `BADGE_CATALOGUE` + pure `evaluateBadges(input)` + `tierFor` + `englishBadge` (server-safe label resolver for the SSR/Lambda share path). Families shipped in V1: `distance_single` (5k/half/marathon/ultra), `distance_lifetime` (100/500/1000/5000 km), `streak` (7/30/100/365 d), `pr` (1/3/5 records held), `plan_finisher` (1/3/10 plans). **Segment badges were deferred** (open question #1 — leaderboard rank is too volatile for a durable award); the `segment` `source_kind` is reserved in the CHECK + union for a future family. 15 unit tests in `badges.test.ts`.
+> - **DB:** `achievements` table + RLS (`achievements_self_select`, `achievements_public_select`, owner-only `achievements_owner_update`; no client INSERT/DELETE) + `award_achievements_for_user(p_user)` SECURITY DEFINER full-rebuild (returns only newly-inserted rows; `on conflict do nothing`) + AFTER triggers on `runs`, `personal_records`, `training_plans` + the `'achievement'` notification kind (full CHECK re-stated) + an `achievement_id` FK on `notifications` (the `activity_kind` CHECK was left untouched per the plan's "dedicated column" option) + a `notify_achievement_earned` AFTER-INSERT trigger + a migration-tail back-fill over all existing users. 16 pgtap assertions in `achievements_test.sql`.
+> - **Threshold contract:** the SQL award function duplicates the catalogue thresholds verbatim; `badges.test.ts` + `achievements_test.sql` pin both sides.
+> - **Narrow unions:** `AchievementTier` + `AchievementSourceKind` in `types.ts` (+ the `Achievement` overlay), both pairs added to `check_constraint_unions.mjs`; `'achievement'` added to `NotificationKind`.
+> - **Web surfaces:** `BadgeGrid.svelte` mounted as a new **Achievements** tab on `/u/[id]` (owner sees private + a per-badge public toggle + share-link; non-owner sees only public via RLS); a recent-badges strip in `SocialFeed.svelte` (`fetchFollowingBadgeAwards`); the public `/share/badge/[id]` page + `/og/badge/[id].png` endpoint + the `apps/web/lambda/share-badge/` SSR handler (mirrors `share-run`). data.ts: `fetchUserBadges` / `fetchMyBadges` / `setBadgeVisibility` / `fetchBadgeForShare` / `fetchFollowingBadgeAwards`. 4 Playwright assertions in `tests-e2e/social/badges.spec.ts`.
+> - **i18n:** all six web locales (chrome + a label/desc pair per catalogue entry).
+> - **Deferred:** the mobile twin (`badges.dart`, `badge_grid.dart`, profile/feed/notification branches, ARBs), the CloudFront wiring + release-workflow entry for the `share-badge` Lambda (SvelteKit dev endpoints own the path locally; static build serves the SPA-shell fallback in prod until wired), and segment badges.
+
+# Achievements / badges — implementation plan
 
 ## Goal & user value
 
