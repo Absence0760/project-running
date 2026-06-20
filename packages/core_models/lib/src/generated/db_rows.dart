@@ -1961,6 +1961,7 @@ class GymRoutineRow {
   static const String colLastModifiedAt = 'last_modified_at';
   static const String colCreatedAt = 'created_at';
   static const String colClubId = 'club_id';
+  static const String colIsPublicTemplate = 'is_public_template';
 
   final String id;
   final String authorId;
@@ -1972,6 +1973,7 @@ class GymRoutineRow {
   final DateTime lastModifiedAt;
   final DateTime createdAt;
   final String? clubId;
+  final bool isPublicTemplate;
 
   const GymRoutineRow({
     required this.id,
@@ -1984,6 +1986,7 @@ class GymRoutineRow {
     required this.lastModifiedAt,
     required this.createdAt,
     this.clubId,
+    required this.isPublicTemplate,
   });
 
   factory GymRoutineRow.fromJson(Map<String, dynamic> json) => GymRoutineRow(
@@ -1997,6 +2000,7 @@ class GymRoutineRow {
     lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
     clubId: json['club_id'] as String?,
+    isPublicTemplate: (json['is_public_template'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2010,6 +2014,7 @@ class GymRoutineRow {
     colLastModifiedAt: lastModifiedAt.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
     colClubId: clubId,
+    colIsPublicTemplate: isPublicTemplate,
   };
 }
 
