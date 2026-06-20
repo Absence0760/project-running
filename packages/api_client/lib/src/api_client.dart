@@ -2975,6 +2975,58 @@ class ApiClient {
     await _client.from(GearRow.table).delete().eq(GearRow.colId, id);
   }
 
+  /// Fetch a gear item's wear log (per-shoe wear-pattern observations),
+  /// newest observation first. Owner-scoped by RLS — never another
+  /// user's notes. Mirrors the web's `fetchGearWearLogs`.
+  Future<List<GearWearLogRow>> fetchGearWearLogs(String gearId) async {
+    final data = await _client
+        .from(GearWearLogRow.table)
+        .select()
+        .eq(GearWearLogRow.colGearId, gearId)
+        .order(GearWearLogRow.colLoggedOn, ascending: false)
+        .order(GearWearLogRow.colCreatedAt, ascending: false);
+    return (data as List)
+        .map<GearWearLogRow>(
+            (r) => GearWearLogRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Log a wear observation against a gear item. RLS gates the insert to
+  /// the gear owner. [loggedOn] defaults to the DB's `current_date` when
+  /// null. [area] is one of outsole / midsole / upper / other, or null.
+  /// Mirrors the web's `addGearWearLog`.
+  Future<GearWearLogRow> addGearWearLog({
+    required String gearId,
+    required String note,
+    String? area,
+    DateTime? loggedOn,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(GearWearLogRow.table)
+        .insert({
+          GearWearLogRow.colGearId: gearId,
+          GearWearLogRow.colOwnerId: viewerId,
+          GearWearLogRow.colNote: note,
+          GearWearLogRow.colArea: area,
+          if (loggedOn != null)
+            GearWearLogRow.colLoggedOn:
+                loggedOn.toIso8601String().substring(0, 10),
+        })
+        .select()
+        .single();
+    return GearWearLogRow.fromJson(row);
+  }
+
+  /// Delete a single wear observation. RLS scopes to the owner.
+  Future<void> deleteGearWearLog(String id) async {
+    await _client
+        .from(GearWearLogRow.table)
+        .delete()
+        .eq(GearWearLogRow.colId, id);
+  }
+
   /// Replace the full gear set assigned to a run. Empty list clears
   /// the assignment. RLS gates both the delete and the insert to the
   /// run + gear owner; a non-owner gets a 42501 PostgREST error.

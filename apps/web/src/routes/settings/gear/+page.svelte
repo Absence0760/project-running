@@ -9,8 +9,13 @@
 		unretireGear,
 		deleteGear,
 		setDefaultGear,
+		fetchGearWearLogs,
+		addGearWearLog,
+		deleteGearWearLog,
 		type GearKind,
 		type GearWithDistance,
+		type GearWearArea,
+		type GearWearLog,
 	} from '$lib/core/data';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { gearWear } from '$lib/gear/gear_wear';
@@ -35,6 +40,61 @@
 	let formTargetDisplay = $state('');
 	let formNotes = $state('');
 	let saving = $state(false);
+
+	// Wear log — loaded lazily when the edit modal opens for an existing item.
+	let wearLogs = $state<GearWearLog[]>([]);
+	let wearLogLoading = $state(false);
+	let wearNote = $state('');
+	let wearArea = $state<GearWearArea | ''>('');
+	let addingWear = $state(false);
+
+	const WEAR_AREAS: GearWearArea[] = ['outsole', 'midsole', 'upper', 'other'];
+	function wearAreaLabel(area: GearWearArea): string {
+		switch (area) {
+			case 'outsole': return t('settingsGear.wearLogAreaOutsole');
+			case 'midsole': return t('settingsGear.wearLogAreaMidsole');
+			case 'upper': return t('settingsGear.wearLogAreaUpper');
+			case 'other': return t('settingsGear.wearLogAreaOther');
+		}
+	}
+
+	async function loadWearLogs(gearId: string) {
+		wearLogLoading = true;
+		try {
+			wearLogs = await fetchGearWearLogs(gearId);
+		} finally {
+			wearLogLoading = false;
+		}
+	}
+
+	async function handleAddWear() {
+		const note = wearNote.trim();
+		if (!editingId || !note) return;
+		addingWear = true;
+		try {
+			const created = await addGearWearLog({
+				gearId: editingId,
+				note,
+				area: wearArea || null,
+			});
+			wearLogs = [created, ...wearLogs];
+			wearNote = '';
+			wearArea = '';
+		} catch (e) {
+			showToast(t('settingsGear.wearLogAddFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			addingWear = false;
+		}
+	}
+
+	async function handleDeleteWear(log: GearWearLog) {
+		try {
+			await deleteGearWearLog(log.id);
+			wearLogs = wearLogs.filter((l) => l.id !== log.id);
+		} catch (e) {
+			showToast(t('settingsGear.wearLogDeleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		}
+	}
 
 	onMount(async () => {
 		await auth.ready();
@@ -66,6 +126,9 @@
 		formTargetDisplay = '';
 		formNotes = '';
 		editingId = null;
+		wearLogs = [];
+		wearNote = '';
+		wearArea = '';
 	}
 
 	function openEdit(g: GearWithDistance) {
@@ -76,6 +139,10 @@
 		formPurchased = g.purchased_at ?? '';
 		formTargetDisplay = metresToTargetDisplay(g.target_distance_m);
 		formNotes = g.notes ?? '';
+		wearLogs = [];
+		wearNote = '';
+		wearArea = '';
+		loadWearLogs(g.id);
 	}
 
 	async function handleSave() {
@@ -386,6 +453,71 @@
 			{t('settingsGear.fieldNotes')}
 			<textarea bind:value={formNotes} maxlength="500" rows="3"></textarea>
 		</label>
+
+		{#if editingId}
+			<section class="wear-log" data-testid="wear-log">
+				<h4>{t('settingsGear.wearLogHeading')}</h4>
+				<p class="wear-hint">{t('settingsGear.wearLogHint')}</p>
+
+				<div class="wear-add">
+					<div class="wear-add-row">
+						<input
+							type="text"
+							class="wear-note-input"
+							maxlength="500"
+							bind:value={wearNote}
+							placeholder={t('settingsGear.wearLogNotePlaceholder')}
+							aria-label={t('settingsGear.wearLogAddNote')}
+						/>
+						<select bind:value={wearArea} aria-label={t('settingsGear.wearLogArea')}>
+							<option value="">{t('settingsGear.wearLogAreaNone')}</option>
+							{#each WEAR_AREAS as area (area)}
+								<option value={area}>{wearAreaLabel(area)}</option>
+							{/each}
+						</select>
+					</div>
+					<button
+						type="button"
+						class="btn-outline btn-sm wear-add-btn"
+						disabled={addingWear || !wearNote.trim()}
+						onclick={handleAddWear}
+					>
+						{addingWear ? t('settingsGear.wearLogAdding') : t('settingsGear.wearLogAdd')}
+					</button>
+				</div>
+
+				{#if wearLogLoading}
+					<p class="wear-empty">{t('settingsGear.loadingGear')}</p>
+				{:else if wearLogs.length === 0}
+					<p class="wear-empty">{t('settingsGear.wearLogEmpty')}</p>
+				{:else}
+					<ul class="wear-list">
+						{#each wearLogs as log (log.id)}
+							<li class="wear-item">
+								<div class="wear-item-main">
+									<div class="wear-item-meta">
+										<span class="wear-date">{log.logged_on}</span>
+										{#if log.area}
+											<span class="wear-area-pill">{wearAreaLabel(log.area)}</span>
+										{/if}
+									</div>
+									<span class="wear-text">{log.note}</span>
+								</div>
+								<button
+									type="button"
+									class="wear-del"
+									aria-label={t('settingsGear.wearLogDelete')}
+									onclick={() => handleDeleteWear(log)}
+								>
+									<span class="material-symbols" aria-hidden="true">close</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+		{/if}
+
 		<footer>
 			<button class="btn-outline" type="button" onclick={() => { showCreate = false; resetForm(); }}>
 				{t('settingsGear.cancel')}
@@ -721,4 +853,108 @@
 		font-size: 1.1em;
 		vertical-align: middle;
 	}
+
+	.wear-log {
+		border-top: 1px solid var(--color-border);
+		padding-top: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+	.wear-log h4 {
+		margin: 0;
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.wear-hint {
+		margin: 0;
+		font-size: 0.8rem;
+		line-height: 1.45;
+		color: var(--color-text-tertiary);
+	}
+	.wear-add {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+	.wear-add-row {
+		display: flex;
+		gap: var(--space-sm);
+	}
+	.wear-note-input { flex: 1; min-width: 0; }
+	.wear-add-row select {
+		padding: 0.5rem 0.6rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.9rem;
+		background: var(--color-bg);
+		color: var(--color-text);
+	}
+	.wear-add-btn { align-self: flex-start; }
+	.wear-empty {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+	}
+	.wear-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+	.wear-item {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-sm);
+		padding: var(--space-xs) var(--space-sm);
+		background: var(--color-bg-tertiary);
+		border-radius: var(--radius-sm);
+	}
+	.wear-item-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.wear-item-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.wear-date {
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.wear-area-pill {
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+		padding: 0.05rem 0.4rem;
+		border-radius: 999px;
+		color: var(--color-text-secondary);
+		background: var(--color-surface);
+	}
+	.wear-text {
+		font-size: 0.9rem;
+		color: var(--color-text);
+		overflow-wrap: anywhere;
+	}
+	.wear-del {
+		flex-shrink: 0;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		color: var(--color-text-tertiary);
+		padding: 0.15rem;
+		border-radius: var(--radius-sm);
+		display: inline-flex;
+	}
+	.wear-del:hover { color: var(--color-danger); background: var(--color-surface); }
+	.wear-del .material-symbols { font-size: 1rem; }
 </style>

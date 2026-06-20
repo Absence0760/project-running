@@ -62,6 +62,7 @@ export const TABLES = {
 	segments: 'segments',
 	segment_efforts: 'segment_efforts',
 	gear: 'gear',
+	gear_wear_logs: 'gear_wear_logs',
 	fitness_snapshots: 'fitness_snapshots',
 	personal_records: 'personal_records',
 	user_blocks: 'user_blocks',

@@ -418,6 +418,81 @@ test.describe('/settings/gear — CRUD', () => {
 	});
 });
 
+test.describe('/settings/gear — wear log', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('add + delete a wear observation in the edit modal; DB row scoped to the gear', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const name = `E2E Wear Shoe ${Date.now()}`;
+		const { data: gear } = await admin
+			.from('gear')
+			.insert({ owner_id: USER_A.id, kind: 'shoe', name })
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/settings/gear');
+			const row = page.locator('.gear-row', { hasText: name });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+
+			// Open the edit modal — the wear log only renders for an existing item.
+			await row.locator('.gear-main').click();
+			const dialog = page.locator('.modal');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			const wearLog = dialog.getByTestId('wear-log');
+			await expect(wearLog).toBeVisible();
+			await expect(wearLog).toContainText('No wear observations yet.');
+
+			// Add an observation with an area.
+			const note = `outsole lugs worn ${Date.now()}`;
+			await wearLog.getByRole('textbox', { name: 'Observation' }).fill(note);
+			await wearLog.getByRole('combobox', { name: 'Area' }).selectOption('outsole');
+			await wearLog.getByRole('button', { name: 'Add observation' }).click();
+
+			// Renders in the list with its area pill.
+			const item = wearLog.locator('.wear-item', { hasText: note });
+			await expect(item).toBeVisible({ timeout: 5_000 });
+			await expect(item).toContainText('Outsole');
+
+			// Backend: exactly one row for this gear, scoped to the owner.
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('gear_wear_logs')
+							.select('note, area')
+							.eq('gear_id', gear!.id);
+						return data ?? [];
+					},
+					{ timeout: 5_000 }
+				)
+				.toEqual([{ note, area: 'outsole' }]);
+
+			// Delete it — row leaves the list, DB row gone.
+			await item.getByRole('button', { name: 'Delete observation' }).click();
+			await expect(wearLog.locator('.wear-item', { hasText: note })).toHaveCount(0, {
+				timeout: 5_000
+			});
+			await expect
+				.poll(
+					async () => {
+						const { count } = await admin
+							.from('gear_wear_logs')
+							.select('id', { count: 'exact', head: true })
+							.eq('gear_id', gear!.id);
+						return count ?? 0;
+					},
+					{ timeout: 5_000 }
+				)
+				.toBe(0);
+		} finally {
+			await admin.from('gear').delete().eq('id', gear!.id); // cascades wear logs
+		}
+	});
+});
+
 test.describe('/settings/gear — empty state', () => {
 	// USER_C_PRO has no gear in the seed; the empty card with the
 	// "No shoes yet" header + per-kind CTA should render. After adding a

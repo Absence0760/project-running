@@ -7669,6 +7669,60 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get gearWearLogHeading => 'Verschleißprotokoll';
+
+  @override
+  String get gearWearLogHint =>
+      'Notiere, wie diese Ausrüstung mit der Zeit altert — Abrieb der Außensohle, tote Mittelsohle, ausgefranstes Obermaterial.';
+
+  @override
+  String get gearWearLogEmpty => 'Noch keine Verschleißbeobachtungen.';
+
+  @override
+  String get gearWearLogAddNote => 'Beobachtung';
+
+  @override
+  String get gearWearLogNoteHint =>
+      'z. B. Profil der Außensohle an der Ferse abgelaufen';
+
+  @override
+  String get gearWearLogArea => 'Bereich';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'Außensohle';
+
+  @override
+  String get gearWearLogAreaMidsole => 'Mittelsohle';
+
+  @override
+  String get gearWearLogAreaUpper => 'Obermaterial';
+
+  @override
+  String get gearWearLogAreaOther => 'Sonstiges';
+
+  @override
+  String get gearWearLogAdd => 'Beobachtung hinzufügen';
+
+  @override
+  String get gearWearLogAdding => 'Wird hinzugefügt…';
+
+  @override
+  String get gearWearLogDelete => 'Beobachtung löschen';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return 'Beobachtung konnte nicht hinzugefügt werden: $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return 'Beobachtung konnte nicht gelöscht werden: $error';
+  }
+
+  @override
   String get notificationBellTooltip => 'Benachrichtigungen';
 
   @override

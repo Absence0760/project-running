@@ -1,3 +1,5 @@
+import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
@@ -37,6 +39,7 @@ Future<GearFormResult?> showGearFormSheet({
   required Preferences preferences,
   required String kind,
   Map<String, dynamic>? existing,
+  ApiClient? api,
 }) {
   final l10n = AppLocalizations.of(context);
   return showFullScreenForm<GearFormResult>(
@@ -51,6 +54,7 @@ Future<GearFormResult?> showGearFormSheet({
       preferences: preferences,
       kind: kind,
       existing: existing,
+      api: api,
     ),
   );
 }
@@ -60,11 +64,13 @@ class _GearFormSheet extends StatefulWidget {
   final Preferences preferences;
   final String kind;
   final Map<String, dynamic>? existing;
+  final ApiClient? api;
   const _GearFormSheet({
     required this.store,
     required this.preferences,
     required this.kind,
     this.existing,
+    this.api,
   });
 
   @override
@@ -77,8 +83,20 @@ class _GearFormSheetState extends State<_GearFormSheet> {
   final _model = TextEditingController();
   final _target = TextEditingController();
   final _notes = TextEditingController();
+  final _wearNote = TextEditingController();
   DateTime? _purchasedAt;
   bool _saving = false;
+
+  // Wear log — only loaded when editing an existing item AND an api is
+  // wired. Online-only, mirroring the gear-backfill sheet: wear logs are
+  // not part of the offline LocalGearStore pipeline.
+  String? _gearId;
+  List<GearWearLogRow> _wearLogs = const [];
+  bool _wearLoading = false;
+  bool _wearAdding = false;
+  String? _wearArea;
+
+  static const _wearAreas = ['outsole', 'midsole', 'upper', 'other'];
 
   @override
   void initState() {
@@ -97,6 +115,8 @@ class _GearFormSheetState extends State<_GearFormSheet> {
             widget.preferences.unit == DistanceUnit.mi ? 1609.344 : 1000.0;
         _target.text = (t.toDouble() / div).toStringAsFixed(0);
       }
+      _gearId = e['id'] as String?;
+      if (_gearId != null && widget.api != null) _loadWearLogs();
     }
   }
 
@@ -107,7 +127,80 @@ class _GearFormSheetState extends State<_GearFormSheet> {
     _model.dispose();
     _target.dispose();
     _notes.dispose();
+    _wearNote.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadWearLogs() async {
+    final api = widget.api;
+    final gearId = _gearId;
+    if (api == null || gearId == null) return;
+    setState(() => _wearLoading = true);
+    try {
+      final logs = await api.fetchGearWearLogs(gearId);
+      if (mounted) setState(() => _wearLogs = logs);
+    } catch (_) {
+      // L4: a wear-log fetch failure leaves the section empty, never
+      // blocks the gear form.
+    } finally {
+      if (mounted) setState(() => _wearLoading = false);
+    }
+  }
+
+  Future<void> _addWearLog() async {
+    final api = widget.api;
+    final gearId = _gearId;
+    final note = _wearNote.text.trim();
+    if (api == null || gearId == null || note.isEmpty) return;
+    setState(() => _wearAdding = true);
+    try {
+      final created = await api.addGearWearLog(
+        gearId: gearId,
+        note: note,
+        area: _wearArea,
+      );
+      if (!mounted) return;
+      setState(() {
+        _wearLogs = [created, ..._wearLogs];
+        _wearNote.clear();
+        _wearArea = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(
+          context, AppLocalizations.of(context).gearWearLogAddError('$e'));
+    } finally {
+      if (mounted) setState(() => _wearAdding = false);
+    }
+  }
+
+  Future<void> _deleteWearLog(GearWearLogRow log) async {
+    final api = widget.api;
+    if (api == null) return;
+    try {
+      await api.deleteGearWearLog(log.id);
+      if (mounted) {
+        setState(() =>
+            _wearLogs = _wearLogs.where((l) => l.id != log.id).toList());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(
+          context, AppLocalizations.of(context).gearWearLogDeleteError('$e'));
+    }
+  }
+
+  String _wearAreaLabel(AppLocalizations l10n, String area) {
+    switch (area) {
+      case 'outsole':
+        return l10n.gearWearLogAreaOutsole;
+      case 'midsole':
+        return l10n.gearWearLogAreaMidsole;
+      case 'upper':
+        return l10n.gearWearLogAreaUpper;
+      default:
+        return l10n.gearWearLogAreaOther;
+    }
   }
 
   int? _parseTargetMetres() {
@@ -250,6 +343,87 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               maxLength: 500,
               maxLines: 3,
             ),
+            if (_gearId != null && widget.api != null) ...[
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+              Text(l10n.gearWearLogHeading,
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                l10n.gearWearLogHint,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _wearNote,
+                decoration: InputDecoration(
+                  labelText: l10n.gearWearLogAddNote,
+                  hintText: l10n.gearWearLogNoteHint,
+                ),
+                maxLength: 500,
+                maxLines: 2,
+              ),
+              DropdownButtonFormField<String?>(
+                initialValue: _wearArea,
+                decoration:
+                    InputDecoration(labelText: l10n.gearWearLogArea),
+                items: [
+                  DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text(l10n.gearWearLogAreaNone),
+                  ),
+                  for (final a in _wearAreas)
+                    DropdownMenuItem<String?>(
+                      value: a,
+                      child: Text(_wearAreaLabel(l10n, a)),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _wearArea = v),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _wearAdding ? null : _addWearLog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(_wearAdding
+                      ? l10n.gearWearLogAdding
+                      : l10n.gearWearLogAdd),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_wearLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                      child: SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))),
+                )
+              else if (_wearLogs.isEmpty)
+                Text(l10n.gearWearLogEmpty,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline))
+              else
+                for (final log in _wearLogs)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(log.note),
+                    subtitle: Text([
+                      log.loggedOn.toIso8601String().substring(0, 10),
+                      if (log.area != null) _wearAreaLabel(l10n, log.area!),
+                    ].join(' · ')),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      tooltip: l10n.gearWearLogDelete,
+                      onPressed: () => _deleteWearLog(log),
+                    ),
+                  ),
+            ],
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,

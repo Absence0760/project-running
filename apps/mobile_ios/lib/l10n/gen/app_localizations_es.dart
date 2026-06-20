@@ -7666,6 +7666,60 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get gearWearLogHeading => 'Registro de desgaste';
+
+  @override
+  String get gearWearLogHint =>
+      'Anota cómo envejece este equipo — desgaste de la suela, mediasuela muerta, parte superior deshilachada.';
+
+  @override
+  String get gearWearLogEmpty => 'Aún no hay observaciones de desgaste.';
+
+  @override
+  String get gearWearLogAddNote => 'Observación';
+
+  @override
+  String get gearWearLogNoteHint =>
+      'p. ej. tacos de la suela gastados en el talón';
+
+  @override
+  String get gearWearLogArea => 'Zona';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'Suela';
+
+  @override
+  String get gearWearLogAreaMidsole => 'Mediasuela';
+
+  @override
+  String get gearWearLogAreaUpper => 'Parte superior';
+
+  @override
+  String get gearWearLogAreaOther => 'Otro';
+
+  @override
+  String get gearWearLogAdd => 'Añadir observación';
+
+  @override
+  String get gearWearLogAdding => 'Añadiendo…';
+
+  @override
+  String get gearWearLogDelete => 'Eliminar observación';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return 'No se pudo añadir la observación: $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return 'No se pudo eliminar la observación: $error';
+  }
+
+  @override
   String get notificationBellTooltip => 'Notificaciones';
 
   @override
