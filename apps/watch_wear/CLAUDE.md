@@ -522,11 +522,20 @@ is the platform norm on a tiny screen).
 - **Per-app language**: `res/xml/locales_config.xml` lists the six and is
   referenced from `<application android:localeConfig=...>` so Android 13+
   surfaces a per-app language toggle in system settings.
-- **Number formatting**: `recording/UnitFormat.kt` (`formatKm`) is the single
-  place the km decimal separator is decided — `NumberFormat` keyed to
-  `Locale.getDefault()`. The "km" word is the SI abbreviation (identical in all
-  six locales) and lives in `R.string.distance_km`. Time digits (`mm:ss`,
-  pace) are pinned to `Locale.ROOT` (locale-independent).
+- **Number formatting + distance unit**: `recording/UnitFormat.kt` is the
+  single place both the decimal separator and the km↔mi choice are decided.
+  `formatDistance(metres, unit, locale)` formats via `NumberFormat` keyed to
+  `Locale.getDefault()` and divides by km or mile per the runner's
+  `DistanceUnit`; `paceSecPerUnit` scales a sec/km pace to sec/mi. The unit
+  pref (`preferred_unit`, `km`|`mi`) rides the universal-settings bag the same
+  way `body_weight_kg` does — `SupabaseClient.parseUniversalSettings` →
+  `RunViewModel.UiState.preferredUnit` → the consuming screens + the
+  active-run tile (carried on `RecordingRepository.Metrics`, stamped at
+  `startRecording`). The unit words ("km" / "mi") are locale-invariant and
+  live in `R.string.distance_km` / `distance_mi` (+ `_to_go`, `pace_per_*`).
+  Time digits (`mm:ss`, pace) are pinned to `Locale.ROOT`. **TTS still
+  announces km splits** regardless of the pref (the optional mile-TTS variant
+  is deferred — see `docs/product/followups.md`).
 - **TTS**: `recording/TtsAnnouncer.kt` sets the engine language to
   `Locale.getDefault()` (best-effort — falls back to the engine default voice
   if voice data is missing) and assembles spoken phrases from `tts_*` resources

@@ -82,6 +82,26 @@ In Android Studio's emulator controls (`...` button on the emulator toolbar):
 
 The Wear OS emulator does **not** synthesise heart-rate samples — `HealthServices.getClient(...).measureClient` produces nothing in the emulator. Test HR end-to-end on a physical Wear OS 3+ watch. In the emulator, the "HR" field stays at `— bpm`; the rest of the run records normally.
 
+### Distance-unit preference (km / mi)
+
+The watch reads `user_settings.prefs.preferred_unit` (`km` | `mi`) on every
+session restore and renders distance + pace in that unit on the running
+screen, the route "to go" badge, the route picker, the PostRun summary, and
+the active-run tile. The pure parse/format paths are covered by
+`UnitFormatTest`, `ActiveRunTileFormattersTest`, and `UniversalSettingsTest`
+(`./gradlew testDebugUnitTest`). The **on-face visual flip** still needs a
+device check:
+
+1. On the paired phone (or web), set Preferences → distance unit to **mi**.
+2. Record a short run on the watch with a starred route loaded.
+3. Confirm the running-screen distance reads "… mi", pace reads "…/mi", the
+   "to go" badge reads "… mi to go", PostRun shows "… mi", and the active-run
+   tile shows miles. Flip the pref back to **km** and re-check.
+
+(Editing the unit on the wrist is intentionally not supported — settings stay
+on phone / web. TTS splits still announce kilometres regardless of the pref;
+the optional mile-TTS variant is deferred — see followups.md.)
+
 ### Offline queue behaviour
 
 1. Stop the local Supabase stack (`supabase stop` in `apps/backend`).

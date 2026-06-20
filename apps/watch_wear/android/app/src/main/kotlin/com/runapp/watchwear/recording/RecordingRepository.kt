@@ -65,6 +65,11 @@ object RecordingRepository {
         /// device has no pedometer (or before the first sensor sample).
         /// Writes to `metadata.steps` on save when non-null.
         val steps: Int? = null,
+        /// Distance-display unit for this run, stamped once at
+        /// `startRecording` from the runner's `preferred_unit` pref. Lets
+        /// the active-run tile (a separate process reading this StateFlow)
+        /// render distance / pace in the runner's chosen unit.
+        val preferredUnit: DistanceUnit = DistanceUnit.KM,
     ) {
         val isActive: Boolean get() = stage == Stage.Recording || stage == Stage.Paused
     }

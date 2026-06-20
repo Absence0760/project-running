@@ -208,6 +208,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     elapsedMs = state.elapsedMs,
                     distanceM = state.distanceM,
                     paceSecPerKm = state.paceSecPerKm,
+                    preferredUnit = state.preferredUnit,
                     bpm = state.bpm,
                     hrZoneCutoffs = state.hrZoneCutoffs,
                     steps = state.steps,
@@ -235,6 +236,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                 Stage.PostRun -> PostRunScreen(
                     summary = state.lastRunSummary,
                     bodyWeightKg = state.bodyWeightKg,
+                    preferredUnit = state.preferredUnit,
                     synced = state.thisRunSynced,
                     syncing = state.syncing,
                     syncError = state.syncError,
@@ -246,6 +248,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     routes = state.routes,
                     selectedId = state.selectedRoute?.id,
                     loading = state.routesLoading,
+                    preferredUnit = state.preferredUnit,
                     onPick = vm::selectRoute,
                     onClear = vm::clearSelectedRoute,
                     onCancel = vm::closeRoutePicker,
@@ -1111,6 +1114,7 @@ private fun RunningScreen(
     elapsedMs: Long,
     distanceM: Double,
     paceSecPerKm: Double?,
+    preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     bpm: Int?,
     hrZoneCutoffs: List<Int>?,
     steps: Int?,
@@ -1176,7 +1180,7 @@ private fun RunningScreen(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    stringResource(R.string.distance_km, formatKm(distanceM)),
+                    distanceLabel(distanceM, preferredUnit),
                     style = MaterialTheme.typography.body1,
                     color = Color.White.copy(alpha = 0.72f),
                 )
@@ -1287,7 +1291,7 @@ private fun RunningScreen(
                 color = if (paused) DuskPalette.haze else DuskPalette.parchment,
             )
             Text(
-                stringResource(R.string.distance_km, formatKm(distanceM)),
+                distanceLabel(distanceM, preferredUnit),
                 style = MaterialTheme.typography.body2.copy(shadow = captionShadow),
             )
         }
@@ -1304,14 +1308,14 @@ private fun RunningScreen(
         ) {
             if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
                 Text(
-                    stringResource(R.string.pace_per_km, formatPace(paceSecPerKm)),
+                    paceLabel(paceSecPerKm, preferredUnit),
                     style = MaterialTheme.typography.caption2.copy(shadow = captionShadow),
                     color = DuskPalette.parchment,
                 )
             }
             if (routeRemainingM != null && routeRemainingM > 1.0) {
                 Text(
-                    stringResource(R.string.distance_km_to_go, formatKm(routeRemainingM)),
+                    distanceToGoLabel(routeRemainingM, preferredUnit),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.lilac,
                 )
@@ -1444,6 +1448,7 @@ private fun RoutePickerScreen(
     routes: List<com.runapp.watchwear.SavedRoute>,
     selectedId: String?,
     loading: Boolean,
+    preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     onPick: (com.runapp.watchwear.SavedRoute) -> Unit,
     onClear: () -> Unit,
     onCancel: () -> Unit,
@@ -1506,7 +1511,7 @@ private fun RoutePickerScreen(
                             maxLines = 1,
                         )
                         Text(
-                            stringResource(R.string.distance_km, formatKm(r.distanceM)),
+                            distanceLabel(r.distanceM, preferredUnit),
                             style = MaterialTheme.typography.caption3,
                             color = DuskPalette.haze,
                         )
@@ -1615,6 +1620,7 @@ private fun HoldToStopButton(
 private fun PostRunScreen(
     summary: com.runapp.watchwear.FinishedSummary?,
     bodyWeightKg: Double?,
+    preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     synced: Boolean,
     syncing: Boolean,
     syncError: String?,
@@ -1658,7 +1664,7 @@ private fun PostRunScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    stringResource(R.string.distance_km, formatKm(summary.distanceM)),
+                    distanceLabel(summary.distanceM, preferredUnit),
                     style = MaterialTheme.typography.title2.copy(shadow = titleShadow),
                     color = DuskPalette.parchment,
                 )
@@ -1828,6 +1834,51 @@ private fun formatPace(secPerKm: Double): String {
     val m = (secPerKm / 60).toInt()
     val s = (secPerKm % 60).toInt()
     return String.format(java.util.Locale.ROOT, "%d:%02d", m, s)
+}
+
+/// Localized distance readout in the runner's [unit] (e.g. "5.12 km" /
+/// "3.18 mi"). The number is formatted locale-aware; the unit word comes
+/// from the unit-keyed string resource.
+@Composable
+private fun distanceLabel(
+    distanceM: Double,
+    unit: com.runapp.watchwear.recording.DistanceUnit,
+): String {
+    val num = com.runapp.watchwear.recording.formatDistance(distanceM, unit)
+    val res = when (unit) {
+        com.runapp.watchwear.recording.DistanceUnit.KM -> R.string.distance_km
+        com.runapp.watchwear.recording.DistanceUnit.MI -> R.string.distance_mi
+    }
+    return stringResource(res, num)
+}
+
+/// Localized "X.XX km/mi to go" route-remaining badge in the runner's [unit].
+@Composable
+private fun distanceToGoLabel(
+    distanceM: Double,
+    unit: com.runapp.watchwear.recording.DistanceUnit,
+): String {
+    val num = com.runapp.watchwear.recording.formatDistance(distanceM, unit)
+    val res = when (unit) {
+        com.runapp.watchwear.recording.DistanceUnit.KM -> R.string.distance_km_to_go
+        com.runapp.watchwear.recording.DistanceUnit.MI -> R.string.distance_mi_to_go
+    }
+    return stringResource(res, num)
+}
+
+/// Localized pace readout in the runner's [unit] ("5:30 /km" / "8:51 /mi").
+/// [paceSecPerKm] is converted to seconds-per-mile when the unit is miles.
+@Composable
+private fun paceLabel(
+    paceSecPerKm: Double,
+    unit: com.runapp.watchwear.recording.DistanceUnit,
+): String {
+    val perUnit = com.runapp.watchwear.recording.paceSecPerUnit(paceSecPerKm, unit)
+    val res = when (unit) {
+        com.runapp.watchwear.recording.DistanceUnit.KM -> R.string.pace_per_km
+        com.runapp.watchwear.recording.DistanceUnit.MI -> R.string.pace_per_mi
+    }
+    return stringResource(res, formatPace(perUnit))
 }
 
 /// Resolve a localized label for a cycled activity type. Unknown values

@@ -110,6 +110,11 @@ class RunRecordingService : Service() {
     /// live pace drifts >30 s from the target.
     private var targetPaceSecPerKm: Int? = null
 
+    /// Distance-display unit for this run, parsed once from the
+    /// ACTION_START intent. Stamped into `RecordingRepository.Metrics` so
+    /// the active-run tile renders in the runner's chosen unit.
+    private var preferredUnit: DistanceUnit = DistanceUnit.KM
+
     // Rolling HR aggregation instead of a list of every sample.
     // `bpmSum` / `bpmCount` let us compute avg in O(1) regardless of
     // how many samples have arrived.
@@ -145,6 +150,9 @@ class RunRecordingService : Service() {
                 targetPaceSecPerKm = intent
                     .getIntExtra(EXTRA_TARGET_PACE_SEC_PER_KM, 0)
                     .takeIf { it > 0 },
+                unit = runCatching {
+                    DistanceUnit.valueOf(intent.getStringExtra(EXTRA_PREFERRED_UNIT) ?: "KM")
+                }.getOrDefault(DistanceUnit.KM),
             )
             ACTION_PAUSE -> pauseRecording()
             ACTION_RESUME -> resumeRecording()
@@ -172,12 +180,14 @@ class RunRecordingService : Service() {
         activity: String,
         routeWaypointsJson: String?,
         targetPaceSecPerKm: Int?,
+        unit: DistanceUnit,
     ) {
         if (RecordingRepository.metrics.value.isActive) return
 
         this.runId = runId
         this.activityType = activity
         this.targetPaceSecPerKm = targetPaceSecPerKm
+        this.preferredUnit = unit
         startedAtMs = System.currentTimeMillis()
         pausedAccumulatedMs = 0
         pausedSinceMs = 0
@@ -208,6 +218,7 @@ class RunRecordingService : Service() {
                 activityType = activityType,
                 trackFilePath = file.absolutePath,
                 routeWaypoints = routeWaypoints,
+                preferredUnit = preferredUnit,
             )
         }
         com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
@@ -691,6 +702,9 @@ class RunRecordingService : Service() {
         /// Integer seconds-per-km target. `0` (default) means "no target";
         /// the service's pace-alert branch stays silent.
         const val EXTRA_TARGET_PACE_SEC_PER_KM = "target_pace_sec_per_km"
+        /// `DistanceUnit` name (`"KM"` / `"MI"`) for the runner's distance
+        /// preference. Absent / unrecognised → kilometres.
+        const val EXTRA_PREFERRED_UNIT = "preferred_unit"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "run_recording"
@@ -716,11 +730,13 @@ class RunRecordingService : Service() {
             activityType: String,
             routeWaypointsJson: String? = null,
             targetPaceSecPerKm: Int? = null,
+            preferredUnit: DistanceUnit = DistanceUnit.KM,
         ) {
             val intent = Intent(context, RunRecordingService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_RUN_ID, runId)
                 putExtra(EXTRA_ACTIVITY_TYPE, activityType)
+                putExtra(EXTRA_PREFERRED_UNIT, preferredUnit.name)
                 if (!routeWaypointsJson.isNullOrEmpty()) {
                     putExtra(EXTRA_ROUTE_WAYPOINTS_JSON, routeWaypointsJson)
                 }

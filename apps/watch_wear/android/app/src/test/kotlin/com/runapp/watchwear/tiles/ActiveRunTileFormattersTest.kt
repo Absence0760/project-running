@@ -1,5 +1,6 @@
 package com.runapp.watchwear.tiles
 
+import com.runapp.watchwear.recording.DistanceUnit
 import com.runapp.watchwear.recording.RecordingRepository
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -36,19 +37,30 @@ class ActiveRunTileFormattersTest {
     }
 
     @Test
-    fun `formatPaceSecPerKm renders min_ss_km`() {
-        assertEquals("5:30/km", formatPaceSecPerKm(330.0))
-        assertEquals("4:00/km", formatPaceSecPerKm(240.0))
-        assertEquals("12:34/km", formatPaceSecPerKm(754.0))
+    fun `formatPaceSecPerUnit renders min_ss_km`() {
+        assertEquals("5:30/km", formatPaceSecPerUnit(330.0, DistanceUnit.KM))
+        assertEquals("4:00/km", formatPaceSecPerUnit(240.0, DistanceUnit.KM))
+        assertEquals("12:34/km", formatPaceSecPerUnit(754.0, DistanceUnit.KM))
     }
 
     @Test
-    fun `formatPaceSecPerKm guards null and non-positive and non-finite`() {
-        assertEquals("—:—/km", formatPaceSecPerKm(null))
-        assertEquals("—:—/km", formatPaceSecPerKm(0.0))
-        assertEquals("—:—/km", formatPaceSecPerKm(-30.0))
-        assertEquals("—:—/km", formatPaceSecPerKm(Double.NaN))
-        assertEquals("—:—/km", formatPaceSecPerKm(Double.POSITIVE_INFINITY))
+    fun `formatPaceSecPerUnit scales the km pace to min_ss_mi`() {
+        // A 5:00/km runner covers a (longer) mile in ~8:02. The per-mile
+        // pace is the km pace × 1.609344, truncated to whole seconds.
+        assertEquals("8:02/mi", formatPaceSecPerUnit(300.0, DistanceUnit.MI))
+        // 330 s/km → 531.08 s/mi → truncates to 8:51/mi.
+        assertEquals("8:51/mi", formatPaceSecPerUnit(330.0, DistanceUnit.MI))
+    }
+
+    @Test
+    fun `formatPaceSecPerUnit guards null and non-positive and non-finite`() {
+        assertEquals("—:—/km", formatPaceSecPerUnit(null, DistanceUnit.KM))
+        assertEquals("—:—/km", formatPaceSecPerUnit(0.0, DistanceUnit.KM))
+        assertEquals("—:—/km", formatPaceSecPerUnit(-30.0, DistanceUnit.KM))
+        assertEquals("—:—/km", formatPaceSecPerUnit(Double.NaN, DistanceUnit.KM))
+        assertEquals("—:—/km", formatPaceSecPerUnit(Double.POSITIVE_INFINITY, DistanceUnit.KM))
+        // The guard still emits the runner's unit word for the blank pace.
+        assertEquals("—:—/mi", formatPaceSecPerUnit(null, DistanceUnit.MI))
     }
 
     @Test
@@ -62,6 +74,19 @@ class ActiveRunTileFormattersTest {
 
         val over = makeMetrics(distanceM = 21_100.0, paceSecPerKm = 320.0)
         assertEquals("21.1 km · 5:20/km", formatStatRow(over, Locale.US))
+    }
+
+    @Test
+    fun `formatStatRow renders distance and pace in miles when the unit is mi`() {
+        // 5120 m = 3.18 mi (under the 10-unit decimal cutoff → 2 decimals);
+        // 330 s/km → ~8:51/mi.
+        val under = makeMetrics(distanceM = 5_120.0, paceSecPerKm = 330.0, unit = DistanceUnit.MI)
+        assertEquals("3.18 mi · 8:51/mi", formatStatRow(under, Locale.US))
+
+        // 21100 m = 13.11 mi → over the 10-unit cutoff → 1 decimal "13.1";
+        // 320 s/km → ~8:34/mi.
+        val over = makeMetrics(distanceM = 21_100.0, paceSecPerKm = 320.0, unit = DistanceUnit.MI)
+        assertEquals("13.1 mi · 8:34/mi", formatStatRow(over, Locale.US))
     }
 
     @Test
@@ -82,9 +107,11 @@ class ActiveRunTileFormattersTest {
     private fun makeMetrics(
         distanceM: Double,
         paceSecPerKm: Double?,
+        unit: DistanceUnit = DistanceUnit.KM,
     ) = RecordingRepository.Metrics(
         stage = RecordingRepository.Stage.Recording,
         distanceM = distanceM,
         paceSecPerKm = paceSecPerKm,
+        preferredUnit = unit,
     )
 }
