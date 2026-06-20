@@ -5,22 +5,24 @@
 	import SocialPeople from '$lib/components/SocialPeople.svelte';
 	import SocialClubs from '$lib/components/SocialClubs.svelte';
 	import SocialDiscover from '$lib/components/SocialDiscover.svelte';
+	import ChallengesPanel from '$lib/components/ChallengesPanel.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 
-	type Tab = 'feed' | 'people' | 'clubs' | 'discover';
+	type Tab = 'feed' | 'people' | 'clubs' | 'discover' | 'challenges';
 	const TABS: { id: Tab; labelKey: MessageKey; icon: string }[] = [
 		{ id: 'feed', labelKey: 'socialHub.tabFeed', icon: 'dynamic_feed' },
 		{ id: 'people', labelKey: 'socialHub.tabPeople', icon: 'person_search' },
 		{ id: 'clubs', labelKey: 'socialHub.tabClubs', icon: 'groups' },
 		{ id: 'discover', labelKey: 'socialHub.tabDiscover', icon: 'event_available' },
+		{ id: 'challenges', labelKey: 'challenges.title', icon: 'trophy' },
 	];
 
 	let tab = $state<Tab>('feed');
 
 	$effect(() => {
 		const t = $page.url.searchParams.get('tab');
-		if (t === 'people' || t === 'clubs' || t === 'discover' || t === 'feed') tab = t;
+		if (t === 'people' || t === 'clubs' || t === 'discover' || t === 'challenges' || t === 'feed') tab = t;
 		else tab = 'feed';
 	});
 
@@ -79,6 +81,11 @@
 			<SocialPeople />
 		{:else if tab === 'clubs'}
 			<SocialClubs />
+		{:else if tab === 'challenges'}
+			<div class="challenges-tab">
+				<ChallengesPanel />
+				<a class="btn btn-primary" href="/challenges">{m('challenges.browse')}</a>
+			</div>
 		{:else}
 			<SocialDiscover />
 		{/if}
@@ -86,6 +93,12 @@
 </div>
 
 <style>
+	.challenges-tab {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-lg);
+		align-items: flex-start;
+	}
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
 		display: flex;

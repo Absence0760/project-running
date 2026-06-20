@@ -9331,4 +9331,115 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Abbrechen';
+
+  @override
+  String get challengesTitle => 'Challenges';
+
+  @override
+  String get challengesMyChallenges => 'Meine Challenges';
+
+  @override
+  String get challengesBrowse => 'Entdecken';
+
+  @override
+  String get challengesEmpty => 'Noch keine Challenges.';
+
+  @override
+  String get challengesBrowseEmpty =>
+      'Derzeit keine öffentlichen Challenges zum Beitreten.';
+
+  @override
+  String get challengesJoin => 'Beitreten';
+
+  @override
+  String get challengesLeave => 'Verlassen';
+
+  @override
+  String get challengesDelete => 'Löschen';
+
+  @override
+  String get challengesMetricDistance => 'Distanz';
+
+  @override
+  String get challengesMetricDuration => 'Zeit';
+
+  @override
+  String get challengesMetricActivityCount => 'Aktivitäten';
+
+  @override
+  String get challengesMetricStreak => 'Aktive Tage';
+
+  @override
+  String challengesGoalProgress(String value, String goal) {
+    return '$value von $goal';
+  }
+
+  @override
+  String get challengesProgressComplete => 'Geschafft';
+
+  @override
+  String challengesEndsIn(int n) {
+    return 'Endet in $n Tagen';
+  }
+
+  @override
+  String get challengesEndsToday => 'Endet heute';
+
+  @override
+  String get challengesEnded => 'Beendet';
+
+  @override
+  String get challengesLeaderboard => 'Bestenliste';
+
+  @override
+  String get challengesLeaderboardEmpty => 'Noch kein Fortschritt erfasst.';
+
+  @override
+  String challengesLeaderboardRank(int rank) {
+    return '#$rank';
+  }
+
+  @override
+  String challengesParticipants(int n) {
+    return '$n beigetreten';
+  }
+
+  @override
+  String get challengesBadgeEarned => 'Abzeichen erhalten';
+
+  @override
+  String challengesUnitDays(int n) {
+    return '$n Tage';
+  }
+
+  @override
+  String challengesUnitActivities(int n) {
+    return '$n';
+  }
+
+  @override
+  String get challengesLeaveConfirmTitle => 'Challenge verlassen?';
+
+  @override
+  String get challengesLeaveConfirm =>
+      'Dein Fortschritt in dieser Challenge wird nicht mehr verfolgt.';
+
+  @override
+  String get challengesDeleteConfirmTitle => 'Challenge löschen?';
+
+  @override
+  String get challengesDeleteConfirm =>
+      'Damit werden die Challenge und ihre Bestenliste für alle entfernt. Das kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get challengesNotFound => 'Diese Challenge ist nicht verfügbar.';
+
+  @override
+  String get challengesJoinFailed => 'Beitritt zur Challenge fehlgeschlagen.';
+
+  @override
+  String get challengesLeaveFailed => 'Verlassen der Challenge fehlgeschlagen.';
+
+  @override
+  String get challengesLoadFailed => 'Challenges konnten nicht geladen werden.';
 }

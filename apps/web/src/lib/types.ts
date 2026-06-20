@@ -24,6 +24,9 @@ type TrainingPlanRow = Database['public']['Tables']['training_plans']['Row'];
 type PlanWeekRow = Database['public']['Tables']['plan_weeks']['Row'];
 type PlanWorkoutRow = Database['public']['Tables']['plan_workouts']['Row'];
 type CoachAthleteRow = Database['public']['Tables']['coach_athletes']['Row'];
+type ChallengeRow = Database['public']['Tables']['challenges']['Row'];
+type ChallengeParticipantRow = Database['public']['Tables']['challenge_participants']['Row'];
+type ChallengeBadgeRow = Database['public']['Tables']['challenge_badges']['Row'];
 
 // Coach-athlete link lifecycle (persona #46). Enforced by the
 // `coach_athletes_status_check` CHECK in 20261102_001_coach_athletes.sql;
@@ -229,7 +232,8 @@ export type NotificationKind =
 	| 'club_post'
 	| 'run_completed'
 	| 'event_reminder'
-	| 'plan_assigned';
+	| 'plan_assigned'
+	| 'challenge_complete';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)
@@ -333,4 +337,35 @@ export type ActivePlanOverview = {
 	workouts: PlanWorkout[];
 	todayWorkout: PlanWorkout | null;
 	completionPct: number;
+};
+
+// ─────────────────────── Challenges & competitions ───────────────────────
+
+export type ChallengeMetric = 'distance' | 'duration' | 'activity_count' | 'streak_days';
+export type ChallengeScope = 'individual' | 'club_vs_club' | 'group_goal';
+
+export type Challenge = Omit<ChallengeRow, 'metric' | 'scope' | 'activity_type'> & {
+	metric: ChallengeMetric;
+	scope: ChallengeScope;
+	activity_type: ActivityType | null;
+};
+export type ChallengeParticipant = ChallengeParticipantRow;
+export type ChallengeBadge = ChallengeBadgeRow;
+
+/** A row from the `challenge_leaderboard` RPC — not a table, so hand-typed. */
+export type ChallengeLeaderboardRow = {
+	user_id: string | null;
+	display_name: string | null;
+	team_club_id: string | null;
+	value: number;
+	rank: number;
+};
+
+/** Challenge plus the caller-relative meta the list + detail surfaces need. */
+export type ChallengeWithMeta = Challenge & {
+	participant_count: number;
+	my_value: number | null;
+	my_rank: number | null;
+	joined: boolean;
+	completed_at: string | null;
 };

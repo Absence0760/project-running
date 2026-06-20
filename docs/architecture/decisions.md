@@ -3245,6 +3245,16 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 161. Challenge progress is computed at read time via a single GROUP-BY RPC (no per-participant fetch, no denormalised counter), and the leaderboard RPC is SECURITY DEFINER because the public-runs SELECT policy was retired
+
+**Decided (2026-06-19, migrations `20270206_001` + `20270207_001`, [challenges.md](../features/challenges.md)).** A challenge's value for each participant is computed at read time by `challenge_leaderboard(p_challenge_id, p_by_team)` — ONE query joining `challenge_participants` to a per-user (or per-team) aggregate over that runner's `runs` within `[starts_at, ends_at)`. N participants → 1 round trip, 0 client-side per-user fetches, no denormalised progress column to drift. Ranking is `rank() over (order by value desc)`; the `challenge_progress` TS↔Dart pair carries the identical `metricFromActivity` extraction so an offline-optimistic client estimate can't diverge from the board.
+
+**Why DEFINER, not invoker (a spec delta).** The spec called for SECURITY INVOKER (RLS on `activities` governs). But the "public runs readable by anyone" SELECT policy on `runs` was retired earlier — public-run access now flows through the `public_runs` view + `clip-public-track`, and the base-table policy only exposes the caller's own + coach-linked runs. A SECURITY INVOKER aggregate would therefore see only the **caller's** runs and zero every competitor's total. So `challenge_leaderboard` (and `recompute_challenge_completion` + `sweep_challenge_completions`) are **SECURITY DEFINER, gated on `is_challenge_visible(p_challenge_id)`**: participants opted in by joining, so the board may sum a participant's private runs too — but it returns only the per-user/per-team SUM, never the run rows, exactly like `event_results`. A private/club board still can't be read by a non-member (the visibility gate fails closed).
+
+**Why completion is an explicit RPC + cron, not a per-run trigger.** `recompute_challenge_completion` awards the durable `challenge_badges` row + stamps `completed_at` + fires a `challenge_complete` notification when the goal is met (idempotent via the unique badge row). It's called opportunistically client-side after a run saves (best-effort, swallow-to-debug) and by a daily `sweep-challenge-completions` pg_cron job. A per-run trigger that fanned out across every challenge the runner is in would be unbounded write amplification; the RPC + sweep bounds it. **`vert` was dropped from the metric set** at landing — there is no first-class per-run elevation column (`runs.metadata.elevation_m` is import-only + frequently absent), so a vert board would silently undercount; ships in a later slice once elevation is first-classed.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

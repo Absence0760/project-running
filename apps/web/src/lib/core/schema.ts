@@ -60,6 +60,9 @@ export const TABLES = {
 	personal_records: 'personal_records',
 	user_blocks: 'user_blocks',
 	safety_contacts: 'safety_contacts',
+	challenges: 'challenges',
+	challenge_participants: 'challenge_participants',
+	challenge_badges: 'challenge_badges',
 } as const;
 
 /// Supabase Storage buckets reached via `supabase.storage.from(...)`.

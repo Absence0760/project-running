@@ -97,6 +97,136 @@ export type Database = {
         }
         Relationships: []
       }
+      challenge_badges: {
+        Row: {
+          awarded_at: string
+          challenge_id: string
+          final_value: number
+          id: string
+          metric: string
+          user_id: string
+        }
+        Insert: {
+          awarded_at?: string
+          challenge_id: string
+          final_value: number
+          id?: string
+          metric: string
+          user_id: string
+        }
+        Update: {
+          awarded_at?: string
+          challenge_id?: string
+          final_value?: number
+          id?: string
+          metric?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_badges_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_participants: {
+        Row: {
+          challenge_id: string
+          completed_at: string | null
+          joined_at: string
+          team_club_id: string | null
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed_at?: string | null
+          joined_at?: string
+          team_club_id?: string | null
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed_at?: string | null
+          joined_at?: string
+          team_club_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_participants_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_participants_team_club_id_fkey"
+            columns: ["team_club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenges: {
+        Row: {
+          activity_type: string | null
+          club_id: string | null
+          created_at: string
+          creator_id: string
+          description: string | null
+          ends_at: string
+          goal_value: number | null
+          id: string
+          is_public: boolean
+          metric: string
+          scope: string
+          starts_at: string
+          title: string
+        }
+        Insert: {
+          activity_type?: string | null
+          club_id?: string | null
+          created_at?: string
+          creator_id: string
+          description?: string | null
+          ends_at: string
+          goal_value?: number | null
+          id?: string
+          is_public?: boolean
+          metric: string
+          scope: string
+          starts_at: string
+          title: string
+        }
+        Update: {
+          activity_type?: string | null
+          club_id?: string | null
+          created_at?: string
+          creator_id?: string
+          description?: string | null
+          ends_at?: string
+          goal_value?: number | null
+          id?: string
+          is_public?: boolean
+          metric?: string
+          scope?: string
+          starts_at?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checkpoint_crossings: {
         Row: {
           bib: string | null
@@ -1633,6 +1763,7 @@ export type Database = {
           activity_id: string | null
           activity_kind: string | null
           actor_id: string | null
+          challenge_id: string | null
           club_id: string | null
           comment_id: string | null
           created_at: string
@@ -1651,6 +1782,7 @@ export type Database = {
           activity_id?: string | null
           activity_kind?: string | null
           actor_id?: string | null
+          challenge_id?: string | null
           club_id?: string | null
           comment_id?: string | null
           created_at?: string
@@ -1669,6 +1801,7 @@ export type Database = {
           activity_id?: string | null
           activity_kind?: string | null
           actor_id?: string | null
+          challenge_id?: string | null
           club_id?: string | null
           comment_id?: string | null
           created_at?: string
@@ -1684,6 +1817,13 @@ export type Database = {
           web_push_sent_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_club_id_fkey"
             columns: ["club_id"]
@@ -3506,6 +3646,16 @@ export type Database = {
         Args: { p_reason?: string; p_target: string }
         Returns: undefined
       }
+      challenge_leaderboard: {
+        Args: { p_by_team?: boolean; p_challenge_id: string }
+        Returns: {
+          display_name: string
+          rank: number
+          team_club_id: string
+          user_id: string
+          value: number
+        }[]
+      }
       check_rate_limit: {
         Args: {
           p_bucket: string
@@ -3876,6 +4026,10 @@ export type Database = {
         Args: { a: string; b: string }
         Returns: boolean
       }
+      is_challenge_visible: {
+        Args: { target_challenge: string }
+        Returns: boolean
+      }
       is_event_visible: { Args: { p_event_id: string }; Returns: boolean }
       is_pro: { Args: never; Returns: boolean }
       is_public_club_by_id: { Args: { p_club_id: string }; Returns: boolean }
@@ -3940,6 +4094,28 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      my_active_challenges: {
+        Args: never
+        Returns: {
+          activity_type: string
+          club_id: string
+          completed_at: string
+          created_at: string
+          creator_id: string
+          description: string
+          ends_at: string
+          goal_value: number
+          id: string
+          is_public: boolean
+          metric: string
+          my_rank: number
+          my_value: number
+          participant_count: number
+          scope: string
+          starts_at: string
+          title: string
+        }[]
       }
       my_pending_safety_requests: {
         Args: never
@@ -4036,6 +4212,10 @@ export type Database = {
       publish_gym_routine_as_template: {
         Args: { p_club_id: string; p_routine_id: string }
         Returns: string
+      }
+      recompute_challenge_completion: {
+        Args: { p_challenge_id: string; p_user_id: string }
+        Returns: undefined
       }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
@@ -4307,6 +4487,7 @@ export type Database = {
         }
         Returns: string
       }
+      sweep_challenge_completions: { Args: never; Returns: undefined }
       try_consume_strava_quota: {
         Args: { p_day_limit?: number; p_short_limit?: number }
         Returns: boolean

@@ -136,6 +136,65 @@ class AttendeeView {
   });
 }
 
+/// A challenge plus the caller-relative meta the list + detail surfaces need.
+/// `metric` / `scope` stay raw strings here (the narrow unions live in
+/// challenge_progress.dart's enum + the DB CHECK); the UI maps them.
+class ChallengeView {
+  final String id;
+  final String? creatorId;
+  final String? clubId;
+  final String title;
+  final String? description;
+  final String metric;
+  final String scope;
+  final num? goalValue;
+  final String? activityType;
+  final DateTime startsAt;
+  final DateTime endsAt;
+  final bool isPublic;
+  final bool joined;
+  final num? myValue;
+  final int? myRank;
+  final int participantCount;
+  final DateTime? completedAt;
+
+  const ChallengeView({
+    required this.id,
+    required this.creatorId,
+    required this.clubId,
+    required this.title,
+    required this.description,
+    required this.metric,
+    required this.scope,
+    required this.goalValue,
+    required this.activityType,
+    required this.startsAt,
+    required this.endsAt,
+    required this.isPublic,
+    this.joined = false,
+    this.myValue,
+    this.myRank,
+    this.participantCount = 0,
+    this.completedAt,
+  });
+}
+
+/// One row from the `challenge_leaderboard` RPC (not a table, so hand-modelled).
+class ChallengeLeaderboardEntry {
+  final String? userId;
+  final String? displayName;
+  final String? teamClubId;
+  final num value;
+  final int rank;
+  const ChallengeLeaderboardEntry({
+    required this.userId,
+    required this.displayName,
+    required this.teamClubId,
+    required this.value,
+    required this.rank,
+  });
+}
+
 /// Minimal projection of a `runs` row used by the event-result picker.
 /// Deliberately smaller than the full [Run] domain class — we don't need
 /// the track or pace, just enough to identify the run in a list.
@@ -1487,6 +1546,201 @@ class SocialService extends ChangeNotifier {
 
   Future<void> unsubscribe(RealtimeChannel channel) async {
     await _c.removeChannel(channel);
+  }
+
+  // ─────────────────────── Challenges & competitions ───────────────────────
+
+  ChallengeView _challengeFromRow(Map<String, dynamic> r,
+      {bool joined = false,
+      num? myValue,
+      int? myRank,
+      int participantCount = 0,
+      DateTime? completedAt}) {
+    return ChallengeView(
+      id: r['id'] as String,
+      creatorId: r['creator_id'] as String?,
+      clubId: r['club_id'] as String?,
+      title: r['title'] as String,
+      description: r['description'] as String?,
+      metric: r['metric'] as String,
+      scope: r['scope'] as String,
+      goalValue: (r['goal_value'] as num?),
+      activityType: r['activity_type'] as String?,
+      startsAt: DateTime.parse(r['starts_at'] as String),
+      endsAt: DateTime.parse(r['ends_at'] as String),
+      isPublic: (r['is_public'] as bool?) ?? true,
+      joined: joined,
+      myValue: myValue,
+      myRank: myRank,
+      participantCount: participantCount,
+      completedAt: completedAt,
+    );
+  }
+
+  /// Challenges the caller can see (RLS scopes public + creator + participant +
+  /// club member), enriched with participant counts + the joined flag.
+  Future<List<ChallengeView>> fetchChallenges() async {
+    final rows = await _c
+        .from('challenges')
+        .select()
+        .order('ends_at', ascending: true) as List;
+    if (rows.isEmpty) return const [];
+    final ids = rows.map((r) => (r as Map)['id'] as String).toList();
+    final parts = await _c
+        .from('challenge_participants')
+        .select('challenge_id, user_id')
+        .inFilter('challenge_id', ids) as List;
+    final counts = <String, int>{};
+    final mine = <String>{};
+    final uid = _uid;
+    for (final p in parts) {
+      final m = p as Map;
+      final cid = m['challenge_id'] as String;
+      counts[cid] = (counts[cid] ?? 0) + 1;
+      if (uid != null && m['user_id'] == uid) mine.add(cid);
+    }
+    return rows
+        .map((r) => _challengeFromRow(
+              (r as Map).cast<String, dynamic>(),
+              joined: mine.contains(r['id']),
+              participantCount: counts[r['id']] ?? 0,
+            ))
+        .toList();
+  }
+
+  Future<ChallengeView?> fetchChallengeById(String id) async {
+    final row = await _c.from('challenges').select().eq('id', id).maybeSingle();
+    if (row == null) return null;
+    final parts = await _c
+        .from('challenge_participants')
+        .select('user_id, completed_at')
+        .eq('challenge_id', id) as List;
+    final uid = _uid;
+    Map? mineRow;
+    for (final p in parts) {
+      if (uid != null && (p as Map)['user_id'] == uid) mineRow = p;
+    }
+    final completedRaw = mineRow?['completed_at'] as String?;
+    return _challengeFromRow(
+      row.cast<String, dynamic>(),
+      joined: mineRow != null,
+      participantCount: parts.length,
+      completedAt: completedRaw == null ? null : DateTime.parse(completedRaw),
+    );
+  }
+
+  Future<String> createChallenge({
+    required String title,
+    String? description,
+    required String metric,
+    required String scope,
+    num? goalValue,
+    String? activityType,
+    String? clubId,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    bool isPublic = true,
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw StateError('Not authenticated');
+    final row = await _c
+        .from('challenges')
+        .insert({
+          'creator_id': uid,
+          'title': title.trim(),
+          'description': (description?.trim().isEmpty ?? true) ? null : description!.trim(),
+          'metric': metric,
+          'scope': scope,
+          'goal_value': goalValue,
+          'activity_type': activityType,
+          'club_id': scope == 'club_vs_club' ? null : clubId,
+          'starts_at': startsAt.toUtc().toIso8601String(),
+          'ends_at': endsAt.toUtc().toIso8601String(),
+          'is_public': isPublic,
+        })
+        .select('id')
+        .single();
+    notifyListeners();
+    return row['id'] as String;
+  }
+
+  Future<void> deleteChallenge(String id) async {
+    await _c.from('challenges').delete().eq('id', id);
+    notifyListeners();
+  }
+
+  Future<void> joinChallenge(String id, {String? teamClubId}) async {
+    final uid = _uid;
+    if (uid == null) throw StateError('Not authenticated');
+    await _c.from('challenge_participants').insert({
+      'challenge_id': id,
+      'user_id': uid,
+      'team_club_id': teamClubId,
+    });
+    notifyListeners();
+  }
+
+  Future<void> leaveChallenge(String id) async {
+    final uid = _uid;
+    if (uid == null) throw StateError('Not authenticated');
+    await _c
+        .from('challenge_participants')
+        .delete()
+        .eq('challenge_id', id)
+        .eq('user_id', uid);
+    notifyListeners();
+  }
+
+  Future<List<ChallengeLeaderboardEntry>> fetchChallengeLeaderboard(
+    String id, {
+    bool byTeam = false,
+  }) async {
+    final raw = await _c.rpc('challenge_leaderboard', params: {
+      'p_challenge_id': id,
+      'p_by_team': byTeam,
+    });
+    return ((raw ?? <dynamic>[]) as List)
+        .whereType<Map>()
+        .map((r) => ChallengeLeaderboardEntry(
+              userId: r['user_id'] as String?,
+              displayName: r['display_name'] as String?,
+              teamClubId: r['team_club_id'] as String?,
+              value: (r['value'] as num?) ?? 0,
+              rank: (r['rank'] as num?)?.toInt() ?? 0,
+            ))
+        .toList();
+  }
+
+  /// The self-hide driver: challenges the caller has joined that are live or
+  /// recently ended. An empty list means render nothing.
+  Future<List<ChallengeView>> myActiveChallenges() async {
+    final raw = await _c.rpc('my_active_challenges');
+    return ((raw ?? <dynamic>[]) as List).whereType<Map>().map((r) {
+      final completedRaw = r['completed_at'] as String?;
+      return _challengeFromRow(
+        r.cast<String, dynamic>(),
+        joined: true,
+        myValue: r['my_value'] as num?,
+        myRank: (r['my_rank'] as num?)?.toInt(),
+        participantCount: (r['participant_count'] as num?)?.toInt() ?? 0,
+        completedAt: completedRaw == null ? null : DateTime.parse(completedRaw),
+      );
+    }).toList();
+  }
+
+  /// Best-effort completion recompute after a run saves. Swallow-to-debug like
+  /// other auxiliary effects — the daily cron sweep is the durable backstop.
+  Future<void> recomputeChallengeCompletion(String id) async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      await _c.rpc('recompute_challenge_completion', params: {
+        'p_challenge_id': id,
+        'p_user_id': uid,
+      });
+    } catch (e) {
+      debugPrint('recomputeChallengeCompletion failed: $e');
+    }
   }
 }
 

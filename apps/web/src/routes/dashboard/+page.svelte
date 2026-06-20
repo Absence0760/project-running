@@ -31,6 +31,7 @@
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import ThisWeekStrip from '$lib/components/ThisWeekStrip.svelte';
+	import ChallengesPanel from '$lib/components/ChallengesPanel.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
@@ -1027,6 +1028,11 @@
 		     CurrentWeekStrip, which anchors to the plan's week, not the
 		     calendar. Pure derivation in lib/training/current_week.ts. -->
 		<ThisWeekStrip activities={filteredRuns} weekStart={weekStartDay} {now} />
+
+		<!-- Self-hiding challenges strip: renders nothing when the user is in
+		     no live challenge (data-presence self-hide, matching the gym /
+		     nutrition cards). challenges.md. -->
+		<ChallengesPanel />
 
 		<!-- Multi-metric goals — local-only. Lives directly under the
 		     stat-grid so the "what am I working toward?" lens sits next

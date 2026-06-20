@@ -8868,4 +8868,112 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'キャンセル';
+
+  @override
+  String get challengesTitle => 'チャレンジ';
+
+  @override
+  String get challengesMyChallenges => '参加中のチャレンジ';
+
+  @override
+  String get challengesBrowse => 'さがす';
+
+  @override
+  String get challengesEmpty => 'まだチャレンジはありません。';
+
+  @override
+  String get challengesBrowseEmpty => '現在参加できる公開チャレンジはありません。';
+
+  @override
+  String get challengesJoin => '参加';
+
+  @override
+  String get challengesLeave => '退出';
+
+  @override
+  String get challengesDelete => '削除';
+
+  @override
+  String get challengesMetricDistance => '距離';
+
+  @override
+  String get challengesMetricDuration => '時間';
+
+  @override
+  String get challengesMetricActivityCount => 'アクティビティ数';
+
+  @override
+  String get challengesMetricStreak => '活動日数';
+
+  @override
+  String challengesGoalProgress(String value, String goal) {
+    return '$goal 中 $value';
+  }
+
+  @override
+  String get challengesProgressComplete => '達成';
+
+  @override
+  String challengesEndsIn(int n) {
+    return 'あと $n 日で終了';
+  }
+
+  @override
+  String get challengesEndsToday => '本日終了';
+
+  @override
+  String get challengesEnded => '終了済み';
+
+  @override
+  String get challengesLeaderboard => 'ランキング';
+
+  @override
+  String get challengesLeaderboardEmpty => 'まだ記録がありません。';
+
+  @override
+  String challengesLeaderboardRank(int rank) {
+    return '#$rank';
+  }
+
+  @override
+  String challengesParticipants(int n) {
+    return '$n 人参加';
+  }
+
+  @override
+  String get challengesBadgeEarned => 'バッジ獲得';
+
+  @override
+  String challengesUnitDays(int n) {
+    return '$n 日';
+  }
+
+  @override
+  String challengesUnitActivities(int n) {
+    return '$n';
+  }
+
+  @override
+  String get challengesLeaveConfirmTitle => 'チャレンジから退出しますか？';
+
+  @override
+  String get challengesLeaveConfirm => 'このチャレンジでの進捗は記録されなくなります。';
+
+  @override
+  String get challengesDeleteConfirmTitle => 'チャレンジを削除しますか？';
+
+  @override
+  String get challengesDeleteConfirm => 'チャレンジとそのランキングが全員から削除されます。元に戻せません。';
+
+  @override
+  String get challengesNotFound => 'このチャレンジは利用できません。';
+
+  @override
+  String get challengesJoinFailed => 'チャレンジに参加できませんでした。';
+
+  @override
+  String get challengesLeaveFailed => 'チャレンジから退出できませんでした。';
+
+  @override
+  String get challengesLoadFailed => 'チャレンジを読み込めませんでした。';
 }

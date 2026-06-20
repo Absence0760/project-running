@@ -40,7 +40,13 @@ import type {
 	GymExerciseModality,
 	GymProgressionScheme,
 	RouteMarker,
-	RouteMarkerKind
+	RouteMarkerKind,
+	Challenge,
+	ChallengeMetric,
+	ChallengeScope,
+	ChallengeWithMeta,
+	ChallengeLeaderboardRow,
+	ActivityType
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -8040,4 +8046,210 @@ export async function markCheckpointDnf(params: {
 				{ onConflict: 'event_id,instance_start,bib' }
 			);
 	if (error) throw error;
+}
+
+// ─────────────────────── Challenges & competitions ───────────────────────
+
+function challengeFromRow(row: {
+	metric: string;
+	scope: string;
+	activity_type: string | null;
+	[k: string]: unknown;
+}): Challenge {
+	return {
+		...row,
+		metric: row.metric as ChallengeMetric,
+		scope: row.scope as ChallengeScope,
+		activity_type: row.activity_type as ActivityType | null
+	} as Challenge;
+}
+
+export async function fetchChallenges(
+	opts: { mine?: boolean } = {}
+): Promise<ChallengeWithMeta[]> {
+	const userId = auth.user?.id;
+	// RLS already scopes visibility (public + creator + participant + club
+	// member). The `mine` filter narrows to challenges the caller has joined.
+	let query = supabase
+		.from(TABLES.challenges)
+		.select('*')
+		.order('ends_at', { ascending: true });
+	const { data, error } = await query;
+	if (error) throw error;
+	const rows = (data ?? []).map(challengeFromRow);
+
+	// Enrich with participant counts + the caller's joined flag in two scoped
+	// reads (no per-row N+1): one count-grouped read over participants for the
+	// listed ids, one self-membership read.
+	const ids = rows.map((r) => r.id);
+	if (ids.length === 0) return [];
+	const { data: parts } = await supabase
+		.from(TABLES.challenge_participants)
+		.select('challenge_id, user_id')
+		.in('challenge_id', ids);
+	const counts = new Map<string, number>();
+	const mineSet = new Set<string>();
+	for (const p of parts ?? []) {
+		counts.set(p.challenge_id, (counts.get(p.challenge_id) ?? 0) + 1);
+		if (userId && p.user_id === userId) mineSet.add(p.challenge_id);
+	}
+	const enriched: ChallengeWithMeta[] = rows.map((r) => ({
+		...r,
+		participant_count: counts.get(r.id) ?? 0,
+		my_value: null,
+		my_rank: null,
+		joined: mineSet.has(r.id),
+		completed_at: null
+	}));
+	return opts.mine ? enriched.filter((c) => c.joined) : enriched;
+}
+
+export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta | null> {
+	const userId = auth.user?.id;
+	const { data, error } = await supabase
+		.from(TABLES.challenges)
+		.select('*')
+		.eq('id', id)
+		.maybeSingle();
+	if (error) throw error;
+	if (!data) return null;
+	const challenge = challengeFromRow(data);
+	const { data: parts } = await supabase
+		.from(TABLES.challenge_participants)
+		.select('user_id, completed_at')
+		.eq('challenge_id', id);
+	const joinedRow = userId ? (parts ?? []).find((p) => p.user_id === userId) : undefined;
+	return {
+		...challenge,
+		participant_count: (parts ?? []).length,
+		my_value: null,
+		my_rank: null,
+		joined: !!joinedRow,
+		completed_at: joinedRow?.completed_at ?? null
+	};
+}
+
+export async function createChallenge(input: {
+	title: string;
+	description?: string | null;
+	metric: ChallengeMetric;
+	scope: ChallengeScope;
+	goal_value?: number | null;
+	activity_type?: ActivityType | null;
+	club_id?: string | null;
+	starts_at: string;
+	ends_at: string;
+	is_public?: boolean;
+}): Promise<Challenge> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { data, error } = await supabase
+		.from(TABLES.challenges)
+		.insert({
+			creator_id: userId,
+			title: input.title.trim(),
+			description: input.description?.trim() || null,
+			metric: input.metric,
+			scope: input.scope,
+			goal_value: input.goal_value ?? null,
+			activity_type: input.activity_type ?? null,
+			club_id: input.club_id ?? null,
+			starts_at: input.starts_at,
+			ends_at: input.ends_at,
+			is_public: input.is_public ?? true
+		})
+		.select('*')
+		.single();
+	if (error) throw error;
+	return challengeFromRow(data);
+}
+
+export async function updateChallenge(
+	id: string,
+	patch: Partial<{
+		title: string;
+		description: string | null;
+		goal_value: number | null;
+		activity_type: ActivityType | null;
+		starts_at: string;
+		ends_at: string;
+		is_public: boolean;
+	}>
+): Promise<void> {
+	const { error } = await supabase.from(TABLES.challenges).update(patch).eq('id', id);
+	if (error) throw error;
+}
+
+export async function deleteChallenge(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.challenges).delete().eq('id', id);
+	if (error) throw error;
+}
+
+export async function joinChallenge(id: string, teamClubId?: string | null): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase
+		.from(TABLES.challenge_participants)
+		.insert({ challenge_id: id, user_id: userId, team_club_id: teamClubId ?? null });
+	if (error) throw error;
+}
+
+export async function leaveChallenge(id: string): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase
+		.from(TABLES.challenge_participants)
+		.delete()
+		.eq('challenge_id', id)
+		.eq('user_id', userId);
+	if (error) throw error;
+}
+
+export async function fetchChallengeLeaderboard(
+	id: string,
+	byTeam = false
+): Promise<ChallengeLeaderboardRow[]> {
+	const { data, error } = await supabase.rpc('challenge_leaderboard', {
+		p_challenge_id: id,
+		p_by_team: byTeam
+	});
+	if (error) throw error;
+	return (data ?? []).map((r: Record<string, unknown>) => ({
+		user_id: (r.user_id as string | null) ?? null,
+		display_name: (r.display_name as string | null) ?? null,
+		team_club_id: (r.team_club_id as string | null) ?? null,
+		value: Number(r.value ?? 0),
+		rank: Number(r.rank ?? 0)
+	}));
+}
+
+export async function myActiveChallenges(): Promise<ChallengeWithMeta[]> {
+	const { data, error } = await supabase.rpc('my_active_challenges');
+	if (error) throw error;
+	return (data ?? []).map((r: Record<string, unknown>) => ({
+		...challengeFromRow(r as Parameters<typeof challengeFromRow>[0]),
+		participant_count: Number(r.participant_count ?? 0),
+		my_value: r.my_value === null || r.my_value === undefined ? null : Number(r.my_value),
+		my_rank: r.my_rank === null || r.my_rank === undefined ? null : Number(r.my_rank),
+		joined: true,
+		completed_at: (r.completed_at as string | null) ?? null
+	}));
+}
+
+/// Best-effort: ask the server to recompute the caller's completion for a
+/// challenge after a run saves. Swallow-to-debug like other auxiliary effects —
+/// the daily cron sweep is the durable backstop, so a transient failure here
+/// never blocks the run save.
+export async function recomputeChallengeCompletion(id: string): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) return;
+	try {
+		const { error } = await supabase.rpc('recompute_challenge_completion', {
+			p_challenge_id: id,
+			p_user_id: userId
+		});
+		if (error) console.debug('recomputeChallengeCompletion failed', error);
+	} catch (e) {
+		console.debug('recomputeChallengeCompletion threw', e);
+	}
 }

@@ -9325,4 +9325,115 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancelar';
+
+  @override
+  String get challengesTitle => 'Desafíos';
+
+  @override
+  String get challengesMyChallenges => 'Mis desafíos';
+
+  @override
+  String get challengesBrowse => 'Explorar';
+
+  @override
+  String get challengesEmpty => 'Aún no hay desafíos.';
+
+  @override
+  String get challengesBrowseEmpty =>
+      'No hay desafíos públicos para unirse ahora mismo.';
+
+  @override
+  String get challengesJoin => 'Unirse';
+
+  @override
+  String get challengesLeave => 'Salir';
+
+  @override
+  String get challengesDelete => 'Eliminar';
+
+  @override
+  String get challengesMetricDistance => 'Distancia';
+
+  @override
+  String get challengesMetricDuration => 'Tiempo';
+
+  @override
+  String get challengesMetricActivityCount => 'Actividades';
+
+  @override
+  String get challengesMetricStreak => 'Días activos';
+
+  @override
+  String challengesGoalProgress(String value, String goal) {
+    return '$value de $goal';
+  }
+
+  @override
+  String get challengesProgressComplete => 'Completado';
+
+  @override
+  String challengesEndsIn(int n) {
+    return 'Termina en $n días';
+  }
+
+  @override
+  String get challengesEndsToday => 'Termina hoy';
+
+  @override
+  String get challengesEnded => 'Finalizado';
+
+  @override
+  String get challengesLeaderboard => 'Clasificación';
+
+  @override
+  String get challengesLeaderboardEmpty => 'Aún no hay progreso registrado.';
+
+  @override
+  String challengesLeaderboardRank(int rank) {
+    return '#$rank';
+  }
+
+  @override
+  String challengesParticipants(int n) {
+    return '$n unidos';
+  }
+
+  @override
+  String get challengesBadgeEarned => 'Insignia obtenida';
+
+  @override
+  String challengesUnitDays(int n) {
+    return '$n días';
+  }
+
+  @override
+  String challengesUnitActivities(int n) {
+    return '$n';
+  }
+
+  @override
+  String get challengesLeaveConfirmTitle => '¿Salir del desafío?';
+
+  @override
+  String get challengesLeaveConfirm =>
+      'Tu progreso en este desafío dejará de registrarse.';
+
+  @override
+  String get challengesDeleteConfirmTitle => '¿Eliminar desafío?';
+
+  @override
+  String get challengesDeleteConfirm =>
+      'Esto elimina el desafío y su clasificación para todos. No se puede deshacer.';
+
+  @override
+  String get challengesNotFound => 'Este desafío no está disponible.';
+
+  @override
+  String get challengesJoinFailed => 'No se pudo unir al desafío.';
+
+  @override
+  String get challengesLeaveFailed => 'No se pudo salir del desafío.';
+
+  @override
+  String get challengesLoadFailed => 'No se pudieron cargar los desafíos.';
 }

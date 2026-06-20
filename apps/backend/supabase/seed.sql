@@ -2784,3 +2784,25 @@ INSERT INTO gym_routine_sets (routine_exercise_id, set_index, set_type, target_r
   ('e8e80003-0000-0000-0000-000000000003', 1, 'working', 10, 12, 20, 90, null),
   ('e8e80004-0000-0000-0000-000000000004', 0, 'working', null, null, null, 60, 45),
   ('e8e80004-0000-0000-0000-000000000004', 1, 'working', null, null, null, 60, 45);
+
+-- ─────────────────────── Challenges (challenges.md) ───────────────────────
+-- A live open distance challenge the seed user has joined (so /challenges +
+-- the self-hiding dashboard strip are populated on reset) and a club-anchored
+-- group-goal for Richmond Run Club. now()-relative windows so they stay live.
+INSERT INTO challenges (id, creator_id, club_id, title, description, metric, scope, goal_value, starts_at, ends_at, is_public)
+VALUES
+  ('f0000001-0000-0000-0000-000000000001',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890', null,
+   'Run 100 km this month', 'Solo distance challenge — everyone competes on one board.',
+   'distance', 'individual', 100000,
+   now() - interval '5 days', now() + interval '25 days', true),
+  ('f0000002-0000-0000-0000-000000000002',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'c1111111-0000-0000-0000-000000000001',
+   'Club 1,000 km co-op', 'Richmond Run Club pools every member''s distance toward one shared goal.',
+   'distance', 'group_goal', 1000000,
+   now() - interval '5 days', now() + interval '25 days', false);
+
+INSERT INTO challenge_participants (challenge_id, user_id)
+VALUES
+  ('f0000001-0000-0000-0000-000000000001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  ('f0000002-0000-0000-0000-000000000002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
