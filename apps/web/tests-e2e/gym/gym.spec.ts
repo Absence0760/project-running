@@ -228,6 +228,138 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		}
 	});
 
+	test('catalogue browse/picker: picking a seeded exercise fills the name + binds exercise_id (decisions §176)', async ({
+		page,
+	}) => {
+		// The browse/picker UI (migration 20270222_001 deferred surface, now
+		// built): open the composer, click Browse catalogue, filter to Legs,
+		// search "Deadlift", pick it — the name field fills and the saved set
+		// binds the seeded global's exercise_id by normalised key.
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E Picker day ${stamp}`;
+
+		const { data: cat } = await admin
+			.from('exercises')
+			.select('id')
+			.is('author_id', null)
+			.eq('name_key', 'deadlift')
+			.single();
+		const deadliftId = (cat as { id: string }).id;
+		expect(deadliftId).toBeTruthy();
+
+		await page.goto('/gym');
+		await page.getByTestId('gym-log').click();
+		await page.getByPlaceholder('e.g. Push day').fill(title);
+
+		// Open the catalogue picker for the first exercise block.
+		await page.getByTestId('catalogue-browse').first().click();
+		await expect(page.getByTestId('exercise-catalogue-picker')).toBeVisible({ timeout: 10_000 });
+
+		// Filter by category + search, then pick the row.
+		await page.getByTestId('catalogue-category').selectOption('legs');
+		await page.getByTestId('catalogue-search').fill('Deadlift');
+		await page
+			.getByTestId('catalogue-results')
+			.getByTestId('catalogue-pick')
+			.filter({ hasText: 'Deadlift' })
+			.first()
+			.click();
+
+		// The picker closed and the block name is filled.
+		await expect(page.getByTestId('exercise-catalogue-picker')).toHaveCount(0);
+		await expect(page.getByPlaceholder('Exercise name').first()).toHaveValue('Deadlift');
+
+		const setRow = page.locator('.set-row').first();
+		await setRow.locator('input[type="number"]').nth(0).fill('3');
+		await setRow.locator('input[type="number"]').nth(1).fill('120');
+
+		await page.getByRole('button', { name: 'Save workout' }).click();
+
+		const row = page.locator('.workout-row', { hasText: title });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		const { data: created } = await admin
+			.from('gym_workouts')
+			.select('id')
+			.eq('user_id', USER_A.id)
+			.eq('title', title);
+		expect(created?.length).toBe(1);
+		const workoutId = created![0].id as string;
+
+		try {
+			const { data: sets } = await admin
+				.from('gym_sets')
+				.select('exercise_name, exercise_id')
+				.eq('workout_id', workoutId);
+			expect(sets?.length).toBe(1);
+			expect(sets![0].exercise_name).toBe('Deadlift');
+			expect(sets![0].exercise_id).toBe(deadliftId);
+		} finally {
+			await admin.from('gym_workouts').delete().eq('id', workoutId);
+		}
+	});
+
+	test('catalogue picker: creating a custom exercise binds its new id (decisions §176)', async ({
+		page,
+	}) => {
+		// The picker doubles as the "can't find it? add it" path: search a name
+		// with no catalogue match, create it as an owner custom, and confirm the
+		// logged set binds the freshly-created exercise_id.
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E Custom day ${stamp}`;
+		const customName = `E2E Sled Drag ${stamp}`;
+
+		await page.goto('/gym');
+		await page.getByTestId('gym-log').click();
+		await page.getByPlaceholder('e.g. Push day').fill(title);
+
+		await page.getByTestId('catalogue-browse').first().click();
+		await expect(page.getByTestId('exercise-catalogue-picker')).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('catalogue-search').fill(customName);
+		// No seeded global matches, so the create affordance appears.
+		await page.getByTestId('catalogue-create').click();
+
+		// Created + picked: picker closed, name filled.
+		await expect(page.getByTestId('exercise-catalogue-picker')).toHaveCount(0);
+		await expect(page.getByPlaceholder('Exercise name').first()).toHaveValue(customName);
+
+		const setRow = page.locator('.set-row').first();
+		await setRow.locator('input[type="number"]').nth(0).fill('10');
+
+		await page.getByRole('button', { name: 'Save workout' }).click();
+		const row = page.locator('.workout-row', { hasText: title });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		const { data: createdEx } = await admin
+			.from('exercises')
+			.select('id')
+			.eq('author_id', USER_A.id)
+			.eq('name', customName)
+			.single();
+		const customId = (createdEx as { id: string }).id;
+
+		const { data: created } = await admin
+			.from('gym_workouts')
+			.select('id')
+			.eq('user_id', USER_A.id)
+			.eq('title', title);
+		const workoutId = created![0].id as string;
+
+		try {
+			const { data: sets } = await admin
+				.from('gym_sets')
+				.select('exercise_name, exercise_id')
+				.eq('workout_id', workoutId);
+			expect(sets?.length).toBe(1);
+			expect(sets![0].exercise_id).toBe(customId);
+		} finally {
+			await admin.from('gym_workouts').delete().eq('id', workoutId);
+			await admin.from('exercises').delete().eq('id', customId);
+		}
+	});
+
 	test('weight_unit=lbs: entry parses to canonical kg + display renders lbs (F19)', async ({
 		page,
 	}) => {

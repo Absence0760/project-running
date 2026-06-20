@@ -3644,6 +3644,26 @@ export const en = {
 	"gym.editor.save": "Save workout",
 	"gym.editor.needExercise": "Add at least one exercise with a name.",
 
+	// Exercise catalogue browse/picker (migration 20270222_001, decisions §176)
+	"gym.catalogue.browse": "Browse catalogue",
+	"gym.catalogue.title": "Exercise catalogue",
+	"gym.catalogue.searchPlaceholder": "Search exercises",
+	"gym.catalogue.categoryLabel": "Category",
+	"gym.catalogue.empty": "No exercises match.",
+	"gym.catalogue.customBadge": "Custom",
+	"gym.catalogue.create": "Add “{name}” as a custom exercise",
+	"gym.catalogue.createFailed": "Couldn't add that exercise.",
+	"gym.catalogue.category.all": "All",
+	"gym.catalogue.category.chest": "Chest",
+	"gym.catalogue.category.back": "Back",
+	"gym.catalogue.category.shoulders": "Shoulders",
+	"gym.catalogue.category.legs": "Legs",
+	"gym.catalogue.category.arms": "Arms",
+	"gym.catalogue.category.core": "Core",
+	"gym.catalogue.category.cardio": "Cardio",
+	"gym.catalogue.category.full_body": "Full body",
+	"gym.catalogue.category.other": "Other",
+
 	// Gym routines (gym_programming.md slice P1)
 	"gym.routine.title": "Routines",
 	"gym.routine.subtitle": "{count, plural, one {# routine} other {# routines}}",
