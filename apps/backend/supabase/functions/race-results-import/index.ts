@@ -4,16 +4,20 @@ import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
   extractRunSignUpResults,
+  extractUltraSignUpResults,
   mapRunSignUpResult,
+  mapUltraSignUpResult,
   parseRaceResultRow,
   runSignUpResultsUrl,
+  ultraSignUpResultsUrl,
   type MappedRaceRun,
 } from './lib.ts';
 
 interface RequestBody {
-  provider?: unknown; // 'runsignup' | 'paste'
+  provider?: unknown; // 'runsignup' | 'ultrasignup' | 'paste'
   listingId?: unknown; // race_listings.id to import onto / link
   runSignUpUserId?: unknown; // runner's RunSignUp account id (optional filter)
+  ultraSignUpAthleteId?: unknown; // runner's UltraSignup participant uid (optional)
   result?: unknown; // paste-mode single result row
   matchRunId?: unknown; // when set, enrich THIS existing run instead of inserting
 }
@@ -115,6 +119,41 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     }
     mapped = extractRunSignUpResults(payload)
       .map((r) => mapRunSignUpResult(r, mapOpts))
+      .filter((r): r is MappedRaceRun => r !== null);
+  } else if (provider === 'ultrasignup') {
+    // Fail closed when the provider key is unconfigured — the UltraSignup leg
+    // mirrors RunSignUp's missing-credential gate (integrations.md + the race
+    // calendar ADR). Until the key is provisioned the EF is inert and the UI
+    // shows the unavailable explainer.
+    const apiKey = Deno.env.get('ULTRASIGNUP_API_KEY');
+    const apiSecret = Deno.env.get('ULTRASIGNUP_API_SECRET');
+    if (!apiKey || !apiSecret) {
+      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    }
+    // The athlete uid is the listing's provider_race_id for an UltraSignup
+    // listing, or supplied per-call (a runner importing their own history).
+    const athleteId = typeof body.ultraSignUpAthleteId === 'string' && body.ultraSignUpAthleteId
+      ? body.ultraSignUpAthleteId
+      : ((listing.provider_race_id as string | null) ?? '');
+    if (!athleteId) {
+      return Response.json({ error: 'listing has no UltraSignup athlete id' }, { status: 400 });
+    }
+    const url = ultraSignUpResultsUrl({ athleteId, apiKey, apiSecret });
+    const upstream = await fetch(url, {
+      headers: { 'User-Agent': Deno.env.get('RACE_IMPORT_USER_AGENT') || 'RunApp/1.0' },
+    });
+    if (!upstream.ok) {
+      // Fail loud on a non-2xx upstream rather than feeding an error page in.
+      return Response.json({ error: `ultrasignup upstream ${upstream.status}` }, { status: 502 });
+    }
+    let payload: unknown;
+    try {
+      payload = await upstream.json();
+    } catch (_) {
+      return Response.json({ error: 'ultrasignup upstream not JSON' }, { status: 502 });
+    }
+    mapped = extractUltraSignUpResults(payload)
+      .map((r) => mapUltraSignUpResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
   } else if (provider === 'paste') {
     if (!body.result || typeof body.result !== 'object') {
