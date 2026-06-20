@@ -29,6 +29,7 @@ import 'gym_detail_screen.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'run_detail_screen.dart';
+import 'run_heatmap_screen.dart';
 import '../widgets/top_banner.dart';
 
 /// Runs list showing local runs with sync status.
@@ -1062,6 +1063,16 @@ class _RunsScreenState extends State<RunsScreen> {
             icon: const Icon(Icons.event_note),
             tooltip: l10n.fitnessRunsPlans,
             onPressed: widget.onOpenPlans,
+          ),
+        if (!_timelineMode && widget.apiClient != null)
+          IconButton(
+            icon: const Icon(Icons.local_fire_department_outlined),
+            tooltip: l10n.runHeatmapTooltip,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => RunHeatmapScreen(api: widget.apiClient!),
+              ),
+            ),
           ),
         if (!_timelineMode)
         PopupMenuButton<_RunsRange>(
