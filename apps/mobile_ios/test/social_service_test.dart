@@ -21,7 +21,7 @@ import '../lib/social_service.dart';
 /// so testing those branches needs a DI seam refactor first. Tracked
 /// by the iceberg note in `docs/testing/testing.md § What's not covered`.
 
-ClubRow _row(String id, {int memberCount = 1}) => ClubRow(
+ClubRow _row(String id, {int memberCount = 1}) => ClubRow(shadowHidden: false, 
       id: id,
       slug: 'club-$id',
       name: 'Club $id',

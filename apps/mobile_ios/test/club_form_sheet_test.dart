@@ -71,7 +71,7 @@ class _CapturingSocialService extends SocialService {
     capturedJoinPolicy = joinPolicy;
     capturedIsPublic = isPublic;
     if (gate != null) await gate!.future;
-    return ClubRow(
+    return ClubRow(shadowHidden: false, 
       id: 'club-new',
       slug: slug,
       name: name,

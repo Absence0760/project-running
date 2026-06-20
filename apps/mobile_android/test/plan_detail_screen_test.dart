@@ -18,7 +18,7 @@ ClubView _club({
   String joinPolicy = 'open',
 }) =>
     ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: id,
         ownerId: 'owner-uuid',
         name: name,

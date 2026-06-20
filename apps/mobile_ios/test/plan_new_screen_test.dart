@@ -32,7 +32,7 @@ class _FakeTraining extends TrainingService {
 }
 
 ClubView _club(String id, String name) => ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: id,
         ownerId: 'owner-uuid',
         name: name,

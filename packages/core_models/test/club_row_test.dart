@@ -67,7 +67,7 @@ void main() {
       // (`isVerified`) but the JSON key is `is_verified`. Pin so
       // a refactor that drops the explicit `colIsVerified` constant
       // doesn't silently serialise to the wrong key.
-      const row = ClubRow(
+      const row = ClubRow(shadowHidden: false, 
         id: 'id1',
         ownerId: 'owner1',
         name: 'name',
@@ -88,7 +88,7 @@ void main() {
     test(
         'fromJson(toJson(row)) is identity for a row with isVerified=true',
         () {
-      const original = ClubRow(
+      const original = ClubRow(shadowHidden: false, 
         id: '11111111-1111-1111-1111-111111111111',
         ownerId: '22222222-2222-2222-2222-222222222222',
         name: 'Roundtrip Club',

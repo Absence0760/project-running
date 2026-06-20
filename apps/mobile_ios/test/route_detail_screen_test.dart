@@ -47,7 +47,7 @@ ClubView _club({
   String? viewerRole,
 }) =>
     ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: id,
         ownerId: 'owner-uuid',
         name: name,

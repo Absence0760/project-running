@@ -458,6 +458,7 @@ export type Database = {
           name: string
           owner_id: string
           requires_activity_waiver: boolean
+          shadow_hidden: boolean
           slug: string
           strava_url: string | null
           updated_at: string | null
@@ -480,6 +481,7 @@ export type Database = {
           name: string
           owner_id: string
           requires_activity_waiver?: boolean
+          shadow_hidden?: boolean
           slug: string
           strava_url?: string | null
           updated_at?: string | null
@@ -502,6 +504,7 @@ export type Database = {
           name?: string
           owner_id?: string
           requires_activity_waiver?: boolean
+          shadow_hidden?: boolean
           slug?: string
           strava_url?: string | null
           updated_at?: string | null
@@ -1926,6 +1929,86 @@ export type Database = {
           },
         ]
       }
+      meal_template_items: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          external_id: string | null
+          fat_g: number | null
+          id: string
+          item_name: string
+          meal_slot: string | null
+          position: number
+          protein_g: number | null
+          template_id: string
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          external_id?: string | null
+          fat_g?: number | null
+          id?: string
+          item_name: string
+          meal_slot?: string | null
+          position: number
+          protein_g?: number | null
+          template_id: string
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          external_id?: string | null
+          fat_g?: number | null
+          id?: string
+          item_name?: string
+          meal_slot?: string | null
+          position?: number
+          protein_g?: number | null
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "meal_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_templates: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          id: string
+          item_count: number
+          last_modified_at: string
+          meal_slot: string | null
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          item_count?: number
+          last_modified_at?: string
+          meal_slot?: string | null
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          item_count?: number
+          last_modified_at?: string
+          meal_slot?: string | null
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       monthly_funding: {
         Row: {
           amount_received: number
@@ -2683,6 +2766,7 @@ export type Database = {
           is_starred: boolean
           name: string
           run_count: number
+          shadow_hidden: boolean
           slug: string | null
           start_point: unknown
           surface: string | null
@@ -2705,6 +2789,7 @@ export type Database = {
           is_starred?: boolean
           name: string
           run_count?: number
+          shadow_hidden?: boolean
           slug?: string | null
           start_point?: unknown
           surface?: string | null
@@ -2727,6 +2812,7 @@ export type Database = {
           is_starred?: boolean
           name?: string
           run_count?: number
+          shadow_hidden?: boolean
           slug?: string | null
           start_point?: unknown
           surface?: string | null
@@ -3579,6 +3665,7 @@ export type Database = {
           onboarded_at: string | null
           parkrun_number: string | null
           preferred_unit: string | null
+          shadow_hidden: boolean
           subscription_at: string | null
           subscription_tier: string | null
           terms_accepted_at: string | null
@@ -3598,6 +3685,7 @@ export type Database = {
           onboarded_at?: string | null
           parkrun_number?: string | null
           preferred_unit?: string | null
+          shadow_hidden?: boolean
           subscription_at?: string | null
           subscription_tier?: string | null
           terms_accepted_at?: string | null
@@ -3617,6 +3705,7 @@ export type Database = {
           onboarded_at?: string | null
           parkrun_number?: string | null
           preferred_unit?: string | null
+          shadow_hidden?: boolean
           subscription_at?: string | null
           subscription_tier?: string | null
           terms_accepted_at?: string | null
@@ -3954,6 +4043,10 @@ export type Database = {
         Args: { parent_id: string }
         Returns: boolean
       }
+      admin_unhide_target: {
+        Args: { p_target_id: string; p_target_kind: string }
+        Returns: boolean
+      }
       am_i_admin: { Args: never; Returns: boolean }
       approve_event_result: {
         Args: {
@@ -3996,6 +4089,10 @@ export type Database = {
           p_start_date: string
         }
         Returns: string
+      }
+      auto_hide_target: {
+        Args: { p_target_id: string; p_target_kind: string }
+        Returns: undefined
       }
       award_achievements_for_user: {
         Args: { p_user: string }
@@ -4278,6 +4375,7 @@ export type Database = {
           reasons: Json
           report_count: number
           reporter_count: number
+          shadow_hidden: boolean
           target_id: string
           target_kind: string
         }[]
@@ -4380,6 +4478,7 @@ export type Database = {
           onboarded_at: string | null
           parkrun_number: string | null
           preferred_unit: string | null
+          shadow_hidden: boolean
           subscription_at: string | null
           subscription_tier: string | null
           terms_accepted_at: string | null
@@ -4779,6 +4878,7 @@ export type Database = {
           name: string
           owner_id: string
           requires_activity_waiver: boolean
+          shadow_hidden: boolean
           slug: string
           strava_url: string | null
           updated_at: string | null

@@ -48,7 +48,7 @@ RunFeedEntry _runEntry({
       author: _author(id: authorId, name: authorName),
     );
 
-UserProfileRow _profileRow(String id, String name) => UserProfileRow(
+UserProfileRow _profileRow(String id, String name) => UserProfileRow(shadowHidden: false, 
       id: id,
       displayName: name,
     );

@@ -42,7 +42,7 @@ class _FakeSocial extends SocialService {
 }
 
 ClubView _club(String id, String name, String role) => ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: id,
         ownerId: 'owner',
         name: name,

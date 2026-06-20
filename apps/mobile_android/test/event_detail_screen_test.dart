@@ -9,7 +9,7 @@ import '../lib/screens/event_detail_screen.dart';
 import '../lib/social_service.dart';
 
 ClubView _club(String? viewerRole) => ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: 'club-1',
         slug: 'club-1',
         name: 'Club',

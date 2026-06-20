@@ -82,7 +82,7 @@ class _AvatarApi extends ApiClient {
   Future<DateTime?> fetchCoachConsentAt() async => null;
   @override
   Future<UserProfileRow?> fetchMyProfile() async =>
-      UserProfileRow(id: 'u1', displayName: 'Runner', avatarUrl: avatar);
+      UserProfileRow(shadowHidden: false, id: 'u1', displayName: 'Runner', avatarUrl: avatar);
   @override
   Future<void> removeAvatar() async {
     removeCalls++;

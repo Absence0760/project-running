@@ -493,6 +493,7 @@ class ClubRow {
   static const String colInstagramUrl = 'instagram_url';
   static const String colStravaUrl = 'strava_url';
   static const String colFacebookUrl = 'facebook_url';
+  static const String colShadowHidden = 'shadow_hidden';
 
   final String id;
   final String ownerId;
@@ -514,6 +515,7 @@ class ClubRow {
   final String? instagramUrl;
   final String? stravaUrl;
   final String? facebookUrl;
+  final bool shadowHidden;
 
   const ClubRow({
     required this.id,
@@ -536,6 +538,7 @@ class ClubRow {
     this.instagramUrl,
     this.stravaUrl,
     this.facebookUrl,
+    required this.shadowHidden,
   });
 
   factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
@@ -559,6 +562,7 @@ class ClubRow {
     instagramUrl: json['instagram_url'] as String?,
     stravaUrl: json['strava_url'] as String?,
     facebookUrl: json['facebook_url'] as String?,
+    shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -582,6 +586,7 @@ class ClubRow {
     colInstagramUrl: instagramUrl,
     colStravaUrl: stravaUrl,
     colFacebookUrl: facebookUrl,
+    colShadowHidden: shadowHidden,
   };
 }
 
@@ -2236,6 +2241,128 @@ class IntegrationRow {
   };
 }
 
+/// Row shape for the `meal_template_items` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class MealTemplateItemRow {
+  static const String table = 'meal_template_items';
+  static const String colId = 'id';
+  static const String colTemplateId = 'template_id';
+  static const String colPosition = 'position';
+  static const String colItemName = 'item_name';
+  static const String colMealSlot = 'meal_slot';
+  static const String colCalories = 'calories';
+  static const String colProteinG = 'protein_g';
+  static const String colCarbsG = 'carbs_g';
+  static const String colFatG = 'fat_g';
+  static const String colExternalId = 'external_id';
+
+  final String id;
+  final String templateId;
+  final int position;
+  final String itemName;
+  final String? mealSlot;
+  final double? calories;
+  final double? proteinG;
+  final double? carbsG;
+  final double? fatG;
+  final String? externalId;
+
+  const MealTemplateItemRow({
+    required this.id,
+    required this.templateId,
+    required this.position,
+    required this.itemName,
+    this.mealSlot,
+    this.calories,
+    this.proteinG,
+    this.carbsG,
+    this.fatG,
+    this.externalId,
+  });
+
+  factory MealTemplateItemRow.fromJson(Map<String, dynamic> json) => MealTemplateItemRow(
+    id: json['id'] as String,
+    templateId: json['template_id'] as String,
+    position: (json['position'] as num).toInt(),
+    itemName: json['item_name'] as String,
+    mealSlot: json['meal_slot'] as String?,
+    calories: (json['calories'] as num?)?.toDouble(),
+    proteinG: (json['protein_g'] as num?)?.toDouble(),
+    carbsG: (json['carbs_g'] as num?)?.toDouble(),
+    fatG: (json['fat_g'] as num?)?.toDouble(),
+    externalId: json['external_id'] as String?,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colTemplateId: templateId,
+    colPosition: position,
+    colItemName: itemName,
+    colMealSlot: mealSlot,
+    colCalories: calories,
+    colProteinG: proteinG,
+    colCarbsG: carbsG,
+    colFatG: fatG,
+    colExternalId: externalId,
+  };
+}
+
+/// Row shape for the `meal_templates` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class MealTemplateRow {
+  static const String table = 'meal_templates';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colName = 'name';
+  static const String colMealSlot = 'meal_slot';
+  static const String colItemCount = 'item_count';
+  static const String colExternalId = 'external_id';
+  static const String colLastModifiedAt = 'last_modified_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final String name;
+  final String? mealSlot;
+  final int itemCount;
+  final String? externalId;
+  final DateTime lastModifiedAt;
+  final DateTime createdAt;
+
+  const MealTemplateRow({
+    required this.id,
+    required this.userId,
+    required this.name,
+    this.mealSlot,
+    required this.itemCount,
+    this.externalId,
+    required this.lastModifiedAt,
+    required this.createdAt,
+  });
+
+  factory MealTemplateRow.fromJson(Map<String, dynamic> json) => MealTemplateRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    name: json['name'] as String,
+    mealSlot: json['meal_slot'] as String?,
+    itemCount: (json['item_count'] as num).toInt(),
+    externalId: json['external_id'] as String?,
+    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colName: name,
+    colMealSlot: mealSlot,
+    colItemCount: itemCount,
+    colExternalId: externalId,
+    colLastModifiedAt: lastModifiedAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `monthly_funding` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class MonthlyFundingRow {
@@ -3062,6 +3189,7 @@ class RouteRow {
   static const String colGeom = 'geom';
   static const String colDescription = 'description';
   static const String colIsFeatured = 'is_featured';
+  static const String colShadowHidden = 'shadow_hidden';
 
   final String id;
   final String userId;
@@ -3083,6 +3211,7 @@ class RouteRow {
   final dynamic geom;
   final String? description;
   final bool isFeatured;
+  final bool shadowHidden;
 
   const RouteRow({
     required this.id,
@@ -3105,6 +3234,7 @@ class RouteRow {
     this.geom,
     this.description,
     required this.isFeatured,
+    required this.shadowHidden,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -3128,6 +3258,7 @@ class RouteRow {
     geom: json['geom'],
     description: json['description'] as String?,
     isFeatured: (json['is_featured'] as bool?) ?? false,
+    shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3151,6 +3282,7 @@ class RouteRow {
     colGeom: geom,
     colDescription: description,
     colIsFeatured: isFeatured,
+    colShadowHidden: shadowHidden,
   };
 }
 
@@ -4137,6 +4269,7 @@ class UserProfileRow {
   static const String colTermsAcceptedAt = 'terms_accepted_at';
   static const String colOnboardedAt = 'onboarded_at';
   static const String colHeightCm = 'height_cm';
+  static const String colShadowHidden = 'shadow_hidden';
 
   final String id;
   final String? displayName;
@@ -4155,6 +4288,7 @@ class UserProfileRow {
   final DateTime? termsAcceptedAt;
   final DateTime? onboardedAt;
   final double? heightCm;
+  final bool shadowHidden;
 
   const UserProfileRow({
     required this.id,
@@ -4174,6 +4308,7 @@ class UserProfileRow {
     this.termsAcceptedAt,
     this.onboardedAt,
     this.heightCm,
+    required this.shadowHidden,
   });
 
   factory UserProfileRow.fromJson(Map<String, dynamic> json) => UserProfileRow(
@@ -4194,6 +4329,7 @@ class UserProfileRow {
     termsAcceptedAt: json['terms_accepted_at'] == null ? null : DateTime.parse(json['terms_accepted_at'] as String),
     onboardedAt: json['onboarded_at'] == null ? null : DateTime.parse(json['onboarded_at'] as String),
     heightCm: (json['height_cm'] as num?)?.toDouble(),
+    shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4214,6 +4350,7 @@ class UserProfileRow {
     colTermsAcceptedAt: termsAcceptedAt?.toIso8601String(),
     colOnboardedAt: onboardedAt?.toIso8601String(),
     colHeightCm: heightCm,
+    colShadowHidden: shadowHidden,
   };
 }
 

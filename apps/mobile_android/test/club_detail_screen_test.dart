@@ -39,7 +39,7 @@ Future<void> _pump(WidgetTester tester) {
 }
 
 ClubView _memberClub() => ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: 'club-1',
         ownerId: 'owner',
         name: 'Track Club',
@@ -88,7 +88,7 @@ class _FakeTraining extends TrainingService {
 }
 
 ClubView _adminClub() => ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: 'club-1',
         ownerId: 'owner',
         name: 'Track Club',
@@ -565,7 +565,7 @@ void main() {
 }
 
 ClubView _nonMemberClub() => ClubView(
-      row: ClubRow(
+      row: ClubRow(shadowHidden: false, 
         id: 'club-1',
         ownerId: 'owner',
         name: 'Track Club',
