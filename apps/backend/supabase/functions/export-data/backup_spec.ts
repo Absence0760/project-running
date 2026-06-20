@@ -234,6 +234,67 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: `contact_user_id=eq.${uid}`,
 			select: 'id,owner_id,contact_user_id,contact_email,confirmed_at,created_at,updated_at',
 		},
+		// session_plans (+ blocks + items via nested embeds). The yoga/pilates
+		// session-planner P1 authored content (migration 20270103_001).
+		// Author-scoped; session_plan_blocks / session_plan_items have no owner
+		// column of their own (they cascade from the parent plan), so the export
+		// nests them — mirroring the gym_routines + training_plans embeds. The
+		// Go guard's user_id-keyed scan can't see author_id, so it is wired in
+		// explicitly. Mirrors the Go worker's exportPersonalDataSpecs entry.
+		{
+			entry: 'session_plans.json',
+			table: 'session_plans',
+			filter: `author_id=eq.${uid}`,
+			select: '*,blocks:session_plan_blocks(*),items:session_plan_items(*)',
+		},
+		// route_photos — the subject's own route-photo metadata (migration
+		// 20270114_001). owner_id is the uploader. Image bytes live in Storage;
+		// the metadata row is the subject's own Art 20 data. Keyed by owner_id.
+		{
+			entry: 'route_photos.json',
+			table: 'route_photos',
+			filter: `owner_id=eq.${uid}`,
+			select: '*',
+		},
+		// event_orders — the subject's paid-registration ledger, both legs:
+		// orders placed as buyer (buyer_user_id) and orders for their events as
+		// host (host_user_id). The financial record of a transaction the subject
+		// was party to is their own Art 15/20 data. The Stripe id columns are
+		// references (not secret keys), so `*` leaks no credential.
+		{
+			entry: 'event_orders_as_buyer.json',
+			table: 'event_orders',
+			filter: `buyer_user_id=eq.${uid}`,
+			select: '*',
+		},
+		{
+			entry: 'event_orders_as_host.json',
+			table: 'event_orders',
+			filter: `host_user_id=eq.${uid}`,
+			select: '*',
+		},
+		// event_pricing — the price sheets the subject set as host (migration
+		// 20261229_001). event_pricing has no owner column; the host link is
+		// event_id → events.host_user_id. The spec inner-joins the parent event
+		// and filters on its host_user_id, so only the subject's own events'
+		// pricing ships. The embedded events object projects only host_user_id
+		// (the subject's own id), leaking no third-party event data.
+		{
+			entry: 'event_pricing_as_host.json',
+			table: 'event_pricing',
+			filter: `events.host_user_id=eq.${uid}`,
+			select: '*,events!inner(host_user_id)',
+		},
+		// achievements — the subject's earned badges (PR / segment / streak /
+		// distance / plan), tier, earned_at. Owner-scoped (user_id) Art 20 data.
+		// Surfaced by the widened export-completeness guard (2026-06-20).
+		{ entry: 'achievements.json', table: 'achievements', filter: uidEq, select: '*' },
+		// challenge_participants — the subject's challenge enrolments.
+		{ entry: 'challenge_participants.json', table: 'challenge_participants', filter: uidEq, select: '*' },
+		// challenge_badges — the subject's durable challenge-completion records.
+		{ entry: 'challenge_badges.json', table: 'challenge_badges', filter: uidEq, select: '*' },
+		// public_recaps — the subject's published Year/Month-in-Running snapshots.
+		{ entry: 'public_recaps.json', table: 'public_recaps', filter: uidEq, select: '*' },
 	];
 }
 

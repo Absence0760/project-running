@@ -14,19 +14,19 @@ const TEST_UID = '00000000-0000-0000-0000-000000000abc';
 
 Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	const specs = buildBackupSpecs(TEST_UID);
-	// 36 entries matches the Go worker's spec list (May 2026 +
-	// reports_against_me + the 2026-05-30 Critical batch:
-	// direct_messages × 2 directions, coach_athletes × 2 directions,
-	// event_results + the 2026-05-30 High batch: event_result_claims,
-	// user_blocks, club_posts, event_exceptions + the persona round-5
-	// addition: user_settings + the Phase 4 multi-modal gym/nutrition
-	// pair: gym_workouts, food_log + the nutrition body_metrics weight
-	// series + the safety_contacts finish-alert relationships in both
-	// directions: owned + as-contact + the instructor_payout_accounts
-	// Stripe Connect payout metadata); a regression that drops one of
-	// these is a silent Art 20 completeness gap. Keep in lockstep with
-	// the Go worker's `FetchExportPersonalDataTables` spec list.
-	assertEquals(specs.length, 41, `expected 41 specs, got ${specs.length}`);
+	// Entry count tracks the Go worker's exportPersonalDataSpecs list (May
+	// 2026 base + reports_against_me + the 2026-05-30 Critical/High batches
+	// + user_settings + the Phase 4 gym/nutrition pair + body_metrics +
+	// safety_contacts × 2 + instructor_payout_accounts). The 2026-06-20
+	// GDPR Art 20 batch added the four owner-FK tables missing from BOTH
+	// export paths — session_plans, route_photos, event_orders (× 2: buyer
+	// + host), event_pricing_as_host — plus the four pre-existing user_id
+	// gaps the widened completeness guard then surfaced (achievements,
+	// challenge_participants, challenge_badges, public_recaps). A regression
+	// that drops one is a silent Art 20 completeness gap. The Go list
+	// carries two extra entries this twin omits by long-standing design
+	// (route_markers, checkpoint_crossings), so the counts differ by two.
+	assertEquals(specs.length, 50, `expected 50 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -70,8 +70,97 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'instructor_payout_accounts.json',
 		'safety_contacts_owned.json',
 		'safety_contacts_as_contact.json',
+		'session_plans.json',
+		'route_photos.json',
+		'event_orders_as_buyer.json',
+		'event_orders_as_host.json',
+		'event_pricing_as_host.json',
+		'achievements.json',
+		'challenge_participants.json',
+		'challenge_badges.json',
+		'public_recaps.json',
 	]) {
 		assertEquals(entries.has(expected), true, `missing entry: ${expected}`);
+	}
+});
+
+Deno.test('session_plans exported author-scoped with blocks + items nested (GDPR Art 20)', () => {
+	// 2026-06-20 Art 20 batch. The yoga/pilates session-planner P1 authored
+	// content (migration 20270103_001) was missing from both export paths.
+	// It is keyed by author_id (NOT user_id), so the Go completeness guard's
+	// user_id-column scan never flagged it — the blind spot this batch
+	// closed. session_plan_blocks / session_plan_items have no owner column
+	// of their own (they cascade from the parent plan), so the spec nests
+	// them, mirroring the gym_routines embed.
+	const specs = buildBackupSpecs(TEST_UID);
+	const plans = specs.find((s) => s.entry === 'session_plans.json');
+	assertExists(plans);
+	assertEquals(plans.table, 'session_plans');
+	assertEquals(plans.filter, `author_id=eq.${TEST_UID}`);
+	assertEquals(plans.select.includes('session_plan_blocks'), true);
+	assertEquals(plans.select.includes('session_plan_items'), true);
+});
+
+Deno.test('route_photos exported owner-scoped (GDPR Art 20)', () => {
+	// 2026-06-20 Art 20 batch. Route-photo metadata (migration 20270114_001)
+	// is keyed by owner_id (the uploader), so the user_id-column guard never
+	// saw it. The metadata row (caption, ordering, storage paths, timestamps)
+	// is the subject's own data; the image bytes live in Storage.
+	const photos = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'route_photos.json');
+	assertExists(photos);
+	assertEquals(photos.table, 'route_photos');
+	assertEquals(photos.filter, `owner_id=eq.${TEST_UID}`);
+	assertEquals(photos.select, '*');
+});
+
+Deno.test('event_orders exported both legs: as buyer and as host (GDPR Art 20)', () => {
+	// 2026-06-20 Art 20 batch. The paid-registration ledger (migration
+	// 20261229_001) is keyed by buyer_user_id / host_user_id, neither of
+	// which the user_id-column guard saw. The subject is party to a row on
+	// both legs — orders they placed (buyer) and orders for their events
+	// (host) — and the financial record is their own Art 15/20 data.
+	const specs = buildBackupSpecs(TEST_UID);
+	const asBuyer = specs.find((s) => s.entry === 'event_orders_as_buyer.json');
+	const asHost = specs.find((s) => s.entry === 'event_orders_as_host.json');
+	assertExists(asBuyer);
+	assertExists(asHost);
+	assertEquals(asBuyer.table, 'event_orders');
+	assertEquals(asHost.table, 'event_orders');
+	assertEquals(asBuyer.filter, `buyer_user_id=eq.${TEST_UID}`);
+	assertEquals(asHost.filter, `host_user_id=eq.${TEST_UID}`);
+});
+
+Deno.test('event_pricing exported host-scoped via embedded event inner-join (GDPR Art 20)', () => {
+	// 2026-06-20 Art 20 batch. event_pricing (migration 20261229_001) has no
+	// owner column of its own — the host link is event_id → events.host_user_id.
+	// The spec inner-joins the parent event and filters on its host_user_id,
+	// so only the subject's own events' pricing ships. The embedded events
+	// object must project ONLY host_user_id (the subject's own id) so no
+	// third-party event data leaks alongside it.
+	const pricing = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'event_pricing_as_host.json');
+	assertExists(pricing);
+	assertEquals(pricing.table, 'event_pricing');
+	assertEquals(pricing.filter, `events.host_user_id=eq.${TEST_UID}`);
+	assertEquals(pricing.select, '*,events!inner(host_user_id)');
+});
+
+Deno.test('achievements / challenges / recaps exported owner-scoped (GDPR Art 20)', () => {
+	// 2026-06-20 Art 20 batch. These four carry a plain user_id FK to
+	// auth.users and were genuine pre-existing gaps in the export — earned
+	// achievements, challenge enrolments, challenge-completion badges, and
+	// published recap snapshots are all the subject's own Art 20 data. The
+	// widened completeness guard surfaced them; they ship owner-scoped, `*`.
+	const specs = buildBackupSpecs(TEST_UID);
+	for (const entry of [
+		'achievements.json',
+		'challenge_participants.json',
+		'challenge_badges.json',
+		'public_recaps.json',
+	]) {
+		const spec = specs.find((s) => s.entry === entry);
+		assertExists(spec);
+		assertEquals(spec.filter, `user_id=eq.${TEST_UID}`);
+		assertEquals(spec.select, '*');
 	}
 });
 
