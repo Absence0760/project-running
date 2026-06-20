@@ -82,7 +82,7 @@
 			{/if}
 		</nav>
 
-		<h1>{data.guide.title}</h1>
+		<h1>{guide.title}</h1>
 		<p class="updated">{m('learn.lastUpdated', { date: formatDate(data.guide.updated) })}</p>
 
 		{#if showFallbackNotice}
