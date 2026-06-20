@@ -8481,6 +8481,71 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymRoutineClubTemplateBadge => 'Modèle du club';
 
   @override
+  String get gymRoutinePublicBadge => 'Dans la bibliothèque publique';
+
+  @override
+  String get gymRoutinePublishPublicLabel => 'Bibliothèque publique';
+
+  @override
+  String get gymRoutinePublishPublic => 'Publier dans la bibliothèque publique';
+
+  @override
+  String get gymRoutineUnpublishPublic => 'Retirer de la bibliothèque publique';
+
+  @override
+  String get gymRoutinePublishPublicHint =>
+      'Toute personne connectée peut prévisualiser et adopter cette routine. Les séances enregistrées restent privées.';
+
+  @override
+  String get gymRoutinePublishPublicSuccess =>
+      'Routine publiée dans la bibliothèque publique.';
+
+  @override
+  String get gymRoutineUnpublishPublicSuccess =>
+      'Routine retirée de la bibliothèque publique.';
+
+  @override
+  String get gymRoutinePublishPublicFailed =>
+      'Impossible de modifier la visibilité publique.';
+
+  @override
+  String get gymLibraryLink => 'Bibliothèque';
+
+  @override
+  String get gymLibraryTitle => 'Bibliothèque publique de routines';
+
+  @override
+  String get gymLibrarySearchHint => 'Rechercher des routines par nom';
+
+  @override
+  String get gymLibraryLoadError => 'Impossible de charger la bibliothèque.';
+
+  @override
+  String get gymLibraryEmpty => 'Aucune routine publiée pour l’instant.';
+
+  @override
+  String gymLibraryEmptySearch(String query) {
+    return 'Aucune routine ne correspond à \"$query\".';
+  }
+
+  @override
+  String gymLibraryByAuthor(String author) {
+    return 'par $author';
+  }
+
+  @override
+  String get gymLibraryAnonymous => 'un pratiquant';
+
+  @override
+  String get gymLibraryAdopt => 'Adopter dans mes routines';
+
+  @override
+  String get gymLibraryAdopting => 'Adoption…';
+
+  @override
+  String get gymLibraryAdoptFailed => 'Impossible d’adopter la routine.';
+
+  @override
   String get gymRoutineDelete => 'Supprimer';
 
   @override

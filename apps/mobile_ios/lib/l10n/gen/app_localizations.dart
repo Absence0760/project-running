@@ -13998,6 +13998,120 @@ abstract class AppLocalizations {
   /// **'Club template'**
   String get gymRoutineClubTemplateBadge;
 
+  /// Badge shown on a routine that is published to the public library
+  ///
+  /// In en, this message translates to:
+  /// **'In the public library'**
+  String get gymRoutinePublicBadge;
+
+  /// Label above the public publish/unpublish control on the routine detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Public library'**
+  String get gymRoutinePublishPublicLabel;
+
+  /// Button that publishes a personal routine to the public library
+  ///
+  /// In en, this message translates to:
+  /// **'Publish to public library'**
+  String get gymRoutinePublishPublic;
+
+  /// Button that removes a routine from the public library
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from public library'**
+  String get gymRoutineUnpublishPublic;
+
+  /// Hint under the public-library publish control
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone signed in can preview and adopt this routine. Logged workouts stay private.'**
+  String get gymRoutinePublishPublicHint;
+
+  /// Confirmation after publishing a routine to the public library
+  ///
+  /// In en, this message translates to:
+  /// **'Routine published to the public library.'**
+  String get gymRoutinePublishPublicSuccess;
+
+  /// Confirmation after removing a routine from the public library
+  ///
+  /// In en, this message translates to:
+  /// **'Routine removed from the public library.'**
+  String get gymRoutineUnpublishPublicSuccess;
+
+  /// Error after a failed public-library visibility toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update public visibility.'**
+  String get gymRoutinePublishPublicFailed;
+
+  /// Action that opens the public routine library
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get gymLibraryLink;
+
+  /// App bar title of the public routine library
+  ///
+  /// In en, this message translates to:
+  /// **'Public routine library'**
+  String get gymLibraryTitle;
+
+  /// Placeholder in the public routine library search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search routines by name'**
+  String get gymLibrarySearchHint;
+
+  /// Error state in the public routine library
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the library.'**
+  String get gymLibraryLoadError;
+
+  /// Empty state when the public routine library has no routines
+  ///
+  /// In en, this message translates to:
+  /// **'No published routines yet.'**
+  String get gymLibraryEmpty;
+
+  /// Empty state when a public routine library search returns nothing
+  ///
+  /// In en, this message translates to:
+  /// **'No routines match \"{query}\".'**
+  String gymLibraryEmptySearch(String query);
+
+  /// Attribution line on a public routine library entry
+  ///
+  /// In en, this message translates to:
+  /// **'by {author}'**
+  String gymLibraryByAuthor(String author);
+
+  /// Fallback author name when a public routine's author has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'a lifter'**
+  String get gymLibraryAnonymous;
+
+  /// Button that clones a public routine into the viewer's library
+  ///
+  /// In en, this message translates to:
+  /// **'Adopt into my routines'**
+  String get gymLibraryAdopt;
+
+  /// Busy label while adopting a public routine
+  ///
+  /// In en, this message translates to:
+  /// **'Adopting…'**
+  String get gymLibraryAdopting;
+
+  /// Error after a failed public-routine adopt
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t adopt the routine.'**
+  String get gymLibraryAdoptFailed;
+
   /// No description provided for @gymRoutineDelete.
   ///
   /// In en, this message translates to:

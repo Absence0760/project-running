@@ -5425,6 +5425,61 @@ class ApiClient {
     return newId as String;
   }
 
+  /// Browse the public gym-routine library — routines published as public
+  /// templates that any signed-in user can adopt (migration 20270224_001).
+  /// Optional case-insensitive title search. Each entry carries the author's
+  /// public display name (handle) joined from user_profiles; no other author
+  /// data is exposed. Mirrors web `data.ts#fetchPublicGymRoutineLibrary`.
+  Future<List<({GymRoutineRow routine, String? authorHandle})>>
+      fetchPublicGymRoutineLibrary({String query = ''}) async {
+    var sel = _client
+        .from(GymRoutineRow.table)
+        .select()
+        .eq(GymRoutineRow.colIsPublicTemplate, true);
+    final trimmed = query.trim();
+    if (trimmed.isNotEmpty) {
+      sel = sel.ilike(GymRoutineRow.colTitle, '%$trimmed%');
+    }
+    final rows = await sel
+        .order(GymRoutineRow.colLastModifiedAt, ascending: false)
+        .limit(100);
+    final routines = (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(GymRoutineRow.fromJson)
+        .toList();
+    final authorIds = {for (final r in routines) r.authorId}.toList();
+    final byId = <String, String?>{};
+    if (authorIds.isNotEmpty) {
+      final profiles = await _client
+          .from('user_profiles')
+          .select('id, display_name')
+          .inFilter('id', authorIds);
+      for (final p in profiles as List) {
+        final m = p as Map<String, dynamic>;
+        byId[m['id'] as String] = m['display_name'] as String?;
+      }
+    }
+    return [
+      for (final r in routines)
+        (routine: r, authorHandle: byId[r.authorId]),
+    ];
+  }
+
+  /// Publish (or unpublish) a personal gym routine to/from the public library.
+  /// The set_gym_routine_public RPC is author-gated + refuses a club-owned
+  /// routine server-side; publishing flips is_public_template on the routine
+  /// itself (the routine IS the template — no deep-copy). Mirrors web
+  /// `data.ts#setGymRoutinePublic`.
+  Future<void> setGymRoutinePublic({
+    required String routineId,
+    required bool isPublic,
+  }) async {
+    await _client.rpc(
+      'set_gym_routine_public',
+      params: {'p_routine_id': routineId, 'p_public': isPublic},
+    );
+  }
+
   // ─────────────────── Nutrition / food log (Phase 4) ───────────────────
 
   /// Food entries in the half-open day range [from, to), newest first.

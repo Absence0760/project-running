@@ -50,15 +50,38 @@ class RoutineDetailScreen extends StatefulWidget {
 
 class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   bool _isOnline = true;
+  bool _isOwner = false;
   List<ClubView> _adminClubs = const [];
   String _publishingTo = '';
   bool _publishBusy = false;
+  bool _publicBusy = false;
 
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChange);
+    _computeOwner();
     _loadAdminClubs();
+  }
+
+  /// Whether the viewer authors this personal (non-club) routine — gates the
+  /// public publish/unpublish toggle. Independent of [_loadAdminClubs] (which
+  /// additionally needs a SocialService for the club publish-row).
+  void _computeOwner() {
+    final r = widget.store.byId(widget.routineId);
+    if (r == null || r.clubId != null) return;
+    String? uid = widget.viewerIdOverride;
+    if (uid == null) {
+      try {
+        uid = Supabase.instance.client.auth.currentUser?.id;
+      } catch (_) {
+        // Supabase not initialised (e.g. a widget test without the override).
+        return;
+      }
+    }
+    if (uid != null && r.row['author_id'] == uid) {
+      _isOwner = true;
+    }
   }
 
   @override
@@ -113,6 +136,30 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
       showTopBanner(context, l10n.gymRoutinePublishFailed);
     } finally {
       if (mounted) setState(() => _publishBusy = false);
+    }
+  }
+
+  Future<void> _togglePublic(StoredRoutine r) async {
+    final api = widget.api;
+    if (api == null || _publicBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final next = !r.isPublicTemplate;
+    setState(() => _publicBusy = true);
+    try {
+      await api.setGymRoutinePublic(routineId: r.id, isPublic: next);
+      await widget.store.setPublicLocal(r.id, next);
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        next
+            ? l10n.gymRoutinePublishPublicSuccess
+            : l10n.gymRoutineUnpublishPublicSuccess,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showTopBanner(context, l10n.gymRoutinePublishPublicFailed);
+    } finally {
+      if (mounted) setState(() => _publicBusy = false);
     }
   }
 
@@ -297,6 +344,10 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           const SizedBox(height: 12),
           _publishRow(r, theme, l10n),
         ],
+        if (_isOwner && r.clubId == null) ...[
+          const SizedBox(height: 12),
+          _publicRow(r, theme, l10n),
+        ],
         const SizedBox(height: 16),
         for (final ex in r.exercises) _exerciseCard(ex, theme, l10n),
       ],
@@ -358,6 +409,47 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
               child: Text(l10n.gymRoutinePublish),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _publicRow(StoredRoutine r, ThemeData theme, AppLocalizations l10n) {
+    final isPublic = r.isPublicTemplate;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.gymRoutinePublishPublicLabel,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 4),
+        if (isPublic)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.public, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                l10n.gymRoutinePublicBadge,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.primary),
+              ),
+            ],
+          )
+        else
+          Text(
+            l10n.gymRoutinePublishPublicHint,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: _publicBusy ? null : () => _togglePublic(r),
+          child: Text(isPublic
+              ? l10n.gymRoutineUnpublishPublic
+              : l10n.gymRoutinePublishPublic),
         ),
       ],
     );
