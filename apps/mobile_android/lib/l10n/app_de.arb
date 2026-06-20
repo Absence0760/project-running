@@ -2192,18 +2192,53 @@
   "gymRecordsSubtitle": "Deine Bestleistung für jede gewichtete Übung.",
   "gymRecordsEmpty": "Noch keine gewichteten Übungen erfasst. Trage ein Gewicht zu einem Satz ein, um deine Bestleistungen zu verfolgen.",
   "gymRecordsLastDone": "Zuletzt {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, one{1 Einheit} other{{count} Einheiten}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "Zurück zu Rekorden",
   "gymExerciseEmpty": "Noch kein Verlauf für diese Übung.",
   "gymSinceFirstUp": "+{delta} seit der ersten Einheit",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "−{delta} seit der ersten Einheit",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "keine Veränderung seit der ersten Einheit",
   "gymDetailLastTime": "Letztes Mal {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "Volumen",
   "gymDeleteConfirmTitle": "Training löschen?",
   "gymDeleteConfirmBody": "Dadurch werden das Training und seine Sätze dauerhaft entfernt.",
@@ -2306,30 +2341,92 @@
   "nutritionNoTargets": "Gib in der Web-App Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.",
   "nutritionWeeklyTrend": "Letzte 7 Tage",
   "nutritionCaloriesLeft": "{n} kcal übrig",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal über dem Ziel",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "Ziel erreicht",
   "nutritionMacroOver": "{n} über dem Ziel",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "Ziel erreicht",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "Ziel erreicht",
   "nutritionWaterRemaining": "{n} ml übrig",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "Im Ziel",
   "nutritionWeekUnderGoal": "{n} unter Ziel/Tag",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "{n} über Ziel/Tag",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "Tagesziel",
   "nutritionGoalBreakdown": "Ziel {base} + {exercise} kcal heute verbrannt",
   "dashGymReadinessIncluded": "Aktuelle Gym-Einheiten fließen in deine Ermüdung ein.",
   "dashGymReadinessExcluded": "Gym-Belastung ist von deiner Lauf-Bereitschaft ausgenommen.",
   "prefsExcludeGymFromReadiness": "Gym-Belastung von der Lauf-Bereitschaft ausschließen",
   "prefsExcludeGymFromReadinessHint": "Standardmäßig erhöhen Gym-Einheiten deine Ermüdung und senken deine Bereitschaft, wie ein Lauf. Aktiviere dies, um Fitness, Ermüdung und Form nur auf Läufen basieren zu lassen.",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "Heute noch nichts erfasst",
   "nutritionEmptyBody": "Erfasse eine Mahlzeit, um Kalorien und Makros zu verfolgen.",
   "nutritionSlotBreakfast": "Frühstück",
@@ -2421,7 +2518,6 @@
   "sessionRunVerdictAbandoned": "Abgebrochen",
   "sessionRunStepCount": "Schritt {index} von {total}",
   "sessionRunSwitchSides": "Seite wechseln",
-
   "coachingTitle": "Coaching",
   "coachingLede": "Betreue Athleten, indem du einen Einladungslink teilst, und sieh dir ihr Training an. Oder folge hier deinem eigenen Coach.",
   "coachingCancel": "Abbrechen",
@@ -2459,7 +2555,6 @@
   "coachingRevokeInviteError": "Einladung konnte nicht widerrufen werden: {error}",
   "coachingRemoveAthleteError": "Athlet konnte nicht entfernt werden: {error}",
   "coachingEndLinkError": "Verknüpfung konnte nicht beendet werden: {error}",
-
   "coachingAthleteAthleteFallback": "Athlet",
   "coachingAthleteRunnerFallback": "Läufer",
   "coachingAthleteCoachingSince": "Coaching seit {date}",
@@ -2575,5 +2670,50 @@
   "checkpointWeighInWeightKg": "Körpergewicht (kg)",
   "checkpointMedicalHold": "Medizinischen Stopp anordnen",
   "checkpointWeighInSave": "Speichern & stempeln",
-  "checkpointCancel": "Abbrechen"
+  "checkpointCancel": "Abbrechen",
+  "racesTitle": "Rennkalender",
+  "racesSearchPlaceholder": "Rennen nach Name suchen…",
+  "racesNearPlace": "In der Nähe eines Ortes…",
+  "racesKmAway": "{distance} entfernt",
+  "racesDistanceAny": "Beliebige Distanz",
+  "racesDistance5k": "5 km",
+  "racesDistance10k": "10 km",
+  "racesDistanceHalf": "Halbmarathon",
+  "racesDistanceMarathon": "Marathon",
+  "racesDistanceUltra": "Ultra",
+  "racesRegister": "Anmelden",
+  "racesViewResults": "Ergebnisse ansehen",
+  "racesImportResult": "Mein Ergebnis importieren",
+  "racesSubmitRace": "Rennen hinzufügen",
+  "racesUnverified": "Nicht verifiziert",
+  "racesEmpty": "Noch keine Rennen für diese Filter.",
+  "racesSearchFailed": "Rennen konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.",
+  "racesMatchPrompt": "War das der {name}? Importiere dein offizielles Ergebnis.",
+  "racesMatchConfirm": "Ergebnis importieren",
+  "racesMatchDismiss": "Nicht dieses Rennen",
+  "racesImported": "Offizielles Ergebnis importiert.",
+  "racesOfficialResult": "Offizielles Ergebnis",
+  "racesChipTime": "Nettozeit",
+  "racesGunTime": "Bruttozeit",
+  "racesOverallPlace": "Gesamtplatzierung",
+  "racesAgeGroupPlace": "Platzierung Altersklasse",
+  "racesAgeGroup": "Altersklasse",
+  "racesBib": "Startnummer",
+  "racesPasteResultHint": "Gib deine Zielergebnisse von der Ergebnisseite des Rennens ein.",
+  "racesSave": "Speichern",
+  "racesCancel": "Abbrechen",
+  "racesEditorTitle": "Rennen hinzufügen",
+  "racesFieldName": "Rennname",
+  "racesFieldDate": "Datum",
+  "racesFieldDistance": "Distanz (Meter)",
+  "racesFieldLocation": "Ort",
+  "racesFieldEntryUrl": "Anmeldelink",
+  "racesFieldResultsUrl": "Ergebnislink",
+  "racesSubmitFailed": "Das Rennen konnte nicht gespeichert werden. Bitte versuche es erneut.",
+  "racesImportFailed": "Das Ergebnis konnte nicht importiert werden. Bitte versuche es erneut.",
+  "navRaces": "Rennen",
+  "integrationsRunsignup": "RunSignUp",
+  "integrationsRunsignupConnect": "Rennergebnisse von RunSignUp importieren.",
+  "integrationsRunsignupOpen": "Rennkalender öffnen",
+  "integrationsRunsignupUnavailable": "RunSignUp-Import ist noch nicht verfügbar. parkrun und manuelles Einfügen funktionieren weiterhin."
 }

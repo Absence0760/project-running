@@ -8868,4 +8868,144 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'キャンセル';
+
+  @override
+  String get racesTitle => 'レースカレンダー';
+
+  @override
+  String get racesSearchPlaceholder => 'レースを名前で検索…';
+
+  @override
+  String get racesNearPlace => '場所の近くで…';
+
+  @override
+  String racesKmAway(String distance) {
+    return '$distance先';
+  }
+
+  @override
+  String get racesDistanceAny => 'すべての距離';
+
+  @override
+  String get racesDistance5k => '5K';
+
+  @override
+  String get racesDistance10k => '10K';
+
+  @override
+  String get racesDistanceHalf => 'ハーフ';
+
+  @override
+  String get racesDistanceMarathon => 'マラソン';
+
+  @override
+  String get racesDistanceUltra => 'ウルトラ';
+
+  @override
+  String get racesRegister => '登録';
+
+  @override
+  String get racesViewResults => '結果を見る';
+
+  @override
+  String get racesImportResult => '自分の結果をインポート';
+
+  @override
+  String get racesSubmitRace => 'レースを追加';
+
+  @override
+  String get racesUnverified => '未確認';
+
+  @override
+  String get racesEmpty => 'このフィルターに一致するレースはまだありません。';
+
+  @override
+  String get racesSearchFailed => 'レースを読み込めませんでした。接続を確認して再試行してください。';
+
+  @override
+  String racesMatchPrompt(String name) {
+    return 'これは$nameでしたか？公式結果をインポートします。';
+  }
+
+  @override
+  String get racesMatchConfirm => '結果をインポート';
+
+  @override
+  String get racesMatchDismiss => 'このレースではない';
+
+  @override
+  String get racesImported => '公式結果をインポートしました。';
+
+  @override
+  String get racesOfficialResult => '公式結果';
+
+  @override
+  String get racesChipTime => 'ネットタイム';
+
+  @override
+  String get racesGunTime => 'グロスタイム';
+
+  @override
+  String get racesOverallPlace => '総合順位';
+
+  @override
+  String get racesAgeGroupPlace => '年代別順位';
+
+  @override
+  String get racesAgeGroup => '年代';
+
+  @override
+  String get racesBib => 'ゼッケン';
+
+  @override
+  String get racesPasteResultHint => 'レースの結果ページから完走の詳細を入力してください。';
+
+  @override
+  String get racesSave => '保存';
+
+  @override
+  String get racesCancel => 'キャンセル';
+
+  @override
+  String get racesEditorTitle => 'レースを追加';
+
+  @override
+  String get racesFieldName => 'レース名';
+
+  @override
+  String get racesFieldDate => '日付';
+
+  @override
+  String get racesFieldDistance => '距離（メートル）';
+
+  @override
+  String get racesFieldLocation => '場所';
+
+  @override
+  String get racesFieldEntryUrl => '登録リンク';
+
+  @override
+  String get racesFieldResultsUrl => '結果リンク';
+
+  @override
+  String get racesSubmitFailed => 'レースを保存できませんでした。もう一度お試しください。';
+
+  @override
+  String get racesImportFailed => '結果をインポートできませんでした。もう一度お試しください。';
+
+  @override
+  String get navRaces => 'レース';
+
+  @override
+  String get integrationsRunsignup => 'RunSignUp';
+
+  @override
+  String get integrationsRunsignupConnect => 'RunSignUpからレース結果をインポートします。';
+
+  @override
+  String get integrationsRunsignupOpen => 'レースカレンダーを開く';
+
+  @override
+  String get integrationsRunsignupUnavailable =>
+      'RunSignUpのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
 }

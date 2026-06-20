@@ -2192,18 +2192,53 @@
   "gymRecordsSubtitle": "重量種目ごとのあなたのベスト記録。",
   "gymRecordsEmpty": "重量種目の記録はまだありません。セットに重量を入力すると自己ベストの記録が始まります。",
   "gymRecordsLastDone": "最終 {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, other{{count}セッション}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "記録に戻る",
   "gymExerciseEmpty": "この種目の履歴はまだありません。",
   "gymSinceFirstUp": "初回から+{delta}",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "初回から−{delta}",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "初回から変化なし",
   "gymDetailLastTime": "前回 {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "ボリューム",
   "gymDeleteConfirmTitle": "ワークアウトを削除しますか？",
   "gymDeleteConfirmBody": "ワークアウトとそのセットが完全に削除されます。",
@@ -2306,30 +2341,92 @@
   "nutritionNoTargets": "カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。",
   "nutritionWeeklyTrend": "直近7日間",
   "nutritionCaloriesLeft": "残り {n} kcal",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal 超過",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "目標達成",
   "nutritionMacroOver": "{n} 超過",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "目標達成",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "目標達成",
   "nutritionWaterRemaining": "残り {n} ml",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "目標どおり",
   "nutritionWeekUnderGoal": "目標より1日 {n} 少ない",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "目標より1日 {n} 多い",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "1日の目標",
   "nutritionGoalBreakdown": "目標 {base} + 本日消費 {exercise} kcal",
   "dashGymReadinessIncluded": "最近のジムのセッションは疲労に反映されています。",
   "dashGymReadinessExcluded": "ジムの負荷はランの準備度から除外されています。",
   "prefsExcludeGymFromReadiness": "ジムの負荷をランの準備度から除外する",
   "prefsExcludeGymFromReadinessHint": "デフォルトでは、ジムのセッションはランと同様に疲労を増やし準備度を下げます。フィットネス・疲労・フォームをランのみに基づかせるにはこれをオンにしてください。",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "今日はまだ何も記録していません",
   "nutritionEmptyBody": "食事を記録してカロリーとマクロを管理しましょう。",
   "nutritionSlotBreakfast": "朝食",
@@ -2421,7 +2518,6 @@
   "sessionRunVerdictAbandoned": "中止",
   "sessionRunStepCount": "ステップ {index} / {total}",
   "sessionRunSwitchSides": "反対側に切り替え",
-
   "coachingTitle": "コーチング",
   "coachingLede": "招待リンクを共有してアスリートを指導し、トレーニングを確認できます。あるいは自分のコーチをここでフォローできます。",
   "coachingCancel": "キャンセル",
@@ -2459,7 +2555,6 @@
   "coachingRevokeInviteError": "招待を取り消せませんでした: {error}",
   "coachingRemoveAthleteError": "アスリートを削除できませんでした: {error}",
   "coachingEndLinkError": "連携を終了できませんでした: {error}",
-
   "coachingAthleteAthleteFallback": "アスリート",
   "coachingAthleteRunnerFallback": "ランナー",
   "coachingAthleteCoachingSince": "{date} から指導",
@@ -2575,5 +2670,50 @@
   "checkpointWeighInWeightKg": "体重 (kg)",
   "checkpointMedicalHold": "メディカルホールドにする",
   "checkpointWeighInSave": "保存して記録",
-  "checkpointCancel": "キャンセル"
+  "checkpointCancel": "キャンセル",
+  "racesTitle": "レースカレンダー",
+  "racesSearchPlaceholder": "レースを名前で検索…",
+  "racesNearPlace": "場所の近くで…",
+  "racesKmAway": "{distance}先",
+  "racesDistanceAny": "すべての距離",
+  "racesDistance5k": "5K",
+  "racesDistance10k": "10K",
+  "racesDistanceHalf": "ハーフ",
+  "racesDistanceMarathon": "マラソン",
+  "racesDistanceUltra": "ウルトラ",
+  "racesRegister": "登録",
+  "racesViewResults": "結果を見る",
+  "racesImportResult": "自分の結果をインポート",
+  "racesSubmitRace": "レースを追加",
+  "racesUnverified": "未確認",
+  "racesEmpty": "このフィルターに一致するレースはまだありません。",
+  "racesSearchFailed": "レースを読み込めませんでした。接続を確認して再試行してください。",
+  "racesMatchPrompt": "これは{name}でしたか？公式結果をインポートします。",
+  "racesMatchConfirm": "結果をインポート",
+  "racesMatchDismiss": "このレースではない",
+  "racesImported": "公式結果をインポートしました。",
+  "racesOfficialResult": "公式結果",
+  "racesChipTime": "ネットタイム",
+  "racesGunTime": "グロスタイム",
+  "racesOverallPlace": "総合順位",
+  "racesAgeGroupPlace": "年代別順位",
+  "racesAgeGroup": "年代",
+  "racesBib": "ゼッケン",
+  "racesPasteResultHint": "レースの結果ページから完走の詳細を入力してください。",
+  "racesSave": "保存",
+  "racesCancel": "キャンセル",
+  "racesEditorTitle": "レースを追加",
+  "racesFieldName": "レース名",
+  "racesFieldDate": "日付",
+  "racesFieldDistance": "距離（メートル）",
+  "racesFieldLocation": "場所",
+  "racesFieldEntryUrl": "登録リンク",
+  "racesFieldResultsUrl": "結果リンク",
+  "racesSubmitFailed": "レースを保存できませんでした。もう一度お試しください。",
+  "racesImportFailed": "結果をインポートできませんでした。もう一度お試しください。",
+  "navRaces": "レース",
+  "integrationsRunsignup": "RunSignUp",
+  "integrationsRunsignupConnect": "RunSignUpからレース結果をインポートします。",
+  "integrationsRunsignupOpen": "レースカレンダーを開く",
+  "integrationsRunsignupUnavailable": "RunSignUpのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。"
 }

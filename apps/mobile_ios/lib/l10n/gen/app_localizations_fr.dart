@@ -9346,4 +9346,149 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Annuler';
+
+  @override
+  String get racesTitle => 'Calendrier des courses';
+
+  @override
+  String get racesSearchPlaceholder => 'Rechercher des courses par nom…';
+
+  @override
+  String get racesNearPlace => 'Près d\'un lieu…';
+
+  @override
+  String racesKmAway(String distance) {
+    return 'à $distance';
+  }
+
+  @override
+  String get racesDistanceAny => 'Toute distance';
+
+  @override
+  String get racesDistance5k => '5 km';
+
+  @override
+  String get racesDistance10k => '10 km';
+
+  @override
+  String get racesDistanceHalf => 'Semi';
+
+  @override
+  String get racesDistanceMarathon => 'Marathon';
+
+  @override
+  String get racesDistanceUltra => 'Ultra';
+
+  @override
+  String get racesRegister => 'S\'inscrire';
+
+  @override
+  String get racesViewResults => 'Voir les résultats';
+
+  @override
+  String get racesImportResult => 'Importer mon résultat';
+
+  @override
+  String get racesSubmitRace => 'Ajouter une course';
+
+  @override
+  String get racesUnverified => 'Non vérifié';
+
+  @override
+  String get racesEmpty => 'Aucune course ne correspond encore à ces filtres.';
+
+  @override
+  String get racesSearchFailed =>
+      'Impossible de charger les courses. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String racesMatchPrompt(String name) {
+    return 'Était-ce le $name ? Importez votre résultat officiel.';
+  }
+
+  @override
+  String get racesMatchConfirm => 'Importer le résultat';
+
+  @override
+  String get racesMatchDismiss => 'Pas cette course';
+
+  @override
+  String get racesImported => 'Résultat officiel importé.';
+
+  @override
+  String get racesOfficialResult => 'Résultat officiel';
+
+  @override
+  String get racesChipTime => 'Temps puce';
+
+  @override
+  String get racesGunTime => 'Temps officiel';
+
+  @override
+  String get racesOverallPlace => 'Classement général';
+
+  @override
+  String get racesAgeGroupPlace => 'Classement par catégorie';
+
+  @override
+  String get racesAgeGroup => 'Catégorie d\'âge';
+
+  @override
+  String get racesBib => 'Dossard';
+
+  @override
+  String get racesPasteResultHint =>
+      'Saisissez les détails de votre arrivée depuis la page de résultats de la course.';
+
+  @override
+  String get racesSave => 'Enregistrer';
+
+  @override
+  String get racesCancel => 'Annuler';
+
+  @override
+  String get racesEditorTitle => 'Ajouter une course';
+
+  @override
+  String get racesFieldName => 'Nom de la course';
+
+  @override
+  String get racesFieldDate => 'Date';
+
+  @override
+  String get racesFieldDistance => 'Distance (mètres)';
+
+  @override
+  String get racesFieldLocation => 'Lieu';
+
+  @override
+  String get racesFieldEntryUrl => 'Lien d\'inscription';
+
+  @override
+  String get racesFieldResultsUrl => 'Lien des résultats';
+
+  @override
+  String get racesSubmitFailed =>
+      'Impossible d\'enregistrer la course. Veuillez réessayer.';
+
+  @override
+  String get racesImportFailed =>
+      'Impossible d\'importer le résultat. Veuillez réessayer.';
+
+  @override
+  String get navRaces => 'Courses';
+
+  @override
+  String get integrationsRunsignup => 'RunSignUp';
+
+  @override
+  String get integrationsRunsignupConnect =>
+      'Importez les résultats de course depuis RunSignUp.';
+
+  @override
+  String get integrationsRunsignupOpen => 'Ouvrir le calendrier des courses';
+
+  @override
+  String get integrationsRunsignupUnavailable =>
+      'L\'import RunSignUp n\'est pas encore disponible. parkrun et le collage manuel fonctionnent toujours.';
 }

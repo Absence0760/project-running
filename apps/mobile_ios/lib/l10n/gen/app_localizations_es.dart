@@ -9325,4 +9325,150 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancelar';
+
+  @override
+  String get racesTitle => 'Calendario de carreras';
+
+  @override
+  String get racesSearchPlaceholder => 'Buscar carreras por nombre…';
+
+  @override
+  String get racesNearPlace => 'Cerca de un lugar…';
+
+  @override
+  String racesKmAway(String distance) {
+    return 'a $distance';
+  }
+
+  @override
+  String get racesDistanceAny => 'Cualquier distancia';
+
+  @override
+  String get racesDistance5k => '5K';
+
+  @override
+  String get racesDistance10k => '10K';
+
+  @override
+  String get racesDistanceHalf => 'Media';
+
+  @override
+  String get racesDistanceMarathon => 'Maratón';
+
+  @override
+  String get racesDistanceUltra => 'Ultra';
+
+  @override
+  String get racesRegister => 'Inscribirse';
+
+  @override
+  String get racesViewResults => 'Ver resultados';
+
+  @override
+  String get racesImportResult => 'Importar mi resultado';
+
+  @override
+  String get racesSubmitRace => 'Añadir una carrera';
+
+  @override
+  String get racesUnverified => 'Sin verificar';
+
+  @override
+  String get racesEmpty =>
+      'Aún no hay carreras que coincidan con estos filtros.';
+
+  @override
+  String get racesSearchFailed =>
+      'No se pudieron cargar las carreras. Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
+  String racesMatchPrompt(String name) {
+    return '¿Fue esta la $name? Importa tu resultado oficial.';
+  }
+
+  @override
+  String get racesMatchConfirm => 'Importar resultado';
+
+  @override
+  String get racesMatchDismiss => 'No es esta carrera';
+
+  @override
+  String get racesImported => 'Resultado oficial importado.';
+
+  @override
+  String get racesOfficialResult => 'Resultado oficial';
+
+  @override
+  String get racesChipTime => 'Tiempo chip';
+
+  @override
+  String get racesGunTime => 'Tiempo oficial';
+
+  @override
+  String get racesOverallPlace => 'Puesto general';
+
+  @override
+  String get racesAgeGroupPlace => 'Puesto por categoría';
+
+  @override
+  String get racesAgeGroup => 'Categoría de edad';
+
+  @override
+  String get racesBib => 'Dorsal';
+
+  @override
+  String get racesPasteResultHint =>
+      'Introduce los datos de tu llegada desde la página de resultados de la carrera.';
+
+  @override
+  String get racesSave => 'Guardar';
+
+  @override
+  String get racesCancel => 'Cancelar';
+
+  @override
+  String get racesEditorTitle => 'Añadir una carrera';
+
+  @override
+  String get racesFieldName => 'Nombre de la carrera';
+
+  @override
+  String get racesFieldDate => 'Fecha';
+
+  @override
+  String get racesFieldDistance => 'Distancia (metros)';
+
+  @override
+  String get racesFieldLocation => 'Ubicación';
+
+  @override
+  String get racesFieldEntryUrl => 'Enlace de inscripción';
+
+  @override
+  String get racesFieldResultsUrl => 'Enlace de resultados';
+
+  @override
+  String get racesSubmitFailed =>
+      'No se pudo guardar la carrera. Inténtalo de nuevo.';
+
+  @override
+  String get racesImportFailed =>
+      'No se pudo importar el resultado. Inténtalo de nuevo.';
+
+  @override
+  String get navRaces => 'Carreras';
+
+  @override
+  String get integrationsRunsignup => 'RunSignUp';
+
+  @override
+  String get integrationsRunsignupConnect =>
+      'Importa resultados de carreras desde RunSignUp.';
+
+  @override
+  String get integrationsRunsignupOpen => 'Abrir el calendario de carreras';
+
+  @override
+  String get integrationsRunsignupUnavailable =>
+      'La importación de RunSignUp aún no está disponible. parkrun y el pegado manual siguen funcionando.';
 }

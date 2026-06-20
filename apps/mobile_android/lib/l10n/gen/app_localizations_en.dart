@@ -9232,4 +9232,148 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancel';
+
+  @override
+  String get racesTitle => 'Race calendar';
+
+  @override
+  String get racesSearchPlaceholder => 'Search races by name…';
+
+  @override
+  String get racesNearPlace => 'Near a place…';
+
+  @override
+  String racesKmAway(String distance) {
+    return '$distance away';
+  }
+
+  @override
+  String get racesDistanceAny => 'Any distance';
+
+  @override
+  String get racesDistance5k => '5K';
+
+  @override
+  String get racesDistance10k => '10K';
+
+  @override
+  String get racesDistanceHalf => 'Half';
+
+  @override
+  String get racesDistanceMarathon => 'Marathon';
+
+  @override
+  String get racesDistanceUltra => 'Ultra';
+
+  @override
+  String get racesRegister => 'Register';
+
+  @override
+  String get racesViewResults => 'View results';
+
+  @override
+  String get racesImportResult => 'Import my result';
+
+  @override
+  String get racesSubmitRace => 'Add a race';
+
+  @override
+  String get racesUnverified => 'Unverified';
+
+  @override
+  String get racesEmpty => 'No races match these filters yet.';
+
+  @override
+  String get racesSearchFailed =>
+      'Couldn\'t load races. Check your connection and try again.';
+
+  @override
+  String racesMatchPrompt(String name) {
+    return 'Was this the $name? Import your official result.';
+  }
+
+  @override
+  String get racesMatchConfirm => 'Import result';
+
+  @override
+  String get racesMatchDismiss => 'Not this race';
+
+  @override
+  String get racesImported => 'Official result imported.';
+
+  @override
+  String get racesOfficialResult => 'Official result';
+
+  @override
+  String get racesChipTime => 'Chip time';
+
+  @override
+  String get racesGunTime => 'Gun time';
+
+  @override
+  String get racesOverallPlace => 'Overall place';
+
+  @override
+  String get racesAgeGroupPlace => 'Age-group place';
+
+  @override
+  String get racesAgeGroup => 'Age group';
+
+  @override
+  String get racesBib => 'Bib';
+
+  @override
+  String get racesPasteResultHint =>
+      'Enter your finishing details from the race\'s results page.';
+
+  @override
+  String get racesSave => 'Save';
+
+  @override
+  String get racesCancel => 'Cancel';
+
+  @override
+  String get racesEditorTitle => 'Add a race';
+
+  @override
+  String get racesFieldName => 'Race name';
+
+  @override
+  String get racesFieldDate => 'Date';
+
+  @override
+  String get racesFieldDistance => 'Distance (metres)';
+
+  @override
+  String get racesFieldLocation => 'Location';
+
+  @override
+  String get racesFieldEntryUrl => 'Registration link';
+
+  @override
+  String get racesFieldResultsUrl => 'Results link';
+
+  @override
+  String get racesSubmitFailed => 'Couldn\'t save the race. Please try again.';
+
+  @override
+  String get racesImportFailed =>
+      'Couldn\'t import the result. Please try again.';
+
+  @override
+  String get navRaces => 'Races';
+
+  @override
+  String get integrationsRunsignup => 'RunSignUp';
+
+  @override
+  String get integrationsRunsignupConnect =>
+      'Import race results from RunSignUp.';
+
+  @override
+  String get integrationsRunsignupOpen => 'Open the race calendar';
+
+  @override
+  String get integrationsRunsignupUnavailable =>
+      'RunSignUp import isn\'t available yet. parkrun and manual paste still work.';
 }
