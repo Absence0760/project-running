@@ -27,6 +27,8 @@ const (
 	TableRunPhotos               = "run_photos"
 	TableRunGear                 = "run_gear"
 	TableGear                    = "gear"
+	TableGearWearLogs            = "gear_wear_logs"
+	TableGearRotations           = "gear_rotations"
 	TableRoutes                  = "routes"
 	TableRouteReviews            = "route_reviews"
 	TableRouteMarkers            = "route_markers"

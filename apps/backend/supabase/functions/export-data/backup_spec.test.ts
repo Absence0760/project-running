@@ -35,7 +35,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// 20270222_001) added exercises filtered to the subject's OWN custom
 	// entries (author_id = uid) — seeded global rows are shared reference
 	// data, not personal data.
-	assertEquals(specs.length, 54, `expected 54 specs, got ${specs.length}`);
+	assertEquals(specs.length, 57, `expected 57 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -47,6 +47,8 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'run_photos.json',
 		'segment_efforts.json',
 		'gear.json',
+		'gear_wear_logs.json',
+		'gear_rotations.json',
 		'fitness_snapshots.json',
 		'personal_records.json',
 		'device_tokens.json',
@@ -85,6 +87,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'safety_contacts_as_contact.json',
 		'session_plans.json',
 		'route_photos.json',
+		'club_photos.json',
 		'event_orders_as_buyer.json',
 		'event_orders_as_host.json',
 		'event_pricing_as_host.json',

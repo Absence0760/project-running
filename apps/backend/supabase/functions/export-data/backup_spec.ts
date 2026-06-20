@@ -58,6 +58,16 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		},
 		{ entry: 'segment_efforts.json', table: 'segment_efforts', filter: uidEq, select: '*' },
 		{ entry: 'gear.json', table: 'gear', filter: `owner_id=eq.${uid}`, select: '*' },
+		// gear_wear_logs (migration 20270225_001) + gear_rotations
+		// (migration 20270227_001) — owner-private gear sub-data, keyed by
+		// owner_id. Mirror of the Go worker's exportPersonalDataSpecs.
+		{ entry: 'gear_wear_logs.json', table: 'gear_wear_logs', filter: `owner_id=eq.${uid}`, select: '*' },
+		{
+			entry: 'gear_rotations.json',
+			table: 'gear_rotations',
+			filter: `owner_id=eq.${uid}`,
+			select: '*,members:gear_rotation_members(*)',
+		},
 		{ entry: 'fitness_snapshots.json', table: 'fitness_snapshots', filter: uidEq, select: '*' },
 		{ entry: 'personal_records.json', table: 'personal_records', filter: uidEq, select: '*' },
 		{
@@ -291,6 +301,16 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'route_photos.json',
 			table: 'route_photos',
+			filter: `owner_id=eq.${uid}`,
+			select: '*',
+		},
+		// club_photos — the subject's own club-photo metadata (migration
+		// 20270301_001). owner_id is the uploader. Image bytes live in the
+		// club-photos Storage bucket; the metadata row is the subject's own
+		// Art 20 data. Keyed by owner_id. Mirror of the Go worker spec.
+		{
+			entry: 'club_photos.json',
+			table: 'club_photos',
 			filter: `owner_id=eq.${uid}`,
 			select: '*',
 		},

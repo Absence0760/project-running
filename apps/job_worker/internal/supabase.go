@@ -1661,6 +1661,17 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		{name: "segment_efforts.json", table: schema.TableSegmentEfforts, filter: uidEq, sel: "*"},
 		// gear + run_gear — owner-private inventory + join.
 		{name: "gear.json", table: schema.TableGear, filter: "owner_id=eq." + uid, sel: "*"},
+		// gear_wear_logs — the subject's dated per-shoe wear observations
+		// (migration 20270225_001), owner-private. Keyed by owner_id, so the
+		// guard's user_id scan can't flag it — wired in explicitly.
+		{name: "gear_wear_logs.json", table: schema.TableGearWearLogs, filter: "owner_id=eq." + uid, sel: "*"},
+		// gear_rotations — the subject's named gear groupings + their members
+		// embedded (migration 20270227_001), owner-private. Keyed by owner_id.
+		{
+			name: "gear_rotations.json", table: schema.TableGearRotations,
+			filter: "owner_id=eq." + uid,
+			sel:    "*,members:gear_rotation_members(*)",
+		},
 		// run_gear is filled below by a two-step fetch (PostgREST
 		// `in.()` takes a literal value list, not a SQL subselect —
 		// the self-audit caught the malformed query that this entry
