@@ -251,12 +251,19 @@ becomes an **action button**, not a tab.
 
 ## Home — a prioritised, self-hiding card stack
 
-> **Status (web — gym slice shipped):** `/dashboard` renders a Today's-lift
-> card (when a session was logged today), a Recent-lifts trend card, and a
-> first-run "log a lift" footer affordance — all gated on **data presence**
-> (no flag, §63 amendment), modality coded by the `fitness_center` glyph +
-> label + a distinct accent (never colour alone). A pure runner sees no new
-> card. Nutrition rings land with the nutrition module.
+> **Status (web — shipped):** `/dashboard` renders a Today's-lift
+> card (when a session was logged today), a Recent-lifts trend card, a
+> first-run "log a lift" footer affordance, and a **Today's-nutrition rings
+> card** (`NutritionRingsCard.svelte`, when food was logged today) — all gated
+> on **data presence** (no flag, §63 amendment), each modality coded by its
+> glyph + label + a distinct accent (never colour alone). A pure runner sees
+> no new card. The nutrition card reuses the `/nutrition`
+> `computeNutritionTargets` + dynamic-TDEE `exerciseCaloriesForDay` math, so
+> the four macro rings (kcal / protein / carbs / fat vs targets) agree across
+> both surfaces; targets stay null when body metrics are absent (the Art 9
+> health-consent gate `/nutrition` already sits behind) and the rings then
+> render unfilled rather than zeroed. e2e
+> `tests-e2e/dashboard/nutrition-rings.spec.ts`.
 >
 > **Status (mobile — shipped, G5):** `dashboard_screen.dart` composes a
 > self-hiding today's-lift card (`widgets/gym_summary_card.dart`) + today's

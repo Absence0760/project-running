@@ -292,6 +292,7 @@ export const messages = {
 	"dash.unhide": "Mostrar",
 	"dash.recentRunsTitle": "Carreras recientes",
 	"dash.todayLiftLabel": "Pesas de hoy",
+	"dash.todayNutritionLabel": "Nutrición de hoy",
 	"dash.recentLiftsTitle": "Sesiones recientes",
 	"dash.viewAllGym": "Ver todo",
 	"dash.logALift": "Registrar sesión",

@@ -24,8 +24,20 @@
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
 	import { fetchGymSetHistory, fetchGymWorkouts } from '$lib/core/data';
+	import { fetchFoodLog, fetchLatestWeightKg, type FoodEntry } from '$lib/core/data';
+	import { supabase } from '$lib/core/supabase';
 	import type { GymWorkout, GymSetWithDate } from '$lib/core/data';
 	import { liftsFromSetHistory } from '$lib/gym/lift_load';
+	import {
+		computeNutritionTargets,
+		ageFromDob,
+		type ActivityLevel,
+		type WeightGoal,
+		type NutritionTargets,
+	} from '$lib/nutrition/nutrition_targets';
+	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
+	import { sumMacros } from '$lib/nutrition/nutrition_totals';
+	import NutritionRingsCard from '$lib/components/NutritionRingsCard.svelte';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import RacePredictorCard from '$lib/components/RacePredictorCard.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
@@ -105,6 +117,15 @@
 	let gymWorkouts = $state<GymWorkout[]>([]);
 	let gymHistory = $state<GymSetWithDate[]>([]);
 	let lifts = $derived(liftsFromSetHistory(gymHistory));
+	// Today's nutrition — the "today's modality" rings card (multi_modal.md §
+	// Home), mirroring the mobile NutritionRingsCard + the today's-lift card
+	// above. `todaysFood` holds only food logged on the local calendar day, so
+	// the card self-hides for a runner who logged nothing today; `nutritionTargets`
+	// stays null when the Art 9 health-consent body-metrics are absent (exactly
+	// as /nutrition behaves — the rings render unfilled rather than zeroed).
+	let todaysFood = $state<FoodEntry[]>([]);
+	let nutritionTargets = $state<NutritionTargets | null>(null);
+	let nutritionConsumed = $derived(sumMacros(todaysFood));
 	// Opt-out: a runner who wants a pure run-only readiness curve can exclude
 	// gym load (Settings → Preferences). When set, the readiness series sees
 	// no lifts — the run-only curve is byte-for-byte recoverable (the same
@@ -425,8 +446,61 @@
 		} catch (_) {
 			/* silent — gym cards + lift-load are additive */
 		}
+		// Today's nutrition rings — the "today's modality" Home card. Best-effort
+		// + self-hiding: a runner who logged nothing today gets `todaysFood = []`
+		// and the card never renders. Reuses the SAME target math + dynamic-TDEE
+		// exercise add as /nutrition so the rings agree across surfaces, and
+		// inherits its Art 9 health-consent gate (targets stay null without body
+		// metrics — the rings then render unfilled, exactly as /nutrition does).
+		await loadTodaysNutrition();
 		loading = false;
 	});
+
+	async function loadTodaysNutrition() {
+		const uid = auth.user?.id;
+		if (!uid) return;
+		try {
+			const day = new Date();
+			const todayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+			const tomorrow = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+			const todayStartIso = todayStart.toISOString();
+			const tomorrowIso = tomorrow.toISOString();
+			todaysFood = await fetchFoodLog(todayStartIso, tomorrowIso);
+			// No food today → the card self-hides; skip the target round-trip.
+			if (todaysFood.length === 0) {
+				nutritionTargets = null;
+				return;
+			}
+			const [settings, weight, profileRes] = await Promise.all([
+				loadSettings(uid),
+				fetchLatestWeightKg(),
+				supabase.rpc('get_my_profile'),
+			]);
+			const isToday = (iso: string) => iso >= todayStartIso && iso < tomorrowIso;
+			const todayRuns = runs.filter((r) => isToday(r.started_at));
+			const todayGym = gymWorkouts.filter((w) => isToday(w.started_at));
+			const exerciseKcal = exerciseCaloriesForDay({
+				runs: todayRuns.map((r) => ({ distanceM: r.distance_m })),
+				gymSessions: todayGym.map((w) => ({ durationS: w.duration_s })),
+				weightKg: weight,
+			});
+			const prof = profileRes.data as
+				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
+				| null;
+			nutritionTargets = computeNutritionTargets({
+				weightKg: weight,
+				heightCm: prof?.height_cm ?? null,
+				ageYears: ageFromDob(prof?.date_of_birth, Date.now()),
+				sex: prof?.gender ?? null,
+				activityLevel:
+					effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate',
+				goal: effective<WeightGoal>(settings, 'nutrition_goal', 'maintain') ?? 'maintain',
+				exerciseKcal,
+			});
+		} catch (_) {
+			/* silent — nutrition card is additive, not load-blocking */
+		}
+	}
 
 	function applyDashboardSettings(settings: LoadedSettings) {
 		weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
@@ -926,6 +1000,15 @@
 				</div>
 				<span class="material-symbols today-lift-arrow">chevron_right</span>
 			</a>
+		{/if}
+
+		<!-- Today's nutrition — a "today's modality" card (multi_modal.md §
+		     Home), the rings companion to the today's-lift card above. Self-
+		     hiding: only renders when food was logged today (a runner who tracks
+		     no food never sees it). Targets stay null without body metrics
+		     (Art 9 health-consent gate), so the rings render unfilled. -->
+		{#if todaysFood.length > 0}
+			<NutritionRingsCard consumed={nutritionConsumed} targets={nutritionTargets} />
 		{/if}
 
 		<!-- Source filter — applies to every metric below the today
