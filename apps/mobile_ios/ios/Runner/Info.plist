@@ -53,6 +53,8 @@
 	<string>Threkir lets you attach photos from your library to your runs.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Threkir saves shared run cards back to your Photos library when you tap "Save to Photos."</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Threkir uses the camera to scan a food product's barcode so it can look up its nutrition and log it for you.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

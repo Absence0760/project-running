@@ -52,6 +52,15 @@ class FoodSearchResult {
 typedef FoodFetcher = Future<String> Function(Uri url);
 
 const _searchUrl = 'https://world.openfoodfacts.org/cgi/search.pl';
+const _productUrl = 'https://world.openfoodfacts.org/api/v2/product';
+
+/// Keep only the digits of a scanned EAN/UPC. A barcode scanner can hand back
+/// a trailing newline or a symbology label; Open Food Facts keys products by
+/// the bare digit string. Returns null when nothing usable remains.
+String? normaliseBarcode(String raw) {
+  final digits = raw.replaceAll(RegExp('[^0-9]'), '');
+  return digits.isEmpty ? null : digits;
+}
 
 double? _num(dynamic v) {
   final n = v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
@@ -87,6 +96,37 @@ List<FoodSearchResult> parseOffSearch(dynamic json) {
     ));
   }
   return out;
+}
+
+/// Map a raw Open Food Facts `/api/v2/product/{barcode}` response into a
+/// single result. Pure. The product-by-barcode endpoint returns
+/// `{status, product}` (one object, not the `products` array the search
+/// endpoint returns), so it can't reuse [parseOffSearch]. Returns null when
+/// the product is missing (`status != 1`) or unloggable (no name / no calorie
+/// figure) — the caller treats null as "no match, fall back to search".
+FoodSearchResult? parseOffProduct(dynamic json) {
+  final map = json is Map ? json : null;
+  if (map == null || map['status'] != 1) return null;
+  final p = map['product'];
+  if (p is! Map) return null;
+  final name = (p['product_name'] as String?)?.trim() ?? '';
+  final code = p['code'] as String?;
+  final nutr = p['nutriments'];
+  final n = nutr is Map ? nutr : const {};
+  final calories = _num(n['energy-kcal_100g']);
+  if (name.isEmpty || code == null || code.isEmpty || calories == null) {
+    return null;
+  }
+  final brandRaw = (p['brands'] as String?)?.split(',').first.trim() ?? '';
+  return FoodSearchResult(
+    code: code,
+    name: name,
+    brand: brandRaw.isEmpty ? null : brandRaw,
+    calories100g: calories,
+    protein100g: _num(n['proteins_100g']) ?? 0,
+    carbs100g: _num(n['carbohydrates_100g']) ?? 0,
+    fat100g: _num(n['fat_100g']) ?? 0,
+  );
 }
 
 /// Scale a per-100 g result to a portion in grams, rounded to whole units.
@@ -136,4 +176,23 @@ Future<List<FoodSearchResult>> searchFoods(
   });
   final body = await (fetcher ?? _defaultFetcher)(url);
   return parseOffSearch(jsonDecode(body));
+}
+
+/// Look up a single product by scanned EAN/UPC barcode (the v1.1 camera
+/// fast-path on the same Open Food Facts lookup). Returns null for a blank /
+/// non-numeric code or a genuine no-match (`status != 1` / unloggable
+/// product); THROWS on a network / non-2xx / parse failure so the caller can
+/// tell "not in the database" apart from "lookup failed" and fall back to
+/// manual search in either case while surfacing a distinct failure message.
+Future<FoodSearchResult?> lookupBarcode(
+  String barcode, {
+  FoodFetcher? fetcher,
+}) async {
+  final code = normaliseBarcode(barcode);
+  if (code == null) return null;
+  final url = Uri.parse('$_productUrl/$code.json').replace(queryParameters: {
+    'fields': 'code,product_name,brands,nutriments',
+  });
+  final body = await (fetcher ?? _defaultFetcher)(url);
+  return parseOffProduct(jsonDecode(body));
 }

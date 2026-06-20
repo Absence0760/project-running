@@ -14640,6 +14640,48 @@ abstract class AppLocalizations {
   /// **'Retry search'**
   String get nutritionSearchRetry;
 
+  /// Label/tooltip for the camera barcode-scan action in the nutrition log composer.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan barcode'**
+  String get nutritionScanBarcode;
+
+  /// Guidance shown on the barcode scanner screen while waiting for a scan.
+  ///
+  /// In en, this message translates to:
+  /// **'Point the camera at a product barcode'**
+  String get nutritionScanHint;
+
+  /// Shown while a scanned barcode is being looked up in the food database.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking up…'**
+  String get nutritionScanLookingUp;
+
+  /// Shown when a scanned barcode has no matching product in the food database.
+  ///
+  /// In en, this message translates to:
+  /// **'No product found for that barcode. Try a search or enter it manually.'**
+  String get nutritionScanNotFound;
+
+  /// Shown when the barcode lookup fails (network/parse error).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan failed. Try a search or enter it manually.'**
+  String get nutritionScanFailed;
+
+  /// Shown when the camera permission is denied for barcode scanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access is needed to scan a barcode. You can still search or enter food manually.'**
+  String get nutritionScanPermissionDenied;
+
+  /// Action to open the OS app settings so the user can grant camera access.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get nutritionScanOpenSettings;
+
   /// No description provided for @nutritionSaveFailed.
   ///
   /// In en, this message translates to:

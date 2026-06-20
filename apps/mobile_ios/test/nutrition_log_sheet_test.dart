@@ -33,10 +33,21 @@ class _ThrowingFoodStore extends LocalFoodStore {
   }
 }
 
-Widget _host(LocalFoodStore store, {FoodFetcher? fetcher}) => MaterialApp(
+Widget _host(
+  LocalFoodStore store, {
+  FoodFetcher? fetcher,
+  BarcodeScanner? scanner,
+}) =>
+    MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: NutritionLogSheet(store: store, fetcher: fetcher)),
+      home: Scaffold(
+        body: NutritionLogSheet(
+          store: store,
+          fetcher: fetcher,
+          scanner: scanner,
+        ),
+      ),
     );
 
 const _sample = {
@@ -155,5 +166,96 @@ void main() {
     // Error banner shows; the sheet stays open (still find the form fields).
     expect(find.text("Couldn't log food. Try again."), findsOneWidget);
     expect(find.widgetWithText(TextField, 'Item name'), findsOneWidget);
+  });
+
+  testWidgets('a scanned barcode that matches opens the confirm-portion dialog',
+      (tester) async {
+    final f = await _store('scan_match_');
+    try {
+      await tester.pumpWidget(_host(
+        f.store,
+        // The product-by-barcode lookup response shape ({status, product}).
+        fetcher: (u) async => jsonEncode(const {
+          'status': 1,
+          'product': {
+            'code': '737628064502',
+            'product_name': 'Rolled Oats',
+            'nutriments': {'energy-kcal_100g': 389},
+          },
+        }),
+        scanner: (_) async => '737628064502',
+      ));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Scan barcode'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pumpAndSettle();
+      // The portion dialog opened on the matched product.
+      expect(find.text('Rolled Oats'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Portion (g)'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a scanned barcode with no match shows the not-found message',
+      (tester) async {
+    final f = await _store('scan_nomatch_');
+    try {
+      await tester.pumpWidget(_host(
+        f.store,
+        fetcher: (u) async => '{"status": 0}',
+        scanner: (_) async => '000000000000',
+      ));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Scan barcode'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.textContaining('No product found'), findsOneWidget);
+      // The manual / search fallback is still present.
+      expect(find.text('Enter manually'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a scan lookup failure shows the distinct scan-failed message',
+      (tester) async {
+    final f = await _store('scan_fail_');
+    try {
+      await tester.pumpWidget(_host(
+        f.store,
+        fetcher: (u) async => throw const SocketException('network down'),
+        scanner: (_) async => '737628064502',
+      ));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Scan barcode'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.textContaining('Scan failed'), findsOneWidget);
+      expect(find.text('Enter manually'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a cancelled scan does nothing and leaves the composer untouched',
+      (tester) async {
+    final f = await _store('scan_cancel_');
+    try {
+      await tester.pumpWidget(_host(f.store, scanner: (_) async => null));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Scan barcode'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.textContaining('No product found'), findsNothing);
+      expect(find.textContaining('Scan failed'), findsNothing);
+      expect(f.store.rows, isEmpty);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
   });
 }

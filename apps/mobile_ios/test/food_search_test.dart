@@ -134,4 +134,88 @@ void main() {
     final out = await searchFoods('oats', fetcher: (u) async => '{"products": []}');
     expect(out, isEmpty);
   });
+
+  const product = {
+    'status': 1,
+    'product': {
+      'code': '737628064502',
+      'product_name': 'Rolled Oats',
+      'brands': 'Quaker, StoreBrand',
+      'nutriments': {
+        'energy-kcal_100g': 389,
+        'proteins_100g': 16.9,
+        'carbohydrates_100g': 66.3,
+        'fat_100g': 6.9,
+      },
+    },
+  };
+
+  test('normaliseBarcode strips non-digits and rejects empty', () {
+    expect(normaliseBarcode(' 737628064502\n'), '737628064502');
+    expect(normaliseBarcode('EAN 4006381333931'), '4006381333931');
+    expect(normaliseBarcode('abc'), isNull);
+    expect(normaliseBarcode(''), isNull);
+  });
+
+  test('parseOffProduct maps a found product', () {
+    final r = parseOffProduct(product);
+    expect(r, isNotNull);
+    expect(r!.code, '737628064502');
+    expect(r.name, 'Rolled Oats');
+    expect(r.brand, 'Quaker');
+    expect(r.calories100g, 389);
+    expect(r.carbs100g, 66.3);
+  });
+
+  test('parseOffProduct returns null for a missing product or unloggable one',
+      () {
+    expect(parseOffProduct({'status': 0, 'product': const {}}), isNull);
+    expect(parseOffProduct(null), isNull);
+    expect(
+      parseOffProduct({
+        'status': 1,
+        'product': {'code': 'x', 'product_name': 'No Energy', 'nutriments': const {}},
+      }),
+      isNull,
+    );
+  });
+
+  test(
+      'lookupBarcode returns null for a blank/non-numeric code without calling the fetcher',
+      () async {
+    var called = false;
+    final out = await lookupBarcode('  ', fetcher: (u) async {
+      called = true;
+      return '{}';
+    });
+    expect(out, isNull);
+    expect(called, false);
+  });
+
+  test('lookupBarcode parses a found product via the injected fetcher',
+      () async {
+    final r = await lookupBarcode('737628064502', fetcher: (u) async {
+      expect(u.path, contains('/api/v2/product/737628064502.json'));
+      return jsonEncode(product);
+    });
+    expect(r, isNotNull);
+    expect(r!.name, 'Rolled Oats');
+  });
+
+  test('lookupBarcode returns null on a genuine no-match (status 0)', () async {
+    final r = await lookupBarcode('000000000000',
+        fetcher: (u) async => '{"status": 0}');
+    expect(r, isNull);
+  });
+
+  test(
+      'lookupBarcode rethrows a fetch failure (failure is distinct from no-match)',
+      () async {
+    expect(
+      () => lookupBarcode('737628064502', fetcher: (u) async {
+        throw Exception('network down');
+      }),
+      throwsA(isA<Exception>()),
+    );
+  });
 }

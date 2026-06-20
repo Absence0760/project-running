@@ -8832,6 +8832,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get nutritionSearchRetry => 'Suche wiederholen';
 
   @override
+  String get nutritionScanBarcode => 'Barcode scannen';
+
+  @override
+  String get nutritionScanHint => 'Richte die Kamera auf einen Produkt-Barcode';
+
+  @override
+  String get nutritionScanLookingUp => 'Wird gesucht…';
+
+  @override
+  String get nutritionScanNotFound =>
+      'Kein Produkt für diesen Barcode gefunden. Suche oder gib es manuell ein.';
+
+  @override
+  String get nutritionScanFailed =>
+      'Scan fehlgeschlagen. Suche oder gib es manuell ein.';
+
+  @override
+  String get nutritionScanPermissionDenied =>
+      'Für das Scannen eines Barcodes wird Kamerazugriff benötigt. Du kannst weiterhin suchen oder Essen manuell eingeben.';
+
+  @override
+  String get nutritionScanOpenSettings => 'Einstellungen öffnen';
+
+  @override
   String get nutritionSaveFailed =>
       'Essen konnte nicht protokolliert werden. Versuche es erneut.';
 

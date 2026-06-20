@@ -8374,6 +8374,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionSearchRetry => '検索を再試行';
 
   @override
+  String get nutritionScanBarcode => 'バーコードをスキャン';
+
+  @override
+  String get nutritionScanHint => 'カメラを商品のバーコードに向けてください';
+
+  @override
+  String get nutritionScanLookingUp => '検索中…';
+
+  @override
+  String get nutritionScanNotFound => 'そのバーコードの商品が見つかりませんでした。検索するか手動で入力してください。';
+
+  @override
+  String get nutritionScanFailed => 'スキャンに失敗しました。検索するか手動で入力してください。';
+
+  @override
+  String get nutritionScanPermissionDenied =>
+      'バーコードのスキャンにはカメラへのアクセスが必要です。検索や手動入力は引き続き利用できます。';
+
+  @override
+  String get nutritionScanOpenSettings => '設定を開く';
+
+  @override
   String get nutritionSaveFailed => '食事を記録できませんでした。もう一度お試しください。';
 
   @override

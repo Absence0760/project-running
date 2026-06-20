@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseOffSearch, scalePortion, searchFoods, type Fetcher } from './food_search';
+import {
+	lookupBarcode,
+	normaliseBarcode,
+	parseOffProduct,
+	parseOffSearch,
+	scalePortion,
+	searchFoods,
+	type Fetcher,
+} from './food_search';
 
 const sample = {
 	products: [
@@ -118,4 +126,73 @@ test('searchFoods propagates a network throw (failure is distinct from empty)', 
 		throw new Error('network down');
 	};
 	await assert.rejects(() => searchFoods('oats', thrower), /network down/);
+});
+
+const productSample = {
+	status: 1,
+	product: {
+		code: '737628064502',
+		product_name: 'Rolled Oats',
+		brands: 'Quaker, StoreBrand',
+		nutriments: {
+			'energy-kcal_100g': 389,
+			proteins_100g: 16.9,
+			carbohydrates_100g: 66.3,
+			fat_100g: 6.9,
+		},
+	},
+};
+
+test('normaliseBarcode strips non-digits and rejects empty', () => {
+	assert.equal(normaliseBarcode(' 737628064502\n'), '737628064502');
+	assert.equal(normaliseBarcode('EAN 4006381333931'), '4006381333931');
+	assert.equal(normaliseBarcode('abc'), null);
+	assert.equal(normaliseBarcode(''), null);
+});
+
+test('parseOffProduct maps a found product', () => {
+	const r = parseOffProduct(productSample);
+	assert.ok(r);
+	assert.equal(r?.code, '737628064502');
+	assert.equal(r?.name, 'Rolled Oats');
+	assert.equal(r?.brand, 'Quaker');
+	assert.equal(r?.per100g.calories, 389);
+});
+
+test('parseOffProduct returns null for a missing product or unloggable one', () => {
+	assert.equal(parseOffProduct({ status: 0, product: {} }), null);
+	assert.equal(parseOffProduct(null), null);
+	assert.equal(
+		parseOffProduct({ status: 1, product: { code: 'x', product_name: 'No Energy', nutriments: {} } }),
+		null,
+	);
+});
+
+test('lookupBarcode returns null for a blank / non-numeric code without calling the fetcher', async () => {
+	let called = false;
+	const fetcher: Fetcher = async () => {
+		called = true;
+		return new Response('{}');
+	};
+	assert.equal(await lookupBarcode('  ', fetcher), null);
+	assert.equal(called, false);
+});
+
+test('lookupBarcode parses a found product via the injected fetcher', async () => {
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('/api/v2/product/737628064502.json'));
+		return new Response(JSON.stringify(productSample), { status: 200 });
+	};
+	const r = await lookupBarcode('737628064502', fetcher);
+	assert.equal(r?.name, 'Rolled Oats');
+});
+
+test('lookupBarcode returns null on a genuine no-match (status 0)', async () => {
+	const fetcher: Fetcher = async () => new Response(JSON.stringify({ status: 0 }), { status: 200 });
+	assert.equal(await lookupBarcode('000000000000', fetcher), null);
+});
+
+test('lookupBarcode throws on a non-OK response (failure is distinct from no-match)', async () => {
+	const bad: Fetcher = async () => new Response('', { status: 500 });
+	await assert.rejects(() => lookupBarcode('737628064502', bad));
 });

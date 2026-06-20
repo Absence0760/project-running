@@ -36,6 +36,13 @@
          runtime and Play flags the mismatch. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
+    <!-- Camera: barcode scan for the nutrition log fast-path (mobile_scanner).
+         Declared optional (android:required="false") so the app still installs
+         on a camera-less device — the scan affordance degrades to the
+         search / manual-entry fallback. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <!-- Health Connect read permissions for importing workouts.
          Mirrored in res/xml/health_permissions.xml so the Play
          Console Health-Connect data-access form sees the same set. -->
