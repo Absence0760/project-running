@@ -1409,6 +1409,53 @@ func (c *SupabaseClient) RecordLifecycleEmail(ctx context.Context, userID, templ
 	return err
 }
 
+// AccountDeletionReceiptAlreadySent reports whether the account-deletion
+// receipt for this email hash has already been sent. The send-once guard for
+// the account_deleted template lives in the non-cascading
+// account_deletion_receipts table (keyed by hash, not the now-gone user_id) —
+// see migration 20270217_001.
+func (c *SupabaseClient) AccountDeletionReceiptAlreadySent(ctx context.Context, emailHash string) (bool, error) {
+	q := url.Values{}
+	q.Set("email_hash", "eq."+emailHash)
+	q.Set("select", "email_hash")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/" + schema.TableAccountDeletionReceipts + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	var rows []struct {
+		EmailHash string `json:"email_hash"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
+}
+
+// RecordAccountDeletionReceipt marks an email hash as having received the
+// deletion receipt. Idempotent — a duplicate insert is ignored so a benign
+// re-record can't 409.
+func (c *SupabaseClient) RecordAccountDeletionReceipt(ctx context.Context, emailHash string) error {
+	u := c.BaseURL + "/rest/v1/" + schema.TableAccountDeletionReceipts
+	payload, err := json.Marshal(map[string]string{"email_hash": emailHash})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal,resolution=ignore-duplicates")
+	_, err = c.do(ctx, req)
+	return err
+}
+
 // exportTableSpec describes one personal-data table the GDPR Art 20
 // export bundles: (zip entry name, PostgREST table, filter param,
 // select clause). The filter param is the column the table joins on —

@@ -178,9 +178,19 @@ type PushSubscriptionRow struct {
 // user. The first template is `welcome`, enqueued by the AFTER INSERT
 // trigger on user_profiles. Future scheduled mail (weekly digest,
 // re-engagement) reuses this kind with its own template + opt-in gate.
+//
+// account_deleted is the exception that carries its address INLINE: by send
+// time the user is gone (admin.deleteUser ran in the delete-account EF), so
+// there's no auth.users row to resolve the address from and no user_settings
+// to read the locale from. The EF fills Email + Locale and omits UserID;
+// the absence of UserID also makes the receipt job naturally exempt from the
+// EF's `payload->>user_id` job-drain (decisions §121).
 type LifecycleEmailPayload struct {
 	UserID   string `json:"user_id"`
 	Template string `json:"template"`
+	// Inline-address fields — set only for account_deleted (the user is gone).
+	Email  string `json:"email,omitempty"`
+	Locale string `json:"locale,omitempty"`
 }
 
 // SafetyEmailPayload is the payload for `kind='safety_email'` jobs

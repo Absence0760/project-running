@@ -42,6 +42,7 @@ const (
 	TableUserBlocks          = "user_blocks"
 	TableNotifications       = "notifications"
 	TableLifecycleEmailLog   = "lifecycle_email_log"
+	TableAccountDeletionReceipts = "account_deletion_receipts"
 	TableCoachMessages       = "coach_messages"
 	TableCoachAthletes       = "coach_athletes"
 	TableTrainingPlans       = "training_plans"
