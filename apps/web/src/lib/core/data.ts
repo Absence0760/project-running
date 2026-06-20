@@ -2759,6 +2759,49 @@ export async function fetchMyOrder(
 	return data[0] as EventOrder;
 }
 
+/// Buyer self-cancel of their OWN paid/pending registration for an event
+/// instance (club_events.md slice P2). Calls the events-cancel Edge
+/// Function, which initiates the Stripe refund (paid order, refund-eligible
+/// per the event's refund_policy) or expires the soft reservation (pending
+/// order). The stripe-events webhook — still the sole writer of
+/// event_orders.status — performs the actual status transition + seat
+/// release when Stripe delivers the resulting event, so this returns the
+/// initiated `action` and the caller polls/refreshes for the terminal state.
+export async function cancelEventOrder(
+	eventId: string,
+	instanceStart: string
+): Promise<{ action: string }> {
+	const { data, error } = await supabase.functions.invoke('events-cancel', {
+		body: { event_id: eventId, instance_start: instanceStart }
+	});
+	if (error) {
+		// A non-2xx (e.g. 409 policy_no_refund, 503 stripe_not_configured)
+		// arrives as a FunctionsHttpError carrying the Response in `context`.
+		// Re-throw an Error whose message is the EF's machine `error` code so
+		// the caller can map it to a localized string.
+		const code = await edgeFunctionErrorCode(error);
+		throw new Error(code ?? (error instanceof Error ? error.message : 'cancel_failed'));
+	}
+	const action = (data as { action?: string } | null)?.action;
+	if (!action) throw new Error('cancel_failed');
+	return { action };
+}
+
+/// Pull the machine `error` code out of a supabase-js FunctionsHttpError —
+/// its `context` is the raw Response, whose JSON body carries our
+/// `{ error: '<code>' }` envelope. Null when the body can't be read.
+async function edgeFunctionErrorCode(error: unknown): Promise<string | null> {
+	const ctx = (error as { context?: Response })?.context;
+	if (!ctx || typeof ctx.clone !== 'function') return null;
+	try {
+		const body = await ctx.clone().json();
+		const code = (body as { error?: string })?.error;
+		return typeof code === 'string' ? code : null;
+	} catch {
+		return null;
+	}
+}
+
 /// Cancel a single occurrence of a recurring event (the rest of the series
 /// is untouched). Organiser-only via RLS; the fan-out trigger notifies every
 /// going / maybe / waitlisted attendee of this instance.
