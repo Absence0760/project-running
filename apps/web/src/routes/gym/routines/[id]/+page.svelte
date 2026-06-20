@@ -9,6 +9,7 @@
 		deleteGymRoutine,
 		fetchMyClubs,
 		publishGymRoutineAsTemplate,
+		setGymRoutinePublic,
 		type GymRoutineDetail,
 	} from '$lib/core/data';
 	import type { ClubWithMeta } from '$lib/types';
@@ -23,6 +24,7 @@
 	let adminClubs = $state<ClubWithMeta[]>([]);
 	let publishingTo = $state('');
 	let publishBusy = $state(false);
+	let publicBusy = $state(false);
 
 	const back = smartBack();
 	const routineId = $derived($page.params.id ?? '');
@@ -51,6 +53,25 @@
 			showToast(t('gym.routine.publishFailed'), 'error');
 		} finally {
 			publishBusy = false;
+		}
+	}
+
+	async function togglePublic() {
+		if (!detail || publicBusy) return;
+		const next = !detail.routine.is_public_template;
+		publicBusy = true;
+		try {
+			await setGymRoutinePublic(detail.routine.id, next);
+			detail.routine.is_public_template = next;
+			showToast(
+				next ? t('gym.routine.publishPublicSuccess') : t('gym.routine.unpublishPublicSuccess'),
+				'success'
+			);
+		} catch (e) {
+			console.error('toggle gym routine public failed', e);
+			showToast(t('gym.routine.publishPublicFailed'), 'error');
+		} finally {
+			publicBusy = false;
 		}
 	}
 
@@ -172,6 +193,33 @@
 			</section>
 		{/if}
 
+		{#if isOwner && !detail.routine.club_id}
+			<section class="public-row">
+				<div class="public-text">
+					<span class="public-label">{t('gym.routine.publishPublicLabel')}</span>
+					{#if detail.routine.is_public_template}
+						<span class="public-badge" data-testid="routine-public-badge">
+							<span class="material-symbols" aria-hidden="true">public</span>
+							{t('gym.routine.publicBadge')}
+						</span>
+					{:else}
+						<span class="public-hint">{t('gym.routine.publishPublicHint')}</span>
+					{/if}
+				</div>
+				<button
+					type="button"
+					class="btn btn-secondary"
+					onclick={togglePublic}
+					disabled={publicBusy}
+					data-testid="routine-toggle-public"
+				>
+					{detail.routine.is_public_template
+						? t('gym.routine.unpublishPublic')
+						: t('gym.routine.publishPublic')}
+				</button>
+			</section>
+		{/if}
+
 		<ul class="exercise-list" data-testid="routine-exercises">
 			{#each detail.exercises as ex (ex.id)}
 				<li class="card-elevated exercise-card" class:supersetted={ex.superset_group != null}>
@@ -264,6 +312,38 @@
 	.publish-label {
 		color: var(--text-muted);
 		font-size: 0.9rem;
+	}
+	.public-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+		margin: 0 0 var(--space-lg);
+	}
+	.public-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3xs);
+		min-width: 0;
+	}
+	.public-label {
+		font-weight: 600;
+		font-size: 0.9rem;
+	}
+	.public-hint {
+		color: var(--text-muted);
+		font-size: 0.82rem;
+	}
+	.public-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		color: var(--color-primary);
+		font-size: 0.85rem;
+	}
+	.public-badge .material-symbols {
+		font-size: 1.05rem;
 	}
 	.club-template-badge {
 		display: inline-flex;

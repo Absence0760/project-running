@@ -40,6 +40,10 @@
 			{/if}
 		</div>
 		<div class="head-actions">
+			<a class="btn btn-outline" href="/gym/routines/library" data-testid="routine-library">
+				<span class="material-symbols" aria-hidden="true">public</span>
+				{t('gymLibrary.link')}
+			</a>
 			<a class="btn btn-primary" href="/gym/routines/new" data-testid="routine-new">
 				<span class="material-symbols" aria-hidden="true">add</span>
 				{t('gym.routine.new')}
