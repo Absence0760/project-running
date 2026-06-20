@@ -73,8 +73,14 @@ function statCells(recap: YearInRunningRecap, unit: 'km' | 'mi'): StatCell[] {
 
 /// Build the share-card SVG for a year-in-running recap. Returns an
 /// `<svg>` string sized for a 1080×1080 social card. The page
-/// rasterises it to PNG before sharing / downloading.
-export function buildRecapShareSvg(recap: YearInRunningRecap, unit: 'km' | 'mi'): string {
+/// rasterises it to PNG before sharing / downloading. Pass `periodLabel`
+/// (e.g. "March 2026") to render a monthly card; omit it for the annual
+/// card, which uses the year.
+export function buildRecapShareSvg(
+	recap: YearInRunningRecap,
+	unit: 'km' | 'mi',
+	periodLabel?: string,
+): string {
 	const F = 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
 	const parts: string[] = [];
 	parts.push(
@@ -88,8 +94,9 @@ export function buildRecapShareSvg(recap: YearInRunningRecap, unit: 'km' | 'mi')
 	);
 
 	// Kicker.
+	const kickerPeriod = (periodLabel ?? String(recap.year)).toUpperCase();
 	parts.push(
-		`<text x="${PAD}" y="${PAD + 110}" font-family="${F}" font-size="34" font-weight="700" fill="${LABEL_FILL}" letter-spacing="3">MY ${recap.year} IN RUNNING</text>`,
+		`<text x="${PAD}" y="${PAD + 110}" font-family="${F}" font-size="34" font-weight="700" fill="${LABEL_FILL}" letter-spacing="3">MY ${xmlEscape(kickerPeriod)} IN RUNNING</text>`,
 	);
 
 	// Hero — total distance.

@@ -60,6 +60,12 @@ test('shows active-month count out of twelve', () => {
 	assert.ok(svg.includes('9 / 12'));
 });
 
+test('a periodLabel renders a monthly kicker instead of the year', () => {
+	const svg = buildRecapShareSvg(recap({ month: 3 }), 'km', 'March 2026');
+	assert.ok(svg.includes('MY MARCH 2026 IN RUNNING'));
+	assert.ok(!svg.includes('MY 2026 IN RUNNING'));
+});
+
 test('escapes nothing dangerous but stays valid with zeroed data', () => {
 	const svg = buildRecapShareSvg(
 		recap({

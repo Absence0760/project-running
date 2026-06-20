@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { activeFormatLocale } from '$lib/format/time';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchRuns, fetchRecapExtras, publishRecap } from '$lib/core/data';
-	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
+	import { buildMonthInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
-	import RecapView from '$lib/components/RecapView.svelte';
 	import { svgToPngBlob } from '$lib/share/svg_to_png';
+	import RecapView from '$lib/components/RecapView.svelte';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
@@ -21,7 +22,21 @@
 	let publishing = $state(false);
 
 	let year = $derived(parseInt($page.params.year ?? '0', 10));
-	let valid = $derived(!Number.isNaN(year) && year >= 2010 && year <= 2100);
+	let month = $derived(parseInt($page.params.month ?? '0', 10));
+	let valid = $derived(
+		!Number.isNaN(year) && year >= 2010 && year <= 2100 && !Number.isNaN(month) && month >= 1 && month <= 12
+	);
+
+	function monthLabel(y: number, mo: number): string {
+		if (!valid) return '';
+		return new Date(y, mo - 1, 1).toLocaleDateString(activeFormatLocale(), {
+			month: 'long',
+			year: 'numeric'
+		});
+	}
+
+	let periodLabel = $derived(monthLabel(year, month));
+	let periodKey = $derived(`${year}-${String(month).padStart(2, '0')}`);
 
 	onMount(async () => {
 		await auth.ready();
@@ -39,29 +54,28 @@
 
 	$effect(() => {
 		if (!valid) return;
-		recap = buildYearInRunningRecap(runs, year, extras);
+		recap = buildMonthInRunningRecap(runs, year, month, extras);
 	});
 
 	async function shareRecap() {
 		if (!recap) return;
 		const lines = [
-			t('recap.shareTitle', { year: recap.year }),
+			t('recap.monthShareTitle', { period: periodLabel }),
 			'',
 			t('recap.shareDistance', { distance: fmtKm(recap.totalDistanceM), n: recap.runCount }),
 			t('recap.shareLongest', { distance: fmtKm(recap.longestRunM) }),
-			t('recap.shareStreak', { n: recap.bestStreakDays }),
 			t('recap.shareTopWeek', { distance: fmtKm(recap.topWeek?.distanceM ?? 0) })
 		];
 		const text = lines.join('\n');
 
 		try {
-			const svg = buildRecapShareSvg(recap, getUnit());
+			const svg = buildRecapShareSvg(recap, getUnit(), periodLabel);
 			const blob = await svgToPngBlob(svg, 1080);
-			const file = new File([blob], `threkir-${recap.year}.png`, { type: 'image/png' });
+			const file = new File([blob], `threkir-${periodKey}.png`, { type: 'image/png' });
 			if (navigator.canShare?.({ files: [file] })) {
 				await navigator.share({
 					files: [file],
-					title: t('recap.shareTitle', { year: recap.year }),
+					title: t('recap.monthShareTitle', { period: periodLabel }),
 					text
 				});
 				return;
@@ -69,7 +83,7 @@
 			const dl = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = dl;
-			a.download = `threkir-${recap.year}.png`;
+			a.download = `threkir-${periodKey}.png`;
 			a.click();
 			URL.revokeObjectURL(dl);
 			return;
@@ -79,7 +93,7 @@
 
 		if (navigator.share) {
 			try {
-				await navigator.share({ title: t('recap.shareTitle', { year: recap.year }), text });
+				await navigator.share({ title: t('recap.monthShareTitle', { period: periodLabel }), text });
 				return;
 			} catch (_) {
 				// fall through to clipboard
@@ -93,7 +107,7 @@
 		if (!recap || publishing) return;
 		publishing = true;
 		try {
-			const id = await publishRecap('year', String(recap.year), recap);
+			const id = await publishRecap('month', periodKey, recap);
 			if (!id) {
 				alert(t('recap.publishFailed'));
 				return;
@@ -101,7 +115,7 @@
 			const url = `${location.origin}/recap/share/${id}`;
 			if (navigator.share) {
 				try {
-					await navigator.share({ title: t('recap.shareTitle', { year: recap.year }), url });
+					await navigator.share({ title: t('recap.monthShareTitle', { period: periodLabel }), url });
 					return;
 				} catch (_) {
 					// fall through to clipboard
@@ -119,20 +133,20 @@
 </script>
 
 <svelte:head>
-	<title>{t('recap.pageTitle', { year })}</title>
+	<title>{valid ? t('recap.monthPageTitle', { period: periodLabel }) : t('recap.invalidYear')}</title>
 </svelte:head>
 
 <div class="page">
 	{#if !valid}
-		<p class="muted">{t('recap.invalidYear')}</p>
+		<p class="muted">{t('recap.invalidMonth')}</p>
 	{:else if loading}
 		<p class="muted">{t('recap.loadingYear')}</p>
 	{:else if !auth.user}
 		<p class="muted">{t('recap.signInPrompt')}</p>
 	{:else if recap == null || recap.runCount === 0}
 		<header class="hero-empty">
-			<p class="kicker">{year}</p>
-			<h1>{t('recap.noRunsYet', { year })}</h1>
+			<p class="kicker">{periodLabel}</p>
+			<h1>{t('recap.noRunsMonth', { period: periodLabel })}</h1>
 			<p class="empty-sub">
 				{t('recap.emptySub')}
 			</p>
@@ -140,8 +154,8 @@
 	{:else}
 		<RecapView
 			{recap}
-			kicker={t('recap.heroKicker', { year: recap.year })}
-			shareLabel={t('recap.shareMyYear', { year: recap.year })}
+			kicker={t('recap.monthHeroKicker', { period: periodLabel })}
+			shareLabel={t('recap.shareMyMonth', { period: periodLabel })}
 			onshare={shareRecap}
 			onpublish={publishAndShareLink}
 			{publishing}

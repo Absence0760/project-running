@@ -221,6 +221,23 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		expect(clipText).toMatch(/Top week:/);
 	});
 
+	test('monthly recap route renders the month card', async ({ page }) => {
+		await page.goto(`/recap/${CURRENT_YEAR}/1`);
+		// The seed user has runs across the current year; January may or may not
+		// be populated, so accept either the populated hero or the empty hero —
+		// the point is the route resolves with a month-scoped card, never a 500.
+		await expect(
+			page.getByText(/in running/).first().or(page.getByText(/No runs in/))
+		).toBeVisible({ timeout: 10_000 });
+		// The monthly card hides the 12-month "Distance by month" chart.
+		await expect(page.getByRole('heading', { name: 'Distance by month' })).toHaveCount(0);
+	});
+
+	test('out-of-range month falls through to the invalid-month hint', async ({ page }) => {
+		await page.goto(`/recap/${CURRENT_YEAR}/13`);
+		await expect(page.getByText(/Pick a month between/)).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('Wrap-it-up closing CTA also shares the card image', async ({ page }) => {
 		await page.addInitScript(() => {
 			const w = window as unknown as { __sharedCount?: number };
