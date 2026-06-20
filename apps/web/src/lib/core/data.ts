@@ -6067,6 +6067,69 @@ export async function fetchRunGear(runId: string): Promise<Gear[]> {
 	return data as Gear[];
 }
 
+// --- Gear wear-pattern logging (roadmap §7) ---
+
+export type GearWearArea = 'outsole' | 'midsole' | 'upper' | 'other';
+
+export interface GearWearLog {
+	id: string;
+	gear_id: string;
+	owner_id: string;
+	logged_on: string;
+	area: GearWearArea | null;
+	note: string;
+	created_at: string;
+	updated_at: string;
+}
+
+/// Fetch a gear item's wear log, newest observation first. Owner-scoped by
+/// RLS — a non-owner read returns nothing, never another user's notes.
+export async function fetchGearWearLogs(gearId: string): Promise<GearWearLog[]> {
+	const { data, error } = await supabase
+		.from(TABLES.gear_wear_logs)
+		.select('*')
+		.eq('gear_id', gearId)
+		.order('logged_on', { ascending: false })
+		.order('created_at', { ascending: false });
+	if (error) {
+		console.error('fetchGearWearLogs failed', error);
+		return [];
+	}
+	return (data ?? []) as GearWearLog[];
+}
+
+export async function addGearWearLog(input: {
+	gearId: string;
+	note: string;
+	area?: GearWearArea | null;
+	loggedOn?: string | null;
+}): Promise<GearWearLog> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { data, error } = await supabase
+		.from(TABLES.gear_wear_logs)
+		.insert({
+			gear_id: input.gearId,
+			owner_id: userId,
+			note: input.note,
+			area: input.area ?? null,
+			// Let the column default (current_date) win when no date is supplied.
+			...(input.loggedOn ? { logged_on: input.loggedOn } : {}),
+		})
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('addGearWearLog failed');
+	return data as GearWearLog;
+}
+
+export async function deleteGearWearLog(id: string): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.gear_wear_logs)
+		.delete()
+		.eq('id', id);
+	if (error) throw error;
+}
+
 // --- Safety contacts (decisions §131) ---
 
 export interface SafetyContact {
