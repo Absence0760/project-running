@@ -2,10 +2,12 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../badges.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../social_service.dart';
+import '../widgets/badge_grid.dart';
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
 import 'people_screen.dart';
@@ -62,6 +64,7 @@ class _FeedScreenState extends State<FeedScreen> {
   List<ActivityFeedEntry> _entries = const [];
   Map<String, EngagementSummary> _engagement = const {};
   List<UserProfileRow> _followees = const [];
+  List<BadgeAwardEntry> _badgeAwards = const [];
 
   String _authorFilter = 'all';
   String _activityFilter = 'all';
@@ -70,6 +73,20 @@ class _FeedScreenState extends State<FeedScreen> {
   void initState() {
     super.initState();
     _loadInitial();
+  }
+
+  // Recent badge awards from people you follow — an auxiliary feed adornment
+  // (L4). A failure here must never blank the core feed, so it loads on its
+  // own and degrades to no strip.
+  Future<void> _loadBadgeAwards() async {
+    try {
+      final awards = await widget.api.fetchFollowingBadgeAwards(limit: 6);
+      if (!mounted) return;
+      setState(() => _badgeAwards = awards);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _badgeAwards = const []);
+    }
   }
 
   // Engagement (kudos / comments) only exists for runs. Lift cards carry no
@@ -83,6 +100,7 @@ class _FeedScreenState extends State<FeedScreen> {
       _loading = true;
       _loadError = null;
     });
+    _loadBadgeAwards();
     try {
       final api = widget.api;
       final results = await Future.wait([
@@ -222,6 +240,7 @@ class _FeedScreenState extends State<FeedScreen> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (_badgeAwards.isNotEmpty) _buildBadgeStrip(theme),
                     if (_followees.isNotEmpty) _buildToolbar(theme),
                     Expanded(
                       child: _entries.isEmpty
@@ -303,6 +322,44 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                   ],
                 );
+  }
+
+  Widget _buildBadgeStrip(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: SizedBox(
+        height: 40,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _badgeAwards.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final a = _badgeAwards[i];
+            final tierColor = badgeTierColor(a.badge.tier);
+            final name = a.authorName ?? l10n.badgesARunner;
+            final label = badgeLabelFor(l10n, a.badge.badgeKey, a.badge.tier);
+            final icon = badgeIconData(
+              tierFor(a.badge.badgeKey, a.badge.tier)?.icon ?? 'military_tech',
+            );
+            return ActionChip(
+              avatar: Icon(icon, size: 18, color: tierColor),
+              label: Text(
+                l10n.badgesFeedEarned(name, label),
+                overflow: TextOverflow.ellipsis,
+              ),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      ProfileScreen(api: widget.api, userId: a.authorId),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildToolbar(ThemeData theme) {

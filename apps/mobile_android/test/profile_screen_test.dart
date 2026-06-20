@@ -49,12 +49,15 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('renders three tabs (Runs/Followers/Following) for non-self',
+    testWidgets(
+        'renders four tabs (Runs/Achievements/Followers/Following) for non-self',
         (tester) async {
-      // Reason: Notifications is gated to isSelf — it must NOT appear
-      // when viewing another user's profile.
+      // Reason: Achievements is visible to everyone (RLS gates the private
+      // rows); Notifications is gated to isSelf — it must NOT appear when
+      // viewing another user's profile.
       await _pump(tester, userId: 'someone-else');
       expect(find.text('Runs'), findsOneWidget);
+      expect(find.text('Achievements'), findsOneWidget);
       expect(find.text('Followers'), findsOneWidget);
       expect(find.text('Following'), findsOneWidget);
       expect(find.text('Notifications'), findsNothing);
