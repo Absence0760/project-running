@@ -155,6 +155,14 @@ jobs:
         working-directory: apps/web
         run: node lambda/share-route/build.mjs
 
+      - name: Bundle share-recap Lambda
+        # Year-in-Running "Wrapped" share parity with share-run/route.
+        # Per-request SSR handler for /recap/share/* + /og/recap/*.png.
+        # Same post-build ordering constraint — it embeds
+        # apps/web/build/index.html. See apps/web/lambda/share-recap/README.md.
+        working-directory: apps/web
+        run: node lambda/share-recap/build.mjs
+
       # ──────────────────── AWS auth via OIDC ────────────────────
 
       - name: Pick deploy role ARN
@@ -197,6 +205,7 @@ jobs:
           echo "lambda=runonward-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
           echo "share_run_lambda=runonward-web-${ENV}-share-run" >> "$GITHUB_OUTPUT"
           echo "share_route_lambda=runonward-web-${ENV}-share-route" >> "$GITHUB_OUTPUT"
+          echo "share_recap_lambda=runonward-web-${ENV}-share-recap" >> "$GITHUB_OUTPUT"
 
           if [[ "$ENV" == "prod" ]]; then ALIAS="threkir.com"; else ALIAS="preview.threkir.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \
@@ -266,6 +275,20 @@ jobs:
             --name live \
             --function-version "$NEW_VERSION"
           echo "Share-route Lambda alias 'live' now points at version $NEW_VERSION"
+
+      - name: Update share-recap Lambda
+        run: |
+          NEW_VERSION=$(aws lambda update-function-code \
+            --function-name "${{ steps.aws.outputs.share_recap_lambda }}" \
+            --zip-file "fileb://apps/web/lambda/share-recap/dist/share-recap.zip" \
+            --publish \
+            --query Version \
+            --output text)
+          aws lambda update-alias \
+            --function-name "${{ steps.aws.outputs.share_recap_lambda }}" \
+            --name live \
+            --function-version "$NEW_VERSION"
+          echo "Share-recap Lambda alias 'live' now points at version $NEW_VERSION"
 
       - name: Invalidate CloudFront
         run: |

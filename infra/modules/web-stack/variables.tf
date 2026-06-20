@@ -73,6 +73,12 @@ variable "share_route_lambda_zip_path" {
   default     = null
 }
 
+variable "share_recap_lambda_zip_path" {
+  description = "Optional path to a pre-built share-recap Lambda zip (apps/web/lambda/share-recap/dist/share-recap.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Year-in-Running 'Wrapped' share parity with share-run/share-route — handles /recap/share/* + /og/recap/*.png with per-request SSR over the frozen public_recaps snapshot."
+  type        = string
+  default     = null
+}
+
 variable "generate_route_lambda_zip_path" {
   description = "Optional path to a pre-built generate-route Lambda zip (apps/web/lambda/generate-route/dist/generate-route.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Handles /api/routes/generate* — server-side round-trip route generation against the self-hosted GraphHopper engine."
   type        = string

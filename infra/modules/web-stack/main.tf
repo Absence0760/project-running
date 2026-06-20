@@ -57,6 +57,20 @@ locals {
     },
   )
 
+  # share-recap Lambda env. Same shape + posture as the share-run /
+  # share-route envs (anon key against the anon-readable public_recaps
+  # row; PUBLIC_SITE_URL for env-specific absolute og:url / og:image /
+  # canonical URLs). The recap snapshot is aggregate-only (no track),
+  # so no clip RPC is needed. Kept as its own local so the three share
+  # surfaces stay independently owned.
+  share_recap_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+      PUBLIC_SITE_URL          = var.public_site_url
+    },
+  )
+
   # generate-route Lambda env. Engine URLs (GRAPH_CYCLE_URL + GRAPHHOPPER_URL)
   # are non-secret internal URLs passed as plain Terraform vars; an empty string
   # is omitted so the handler sees that env unset and simply skips that engine
@@ -96,6 +110,7 @@ locals {
   effective_zip_path                = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
   effective_share_run_zip_path      = var.share_run_lambda_zip_path != null ? var.share_run_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_share_route_zip_path    = var.share_route_lambda_zip_path != null ? var.share_route_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_recap_zip_path    = var.share_recap_lambda_zip_path != null ? var.share_recap_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_generate_route_zip_path = var.generate_route_lambda_zip_path != null ? var.generate_route_lambda_zip_path : data.archive_file.placeholder.output_path
 }
 
@@ -684,6 +699,126 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_route" {
   }
 }
 
+# ─── Share-recap Lambda (Year-in-Running "Wrapped" share parity) ───
+#
+# Per-request SSR handler for /recap/share/<id> (HTML + OG tags) +
+# /og/recap/<id>.png (1200x630 card PNG). Renders the FROZEN
+# public_recaps snapshot — aggregate-only, no track, no per-run rows —
+# so a recap published after the last web build still unfurls with the
+# right per-recap head AND a rendered image, regardless of build
+# cadence. The PNG path falls back to a generic branded card (HTTP 200)
+# for missing / revoked recaps so an unfurl never breaks. Symmetric
+# mirror of the share-run / share-route Lambdas above. See
+# apps/web/lambda/share-recap/README.md for the bundle shape + lifecycle.
+#
+# Reuses the existing `aws_iam_role.lambda` execution role + CloudWatch
+# log group naming so the operator surface stays uniform across the
+# share Lambdas — single role, single dashboard, single alarm fan-out.
+
+resource "aws_cloudwatch_log_group" "lambda_share_recap" {
+  name              = "/aws/lambda/${local.resource_prefix}-share-recap"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secrets.arn
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "share_recap" {
+  function_name = "${local.resource_prefix}-share-recap"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  # Node 24 — same runtime as the coach + share-run + share-route
+  # Lambdas. Bumping here also requires the esbuild target in
+  # apps/web/lambda/share-recap/build.mjs to match.
+  runtime       = "nodejs24.x"
+  architectures = ["arm64"]
+  # 512 MB — the @resvg PNG renderer needs more headroom than a pure
+  # HTML handler, but the static HTML path is the hot one and runs well
+  # under 256 MB. 512 splits the difference cheaply. Matches the
+  # share-run / share-route Lambdas.
+  memory_size                    = 512
+  timeout                        = 15
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
+  filename         = local.effective_share_recap_zip_path
+  source_code_hash = filebase64sha256(local.effective_share_recap_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.share_recap_lambda_env
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = var.tags
+
+  # Same rationale as the coach + share-run + share-route Lambdas — CI
+  # updates code on every web@* tag; Terraform owns infra-shape.
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      qualified_arn,
+      version,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_share_recap]
+}
+
+resource "aws_lambda_alias" "share_recap_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.share_recap.function_name
+  function_version = aws_lambda_function.share_recap.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "share_recap" {
+  function_name      = aws_lambda_function.share_recap.function_name
+  qualifier          = aws_lambda_alias.share_recap_live.name
+  authorization_type = "AWS_IAM"
+  # Buffered (not streaming) — share-recap returns a single HTML or PNG
+  # body, no SSE. RESPONSE_STREAM would add latency overhead with no
+  # benefit.
+  invoke_mode = "BUFFERED"
+
+  cors {
+    # Crawlers + first-party viewers are the only callers; restrict to
+    # GET / OPTIONS. No custom headers needed (no JWT — every read is
+    # via the anon key inside the Lambda).
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["GET"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_share_recap" {
+  name                              = "${local.resource_prefix}-share-recap-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke_share_recap" {
+  statement_id           = "AllowCloudFrontInvokeShareRecap"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.share_recap.function_name
+  qualifier              = aws_lambda_alias.share_recap_live.name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Generate-route Lambda (server-side round-trip route generation) ───
 #
 # Non-streaming JSON handler for POST /api/routes/generate. Replaces the
@@ -1049,6 +1184,46 @@ resource "aws_cloudfront_origin_request_policy" "share_route" {
   }
 }
 
+# Cache + origin-request policies for the share-recap Lambda. Same
+# shape + 5-min TTL as the share-run / share-route policies (responses
+# are deterministic per URL and a recap revocation must propagate
+# fast). Kept as dedicated resources rather than sharing the sibling
+# ones so a future tweak to one share surface can't silently change
+# the others.
+resource "aws_cloudfront_cache_policy" "share_recap" {
+  name = "${local.resource_prefix}-share-recap"
+  # 5-min TTL — matches the Lambda's `max-age=300, s-maxage=300,
+  # stale-while-revalidate=60` Cache-Control. Both ceilings (CloudFront
+  # max_ttl AND the origin Cache-Control) clamp the stale window, so
+  # they must agree. Caps how long a revoked recap stays on the unfurl.
+  comment     = "Share-recap Lambda — cache per-id HTML/PNG for 5m so recap revocations propagate fast"
+  default_ttl = 300
+  max_ttl     = 300
+  min_ttl     = 0
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+    cookies_config { cookie_behavior = "none" }
+    headers_config { header_behavior = "none" }
+    # Path varies per recap id; CloudFront already keys on the path
+    # without any query-string contribution. Disable QS-in-key so a
+    # `?foo=bar` doesn't multiply cache entries.
+    query_strings_config { query_string_behavior = "none" }
+  }
+}
+
+resource "aws_cloudfront_origin_request_policy" "share_recap" {
+  name = "${local.resource_prefix}-share-recap-origin"
+  cookies_config { cookie_behavior = "none" }
+  query_strings_config { query_string_behavior = "none" }
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = ["accept", "accept-encoding"]
+    }
+  }
+}
+
 # Origin request policy for the generate-route Lambda. The handler reads
 # the request body only (a coordinate + distance), no viewer JWT — so,
 # unlike the coach policy, no `x-supabase-authorization` is forwarded.
@@ -1118,6 +1293,19 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id                = "lambda-share-route"
     domain_name              = replace(aws_lambda_function_url.share_route.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
     origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_route.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  origin {
+    origin_id                = "lambda-share-recap"
+    domain_name              = replace(aws_lambda_function_url.share_recap.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_recap.id
 
     custom_origin_config {
       http_port              = 80
@@ -1247,6 +1435,39 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = false
     cache_policy_id            = aws_cloudfront_cache_policy.share_route.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_route.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Share-recap Lambda: per-request SSR for the Year-in-Running
+  # "Wrapped" share-link HTML so a recap published after the last build
+  # unfurls with the right per-recap head, regardless of build cadence.
+  # Renders the frozen public_recaps snapshot. See
+  # apps/web/lambda/share-recap/README.md.
+  ordered_cache_behavior {
+    path_pattern               = "/recap/share/*"
+    target_origin_id           = "lambda-share-recap"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_recap.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_recap.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Per-recap og:image PNG, same Lambda. Routing /og/recap/* to the
+  # share-recap Lambda renders the 1200x630 card at request time for ANY
+  # id (with a generic branded fallback at 200 for missing / revoked
+  # recaps). compress is off: the body is already-compressed PNG bytes.
+  ordered_cache_behavior {
+    path_pattern               = "/og/recap/*"
+    target_origin_id           = "lambda-share-recap"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = false
+    cache_policy_id            = aws_cloudfront_cache_policy.share_recap.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_recap.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
