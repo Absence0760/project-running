@@ -26,7 +26,9 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// that drops one is a silent Art 20 completeness gap. The Go list
 	// carries two extra entries this twin omits by long-standing design
 	// (route_markers, checkpoint_crossings), so the counts differ by two.
-	assertEquals(specs.length, 50, `expected 50 specs, got ${specs.length}`);
+	// The 2026-06-20 widened-guard pass then surfaced route_conditions
+	// (migration 20270215_001) as a further user_id gap and wired it in.
+	assertEquals(specs.length, 51, `expected 51 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -48,6 +50,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'club_members.json',
 		'saved_routes.json',
 		'route_reviews.json',
+		'route_conditions.json',
 		'race_pings.json',
 		'user_settings.json',
 		'user_device_settings.json',

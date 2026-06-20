@@ -84,6 +84,10 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{ entry: 'club_members.json', table: 'club_members', filter: uidEq, select: '*' },
 		{ entry: 'saved_routes.json', table: 'saved_routes', filter: uidEq, select: '*' },
 		{ entry: 'route_reviews.json', table: 'route_reviews', filter: uidEq, select: '*' },
+		// route_conditions — the subject's own community condition reports on routes
+		// (migration 20270215_001): condition, severity, note, optional report
+		// location, timestamps. Reporter's own contributed content under Art 20.
+		{ entry: 'route_conditions.json', table: 'route_conditions', filter: uidEq, select: '*' },
 		{ entry: 'race_pings.json', table: 'race_pings', filter: uidEq, select: '*' },
 		// user_settings — the universal (per-user) prefs bag: privacy
 		// zones, HR settings, date-of-birth, week-start, units, and

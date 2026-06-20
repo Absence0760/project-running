@@ -30,6 +30,7 @@ const (
 	TableRoutes                  = "routes"
 	TableRouteReviews            = "route_reviews"
 	TableRouteMarkers            = "route_markers"
+	TableRouteConditions         = "route_conditions"
 	TableSavedRoutes             = "saved_routes"
 	TableIntegrations            = "integrations"
 	TableWebhookEvents           = "webhook_events"

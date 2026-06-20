@@ -1643,6 +1643,11 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// every column is the subject's own input or geometry-derived, so
 		// `*` leaks no third party. Same Art 15/20 footing as route_reviews.
 		{name: "route_markers.json", table: schema.TableRouteMarkers, filter: uidEq, sel: "*"},
+		// route_conditions — the subject's own community condition reports on
+		// routes (migration 20270215_001): condition, severity, note, the
+		// optional report location, and timestamps. The reporter's own
+		// contributed content under Art 20, keyed by user_id.
+		{name: "route_conditions.json", table: schema.TableRouteConditions, filter: uidEq, sel: "*"},
 		// race_pings — live race GPS+HR at ~10s granularity. Personal
 		// health + location data; absent before audit/data-export-
 		// completeness (2026-05-25).
