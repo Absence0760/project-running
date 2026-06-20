@@ -27,6 +27,7 @@
 	import type { GymWorkout, GymSetWithDate } from '$lib/core/data';
 	import { liftsFromSetHistory } from '$lib/gym/lift_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
+	import RacePredictorCard from '$lib/components/RacePredictorCard.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
@@ -1238,6 +1239,12 @@
 				<TrainingLoadChart points={trainingLoadSeries} hasHr={trainingLoadHasHr} />
 			</section>
 		{/if}
+
+		<!-- Multi-distance race-time predictor — projects the 5K / 10K / Half /
+		     Marathon ladder from recency-weighted qualifying efforts, each rung
+		     graded for confidence. Self-hides when no run qualifies (its own
+		     null return). Backlog #11 (advanced analytics polish). -->
+		<RacePredictorCard {runs} />
 
 		<!-- Mileage chart -->
 		<section class="card-elevated">
