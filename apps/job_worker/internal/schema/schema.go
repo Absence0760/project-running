@@ -67,6 +67,7 @@ const (
 	TableGymWorkouts             = "gym_workouts"
 	TableGymRoutines             = "gym_routines"
 	TableFoodLog                 = "food_log"
+	TableMealTemplates           = "meal_templates"
 	TableBodyMetrics             = "body_metrics"
 	TableSafetyContacts          = "safety_contacts"
 	TableSessionPlans            = "session_plans"

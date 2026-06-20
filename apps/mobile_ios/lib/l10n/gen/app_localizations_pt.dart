@@ -8839,6 +8839,62 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionCancel => 'Cancelar';
 
   @override
+  String get nutritionTemplates => 'Modelos de refeição';
+
+  @override
+  String get nutritionSaveAsMeal => 'Salvar como refeição';
+
+  @override
+  String get nutritionSaveAsMealTitle => 'Salvar como modelo de refeição';
+
+  @override
+  String get nutritionTemplateName => 'Nome do modelo';
+
+  @override
+  String get nutritionTemplateNamePlaceholder =>
+      'ex.: Café da manhã antes da corrida';
+
+  @override
+  String get nutritionSaveTemplate => 'Salvar refeição';
+
+  @override
+  String get nutritionTemplateSaved => 'Modelo de refeição salvo.';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'Não foi possível salvar o modelo: $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => 'Registrar';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return '$n itens registrados de $name.';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'Não foi possível registrar o modelo: $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n itens';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => 'Excluir';
+
+  @override
+  String get nutritionDeleteTemplateTitle => 'Excluir este modelo de refeição?';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name será removido. As refeições já registradas a partir dele permanecem no seu diário.';
+  }
+
+  @override
   String get sessionTitle => 'Sessões';
 
   @override
@@ -19016,6 +19072,62 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionCancel => 'Cancelar';
+
+  @override
+  String get nutritionTemplates => 'Modelos de refeição';
+
+  @override
+  String get nutritionSaveAsMeal => 'Salvar como refeição';
+
+  @override
+  String get nutritionSaveAsMealTitle => 'Salvar como modelo de refeição';
+
+  @override
+  String get nutritionTemplateName => 'Nome do modelo';
+
+  @override
+  String get nutritionTemplateNamePlaceholder =>
+      'ex.: Café da manhã antes da corrida';
+
+  @override
+  String get nutritionSaveTemplate => 'Salvar refeição';
+
+  @override
+  String get nutritionTemplateSaved => 'Modelo de refeição salvo.';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'Não foi possível salvar o modelo: $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => 'Registrar';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return '$n itens registrados de $name.';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'Não foi possível registrar o modelo: $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n itens';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => 'Excluir';
+
+  @override
+  String get nutritionDeleteTemplateTitle => 'Excluir este modelo de refeição?';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name será removido. As refeições já registradas a partir dele permanecem no seu diário.';
+  }
 
   @override
   String get sessionTitle => 'Sessões';

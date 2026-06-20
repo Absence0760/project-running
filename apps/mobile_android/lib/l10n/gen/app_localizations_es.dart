@@ -8843,6 +8843,63 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nutritionCancel => 'Cancelar';
 
   @override
+  String get nutritionTemplates => 'Plantillas de comida';
+
+  @override
+  String get nutritionSaveAsMeal => 'Guardar como comida';
+
+  @override
+  String get nutritionSaveAsMealTitle => 'Guardar como plantilla de comida';
+
+  @override
+  String get nutritionTemplateName => 'Nombre de la plantilla';
+
+  @override
+  String get nutritionTemplateNamePlaceholder =>
+      'p. ej. Desayuno antes de correr';
+
+  @override
+  String get nutritionSaveTemplate => 'Guardar comida';
+
+  @override
+  String get nutritionTemplateSaved => 'Plantilla de comida guardada.';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'No se pudo guardar la plantilla: $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => 'Registrar';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return 'Se registraron $n elementos de $name.';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'No se pudo registrar la plantilla: $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n elementos';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => 'Eliminar';
+
+  @override
+  String get nutritionDeleteTemplateTitle =>
+      '¿Eliminar esta plantilla de comida?';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name se eliminará. Las comidas ya registradas a partir de ella permanecen en tu diario.';
+  }
+
+  @override
   String get sessionTitle => 'Sesiones';
 
   @override

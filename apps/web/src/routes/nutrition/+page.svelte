@@ -8,8 +8,15 @@
 		fetchRuns,
 		fetchGymWorkouts,
 		deleteFoodEntry,
+		fetchMealTemplatesWithError,
+		fetchMealTemplateDetail,
+		createMealTemplate,
+		deleteMealTemplate,
+		logMealTemplate,
 		type FoodEntry,
+		type MealTemplateSummary,
 	} from '$lib/core/data';
+	import { templateFromEntries } from '$lib/nutrition/meal_template';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import {
 		computeNutritionTargets,
@@ -46,6 +53,15 @@
 	let waterMl = $state(0);
 	let weightKg = $state<number | null>(null);
 	let exerciseMinutes = $state(0);
+
+	let templates = $state<MealTemplateSummary[]>([]);
+	let templatesError = $state(false);
+	let showSaveMeal = $state(false);
+	let mealName = $state('');
+	let savingMeal = $state(false);
+	let loggingTemplateId = $state<string | null>(null);
+	let confirmDeleteTemplate = $state<MealTemplateSummary | null>(null);
+	let deletingTemplate = $state(false);
 
 	const WATER_UNIT_ML = 250;
 
@@ -154,15 +170,84 @@
 
 			const stored = localStorage.getItem(waterStorageKey());
 			waterMl = stored ? Number(stored) || 0 : 0;
+
+			await loadTemplates();
 		} catch (e) {
 			console.warn('nutrition load failed', e);
 		}
 		loading = false;
 	}
 
+	async function loadTemplates() {
+		const res = await fetchMealTemplatesWithError();
+		templates = res.templates;
+		templatesError = res.error !== null;
+	}
+
 	function onLogged() {
 		showLog = false;
 		void load();
+	}
+
+	async function saveMeal() {
+		if (savingMeal || entries.length === 0) return;
+		savingMeal = true;
+		try {
+			const draft = templateFromEntries(mealName, entries);
+			await createMealTemplate({
+				name: draft.name,
+				meal_slot: draft.mealSlot,
+				items: draft.items.map((it) => ({
+					position: it.position,
+					item_name: it.itemName,
+					meal_slot: it.mealSlot,
+					calories: it.calories,
+					protein_g: it.proteinG,
+					carbs_g: it.carbsG,
+					fat_g: it.fatG,
+					external_id: it.externalId,
+				})),
+			});
+			showToast(m('nutrition.templateSaved'), 'success');
+			showSaveMeal = false;
+			mealName = '';
+			await loadTemplates();
+		} catch (e) {
+			showToast(m('nutrition.templateSaveFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			savingMeal = false;
+		}
+	}
+
+	async function logTemplate(t: MealTemplateSummary) {
+		if (loggingTemplateId) return;
+		loggingTemplateId = t.id;
+		try {
+			const detail = await fetchMealTemplateDetail(t.id);
+			if (!detail) throw new Error('not found');
+			const n = await logMealTemplate(detail);
+			showToast(m('nutrition.templateLogged', { n, name: t.name }), 'success');
+			await load();
+		} catch (e) {
+			showToast(m('nutrition.templateLogFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			loggingTemplateId = null;
+		}
+	}
+
+	async function removeTemplate() {
+		const t = confirmDeleteTemplate;
+		if (!t || deletingTemplate) return;
+		deletingTemplate = true;
+		try {
+			await deleteMealTemplate(t.id);
+			templates = templates.filter((x) => x.id !== t.id);
+			confirmDeleteTemplate = null;
+		} catch (e) {
+			showToast(m('nutrition.deleteTemplateFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			deletingTemplate = false;
+		}
 	}
 
 	function addWater() {
@@ -341,6 +426,50 @@
 			</div>
 		</section>
 
+		{#if templatesError}
+			<section class="card-elevated templates-card" data-testid="templates-error">
+				<div class="card-head">
+					<span class="section-label">{m('nutrition.templates')}</span>
+				</div>
+				<p class="section-hint">
+					<span class="material-symbols hint-icon" aria-hidden="true">error</span>
+					{m('nutrition.templatesLoadFailed')}
+					<button class="btn btn-outline btn-sm" type="button" onclick={() => void loadTemplates()}>{m('nutrition.templatesRetry')}</button>
+				</p>
+			</section>
+		{:else if templates.length > 0}
+			<section class="card-elevated templates-card" data-testid="meal-templates">
+				<div class="card-head">
+					<span class="section-label">{m('nutrition.templates')}</span>
+				</div>
+				<ul class="template-list">
+					{#each templates as t (t.id)}
+						<li class="template-row">
+							<div class="template-main">
+								<span class="template-name">{t.name}</span>
+								<span class="template-meta">{m('nutrition.templateItems', { n: t.item_count })}</span>
+							</div>
+							<button
+								class="btn btn-primary btn-sm"
+								type="button"
+								disabled={loggingTemplateId === t.id}
+								onclick={() => void logTemplate(t)}
+								data-testid="log-template"
+							>{m('nutrition.logTemplate')}</button>
+							<button
+								class="icon-btn"
+								type="button"
+								onclick={() => (confirmDeleteTemplate = t)}
+								aria-label={`${m('nutrition.deleteTemplate')} ${t.name}`}
+							>
+								<span class="material-symbols" aria-hidden="true">delete</span>
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
 		{#if !hasMeals}
 			<section class="card-elevated empty" data-testid="macro-rings-empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
@@ -352,7 +481,18 @@
 			<section class="card-elevated meals-card">
 				<div class="card-head">
 					<span class="section-label">{m('dash.today')}</span>
-					<span class="card-meta">{consumed.calories} kcal</span>
+					<div class="meals-head-right">
+						<span class="card-meta">{consumed.calories} kcal</span>
+						<button
+							class="btn btn-outline btn-sm"
+							type="button"
+							onclick={() => {
+								mealName = '';
+								showSaveMeal = true;
+							}}
+							data-testid="save-as-meal"
+						>{m('nutrition.saveAsMeal')}</button>
+					</div>
 				</div>
 				<div class="meal-groups">
 					{#each groups as g (g.slot)}
@@ -453,6 +593,42 @@
 	confirmLabel={m('nutrition.delete')}
 	onconfirm={removeEntry}
 	oncancel={() => (confirmDeleteEntry = null)}
+	danger
+/>
+
+<Modal open={showSaveMeal} title={m('nutrition.saveAsMealTitle')} narrow onclose={() => (showSaveMeal = false)}>
+	<form
+		class="editor-form save-meal-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			void saveMeal();
+		}}
+	>
+		<label class="field">
+			<span class="section-label">{m('nutrition.templateName')}</span>
+			<input
+				type="text"
+				bind:value={mealName}
+				placeholder={m('nutrition.templateNamePlaceholder')}
+				data-testid="meal-name"
+			/>
+		</label>
+		<div class="save-meal-actions">
+			<button class="btn btn-outline" type="button" onclick={() => (showSaveMeal = false)}>{m('nutrition.cancel')}</button>
+			<button class="btn btn-primary" type="submit" disabled={savingMeal || entries.length === 0} data-testid="confirm-save-meal">
+				{m('nutrition.saveTemplate')}
+			</button>
+		</div>
+	</form>
+</Modal>
+
+<ConfirmDialog
+	open={confirmDeleteTemplate !== null}
+	title={m('nutrition.deleteTemplateTitle')}
+	message={m('nutrition.deleteTemplateMessage', { name: confirmDeleteTemplate?.name ?? '' })}
+	confirmLabel={m('nutrition.deleteTemplate')}
+	onconfirm={removeTemplate}
+	oncancel={() => (confirmDeleteTemplate = null)}
 	danger
 />
 
@@ -666,6 +842,47 @@
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 	}
+
+	.meals-head-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+	}
+
+	/* Meal templates — a self-hiding section above the day's meals, mirroring
+	   the gym Routines section above the workout list. */
+	.template-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.template-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) 0;
+		border-bottom: 1px solid var(--color-bg-secondary);
+	}
+	.template-row:last-child { border-bottom: none; }
+	.template-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+	.template-name {
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.template-meta {
+		color: var(--color-text-secondary);
+		font-size: 0.8rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.save-meal-form { display: flex; flex-direction: column; gap: var(--space-lg); }
+	.save-meal-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 
 	/* Meals — one card with per-slot subsections so the day reads as a
 	   single block rather than four floating fragments. */

@@ -8847,6 +8847,61 @@ class AppLocalizationsDe extends AppLocalizations {
   String get nutritionCancel => 'Abbrechen';
 
   @override
+  String get nutritionTemplates => 'Mahlzeitvorlagen';
+
+  @override
+  String get nutritionSaveAsMeal => 'Als Mahlzeit speichern';
+
+  @override
+  String get nutritionSaveAsMealTitle => 'Als Mahlzeitvorlage speichern';
+
+  @override
+  String get nutritionTemplateName => 'Vorlagenname';
+
+  @override
+  String get nutritionTemplateNamePlaceholder => 'z. B. Frühstück vor dem Lauf';
+
+  @override
+  String get nutritionSaveTemplate => 'Mahlzeit speichern';
+
+  @override
+  String get nutritionTemplateSaved => 'Mahlzeitvorlage gespeichert.';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'Vorlage konnte nicht gespeichert werden: $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => 'Erfassen';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return '$n Einträge aus $name erfasst.';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'Vorlage konnte nicht erfasst werden: $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n Einträge';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => 'Löschen';
+
+  @override
+  String get nutritionDeleteTemplateTitle => 'Diese Mahlzeitvorlage löschen?';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name wird entfernt. Bereits daraus erfasste Mahlzeiten bleiben in deinem Tagebuch.';
+  }
+
+  @override
   String get sessionTitle => 'Sessions';
 
   @override

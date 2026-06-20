@@ -14670,6 +14670,96 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get nutritionCancel;
 
+  /// No description provided for @nutritionTemplates.
+  ///
+  /// In en, this message translates to:
+  /// **'Meal templates'**
+  String get nutritionTemplates;
+
+  /// AppBar action: save today’s logged meals as a reusable template
+  ///
+  /// In en, this message translates to:
+  /// **'Save as meal'**
+  String get nutritionSaveAsMeal;
+
+  /// No description provided for @nutritionSaveAsMealTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as a meal template'**
+  String get nutritionSaveAsMealTitle;
+
+  /// No description provided for @nutritionTemplateName.
+  ///
+  /// In en, this message translates to:
+  /// **'Template name'**
+  String get nutritionTemplateName;
+
+  /// No description provided for @nutritionTemplateNamePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Pre-run breakfast'**
+  String get nutritionTemplateNamePlaceholder;
+
+  /// No description provided for @nutritionSaveTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'Save meal'**
+  String get nutritionSaveTemplate;
+
+  /// No description provided for @nutritionTemplateSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Meal template saved.'**
+  String get nutritionTemplateSaved;
+
+  /// Banner when saving a meal template fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save the template: {error}'**
+  String nutritionTemplateSaveFailed(String error);
+
+  /// No description provided for @nutritionLogTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get nutritionLogTemplate;
+
+  /// Banner after logging a meal template: n items from the named template
+  ///
+  /// In en, this message translates to:
+  /// **'Logged {n} items from {name}.'**
+  String nutritionTemplateLogged(int n, String name);
+
+  /// Banner when logging a meal template fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t log the template: {error}'**
+  String nutritionTemplateLogFailed(String error);
+
+  /// Subtitle on a meal-template row: number of items
+  ///
+  /// In en, this message translates to:
+  /// **'{n} items'**
+  String nutritionTemplateItems(int n);
+
+  /// No description provided for @nutritionDeleteTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get nutritionDeleteTemplate;
+
+  /// No description provided for @nutritionDeleteTemplateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this meal template?'**
+  String get nutritionDeleteTemplateTitle;
+
+  /// Confirm dialog body before deleting a meal template
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be removed. Meals already logged from it stay in your diary.'**
+  String nutritionDeleteTemplateMessage(String name);
+
   /// App bar title for the session-plans list (yoga/pilates/class sequences)
   ///
   /// In en, this message translates to:

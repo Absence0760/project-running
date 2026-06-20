@@ -28,7 +28,9 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// (route_markers, checkpoint_crossings), so the counts differ by two.
 	// The 2026-06-20 widened-guard pass then surfaced route_conditions
 	// (migration 20270215_001) as a further user_id gap and wired it in.
-	assertEquals(specs.length, 51, `expected 51 specs, got ${specs.length}`);
+	// The 2026-06-20 nutrition saved-meals batch added meal_templates
+	// (+ nested items) as a further owner-scoped Art 20 table.
+	assertEquals(specs.length, 52, `expected 52 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -69,6 +71,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'gym_workouts.json',
 		'gym_routines.json',
 		'food_log.json',
+		'meal_templates.json',
 		'body_metrics.json',
 		'instructor_payout_accounts.json',
 		'safety_contacts_owned.json',
@@ -234,6 +237,20 @@ Deno.test('gym_routines exported author-scoped with exercises + planned sets nes
 	// the owner-less child tables still ship in full.
 	assertEquals(routines.select.includes('gym_routine_exercises'), true);
 	assertEquals(routines.select.includes('gym_routine_sets'), true);
+});
+
+Deno.test('meal_templates exported owner-scoped with items nested (GDPR Art 20)', () => {
+	// multi_modal.md Nutrition mid tier. Saved meals (migration 20270218_001)
+	// are the subject's own authored content. meal_templates is keyed by
+	// user_id; meal_template_items have no owner column of their own — they
+	// cascade from the parent template — so the spec nests them, mirroring the
+	// gym_routines → exercises → sets embed.
+	const specs = buildBackupSpecs(TEST_UID);
+	const templates = specs.find((s) => s.entry === 'meal_templates.json');
+	assertExists(templates);
+	assertEquals(templates.table, 'meal_templates');
+	assertEquals(templates.filter, `user_id=eq.${TEST_UID}`);
+	assertEquals(templates.select.includes('meal_template_items'), true);
 });
 
 Deno.test('direct_messages exported in both directions (GDPR Art 20)', () => {

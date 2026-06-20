@@ -1449,11 +1449,15 @@ class ApiClient {
       isStarred: route.isStarred,
       clubId: route.clubId,
       description: description,
+      shadowHidden: false,
     );
     // Drop null / server-default columns so Postgres fills them in.
     // `id` is NOT dropped — we want the client UUID to flow through
     // so local and server agree on row identity (matches `saveRun`).
+    // `shadow_hidden` is a moderation column owned by the auto-hide
+    // trigger — never written from the client.
     return Map<String, dynamic>.from(row.toJson())
+      ..remove('shadow_hidden')
       ..removeWhere((k, v) => v == null);
   }
 
@@ -5494,6 +5498,138 @@ class ApiClient {
     await _client.from(FoodLogRow.table).delete().eq(FoodLogRow.colId, id);
   }
 
+  // ─────────────────── Meal templates (multi_modal.md mid tier) ───────────
+  //
+  // Saved meals logged with one tap: meal_templates parent + meal_template_items
+  // (migration 20270218_001, owner-scoped RLS). last_modified_at + item_count
+  // are client-stamped (newer-wins sync, non-authoritative count — no server
+  // trigger), mirroring food_log + gym_routines. A template is NOT a dated
+  // activity, so it never feeds the activities view. Mirrors web core/data.ts
+  // (fetchMealTemplates / fetchMealTemplateDetail / createMealTemplate /
+  // deleteMealTemplate).
+
+  /// Saved meal templates for the signed-in user, most-recently-modified first.
+  Future<List<MealTemplateRow>> fetchMealTemplates({int limit = 100}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final data = await _client
+        .from(MealTemplateRow.table)
+        .select()
+        .eq(MealTemplateRow.colUserId, uid)
+        .order(MealTemplateRow.colLastModifiedAt, ascending: false)
+        .limit(limit);
+    return (data as List)
+        .map((r) => MealTemplateRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// A single template with its items (by position). Null when the id doesn't
+  /// resolve (RLS hides others').
+  Future<({MealTemplateRow template, List<MealTemplateItemRow> items})?>
+      fetchMealTemplateDetail(String id) async {
+    final t = await _client
+        .from(MealTemplateRow.table)
+        .select()
+        .eq(MealTemplateRow.colId, id)
+        .maybeSingle();
+    if (t == null) return null;
+    final template = MealTemplateRow.fromJson(t);
+    final itemRows = await _client
+        .from(MealTemplateItemRow.table)
+        .select()
+        .eq(MealTemplateItemRow.colTemplateId, id)
+        .order(MealTemplateItemRow.colPosition, ascending: true);
+    final items = (itemRows as List)
+        .map((r) => MealTemplateItemRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+    return (template: template, items: items);
+  }
+
+  /// Insert a template + its items. Blank-named items are dropped. item_count is
+  /// stamped client-side from the surviving item list (non-authoritative cache).
+  /// The caller may mint [id] (offline-create path) — `meal_templates.id`
+  /// accepts a client value, so the local id IS the server id (no
+  /// reconciliation), matching the gym/gear/food pattern.
+  Future<MealTemplateRow> createMealTemplate({
+    String? id,
+    required String name,
+    String? mealSlot,
+    DateTime? lastModifiedAt,
+    List<MealTemplateItemInput> items = const [],
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    final kept =
+        items.where((it) => it.itemName.trim().isNotEmpty).toList(growable: false);
+    final row = await _client
+        .from(MealTemplateRow.table)
+        .insert({
+          if (id != null) MealTemplateRow.colId: id,
+          MealTemplateRow.colUserId: uid,
+          MealTemplateRow.colName: name.trim(),
+          MealTemplateRow.colMealSlot: mealSlot,
+          MealTemplateRow.colItemCount: kept.length,
+          if (lastModifiedAt != null)
+            MealTemplateRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
+        })
+        .select()
+        .single();
+    final template = MealTemplateRow.fromJson(row);
+    if (kept.isNotEmpty) {
+      await _client.from(MealTemplateItemRow.table).insert([
+        for (var i = 0; i < kept.length; i++)
+          {
+            MealTemplateItemRow.colTemplateId: template.id,
+            MealTemplateItemRow.colPosition: i,
+            MealTemplateItemRow.colItemName: kept[i].itemName.trim(),
+            MealTemplateItemRow.colMealSlot: kept[i].mealSlot,
+            MealTemplateItemRow.colCalories: kept[i].calories,
+            MealTemplateItemRow.colProteinG: kept[i].proteinG,
+            MealTemplateItemRow.colCarbsG: kept[i].carbsG,
+            MealTemplateItemRow.colFatG: kept[i].fatG,
+            MealTemplateItemRow.colExternalId: kept[i].externalId,
+          },
+      ]);
+    }
+    return template;
+  }
+
+  /// Delete a template; its items cascade via FK (migration 20270218_001).
+  /// Logged food_log entries are untouched (the template is a parallel plan,
+  /// never linked to the entries it spawned).
+  Future<void> deleteMealTemplate(String id) async {
+    await _client
+        .from(MealTemplateRow.table)
+        .delete()
+        .eq(MealTemplateRow.colId, id);
+  }
+
+  /// Insert many food_log rows in one round-trip. Used by the one-tap
+  /// "log a meal template" path (each template item becomes a food_log entry).
+  Future<void> logFoodBatch(List<FoodLogInput> entries) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    if (entries.isEmpty) return;
+    final now = DateTime.now().toUtc();
+    await _client.from(FoodLogRow.table).insert([
+      for (final e in entries)
+        {
+          if (e.id != null) FoodLogRow.colId: e.id,
+          FoodLogRow.colUserId: uid,
+          FoodLogRow.colStartedAt:
+              (e.startedAt ?? now).toIso8601String(),
+          FoodLogRow.colItemName: e.itemName,
+          FoodLogRow.colMealSlot: e.mealSlot,
+          FoodLogRow.colCalories: e.calories,
+          FoodLogRow.colProteinG: e.proteinG,
+          FoodLogRow.colCarbsG: e.carbsG,
+          FoodLogRow.colFatG: e.fatG,
+          FoodLogRow.colExternalId: e.externalId,
+          FoodLogRow.colLastModifiedAt: now.toIso8601String(),
+        },
+    ]);
+  }
+
   /// The signed-in user's most recent recorded weight (kg), or null when
   /// none. Owner-only — `body_metrics` has no public-read policy (migration
   /// 20261216_001). Feeds the nutrition BMR target.
@@ -6122,6 +6258,32 @@ typedef GymRoutineExerciseInput = ({
   String? progression,
   Map<String, dynamic>? progressionParams,
   List<GymRoutineSetInput> sets,
+});
+
+/// One item in a [ApiClient.createMealTemplate] call. Mirrors a food_log
+/// row's macro shape; `position` is assigned positionally on insert.
+typedef MealTemplateItemInput = ({
+  String itemName,
+  String? mealSlot,
+  double? calories,
+  double? proteinG,
+  double? carbsG,
+  double? fatG,
+  String? externalId,
+});
+
+/// One food_log entry for [ApiClient.logFoodBatch]. The one-tap meal-template
+/// log path turns each template item into one of these.
+typedef FoodLogInput = ({
+  String? id,
+  DateTime? startedAt,
+  String itemName,
+  String? mealSlot,
+  double? calories,
+  double? proteinG,
+  double? carbsG,
+  double? fatG,
+  String? externalId,
 });
 
 /// One block in a [ApiClient.createSessionPlan] call. `id` is client-minted so

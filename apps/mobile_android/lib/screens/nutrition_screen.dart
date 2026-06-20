@@ -13,12 +13,15 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../local_food_store.dart';
+import '../local_meal_template_store.dart';
+import '../meal_template.dart';
 import '../nutrition_budget.dart';
 import '../nutrition_targets.dart';
 import '../nutrition_totals.dart';
 import '../nutrition_week.dart';
 import '../settings_sync.dart';
 import '../widgets/nutrition_log_sheet.dart';
+import '../widgets/top_banner.dart';
 import 'nutrition_meal_detail_screen.dart';
 
 /// Daily calorie + macro targets for the signed-in user, or null when a
@@ -88,6 +91,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
   int _waterMl = 0;
   double? _weightKg;
 
+  /// Owned offline-first cache for saved meal templates (mirrors how
+  /// `gym_detail_screen` owns a `LocalRoutineStore`). Hydrated best-effort
+  /// from `api` on mount; create/delete/log all route through it.
+  final LocalMealTemplateStore _templateStore = LocalMealTemplateStore();
+  bool _loggingTemplateId = false;
+  String? _loggingId;
+
   /// Today's run + gym active minutes — feeds the hydration goal's
   /// sweat-replacement add (runs/gym without a duration contribute nothing).
   int _exerciseMinutes = 0;
@@ -96,13 +106,16 @@ class _NutritionScreenState extends State<NutritionScreen> {
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChange);
+    _templateStore.addListener(_onStoreChange);
     _loadWater();
+    _templateStore.loadAll();
     _refresh();
   }
 
   @override
   void dispose() {
     widget.store.removeListener(_onStoreChange);
+    _templateStore.removeListener(_onStoreChange);
     super.dispose();
   }
 
@@ -154,6 +167,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         windowEnd: _tomorrow,
       );
       if (widget.store.hasPending) await widget.store.syncWithServer(api);
+      await _hydrateTemplates(api);
       _weightKg = await api.fetchLatestBodyWeightKg();
       final exercise = await _todayExercise(api, _weightKg);
       _exerciseMinutes = exercise.minutes;
@@ -216,9 +230,214 @@ class _NutritionScreenState extends State<NutritionScreen> {
     await widget.store.syncWithServer(api);
   }
 
+  /// Best-effort: pull saved meal templates (with their items) and overlay the
+  /// offline cache. A failure leaves the cache as-is (offline-first).
+  Future<void> _hydrateTemplates(ApiClient api) async {
+    try {
+      final summaries = await api.fetchMealTemplates();
+      final detailed = <({
+        Map<String, dynamic> template,
+        List<StoredMealTemplateItem> items
+      })>[];
+      for (final t in summaries) {
+        final d = await api.fetchMealTemplateDetail(t.id);
+        if (d == null) continue;
+        detailed.add((
+          template: d.template.toJson(),
+          items: [
+            for (final it in d.items)
+              StoredMealTemplateItem(
+                itemName: it.itemName,
+                mealSlot: it.mealSlot,
+                calories: it.calories,
+                proteinG: it.proteinG,
+                carbsG: it.carbsG,
+                fatG: it.fatG,
+                externalId: it.externalId,
+              ),
+          ],
+        ));
+      }
+      await _templateStore.replaceFromServer(detailed);
+      if (_templateStore.hasPending) await _templateStore.syncWithServer(api);
+    } catch (e) {
+      debugPrint('nutrition_screen: template hydrate failed: $e');
+    }
+  }
+
   Future<void> _logFood() async {
     final saved = await showNutritionLogSheet(context: context, store: widget.store);
     if (saved == true) await _maybeSync();
+  }
+
+  /// Promote today's logged entries into a named meal template via the pure
+  /// `templateFromEntries` parity helper (default slot derived when the day's
+  /// entries agree). The name is collected in an AlertDialog.
+  Future<void> _saveAsMeal() async {
+    final l10n = AppLocalizations.of(context);
+    final today = _todayEntries;
+    if (today.isEmpty) return;
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.nutritionSaveAsMealTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: l10n.nutritionTemplateName,
+            hintText: l10n.nutritionTemplateNamePlaceholder,
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.nutritionCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text(l10n.nutritionSaveTemplate),
+          ),
+        ],
+      ),
+    );
+    if (name == null) return;
+    final draft = templateFromEntries(
+      name,
+      [
+        for (final e in today)
+          TemplateSourceEntry(
+            itemName: e.itemName,
+            mealSlot: e.mealSlot,
+            calories: e.calories,
+            proteinG: e.proteinG,
+            carbsG: e.carbsG,
+            fatG: e.fatG,
+            externalId: e.externalId,
+          ),
+      ],
+    );
+    try {
+      await _templateStore.createLocal(
+        name: draft.name,
+        mealSlot: draft.mealSlot,
+        items: [
+          for (final it in draft.items)
+            StoredMealTemplateItem(
+              itemName: it.itemName,
+              mealSlot: it.mealSlot,
+              calories: it.calories,
+              proteinG: it.proteinG,
+              carbsG: it.carbsG,
+              fatG: it.fatG,
+              externalId: it.externalId,
+            ),
+        ],
+      );
+      await _maybeSyncTemplates();
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionTemplateSaved);
+      }
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionTemplateSaveFailed(e.toString()));
+      }
+    }
+  }
+
+  Future<void> _maybeSyncTemplates() async {
+    final api = widget.api;
+    if (api == null || !_isOnline) return;
+    await _templateStore.syncWithServer(api);
+  }
+
+  /// Log every item of [t] as a food_log entry at now, via the pure
+  /// `entriesFromTemplate` parity helper (slot resolves item → template-default)
+  /// + an offline-first batch write to the food store.
+  Future<void> _logTemplate(StoredMealTemplate t) async {
+    if (_loggingTemplateId) return;
+    setState(() {
+      _loggingTemplateId = true;
+      _loggingId = t.id;
+    });
+    final l10n = AppLocalizations.of(context);
+    try {
+      final inputs = entriesFromTemplate(PlannedTemplate(
+        name: t.name,
+        mealSlot: t.mealSlot,
+        items: [
+          for (var i = 0; i < t.items.length; i++)
+            PlannedTemplateItem(
+              position: i,
+              itemName: t.items[i].itemName,
+              mealSlot: t.items[i].mealSlot,
+              calories: t.items[i].calories,
+              proteinG: t.items[i].proteinG,
+              carbsG: t.items[i].carbsG,
+              fatG: t.items[i].fatG,
+              externalId: t.items[i].externalId,
+            ),
+        ],
+      ));
+      for (final it in inputs) {
+        await widget.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: it.itemName,
+          mealSlot: it.mealSlot,
+          calories: it.calories,
+          proteinG: it.proteinG,
+          carbsG: it.carbsG,
+          fatG: it.fatG,
+        );
+      }
+      await _maybeSync();
+      if (mounted) {
+        showTopBanner(
+          context,
+          l10n.nutritionTemplateLogged(inputs.length, t.name),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionTemplateLogFailed(e.toString()));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loggingTemplateId = false;
+          _loggingId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteTemplate(StoredMealTemplate t) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.nutritionDeleteTemplateTitle),
+            content: Text(l10n.nutritionDeleteTemplateMessage(t.name)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.nutritionCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.nutritionDeleteTemplate),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    await _templateStore.deleteLocal(t.id);
+    await _maybeSyncTemplates();
   }
 
   Future<void> _delete(FoodEntry e) async {
@@ -263,6 +482,12 @@ class _NutritionScreenState extends State<NutritionScreen> {
       appBar: AppBar(
         title: Text(l10n.nutritionTitle),
         actions: [
+          if (today.isNotEmpty)
+            IconButton(
+              tooltip: l10n.nutritionSaveAsMeal,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              onPressed: _refreshing ? null : _saveAsMeal,
+            ),
           IconButton(
             tooltip: l10n.nutritionLogFood,
             icon: const Icon(Icons.add),
@@ -302,6 +527,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   const SizedBox(height: 12),
                   _waterCard(theme, l10n),
                   const SizedBox(height: 12),
+                  if (_templateStore.templates.isNotEmpty) ...[
+                    _templatesCard(theme, l10n),
+                    const SizedBox(height: 12),
+                  ],
                   if (groups.isEmpty)
                     _emptyState(theme, l10n)
                   else
@@ -315,6 +544,57 @@ class _NutritionScreenState extends State<NutritionScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Saved meal templates — a self-hiding section above the day's meals,
+  /// mirroring web `/nutrition`. Each row logs the whole meal with one tap or
+  /// deletes behind an AlertDialog.
+  Widget _templatesCard(ThemeData theme, AppLocalizations l10n) {
+    final templates = _templateStore.templates;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                l10n.nutritionTemplates,
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+            for (final t in templates)
+              ListTile(
+                title: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(l10n.nutritionTemplateItems(t.itemCount)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_loggingTemplateId && _loggingId == t.id)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      TextButton(
+                        onPressed: _loggingTemplateId ? null : () => _logTemplate(t),
+                        child: Text(l10n.nutritionLogTemplate),
+                      ),
+                    IconButton(
+                      tooltip: l10n.nutritionDeleteTemplate,
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _deleteTemplate(t),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

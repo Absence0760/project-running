@@ -205,6 +205,17 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// food_log — Phase 4 nutrition diary (calories + macros per item,
 		// migration 20261204_001). Owner-scoped Art 20 personal data.
 		{ entry: 'food_log.json', table: 'food_log', filter: uidEq, select: '*' },
+		// meal_templates (+ their items via a nested embed). Saved meals the
+		// user logs with one tap (multi_modal.md Nutrition mid tier, migration
+		// 20270218_001). Owner-scoped (user_id); meal_template_items have no
+		// user_id of their own (they cascade from the parent template), so the
+		// export nests them — mirroring the gym_routines + training_plans embeds.
+		{
+			entry: 'meal_templates.json',
+			table: 'meal_templates',
+			filter: uidEq,
+			select: '*,items:meal_template_items(*)',
+		},
 		// body_metrics — Phase 4 nutrition weight time-series (migration
 		// 20261216_001). Special-category health data, owner-scoped, squarely
 		// within Art 20. height_cm ships in the user_profiles export entry.

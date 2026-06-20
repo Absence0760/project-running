@@ -8861,6 +8861,62 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionCancel => 'Annuler';
 
   @override
+  String get nutritionTemplates => 'Modèles de repas';
+
+  @override
+  String get nutritionSaveAsMeal => 'Enregistrer comme repas';
+
+  @override
+  String get nutritionSaveAsMealTitle => 'Enregistrer comme modèle de repas';
+
+  @override
+  String get nutritionTemplateName => 'Nom du modèle';
+
+  @override
+  String get nutritionTemplateNamePlaceholder =>
+      'ex. Petit-déjeuner avant la course';
+
+  @override
+  String get nutritionSaveTemplate => 'Enregistrer le repas';
+
+  @override
+  String get nutritionTemplateSaved => 'Modèle de repas enregistré.';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'Impossible d’enregistrer le modèle : $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => 'Enregistrer';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return '$n éléments enregistrés depuis $name.';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'Impossible d’enregistrer le modèle : $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n éléments';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => 'Supprimer';
+
+  @override
+  String get nutritionDeleteTemplateTitle => 'Supprimer ce modèle de repas ?';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name sera supprimé. Les repas déjà enregistrés à partir de celui-ci restent dans ton journal.';
+  }
+
+  @override
   String get sessionTitle => 'Séances';
 
   @override

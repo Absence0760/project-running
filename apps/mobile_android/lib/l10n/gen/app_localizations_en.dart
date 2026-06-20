@@ -8751,6 +8751,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionCancel => 'Cancel';
 
   @override
+  String get nutritionTemplates => 'Meal templates';
+
+  @override
+  String get nutritionSaveAsMeal => 'Save as meal';
+
+  @override
+  String get nutritionSaveAsMealTitle => 'Save as a meal template';
+
+  @override
+  String get nutritionTemplateName => 'Template name';
+
+  @override
+  String get nutritionTemplateNamePlaceholder => 'e.g. Pre-run breakfast';
+
+  @override
+  String get nutritionSaveTemplate => 'Save meal';
+
+  @override
+  String get nutritionTemplateSaved => 'Meal template saved.';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'Couldn’t save the template: $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => 'Log';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return 'Logged $n items from $name.';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'Couldn’t log the template: $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n items';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => 'Delete';
+
+  @override
+  String get nutritionDeleteTemplateTitle => 'Delete this meal template?';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name will be removed. Meals already logged from it stay in your diary.';
+  }
+
+  @override
   String get sessionTitle => 'Sessions';
 
   @override

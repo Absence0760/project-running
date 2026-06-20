@@ -108,6 +108,8 @@ const _tables = <String>{
   'gym_routine_exercises',
   'gym_routine_sets',
   'food_log',
+  'meal_templates',
+  'meal_template_items',
   'body_metrics',
   'safety_contacts',
   'instructor_payout_accounts',

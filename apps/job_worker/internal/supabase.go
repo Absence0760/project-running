@@ -1793,6 +1793,17 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// migration 20261204_001). Owner-scoped personal data the subject
 		// has an Art 20 right to receive.
 		{name: "food_log.json", table: schema.TableFoodLog, filter: uidEq, sel: "*"},
+		// meal_templates (+ their items via a nested embed). Saved meals the
+		// user logs with one tap (multi_modal.md Nutrition mid tier, migration
+		// 20270218_001). Owner-scoped (user_id); meal_template_items have no
+		// user_id of their own (they cascade from the parent template), so the
+		// export nests them — mirroring the gym_routines + training_plans
+		// embeds. Keep the shape in lockstep with the TS twin in backup_spec.ts.
+		{
+			name: "meal_templates.json", table: schema.TableMealTemplates,
+			filter: uidEq,
+			sel:    "*,items:meal_template_items(*)",
+		},
 		// body_metrics — Phase 4 nutrition weight time-series (migration
 		// 20261216_001). GDPR special-category health data; owner-scoped and
 		// squarely within the Art 20 right to receive. height_cm lives on

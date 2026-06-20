@@ -8388,6 +8388,61 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionCancel => 'キャンセル';
 
   @override
+  String get nutritionTemplates => '食事テンプレート';
+
+  @override
+  String get nutritionSaveAsMeal => '食事として保存';
+
+  @override
+  String get nutritionSaveAsMealTitle => '食事テンプレートとして保存';
+
+  @override
+  String get nutritionTemplateName => 'テンプレート名';
+
+  @override
+  String get nutritionTemplateNamePlaceholder => '例: ランニング前の朝食';
+
+  @override
+  String get nutritionSaveTemplate => '食事を保存';
+
+  @override
+  String get nutritionTemplateSaved => '食事テンプレートを保存しました。';
+
+  @override
+  String nutritionTemplateSaveFailed(String error) {
+    return 'テンプレートを保存できませんでした: $error';
+  }
+
+  @override
+  String get nutritionLogTemplate => '記録';
+
+  @override
+  String nutritionTemplateLogged(int n, String name) {
+    return '$name から $n 件を記録しました。';
+  }
+
+  @override
+  String nutritionTemplateLogFailed(String error) {
+    return 'テンプレートを記録できませんでした: $error';
+  }
+
+  @override
+  String nutritionTemplateItems(int n) {
+    return '$n 件';
+  }
+
+  @override
+  String get nutritionDeleteTemplate => '削除';
+
+  @override
+  String get nutritionDeleteTemplateTitle => 'この食事テンプレートを削除しますか？';
+
+  @override
+  String nutritionDeleteTemplateMessage(String name) {
+    return '$name を削除します。これまでに記録済みの食事は日記に残ります。';
+  }
+
+  @override
   String get sessionTitle => 'セッション';
 
   @override
