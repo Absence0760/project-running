@@ -1032,6 +1032,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                   await _putUniversal(SettingsKeys.voiceFeedbackVerbosity, value);
                 },
               ),
+            if (prefs.audioCues)
+              SwitchListTile(
+                title: Text(l10n.prefTurnByTurnCues),
+                subtitle: Text(l10n.prefTurnByTurnCuesSubtitle),
+                value: prefs.turnByTurnCues,
+                onChanged: (v) async {
+                  await prefs.setTurnByTurnCues(v);
+                },
+              ),
             ListTile(
               title: Text(l10n.prefsSplitInterval),
               subtitle: Text(

@@ -10,6 +10,7 @@ import 'package:run_recorder/run_recorder.dart' show
 
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
+import 'turn_cues.dart' show TurnDirection;
 import 'preferences.dart';
 
 /// Speaks running stats out loud (km splits, etc.) using text-to-speech.
@@ -309,6 +310,45 @@ class AudioCues {
     await _init();
     await _applyLanguage();
     await _tts.speak(ttsL10n(activeLocaleTag).ttsOffRoute);
+  }
+
+  /// Speak a turn-by-turn cue for an upcoming bend on the followed route.
+  /// [direction] is the geometric turn classification from `turn_cues.dart`;
+  /// [distance] is a pre-formatted, unit-aware distance string (null = the
+  /// turn is here now). Best-effort like every other cue — a TTS failure
+  /// never disturbs the recording (L4, wrapped by the caller's `_ttsCue`).
+  Future<void> announceTurn(
+    TurnDirection direction, {
+    String? distance,
+  }) async {
+    await _init();
+    await _applyLanguage();
+    final l10n = ttsL10n(activeLocaleTag);
+    final String phrase;
+    switch (direction) {
+      case TurnDirection.left:
+        phrase = distance != null
+            ? l10n.ttsTurnLeftIn(distance)
+            : l10n.ttsTurnLeftNow;
+        break;
+      case TurnDirection.right:
+        phrase = distance != null
+            ? l10n.ttsTurnRightIn(distance)
+            : l10n.ttsTurnRightNow;
+        break;
+      case TurnDirection.slightLeft:
+        phrase = l10n.ttsSlightLeft;
+        break;
+      case TurnDirection.slightRight:
+        phrase = l10n.ttsSlightRight;
+        break;
+      case TurnDirection.uturn:
+        phrase = l10n.ttsUturn;
+        break;
+      case TurnDirection.straight:
+        return;
+    }
+    await _tts.speak(phrase);
   }
 
   /// Tell the runner they're outside the target pace window.
