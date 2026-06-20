@@ -204,6 +204,24 @@ export function parseRunSource(raw: string | null | undefined): RunSource {
 export type ActivityType = 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
 
 export type RouteSurface = 'road' | 'trail' | 'mixed';
+
+/// Defensive narrow on read, mirroring `parseRunSource`. The DB rejects
+/// bad values via a CHECK constraint, but a stale TS union or a row
+/// imported during a migration could surface a string outside the union.
+/// A surface-less route (GPX/KML imports that don't know) is the common
+/// case, so `null` passes through unchanged; only an unrecognised
+/// non-null string collapses to `null`.
+export function parseRouteSurface(raw: string | null | undefined): RouteSurface | null {
+	switch (raw) {
+		case 'road':
+		case 'trail':
+		case 'mixed':
+			return raw;
+		default:
+			return null;
+	}
+}
+
 export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';
 export type PreferredUnit = 'km' | 'mi';
 export type SubscriptionTier = 'free' | 'pro' | 'lifetime';

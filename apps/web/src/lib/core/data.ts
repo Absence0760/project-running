@@ -60,7 +60,7 @@ import type {
 	RouteConditionSeverity
 } from '../types';
 export type { NotificationKind };
-import { parseRunSource, type RunSource } from '../types';
+import { parseRunSource, parseRouteSurface, type RunSource } from '../types';
 import {
 	filterRelinkCandidates,
 	DEFAULT_RELINK_WINDOW_DAYS,
@@ -1320,7 +1320,19 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		.select('*')
 		.eq('id', id)
 		.maybeSingle();
-	if (ownerRead.data) return ownerRead.data;
+	if (ownerRead.data) {
+		// `shadow_hidden` is a server-/trigger-owned moderation column
+		// (migration 20270218_001) the client has no business reading; the
+		// `public_routes` view already projects it away, so strip it from the
+		// base-table owner read too. `surface` is narrowed through the same
+		// defensive parse `fetchRunById` uses for `source`, so a value outside
+		// the RouteSurface union can't leak past the read boundary.
+		const { shadow_hidden, ...rest } = ownerRead.data as typeof ownerRead.data & {
+			shadow_hidden?: boolean;
+		};
+		void shadow_hidden;
+		return { ...rest, surface: parseRouteSurface(rest.surface) } as Route;
+	}
 
 	// The metadata read and the server-clip RPC both key only on `id`, so
 	// fire them concurrently instead of serialising two round trips.

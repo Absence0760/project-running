@@ -429,15 +429,15 @@ jobs:
         run: flutter test test/services_integration_test.dart
 
   cross-client-roundtrip:
-    name: Cross-client run round-trip (Dart write -> web read)
+    name: Cross-client round-trip (Dart write -> web read)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Proves a run SAVED by the Dart api_client reads back field-for-field
-    # through the WEB data layer's read shape (fetchRunById) against the same
-    # local Supabase. This catches TS<->Dart row-type drift at RUNTIME — a
-    # value-serialisation skew (steps written as a string vs read as a number,
-    # a started_at timezone bug, a RunSource enum that doesn't survive the
-    # round-trip) that the static gen:types:check can't see, because both type
+    # Proves a row SAVED by the Dart api_client reads back field-for-field
+    # through the WEB data layer's read shape (fetchRunById / fetchRouteById)
+    # against the same local Supabase. This catches TS<->Dart row-type drift at
+    # RUNTIME — a value-serialisation skew (steps written as a string vs read as
+    # a number, a started_at timezone bug, a RunSource enum that doesn't survive
+    # the round-trip) that the static gen:types:check can't see, because both type
     # files generate cleanly from the same migrations yet can still disagree on
     # the value a write produces vs a read consumes. The Dart half writes the
     # run + an expected-field fixture; the Node half re-reads via the web's
@@ -506,6 +506,28 @@ jobs:
           SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
           CROSS_CLIENT_FIXTURE_IN: ${{ github.workspace }}/cross_client_fixture.json
         run: npx tsx scripts/cross_client_roundtrip_read.mjs
+      # 3) Dart WRITE half for ROUTES: saveRoute a fixture route (waypoints
+      #    incl. elevation, RouteSurface narrow union, tags, is_public) + emit
+      #    its expected-field fixture. Distinct fixture file from the run half.
+      - name: Dart write half — routes (api_client saveRoute)
+        working-directory: packages/api_client
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          CROSS_CLIENT_ROUTE_FIXTURE_OUT: ${{ github.workspace }}/cross_client_route_fixture.json
+        run: flutter test test/cross_client_roundtrip_route_test.dart
+      # 4) Web READ half for ROUTES: re-read via fetchRouteById's owner shape
+      #    (tsx resolves the TS import of parseRouteSurface from src/lib/types).
+      #    Asserts the waypoint structure, the surface union, and that the
+      #    trigger-owned shadow_hidden column round-trips false and is stripped
+      #    from the read shape. Exits non-zero on any mismatch, failing the PR.
+      - name: Web read half — routes (fetchRouteById shape + deep-equal assert)
+        working-directory: apps/web
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          CROSS_CLIENT_ROUTE_FIXTURE_IN: ${{ github.workspace }}/cross_client_route_fixture.json
+        run: npx tsx scripts/cross_client_roundtrip_route_read.mjs
 
   edge-functions:
     name: Edge Function tests (Deno)
