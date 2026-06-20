@@ -36,6 +36,20 @@ export type CoachAthlete = Omit<CoachAthleteRow, 'status'> & {
 	status: CoachAthleteStatus;
 };
 
+type AchievementRow = Database['public']['Tables']['achievements']['Row'];
+
+// Achievement badge awards (docs/features/achievements.md). Both narrow
+// columns are enforced by CHECK constraints in 20270206_001_achievements.sql;
+// the check_constraint_unions.mjs guard keeps each in lockstep. The catalogue
+// (which badge_keys exist + their thresholds) lives in social/badges.ts.
+export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'platinum';
+export type AchievementSourceKind = 'pr' | 'segment' | 'streak' | 'distance' | 'plan';
+
+export type Achievement = Omit<AchievementRow, 'tier' | 'source_kind'> & {
+	tier: AchievementTier;
+	source_kind: AchievementSourceKind;
+};
+
 export interface TrackPoint {
 	lat: number;
 	lng: number;
@@ -229,7 +243,8 @@ export type NotificationKind =
 	| 'club_post'
 	| 'run_completed'
 	| 'event_reminder'
-	| 'plan_assigned';
+	| 'plan_assigned'
+	| 'achievement';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)

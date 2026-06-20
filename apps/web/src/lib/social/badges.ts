@@ -22,9 +22,9 @@
  */
 
 import type { MessageKey } from '$lib/i18n/messages';
+import type { AchievementTier, AchievementSourceKind } from '$lib/types';
 
-export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'platinum';
-export type AchievementSourceKind = 'pr' | 'segment' | 'streak' | 'distance' | 'plan';
+export type { AchievementTier, AchievementSourceKind };
 
 /** Tier order, low → high. The earned tier is the highest threshold met. */
 export const TIER_ORDER: AchievementTier[] = ['bronze', 'silver', 'gold', 'platinum'];

@@ -34,6 +34,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          badge_key: string
+          earned_at: string
+          id: string
+          is_public: boolean
+          source_id: string | null
+          source_kind: string
+          tier: string
+          user_id: string
+          value_num: number | null
+        }
+        Insert: {
+          badge_key: string
+          earned_at?: string
+          id?: string
+          is_public?: boolean
+          source_id?: string | null
+          source_kind: string
+          tier?: string
+          user_id: string
+          value_num?: number | null
+        }
+        Update: {
+          badge_key?: string
+          earned_at?: string
+          id?: string
+          is_public?: boolean
+          source_id?: string | null
+          source_kind?: string
+          tier?: string
+          user_id?: string
+          value_num?: number | null
+        }
+        Relationships: []
+      }
       app_admins: {
         Row: {
           granted_at: string
@@ -1630,6 +1666,7 @@ export type Database = {
       }
       notifications: {
         Row: {
+          achievement_id: string | null
           activity_id: string | null
           activity_kind: string | null
           actor_id: string | null
@@ -1648,6 +1685,7 @@ export type Database = {
           web_push_sent_at: string | null
         }
         Insert: {
+          achievement_id?: string | null
           activity_id?: string | null
           activity_kind?: string | null
           actor_id?: string | null
@@ -1666,6 +1704,7 @@ export type Database = {
           web_push_sent_at?: string | null
         }
         Update: {
+          achievement_id?: string | null
           activity_id?: string | null
           activity_kind?: string | null
           actor_id?: string | null
@@ -1684,6 +1723,13 @@ export type Database = {
           web_push_sent_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_club_id_fkey"
             columns: ["club_id"]
@@ -3501,6 +3547,26 @@ export type Database = {
           p_start_date: string
         }
         Returns: string
+      }
+      award_achievements_for_user: {
+        Args: { p_user: string }
+        Returns: {
+          badge_key: string
+          earned_at: string
+          id: string
+          is_public: boolean
+          source_id: string | null
+          source_kind: string
+          tier: string
+          user_id: string
+          value_num: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "achievements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       block_user: {
         Args: { p_reason?: string; p_target: string }

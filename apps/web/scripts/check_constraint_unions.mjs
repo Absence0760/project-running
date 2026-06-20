@@ -47,6 +47,8 @@ const PAIRS = [
 	{ tableColumn: 'gym_routine_exercises.progression', tsUnion: 'GymProgressionScheme' },
 	{ tableColumn: 'gym_routine_sets.set_type', tsUnion: 'GymSetType' },
 	{ tableColumn: 'reports.target_kind', tsUnion: 'ReportTargetKind' },
+	{ tableColumn: 'achievements.tier', tsUnion: 'AchievementTier' },
+	{ tableColumn: 'achievements.source_kind', tsUnion: 'AchievementSourceKind' },
 ];
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or
