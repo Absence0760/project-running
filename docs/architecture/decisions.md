@@ -3245,6 +3245,16 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 161. A public recap is an opt-in FROZEN `public_recaps` snapshot, not a live recompute
+
+**Decided (2026-06-19, migration `20270206_001`, `docs/features/recap.md`).** The Year-in-Running / "Wrapped" recap is personal data; an annual recap browser-side card existed but had no shareable URL, so a posted recap link couldn't unfurl. The fix is a per-user, tokenised `public_recaps` table: the owner explicitly **publishes**, which freezes the recap's aggregate numbers into a `snapshot jsonb`. The share page (`/recap/share/[id]`) + og:image (`/og/recap/[id].png`) render from that frozen snapshot, and the uuid id is the capability token (RLS: owner full CRUD, anyone may SELECT by id).
+
+**Why a snapshot, not recompute-on-read.** An unauthenticated unfurl bot can't recompute a recap from the owner's `runs` (RLS hides them), and a recap shouldn't change under a reader after it was posted. Snapshotting solves both: the reader sees a stable card, and no private-run access is needed. **Why a table, not URL-encoded numbers** (the rejected cheap path): URL-encoding the whole recap is fragile, has no revoke, and still can't carry the owner's display name for the card. The table gives an explicit publish + a revoke (delete the row → the link 404s / falls back).
+
+**Privacy / fail-closed.** Private by default — nothing exists until the explicit publish action. Only **aggregate, non-track** numbers go in `snapshot` (totals / badges / monthly strip) — no GPS, no per-run rows, mirroring `og_run_image.ts`'s no-polyline discipline. No CISO/counsel gate is required for pure aggregates, but the publish action carries a clear "this makes a public link" disclosure (`recap.makePublicExplain`). The og endpoint always 200s with a branded fallback so an unfurl never breaks. Mobile reuses the same table via `ApiClient.publishRecap` + `recapSnapshotJson` (frozen shape identical to the web `YearInRunningRecap`), sharing the web `/recap/share/[id]` URL through the OS share sheet — the device share sheet is the additive part, the page is web-canonical. Deploy-time follow-up: the `share-recap` prod Lambda's CloudFront/OIDC/release wiring in `infra/` (mirrors `share-run`).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -138,6 +138,15 @@ lambda/
                     # buildRouteOgSvg via share_route_lookup / share_route_meta /
                     # share_route_spa_shell / og_route_png. Track is privacy-clipped via
                     # clip_track_for_user. See lambda/share-route/README.md.
+  share-recap/      # Same shape as share-run for /recap/share/* + /og/recap/*.png — the
+                    # public Year-in-Running "Wrapped" share. Renders the FROZEN
+                    # public_recaps snapshot (aggregate-only, no track) via
+                    # share_recap_lookup / share_recap_meta / share_recap_spa_shell /
+                    # og_recap_png (buildRecapOgSvg, 1200x630). Opt-in + revocable; 200
+                    # branded fallback on a missing/revoked recap. The SvelteKit
+                    # /recap/share/[id] + /og/recap/[id].png routes (prerender=false) own
+                    # the path in dev. infra/ CloudFront+OIDC+release wiring is a
+                    # deploy-time follow-up (mirror share-run). See lambda/share-recap/README.md.
 ```
 
 ## Development

@@ -1,6 +1,11 @@
 # Year-in-review / "Wrapped" recap — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** SHIPPED 2026-06-19 (migration `20270206_001`). This was the
+> implementation handoff plan; the gap-closers (public OG-unfurlable share
+> snapshot, monthly variant, `recap.ts`↔`recap.dart` parity-pair registration)
+> all landed. The live feature reference is now [recap.md](recap.md); this file
+> is kept as the design record. One deploy-time follow-up remains: wiring the
+> `share-recap` Lambda's CloudFront/OIDC/release steps in `infra/`.
 
 ## Goal & user value
 Give every runner a first-class, highly shareable annual (and new: monthly)
