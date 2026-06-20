@@ -13410,6 +13410,66 @@ abstract class AppLocalizations {
   /// **'Added to your gym log'**
   String get clubEventLogAsWorkoutSaved;
 
+  /// Tooltip / title for the action that opens a finisher's downloadable certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Finisher certificate'**
+  String get clubEventDownloadCertificate;
+
+  /// Button that captures the finisher certificate and opens the OS share sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Save or share'**
+  String get clubEventCertificateShare;
+
+  /// Caption attached when sharing a finisher certificate image.
+  ///
+  /// In en, this message translates to:
+  /// **'I finished {event}!'**
+  String clubEventCertificateShareText(String event);
+
+  /// Error banner when the finisher certificate image fails to render.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate the certificate. Please try again.'**
+  String get clubEventCertificateFailed;
+
+  /// Headline printed on the finisher certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate of Completion'**
+  String get clubEventCertificateHeading;
+
+  /// Line above the finisher's name on the certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'This certifies that'**
+  String get clubEventCertificateCertifies;
+
+  /// Line above the event title on the certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'completed'**
+  String get clubEventCertificateCompleted;
+
+  /// Label before the finish time in the certificate's stat row.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get clubEventCertificateTime;
+
+  /// Label before the distance in the certificate's stat row.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get clubEventCertificateDistance;
+
+  /// Placing entry in the certificate's stat row, e.g. '3rd place'.
+  ///
+  /// In en, this message translates to:
+  /// **'{place} place'**
+  String clubEventCertificatePlace(String place);
+
   /// No description provided for @gymEditorNewTitle.
   ///
   /// In en, this message translates to:

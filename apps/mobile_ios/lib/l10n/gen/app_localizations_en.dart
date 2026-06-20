@@ -8050,6 +8050,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'Added to your gym log';
 
   @override
+  String get clubEventDownloadCertificate => 'Finisher certificate';
+
+  @override
+  String get clubEventCertificateShare => 'Save or share';
+
+  @override
+  String clubEventCertificateShareText(String event) {
+    return 'I finished $event!';
+  }
+
+  @override
+  String get clubEventCertificateFailed =>
+      'Could not generate the certificate. Please try again.';
+
+  @override
+  String get clubEventCertificateHeading => 'Certificate of Completion';
+
+  @override
+  String get clubEventCertificateCertifies => 'This certifies that';
+
+  @override
+  String get clubEventCertificateCompleted => 'completed';
+
+  @override
+  String get clubEventCertificateTime => 'Time';
+
+  @override
+  String get clubEventCertificateDistance => 'Distance';
+
+  @override
+  String clubEventCertificatePlace(String place) {
+    return '$place place';
+  }
+
+  @override
   String get gymEditorNewTitle => 'New workout';
 
   @override

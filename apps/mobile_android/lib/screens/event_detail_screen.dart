@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../event_category.dart';
 import '../event_gym_template.dart';
+import '../finisher_certificate.dart';
 import '../local_gym_store.dart';
 import 'checkpoint_checkin_screen.dart';
 import '../l10n/date_format.dart';
@@ -20,6 +21,7 @@ import '../recurrence.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/finisher_certificate_card.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/top_banner.dart';
 
@@ -821,6 +823,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               submitting: _submittingResult,
               onSubmit: _submitMyTime,
               onRemove: _removeMyResult,
+              eventTitle: e.row.title,
+              clubName: _club?.row.name,
+              certificateDate: _activeInstance ?? e.row.startsAt,
             ),
           ],
           if (isMember) ...[
@@ -1186,6 +1191,9 @@ class EventResultsSection extends StatelessWidget {
   final bool submitting;
   final VoidCallback onSubmit;
   final VoidCallback onRemove;
+  final String eventTitle;
+  final String? clubName;
+  final DateTime certificateDate;
   const EventResultsSection({
     super.key,
     required this.results,
@@ -1193,6 +1201,9 @@ class EventResultsSection extends StatelessWidget {
     required this.submitting,
     required this.onSubmit,
     required this.onRemove,
+    required this.eventTitle,
+    required this.clubName,
+    required this.certificateDate,
   });
 
   // The result removal is destructive (it deletes the runner's
@@ -1262,7 +1273,13 @@ class EventResultsSection extends StatelessWidget {
             ),
           )
         else
-          ...results.map((r) => _ResultRow(row: r, isMe: r.userId == myUserId)),
+          ...results.map((r) => _ResultRow(
+                row: r,
+                isMe: r.userId == myUserId,
+                eventTitle: eventTitle,
+                clubName: clubName,
+                certificateDate: certificateDate,
+              )),
       ],
     );
   }
@@ -1271,7 +1288,16 @@ class EventResultsSection extends StatelessWidget {
 class _ResultRow extends StatelessWidget {
   final EventResultView row;
   final bool isMe;
-  const _ResultRow({required this.row, required this.isMe});
+  final String eventTitle;
+  final String? clubName;
+  final DateTime certificateDate;
+  const _ResultRow({
+    required this.row,
+    required this.isMe,
+    required this.eventTitle,
+    required this.clubName,
+    required this.certificateDate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1340,6 +1366,28 @@ class _ResultRow extends StatelessWidget {
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.outline,
                 )),
+          ],
+          if (isCertificateEligible(
+            finisherStatus: row.finisherStatus,
+            organiserApproved: row.organiserApproved,
+          )) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: AppLocalizations.of(context).clubEventDownloadCertificate,
+              icon: const Icon(Icons.workspace_premium_outlined, size: 20),
+              onPressed: () => showFinisherCertificateSheet(
+                context,
+                eventTitle: eventTitle,
+                finisherName: row.displayName ??
+                    AppLocalizations.of(context).eventResultRunner,
+                durationS: row.durationS,
+                distanceM: row.distanceM,
+                rank: row.rank,
+                date: certificateDate,
+                clubName: clubName,
+              ),
+            ),
           ],
         ],
       ),

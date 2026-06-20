@@ -8153,6 +8153,41 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'Ajouté à votre journal de muscu';
 
   @override
+  String get clubEventDownloadCertificate => 'Certificat de finisher';
+
+  @override
+  String get clubEventCertificateShare => 'Enregistrer ou partager';
+
+  @override
+  String clubEventCertificateShareText(String event) {
+    return 'J\'ai terminé $event !';
+  }
+
+  @override
+  String get clubEventCertificateFailed =>
+      'Impossible de générer le certificat. Veuillez réessayer.';
+
+  @override
+  String get clubEventCertificateHeading => 'Certificat de réussite';
+
+  @override
+  String get clubEventCertificateCertifies => 'Ceci certifie que';
+
+  @override
+  String get clubEventCertificateCompleted => 'a terminé';
+
+  @override
+  String get clubEventCertificateTime => 'Temps';
+
+  @override
+  String get clubEventCertificateDistance => 'Distance';
+
+  @override
+  String clubEventCertificatePlace(String place) {
+    return '$place place';
+  }
+
+  @override
   String get gymEditorNewTitle => 'Nouvelle séance';
 
   @override
