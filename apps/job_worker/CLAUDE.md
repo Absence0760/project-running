@@ -95,9 +95,16 @@ Function moves per
   receipt (`pro_welcome`) + payment-failed dunning (`payment_failed`) are
   trigger-enqueued on `user_profiles` AFTER UPDATE of the subscription
   columns (`decisions.md § 121`) and are RECURRING — they skip the
-  once-per-user log (`oncePerUserTemplates` gates it to `welcome`). All
-  templates live in `email_i18n.go`, localized across six locales. A future
-  digest reuses the kind with a cron enqueue + its own opt-in preference.
+  once-per-user log (`oncePerUserTemplates` gates it to `welcome`). The
+  account-deletion receipt (`account_deleted`, decisions §121) reuses this kind
+  but is the one INLINE-ADDRESS template (`inlineAddressTemplates`): its payload
+  carries `{email, locale}` and no `user_id` (the user is gone by send time),
+  so `handleLifecycleEmail` routes it to `handleAccountDeletionReceipt`, which
+  resolves the address from the payload (not GoTrue) and dedups on a SHA-256
+  hash of the address via the non-cascading `account_deletion_receipts` table
+  (not `lifecycle_email_log`, which cascades away with the user). All templates
+  live in `email_i18n.go`, localized across six locales. A future digest reuses
+  the kind with a cron enqueue + its own opt-in preference.
   `web_push` (`handler_web_push.go` + `push_render.go` + `internal/webpush/`)
   is the worked example for "second transport over the same notifications
   rows": the SAME notifications AFTER-INSERT fan-out, but a DIFFERENT enqueue
@@ -161,6 +168,7 @@ apps/job_worker/
 │   ├── handler_notification_email_test.go # 9 tests on gating / opt-out / idempotency
 │   ├── handler_lifecycle_email.go # kind='lifecycle_email' (welcome) render + send-once
 │   ├── handler_lifecycle_email_test.go # 6 tests on send / dedup / no-address / nil-sender
+│   ├── handler_account_deletion_receipt_test.go # 9 tests on inline-address send / hash send-once / no-address / send-error / nil-sender / locale / no-prefs-link
 │   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic
 │   ├── mailer_test.go       # 6 tests on emailMode / shouldEmail / render / MIME
 │   ├── handler_safety_email.go # kind='safety_email' confirm + finish alerts (decisions §131)

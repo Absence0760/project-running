@@ -1302,6 +1302,7 @@ These tables ship in the live schema but don't have a full column-by-column bloc
 | `deletion_audit_log` | `20260917_001` | Tamper-evident account-deletion ledger keyed by the SHA-256 of the user id (no PII). `hashed_user_id, deleted_at, result (enum of outcomes), notes`. |
 | `app_quota` | `20261007_001` | App-level (not per-user) third-party rate-limit counter. `provider, window_kind ('short'/'day'), window_start, count`, PK `(provider, window_kind, window_start)`. |
 | `lifecycle_email_log` | `20261202_001` | Idempotency ledger for one-shot lifecycle emails (welcome, etc.). `user_id, template, sent_at`, PK `(user_id, template)`. |
+| `account_deletion_receipts` | `20270217_001` | Non-cascading send-once ledger for the account-deletion receipt email (the user — and so `lifecycle_email_log` — is gone by send time). `email_hash` (hex SHA-256 of the lowercased address, no raw PII), `sent_at`, PK `email_hash`. Service-role only; 30-day cron retention. decisions §121. |
 | `email_suppressions` | `20270108_001` | Do-not-send list. `email, reason ('bounce'/'complaint'/'unsubscribe'/'manual'), created_at`, PK `email`. |
 | `webhook_events` | `20260623_001` | Replay-dedupe ledger for inbound webhooks (RevenueCat, Stripe). `provider, event_id, received_at`, PK `(provider, event_id)`; GC'd by `cleanup-stale-webhook-events`. |
 | `user_blocks` | `20261012_001` | Per-user block list for the social layer. `blocker_id, blocked_id, created_at, reason`, PK `(blocker_id, blocked_id)`, CHECK `blocker_id <> blocked_id`. |

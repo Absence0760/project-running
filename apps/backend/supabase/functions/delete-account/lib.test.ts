@@ -6,9 +6,11 @@ import {
 import {
 	FCM_BATCH_REMOVE_URL,
 	STRAVA_DEAUTHORIZE_URL,
+	accountDeletionReceiptJobPayload,
 	fcmBatchRemoveBody,
 	formatDeletedCounts,
 	hashUserIdForAudit,
+	normalizeReceiptLocale,
 	revenueCatSubscriberUrl,
 } from './lib.ts';
 
@@ -155,4 +157,42 @@ Deno.test('hashUserIdForAudit empty-string key falls back to unkeyed mode', asyn
 	const empty = await hashUserIdForAudit('user', { key: '' });
 	const unset = await hashUserIdForAudit('user');
 	assertEquals(empty, unset);
+});
+
+Deno.test('normalizeReceiptLocale maps supported + region tags', () => {
+	const cases: Record<string, string> = {
+		en: 'en', de: 'de', fr: 'fr', es: 'es', ja: 'ja', 'pt-BR': 'pt-BR',
+		'de-DE': 'de', 'en-US': 'en', 'pt': 'pt-BR', 'PT-br': 'pt-BR',
+		'': 'en', xx: 'en', 'zh-CN': 'en',
+	};
+	for (const [input, want] of Object.entries(cases)) {
+		assertEquals(normalizeReceiptLocale(input), want, `locale ${input}`);
+	}
+});
+
+Deno.test('normalizeReceiptLocale defaults a non-string to en', () => {
+	// A junk prefs.locale value (number, null, undefined) must not flow into
+	// the job payload as-is.
+	assertEquals(normalizeReceiptLocale(5), 'en');
+	assertEquals(normalizeReceiptLocale(null), 'en');
+	assertEquals(normalizeReceiptLocale(undefined), 'en');
+});
+
+Deno.test('accountDeletionReceiptJobPayload carries the address inline with NO user_id', () => {
+	// The drain filters on payload->>user_id; the receipt must omit it so a
+	// concurrent re-run can't sweep this job. It must be a lifecycle_email job
+	// (already in the kind allowlist) with the account_deleted template.
+	const job = accountDeletionReceiptJobPayload('gone@test.com', 'de');
+	assertEquals(job.kind, 'lifecycle_email');
+	assertEquals(job.payload, {
+		template: 'account_deleted',
+		email: 'gone@test.com',
+		locale: 'de',
+	});
+	assert(!('user_id' in job.payload), 'receipt payload must not carry a user_id');
+});
+
+Deno.test('accountDeletionReceiptJobPayload normalizes a junk locale to en', () => {
+	const job = accountDeletionReceiptJobPayload('gone@test.com', 'zh-CN');
+	assertEquals(job.payload.locale, 'en');
 });

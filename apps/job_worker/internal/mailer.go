@@ -332,9 +332,21 @@ func pathForKind(kind, base string, n NotificationRow) string {
 // gates renderLifecycleEmail — an unknown template returns ok=false so the
 // handler skips rather than sending a generic "new notification" email.
 var lifecycleTemplates = map[string]bool{
-	"welcome":        true,
-	"pro_welcome":    true,
-	"payment_failed": true,
+	"welcome":         true,
+	"pro_welcome":     true,
+	"payment_failed":  true,
+	"account_deleted": true,
+}
+
+// inlineAddressTemplates carry the recipient's address (and locale) in the job
+// payload rather than a user_id the worker resolves via GoTrue. account_deleted
+// is the only one: by send time the user is GONE (admin.deleteUser ran), so
+// there's no auth.users row to look up and no user_settings.prefs to read for
+// the locale (decisions §121). The send-once guard is the non-cascading
+// account_deletion_receipts table keyed by the email hash, NOT
+// lifecycle_email_log (which cascades away with the user).
+var inlineAddressTemplates = map[string]bool{
+	"account_deleted": true,
 }
 
 // oncePerUserTemplates only fire once per account, so the handler dedups
@@ -353,6 +365,24 @@ func renderLifecycleEmail(template, baseURL, locale string) (Email, bool) {
 	loc := normalizeEmailLocale(locale)
 	s := lookupEmailStrings(loc, template)
 	shared := lookupEmailShared(loc)
+
+	// account_deleted has no account left to manage — no prefs link, no CTA
+	// (the catalogue leaves the CTA empty), and its own footer. Render it
+	// before the standard transactional path so it never grows a dead
+	// /settings/preferences link a deleted user can't use.
+	if template == "account_deleted" {
+		return composeEmail(emailContent{
+			lang:      loc,
+			subject:   s.subject,
+			preheader: s.preheader,
+			heading:   s.heading,
+			body:      s.body,
+			ctaLabel:  s.cta,
+			ctaURL:    base, // the public homepage — a re-signup invitation, not an account link
+			footer:    shared.footerAccountDeleted,
+			// no prefsURL / List-Unsubscribe — the account is gone.
+		}), true
+	}
 
 	// welcome reads as a relationship message; billing/account templates as a
 	// service message.

@@ -87,6 +87,14 @@ type Backend interface {
 	// lifecycle_email_log so a job retry can't re-send a welcome.
 	LifecycleEmailAlreadySent(ctx context.Context, userID, template string) (bool, error)
 	RecordLifecycleEmail(ctx context.Context, userID, template string) error
+	// Account-deletion receipt path — the send-once guard for the
+	// account_deleted lifecycle template (migration 20270217_001). It can't
+	// use lifecycle_email_log (that FK-cascades away with the deleted user),
+	// so it's keyed by a hash of the address in the non-cascading
+	// account_deletion_receipts table. emailHash is hex SHA-256 of the
+	// lowercased, trimmed address.
+	AccountDeletionReceiptAlreadySent(ctx context.Context, emailHash string) (bool, error)
+	RecordAccountDeletionReceipt(ctx context.Context, emailHash string) error
 	// Web-push path — used by the kind='web_push' handler (migration
 	// 20261219_001), the sibling consumer of the same notifications row the
 	// email handler reads. WebPushSentAt is the per-channel idempotency

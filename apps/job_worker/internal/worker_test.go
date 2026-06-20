@@ -93,6 +93,11 @@ type fakeBackend struct {
 	recordLifecycleErr error
 	recordedLifecycle  []string // "user_id|template" recorded this run
 
+	receiptSent      map[string]bool // key email_hash → already sent
+	receiptSentErr   error
+	recordReceiptErr error
+	recordedReceipts []string // email hashes recorded this run
+
 	// web_push inputs/outputs.
 	pushSubs        map[string][]PushSubscriptionRow // keyed by user_id
 	fetchSubsErr    error
@@ -358,6 +363,33 @@ func (f *fakeBackend) RecordLifecycleEmail(_ context.Context, userID, template s
 		f.lifecycleSent = map[string]bool{}
 	}
 	f.lifecycleSent[key] = true
+	return nil
+}
+
+func (f *fakeBackend) AccountDeletionReceiptAlreadySent(_ context.Context, emailHash string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.receiptSentErr != nil {
+		err := f.receiptSentErr
+		f.receiptSentErr = nil
+		return false, err
+	}
+	return f.receiptSent[emailHash], nil
+}
+
+func (f *fakeBackend) RecordAccountDeletionReceipt(_ context.Context, emailHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.recordReceiptErr != nil {
+		err := f.recordReceiptErr
+		f.recordReceiptErr = nil
+		return err
+	}
+	f.recordedReceipts = append(f.recordedReceipts, emailHash)
+	if f.receiptSent == nil {
+		f.receiptSent = map[string]bool{}
+	}
+	f.receiptSent[emailHash] = true
 	return nil
 }
 
