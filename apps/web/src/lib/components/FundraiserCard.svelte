@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import GoalThermometer from './GoalThermometer.svelte';
-	import { startDonationCheckout, type FundraiserTotals } from '$lib/core/data';
-	import type { Fundraiser } from '$lib/types';
+	import { startDonationCheckout } from '$lib/core/data';
+	import type { Fundraiser, FundraiserTotals } from '$lib/types';
 
 	let {
 		fundraiser,
@@ -38,7 +38,7 @@
 			const { url } = await startDonationCheckout(fundraiser.id, amountCents, opts);
 			window.location.href = url;
 		} catch (e) {
-			toast.error(m('fundraiser.donateFailed'));
+			showToast(m('fundraiser.donateFailed'), 'error');
 			console.error('donation checkout failed', e);
 			donating = false;
 		}
@@ -57,7 +57,7 @@
 		</p>
 	</header>
 
-	<GoalThermometer raisedCents={raised} {goalCents} {donorCount} currency={fundraiser.currency} />
+	<GoalThermometer raisedCents={raised} goalCents={goal} {donorCount} currency={fundraiser.currency} />
 
 	{#if closed}
 		<p class="closed">{m('fundraiser.closed')}</p>

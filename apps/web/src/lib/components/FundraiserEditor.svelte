@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import {
 		createFundraiser,
 		updateFundraiser,
@@ -77,7 +77,7 @@
 				oncreated?.(created);
 			}
 		} catch (e) {
-			toast.error(m('fundraiser.saveFailed'));
+			showToast(m('fundraiser.saveFailed'), 'error');
 			console.error('fundraiser save failed', e);
 		} finally {
 			saving = false;
