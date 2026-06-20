@@ -8,6 +8,7 @@ import { privacyDefaultToIsPublic } from '../social/run_visibility';
 import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
 import { assemblePublicRoute } from '../routes/public_route_assembly';
 import { stripExifFromFile } from '../util/exif_strip';
+import { entriesFromTemplate } from '../nutrition/meal_template';
 import type {
 	Run,
 	Route,
@@ -1569,7 +1570,7 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 // falls back to `GenericStringError` and downstream type assertions
 // fail svelte-check.
 const CLUB_SELECT_COLS =
-	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, requires_activity_waiver, website_url, instagram_url, strava_url, facebook_url, created_at, updated_at' as const;
+	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, requires_activity_waiver, website_url, instagram_url, strava_url, facebook_url, shadow_hidden, created_at, updated_at' as const;
 
 // Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
 // from anon + authenticated (migrations 20260723_001 + 20260806_001 +
@@ -1648,6 +1649,7 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 		instagram_url: (r.instagram_url ?? null) as string | null,
 		strava_url: (r.strava_url ?? null) as string | null,
 		facebook_url: (r.facebook_url ?? null) as string | null,
+		shadow_hidden: (r.shadow_hidden as boolean | undefined) ?? false,
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
@@ -7718,6 +7720,197 @@ export async function deleteFoodEntry(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+// --- Meal templates: saved meals logged with one tap (multi_modal.md) ---
+//
+// A reusable plan: meal_templates parent + meal_template_items. Owner-scoped
+// RLS (migration 20270218_001). last_modified_at + item_count are
+// client-stamped (newer-wins sync, non-authoritative count — no server
+// trigger), mirroring food_log + gym_routines. A template is NOT a dated
+// activity, so it does not feed the activities view. Item shaping (logged
+// entries -> draft, template -> log inputs) is the pure meal_template.ts
+// parity pair; these helpers are the Supabase round-trips.
+
+export interface MealTemplateSummary {
+	id: string;
+	user_id: string;
+	name: string;
+	meal_slot: MealSlot | null;
+	item_count: number;
+	last_modified_at: string;
+	created_at: string;
+}
+
+export interface MealTemplateItemRow {
+	position: number;
+	item_name: string;
+	meal_slot: MealSlot | null;
+	calories: number | null;
+	protein_g: number | null;
+	carbs_g: number | null;
+	fat_g: number | null;
+	external_id: string | null;
+}
+
+export interface MealTemplateDetail {
+	template: MealTemplateSummary;
+	items: MealTemplateItemRow[];
+}
+
+/// The shape templateFromEntries / the save-as-meal flow hand to the create
+/// call. Mirrors MealTemplateDraft from $lib/nutrition/meal_template.ts.
+export interface MealTemplateInput {
+	name: string;
+	meal_slot?: MealSlot | null;
+	items: Array<{
+		position: number;
+		item_name: string;
+		meal_slot?: MealSlot | null;
+		calories?: number | null;
+		protein_g?: number | null;
+		carbs_g?: number | null;
+		fat_g?: number | null;
+		external_id?: string | null;
+	}>;
+}
+
+/// Saved meal templates for the signed-in user, most-recently-modified first.
+/// Surfaces the error so the list can show a "couldn't load — retry" state
+/// rather than an empty list (indistinguishable from "no templates yet"),
+/// mirroring `fetchGymRoutinesWithError`.
+export async function fetchMealTemplatesWithError(
+	limit = 100,
+): Promise<{ templates: MealTemplateSummary[]; error: string | null }> {
+	const userId = auth.user?.id;
+	if (!userId) return { templates: [], error: null };
+	const { data, error } = await supabase
+		.from(TABLES.meal_templates)
+		.select('id, user_id, name, meal_slot, item_count, last_modified_at, created_at')
+		.eq('user_id', userId)
+		.order('last_modified_at', { ascending: false })
+		.limit(limit);
+	return { templates: (data ?? []) as MealTemplateSummary[], error: error?.message ?? null };
+}
+
+export async function fetchMealTemplates(limit = 100): Promise<MealTemplateSummary[]> {
+	return (await fetchMealTemplatesWithError(limit)).templates;
+}
+
+/// A single template with its items ordered by `position`. Returns null when
+/// the id doesn't resolve (RLS hides others').
+export async function fetchMealTemplateDetail(id: string): Promise<MealTemplateDetail | null> {
+	const { data: template, error: tErr } = await supabase
+		.from(TABLES.meal_templates)
+		.select('id, user_id, name, meal_slot, item_count, last_modified_at, created_at')
+		.eq('id', id)
+		.maybeSingle();
+	if (tErr || !template) return null;
+	const { data: itemRows, error: iErr } = await supabase
+		.from(TABLES.meal_template_items)
+		.select('position, item_name, meal_slot, calories, protein_g, carbs_g, fat_g, external_id')
+		.eq('template_id', id)
+		.order('position', { ascending: true });
+	if (iErr) console.error('fetchMealTemplateDetail items failed', iErr);
+	return {
+		template: template as MealTemplateSummary,
+		items: (itemRows ?? []) as MealTemplateItemRow[],
+	};
+}
+
+/// Insert a template + its items. Blank-named items are dropped. item_count is
+/// stamped client-side from the surviving item list (non-authoritative cache).
+/// Two round-trips (parent, then a single batch of items), mirroring
+/// `createGymRoutine`.
+export async function createMealTemplate(input: MealTemplateInput): Promise<MealTemplateSummary> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const items = input.items.filter((it) => it.item_name.trim().length > 0);
+	const nowIso = new Date().toISOString();
+	const { data, error } = await supabase
+		.from(TABLES.meal_templates)
+		.insert({
+			user_id: userId,
+			name: input.name.trim(),
+			meal_slot: input.meal_slot ?? null,
+			item_count: items.length,
+			last_modified_at: nowIso,
+		})
+		.select('id, user_id, name, meal_slot, item_count, last_modified_at, created_at')
+		.single();
+	if (error || !data) throw error ?? new Error('createMealTemplate failed');
+	const template = data as MealTemplateSummary;
+	if (items.length === 0) return template;
+	const itemRows = items.map((it, i) => ({
+		template_id: template.id,
+		position: i,
+		item_name: it.item_name.trim(),
+		meal_slot: it.meal_slot ?? null,
+		calories: it.calories ?? null,
+		protein_g: it.protein_g ?? null,
+		carbs_g: it.carbs_g ?? null,
+		fat_g: it.fat_g ?? null,
+		external_id: it.external_id ?? null,
+	}));
+	const { error: iErr } = await supabase.from(TABLES.meal_template_items).insert(itemRows);
+	if (iErr) throw iErr;
+	return template;
+}
+
+/// Delete a template; its items cascade via FK (migration 20270218_001).
+/// Logged food_log entries are untouched — the template is a parallel plan,
+/// never linked to the entries it spawned.
+export async function deleteMealTemplate(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.meal_templates).delete().eq('id', id);
+	if (error) throw error;
+}
+
+/// Log every item of a template as a food_log entry at `startedAt` (default
+/// now), one round-trip. Returns the count logged. This is the one-tap
+/// "Log meal template" path; the slot/item shaping (item → template-default →
+/// `slotOverride`, position order) is the pure `entriesFromTemplate` parity
+/// helper so the resolution can't drift from the mobile twin.
+export async function logMealTemplate(
+	detail: MealTemplateDetail,
+	opts: { startedAt?: string; slotOverride?: MealSlot | null } = {},
+): Promise<number> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const inputs = entriesFromTemplate(
+		{
+			name: detail.template.name,
+			mealSlot: detail.template.meal_slot,
+			items: detail.items.map((it) => ({
+				position: it.position,
+				itemName: it.item_name,
+				mealSlot: it.meal_slot,
+				calories: it.calories,
+				proteinG: it.protein_g,
+				carbsG: it.carbs_g,
+				fatG: it.fat_g,
+				externalId: it.external_id,
+			})),
+		},
+		opts.slotOverride ?? null,
+	);
+	if (inputs.length === 0) return 0;
+	const startedAt = opts.startedAt ?? new Date().toISOString();
+	const nowIso = new Date().toISOString();
+	const rows = inputs.map((it) => ({
+		user_id: userId,
+		item_name: it.itemName,
+		meal_slot: it.mealSlot,
+		calories: it.calories,
+		protein_g: it.proteinG,
+		carbs_g: it.carbsG,
+		fat_g: it.fatG,
+		started_at: startedAt,
+		external_id: it.externalId,
+		last_modified_at: nowIso,
+	}));
+	const { error } = await supabase.from(TABLES.food_log).insert(rows);
+	if (error) throw error;
+	return rows.length;
+}
+
 /// The user's most recent recorded weight, or null if none. Owner-only
 /// (body_metrics has no public-read policy — special-category health data,
 /// migration 20261216_001).
@@ -8038,6 +8231,7 @@ export interface PendingReportTarget {
 	reporter_count: number;
 	reasons: Record<string, number>;
 	latest_at: string;
+	shadow_hidden: boolean;
 }
 
 export interface TargetReport {
@@ -8071,6 +8265,7 @@ export async function fetchPendingReports(): Promise<PendingReportTarget[]> {
 		reporter_count: Number(r.reporter_count ?? 0),
 		reasons: (r.reasons ?? {}) as Record<string, number>,
 		latest_at: r.latest_at as string,
+		shadow_hidden: r.shadow_hidden === true,
 	}));
 }
 
@@ -8113,6 +8308,20 @@ export async function resolveTargetReports(
 	});
 	if (error) throw error;
 	return Number(data ?? 0);
+}
+
+/** Revert an auto-hide: clear shadow_hidden on a user/club/route.
+ *  Returns true if a row was actually un-hidden. Admin-gated at the DB. */
+export async function adminUnhideTarget(
+	targetKind: ReportTargetKind,
+	targetId: string
+): Promise<boolean> {
+	const { data, error } = await supabase.rpc('admin_unhide_target', {
+		p_target_kind: targetKind,
+		p_target_id: targetId,
+	});
+	if (error) throw error;
+	return data === true;
 }
 
 /** Club-owned session plans (the club's "session templates"). Visible to club
