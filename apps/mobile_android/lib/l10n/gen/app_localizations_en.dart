@@ -5936,6 +5936,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gearRestore => 'Restore';
 
   @override
+  String get gearRotationsTitle => 'Rotations';
+
+  @override
+  String get gearRotationsHint =>
+      'Group the gear you cycle through — a \"Daily trainers\" set, a \"Race day\" set. A rotation is just a named grouping; it doesn\'t change which pair auto-tags new runs.';
+
+  @override
+  String get gearRotationsEmpty =>
+      'No rotations yet. Create one to group a set of shoes or bikes.';
+
+  @override
+  String get gearRotationName => 'Rotation name';
+
+  @override
+  String get gearRotationNew => 'New rotation';
+
+  @override
+  String get gearRotationCreate => 'Create';
+
+  @override
+  String get gearRotationRename => 'Rename';
+
+  @override
+  String get gearRotationManage => 'Edit gear';
+
+  @override
+  String gearRotationManageTitle(String name) {
+    return 'Gear in \"$name\"';
+  }
+
+  @override
+  String get gearRotationDeleteTitle => 'Delete rotation?';
+
+  @override
+  String gearRotationDeleteBody(String name) {
+    return 'Delete the \"$name\" rotation? Your gear isn\'t affected — only the grouping is removed.';
+  }
+
+  @override
+  String gearRotationMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '$count item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRotationNoGear =>
+      'Add some gear first, then you can group it into a rotation.';
+
+  @override
+  String gearRotationSaveFailed(Object error) {
+    return 'Couldn\'t save rotation: $error';
+  }
+
+  @override
+  String get gearRotationDone => 'Done';
+
+  @override
   String get privacyZonesTitle => 'Privacy zones';
 
   @override

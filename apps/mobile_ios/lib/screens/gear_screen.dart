@@ -12,6 +12,7 @@ import '../preferences.dart';
 import '../widgets/gear_backfill_sheet.dart';
 import '../widgets/gear_form_sheet.dart';
 import '../widgets/top_banner.dart';
+import 'gear_rotations_screen.dart';
 
 /// Settings → Gear: per-user inventory of shoes and bikes plus the
 /// rolled-up total mileage each item has accrued via assigned runs.
@@ -120,6 +121,19 @@ class _GearScreenState extends State<GearScreen> {
     if (result == null) return;
     await _maybeSync();
     if (result.isNew) await _maybeOfferBackfill(result);
+  }
+
+  /// Open the rotations management screen. Online-only (gated in the
+  /// AppBar): rotations live outside [LocalGearStore], like the wear-log
+  /// + backfill sub-flows.
+  Future<void> _openRotations() async {
+    final api = widget.api;
+    if (api == null || api.userId == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GearRotationsScreen(api: api, gearStore: widget.store),
+      ),
+    );
   }
 
   Future<void> _edit(Map<String, dynamic> row) async {
@@ -254,6 +268,12 @@ class _GearScreenState extends State<GearScreen> {
       appBar: AppBar(
         title: Text(l10n.gearTitle),
         actions: [
+          if (widget.api != null && widget.api!.userId != null)
+            IconButton(
+              tooltip: l10n.gearRotationsTitle,
+              icon: const Icon(Icons.sync_alt),
+              onPressed: _refreshing ? null : _openRotations,
+            ),
           IconButton(
             tooltip: l10n.gearAddGear,
             icon: const Icon(Icons.add),
