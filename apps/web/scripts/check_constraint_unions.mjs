@@ -40,6 +40,8 @@ const PAIRS = [
 	{ tableColumn: 'event_orders.status', tsUnion: 'OrderStatus' },
 	{ tableColumn: 'event_pricing.refund_policy', tsUnion: 'RefundPolicy' },
 	{ tableColumn: 'event_pricing.modality', tsUnion: 'EventModality' },
+	{ tableColumn: 'fundraisers.status', tsUnion: 'FundraiserStatus' },
+	{ tableColumn: 'donations.status', tsUnion: 'DonationStatus' },
 	{ tableColumn: 'event_attendees.attendance', tsUnion: 'EventAttendance' },
 	{ tableColumn: 'session_plan_items.kind', tsUnion: 'SessionItemKind' },
 	{ tableColumn: 'gym_routines.periodisation', tsUnion: 'GymPeriodisation' },

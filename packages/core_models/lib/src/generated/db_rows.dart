@@ -539,6 +539,102 @@ class DeviceTokenRow {
   };
 }
 
+/// Row shape for the `donations` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class DonationRow {
+  static const String table = 'donations';
+  static const String colId = 'id';
+  static const String colFundraiserId = 'fundraiser_id';
+  static const String colDonorUserId = 'donor_user_id';
+  static const String colOwnerUserId = 'owner_user_id';
+  static const String colDisplayName = 'display_name';
+  static const String colMessage = 'message';
+  static const String colStripeCheckoutSessionId = 'stripe_checkout_session_id';
+  static const String colStripePaymentIntentId = 'stripe_payment_intent_id';
+  static const String colAmountCents = 'amount_cents';
+  static const String colCurrency = 'currency';
+  static const String colPlatformFeeCents = 'platform_fee_cents';
+  static const String colStatus = 'status';
+  static const String colIsAnonymous = 'is_anonymous';
+  static const String colCreatedAt = 'created_at';
+  static const String colPaidAt = 'paid_at';
+  static const String colRefundedAt = 'refunded_at';
+
+  final String id;
+  final String fundraiserId;
+  final String? donorUserId;
+  final String ownerUserId;
+  final String? displayName;
+  final String? message;
+  final String? stripeCheckoutSessionId;
+  final String? stripePaymentIntentId;
+  final int amountCents;
+  final String currency;
+  final int platformFeeCents;
+  final String status;
+  final bool isAnonymous;
+  final DateTime createdAt;
+  final DateTime? paidAt;
+  final DateTime? refundedAt;
+
+  const DonationRow({
+    required this.id,
+    required this.fundraiserId,
+    this.donorUserId,
+    required this.ownerUserId,
+    this.displayName,
+    this.message,
+    this.stripeCheckoutSessionId,
+    this.stripePaymentIntentId,
+    required this.amountCents,
+    required this.currency,
+    required this.platformFeeCents,
+    required this.status,
+    required this.isAnonymous,
+    required this.createdAt,
+    this.paidAt,
+    this.refundedAt,
+  });
+
+  factory DonationRow.fromJson(Map<String, dynamic> json) => DonationRow(
+    id: json['id'] as String,
+    fundraiserId: json['fundraiser_id'] as String,
+    donorUserId: json['donor_user_id'] as String?,
+    ownerUserId: json['owner_user_id'] as String,
+    displayName: json['display_name'] as String?,
+    message: json['message'] as String?,
+    stripeCheckoutSessionId: json['stripe_checkout_session_id'] as String?,
+    stripePaymentIntentId: json['stripe_payment_intent_id'] as String?,
+    amountCents: (json['amount_cents'] as num).toInt(),
+    currency: json['currency'] as String,
+    platformFeeCents: (json['platform_fee_cents'] as num).toInt(),
+    status: json['status'] as String,
+    isAnonymous: (json['is_anonymous'] as bool?) ?? false,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
+    refundedAt: json['refunded_at'] == null ? null : DateTime.parse(json['refunded_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colFundraiserId: fundraiserId,
+    colDonorUserId: donorUserId,
+    colOwnerUserId: ownerUserId,
+    colDisplayName: displayName,
+    colMessage: message,
+    colStripeCheckoutSessionId: stripeCheckoutSessionId,
+    colStripePaymentIntentId: stripePaymentIntentId,
+    colAmountCents: amountCents,
+    colCurrency: currency,
+    colPlatformFeeCents: platformFeeCents,
+    colStatus: status,
+    colIsAnonymous: isAnonymous,
+    colCreatedAt: createdAt.toIso8601String(),
+    colPaidAt: paidAt?.toIso8601String(),
+    colRefundedAt: refundedAt?.toIso8601String(),
+  };
+}
+
 /// Row shape for the `event_attendees` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class EventAttendeeRow {
@@ -1234,6 +1330,92 @@ class FoodLogRow {
     colLastModifiedAt: lastModifiedAt.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
     colStartedAt: startedAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `fundraisers` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class FundraiserRow {
+  static const String table = 'fundraisers';
+  static const String colId = 'id';
+  static const String colOwnerUserId = 'owner_user_id';
+  static const String colRunId = 'run_id';
+  static const String colEventId = 'event_id';
+  static const String colCharityName = 'charity_name';
+  static const String colCharityUrl = 'charity_url';
+  static const String colTitle = 'title';
+  static const String colStory = 'story';
+  static const String colGoalCents = 'goal_cents';
+  static const String colCurrency = 'currency';
+  static const String colPlatformFeeBps = 'platform_fee_bps';
+  static const String colStatus = 'status';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String ownerUserId;
+  final String? runId;
+  final String? eventId;
+  final String charityName;
+  final String? charityUrl;
+  final String title;
+  final String? story;
+  final int goalCents;
+  final String currency;
+  final int platformFeeBps;
+  final String status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const FundraiserRow({
+    required this.id,
+    required this.ownerUserId,
+    this.runId,
+    this.eventId,
+    required this.charityName,
+    this.charityUrl,
+    required this.title,
+    this.story,
+    required this.goalCents,
+    required this.currency,
+    required this.platformFeeBps,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory FundraiserRow.fromJson(Map<String, dynamic> json) => FundraiserRow(
+    id: json['id'] as String,
+    ownerUserId: json['owner_user_id'] as String,
+    runId: json['run_id'] as String?,
+    eventId: json['event_id'] as String?,
+    charityName: json['charity_name'] as String,
+    charityUrl: json['charity_url'] as String?,
+    title: json['title'] as String,
+    story: json['story'] as String?,
+    goalCents: (json['goal_cents'] as num).toInt(),
+    currency: json['currency'] as String,
+    platformFeeBps: (json['platform_fee_bps'] as num).toInt(),
+    status: json['status'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colOwnerUserId: ownerUserId,
+    colRunId: runId,
+    colEventId: eventId,
+    colCharityName: charityName,
+    colCharityUrl: charityUrl,
+    colTitle: title,
+    colStory: story,
+    colGoalCents: goalCents,
+    colCurrency: currency,
+    colPlatformFeeBps: platformFeeBps,
+    colStatus: status,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
   };
 }
 

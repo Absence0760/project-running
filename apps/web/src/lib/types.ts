@@ -190,6 +190,14 @@ export type RefundPolicy = 'full_until_start' | 'full_until_24h' | 'no_refund';
 // event_pricing.modality — in_person only in P1; 'virtual' is a digital good
 // that re-opens the app-store IAP rule (reserved for P4).
 export type EventModality = 'in_person';
+// Charity fundraising (fundraising.md, migration 20270212_001). Two
+// narrow-union ↔ CHECK pairs; the Dart side treats both as raw String. Keep
+// each in lockstep with the migration (check_constraint_unions.mjs PAIRS).
+// fundraisers.status — open until the owner closes it.
+export type FundraiserStatus = 'open' | 'closed';
+// donations.status — the donation ledger lifecycle, written only by the
+// stripe-events webhook donation branch (service role).
+export type DonationStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'canceled';
 // session_plan_items.kind — a yoga/pilates movement is a timed hold, a counted
 // set of reps, or a continuous flow. Enforced by the session_plan_items_kind_check
 // CHECK constraint (migration 20270103_001) — keep this union in lockstep
@@ -280,6 +288,33 @@ export type EventPricing = Omit<EventPricingRow, 'modality' | 'refund_policy'> &
 };
 export type EventOrder = Omit<EventOrderRow, 'status'> & { status: OrderStatus };
 export type InstructorPayoutAccount = InstructorPayoutAccountRow;
+
+// Charity fundraising (fundraising.md). A fundraiser is polymorphic over
+// (run | event) — exactly one anchor FK is set (CHECK-enforced). DonationRow's
+// donor_user_id / owner_user_id / stripe ids / platform_fee_cents are revoked
+// from client roles in the migration, so a base-table read never surfaces them;
+// the public feed is served by the fundraiser_feed RPC (FundraiserFeedEntry).
+export type Fundraiser = Omit<FundraiserRow, 'status'> & { status: FundraiserStatus };
+export type Donation = Omit<DonationRow, 'status'> & { status: DonationStatus };
+
+/** Public donation-feed row — the fundraiser_feed RPC projection (public-safe
+ * columns only; donor identity / Stripe ids never surface). */
+export interface FundraiserFeedEntry {
+	display_name: string | null;
+	message: string | null;
+	amount_cents: number;
+	currency: string;
+	is_anonymous: boolean;
+	paid_at: string | null;
+}
+
+/** Thermometer totals — the fundraiser_totals RPC projection. */
+export interface FundraiserTotals {
+	raised_cents: number;
+	donor_count: number;
+	goal_cents: number;
+	currency: string;
+}
 
 export type SessionPlan = SessionPlanRow;
 export type SessionPlanBlock = SessionPlanBlockRow;
