@@ -1,17 +1,23 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import {
 		fetchMyAthletesWithError,
 		fetchPendingCoachInvites,
 		fetchMyCoaches,
+		fetchCoachRosterSummaryWithError,
 		createCoachInvite,
 		revokeCoachInvite,
 		endCoachLink,
 		type CoachAthleteLink,
+		type CoachRosterRow,
 		type PendingCoachInvite
 	} from '$lib/core/data';
+	import { formatRelativeTime } from '$lib/format/time';
+	import { formatDistance } from '$lib/format/units.svelte';
+	import { injuryRiskBand, loadTrend } from '$lib/training/coach_load';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -20,6 +26,8 @@
 	let athletes = $state<CoachAthleteLink[]>([]);
 	let pending = $state<PendingCoachInvite[]>([]);
 	let coaches = $state<CoachAthleteLink[]>([]);
+	let roster = $state<CoachRosterRow[]>([]);
+	let rosterError = $state<string | null>(null);
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let minting = $state(false);
@@ -39,19 +47,107 @@
 		// (or under CI load) onMount can fire before fetchUser resolves,
 		// leaving an empty roster that never refills.
 		await auth.ready();
-		const [athletesResult, p, c] = await Promise.all([
+		const [athletesResult, p, c, rosterResult] = await Promise.all([
 			fetchMyAthletesWithError(),
 			fetchPendingCoachInvites(),
-			fetchMyCoaches()
+			fetchMyCoaches(),
+			fetchCoachRosterSummaryWithError()
 		]);
 		athletes = athletesResult.athletes;
 		pending = p;
 		coaches = c;
+		roster = rosterResult.rows;
+		rosterError = rosterResult.error;
 		loadError = athletesResult.error;
 		loading = false;
 	}
 
 	onMount(load);
+
+	// Sort defaults to "risk first, then most-stale last-run first" so the
+	// athletes who need attention float to the top of the roster.
+	type RosterSortKey = 'risk' | 'lastRun' | 'load' | 'plan' | 'name';
+	let sortKey = $state<RosterSortKey>('risk');
+	let sortDir = $state<'asc' | 'desc'>('desc');
+
+	const RISK_RANK: Record<string, number> = {
+		high: 4,
+		elevated: 3,
+		optimal: 2,
+		low: 1,
+		insufficient: 0
+	};
+
+	function rosterRisk(r: CoachRosterRow): string {
+		return injuryRiskBand(r.load_acute, r.load_chronic);
+	}
+
+	function setSort(key: RosterSortKey) {
+		if (sortKey === key) {
+			sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+		} else {
+			sortKey = key;
+			sortDir = 'desc';
+		}
+	}
+
+	const sortedRoster = $derived.by(() => {
+		const dir = sortDir === 'desc' ? -1 : 1;
+		const rows = [...roster];
+		rows.sort((a, b) => {
+			let cmp = 0;
+			switch (sortKey) {
+				case 'risk':
+					cmp = RISK_RANK[rosterRisk(a)] - RISK_RANK[rosterRisk(b)];
+					if (cmp === 0) cmp = lastRunMs(a) - lastRunMs(b);
+					break;
+				case 'lastRun':
+					cmp = lastRunMs(a) - lastRunMs(b);
+					break;
+				case 'load':
+					cmp = a.load_acute - b.load_acute;
+					break;
+				case 'plan':
+					cmp = a.plan_completion_pct - b.plan_completion_pct;
+					break;
+				case 'name':
+					cmp = (a.display_name ?? '').localeCompare(b.display_name ?? '');
+					break;
+			}
+			return cmp * dir;
+		});
+		return rows;
+	});
+
+	function lastRunMs(r: CoachRosterRow): number {
+		return r.last_run_at ? new Date(r.last_run_at).getTime() : 0;
+	}
+
+	function riskLabel(band: string): string {
+		switch (band) {
+			case 'high':
+				return m('coaching.roster.riskHigh');
+			case 'elevated':
+				return m('coaching.roster.riskElevated');
+			case 'optimal':
+				return m('coaching.roster.riskOptimal');
+			case 'low':
+				return m('coaching.roster.riskLow');
+			default:
+				return m('coaching.roster.riskInsufficient');
+		}
+	}
+
+	function trendLabel(r: CoachRosterRow): string {
+		switch (loadTrend(r.load_acute, r.load_chronic)) {
+			case 'ramping':
+				return m('coaching.roster.loadRamping');
+			case 'tapering':
+				return m('coaching.roster.loadTapering');
+			default:
+				return m('coaching.roster.loadSteady');
+		}
+	}
 
 	function inviteLink(token: string): string {
 		const origin = typeof location !== 'undefined' ? location.origin : '';
@@ -172,6 +268,108 @@
 			<button class="btn btn-outline" onclick={load}>{m('coaching.retry')}</button>
 		</div>
 	{:else}
+		{#if roster.length > 0 || rosterError}
+			<section class="card" data-testid="roster-section">
+				<div class="card-head">
+					<div>
+						<h2>{m('coaching.roster.title')}</h2>
+						<p class="muted">{m('coaching.roster.subtitle')}</p>
+					</div>
+				</div>
+
+				{#if rosterError}
+					<div class="error-banner" role="alert">
+						<span class="material-symbols" aria-hidden="true">error</span>
+						<div>
+							<strong>{m('coaching.roster.loadError')}</strong>
+							<span class="error-detail">{rosterError}</span>
+						</div>
+						<button class="btn btn-outline" onclick={load}>{m('coaching.retry')}</button>
+					</div>
+				{:else}
+					<div class="roster-scroll">
+						<table class="roster-table">
+							<thead>
+								<tr>
+									<th scope="col">
+										<button class="th-sort" onclick={() => setSort('name')}>
+											{m('coaching.roster.colAthlete')}
+										</button>
+									</th>
+									<th scope="col">
+										<button class="th-sort" onclick={() => setSort('lastRun')}>
+											{m('coaching.roster.colLastRun')}
+										</button>
+									</th>
+									<th scope="col">
+										<button class="th-sort" onclick={() => setSort('load')}>
+											{m('coaching.roster.colLoad')}
+										</button>
+									</th>
+									<th scope="col">
+										<button class="th-sort" onclick={() => setSort('plan')}>
+											{m('coaching.roster.colPlan')}
+										</button>
+									</th>
+									<th scope="col">
+										<button class="th-sort" onclick={() => setSort('risk')}>
+											{m('coaching.roster.colRisk')}
+										</button>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each sortedRoster as r (r.athlete_id)}
+									{@const band = rosterRisk(r)}
+									<tr
+										class="roster-row"
+										data-testid="roster-row"
+										onclick={() => goto(`/coaching/athletes/${r.athlete_id}`)}
+									>
+										<td>
+											<a
+												class="athlete-cell"
+												href="/coaching/athletes/{r.athlete_id}"
+												onclick={(e) => e.stopPropagation()}
+											>
+												<Avatar name={r.display_name} size="2rem" font="0.78rem" />
+												<span class="athlete-name">{r.display_name ?? m('coaching.runner')}</span>
+											</a>
+										</td>
+										<td>
+											{#if r.last_run_at}
+												<span>{formatRelativeTime(r.last_run_at)}</span>
+											{:else}
+												<span class="muted">{m('coaching.roster.neverRun')}</span>
+											{/if}
+										</td>
+										<td>
+											<div class="load-cell">
+												<span>{formatDistance(r.distance_7d_m)}</span>
+												<span class="load-trend">{trendLabel(r)}</span>
+											</div>
+										</td>
+										<td>
+											{#if r.active_plan_id}
+												<span>{r.plan_completion_pct}%</span>
+											{:else}
+												<span class="muted">{m('coaching.roster.noPlan')}</span>
+											{/if}
+										</td>
+										<td>
+											<span class="risk-chip risk-{band}" data-testid="risk-chip">
+												{riskLabel(band)}
+											</span>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</section>
+		{/if}
+
 		<section class="card">
 			<div class="card-head">
 				<div>
@@ -409,5 +607,96 @@
 		display: flex;
 		gap: var(--space-xs);
 		flex-shrink: 0;
+	}
+
+	.roster-scroll {
+		overflow-x: auto;
+	}
+	.roster-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.9rem;
+	}
+	.roster-table th {
+		text-align: left;
+		padding: 0;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.th-sort {
+		background: none;
+		border: none;
+		padding: var(--space-xs) var(--space-sm);
+		font: inherit;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.th-sort:hover {
+		color: var(--color-text);
+	}
+	.roster-row {
+		cursor: pointer;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.roster-row:hover {
+		background: var(--color-bg);
+	}
+	.roster-table td {
+		padding: var(--space-sm);
+		vertical-align: middle;
+		white-space: nowrap;
+	}
+	.athlete-cell {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		text-decoration: none;
+		color: var(--color-text);
+		font-weight: 600;
+	}
+	.athlete-cell:hover .athlete-name {
+		text-decoration: underline;
+	}
+	.athlete-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.load-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+	.load-trend {
+		font-size: 0.74rem;
+		color: var(--color-text-tertiary);
+	}
+	.risk-chip {
+		display: inline-block;
+		padding: 0.1rem 0.5rem;
+		border-radius: var(--radius-sm);
+		font-size: 0.76rem;
+		font-weight: 700;
+	}
+	.risk-high {
+		background: rgba(239, 68, 68, 0.15);
+		color: #b91c1c;
+	}
+	.risk-elevated {
+		background: rgba(245, 158, 11, 0.16);
+		color: #b45309;
+	}
+	.risk-optimal {
+		background: rgba(34, 197, 94, 0.15);
+		color: #15803d;
+	}
+	.risk-low {
+		background: rgba(59, 130, 246, 0.14);
+		color: #1d4ed8;
+	}
+	.risk-insufficient {
+		background: var(--color-bg);
+		color: var(--color-text-tertiary);
 	}
 </style>

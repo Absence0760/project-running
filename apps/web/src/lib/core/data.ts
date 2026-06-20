@@ -6417,6 +6417,56 @@ export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
 	return (await fetchMyAthletesWithError()).athletes;
 }
 
+/// One row of the multi-athlete coach roster (coach_roster.md). The shape is
+/// the bespoke `coach_roster_summary` RPC projection — NOT a base-table row —
+/// so it lives here next to CoachAthleteLink rather than as a types.ts overlay.
+/// load_acute / load_chronic are RAW distance-proxy stress sums; the page
+/// derives the ACWR risk band + load trend from them via the coach_load helper
+/// (the risk policy stays in one place, never in the SQL).
+export interface CoachRosterRow {
+	athlete_id: string;
+	display_name: string | null;
+	avatar_url: string | null;
+	last_run_at: string | null;
+	runs_7d: number;
+	distance_7d_m: number;
+	load_acute: number;
+	load_chronic: number;
+	active_plan_id: string | null;
+	plan_completion_pct: number;
+}
+
+/// The whole roster in one consent-gated round-trip. Surfaces the RPC error so
+/// the page can show a retry state distinct from "no athletes yet" — the
+/// durable shape, mirroring fetchMyAthletesWithError. Returns no athlete data
+/// to a non-coach (the RPC's `mine` CTE yields zero rows; an unauthenticated
+/// caller raises, which surfaces as an error here, fail-closed).
+export async function fetchCoachRosterSummaryWithError(): Promise<{
+	rows: CoachRosterRow[];
+	error: string | null;
+}> {
+	if (!auth.user?.id) return { rows: [], error: null };
+	const { data, error } = await supabase.rpc('coach_roster_summary');
+	if (error) return { rows: [], error: error.message };
+	const rows: CoachRosterRow[] = ((data as Array<Record<string, unknown>>) ?? []).map((r) => ({
+		athlete_id: r.athlete_id as string,
+		display_name: (r.display_name as string | null) ?? null,
+		avatar_url: (r.avatar_url as string | null) ?? null,
+		last_run_at: (r.last_run_at as string | null) ?? null,
+		runs_7d: Number(r.runs_7d) || 0,
+		distance_7d_m: Number(r.distance_7d_m) || 0,
+		load_acute: Number(r.load_acute) || 0,
+		load_chronic: Number(r.load_chronic) || 0,
+		active_plan_id: (r.active_plan_id as string | null) ?? null,
+		plan_completion_pct: Number(r.plan_completion_pct) || 0
+	}));
+	return { rows, error: null };
+}
+
+export async function fetchCoachRosterSummary(): Promise<CoachRosterRow[]> {
+	return (await fetchCoachRosterSummaryWithError()).rows;
+}
+
 /// One athlete's recent runs for the coach review surface
 /// (`/coaching/athletes/[id]`). The RLS policy `active coach reads
 /// athlete runs` (migration 20261103_001) grants a `status='active'`
