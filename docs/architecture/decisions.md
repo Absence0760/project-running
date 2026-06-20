@@ -3245,6 +3245,18 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 155. The coach roster is a read-only SECURITY DEFINER aggregation re-checking consent per athlete; the ACWR injury-risk policy lives in the shared helper, not the SQL
+
+**Decided (2026-06-19, migration `20270206_001_coach_roster_summary.sql`, coach_roster.md).** The multi-athlete coach roster dashboard is a single SECURITY DEFINER RPC `coach_roster_summary()` that aggregates per-athlete triage signals (7-day load, plan %, ACWR injury-risk, last-run recency) in one round-trip. Three load-bearing choices: (1) the RPC re-checks the **active `coach_athletes` link per athlete inside the definer body** (a `mine` CTE on `coach_id = auth.uid() and status='active'`), never leaning on the caller's RLS — SECURITY DEFINER bypasses it, so the CTE is the only consent gate; a non-coach gets zero rows and an unauthenticated caller raises, fail-closed. (2) The RPC returns **raw** acute (7d) + chronic (28d-avg) distance-proxy load sums; the **ACWR ratio + injury-risk band thresholds live in the shared `coach_load` parity helper** (web `training/coach_load.ts` ↔ mobile `coach_load.dart`), not the SQL, so web / mobile / the RPC display agree on one testable risk policy. (3) The roster surfaces **no track bytes** — run row stats only, so it opens **no new privacy boundary**: every value is already coach-readable under the shipped run-visibility (§98) + plan-read policies; this only aggregates it.
+
+**Why.** A client fan-out (one runs query + one plan query per athlete) is correct at small roster sizes but is N+1 and re-implements the consent recheck N times. One definer RPC is the durable shape: server-side aggregation, one consent recheck, one place the math lives. Keeping the ACWR thresholds out of the SQL is the same instinct as every other narrow-policy-in-one-place rule — a band edge that drifted between the SQL and the client would mislabel an athlete's injury risk on one surface. A new athlete with <28 days of history reads as `insufficient` (not a false green "low"), so the chip never tells a coach it's safe to push someone the model can't actually assess.
+
+**Trade-off.** The distance-proxy load is coarser than the calibrated TRIMP curve on the athlete's own dashboard — but the roster column is a triage signal ("ramping vs tapering / who's overcooked"), which the acute:chronic ratio gives from the proxy alone; the per-athlete review surface still has the full curve.
+
+**Boundary / not-yet-done.** No paywall gate in v1 (coaching isn't paywalled); if multi-athlete coaching is later paywalled, gate the section behind `ProGate` with a default-off flag. Saved roster sort, a per-athlete sparkline, and configurable load windows are deferred. No CISO/counsel sign-off gate — no new personal-data exposure beyond the shipped consent grant; this ADR is the artifact a reviewer evaluates if they consider the aggregation itself a new surface.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
