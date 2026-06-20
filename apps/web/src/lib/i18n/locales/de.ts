@@ -3448,6 +3448,8 @@ export const messages = {
 	"prefs.pushNotifHint": "Wähle, welche Benachrichtigungen als Push-Hinweise an deine abonnierten Browser gesendet werden. Die App-Glocke zeigt immer alles.",
 	"prefs.emailWeeklyDigest": "Wöchentliche Zusammenfassung per E-Mail",
 	"prefs.emailWeeklyDigestHint": "Abonniere eine wöchentliche Übersicht über dein Training und Community-Highlights. Standardmäßig aus; getrennt von deinen Benachrichtigungs-E-Mails.",
+	"prefs.emailLifecycleDrip": "E-Mail mit Tipps & Motivation",
+	"prefs.emailLifecycleDripHint": "Erhalte gelegentliche Einstiegs-, Reaktivierungs- und Serien-Erinnerungen. Standardmäßig aus; getrennt von deiner wöchentlichen Zusammenfassung und deinen Benachrichtigungs-E-Mails.",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "Gym",
 	"nav.nutrition": "Ernährung",

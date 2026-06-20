@@ -3447,6 +3447,8 @@ export const messages = {
 	"prefs.pushNotifHint": "Escolha quais notificações são enviadas como alertas push para os navegadores inscritos. O sino do app sempre mostra tudo.",
 	"prefs.emailWeeklyDigest": "E-mail de resumo semanal",
 	"prefs.emailWeeklyDigestHint": "Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.",
+	"prefs.emailLifecycleDrip": "E-mail de dicas e incentivo",
+	"prefs.emailLifecycleDripHint": "Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "Academia",
 	"nav.nutrition": "Nutrição",

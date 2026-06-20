@@ -3444,6 +3444,8 @@ export const messages = {
 	"prefs.pushNotifHint": "登録したブラウザにプッシュ通知として送る通知を選びます。アプリのベルには常にすべて表示されます。",
 	"prefs.emailWeeklyDigest": "週刊ダイジェストメール",
 	"prefs.emailWeeklyDigestHint": "トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。",
+	"prefs.emailLifecycleDrip": "ヒントと応援メール",
+	"prefs.emailLifecycleDripHint": "オンボーディング、再開、連続記録のリマインダーを時々受け取ります。初期設定はオフで、週刊ダイジェストや通知メールとは別です。",
 	// Gym (Phase 4 multi-modal, decisions §63)
 	"nav.gym": "ジム",
 	"nav.nutrition": "栄養",
