@@ -16,6 +16,7 @@ import { withSentry } from '../_shared/sentry.ts';
 
 interface RequestBody {
   near?: unknown; // { lng, lat, radius_m } region hint (future)
+  provider?: unknown; // 'runsignup' (default) | 'ultrasignup' — which leg to gate/probe
 }
 
 Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
@@ -37,10 +38,17 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
   const denied = await checkRateLimitTiered(supabase, user.id, 'race-listings-sync', 2, 8, 3600);
   if (denied) return denied;
 
-  // Fail closed on the missing provider key — the whole RunSignUp leg is
-  // inert until the credential lands (integrations.md + decisions ADR).
-  const apiKey = Deno.env.get('RUNSIGNUP_API_KEY');
-  const apiSecret = Deno.env.get('RUNSIGNUP_API_SECRET');
+  // Fail closed on the missing provider key — the chosen leg is inert until its
+  // credential lands (integrations.md + decisions ADR). Defaults to RunSignUp so
+  // the existing probe is unchanged; UltraSignup is gated symmetrically.
+  const body = (guarded.body ?? {}) as RequestBody;
+  const provider = body.provider === 'ultrasignup' ? 'ultrasignup' : 'runsignup';
+  const apiKey = provider === 'ultrasignup'
+    ? Deno.env.get('ULTRASIGNUP_API_KEY')
+    : Deno.env.get('RUNSIGNUP_API_KEY');
+  const apiSecret = provider === 'ultrasignup'
+    ? Deno.env.get('ULTRASIGNUP_API_SECRET')
+    : Deno.env.get('RUNSIGNUP_API_SECRET');
   if (!apiKey || !apiSecret) {
     return Response.json({ error: 'provider_not_configured' }, { status: 503 });
   }
