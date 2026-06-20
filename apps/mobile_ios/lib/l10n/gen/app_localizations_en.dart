@@ -840,6 +840,155 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingNext => 'Next';
 
   @override
+  String get setupPageTitle => 'Set up your account';
+
+  @override
+  String get setupSkip => 'Skip setup';
+
+  @override
+  String get setupSkipStep => 'Skip';
+
+  @override
+  String get setupBack => 'Back';
+
+  @override
+  String get setupContinue => 'Continue';
+
+  @override
+  String get setupSaving => 'Saving…';
+
+  @override
+  String get setupOpenDashboard => 'Open dashboard';
+
+  @override
+  String get setupWelcomeToast => 'Welcome to Threkir!';
+
+  @override
+  String setupSaveError(String message) {
+    return 'Couldn\'t save your setup: $message';
+  }
+
+  @override
+  String get setupNameTitle => 'What should we call you?';
+
+  @override
+  String get setupNameHint =>
+      'This is the name other runners see on your profile and shared runs.';
+
+  @override
+  String get setupNameLabel => 'Display name';
+
+  @override
+  String get setupNamePlaceholder => 'e.g. Alex Runner';
+
+  @override
+  String get setupUnitsTitle => 'Kilometres or miles?';
+
+  @override
+  String get setupUnitsHint =>
+      'We\'ll use this everywhere distances and paces are shown. You can change it any time in Settings.';
+
+  @override
+  String get setupUnitKm => 'Kilometres';
+
+  @override
+  String get setupUnitKmSample => '5.0 km · 5:00 /km';
+
+  @override
+  String get setupUnitMi => 'Miles';
+
+  @override
+  String get setupUnitMiSample => '3.1 mi · 8:03 /mi';
+
+  @override
+  String get setupGoalTitle => 'What\'s your main goal?';
+
+  @override
+  String get setupGoalHint =>
+      'We\'ll use this to suggest a training plan that fits. Optional — you can skip it.';
+
+  @override
+  String get setupGoalGeneralFitness => 'Stay fit + healthy';
+
+  @override
+  String get setupGoalWeightLoss => 'Lose weight';
+
+  @override
+  String get setupGoal5k => 'Run a 5K';
+
+  @override
+  String get setupGoal10k => 'Run a 10K';
+
+  @override
+  String get setupGoalHalf => 'Run a half marathon';
+
+  @override
+  String get setupGoalMarathon => 'Run a marathon';
+
+  @override
+  String get setupAboutTitle => 'A bit about you';
+
+  @override
+  String get setupAboutHint =>
+      'Optional. Helps tailor pace and calorie estimates. You choose whether to share health data.';
+
+  @override
+  String get setupGenderLabel => 'Gender';
+
+  @override
+  String get setupGenderPreferNot => 'Prefer not to say';
+
+  @override
+  String get setupGenderFemale => 'Female';
+
+  @override
+  String get setupGenderMale => 'Male';
+
+  @override
+  String get setupGenderNonbinary => 'Non-binary';
+
+  @override
+  String get setupDobLabel => 'Date of birth';
+
+  @override
+  String get setupDobNote =>
+      'Used to keep accounts of under-18s out of people search, and for age-graded results if you share health data.';
+
+  @override
+  String get setupDobPlaceholder => 'Tap to choose';
+
+  @override
+  String get setupWeightLabel => 'Weight (kg)';
+
+  @override
+  String get setupWeightPlaceholder => 'e.g. 70';
+
+  @override
+  String get setupHealthConsent =>
+      'I consent to Threkir using my gender and date of birth to personalise pace, heart-rate and calorie estimates (special-category health data, GDPR Art 9).';
+
+  @override
+  String get setupPrivacyTitle => 'Who sees your runs?';
+
+  @override
+  String get setupPrivacyHint =>
+      'Choose a default for new runs. You can change it any time and override it on any single run.';
+
+  @override
+  String get setupNotificationsTitle => 'Stay in the loop';
+
+  @override
+  String get setupNotificationsHint =>
+      'Choose how many push notifications you\'d like. You can fine-tune this later in Settings.';
+
+  @override
+  String get setupDoneTitle => 'You\'re all set';
+
+  @override
+  String get setupDoneHint =>
+      'That\'s everything. Tap Open dashboard to start running.';
+
+  @override
   String get privacyPrivateTitle => 'Private';
 
   @override

@@ -1523,6 +1523,282 @@ abstract class AppLocalizations {
   /// **'Next'**
   String get onboardingNext;
 
+  /// App bar title of the post-signup setup wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Set up your account'**
+  String get setupPageTitle;
+
+  /// Header action that skips the whole setup wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Skip setup'**
+  String get setupSkip;
+
+  /// Action that skips the current setup-wizard step
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get setupSkipStep;
+
+  /// Button that goes to the previous setup-wizard step
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get setupBack;
+
+  /// Button that advances to the next setup-wizard step
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get setupContinue;
+
+  /// Final setup-wizard button label while the answers are being saved
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get setupSaving;
+
+  /// Final setup-wizard button that saves and closes the wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Open dashboard'**
+  String get setupOpenDashboard;
+
+  /// Toast shown after the setup wizard completes
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Threkir!'**
+  String get setupWelcomeToast;
+
+  /// Toast shown when saving the setup wizard fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your setup: {message}'**
+  String setupSaveError(String message);
+
+  /// Setup wizard display-name step title
+  ///
+  /// In en, this message translates to:
+  /// **'What should we call you?'**
+  String get setupNameTitle;
+
+  /// Setup wizard display-name step hint
+  ///
+  /// In en, this message translates to:
+  /// **'This is the name other runners see on your profile and shared runs.'**
+  String get setupNameHint;
+
+  /// Setup wizard display-name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get setupNameLabel;
+
+  /// Setup wizard display-name field placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Alex Runner'**
+  String get setupNamePlaceholder;
+
+  /// Setup wizard units step title
+  ///
+  /// In en, this message translates to:
+  /// **'Kilometres or miles?'**
+  String get setupUnitsTitle;
+
+  /// Setup wizard units step hint
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll use this everywhere distances and paces are shown. You can change it any time in Settings.'**
+  String get setupUnitsHint;
+
+  /// Setup wizard kilometres unit option
+  ///
+  /// In en, this message translates to:
+  /// **'Kilometres'**
+  String get setupUnitKm;
+
+  /// Setup wizard kilometres unit sample line
+  ///
+  /// In en, this message translates to:
+  /// **'5.0 km · 5:00 /km'**
+  String get setupUnitKmSample;
+
+  /// Setup wizard miles unit option
+  ///
+  /// In en, this message translates to:
+  /// **'Miles'**
+  String get setupUnitMi;
+
+  /// Setup wizard miles unit sample line
+  ///
+  /// In en, this message translates to:
+  /// **'3.1 mi · 8:03 /mi'**
+  String get setupUnitMiSample;
+
+  /// Setup wizard primary-goal step title
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s your main goal?'**
+  String get setupGoalTitle;
+
+  /// Setup wizard primary-goal step hint
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll use this to suggest a training plan that fits. Optional — you can skip it.'**
+  String get setupGoalHint;
+
+  /// Setup wizard general-fitness goal option
+  ///
+  /// In en, this message translates to:
+  /// **'Stay fit + healthy'**
+  String get setupGoalGeneralFitness;
+
+  /// Setup wizard weight-loss goal option
+  ///
+  /// In en, this message translates to:
+  /// **'Lose weight'**
+  String get setupGoalWeightLoss;
+
+  /// Setup wizard 5K goal option
+  ///
+  /// In en, this message translates to:
+  /// **'Run a 5K'**
+  String get setupGoal5k;
+
+  /// Setup wizard 10K goal option
+  ///
+  /// In en, this message translates to:
+  /// **'Run a 10K'**
+  String get setupGoal10k;
+
+  /// Setup wizard half-marathon goal option
+  ///
+  /// In en, this message translates to:
+  /// **'Run a half marathon'**
+  String get setupGoalHalf;
+
+  /// Setup wizard marathon goal option
+  ///
+  /// In en, this message translates to:
+  /// **'Run a marathon'**
+  String get setupGoalMarathon;
+
+  /// Setup wizard demographics step title
+  ///
+  /// In en, this message translates to:
+  /// **'A bit about you'**
+  String get setupAboutTitle;
+
+  /// Setup wizard demographics step hint
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. Helps tailor pace and calorie estimates. You choose whether to share health data.'**
+  String get setupAboutHint;
+
+  /// Setup wizard gender field label
+  ///
+  /// In en, this message translates to:
+  /// **'Gender'**
+  String get setupGenderLabel;
+
+  /// Setup wizard gender option declining to answer
+  ///
+  /// In en, this message translates to:
+  /// **'Prefer not to say'**
+  String get setupGenderPreferNot;
+
+  /// Setup wizard female gender option
+  ///
+  /// In en, this message translates to:
+  /// **'Female'**
+  String get setupGenderFemale;
+
+  /// Setup wizard male gender option
+  ///
+  /// In en, this message translates to:
+  /// **'Male'**
+  String get setupGenderMale;
+
+  /// Setup wizard non-binary gender option
+  ///
+  /// In en, this message translates to:
+  /// **'Non-binary'**
+  String get setupGenderNonbinary;
+
+  /// Setup wizard date-of-birth field label
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth'**
+  String get setupDobLabel;
+
+  /// Setup wizard date-of-birth field note
+  ///
+  /// In en, this message translates to:
+  /// **'Used to keep accounts of under-18s out of people search, and for age-graded results if you share health data.'**
+  String get setupDobNote;
+
+  /// Setup wizard date-of-birth empty-state text
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to choose'**
+  String get setupDobPlaceholder;
+
+  /// Setup wizard weight field label
+  ///
+  /// In en, this message translates to:
+  /// **'Weight (kg)'**
+  String get setupWeightLabel;
+
+  /// Setup wizard weight field placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 70'**
+  String get setupWeightPlaceholder;
+
+  /// Setup wizard health-data (GDPR Art 9) consent checkbox label
+  ///
+  /// In en, this message translates to:
+  /// **'I consent to Threkir using my gender and date of birth to personalise pace, heart-rate and calorie estimates (special-category health data, GDPR Art 9).'**
+  String get setupHealthConsent;
+
+  /// Setup wizard privacy-default step title
+  ///
+  /// In en, this message translates to:
+  /// **'Who sees your runs?'**
+  String get setupPrivacyTitle;
+
+  /// Setup wizard privacy-default step hint
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a default for new runs. You can change it any time and override it on any single run.'**
+  String get setupPrivacyHint;
+
+  /// Setup wizard notifications step title
+  ///
+  /// In en, this message translates to:
+  /// **'Stay in the loop'**
+  String get setupNotificationsTitle;
+
+  /// Setup wizard notifications step hint
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how many push notifications you\'d like. You can fine-tune this later in Settings.'**
+  String get setupNotificationsHint;
+
+  /// Setup wizard final step title
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all set'**
+  String get setupDoneTitle;
+
+  /// Setup wizard final step hint
+  ///
+  /// In en, this message translates to:
+  /// **'That\'s everything. Tap Open dashboard to start running.'**
+  String get setupDoneHint;
+
   /// Title of the Private visibility default option
   ///
   /// In en, this message translates to:

@@ -1148,6 +1148,195 @@
   "@onboardingNext": {
     "description": "Bottom button label advancing to the next onboarding page"
   },
+  "setupPageTitle": "Set up your account",
+  "@setupPageTitle": {
+    "description": "App bar title of the post-signup setup wizard"
+  },
+  "setupSkip": "Skip setup",
+  "@setupSkip": {
+    "description": "Header action that skips the whole setup wizard"
+  },
+  "setupSkipStep": "Skip",
+  "@setupSkipStep": {
+    "description": "Action that skips the current setup-wizard step"
+  },
+  "setupBack": "Back",
+  "@setupBack": {
+    "description": "Button that goes to the previous setup-wizard step"
+  },
+  "setupContinue": "Continue",
+  "@setupContinue": {
+    "description": "Button that advances to the next setup-wizard step"
+  },
+  "setupSaving": "Saving…",
+  "@setupSaving": {
+    "description": "Final setup-wizard button label while the answers are being saved"
+  },
+  "setupOpenDashboard": "Open dashboard",
+  "@setupOpenDashboard": {
+    "description": "Final setup-wizard button that saves and closes the wizard"
+  },
+  "setupWelcomeToast": "Welcome to Threkir!",
+  "@setupWelcomeToast": {
+    "description": "Toast shown after the setup wizard completes"
+  },
+  "setupSaveError": "Couldn't save your setup: {message}",
+  "@setupSaveError": {
+    "description": "Toast shown when saving the setup wizard fails",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "setupNameTitle": "What should we call you?",
+  "@setupNameTitle": {
+    "description": "Setup wizard display-name step title"
+  },
+  "setupNameHint": "This is the name other runners see on your profile and shared runs.",
+  "@setupNameHint": {
+    "description": "Setup wizard display-name step hint"
+  },
+  "setupNameLabel": "Display name",
+  "@setupNameLabel": {
+    "description": "Setup wizard display-name field label"
+  },
+  "setupNamePlaceholder": "e.g. Alex Runner",
+  "@setupNamePlaceholder": {
+    "description": "Setup wizard display-name field placeholder"
+  },
+  "setupUnitsTitle": "Kilometres or miles?",
+  "@setupUnitsTitle": {
+    "description": "Setup wizard units step title"
+  },
+  "setupUnitsHint": "We'll use this everywhere distances and paces are shown. You can change it any time in Settings.",
+  "@setupUnitsHint": {
+    "description": "Setup wizard units step hint"
+  },
+  "setupUnitKm": "Kilometres",
+  "@setupUnitKm": {
+    "description": "Setup wizard kilometres unit option"
+  },
+  "setupUnitKmSample": "5.0 km · 5:00 /km",
+  "@setupUnitKmSample": {
+    "description": "Setup wizard kilometres unit sample line"
+  },
+  "setupUnitMi": "Miles",
+  "@setupUnitMi": {
+    "description": "Setup wizard miles unit option"
+  },
+  "setupUnitMiSample": "3.1 mi · 8:03 /mi",
+  "@setupUnitMiSample": {
+    "description": "Setup wizard miles unit sample line"
+  },
+  "setupGoalTitle": "What's your main goal?",
+  "@setupGoalTitle": {
+    "description": "Setup wizard primary-goal step title"
+  },
+  "setupGoalHint": "We'll use this to suggest a training plan that fits. Optional — you can skip it.",
+  "@setupGoalHint": {
+    "description": "Setup wizard primary-goal step hint"
+  },
+  "setupGoalGeneralFitness": "Stay fit + healthy",
+  "@setupGoalGeneralFitness": {
+    "description": "Setup wizard general-fitness goal option"
+  },
+  "setupGoalWeightLoss": "Lose weight",
+  "@setupGoalWeightLoss": {
+    "description": "Setup wizard weight-loss goal option"
+  },
+  "setupGoal5k": "Run a 5K",
+  "@setupGoal5k": {
+    "description": "Setup wizard 5K goal option"
+  },
+  "setupGoal10k": "Run a 10K",
+  "@setupGoal10k": {
+    "description": "Setup wizard 10K goal option"
+  },
+  "setupGoalHalf": "Run a half marathon",
+  "@setupGoalHalf": {
+    "description": "Setup wizard half-marathon goal option"
+  },
+  "setupGoalMarathon": "Run a marathon",
+  "@setupGoalMarathon": {
+    "description": "Setup wizard marathon goal option"
+  },
+  "setupAboutTitle": "A bit about you",
+  "@setupAboutTitle": {
+    "description": "Setup wizard demographics step title"
+  },
+  "setupAboutHint": "Optional. Helps tailor pace and calorie estimates. You choose whether to share health data.",
+  "@setupAboutHint": {
+    "description": "Setup wizard demographics step hint"
+  },
+  "setupGenderLabel": "Gender",
+  "@setupGenderLabel": {
+    "description": "Setup wizard gender field label"
+  },
+  "setupGenderPreferNot": "Prefer not to say",
+  "@setupGenderPreferNot": {
+    "description": "Setup wizard gender option declining to answer"
+  },
+  "setupGenderFemale": "Female",
+  "@setupGenderFemale": {
+    "description": "Setup wizard female gender option"
+  },
+  "setupGenderMale": "Male",
+  "@setupGenderMale": {
+    "description": "Setup wizard male gender option"
+  },
+  "setupGenderNonbinary": "Non-binary",
+  "@setupGenderNonbinary": {
+    "description": "Setup wizard non-binary gender option"
+  },
+  "setupDobLabel": "Date of birth",
+  "@setupDobLabel": {
+    "description": "Setup wizard date-of-birth field label"
+  },
+  "setupDobNote": "Used to keep accounts of under-18s out of people search, and for age-graded results if you share health data.",
+  "@setupDobNote": {
+    "description": "Setup wizard date-of-birth field note"
+  },
+  "setupDobPlaceholder": "Tap to choose",
+  "@setupDobPlaceholder": {
+    "description": "Setup wizard date-of-birth empty-state text"
+  },
+  "setupWeightLabel": "Weight (kg)",
+  "@setupWeightLabel": {
+    "description": "Setup wizard weight field label"
+  },
+  "setupWeightPlaceholder": "e.g. 70",
+  "@setupWeightPlaceholder": {
+    "description": "Setup wizard weight field placeholder"
+  },
+  "setupHealthConsent": "I consent to Threkir using my gender and date of birth to personalise pace, heart-rate and calorie estimates (special-category health data, GDPR Art 9).",
+  "@setupHealthConsent": {
+    "description": "Setup wizard health-data (GDPR Art 9) consent checkbox label"
+  },
+  "setupPrivacyTitle": "Who sees your runs?",
+  "@setupPrivacyTitle": {
+    "description": "Setup wizard privacy-default step title"
+  },
+  "setupPrivacyHint": "Choose a default for new runs. You can change it any time and override it on any single run.",
+  "@setupPrivacyHint": {
+    "description": "Setup wizard privacy-default step hint"
+  },
+  "setupNotificationsTitle": "Stay in the loop",
+  "@setupNotificationsTitle": {
+    "description": "Setup wizard notifications step title"
+  },
+  "setupNotificationsHint": "Choose how many push notifications you'd like. You can fine-tune this later in Settings.",
+  "@setupNotificationsHint": {
+    "description": "Setup wizard notifications step hint"
+  },
+  "setupDoneTitle": "You're all set",
+  "@setupDoneTitle": {
+    "description": "Setup wizard final step title"
+  },
+  "setupDoneHint": "That's everything. Tap Open dashboard to start running.",
+  "@setupDoneHint": {
+    "description": "Setup wizard final step hint"
+  },
   "privacyPrivateTitle": "Private",
   "@privacyPrivateTitle": {
     "description": "Title of the Private visibility default option"

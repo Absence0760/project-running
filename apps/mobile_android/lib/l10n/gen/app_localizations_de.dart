@@ -846,6 +846,155 @@ class AppLocalizationsDe extends AppLocalizations {
   String get onboardingNext => 'Weiter';
 
   @override
+  String get setupPageTitle => 'Konto einrichten';
+
+  @override
+  String get setupSkip => 'Einrichtung überspringen';
+
+  @override
+  String get setupSkipStep => 'Überspringen';
+
+  @override
+  String get setupBack => 'Zurück';
+
+  @override
+  String get setupContinue => 'Weiter';
+
+  @override
+  String get setupSaving => 'Wird gespeichert …';
+
+  @override
+  String get setupOpenDashboard => 'Dashboard öffnen';
+
+  @override
+  String get setupWelcomeToast => 'Willkommen bei Threkir!';
+
+  @override
+  String setupSaveError(String message) {
+    return 'Einrichtung konnte nicht gespeichert werden: $message';
+  }
+
+  @override
+  String get setupNameTitle => 'Wie sollen wir dich nennen?';
+
+  @override
+  String get setupNameHint =>
+      'Diesen Namen sehen andere Läufer in deinem Profil und bei geteilten Läufen.';
+
+  @override
+  String get setupNameLabel => 'Anzeigename';
+
+  @override
+  String get setupNamePlaceholder => 'z. B. Alex Läufer';
+
+  @override
+  String get setupUnitsTitle => 'Kilometer oder Meilen?';
+
+  @override
+  String get setupUnitsHint =>
+      'Wir verwenden dies überall, wo Distanzen und Tempo angezeigt werden. Du kannst es jederzeit in den Einstellungen ändern.';
+
+  @override
+  String get setupUnitKm => 'Kilometer';
+
+  @override
+  String get setupUnitKmSample => '5,0 km · 5:00 /km';
+
+  @override
+  String get setupUnitMi => 'Meilen';
+
+  @override
+  String get setupUnitMiSample => '3,1 mi · 8:03 /mi';
+
+  @override
+  String get setupGoalTitle => 'Was ist dein Hauptziel?';
+
+  @override
+  String get setupGoalHint =>
+      'Damit schlagen wir dir einen passenden Trainingsplan vor. Optional – du kannst es überspringen.';
+
+  @override
+  String get setupGoalGeneralFitness => 'Fit + gesund bleiben';
+
+  @override
+  String get setupGoalWeightLoss => 'Abnehmen';
+
+  @override
+  String get setupGoal5k => '5 km laufen';
+
+  @override
+  String get setupGoal10k => '10 km laufen';
+
+  @override
+  String get setupGoalHalf => 'Halbmarathon laufen';
+
+  @override
+  String get setupGoalMarathon => 'Marathon laufen';
+
+  @override
+  String get setupAboutTitle => 'Ein bisschen über dich';
+
+  @override
+  String get setupAboutHint =>
+      'Optional. Hilft, Tempo- und Kalorienschätzungen anzupassen. Du entscheidest, ob du Gesundheitsdaten teilst.';
+
+  @override
+  String get setupGenderLabel => 'Geschlecht';
+
+  @override
+  String get setupGenderPreferNot => 'Keine Angabe';
+
+  @override
+  String get setupGenderFemale => 'Weiblich';
+
+  @override
+  String get setupGenderMale => 'Männlich';
+
+  @override
+  String get setupGenderNonbinary => 'Nicht-binär';
+
+  @override
+  String get setupDobLabel => 'Geburtsdatum';
+
+  @override
+  String get setupDobNote =>
+      'Wird verwendet, um Konten von unter 18-Jährigen aus der Personensuche herauszuhalten, und für altersbewertete Ergebnisse, wenn du Gesundheitsdaten teilst.';
+
+  @override
+  String get setupDobPlaceholder => 'Zum Auswählen tippen';
+
+  @override
+  String get setupWeightLabel => 'Gewicht (kg)';
+
+  @override
+  String get setupWeightPlaceholder => 'z. B. 70';
+
+  @override
+  String get setupHealthConsent =>
+      'Ich willige ein, dass Threkir mein Geschlecht und Geburtsdatum verwendet, um Tempo-, Herzfrequenz- und Kalorienschätzungen zu personalisieren (besondere Gesundheitsdaten, DSGVO Art. 9).';
+
+  @override
+  String get setupPrivacyTitle => 'Wer sieht deine Läufe?';
+
+  @override
+  String get setupPrivacyHint =>
+      'Wähle eine Standardeinstellung für neue Läufe. Du kannst sie jederzeit ändern und für jeden einzelnen Lauf überschreiben.';
+
+  @override
+  String get setupNotificationsTitle => 'Bleib auf dem Laufenden';
+
+  @override
+  String get setupNotificationsHint =>
+      'Wähle, wie viele Push-Benachrichtigungen du möchtest. Du kannst dies später in den Einstellungen anpassen.';
+
+  @override
+  String get setupDoneTitle => 'Alles bereit';
+
+  @override
+  String get setupDoneHint =>
+      'Das war\'s. Tippe auf „Dashboard öffnen“, um loszulaufen.';
+
+  @override
   String get privacyPrivateTitle => 'Privat';
 
   @override
