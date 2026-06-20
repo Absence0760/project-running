@@ -8868,4 +8868,137 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'キャンセル';
+
+  @override
+  String get routeConditionsTitle => 'コンディション';
+
+  @override
+  String get routeConditionsReport => 'コンディションを報告';
+
+  @override
+  String get routeConditionsReporting => '報告中…';
+
+  @override
+  String get routeConditionsReported => 'コンディションを報告しました';
+
+  @override
+  String get routeConditionsReportFailed => 'コンディションを報告できませんでした';
+
+  @override
+  String get routeConditionsEmpty => 'まだ報告はありません。';
+
+  @override
+  String get routeConditionsLoading => '読み込み中…';
+
+  @override
+  String get routeConditionsCancel => 'キャンセル';
+
+  @override
+  String get routeConditionsDelete => '削除';
+
+  @override
+  String get routeConditionsDeleteTitle => '報告を削除しますか？';
+
+  @override
+  String get routeConditionsDeleteConfirm => 'コンディション報告を完全に削除します。';
+
+  @override
+  String get routeConditionsDeleteFailed => '報告を削除できませんでした';
+
+  @override
+  String get routeConditionsKindLabel => '状態';
+
+  @override
+  String get routeConditionsSeverityLabel => '深刻度';
+
+  @override
+  String get routeConditionsNoteLabel => 'メモ';
+
+  @override
+  String get routeConditionsNotePlaceholder => '次のランナーは何に遭遇しますか？';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return '$distance 地点';
+  }
+
+  @override
+  String get routeConditionMuddy => '泥';
+
+  @override
+  String get routeConditionFlooded => '冠水';
+
+  @override
+  String get routeConditionSnowIce => '雪・氷';
+
+  @override
+  String get routeConditionOvergrown => '草木が繁茂';
+
+  @override
+  String get routeConditionClosed => '閉鎖';
+
+  @override
+  String get routeConditionHazard => '危険';
+
+  @override
+  String get routeConditionClear => '良好';
+
+  @override
+  String get routeConditionOther => 'その他';
+
+  @override
+  String get routeConditionSeverityInfo => '情報';
+
+  @override
+  String get routeConditionSeverityCaution => '注意';
+
+  @override
+  String get routeConditionSeverityImpassable => '通行不能';
+
+  @override
+  String get prefTurnByTurnCues => 'ターンバイターン音声ガイド';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle => '保存したルートを辿る際に曲がる方向を音声で案内';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return '$distance先、左折します';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return '$distance先、右折します';
+  }
+
+  @override
+  String get ttsTurnLeftNow => '左折します';
+
+  @override
+  String get ttsTurnRightNow => '右折します';
+
+  @override
+  String get ttsSlightLeft => 'やや左へ';
+
+  @override
+  String get ttsSlightRight => 'やや右へ';
+
+  @override
+  String get ttsUturn => 'Uターンします';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return '地図をキャッシュ中: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => '地図をオフライン保存しました';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return '地図を一部保存 ($done / $total) — 再試行';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge => 'このルートはオフライン保存には大きすぎます';
 }

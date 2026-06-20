@@ -2192,18 +2192,53 @@
   "gymRecordsSubtitle": "Sua melhor marca em cada exercício com peso.",
   "gymRecordsEmpty": "Nenhum exercício com peso registrado ainda. Adicione um peso a uma série para começar a acompanhar seus recordes.",
   "gymRecordsLastDone": "Último {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, one{1 sessão} other{{count} sessões}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "Voltar aos recordes",
   "gymExerciseEmpty": "Ainda não há histórico deste exercício.",
   "gymSinceFirstUp": "+{delta} desde a primeira sessão",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "−{delta} desde a primeira sessão",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "sem mudança desde a primeira sessão",
   "gymDetailLastTime": "Última vez {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "Volume",
   "gymDeleteConfirmTitle": "Excluir treino?",
   "gymDeleteConfirmBody": "Isso remove permanentemente o treino e suas séries.",
@@ -2306,30 +2341,92 @@
   "nutritionNoTargets": "Informe sua altura, peso, idade e sexo no app web para ver as metas de calorias e macros.",
   "nutritionWeeklyTrend": "Últimos 7 dias",
   "nutritionCaloriesLeft": "{n} kcal restantes",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal acima",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "Na meta",
   "nutritionMacroOver": "{n} acima da meta",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "Meta atingida",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "Meta atingida",
   "nutritionWaterRemaining": "{n} ml restantes",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "Na meta",
   "nutritionWeekUnderGoal": "{n} abaixo da meta/dia",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "{n} acima da meta/dia",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "Meta diária",
   "nutritionGoalBreakdown": "Meta {base} + {exercise} kcal queimadas hoje",
   "dashGymReadinessIncluded": "Suas sessões recentes de musculação entram na sua fadiga.",
   "dashGymReadinessExcluded": "A carga da musculação fica de fora do seu preparo para correr.",
   "prefsExcludeGymFromReadiness": "Excluir a carga da musculação do preparo para correr",
   "prefsExcludeGymFromReadinessHint": "Por padrão, as sessões de musculação aumentam sua fadiga e reduzem seu preparo, como uma corrida. Ative isto para que seu condicionamento, fadiga e forma se baseiem apenas nas corridas.",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "Nada registrado hoje",
   "nutritionEmptyBody": "Registre uma refeição para acompanhar suas calorias e macros.",
   "nutritionSlotBreakfast": "Café da manhã",
@@ -2421,7 +2518,6 @@
   "sessionRunVerdictAbandoned": "Abandonada",
   "sessionRunStepCount": "Etapa {index} de {total}",
   "sessionRunSwitchSides": "Troque de lado",
-
   "coachingTitle": "Treinamento",
   "coachingLede": "Treine atletas compartilhando um link de convite e acompanhe o treino deles. Ou siga o seu próprio treinador aqui.",
   "coachingCancel": "Cancelar",
@@ -2459,7 +2555,6 @@
   "coachingRevokeInviteError": "Não foi possível revogar o convite: {error}",
   "coachingRemoveAthleteError": "Não foi possível remover o atleta: {error}",
   "coachingEndLinkError": "Não foi possível encerrar o vínculo: {error}",
-
   "coachingAthleteAthleteFallback": "Atleta",
   "coachingAthleteRunnerFallback": "Corredor",
   "coachingAthleteCoachingSince": "Treinando desde {date}",
@@ -2575,5 +2670,46 @@
   "checkpointWeighInWeightKg": "Peso corporal (kg)",
   "checkpointMedicalHold": "Colocar em retenção médica",
   "checkpointWeighInSave": "Salvar e registrar",
-  "checkpointCancel": "Cancelar"
+  "checkpointCancel": "Cancelar",
+  "routeConditionsTitle": "Condições",
+  "routeConditionsReport": "Relatar condição",
+  "routeConditionsReporting": "Enviando…",
+  "routeConditionsReported": "Condição relatada",
+  "routeConditionsReportFailed": "Não foi possível relatar a condição",
+  "routeConditionsEmpty": "Ainda não há relatos.",
+  "routeConditionsLoading": "Carregando…",
+  "routeConditionsCancel": "Cancelar",
+  "routeConditionsDelete": "Excluir",
+  "routeConditionsDeleteTitle": "Excluir relato?",
+  "routeConditionsDeleteConfirm": "Isso remove o relato permanentemente.",
+  "routeConditionsDeleteFailed": "Não foi possível excluir o relato",
+  "routeConditionsKindLabel": "Condição",
+  "routeConditionsSeverityLabel": "Gravidade",
+  "routeConditionsNoteLabel": "Nota",
+  "routeConditionsNotePlaceholder": "O que o próximo corredor vai encontrar?",
+  "routeConditionsAtDistance": "em {distance}",
+  "routeConditionMuddy": "Lamacento",
+  "routeConditionFlooded": "Alagado",
+  "routeConditionSnowIce": "Neve / gelo",
+  "routeConditionOvergrown": "Coberto de vegetação",
+  "routeConditionClosed": "Fechado",
+  "routeConditionHazard": "Perigo",
+  "routeConditionClear": "Livre",
+  "routeConditionOther": "Outro",
+  "routeConditionSeverityInfo": "Info",
+  "routeConditionSeverityCaution": "Cuidado",
+  "routeConditionSeverityImpassable": "Intransitável",
+  "prefTurnByTurnCues": "Instruções de voz curva a curva",
+  "prefTurnByTurnCuesSubtitle": "Direções faladas ao seguir uma rota salva",
+  "ttsTurnLeftIn": "Em {distance}, vire à esquerda",
+  "ttsTurnRightIn": "Em {distance}, vire à direita",
+  "ttsTurnLeftNow": "Vire à esquerda",
+  "ttsTurnRightNow": "Vire à direita",
+  "ttsSlightLeft": "Mantenha-se à esquerda",
+  "ttsSlightRight": "Mantenha-se à direita",
+  "ttsUturn": "Faça um retorno",
+  "routeOfflinePackDownloading": "Salvando mapa: {done} / {total}",
+  "routeOfflinePackReady": "Mapa salvo para uso offline",
+  "routeOfflinePackPartial": "Mapa parcialmente salvo ({done} / {total}) — tentar de novo",
+  "routeOfflinePackTooLarge": "Esta rota é grande demais para salvar offline"
 }

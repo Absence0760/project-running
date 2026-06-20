@@ -9346,4 +9346,143 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Annuler';
+
+  @override
+  String get routeConditionsTitle => 'Conditions';
+
+  @override
+  String get routeConditionsReport => 'Signaler une condition';
+
+  @override
+  String get routeConditionsReporting => 'Envoi…';
+
+  @override
+  String get routeConditionsReported => 'Condition signalée';
+
+  @override
+  String get routeConditionsReportFailed =>
+      'Impossible de signaler la condition';
+
+  @override
+  String get routeConditionsEmpty => 'Aucun signalement pour l\'instant.';
+
+  @override
+  String get routeConditionsLoading => 'Chargement…';
+
+  @override
+  String get routeConditionsCancel => 'Annuler';
+
+  @override
+  String get routeConditionsDelete => 'Supprimer';
+
+  @override
+  String get routeConditionsDeleteTitle => 'Supprimer le signalement ?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'Cela supprime définitivement le signalement.';
+
+  @override
+  String get routeConditionsDeleteFailed =>
+      'Impossible de supprimer le signalement';
+
+  @override
+  String get routeConditionsKindLabel => 'Condition';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Gravité';
+
+  @override
+  String get routeConditionsNoteLabel => 'Note';
+
+  @override
+  String get routeConditionsNotePlaceholder =>
+      'Que rencontrera le prochain coureur ?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'à $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Boueux';
+
+  @override
+  String get routeConditionFlooded => 'Inondé';
+
+  @override
+  String get routeConditionSnowIce => 'Neige / glace';
+
+  @override
+  String get routeConditionOvergrown => 'Envahi par la végétation';
+
+  @override
+  String get routeConditionClosed => 'Fermé';
+
+  @override
+  String get routeConditionHazard => 'Danger';
+
+  @override
+  String get routeConditionClear => 'Dégagé';
+
+  @override
+  String get routeConditionOther => 'Autre';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Attention';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Impraticable';
+
+  @override
+  String get prefTurnByTurnCues => 'Guidage vocal virage par virage';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Directions vocales en suivant un itinéraire enregistré';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'Dans $distance, tournez à gauche';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'Dans $distance, tournez à droite';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Tournez à gauche';
+
+  @override
+  String get ttsTurnRightNow => 'Tournez à droite';
+
+  @override
+  String get ttsSlightLeft => 'Serrez à gauche';
+
+  @override
+  String get ttsSlightRight => 'Serrez à droite';
+
+  @override
+  String get ttsUturn => 'Faites demi-tour';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Mise en cache de la carte : $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Carte enregistrée hors ligne';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Carte partiellement enregistrée ($done / $total) — réessayer';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'Cet itinéraire est trop grand pour la mise en cache hors ligne';
 }

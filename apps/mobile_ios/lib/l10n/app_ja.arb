@@ -2192,18 +2192,53 @@
   "gymRecordsSubtitle": "重量種目ごとのあなたのベスト記録。",
   "gymRecordsEmpty": "重量種目の記録はまだありません。セットに重量を入力すると自己ベストの記録が始まります。",
   "gymRecordsLastDone": "最終 {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, other{{count}セッション}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "記録に戻る",
   "gymExerciseEmpty": "この種目の履歴はまだありません。",
   "gymSinceFirstUp": "初回から+{delta}",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "初回から−{delta}",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "初回から変化なし",
   "gymDetailLastTime": "前回 {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "ボリューム",
   "gymDeleteConfirmTitle": "ワークアウトを削除しますか？",
   "gymDeleteConfirmBody": "ワークアウトとそのセットが完全に削除されます。",
@@ -2306,30 +2341,92 @@
   "nutritionNoTargets": "カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。",
   "nutritionWeeklyTrend": "直近7日間",
   "nutritionCaloriesLeft": "残り {n} kcal",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal 超過",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "目標達成",
   "nutritionMacroOver": "{n} 超過",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "目標達成",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "目標達成",
   "nutritionWaterRemaining": "残り {n} ml",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "目標どおり",
   "nutritionWeekUnderGoal": "目標より1日 {n} 少ない",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "目標より1日 {n} 多い",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "1日の目標",
   "nutritionGoalBreakdown": "目標 {base} + 本日消費 {exercise} kcal",
   "dashGymReadinessIncluded": "最近のジムのセッションは疲労に反映されています。",
   "dashGymReadinessExcluded": "ジムの負荷はランの準備度から除外されています。",
   "prefsExcludeGymFromReadiness": "ジムの負荷をランの準備度から除外する",
   "prefsExcludeGymFromReadinessHint": "デフォルトでは、ジムのセッションはランと同様に疲労を増やし準備度を下げます。フィットネス・疲労・フォームをランのみに基づかせるにはこれをオンにしてください。",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "今日はまだ何も記録していません",
   "nutritionEmptyBody": "食事を記録してカロリーとマクロを管理しましょう。",
   "nutritionSlotBreakfast": "朝食",
@@ -2421,7 +2518,6 @@
   "sessionRunVerdictAbandoned": "中止",
   "sessionRunStepCount": "ステップ {index} / {total}",
   "sessionRunSwitchSides": "反対側に切り替え",
-
   "coachingTitle": "コーチング",
   "coachingLede": "招待リンクを共有してアスリートを指導し、トレーニングを確認できます。あるいは自分のコーチをここでフォローできます。",
   "coachingCancel": "キャンセル",
@@ -2459,7 +2555,6 @@
   "coachingRevokeInviteError": "招待を取り消せませんでした: {error}",
   "coachingRemoveAthleteError": "アスリートを削除できませんでした: {error}",
   "coachingEndLinkError": "連携を終了できませんでした: {error}",
-
   "coachingAthleteAthleteFallback": "アスリート",
   "coachingAthleteRunnerFallback": "ランナー",
   "coachingAthleteCoachingSince": "{date} から指導",
@@ -2575,5 +2670,46 @@
   "checkpointWeighInWeightKg": "体重 (kg)",
   "checkpointMedicalHold": "メディカルホールドにする",
   "checkpointWeighInSave": "保存して記録",
-  "checkpointCancel": "キャンセル"
+  "checkpointCancel": "キャンセル",
+  "routeConditionsTitle": "コンディション",
+  "routeConditionsReport": "コンディションを報告",
+  "routeConditionsReporting": "報告中…",
+  "routeConditionsReported": "コンディションを報告しました",
+  "routeConditionsReportFailed": "コンディションを報告できませんでした",
+  "routeConditionsEmpty": "まだ報告はありません。",
+  "routeConditionsLoading": "読み込み中…",
+  "routeConditionsCancel": "キャンセル",
+  "routeConditionsDelete": "削除",
+  "routeConditionsDeleteTitle": "報告を削除しますか？",
+  "routeConditionsDeleteConfirm": "コンディション報告を完全に削除します。",
+  "routeConditionsDeleteFailed": "報告を削除できませんでした",
+  "routeConditionsKindLabel": "状態",
+  "routeConditionsSeverityLabel": "深刻度",
+  "routeConditionsNoteLabel": "メモ",
+  "routeConditionsNotePlaceholder": "次のランナーは何に遭遇しますか？",
+  "routeConditionsAtDistance": "{distance} 地点",
+  "routeConditionMuddy": "泥",
+  "routeConditionFlooded": "冠水",
+  "routeConditionSnowIce": "雪・氷",
+  "routeConditionOvergrown": "草木が繁茂",
+  "routeConditionClosed": "閉鎖",
+  "routeConditionHazard": "危険",
+  "routeConditionClear": "良好",
+  "routeConditionOther": "その他",
+  "routeConditionSeverityInfo": "情報",
+  "routeConditionSeverityCaution": "注意",
+  "routeConditionSeverityImpassable": "通行不能",
+  "prefTurnByTurnCues": "ターンバイターン音声ガイド",
+  "prefTurnByTurnCuesSubtitle": "保存したルートを辿る際に曲がる方向を音声で案内",
+  "ttsTurnLeftIn": "{distance}先、左折します",
+  "ttsTurnRightIn": "{distance}先、右折します",
+  "ttsTurnLeftNow": "左折します",
+  "ttsTurnRightNow": "右折します",
+  "ttsSlightLeft": "やや左へ",
+  "ttsSlightRight": "やや右へ",
+  "ttsUturn": "Uターンします",
+  "routeOfflinePackDownloading": "地図をキャッシュ中: {done} / {total}",
+  "routeOfflinePackReady": "地図をオフライン保存しました",
+  "routeOfflinePackPartial": "地図を一部保存 ({done} / {total}) — 再試行",
+  "routeOfflinePackTooLarge": "このルートはオフライン保存には大きすぎます"
 }

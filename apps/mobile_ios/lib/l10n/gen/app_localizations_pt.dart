@@ -9323,6 +9323,144 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancelar';
+
+  @override
+  String get routeConditionsTitle => 'Condições';
+
+  @override
+  String get routeConditionsReport => 'Relatar condição';
+
+  @override
+  String get routeConditionsReporting => 'Enviando…';
+
+  @override
+  String get routeConditionsReported => 'Condição relatada';
+
+  @override
+  String get routeConditionsReportFailed =>
+      'Não foi possível relatar a condição';
+
+  @override
+  String get routeConditionsEmpty => 'Ainda não há relatos.';
+
+  @override
+  String get routeConditionsLoading => 'Carregando…';
+
+  @override
+  String get routeConditionsCancel => 'Cancelar';
+
+  @override
+  String get routeConditionsDelete => 'Excluir';
+
+  @override
+  String get routeConditionsDeleteTitle => 'Excluir relato?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'Isso remove o relato permanentemente.';
+
+  @override
+  String get routeConditionsDeleteFailed => 'Não foi possível excluir o relato';
+
+  @override
+  String get routeConditionsKindLabel => 'Condição';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Gravidade';
+
+  @override
+  String get routeConditionsNoteLabel => 'Nota';
+
+  @override
+  String get routeConditionsNotePlaceholder =>
+      'O que o próximo corredor vai encontrar?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'em $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Lamacento';
+
+  @override
+  String get routeConditionFlooded => 'Alagado';
+
+  @override
+  String get routeConditionSnowIce => 'Neve / gelo';
+
+  @override
+  String get routeConditionOvergrown => 'Coberto de vegetação';
+
+  @override
+  String get routeConditionClosed => 'Fechado';
+
+  @override
+  String get routeConditionHazard => 'Perigo';
+
+  @override
+  String get routeConditionClear => 'Livre';
+
+  @override
+  String get routeConditionOther => 'Outro';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Cuidado';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Intransitável';
+
+  @override
+  String get prefTurnByTurnCues => 'Instruções de voz curva a curva';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Direções faladas ao seguir uma rota salva';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'Em $distance, vire à esquerda';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'Em $distance, vire à direita';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Vire à esquerda';
+
+  @override
+  String get ttsTurnRightNow => 'Vire à direita';
+
+  @override
+  String get ttsSlightLeft => 'Mantenha-se à esquerda';
+
+  @override
+  String get ttsSlightRight => 'Mantenha-se à direita';
+
+  @override
+  String get ttsUturn => 'Faça um retorno';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Salvando mapa: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Mapa salvo para uso offline';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Mapa parcialmente salvo ($done / $total) — tentar de novo';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'Esta rota é grande demais para salvar offline';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18644,4 +18782,142 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get checkpointCancel => 'Cancelar';
+
+  @override
+  String get routeConditionsTitle => 'Condições';
+
+  @override
+  String get routeConditionsReport => 'Relatar condição';
+
+  @override
+  String get routeConditionsReporting => 'Enviando…';
+
+  @override
+  String get routeConditionsReported => 'Condição relatada';
+
+  @override
+  String get routeConditionsReportFailed =>
+      'Não foi possível relatar a condição';
+
+  @override
+  String get routeConditionsEmpty => 'Ainda não há relatos.';
+
+  @override
+  String get routeConditionsLoading => 'Carregando…';
+
+  @override
+  String get routeConditionsCancel => 'Cancelar';
+
+  @override
+  String get routeConditionsDelete => 'Excluir';
+
+  @override
+  String get routeConditionsDeleteTitle => 'Excluir relato?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'Isso remove o relato permanentemente.';
+
+  @override
+  String get routeConditionsDeleteFailed => 'Não foi possível excluir o relato';
+
+  @override
+  String get routeConditionsKindLabel => 'Condição';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Gravidade';
+
+  @override
+  String get routeConditionsNoteLabel => 'Nota';
+
+  @override
+  String get routeConditionsNotePlaceholder =>
+      'O que o próximo corredor vai encontrar?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'em $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Lamacento';
+
+  @override
+  String get routeConditionFlooded => 'Alagado';
+
+  @override
+  String get routeConditionSnowIce => 'Neve / gelo';
+
+  @override
+  String get routeConditionOvergrown => 'Coberto de vegetação';
+
+  @override
+  String get routeConditionClosed => 'Fechado';
+
+  @override
+  String get routeConditionHazard => 'Perigo';
+
+  @override
+  String get routeConditionClear => 'Livre';
+
+  @override
+  String get routeConditionOther => 'Outro';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Cuidado';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Intransitável';
+
+  @override
+  String get prefTurnByTurnCues => 'Instruções de voz curva a curva';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Direções faladas ao seguir uma rota salva';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'Em $distance, vire à esquerda';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'Em $distance, vire à direita';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Vire à esquerda';
+
+  @override
+  String get ttsTurnRightNow => 'Vire à direita';
+
+  @override
+  String get ttsSlightLeft => 'Mantenha-se à esquerda';
+
+  @override
+  String get ttsSlightRight => 'Mantenha-se à direita';
+
+  @override
+  String get ttsUturn => 'Faça um retorno';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Salvando mapa: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Mapa salvo para uso offline';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Mapa parcialmente salvo ($done / $total) — tentar de novo';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'Esta rota é grande demais para salvar offline';
 }

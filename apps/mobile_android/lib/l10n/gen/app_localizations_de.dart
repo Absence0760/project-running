@@ -9331,4 +9331,143 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Abbrechen';
+
+  @override
+  String get routeConditionsTitle => 'Bedingungen';
+
+  @override
+  String get routeConditionsReport => 'Bedingung melden';
+
+  @override
+  String get routeConditionsReporting => 'Wird gemeldet…';
+
+  @override
+  String get routeConditionsReported => 'Bedingung gemeldet';
+
+  @override
+  String get routeConditionsReportFailed =>
+      'Bedingung konnte nicht gemeldet werden';
+
+  @override
+  String get routeConditionsEmpty => 'Noch keine Meldungen.';
+
+  @override
+  String get routeConditionsLoading => 'Wird geladen…';
+
+  @override
+  String get routeConditionsCancel => 'Abbrechen';
+
+  @override
+  String get routeConditionsDelete => 'Löschen';
+
+  @override
+  String get routeConditionsDeleteTitle => 'Meldung löschen?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'Dies entfernt die Meldung dauerhaft.';
+
+  @override
+  String get routeConditionsDeleteFailed =>
+      'Meldung konnte nicht gelöscht werden';
+
+  @override
+  String get routeConditionsKindLabel => 'Bedingung';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Schweregrad';
+
+  @override
+  String get routeConditionsNoteLabel => 'Notiz';
+
+  @override
+  String get routeConditionsNotePlaceholder =>
+      'Was erwartet den nächsten Läufer?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'bei $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Schlammig';
+
+  @override
+  String get routeConditionFlooded => 'Überflutet';
+
+  @override
+  String get routeConditionSnowIce => 'Schnee / Eis';
+
+  @override
+  String get routeConditionOvergrown => 'Zugewachsen';
+
+  @override
+  String get routeConditionClosed => 'Gesperrt';
+
+  @override
+  String get routeConditionHazard => 'Gefahr';
+
+  @override
+  String get routeConditionClear => 'Frei';
+
+  @override
+  String get routeConditionOther => 'Sonstiges';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Vorsicht';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Unpassierbar';
+
+  @override
+  String get prefTurnByTurnCues => 'Sprachnavigation (Abbiegehinweise)';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Gesprochene Abbiegehinweise beim Folgen einer gespeicherten Route';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'In $distance links abbiegen';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'In $distance rechts abbiegen';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Links abbiegen';
+
+  @override
+  String get ttsTurnRightNow => 'Rechts abbiegen';
+
+  @override
+  String get ttsSlightLeft => 'Halten Sie sich links';
+
+  @override
+  String get ttsSlightRight => 'Halten Sie sich rechts';
+
+  @override
+  String get ttsUturn => 'Wenden Sie';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Karte wird zwischengespeichert: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Karte offline gespeichert';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Karte teilweise gespeichert ($done / $total) — erneut versuchen';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'Diese Route ist zu groß für den Offline-Cache';
 }

@@ -9232,4 +9232,140 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancel';
+
+  @override
+  String get routeConditionsTitle => 'Conditions';
+
+  @override
+  String get routeConditionsReport => 'Report condition';
+
+  @override
+  String get routeConditionsReporting => 'Reporting…';
+
+  @override
+  String get routeConditionsReported => 'Condition reported';
+
+  @override
+  String get routeConditionsReportFailed => 'Could not report condition';
+
+  @override
+  String get routeConditionsEmpty => 'No condition reports yet.';
+
+  @override
+  String get routeConditionsLoading => 'Loading…';
+
+  @override
+  String get routeConditionsCancel => 'Cancel';
+
+  @override
+  String get routeConditionsDelete => 'Delete';
+
+  @override
+  String get routeConditionsDeleteTitle => 'Delete report?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'This removes the condition report permanently.';
+
+  @override
+  String get routeConditionsDeleteFailed => 'Could not delete report';
+
+  @override
+  String get routeConditionsKindLabel => 'Condition';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Severity';
+
+  @override
+  String get routeConditionsNoteLabel => 'Note';
+
+  @override
+  String get routeConditionsNotePlaceholder => 'What will the next runner hit?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'at $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Muddy';
+
+  @override
+  String get routeConditionFlooded => 'Flooded';
+
+  @override
+  String get routeConditionSnowIce => 'Snow / ice';
+
+  @override
+  String get routeConditionOvergrown => 'Overgrown';
+
+  @override
+  String get routeConditionClosed => 'Closed';
+
+  @override
+  String get routeConditionHazard => 'Hazard';
+
+  @override
+  String get routeConditionClear => 'Clear';
+
+  @override
+  String get routeConditionOther => 'Other';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Caution';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Impassable';
+
+  @override
+  String get prefTurnByTurnCues => 'Turn-by-turn voice cues';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Spoken turn directions while following a saved route';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'In $distance, turn left';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'In $distance, turn right';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Turn left';
+
+  @override
+  String get ttsTurnRightNow => 'Turn right';
+
+  @override
+  String get ttsSlightLeft => 'Bear left';
+
+  @override
+  String get ttsSlightRight => 'Bear right';
+
+  @override
+  String get ttsUturn => 'Make a U-turn';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Caching map: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Map saved for offline';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Map partly saved ($done / $total) — retry';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'This route is too large to cache offline';
 }
