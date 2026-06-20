@@ -564,8 +564,21 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 > **copies** into `food_log` (no FK, so deleting a template leaves logged meals
 > intact). Mobile mirrors via `LocalMealTemplateStore` (offline-first) + the
 > nutrition screen, byte-identical iOS twin. In the Art 20 DSAR export (items
-> nested). **Recipe builder + shared/public templates + an edit path stay
-> deferred.**
+> nested). **Shared/public templates + an edit path stay deferred.**
+
+> **Status (recipe builder — shipped web + mobile, 2026-06-20, migration
+> `20270221_001`, [decisions § 175](../architecture/decisions.md)):** the next Nutrition mid-tier item —
+> "N ingredients → one logged meal." A **`recipes` + `recipe_ingredients`** pair,
+> the sum-into-one sibling of meal templates: logging a recipe writes a **single**
+> `food_log` row carrying each ingredient's macros × `quantity`, summed, ÷ a
+> `servings` count (so one serving = the per-serving macros under the recipe's
+> name). `/nutrition` gains a **"Save as recipe"** action (with a servings field) +
+> a self-hiding Recipes section. The `recipe.ts`↔`.dart` parity pair
+> (`recipeFromEntries` / `sumRecipe` / `logInputFromRecipe`) holds the arithmetic
+> (missing macro contributes 0, never poisons the sum; rounds to 0.1). Same
+> instantiate-by-copy contract (no FK). Mobile mirrors via `LocalRecipeStore`,
+> byte-identical iOS twin. In the Art 20 DSAR export (ingredients nested).
+> **Per-ingredient quantity editing + shared/public recipes + an edit path stay deferred.**
 
 ## Cross-modality touches (Tier 1 — ship with Phase 4; this is the headline)
 

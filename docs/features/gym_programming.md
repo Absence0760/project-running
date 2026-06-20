@@ -659,3 +659,17 @@ Flip the "Not in scope" bullet (verified exact text: `- [ ] **Not in scope:** ex
 | `apps/web/.../local_testing.md` + `manual_testing.md` (gym section) | ✓ | ✓ | ✓ | ✓ |
 | `apps/watch_wear/CLAUDE.md` + `apps/watch_ios/CLAUDE.md` (deferral note) | ✓ (one line, both) | — | — | — |
 | `decisions.md` (§141) | ✓ (landed with P1) | — | — | — |
+
+## Exercise catalogue (mid-tier; additive)
+
+**Shipped 2026-06-20** (web + mobile twin, migration `20270222_001`, decisions §176). The gym-mid roadmap's "exercise database (FK from `gym_sets.exercise_id` instead of free text)" bullet — built **additively**, never as a replacement, so existing free-text logs and the offline-first `LocalGymStore` path are untouched.
+
+**Schema.** A new `public.exercises` table: `id`, nullable `author_id → auth.users` (NULL = a seeded global, read-only for everyone; set = an owner-created custom), `name`, `name_key` (= `normaliseExerciseName(name)`, stamped at write), `category` (chest/back/shoulders/legs/arms/core/cardio/full_body/other — narrow union ↔ CHECK), `modality` (reuses `GymExerciseModality`), `external_id`, `last_modified_at`, `created_at`. Two partial unique indexes keep the global (`where author_id is null`) and per-author namespaces independent. Seed = ~43 common compounds + isolations + cardio. **`gym_sets.exercise_id`** is a **nullable** FK with `on delete set null` — a logged set may reference a catalogue entry or stay free-text; `exercise_name` is always populated, and PR computation stays keyed on the normalised name, so the link is provenance, not the grouping key.
+
+**RLS.** Read = `author_id is null or author_id = auth.uid()`; insert/update/delete = `author_id = auth.uid()` (can't mutate a global or forge another user's custom). Deleting a custom sets the logged set's `exercise_id` null (history immutable); deleting the owner cascades the custom away (Art 17).
+
+**Wiring.** The composer (web `GymEditor.svelte` ← `fetchExerciseCatalogue`; mobile `gym_compose_sheet.dart` ← `ApiClient.fetchExerciseCatalogue` from `gym_screen.dart`) merges catalogue names into the existing history autocomplete and binds `exercise_id` only when the typed name matches a catalogue entry by normalised key. Custom-exercise create on web is `createCustomExercise` in `core/data.ts`. The `Exercise` overlay + `ExerciseCategory` union live in `apps/web/src/lib/types.ts`, both registered in `check_constraint_unions.mjs`.
+
+**DSAR.** Only owner-created customs (`author_id = uid`) are exported (seeded globals are shared reference data), wired into both the Deno `backup_spec.ts` and the Go worker `exportPersonalDataSpecs`.
+
+**Tests.** pgtap `exercises_rls_test.sql`; Playwright `gym/gym.spec.ts`; mobile `gym_compose_sheet_test.dart`. **Not built** (deferred): a catalogue browse/picker UI, muscle-group analytics off `category`, public/shared customs, and binding `exercise_id` from a routine step.

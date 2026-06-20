@@ -114,8 +114,12 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
 
 ## Planned / not built
 
-- [~] **Weekly digest** (engagement) — **WORKER BACKEND BUILT, SEND STILL GATED
-  (2026-06-12, migration `20270108_001`).** Foundation: the `weekly_digest`
+- [~] **Weekly digest** (engagement) — **FULLY BUILT INCL. SCHEDULER, SEND STILL GATED
+  ON SMTP + CISO/COUNSEL (2026-06-20, scheduler migration `20270220_001`; decisions §174).**
+  The missing piece — a `pg_cron` `enqueue_weekly_digests()` (Monday 08:00 UTC,
+  opt-in-only, dedupe-safe) — now ships; the send is fail-closed on the unset
+  SMTP credential (jobs drain to `done` without `SMTP_HOST`). The one-click
+  `List-Unsubscribe-Post` header is digest-only. Foundation (2026-06-12, migration `20270108_001`): the `weekly_digest`
   jobs.kind, the `email_suppressions` hard-block table (fail-closed RLS,
   worker-only), the **opt-IN** `email_weekly_digest` pref (default `off`,
   separate key — never folded into `email_notifications`), and a **stateless
