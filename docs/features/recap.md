@@ -4,7 +4,7 @@
 > the monthly variant + public share snapshot + parity-pair registration
 > landed 2026-06-19 (migration `20270207_001`). See
 > [year_in_review.md](year_in_review.md) for the original gap-closer plan and
-> [decisions.md § 161](../architecture/decisions.md) for the snapshot rationale.
+> [decisions.md § 163](../architecture/decisions.md) for the snapshot rationale.
 
 ## What it is
 

@@ -6,6 +6,67 @@
 // Do not hand-edit. To add a column, add it to the SQL
 // migration, rerun the generator, and commit both files.
 
+/// Row shape for the `achievements` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class AchievementRow {
+  static const String table = 'achievements';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colBadgeKey = 'badge_key';
+  static const String colTier = 'tier';
+  static const String colSourceKind = 'source_kind';
+  static const String colSourceId = 'source_id';
+  static const String colValueNum = 'value_num';
+  static const String colEarnedAt = 'earned_at';
+  static const String colIsPublic = 'is_public';
+
+  final String id;
+  final String userId;
+  final String badgeKey;
+  final String tier;
+  final String sourceKind;
+  final String? sourceId;
+  final double? valueNum;
+  final DateTime earnedAt;
+  final bool isPublic;
+
+  const AchievementRow({
+    required this.id,
+    required this.userId,
+    required this.badgeKey,
+    required this.tier,
+    required this.sourceKind,
+    this.sourceId,
+    this.valueNum,
+    required this.earnedAt,
+    required this.isPublic,
+  });
+
+  factory AchievementRow.fromJson(Map<String, dynamic> json) => AchievementRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    badgeKey: json['badge_key'] as String,
+    tier: json['tier'] as String,
+    sourceKind: json['source_kind'] as String,
+    sourceId: json['source_id'] as String?,
+    valueNum: (json['value_num'] as num?)?.toDouble(),
+    earnedAt: DateTime.parse(json['earned_at'] as String),
+    isPublic: (json['is_public'] as bool?) ?? false,
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colBadgeKey: badgeKey,
+    colTier: tier,
+    colSourceKind: sourceKind,
+    colSourceId: sourceId,
+    colValueNum: valueNum,
+    colEarnedAt: earnedAt.toIso8601String(),
+    colIsPublic: isPublic,
+  };
+}
+
 /// Row shape for the `body_metrics` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class BodyMetricRow {
@@ -1881,6 +1942,7 @@ class NotificationRow {
   static const String colActivityKind = 'activity_kind';
   static const String colActivityId = 'activity_id';
   static const String colWebPushSentAt = 'web_push_sent_at';
+  static const String colAchievementId = 'achievement_id';
 
   final String id;
   final String userId;
@@ -1898,6 +1960,7 @@ class NotificationRow {
   final String? activityKind;
   final String? activityId;
   final DateTime? webPushSentAt;
+  final String? achievementId;
 
   const NotificationRow({
     required this.id,
@@ -1916,6 +1979,7 @@ class NotificationRow {
     this.activityKind,
     this.activityId,
     this.webPushSentAt,
+    this.achievementId,
   });
 
   factory NotificationRow.fromJson(Map<String, dynamic> json) => NotificationRow(
@@ -1935,6 +1999,7 @@ class NotificationRow {
     activityKind: json['activity_kind'] as String?,
     activityId: json['activity_id'] as String?,
     webPushSentAt: json['web_push_sent_at'] == null ? null : DateTime.parse(json['web_push_sent_at'] as String),
+    achievementId: json['achievement_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1954,6 +2019,7 @@ class NotificationRow {
     colActivityKind: activityKind,
     colActivityId: activityId,
     colWebPushSentAt: webPushSentAt?.toIso8601String(),
+    colAchievementId: achievementId,
   };
 }
 

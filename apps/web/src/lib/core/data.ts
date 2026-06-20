@@ -40,7 +40,8 @@ import type {
 	GymExerciseModality,
 	GymProgressionScheme,
 	RouteMarker,
-	RouteMarkerKind
+	RouteMarkerKind,
+	Achievement
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -8146,4 +8147,111 @@ export async function markCheckpointDnf(params: {
 				{ onConflict: 'event_id,instance_start,bib' }
 			);
 	if (error) throw error;
+}
+
+// --- Achievements / badges ---
+// Reads go through RLS: the owner sees all of their rows, a non-owner sees only
+// is_public = true (the achievements_public_select policy). Awards are written
+// only by the SECURITY DEFINER award function — no client insert/delete path.
+
+/** A profile's public badges (or all badges, if you are the owner — RLS-gated). */
+export async function fetchUserBadges(userId: string): Promise<Achievement[]> {
+	const { data, error } = await supabase
+		.from(TABLES.achievements)
+		.select('*')
+		.eq('user_id', userId)
+		.order('earned_at', { ascending: false });
+	if (error) throw error;
+	return (data ?? []) as Achievement[];
+}
+
+/** The signed-in user's own badges (incl. private). Empty when signed out. */
+export async function fetchMyBadges(): Promise<Achievement[]> {
+	const { data: authUser } = await supabase.auth.getUser();
+	const uid = authUser.user?.id;
+	if (!uid) return [];
+	return fetchUserBadges(uid);
+}
+
+/** Flip a badge's public visibility. Owner-only (enforced by RLS). */
+export async function setBadgeVisibility(id: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.achievements)
+		.update({ is_public: isPublic })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+/** Public read for the share page — returns null for a private / missing id. */
+export async function fetchBadgeForShare(
+	id: string
+): Promise<{ badge: Achievement; ownerName: string | null } | null> {
+	const { data, error } = await supabase
+		.from(TABLES.achievements)
+		.select('*')
+		.eq('id', id)
+		.eq('is_public', true)
+		.maybeSingle();
+	if (error || !data) return null;
+	const badge = data as Achievement;
+	const { data: profile } = await supabase
+		.from('user_profiles')
+		.select('display_name')
+		.eq('id', badge.user_id)
+		.maybeSingle();
+	return { badge, ownerName: profile?.display_name ?? null };
+}
+
+export interface BadgeAwardFeedEntry {
+	badge: Achievement;
+	authorId: string;
+	authorName: string | null;
+	authorAvatarUrl: string | null;
+}
+
+/**
+ * Public badge awards from people the viewer follows, cursor-paged over
+ * (earned_at, id) like the run feed. Public rows only (RLS), newest first.
+ */
+export async function fetchFollowingBadgeAwards(opts?: {
+	limit?: number;
+	cursor?: { earned_at: string; id: string } | null;
+}): Promise<BadgeAwardFeedEntry[]> {
+	const limit = opts?.limit ?? 20;
+	const authors = await resolveFollowedAuthorIds(null);
+	if (authors.length === 0) return [];
+
+	let q = supabase
+		.from(TABLES.achievements)
+		.select('*')
+		.in('user_id', authors)
+		.eq('is_public', true)
+		.order('earned_at', { ascending: false })
+		.order('id', { ascending: false })
+		.limit(limit);
+	if (opts?.cursor) {
+		q = q.or(
+			`earned_at.lt.${opts.cursor.earned_at},and(earned_at.eq.${opts.cursor.earned_at},id.lt.${opts.cursor.id})`
+		);
+	}
+	const { data, error } = await q;
+	if (error) throw error;
+	const rows = (data ?? []) as Achievement[];
+	if (rows.length === 0) return [];
+
+	const ids = [...new Set(rows.map((r) => r.user_id))];
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', ids);
+	const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
+	return rows.map((badge) => {
+		const p = byId.get(badge.user_id);
+		return {
+			badge,
+			authorId: badge.user_id,
+			authorName: p?.display_name ?? null,
+			authorAvatarUrl: p?.avatar_url ?? null
+		};
+	});
 }

@@ -348,18 +348,26 @@ create table notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid references auth.users(id) on delete cascade not null,
   actor_id    uuid references auth.users(id) on delete set null,
-  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder')),
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder','plan_assigned','achievement')),
   run_id        uuid references runs(id) on delete cascade,
   comment_id    uuid references run_comments(id) on delete cascade,
   event_id      uuid references events(id) on delete cascade,
   plan_id       uuid references training_plans(id) on delete cascade,
   club_id       uuid references clubs(id) on delete cascade,
+  achievement_id uuid references achievements(id) on delete cascade,
   activity_kind text check (activity_kind is null or activity_kind in ('run','lift','meal')),
   activity_id   uuid,
   read_at       timestamptz,
   created_at    timestamptz not null default now()
 );
 ```
+
+The `achievement` kind (migration `20270208_001`) fires from the
+`notify_achievement_earned` AFTER-INSERT trigger on `achievements` for each new
+award, linked via the dedicated `achievement_id` FK (the `activity_kind` CHECK
+was left untouched rather than widened — a badge isn't an `activities`-view
+modality). Owner-only, no actor. A new in-app kind stays bell-only unless added
+to the email/push allowlists. `plan_assigned` was added by `20270107_001`.
 
 `(activity_kind, activity_id)` is the **polymorphic activity reference** (F15, migration `20261212_001`) added ahead of the Phase 4 social expansion (kudos on a lift, comment on a meal). `activity_kind` matches the `activities`-view modality tag; `activity_id` is a bare uuid (no single FK — it spans `runs` / `gym_workouts` / `food_log`). The run-notification triggers (`notify_run_kudos`, `notify_run_comment`, `notify_run_completed`) populate it as `('run', run_id)`, and existing run-linked rows were backfilled the same way. `run_id` is kept as the referential-integrity bridge for the run path until the social-lift work lands. The kind CHECK is consolidated into one authoritative constraint (F16, `20261211_001`); `event_reminder` was added by `20261130_001`.
 
@@ -896,6 +904,57 @@ Second index `personal_records_distance_time` on `(distance,
 best_time_s asc)` prepared for a future leaderboard view. RLS today
 scopes reads to the owner; broader read policy is a follow-up when
 the leaderboard UI lands.
+
+#### `achievements`
+
+Persisted badge awards (one row per `(user_id, badge_key, tier)`; the unique
+constraint lets a user accumulate tier history — earning silver later does not
+revoke the bronze). Shipped in `20270208_001_achievements.sql`. The badge
+*catalogue* (what badges exist + their thresholds) lives in code
+(`apps/web/src/lib/social/badges.ts`), not the DB — this table stores only
+awards.
+
+```sql
+create table achievements (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references auth.users(id) on delete cascade not null,
+  badge_key   text not null,            -- matches a catalogue entry id
+  tier        text not null default 'bronze'
+                check (tier in ('bronze','silver','gold','platinum')),
+  source_kind text not null
+                check (source_kind in ('pr','segment','streak','distance','plan')),
+  source_id   uuid,                     -- the run/effort/plan that triggered it (null for aggregates)
+  value_num   double precision,         -- the numeric that earned it (display + dedupe)
+  earned_at   timestamptz not null default now(),
+  is_public   boolean not null default true,
+  constraint achievements_user_badge_uk unique (user_id, badge_key, tier)
+);
+```
+
+`tier` + `source_kind` are narrow-union CHECK columns kept in lockstep with the
+`AchievementTier` / `AchievementSourceKind` TS unions via `check_constraint_unions.mjs`.
+
+**RLS:** `achievements_self_select` (owner reads own, incl. private) +
+`achievements_public_select` (`is_public = true` — the share page + a follower's
+feed/profile read public badges of others; fail-closed, no public policy = no
+leak) + owner-only `achievements_owner_update` (the `is_public` toggle). **No
+client INSERT/DELETE** — awards are written only by the award function below
+(mirrors `personal_records`). `grant ... to postgres` for the definer-owner.
+
+**Award function:** `award_achievements_for_user(p_user)` — SECURITY DEFINER,
+recomputes the full earned set (longest-run + lifetime distance off `runs`,
+best streak off run days, PR count off `personal_records`, completed-plan count
+off `training_plans`) and `insert ... on conflict do nothing`s the new awards,
+**returning only the newly-inserted rows**. Thresholds duplicate the
+`badges.ts` catalogue (the lockstep contract; `achievements_test.sql` pins it).
+A `pg_advisory_xact_lock` per user serialises concurrent fires. Triggers
+`runs_award_achievements` / `personal_records_award_achievements` /
+`training_plans_award_achievements` dispatch on the source tables; a
+`notify_achievement_earned` AFTER-INSERT trigger on `achievements` writes an
+owner notification (`kind = 'achievement'`, linked via the new
+`notifications.achievement_id` FK) for each new award. Backfill runs once in the
+migration tail over all existing users. See [features/achievements.md](../features/achievements.md)
++ [decisions.md § 164](../architecture/decisions.md).
 
 ---
 
@@ -1686,7 +1745,7 @@ SECURITY DEFINER (migration `20270106_001`, persona #46/#47). Lets an **active**
 
 ### `coach_roster_summary() → setof roster row`
 
-SECURITY DEFINER (migration `20270206_001`, coach_roster.md). The read-only aggregation behind the multi-athlete roster dashboard. Returns one row per **active-linked** athlete: `athlete_id, display_name, avatar_url, last_run_at, runs_7d, distance_7d_m, load_acute, load_chronic, active_plan_id, plan_completion_pct`. Consent is re-checked **inside** the definer body — a `mine` CTE (`coach_athletes where coach_id = auth.uid() and status='active'`) is the only membership gate (SECURITY DEFINER bypasses the caller's RLS, so the runs/plan coach-read policies can't be the gate here), so a non-coach gets zero rows and an unauthenticated caller **raises** (`not authenticated`, fail-closed). `load_acute` = 7-day distance-proxy stress sum (10 pts/km, mirroring `training_load.ts`'s distance fallback); `load_chronic` = the 28-day total / 4 (avg weekly), is_dnf runs excluded; the client computes the ACWR ratio + injury-risk band from those via the shared `coach_load` helper (the risk policy stays out of the SQL). `plan_completion_pct` mirrors `fetchAthletePlanOverview` (done = `completed_run_id is not null OR manually_completed`; denominator excludes `kind='rest'` + `skipped_at is not null`). **Returns no track bytes** — run row stats only; the raw GPS track stays owner-only (decisions §98 unchanged). `grant execute … to authenticated` (never anon). Backs `fetchCoachRosterSummary` on `/coaching` + the mobile `coaching_screen` roster card. Pinned by `coach_roster_summary_test.sql` (the auth boundary: active-only, ended/pending excluded, non-coach empty, unauthenticated raises, revocation immediate). See [decisions.md § 155](../architecture/decisions.md).
+SECURITY DEFINER (migration `20270206_001`, coach_roster.md). The read-only aggregation behind the multi-athlete roster dashboard. Returns one row per **active-linked** athlete: `athlete_id, display_name, avatar_url, last_run_at, runs_7d, distance_7d_m, load_acute, load_chronic, active_plan_id, plan_completion_pct`. Consent is re-checked **inside** the definer body — a `mine` CTE (`coach_athletes where coach_id = auth.uid() and status='active'`) is the only membership gate (SECURITY DEFINER bypasses the caller's RLS, so the runs/plan coach-read policies can't be the gate here), so a non-coach gets zero rows and an unauthenticated caller **raises** (`not authenticated`, fail-closed). `load_acute` = 7-day distance-proxy stress sum (10 pts/km, mirroring `training_load.ts`'s distance fallback); `load_chronic` = the 28-day total / 4 (avg weekly), is_dnf runs excluded; the client computes the ACWR ratio + injury-risk band from those via the shared `coach_load` helper (the risk policy stays out of the SQL). `plan_completion_pct` mirrors `fetchAthletePlanOverview` (done = `completed_run_id is not null OR manually_completed`; denominator excludes `kind='rest'` + `skipped_at is not null`). **Returns no track bytes** — run row stats only; the raw GPS track stays owner-only (decisions §98 unchanged). `grant execute … to authenticated` (never anon). Backs `fetchCoachRosterSummary` on `/coaching` + the mobile `coaching_screen` roster card. Pinned by `coach_roster_summary_test.sql` (the auth boundary: active-only, ended/pending excluded, non-coach empty, unauthenticated raises, revocation immediate). See [decisions.md § 162](../architecture/decisions.md).
 
 ### `latest_fitness_snapshot()`
 
