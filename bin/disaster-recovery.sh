@@ -238,7 +238,8 @@ else
 	dim "  PUBLIC_SUPABASE_URL"
 	dim "  PUBLIC_SUPABASE_ANON_KEY"
 	dim "  PUBLIC_MAPTILER_KEY"
-	dim "  PUBLIC_REVENUECAT_WEB_API_KEY  (if RevenueCat is wired)"
+	dim "  PUBLIC_REVENUECAT_WEB_CHECKOUT_URL  (if RevenueCat is wired)"
+	dim "  PUBLIC_REVENUECAT_WEB_PORTAL_URL    (optional)"
 	dim "  PUBLIC_SENTRY_DSN              (if Sentry is wired)"
 	read -rp "Press Enter once the secrets are saved. " _
 fi

@@ -114,7 +114,7 @@ Two Strava accounts (one as the "user", one as a "buddy" to exercise the privacy
 **What's needed:**
 - Stripe dashboard → switch to **Test mode**. Grab `pk_test_…` and `sk_test_…`.
 - RevenueCat → new sandbox project; paste Stripe `sk_test_…` into Integrations → Stripe. Create the `pro_monthly` product mapped to a Stripe test-mode price.
-- `PUBLIC_REVENUECAT_WEB_API_KEY` (RC sandbox public key) in `apps/web/.env.local`.
+- `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` (RC sandbox Web Paywall Link `https://pay.rev.cat/<token>`) in `apps/web/.env.local`; optional `PUBLIC_REVENUECAT_WEB_PORTAL_URL` for the manage-subscription link.
 - `REVENUECAT_WEBHOOK_SECRET` (RC webhook signing secret) in `apps/backend/.env.local`.
 - Optional but recommended: install `stripe` CLI for `stripe listen --forward-to http://127.0.0.1:54321/functions/v1/revenuecat-webhook`.
 

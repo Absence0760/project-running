@@ -60,7 +60,8 @@ Stripe's **test mode** is the canonical local-testing path. RevenueCat acts as a
 
 ```bash
 # apps/web/.env.local
-PUBLIC_REVENUECAT_WEB_API_KEY=rcb_xxx     # public sandbox web key
+PUBLIC_REVENUECAT_WEB_CHECKOUT_URL=https://pay.rev.cat/xxxxxxxx   # sandbox Web Paywall Link
+PUBLIC_REVENUECAT_WEB_PORTAL_URL=                                  # optional customer-portal link
 
 # apps/backend/.env.local
 REVENUECAT_WEBHOOK_SECRET=whsec_xxx        # sandbox webhook signing secret

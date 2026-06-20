@@ -4,7 +4,7 @@
 	import { formatPrice } from '$lib/format/format_price';
 	import { m } from '$lib/i18n/store.svelte';
 	import {
-		startProCheckout,
+		proCheckoutUrl,
 		managementUrl,
 		isRevenueCatConfigured,
 	} from '$lib/billing/revenuecat';
@@ -22,37 +22,25 @@
 
 	const isPro = $derived(auth.isPro);
 
-	async function handleGetPro() {
+	function handleGetPro() {
 		const userId = auth.user?.id;
 		if (!userId) {
 			showToast(m('upgrade.signInToUpgrade'), 'error');
 			return;
 		}
-		if (!isRevenueCatConfigured()) {
-			// Dev / preview builds without a RevenueCat key fall back to
-			// the original placeholder so the page stays usable end-to-
-			// end without a real billing account.
+		const url = proCheckoutUrl(userId, window.location.href);
+		if (!url) {
+			// Dev / preview builds without a RevenueCat checkout link fall
+			// back to the original placeholder so the page stays usable
+			// end-to-end without a real billing account.
 			showToast(m('upgrade.checkoutNotConfigured'), 'info');
 			return;
 		}
+		// Full-page redirect to the hosted checkout. On success RevenueCat
+		// redirects back to `redirect_url` (this page); the webhook flips
+		// the tier server-side and the reloaded page refetches the profile.
 		purchasing = true;
-		try {
-			const { purchased } = await startProCheckout(userId);
-			if (purchased) {
-				showToast(m('upgrade.welcomeToPro'), 'success');
-				// The revenuecat-webhook Edge Function flips the tier
-				// server-side; refetch the profile so the UI picks up the
-				// change without a full reload.
-				await auth.fetchUser();
-			}
-		} catch (err) {
-			showToast(
-				m('upgrade.checkoutFailed', { error: err instanceof Error ? err.message : String(err) }),
-				'error',
-			);
-		} finally {
-			purchasing = false;
-		}
+		window.location.href = url;
 	}
 
 	function handleDonate() {
@@ -61,33 +49,19 @@
 
 	/// Opens the billing portal where the Pro subscription was started.
 	/// Mobile purchases route through the App Store / Play Store — those
-	/// users need to cancel on-device. For web purchases the RevenueCat
-	/// SDK exposes a `managementURL` on CustomerInfo; we redirect there.
-	async function handleManageSubscription() {
-		const userId = auth.user?.id;
-		if (!userId) return;
+	/// users need to cancel on-device. For web purchases RevenueCat's
+	/// no-code customer portal authenticates the user by email, so we open
+	/// the hosted portal link directly (no per-user SDK call).
+	function handleManageSubscription() {
 		if (!isRevenueCatConfigured()) {
-			showToast(
-				m('upgrade.manageWhereStarted'),
-				'info',
-			);
+			showToast(m('upgrade.manageWhereStarted'), 'info');
 			return;
 		}
-		try {
-			const url = await managementUrl(userId);
-			if (url) {
-				window.open(url, '_blank', 'noopener,noreferrer');
-			} else {
-				showToast(
-					m('upgrade.noActiveWebSub'),
-					'info',
-				);
-			}
-		} catch (err) {
-			showToast(
-				m('upgrade.billingPortalFailed', { error: err instanceof Error ? err.message : String(err) }),
-				'error',
-			);
+		const url = managementUrl();
+		if (url) {
+			window.open(url, '_blank', 'noopener,noreferrer');
+		} else {
+			showToast(m('upgrade.noActiveWebSub'), 'info');
 		}
 	}
 </script>

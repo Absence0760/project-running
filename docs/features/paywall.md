@@ -273,15 +273,31 @@ secrets (`supabase secrets set REVENUECAT_WEBHOOK_SECRET=whsec_...`).
 
 ### Client → RevenueCat SDK
 
-**Web (shipped)**: `@revenuecat/purchases-js` is wired via
-`apps/web/src/lib/billing/revenuecat.ts`. `/settings/upgrade` "Get Pro" button
-calls `Purchases.purchase(...)` with the Supabase user id as the
-`appUserId`. The `managementURL` on `CustomerInfo` backs the
-"Manage subscription" button. Env-gated by `PUBLIC_REVENUECAT_WEB_API_KEY`;
-builds without the key fall back to the original "coming soon" toast so
-local dev and previews still compile. After a successful purchase the
-`revenuecat-webhook` Edge Function flips `subscription_tier` server-side
-and the web re-fetches the user profile via `auth.fetchUser()`.
+**Web (shipped)**: the web Pro flow uses RevenueCat's **hosted-checkout
+redirect**, not the embedded `@revenuecat/purchases-js` SDK. The SDK was a
+top-level static import that shipped ~178 KB gzipped into the
+`/settings/upgrade` bundle for two one-shot redirects; it was removed so
+that weight leaves the bundle entirely (see decisions.md + followups.md
+"Web bundle weight"). `apps/web/src/lib/billing/revenuecat.ts` is now a
+thin env-reading shell over the pure `revenuecat_links.ts` URL builder:
+
+- **Checkout**: `/settings/upgrade` "Get Pro" does a full-page redirect to
+  the project's Web Paywall Link, `proCheckoutUrl(userId, returnUrl)` →
+  `https://pay.rev.cat/<token>/<urlEncodedUserId>?redirect_url=<page>`.
+  The Supabase user id is the App User ID, so RevenueCat keys the purchase
+  to the identity the webhook sees. On success RevenueCat redirects back to
+  `/settings/upgrade`; the `revenuecat-webhook` Edge Function flips
+  `subscription_tier` server-side and the reloaded page picks up the new
+  tier from the auth store.
+- **Management**: "Manage subscription" opens RevenueCat's no-code customer
+  portal (`managementUrl()` → `PUBLIC_REVENUECAT_WEB_PORTAL_URL`), which
+  authenticates the user by email at the portal — no per-user SDK
+  `getCustomerInfo()` call.
+
+Env-gated by `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` (the portal URL is
+optional): an unconfigured build reports `configured = false` and the CTAs
+fall back to the "coming soon" / "manage where you started it" toasts so
+local dev and previews still compile and stay usable end-to-end.
 
 **Android (Flutter)**: use `purchases_flutter` package. Initialise in
 `main.dart` after sign-in with the user id as `appUserId`. The
@@ -301,7 +317,8 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_WEBHOOK_SECRET` | Supabase function env | HMAC signing secret from RevenueCat |
 | `REVENUECAT_API_KEY_IOS` | iOS app `.env` / CI secrets | RevenueCat project API key for iOS |
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
-| `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/billing/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
+| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | `apps/web/.env.local` / CI public env | Hosted Web Paywall Link base `https://pay.rev.cat/<token>` (read by `$lib/billing/revenuecat.ts`); unset → Pro CTA falls back to placeholder. **Public** — no secret/API key ships in the web bundle anymore |
+| `PUBLIC_REVENUECAT_WEB_PORTAL_URL` | `apps/web/.env.local` / CI public env | No-code customer-portal link for managing/cancelling a web subscription; optional, unset → "Manage subscription" shows a hint |
 
 ### Regional availability & international payments
 

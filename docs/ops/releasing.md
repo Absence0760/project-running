@@ -162,7 +162,8 @@ The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_AC
 | `PUBLIC_SUPABASE_URL` | Production Supabase REST URL (`https://api.threkir.com` once the custom domain is live). Inlined into the build. |
 | `PUBLIC_SUPABASE_ANON_KEY` | Supabase **publishable** key. Inlined into the build. |
 | `PUBLIC_MAPTILER_KEY` | MapTiler key shared with mobile + Wear OS. Inlined into the build. |
-| `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat web SDK key. Inlined into the build. |
+| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | RevenueCat hosted Web Paywall Link (`https://pay.rev.cat/<token>`). Inlined into the build; the prod-env guard fails the release if unset. |
+| `PUBLIC_REVENUECAT_WEB_PORTAL_URL` | RevenueCat no-code customer-portal link. Optional — empty degrades the manage-subscription button to a hint. |
 | `PUBLIC_SENTRY_DSN` | Frontend Sentry DSN. Optional — empty disables client-side capture. |
 | `APP_RELEASE` | `web@<version>` tag — passed as `PUBLIC_APP_RELEASE` for Sentry release tagging. Defaults to `dev`. |
 

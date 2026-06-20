@@ -38,7 +38,7 @@ test('passes for a real Supabase URL + non-empty anon key', () => {
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(r.ok, true);
 	assert.deepEqual(r.findings, []);
@@ -49,7 +49,7 @@ test('rejects an empty / undefined PUBLIC_SUPABASE_URL', () => {
 		PUBLIC_SUPABASE_URL: '',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(empty.ok, false);
 	assert.equal(empty.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -57,7 +57,7 @@ test('rejects an empty / undefined PUBLIC_SUPABASE_URL', () => {
 	const undef = checkProductionEnv({
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(undef.ok, false);
 	assert.equal(undef.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -68,7 +68,7 @@ test('rejects the CI bundle-budget placeholder URL', () => {
 		PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(r.ok, false);
 	assert.equal(r.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -86,7 +86,7 @@ test('rejects a loopback URL', () => {
 			PUBLIC_SUPABASE_URL: url,
 			PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 		});
 		assert.equal(r.ok, false, `expected reject for ${url}`);
 		assert.equal(r.findings[0].envVar, 'PUBLIC_SUPABASE_URL');
@@ -114,7 +114,7 @@ test('reports every missing required var together', () => {
 	const vars = r.findings.map((f) => f.envVar).sort();
 	assert.deepEqual(vars, [
 		'PUBLIC_MAPTILER_KEY',
-		'PUBLIC_REVENUECAT_WEB_API_KEY',
+		'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL',
 		'PUBLIC_SUPABASE_ANON_KEY',
 		'PUBLIC_SUPABASE_URL',
 	]);
@@ -129,24 +129,37 @@ test('rejects an empty PUBLIC_MAPTILER_KEY', () => {
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: '',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(r.ok, false);
 	assert.equal(r.findings[0].envVar, 'PUBLIC_MAPTILER_KEY');
 });
 
-test('rejects an empty PUBLIC_REVENUECAT_WEB_API_KEY', () => {
-	// `/settings/upgrade` initialises the RevenueCat web SDK with this
-	// key; an empty value disables the Pro purchase flow silently
-	// (no thrown error, just a no-op subscribe button). Fail the build.
+test('rejects an empty PUBLIC_REVENUECAT_WEB_CHECKOUT_URL', () => {
+	// `/settings/upgrade` redirects to this hosted-checkout link; an
+	// empty value disables the Pro purchase flow silently (the CTA
+	// degrades to a "not configured" toast). Fail the build.
 	const r = checkProductionEnv({
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: '',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: '',
 	});
 	assert.equal(r.ok, false);
-	assert.equal(r.findings[0].envVar, 'PUBLIC_REVENUECAT_WEB_API_KEY');
+	assert.equal(r.findings[0].envVar, 'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL');
+});
+
+test('does NOT enforce PUBLIC_REVENUECAT_WEB_PORTAL_URL (management portal is optional)', () => {
+	// The manage-subscription portal degrades to a hint when unset, so
+	// it must NOT block a build the way the checkout link does.
+	const r = checkProductionEnv({
+		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
+		// PUBLIC_REVENUECAT_WEB_PORTAL_URL deliberately omitted
+	});
+	assert.equal(r.ok, true);
 });
 
 test('does NOT enforce PUBLIC_SENTRY_DSN (error reporting is optional)', () => {
@@ -159,7 +172,7 @@ test('does NOT enforce PUBLIC_SENTRY_DSN (error reporting is optional)', () => {
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 		// PUBLIC_SENTRY_DSN deliberately omitted
 	});
 	assert.equal(r.ok, true);
@@ -173,7 +186,7 @@ test('trims whitespace before checking', () => {
 		PUBLIC_SUPABASE_URL: '   https://prod-project.supabase.co\n',
 		PUBLIC_SUPABASE_ANON_KEY: '   sb_publishable_real_key_12345\n',
 		PUBLIC_MAPTILER_KEY: '   real-maptiler-key\n',
-		PUBLIC_REVENUECAT_WEB_API_KEY: '   rcb_real_revenuecat_key\n',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: '   https://pay.rev.cat/abc123\n',
 	});
 	assert.equal(r.ok, true);
 });
@@ -192,7 +205,7 @@ test('CLI exits 0 + prints a proceed banner when env is valid', () => {
 		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(r.status, 0, `expected exit 0, got ${r.status}. stderr: ${r.stderr}`);
 	assert.match(r.stdout, /look real — proceeding/);
@@ -204,7 +217,7 @@ test('CLI exits 1 + writes the violation report to stderr when URL is empty', ()
 		PUBLIC_SUPABASE_URL: '',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(r.status, 1, `expected exit 1, got ${r.status}`);
 	assert.match(r.stderr, /release-web build refuses to start/);
@@ -226,7 +239,7 @@ test('CLI exits 1 on the CI placeholder URL', () => {
 		PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
 		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
 		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_API_KEY: 'rcb_real_revenuecat_key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
 	});
 	assert.equal(r.status, 1);
 	assert.match(r.stderr, /placeholder/i);

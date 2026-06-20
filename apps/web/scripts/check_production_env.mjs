@@ -20,11 +20,15 @@
  *     PNG renderer at prerender time and by the maplibre tile
  *     source at runtime; an empty key bakes broken map / share-
  *     image URLs into every public route + run page.
- *   - PUBLIC_REVENUECAT_WEB_API_KEY must be non-empty. Used by
- *     `/settings/upgrade` to initialise the RevenueCat web SDK; an
- *     empty key disables the Pro purchase flow silently.
+ *   - PUBLIC_REVENUECAT_WEB_CHECKOUT_URL must be non-empty. The hosted
+ *     Web Paywall Link `/settings/upgrade` redirects to; an empty value
+ *     disables the Pro purchase flow silently.
  *
  * NOT enforced (intentional):
+ *   - PUBLIC_REVENUECAT_WEB_PORTAL_URL — the manage-subscription portal
+ *     is optional. An empty value degrades the "Manage subscription"
+ *     button to a "manage where you started it" hint rather than
+ *     breaking the page.
  *   - PUBLIC_SENTRY_DSN — error reporting is optional. An empty DSN
  *     disables Sentry rather than breaking anything; small projects
  *     ship without it deliberately.
@@ -89,12 +93,12 @@ export function checkProductionEnv(env) {
 		});
 	}
 
-	const revenueCatKey = String(env.PUBLIC_REVENUECAT_WEB_API_KEY ?? '').trim();
-	if (!revenueCatKey) {
+	const revenueCatCheckout = String(env.PUBLIC_REVENUECAT_WEB_CHECKOUT_URL ?? '').trim();
+	if (!revenueCatCheckout) {
 		findings.push({
-			envVar: 'PUBLIC_REVENUECAT_WEB_API_KEY',
+			envVar: 'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL',
 			value: '<empty>',
-			reason: 'Missing / empty. The Pro purchase flow on /settings/upgrade silently disables itself when the SDK initialises without a key.',
+			reason: 'Missing / empty. The Pro purchase flow on /settings/upgrade silently disables itself when the hosted-checkout link is unset.',
 		});
 	}
 
@@ -128,7 +132,7 @@ export function formatGuardError(result) {
 	lines.push('  - PUBLIC_SUPABASE_URL');
 	lines.push('  - PUBLIC_SUPABASE_ANON_KEY');
 	lines.push('  - PUBLIC_MAPTILER_KEY');
-	lines.push('  - PUBLIC_REVENUECAT_WEB_API_KEY');
+	lines.push('  - PUBLIC_REVENUECAT_WEB_CHECKOUT_URL');
 	lines.push('');
 	lines.push(banner);
 	lines.push('');
