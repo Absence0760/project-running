@@ -8772,6 +8772,8 @@ export async function fetchFollowingBadgeAwards(opts?: {
 			authorAvatarUrl: p?.avatar_url ?? null
 		};
 	});
+}
+
 // ─────────────────────── Challenges & competitions ───────────────────────
 
 function challengeFromRow(row: {
@@ -8881,6 +8883,13 @@ export async function createChallenge(input: {
 			starts_at: input.starts_at,
 			ends_at: input.ends_at,
 			is_public: input.is_public ?? true
+		})
+		.select()
+		.single();
+	if (error) throw error;
+	return challengeFromRow(data);
+}
+
 // ─────────────────────── Charity fundraising (fundraising.md) ───────────────
 // A fundraiser is polymorphic over (run | event). The public page reads the
 // fundraiser row (RLS: visible when the anchor is public), the thermometer via
@@ -8948,7 +8957,7 @@ export async function createFundraiser(input: CreateFundraiserInput): Promise<Fu
 		.select('*')
 		.single();
 	if (error) throw error;
-	return challengeFromRow(data);
+	return fundraiserFromRow(data);
 }
 
 export async function updateChallenge(
@@ -9039,7 +9048,6 @@ export async function recomputeChallengeCompletion(id: string): Promise<void> {
 	} catch (e) {
 		console.debug('recomputeChallengeCompletion threw', e);
 	}
-	return fundraiserFromRow(data);
 }
 
 export async function updateFundraiser(

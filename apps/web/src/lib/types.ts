@@ -128,6 +128,8 @@ export type RaceProvider =
 
 export type RaceListing = Omit<RaceListingRow, 'provider'> & {
 	provider: RaceProvider;
+};
+
 // Community condition reports on a route (migration 20270212_001). `condition`
 // + `severity` are narrow unions enforced by CHECK constraints +
 // check_constraint_unions.mjs. Distinct from RouteMarker: any viewer (not just
