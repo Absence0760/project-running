@@ -11,7 +11,7 @@
 --     unaffected.
 
 begin;
-select plan(11);
+select plan(12);
 
 -- ── Fixtures: host (also club owner), buyer, stranger ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -160,15 +160,19 @@ select throws_ok(
   'a user-JWT cannot insert an event_orders row'
 );
 
--- And the buyer cannot flip the status of the order they can read. There is no
--- permissive client UPDATE policy, so the row is invisible to the UPDATE's RLS
--- USING filter and zero rows change — the status stays 'paid'. (The
--- lock_event_order_status trigger is the second defence layer for any future
--- mistakenly-added UPDATE policy; here RLS denies the row first, so the write
--- is a silent no-op rather than a 42501.) The invariant under test is the
--- OUTCOME: a user-JWT cannot move an order's status.
-update event_orders set status = 'refunded'
-  where id = 'dddd1111-0000-0000-0000-000000000001';
+-- And the buyer cannot flip the status of the order they can read. Slice P2
+-- (20270303_001) added a buyer UPDATE policy scoped to refund_initiated_at on
+-- their own paid order, so the row is now VISIBLE to the UPDATE's RLS filter —
+-- but the lock_event_order_status trigger rejects the status change with 42501.
+-- The invariant under test is unchanged (a user-JWT cannot move order status);
+-- the outcome is now an explicit throw rather than a silent zero-row no-op.
+select throws_ok(
+  $$ update event_orders set status = 'refunded'
+     where id = 'dddd1111-0000-0000-0000-000000000001' $$,
+  '42501',
+  null,
+  'a user-JWT UPDATE cannot flip event_orders.status (trigger rejects)'
+);
 
 -- Re-read as service role to confirm the status is untouched. Reset the JWT
 -- claims to the service role too — a lingering authenticated claims blob would
@@ -179,7 +183,7 @@ set local "request.jwt.claims" = '{"role":"service_role"}';
 select is(
   (select status from event_orders where id = 'dddd1111-0000-0000-0000-000000000001'),
   'paid',
-  'a user-JWT UPDATE cannot flip event_orders.status (stays paid)'
+  'event_orders.status stays paid after the rejected user-JWT UPDATE'
 );
 
 -- Positive control: the service role (the webhook) CAN move status — the lock
