@@ -1997,6 +1997,8 @@ export const messages = {
 	"live.badgeConnecting": "接続中…",
 	"live.badgeLive": "ライブ",
 	"live.badgeStale": "遅延",
+	"live.approximateBadge": "この付近で最後に確認 · おおよその位置",
+	"live.approximateSub": "おおよその位置 — プライバシーゾーン付近で最後に確認",
 	"live.updatedNow": "たった今更新",
 	"live.updatedSeconds": "{n}秒前に更新",
 	"live.updatedMinutes": "{n}分前に更新",

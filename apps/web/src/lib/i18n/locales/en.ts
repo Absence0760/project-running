@@ -2010,6 +2010,8 @@ export const en = {
 	"live.badgeConnecting": "Connecting…",
 	"live.badgeLive": "LIVE",
 	"live.badgeStale": "DELAYED",
+	"live.approximateBadge": "Last seen near here · approximate",
+	"live.approximateSub": "Approximate — last seen near a privacy zone",
 	"live.updatedNow": "Updated just now",
 	"live.updatedSeconds": "Updated {n}s ago",
 	"live.updatedMinutes": "Updated {n} min ago",

@@ -11,6 +11,11 @@ export interface LivePing {
 	bpm?: number | null;
 	ele?: number | null;
 	sent_at_ms?: number;
+	/// True for the single privacy-zone last-seen ping: a ~1 km-coarsened
+	/// in-zone fix the DB trigger keeps for SAR (migration 20270121_001).
+	/// The spectator surface must render it as approximate, never as a
+	/// precise current position.
+	coarse?: boolean | null;
 }
 
 /// Strip a trailing slash from a base URL so concatenated paths

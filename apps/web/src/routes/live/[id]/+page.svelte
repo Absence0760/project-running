@@ -63,6 +63,12 @@
 	let freshnessTicker: ReturnType<typeof setInterval> | null = null;
 	const freshness = $derived(lastPingAtMs != null ? freshnessFor(lastPingAtMs, nowMs) : null);
 	const isStale = $derived(freshness?.stale ?? false);
+	// True once the latest rendered ping carries the privacy-zone
+	// `coarse` flag (migration 20270121_001): a ~1 km-coarsened in-zone
+	// last-seen fix the DB keeps for SAR. When set, the dot is rendered
+	// as approximate and a "last seen near here" badge is shown — a SAR
+	// watcher must not read the dot as a precise current position.
+	let lastPingCoarse = $state(false);
 
 	// Next cut-off card state. Only wired when the run links a PUBLIC route
 	// (public_runs nulls route_id otherwise) that carries >=1 cutoff marker.
@@ -160,6 +166,9 @@
 		} else {
 			runnerMarker.setLngLat([lng, lat]);
 		}
+		// The coarse last-seen fix renders with a distinct hollow ring so
+		// it reads as approximate next to the solid live dot.
+		runnerMarker.getElement().classList.toggle('coarse', lastPingCoarse);
 	}
 
 	function pushPing(ping: {
@@ -169,12 +178,14 @@
 		elapsed_s?: number | null;
 		sent_at_ms?: number | null;
 		at?: string | null;
+		coarse?: boolean | null;
 	}) {
 		// Stamp freshness from the ping's own clock — `sent_at_ms` on the
 		// Go-hub path, the `at` column on the Supabase path. Finite-guard
 		// so a malformed `at` doesn't reset the age to NaN.
 		const ts = ping.sent_at_ms ?? (ping.at != null ? Date.parse(ping.at) : NaN);
 		if (Number.isFinite(ts)) lastPingAtMs = ts as number;
+		lastPingCoarse = ping.coarse === true;
 		traceCoords.push([ping.lng, ping.lat]);
 		// Stat-strip values update regardless of map readiness — a slow or
 		// failing map style fetch (e.g. MapTiler down, missing key) must
@@ -231,7 +242,7 @@
 		}
 		const { data: rows, error } = await supabase
 			.from('live_run_pings')
-			.select('lat, lng, distance_m, elapsed_s, at')
+			.select('lat, lng, distance_m, elapsed_s, at, coarse')
 			.eq('run_id', data.id)
 			.order('at', { ascending: true });
 		if (error || !rows || rows.length === 0) return false;
@@ -269,6 +280,7 @@
 						distance_m: p.distance_m ?? null,
 						elapsed_s: p.elapsed_s ?? null,
 						sent_at_ms: p.sent_at_ms ?? null,
+						coarse: p.coarse ?? null,
 					});
 					if (status !== 'live') status = 'live';
 				},
@@ -297,6 +309,7 @@
 						distance_m: number | null;
 						elapsed_s: number | null;
 						at: string | null;
+						coarse: boolean | null;
 					};
 					pushPing(row);
 					if (status !== 'live') status = 'live';
@@ -648,6 +661,12 @@
 				{m('live.badgeConnectionLost')}
 			{/if}
 		</div>
+		{#if status === 'live' && lastPingCoarse}
+			<span class="approx-badge" data-testid="coarse-badge">
+				<span class="material-symbols" aria-hidden="true">location_searching</span>
+				{m('live.approximateBadge')}
+			</span>
+		{/if}
 	</header>
 
 	{#if status === 'not-found'}
@@ -673,7 +692,13 @@
 						{:else if status === 'demo'}
 							{m('live.subSynthesisedDemo')}
 						{:else if status === 'live'}
-							{freshness ? freshnessText(freshness) : m('live.subLiveFromDevice')}
+							{#if lastPingCoarse}
+								{m('live.approximateSub')}
+							{:else if freshness}
+								{freshnessText(freshness)}
+							{:else}
+								{m('live.subLiveFromDevice')}
+							{/if}
 						{:else if status === 'finished'}
 							{m('live.subRunFinished')}
 						{:else}
@@ -1191,5 +1216,36 @@
 		border: 3px solid var(--color-surface);
 		box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 30%, transparent),
 			0 2px 6px rgba(0, 0, 0, 0.3);
+	}
+
+	/* Coarse last-seen marker: a hollow amber ring with a wide soft halo,
+	 * deliberately distinct from the solid live dot so a SAR watcher reads
+	 * it as an approximate ~1 km cell, not a precise current position. */
+	:global(.runner-dot.coarse) {
+		width: 22px;
+		height: 22px;
+		background: transparent;
+		border-color: var(--color-warning);
+		box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-warning) 22%, transparent),
+			0 2px 6px rgba(0, 0, 0, 0.3);
+	}
+
+	.approx-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		margin-inline-start: var(--space-sm);
+		padding: var(--space-xs) var(--space-md);
+		border-radius: 9999px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning);
+		border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+	}
+	.approx-badge .material-symbols {
+		font-size: 1rem;
 	}
 </style>
