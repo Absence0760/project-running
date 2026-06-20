@@ -498,6 +498,15 @@ TypeScript unit tests for the pure segment-effort compute (`lib/segments.ts`, de
 
 The synthetic `straightTrack` helper builds a meridian-aligned sequence of `(lat, lng, ts)` so haversine cumulative distance matches `(i * stepM)` to within ~0.5m.
 
+### `apps/web/src/lib/learn/*.test.ts` — Learn/guides unit tests (`learn.md`, decisions §161)
+
+Run with `npx tsx --test src/lib/learn/guides.test.ts src/lib/learn/learn_meta.test.ts` from `apps/web`. Web-only (no Dart twin).
+
+- **`guides.test.ts`** — the build guard for a new guide: reads the `.md` files off disk (the glob index isn't tsx-resolvable) and parses their YAML frontmatter, asserting every guide has the required fields (title / description / category / slug / order / updated), `slug === filename stem`, `updated` is an ISO date, `category` is in `CATEGORIES`, `cta.feature` (when present) is a known CTA target, and English slugs are unique. A malformed guide fails CI here, not in prod.
+- **`learn_meta.test.ts`** — the SEO wire shape: `normaliseSiteUrl` / `buildLearnCanonical` (trailing-slash + leading-slash normalisation, root-relative when base empty), `buildGuideTitle` / `buildGuideDescription` (site-name suffix + empty fallback), and `buildGuideJsonLd` (valid `Article` JSON, Home→Learn→category→article breadcrumb, and the `<`/`>`/`&` escape so a guide title can't break out of the `<script>` tag).
+
+`sitemap.test.ts` is also extended with `learnEntries` coverage (hub 0.8 / category 0.6 / guide 0.7 + frontmatter lastmod, and the lastmod survives `buildSitemap`).
+
 ### `apps/web/src/lib/privacy.test.ts` — 8 tests
 
 TypeScript unit tests for the pure privacy-zone clipper (`lib/privacy.ts`, decisions §33). Run with `npx tsx --test src/lib/privacy.test.ts` from `apps/web`.
@@ -742,6 +751,12 @@ tests-e2e/
   fixtures/                    — globalSetup, helpers, seeded constants, users
   landing.spec.ts              — /
   explore.spec.ts              — /explore (redirects to /routes?tab=explore)
+  learn/                       — public Learn/guides surface (anon storageState; learn.md, decisions §161)
+    hub.spec.ts                — /learn renders the hub heading + ≥1 guide card; a card link resolves to /learn/[slug] (no 404)
+    article.spec.ts            — /learn/road-running-101 renders the prose body, breadcrumb, CTA block; feature CTA href = /plans/new + sign-up href = /login?signup=1
+    seo.spec.ts                — article <head>: <title> contains the guide title + "Threkir", absolute canonical, og:title/description/type=article/image, Article JSON-LD in the DOM
+    category.spec.ts           — /learn/category/getting-started lists that category's guides; unknown category → error UI
+    cta-links-resolve.spec.ts  — anon clicks the feature CTA → lands on /login (auth funnel), not a hard 404
   dashboard-period.spec.ts     — /dashboard/period/[type]/[date] (week + month deep links + invalid-date fallback)
   login.spec.ts                — /login (failed sign-in; sign-up: ?signup=1; forgot-password full round-trip via Mailpit; happy sign-in path in cross-cutting/sign-in-out)
   dashboard.spec.ts            — /dashboard

@@ -5,6 +5,7 @@ import {
 	buildSitemap,
 	changefreqForRunCount,
 	composeEntries,
+	learnEntries,
 	normaliseBase,
 	priorityForRunCount,
 	xmlEscape,
@@ -237,4 +238,49 @@ test('composeEntries → buildSitemap produces a well-formed XML body the spec a
 	assert.ok(xml.includes('<loc>https://threkir.com/</loc>'));
 	assert.ok(xml.includes('<loc>https://threkir.com/share/route/route-uuid-1</loc>'));
 	assert.ok(xml.includes('<loc>https://threkir.com/share/run/run-uuid-1</loc>'));
+});
+
+// ---------------- learnEntries ----------------
+
+test('learnEntries — emits the hub, each category, and each guide', () => {
+	const entries = learnEntries(
+		'https://threkir.com/',
+		[
+			{ slug: 'road-running-101', updated: '2026-06-15' },
+			{ slug: 'couch-to-5k', updated: '2026-06-15' },
+		],
+		['getting-started', 'gear'],
+	);
+	const locs = entries.map((e) => e.loc);
+	assert.ok(locs.includes('https://threkir.com/learn'));
+	assert.ok(locs.includes('https://threkir.com/learn/category/getting-started'));
+	assert.ok(locs.includes('https://threkir.com/learn/category/gear'));
+	assert.ok(locs.includes('https://threkir.com/learn/road-running-101'));
+	assert.ok(locs.includes('https://threkir.com/learn/couch-to-5k'));
+});
+
+test('learnEntries — hub/category/guide carry the documented priorities + lastmod', () => {
+	const entries = learnEntries(
+		'https://threkir.com',
+		[{ slug: 'road-running-101', updated: '2026-06-15' }],
+		['getting-started'],
+	);
+	const hub = entries.find((e) => e.loc.endsWith('/learn'));
+	const category = entries.find((e) => e.loc.endsWith('/category/getting-started'));
+	const guide = entries.find((e) => e.loc.endsWith('/road-running-101'));
+	assert.equal(hub?.priority, 0.8);
+	assert.equal(category?.priority, 0.6);
+	assert.equal(guide?.priority, 0.7);
+	assert.equal(guide?.lastmod, '2026-06-15');
+	assert.equal(guide?.changefreq, 'monthly');
+});
+
+test('learnEntries → buildSitemap emits the guide lastmod', () => {
+	const xml = buildSitemap(
+		learnEntries('https://threkir.com', [{ slug: 'road-running-101', updated: '2026-06-15' }], [
+			'getting-started',
+		]),
+	);
+	assert.ok(xml.includes('<loc>https://threkir.com/learn/road-running-101</loc>'));
+	assert.ok(xml.includes('<lastmod>2026-06-15</lastmod>'));
 });

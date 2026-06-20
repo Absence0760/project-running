@@ -147,6 +147,7 @@
 		shellLessExact.includes(path) ||
 		path.startsWith('/share/') ||
 		path.startsWith('/live/') ||
+		path.startsWith('/learn') ||
 		path.startsWith('/clubs/join/') ||
 		path.startsWith('/coaching/accept/');
 

@@ -121,6 +121,35 @@ export function composeEntries(
 	return entries;
 }
 
+/// Learn-hub sitemap entries: the hub, one per category, one per guide.
+/// Pure — the caller passes plain `{ slug, updated, category }` rows (the
+/// build-time guide index from `$lib/learn/guides`) + the category ids so
+/// this module stays import.meta.glob-free and tsx-testable. The Learn
+/// entries are build-time constants, so the endpoint emits them even when
+/// the Supabase fetch for routes/runs fails.
+export function learnEntries(
+	base: string,
+	guides: Array<{ slug: string; updated?: string | null }>,
+	categoryIds: string[],
+): SitemapEntry[] {
+	const b = normaliseBase(base);
+	const entries: SitemapEntry[] = [
+		{ loc: `${b}/learn`, changefreq: 'weekly', priority: 0.8 },
+	];
+	for (const id of categoryIds) {
+		entries.push({ loc: `${b}/learn/category/${id}`, changefreq: 'weekly', priority: 0.6 });
+	}
+	for (const g of guides) {
+		entries.push({
+			loc: `${b}/learn/${g.slug}`,
+			lastmod: g.updated ?? undefined,
+			changefreq: 'monthly',
+			priority: 0.7,
+		});
+	}
+	return entries;
+}
+
 /// Tally `public_runs.route_id` into a Map keyed by route_id. Used
 /// by the sitemap endpoint to popularity-weight routes. Rows with a
 /// null `route_id` (the most common case — most runs aren't matched

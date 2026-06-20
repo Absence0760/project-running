@@ -2,7 +2,14 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
-import { buildRunCountByRouteId, buildSitemap, composeEntries } from '$lib/share/sitemap';
+import {
+	buildRunCountByRouteId,
+	buildSitemap,
+	composeEntries,
+	learnEntries,
+} from '$lib/share/sitemap';
+import { listGuides } from '$lib/learn/guides';
+import { CATEGORIES } from '$lib/learn/categories';
 
 // Build-time sitemap. `adapter-static` runs this once during the
 // production build because of `prerender = true`; the resulting
@@ -90,7 +97,17 @@ export const GET: RequestHandler = async () => {
 		}
 	}
 
-	const body = buildSitemap(composeEntries(base, routes, runs, runCountByRouteId));
+	// Learn entries are build-time constants from the static guide index,
+	// so they ship even if the Supabase fetch above failed.
+	const learn = learnEntries(
+		base,
+		listGuides().map((g) => ({ slug: g.slug, updated: g.updated })),
+		CATEGORIES.map((c) => c.id),
+	);
+	const body = buildSitemap([
+		...composeEntries(base, routes, runs, runCountByRouteId),
+		...learn,
+	]);
 	return new Response(body, {
 		headers: {
 			'content-type': 'application/xml; charset=utf-8',
