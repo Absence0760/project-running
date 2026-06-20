@@ -12738,6 +12738,102 @@ abstract class AppLocalizations {
   /// **'Save failed: {error}'**
   String gearFormSaveError(String error);
 
+  /// Heading for the per-shoe wear-observation log in the gear edit form
+  ///
+  /// In en, this message translates to:
+  /// **'Wear log'**
+  String get gearWearLogHeading;
+
+  /// Subtitle explaining the wear log
+  ///
+  /// In en, this message translates to:
+  /// **'Note how this gear is ageing over time — outsole wear, a dead midsole, a fraying upper.'**
+  String get gearWearLogHint;
+
+  /// Empty state for the wear log
+  ///
+  /// In en, this message translates to:
+  /// **'No wear observations yet.'**
+  String get gearWearLogEmpty;
+
+  /// Label for the wear-observation note field
+  ///
+  /// In en, this message translates to:
+  /// **'Observation'**
+  String get gearWearLogAddNote;
+
+  /// Hint for the wear-observation note field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. outsole lugs worn smooth on the heel'**
+  String get gearWearLogNoteHint;
+
+  /// Label for the optional wear-area dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get gearWearLogArea;
+
+  /// No-area choice in the wear-area dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'—'**
+  String get gearWearLogAreaNone;
+
+  /// Outsole wear area
+  ///
+  /// In en, this message translates to:
+  /// **'Outsole'**
+  String get gearWearLogAreaOutsole;
+
+  /// Midsole wear area
+  ///
+  /// In en, this message translates to:
+  /// **'Midsole'**
+  String get gearWearLogAreaMidsole;
+
+  /// Upper wear area
+  ///
+  /// In en, this message translates to:
+  /// **'Upper'**
+  String get gearWearLogAreaUpper;
+
+  /// Other wear area
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get gearWearLogAreaOther;
+
+  /// Button to add a wear observation
+  ///
+  /// In en, this message translates to:
+  /// **'Add observation'**
+  String get gearWearLogAdd;
+
+  /// Button label while a wear observation is being added
+  ///
+  /// In en, this message translates to:
+  /// **'Adding…'**
+  String get gearWearLogAdding;
+
+  /// Tooltip to delete a wear observation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete observation'**
+  String get gearWearLogDelete;
+
+  /// Banner when adding a wear observation fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add observation: {error}'**
+  String gearWearLogAddError(String error);
+
+  /// Banner when deleting a wear observation fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete observation: {error}'**
+  String gearWearLogDeleteError(String error);
+
   /// Tooltip on the notification bell
   ///
   /// In en, this message translates to:

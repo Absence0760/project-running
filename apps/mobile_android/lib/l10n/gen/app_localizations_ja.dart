@@ -7266,6 +7266,59 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get gearWearLogHeading => '摩耗ログ';
+
+  @override
+  String get gearWearLogHint =>
+      'このギアの経年変化を記録します — アウトソールの摩耗、ヘタったミッドソール、ほつれたアッパーなど。';
+
+  @override
+  String get gearWearLogEmpty => 'まだ摩耗の記録がありません。';
+
+  @override
+  String get gearWearLogAddNote => '観察メモ';
+
+  @override
+  String get gearWearLogNoteHint => '例: かかとのアウトソールがすり減った';
+
+  @override
+  String get gearWearLogArea => '部位';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'アウトソール';
+
+  @override
+  String get gearWearLogAreaMidsole => 'ミッドソール';
+
+  @override
+  String get gearWearLogAreaUpper => 'アッパー';
+
+  @override
+  String get gearWearLogAreaOther => 'その他';
+
+  @override
+  String get gearWearLogAdd => '観察メモを追加';
+
+  @override
+  String get gearWearLogAdding => '追加中…';
+
+  @override
+  String get gearWearLogDelete => '観察メモを削除';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return '観察メモを追加できませんでした: $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return '観察メモを削除できませんでした: $error';
+  }
+
+  @override
   String get notificationBellTooltip => '通知';
 
   @override

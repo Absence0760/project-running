@@ -7661,6 +7661,59 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get gearWearLogHeading => 'Registro de desgaste';
+
+  @override
+  String get gearWearLogHint =>
+      'Anote como este equipamento está envelhecendo — desgaste do solado, entressola morta, cabedal puído.';
+
+  @override
+  String get gearWearLogEmpty => 'Nenhuma observação de desgaste ainda.';
+
+  @override
+  String get gearWearLogAddNote => 'Observação';
+
+  @override
+  String get gearWearLogNoteHint => 'ex.: cravos do solado gastos no calcanhar';
+
+  @override
+  String get gearWearLogArea => 'Área';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'Solado';
+
+  @override
+  String get gearWearLogAreaMidsole => 'Entressola';
+
+  @override
+  String get gearWearLogAreaUpper => 'Cabedal';
+
+  @override
+  String get gearWearLogAreaOther => 'Outro';
+
+  @override
+  String get gearWearLogAdd => 'Adicionar observação';
+
+  @override
+  String get gearWearLogAdding => 'Adicionando…';
+
+  @override
+  String get gearWearLogDelete => 'Excluir observação';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return 'Não foi possível adicionar a observação: $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return 'Não foi possível excluir a observação: $error';
+  }
+
+  @override
   String get notificationBellTooltip => 'Notificações';
 
   @override
@@ -17966,6 +18019,59 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String gearFormSaveError(String error) {
     return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get gearWearLogHeading => 'Registro de desgaste';
+
+  @override
+  String get gearWearLogHint =>
+      'Anote como este equipamento está envelhecendo — desgaste do solado, entressola morta, cabedal puído.';
+
+  @override
+  String get gearWearLogEmpty => 'Nenhuma observação de desgaste ainda.';
+
+  @override
+  String get gearWearLogAddNote => 'Observação';
+
+  @override
+  String get gearWearLogNoteHint => 'ex.: cravos do solado gastos no calcanhar';
+
+  @override
+  String get gearWearLogArea => 'Área';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'Solado';
+
+  @override
+  String get gearWearLogAreaMidsole => 'Entressola';
+
+  @override
+  String get gearWearLogAreaUpper => 'Cabedal';
+
+  @override
+  String get gearWearLogAreaOther => 'Outro';
+
+  @override
+  String get gearWearLogAdd => 'Adicionar observação';
+
+  @override
+  String get gearWearLogAdding => 'Adicionando…';
+
+  @override
+  String get gearWearLogDelete => 'Excluir observação';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return 'Não foi possível adicionar a observação: $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return 'Não foi possível excluir a observação: $error';
   }
 
   @override

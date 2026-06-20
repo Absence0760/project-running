@@ -7680,6 +7680,60 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get gearWearLogHeading => 'Journal d\'usure';
+
+  @override
+  String get gearWearLogHint =>
+      'Notez comment cet équipement vieillit — semelle extérieure usée, amorti mort, tige effilochée.';
+
+  @override
+  String get gearWearLogEmpty => 'Aucune observation d\'usure pour l\'instant.';
+
+  @override
+  String get gearWearLogAddNote => 'Observation';
+
+  @override
+  String get gearWearLogNoteHint =>
+      'ex. crampons de la semelle lissés au talon';
+
+  @override
+  String get gearWearLogArea => 'Zone';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'Semelle extérieure';
+
+  @override
+  String get gearWearLogAreaMidsole => 'Amorti';
+
+  @override
+  String get gearWearLogAreaUpper => 'Tige';
+
+  @override
+  String get gearWearLogAreaOther => 'Autre';
+
+  @override
+  String get gearWearLogAdd => 'Ajouter une observation';
+
+  @override
+  String get gearWearLogAdding => 'Ajout…';
+
+  @override
+  String get gearWearLogDelete => 'Supprimer l\'observation';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return 'Impossible d\'ajouter l\'observation : $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return 'Impossible de supprimer l\'observation : $error';
+  }
+
+  @override
   String get notificationBellTooltip => 'Notifications';
 
   @override

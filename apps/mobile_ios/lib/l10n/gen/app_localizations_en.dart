@@ -7587,6 +7587,59 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get gearWearLogHeading => 'Wear log';
+
+  @override
+  String get gearWearLogHint =>
+      'Note how this gear is ageing over time — outsole wear, a dead midsole, a fraying upper.';
+
+  @override
+  String get gearWearLogEmpty => 'No wear observations yet.';
+
+  @override
+  String get gearWearLogAddNote => 'Observation';
+
+  @override
+  String get gearWearLogNoteHint => 'e.g. outsole lugs worn smooth on the heel';
+
+  @override
+  String get gearWearLogArea => 'Area';
+
+  @override
+  String get gearWearLogAreaNone => '—';
+
+  @override
+  String get gearWearLogAreaOutsole => 'Outsole';
+
+  @override
+  String get gearWearLogAreaMidsole => 'Midsole';
+
+  @override
+  String get gearWearLogAreaUpper => 'Upper';
+
+  @override
+  String get gearWearLogAreaOther => 'Other';
+
+  @override
+  String get gearWearLogAdd => 'Add observation';
+
+  @override
+  String get gearWearLogAdding => 'Adding…';
+
+  @override
+  String get gearWearLogDelete => 'Delete observation';
+
+  @override
+  String gearWearLogAddError(String error) {
+    return 'Couldn\'t add observation: $error';
+  }
+
+  @override
+  String gearWearLogDeleteError(String error) {
+    return 'Couldn\'t delete observation: $error';
+  }
+
+  @override
   String get notificationBellTooltip => 'Notifications';
 
   @override

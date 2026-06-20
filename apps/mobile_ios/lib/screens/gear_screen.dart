@@ -129,6 +129,7 @@ class _GearScreenState extends State<GearScreen> {
       preferences: widget.preferences,
       kind: row['kind'] as String,
       existing: row,
+      api: widget.api,
     );
     if (result != null) await _maybeSync();
   }

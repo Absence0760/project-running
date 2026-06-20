@@ -10290,6 +10290,80 @@
       }
     }
   },
+  "gearWearLogHeading": "Wear log",
+  "@gearWearLogHeading": {
+    "description": "Heading for the per-shoe wear-observation log in the gear edit form"
+  },
+  "gearWearLogHint": "Note how this gear is ageing over time — outsole wear, a dead midsole, a fraying upper.",
+  "@gearWearLogHint": {
+    "description": "Subtitle explaining the wear log"
+  },
+  "gearWearLogEmpty": "No wear observations yet.",
+  "@gearWearLogEmpty": {
+    "description": "Empty state for the wear log"
+  },
+  "gearWearLogAddNote": "Observation",
+  "@gearWearLogAddNote": {
+    "description": "Label for the wear-observation note field"
+  },
+  "gearWearLogNoteHint": "e.g. outsole lugs worn smooth on the heel",
+  "@gearWearLogNoteHint": {
+    "description": "Hint for the wear-observation note field"
+  },
+  "gearWearLogArea": "Area",
+  "@gearWearLogArea": {
+    "description": "Label for the optional wear-area dropdown"
+  },
+  "gearWearLogAreaNone": "—",
+  "@gearWearLogAreaNone": {
+    "description": "No-area choice in the wear-area dropdown"
+  },
+  "gearWearLogAreaOutsole": "Outsole",
+  "@gearWearLogAreaOutsole": {
+    "description": "Outsole wear area"
+  },
+  "gearWearLogAreaMidsole": "Midsole",
+  "@gearWearLogAreaMidsole": {
+    "description": "Midsole wear area"
+  },
+  "gearWearLogAreaUpper": "Upper",
+  "@gearWearLogAreaUpper": {
+    "description": "Upper wear area"
+  },
+  "gearWearLogAreaOther": "Other",
+  "@gearWearLogAreaOther": {
+    "description": "Other wear area"
+  },
+  "gearWearLogAdd": "Add observation",
+  "@gearWearLogAdd": {
+    "description": "Button to add a wear observation"
+  },
+  "gearWearLogAdding": "Adding…",
+  "@gearWearLogAdding": {
+    "description": "Button label while a wear observation is being added"
+  },
+  "gearWearLogDelete": "Delete observation",
+  "@gearWearLogDelete": {
+    "description": "Tooltip to delete a wear observation"
+  },
+  "gearWearLogAddError": "Couldn't add observation: {error}",
+  "@gearWearLogAddError": {
+    "description": "Banner when adding a wear observation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "gearWearLogDeleteError": "Couldn't delete observation: {error}",
+  "@gearWearLogDeleteError": {
+    "description": "Banner when deleting a wear observation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "notificationBellTooltip": "Notifications",
   "@notificationBellTooltip": {
     "description": "Tooltip on the notification bell"
