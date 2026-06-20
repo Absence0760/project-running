@@ -2449,6 +2449,60 @@ export type Database = {
         }
         Relationships: []
       }
+      route_conditions: {
+        Row: {
+          condition: string
+          created_at: string
+          id: string
+          lat: number | null
+          lng: number | null
+          note: string | null
+          position_m: number | null
+          route_id: string
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          condition: string
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          note?: string | null
+          position_m?: number | null
+          route_id: string
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          condition?: string
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          note?: string | null
+          position_m?: number | null
+          route_id?: string
+          severity?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_conditions_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_conditions_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_markers: {
         Row: {
           created_at: string
@@ -4585,6 +4639,27 @@ export type Database = {
           p_target_kind: string
         }
         Returns: number
+      }
+      route_conditions_for_viewer: {
+        Args: { p_route_id: string }
+        Returns: {
+          condition: string
+          created_at: string
+          id: string
+          lat: number | null
+          lng: number | null
+          note: string | null
+          position_m: number | null
+          route_id: string
+          severity: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "route_conditions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       route_markers_for_viewer: {
         Args: { p_route_id: string }

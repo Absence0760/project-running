@@ -53,7 +53,10 @@ import type {
 	FundraiserFeedEntry,
 	FundraiserTotals,
 	RaceListing,
-	RaceProvider
+	RaceProvider,
+	RouteCondition,
+	RouteConditionKind,
+	RouteConditionSeverity
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -5675,6 +5678,66 @@ export async function updateRouteMarker(
 
 export async function deleteRouteMarker(id: string): Promise<void> {
 	const { error } = await supabase.from(TABLES.route_markers).delete().eq('id', id);
+	if (error) throw error;
+}
+
+// --- Route condition reports (migration 20270215_001) ---
+
+function asRouteCondition(row: Record<string, unknown>): RouteCondition {
+	return {
+		...row,
+		condition: row.condition as RouteConditionKind,
+		severity: row.severity as RouteConditionSeverity
+	} as RouteCondition;
+}
+
+/// Condition reports for a route, newest first. Reads through
+/// `route_conditions_for_viewer`, which gates visibility (owner / public /
+/// club member) AND nulls the anchor of any report inside the owner's privacy
+/// zones for a non-owner — the condition analogue of `route_markers_for_viewer`.
+/// Fails closed (empty list) on error so a redaction failure never leaks.
+export async function fetchRouteConditions(routeId: string): Promise<RouteCondition[]> {
+	const { data, error } = await supabase.rpc('route_conditions_for_viewer', {
+		p_route_id: routeId
+	});
+	if (error) {
+		console.warn('route_conditions_for_viewer failed; failing closed (no conditions)', error);
+		return [];
+	}
+	return ((data ?? []) as Record<string, unknown>[]).map(asRouteCondition);
+}
+
+export async function addRouteCondition(input: {
+	route_id: string;
+	condition: RouteConditionKind;
+	severity: RouteConditionSeverity;
+	note?: string | null;
+	lat?: number | null;
+	lng?: number | null;
+}): Promise<RouteCondition> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const note = input.note?.trim();
+	const { data, error } = await supabase
+		.from(TABLES.route_conditions)
+		.insert({
+			route_id: input.route_id,
+			user_id: userId,
+			condition: input.condition,
+			severity: input.severity,
+			note: note && note.length > 0 ? note : null,
+			lat: input.lat ?? null,
+			lng: input.lng ?? null
+		})
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('Insert failed');
+	return asRouteCondition(data);
+}
+
+export async function deleteRouteCondition(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.route_conditions).delete().eq('id', id);
 	if (error) throw error;
 }
 

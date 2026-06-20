@@ -35,8 +35,11 @@ import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../privacy.dart';
 import '../race_controller.dart';
+import '../route_geometry.dart';
 import '../route_match.dart';
 import '../settings_sync.dart';
+import '../turn_cue_announcer.dart';
+import '../turn_cues.dart';
 import 'route_picker_screen.dart';
 import '../background_location_nudge.dart';
 import '../battery_optimisation_hint.dart';
@@ -142,6 +145,31 @@ class _RunScreenState extends State<RunScreen> {
 
   // Selected route (optional)
   cm.Route? _selectedRoute;
+
+  // Turn-by-turn voice-cue state for the followed route. Rebuilt whenever the
+  // selected route changes; null when no route is followed. Pure decision core
+  // (turn_cue_announcer.dart) — cues fire through the best-effort _ttsCue
+  // wrapper so a TTS failure never disturbs the recording (decisions §169).
+  TurnCueAnnouncer? _turnAnnouncer;
+
+  void _rebuildTurnAnnouncer() {
+    final route = _selectedRoute;
+    if (route == null || route.waypoints.length < 3) {
+      _turnAnnouncer = null;
+      return;
+    }
+    try {
+      final cues = generateTurnCues(
+        route.waypoints
+            .map((w) => TurnCueWaypoint(w.lat, w.lng))
+            .toList(growable: false),
+      );
+      _turnAnnouncer = cues.isEmpty ? null : TurnCueAnnouncer(cues);
+    } catch (e) {
+      debugPrint('turn-cue generation failed: $e');
+      _turnAnnouncer = null;
+    }
+  }
 
   // Live stats. Mirror fields kept for internal consumers (_saveInProgress,
   // _refreshLockScreenNotification, the _formattedX getters). The hot-path
@@ -336,6 +364,7 @@ class _RunScreenState extends State<RunScreen> {
         ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
     _loadTreadmillPairing();
+    _rebuildTurnAnnouncer();
     _maybePreloadWorkoutRunner();
     _refreshUpcomingEvent();
     _refreshPlanOverview();
@@ -600,6 +629,7 @@ class _RunScreenState extends State<RunScreen> {
         widget.initialRoute != oldWidget.initialRoute &&
         _state == _ScreenState.idle) {
       setState(() => _selectedRoute = widget.initialRoute);
+      _rebuildTurnAnnouncer();
     }
   }
 
@@ -756,6 +786,7 @@ class _RunScreenState extends State<RunScreen> {
     final picked = await pickRoute(context, routes: routes, unit: unit);
     if (!mounted) return;
     setState(() => _selectedRoute = picked);
+    _rebuildTurnAnnouncer();
   }
 
   Future<void> _beginCountdown() async {
@@ -1396,6 +1427,42 @@ class _RunScreenState extends State<RunScreen> {
         }
       } catch (e) {
         debugPrint('off-route cue failed: $e');
+      }
+
+      // L4 — Turn-by-turn voice cue. Pure geometry (distanceAlongRoute +
+      // the turn-cue announcer) decides which cue to fire; the spoken cue
+      // goes through the best-effort _ttsCue wrapper so a TTS failure never
+      // disturbs the recording (decisions §169).
+      try {
+        final announcer = _turnAnnouncer;
+        final pos = snapshot.currentPosition;
+        final route = _selectedRoute;
+        if (announcer != null &&
+            pos != null &&
+            route != null &&
+            widget.preferences.audioCues &&
+            widget.preferences.turnByTurnCues) {
+          final along = distanceAlongRoute(
+            (lat: pos.lat, lng: pos.lng),
+            route.waypoints,
+          );
+          if (along != null) {
+            final a = announcer.announcementFor(along);
+            if (a != null) {
+              final distanceStr =
+                  a.isNow ? null : UnitFormat.distance(a.thresholdM, unit);
+              _ttsCue(
+                'announceTurn',
+                () => widget.audioCues.announceTurn(
+                  a.cue.direction,
+                  distance: distanceStr,
+                ),
+              );
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('turn-cue announce failed: $e');
       }
 
       // L4 — Pace alert (skip for cycling — pace target doesn't apply).

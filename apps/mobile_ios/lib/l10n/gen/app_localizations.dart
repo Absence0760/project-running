@@ -16103,6 +16103,252 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'RunSignUp import isn\'t available yet. parkrun and manual paste still work.'**
   String get integrationsRunsignupUnavailable;
+
+  /// Header for the route condition-reports panel
+  ///
+  /// In en, this message translates to:
+  /// **'Conditions'**
+  String get routeConditionsTitle;
+
+  /// Button to open the condition-report composer
+  ///
+  /// In en, this message translates to:
+  /// **'Report condition'**
+  String get routeConditionsReport;
+
+  /// Submit button busy label while a condition report is being sent
+  ///
+  /// In en, this message translates to:
+  /// **'Reporting…'**
+  String get routeConditionsReporting;
+
+  /// Confirmation banner after a condition report is filed
+  ///
+  /// In en, this message translates to:
+  /// **'Condition reported'**
+  String get routeConditionsReported;
+
+  /// Error banner when a condition report fails to send
+  ///
+  /// In en, this message translates to:
+  /// **'Could not report condition'**
+  String get routeConditionsReportFailed;
+
+  /// Empty state for the route condition-reports panel
+  ///
+  /// In en, this message translates to:
+  /// **'No condition reports yet.'**
+  String get routeConditionsEmpty;
+
+  /// Loading state for the route condition-reports panel
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get routeConditionsLoading;
+
+  /// Cancel the condition-report composer
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get routeConditionsCancel;
+
+  /// Delete a condition report
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get routeConditionsDelete;
+
+  /// Title of the delete-condition confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete report?'**
+  String get routeConditionsDeleteTitle;
+
+  /// Body of the delete-condition confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the condition report permanently.'**
+  String get routeConditionsDeleteConfirm;
+
+  /// Error banner when deleting a condition report fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete report'**
+  String get routeConditionsDeleteFailed;
+
+  /// Label for the condition-kind dropdown in the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Condition'**
+  String get routeConditionsKindLabel;
+
+  /// Label for the severity dropdown in the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get routeConditionsSeverityLabel;
+
+  /// Label for the optional note field in the composer
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get routeConditionsNoteLabel;
+
+  /// Placeholder for the optional note field in the composer
+  ///
+  /// In en, this message translates to:
+  /// **'What will the next runner hit?'**
+  String get routeConditionsNotePlaceholder;
+
+  /// Distance-along-route label on an anchored condition report
+  ///
+  /// In en, this message translates to:
+  /// **'at {distance}'**
+  String routeConditionsAtDistance(String distance);
+
+  /// Condition kind: muddy
+  ///
+  /// In en, this message translates to:
+  /// **'Muddy'**
+  String get routeConditionMuddy;
+
+  /// Condition kind: flooded
+  ///
+  /// In en, this message translates to:
+  /// **'Flooded'**
+  String get routeConditionFlooded;
+
+  /// Condition kind: snow or ice
+  ///
+  /// In en, this message translates to:
+  /// **'Snow / ice'**
+  String get routeConditionSnowIce;
+
+  /// Condition kind: overgrown
+  ///
+  /// In en, this message translates to:
+  /// **'Overgrown'**
+  String get routeConditionOvergrown;
+
+  /// Condition kind: closed
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get routeConditionClosed;
+
+  /// Condition kind: hazard
+  ///
+  /// In en, this message translates to:
+  /// **'Hazard'**
+  String get routeConditionHazard;
+
+  /// Condition kind: clear
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get routeConditionClear;
+
+  /// Condition kind: other
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get routeConditionOther;
+
+  /// Severity: info
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get routeConditionSeverityInfo;
+
+  /// Severity: caution
+  ///
+  /// In en, this message translates to:
+  /// **'Caution'**
+  String get routeConditionSeverityCaution;
+
+  /// Severity: impassable
+  ///
+  /// In en, this message translates to:
+  /// **'Impassable'**
+  String get routeConditionSeverityImpassable;
+
+  /// Settings toggle: spoken turn-by-turn cues while following a route
+  ///
+  /// In en, this message translates to:
+  /// **'Turn-by-turn voice cues'**
+  String get prefTurnByTurnCues;
+
+  /// Subtitle for the turn-by-turn voice cues settings toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Spoken turn directions while following a saved route'**
+  String get prefTurnByTurnCuesSubtitle;
+
+  /// Spoken turn cue: left turn ahead at a distance
+  ///
+  /// In en, this message translates to:
+  /// **'In {distance}, turn left'**
+  String ttsTurnLeftIn(String distance);
+
+  /// Spoken turn cue: right turn ahead at a distance
+  ///
+  /// In en, this message translates to:
+  /// **'In {distance}, turn right'**
+  String ttsTurnRightIn(String distance);
+
+  /// Spoken turn cue: turn left now
+  ///
+  /// In en, this message translates to:
+  /// **'Turn left'**
+  String get ttsTurnLeftNow;
+
+  /// Spoken turn cue: turn right now
+  ///
+  /// In en, this message translates to:
+  /// **'Turn right'**
+  String get ttsTurnRightNow;
+
+  /// Spoken turn cue: slight left
+  ///
+  /// In en, this message translates to:
+  /// **'Bear left'**
+  String get ttsSlightLeft;
+
+  /// Spoken turn cue: slight right
+  ///
+  /// In en, this message translates to:
+  /// **'Bear right'**
+  String get ttsSlightRight;
+
+  /// Spoken turn cue: u-turn
+  ///
+  /// In en, this message translates to:
+  /// **'Make a U-turn'**
+  String get ttsUturn;
+
+  /// Progress label while an offline map tile pack downloads
+  ///
+  /// In en, this message translates to:
+  /// **'Caching map: {done} / {total}'**
+  String routeOfflinePackDownloading(int done, int total);
+
+  /// Status when an offline map tile pack finished downloading
+  ///
+  /// In en, this message translates to:
+  /// **'Map saved for offline'**
+  String get routeOfflinePackReady;
+
+  /// Status when an offline map tile pack only partly downloaded
+  ///
+  /// In en, this message translates to:
+  /// **'Map partly saved ({done} / {total}) — retry'**
+  String routeOfflinePackPartial(int done, int total);
+
+  /// Error when a route's offline tile pack would exceed the tile cap
+  ///
+  /// In en, this message translates to:
+  /// **'This route is too large to cache offline'**
+  String get routeOfflinePackTooLarge;
 }
 
 class _AppLocalizationsDelegate

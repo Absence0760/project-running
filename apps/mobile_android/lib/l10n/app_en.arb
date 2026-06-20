@@ -1,233 +1,651 @@
 {
   "@@locale": "en",
   "trustedContactsClearedBanner": "Trusted contacts cleared.",
-  "@trustedContactsClearedBanner": {"description": "Confirmation banner shown after saving an empty trusted-contacts list"},
+  "@trustedContactsClearedBanner": {
+    "description": "Confirmation banner shown after saving an empty trusted-contacts list"
+  },
   "trustedContactsSavedBanner": "{count, plural, one{1 trusted contact saved.} other{{count} trusted contacts saved.}}",
-  "@trustedContactsSavedBanner": {"description": "Confirmation banner with the count of trusted contacts saved", "placeholders": {"count": {"type": "num"}}},
+  "@trustedContactsSavedBanner": {
+    "description": "Confirmation banner with the count of trusted contacts saved",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "trustedContactsSaveFailedBanner": "Save failed: {error}",
-  "@trustedContactsSaveFailedBanner": {"description": "Error banner shown when saving trusted contacts fails", "placeholders": {"error": {"type": "Object"}}},
+  "@trustedContactsSaveFailedBanner": {
+    "description": "Error banner shown when saving trusted contacts fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "trustedContactsTitle": "Trusted contacts",
-  "@trustedContactsTitle": {"description": "App bar title for the trusted-contacts settings screen"},
+  "@trustedContactsTitle": {
+    "description": "App bar title for the trusted-contacts settings screen"
+  },
   "trustedContactsIntro": "Designate one or more trusted contacts. The scaffold stores the list with your account so the planned \"overdue run\" + panic-button surfaces have somewhere to send notifications. Up to {max}.",
-  "@trustedContactsIntro": {"description": "Intro paragraph explaining what trusted contacts are used for", "placeholders": {"max": {"type": "Object"}}},
+  "@trustedContactsIntro": {
+    "description": "Intro paragraph explaining what trusted contacts are used for",
+    "placeholders": {
+      "max": {
+        "type": "Object"
+      }
+    }
+  },
   "trustedContactsAddButton": "Add contact",
-  "@trustedContactsAddButton": {"description": "Button label to add a new trusted contact row"},
+  "@trustedContactsAddButton": {
+    "description": "Button label to add a new trusted contact row"
+  },
   "trustedContactsSavingButton": "Saving…",
-  "@trustedContactsSavingButton": {"description": "Save button label while a save is in progress"},
+  "@trustedContactsSavingButton": {
+    "description": "Save button label while a save is in progress"
+  },
   "trustedContactsSaveButton": "Save",
-  "@trustedContactsSaveButton": {"description": "Save button label for the trusted-contacts list"},
+  "@trustedContactsSaveButton": {
+    "description": "Save button label for the trusted-contacts list"
+  },
   "trustedContactsNameLabel": "Name",
-  "@trustedContactsNameLabel": {"description": "Text field label for a trusted contact's name"},
+  "@trustedContactsNameLabel": {
+    "description": "Text field label for a trusted contact's name"
+  },
   "trustedContactsNameHint": "e.g. Alex Chen",
-  "@trustedContactsNameHint": {"description": "Placeholder hint for the trusted-contact name field"},
+  "@trustedContactsNameHint": {
+    "description": "Placeholder hint for the trusted-contact name field"
+  },
   "trustedContactsPhoneLabel": "Phone",
-  "@trustedContactsPhoneLabel": {"description": "Text field label for a trusted contact's phone number"},
+  "@trustedContactsPhoneLabel": {
+    "description": "Text field label for a trusted contact's phone number"
+  },
   "trustedContactsPhoneHint": "+1 555 123 4567",
-  "@trustedContactsPhoneHint": {"description": "Placeholder hint for the trusted-contact phone field"},
+  "@trustedContactsPhoneHint": {
+    "description": "Placeholder hint for the trusted-contact phone field"
+  },
   "trustedContactsEmailLabel": "Email",
-  "@trustedContactsEmailLabel": {"description": "Text field label for a trusted contact's email address"},
+  "@trustedContactsEmailLabel": {
+    "description": "Text field label for a trusted contact's email address"
+  },
   "trustedContactsEmailHint": "alex@example.com",
-  "@trustedContactsEmailHint": {"description": "Placeholder hint for the trusted-contact email field"},
+  "@trustedContactsEmailHint": {
+    "description": "Placeholder hint for the trusted-contact email field"
+  },
   "trustedContactsRelationshipLabel": "Relationship",
-  "@trustedContactsRelationshipLabel": {"description": "Text field label for a trusted contact's relationship"},
+  "@trustedContactsRelationshipLabel": {
+    "description": "Text field label for a trusted contact's relationship"
+  },
   "trustedContactsRelationshipHint": "partner / parent / run buddy",
-  "@trustedContactsRelationshipHint": {"description": "Placeholder hint for the trusted-contact relationship field"},
+  "@trustedContactsRelationshipHint": {
+    "description": "Placeholder hint for the trusted-contact relationship field"
+  },
   "trustedContactsRemoveButton": "Remove",
-  "@trustedContactsRemoveButton": {"description": "Button to remove a trusted contact from the list"},
+  "@trustedContactsRemoveButton": {
+    "description": "Button to remove a trusted contact from the list"
+  },
   "clubInviteEnterCodeError": "Enter the invite code from your link.",
-  "@clubInviteEnterCodeError": {"description": "Inline error when the invite-code field is empty on submit"},
+  "@clubInviteEnterCodeError": {
+    "description": "Inline error when the invite-code field is empty on submit"
+  },
   "clubInviteJoinedBanner": "You've joined the club.",
-  "@clubInviteJoinedBanner": {"description": "Confirmation banner after successfully redeeming a club invite"},
+  "@clubInviteJoinedBanner": {
+    "description": "Confirmation banner after successfully redeeming a club invite"
+  },
   "clubInviteTitle": "Join club",
-  "@clubInviteTitle": {"description": "App bar title for the club-invite redemption screen"},
+  "@clubInviteTitle": {
+    "description": "App bar title for the club-invite redemption screen"
+  },
   "clubInviteIntro": "Paste the invite code your club admin shared with you.",
-  "@clubInviteIntro": {"description": "Instruction text above the invite-code field"},
+  "@clubInviteIntro": {
+    "description": "Instruction text above the invite-code field"
+  },
   "clubInviteCodeLabel": "Invite code",
-  "@clubInviteCodeLabel": {"description": "Text field label for the club invite code"},
+  "@clubInviteCodeLabel": {
+    "description": "Text field label for the club invite code"
+  },
   "clubInviteJoinButton": "Join",
-  "@clubInviteJoinButton": {"description": "Button to redeem the club invite code"},
+  "@clubInviteJoinButton": {
+    "description": "Button to redeem the club invite code"
+  },
   "recapShareHeadline": "My {year} in running:",
-  "@recapShareHeadline": {"description": "First line of the shared year-in-running recap summary", "placeholders": {"year": {"type": "Object"}}},
+  "@recapShareHeadline": {
+    "description": "First line of the shared year-in-running recap summary",
+    "placeholders": {
+      "year": {
+        "type": "Object"
+      }
+    }
+  },
   "recapShareTotals": "{total} across {count} runs",
-  "@recapShareTotals": {"description": "Distance-and-run-count line in the shared recap summary", "placeholders": {"total": {"type": "Object"}, "count": {"type": "Object"}}},
+  "@recapShareTotals": {
+    "description": "Distance-and-run-count line in the shared recap summary",
+    "placeholders": {
+      "total": {
+        "type": "Object"
+      },
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
   "recapShareLongestRun": "Longest run: {distance}",
-  "@recapShareLongestRun": {"description": "Longest-run line in the shared recap summary", "placeholders": {"distance": {"type": "Object"}}},
+  "@recapShareLongestRun": {
+    "description": "Longest-run line in the shared recap summary",
+    "placeholders": {
+      "distance": {
+        "type": "Object"
+      }
+    }
+  },
   "recapShareBestStreak": "Best streak: {days} days",
-  "@recapShareBestStreak": {"description": "Best-streak line in the shared recap summary", "placeholders": {"days": {"type": "Object"}}},
+  "@recapShareBestStreak": {
+    "description": "Best-streak line in the shared recap summary",
+    "placeholders": {
+      "days": {
+        "type": "Object"
+      }
+    }
+  },
   "recapShareSubject": "{year} recap",
-  "@recapShareSubject": {"description": "OS share-sheet subject for the year-in-running recap", "placeholders": {"year": {"type": "Object"}}},
+  "@recapShareSubject": {
+    "description": "OS share-sheet subject for the year-in-running recap",
+    "placeholders": {
+      "year": {
+        "type": "Object"
+      }
+    }
+  },
   "recapTitle": "Year in running",
-  "@recapTitle": {"description": "App bar title for the year-in-running recap screen"},
+  "@recapTitle": {
+    "description": "App bar title for the year-in-running recap screen"
+  },
   "recapShareTooltip": "Share recap",
   "@recapShareTooltip": {"description": "Tooltip for the share-recap icon button"},
   "recapPublishAndShare": "Publish & share link",
   "@recapPublishAndShare": {"description": "Tooltip/label for the publish-and-share-link action on the recap screen"},
   "recapPublishFailed": "Couldn't publish the recap. Try again.",
   "@recapPublishFailed": {"description": "Banner shown when publishing a public recap fails"},
+  "@recapShareTooltip": {
+    "description": "Tooltip for the share-recap icon button"
+  },
   "recapPrevYear": "Previous year",
-  "@recapPrevYear": {"description": "Tooltip for the previous-year chevron on the recap screen"},
+  "@recapPrevYear": {
+    "description": "Tooltip for the previous-year chevron on the recap screen"
+  },
   "recapNextYear": "Next year",
-  "@recapNextYear": {"description": "Tooltip for the next-year chevron on the recap screen"},
+  "@recapNextYear": {
+    "description": "Tooltip for the next-year chevron on the recap screen"
+  },
   "recapNoRunsForYear": "No runs to recap for {year}.",
-  "@recapNoRunsForYear": {"description": "Empty-state shown for a year outside the valid range", "placeholders": {"year": {"type": "Object"}}},
+  "@recapNoRunsForYear": {
+    "description": "Empty-state shown for a year outside the valid range",
+    "placeholders": {
+      "year": {
+        "type": "Object"
+      }
+    }
+  },
   "recapNoRunsYet": "No runs in {year} yet. Log one to see your recap.",
-  "@recapNoRunsYet": {"description": "Empty-state shown when no runs exist for the selected year", "placeholders": {"year": {"type": "Object"}}},
+  "@recapNoRunsYet": {
+    "description": "Empty-state shown when no runs exist for the selected year",
+    "placeholders": {
+      "year": {
+        "type": "Object"
+      }
+    }
+  },
   "recapAcrossRuns": "across {count} {runWord}",
-  "@recapAcrossRuns": {"description": "Subtitle under the hero distance giving the run count", "placeholders": {"count": {"type": "Object"}, "runWord": {"type": "Object"}}},
+  "@recapAcrossRuns": {
+    "description": "Subtitle under the hero distance giving the run count",
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      },
+      "runWord": {
+        "type": "Object"
+      }
+    }
+  },
   "recapLongestRunLabel": "Longest run",
-  "@recapLongestRunLabel": {"description": "Stat card label for the longest run of the year"},
+  "@recapLongestRunLabel": {
+    "description": "Stat card label for the longest run of the year"
+  },
   "recapBestStreakLabel": "Best streak",
-  "@recapBestStreakLabel": {"description": "Stat card label for the best running streak"},
+  "@recapBestStreakLabel": {
+    "description": "Stat card label for the best running streak"
+  },
   "recapStreakDays": "{days} {dayWord}",
-  "@recapStreakDays": {"description": "Stat card value for the best streak length in days", "placeholders": {"days": {"type": "Object"}, "dayWord": {"type": "Object"}}},
+  "@recapStreakDays": {
+    "description": "Stat card value for the best streak length in days",
+    "placeholders": {
+      "days": {
+        "type": "Object"
+      },
+      "dayWord": {
+        "type": "Object"
+      }
+    }
+  },
   "recapTopWeekLabel": "Top week",
-  "@recapTopWeekLabel": {"description": "Stat card label for the highest-mileage week"},
+  "@recapTopWeekLabel": {
+    "description": "Stat card label for the highest-mileage week"
+  },
   "recapUniqueRoutesLabel": "Unique routes",
-  "@recapUniqueRoutesLabel": {"description": "Stat card label for the count of unique routes run"},
+  "@recapUniqueRoutesLabel": {
+    "description": "Stat card label for the count of unique routes run"
+  },
   "recapEarliestStartLabel": "Earliest start",
-  "@recapEarliestStartLabel": {"description": "Stat card label for the earliest run start time"},
+  "@recapEarliestStartLabel": {
+    "description": "Stat card label for the earliest run start time"
+  },
   "recapLatestStartLabel": "Latest start",
-  "@recapLatestStartLabel": {"description": "Stat card label for the latest run start time"},
+  "@recapLatestStartLabel": {
+    "description": "Stat card label for the latest run start time"
+  },
   "routePickerTitle": "Choose route",
-  "@routePickerTitle": {"description": "App bar title for the full-screen route picker"},
+  "@routePickerTitle": {
+    "description": "App bar title for the full-screen route picker"
+  },
   "routePickerNoRoute": "No route",
-  "@routePickerNoRoute": {"description": "App bar action to dismiss the picker without choosing a route"},
+  "@routePickerNoRoute": {
+    "description": "App bar action to dismiss the picker without choosing a route"
+  },
   "routePickerClearSearchTooltip": "Clear search",
-  "@routePickerClearSearchTooltip": {"description": "Tooltip for the clear-search button in the route picker"},
+  "@routePickerClearSearchTooltip": {
+    "description": "Tooltip for the clear-search button in the route picker"
+  },
   "routePickerSearchHint": "Search routes by name…",
-  "@routePickerSearchHint": {"description": "Placeholder hint for the route-picker search field"},
+  "@routePickerSearchHint": {
+    "description": "Placeholder hint for the route-picker search field"
+  },
   "routePickerEmptyNoRoutes": "No routes saved yet",
-  "@routePickerEmptyNoRoutes": {"description": "Empty state when the user has no saved routes"},
+  "@routePickerEmptyNoRoutes": {
+    "description": "Empty state when the user has no saved routes"
+  },
   "routePickerEmptyNoMatch": "No routes match \"{query}\"",
-  "@routePickerEmptyNoMatch": {"description": "Empty state when no saved route matches the search query", "placeholders": {"query": {"type": "Object"}}},
+  "@routePickerEmptyNoMatch": {
+    "description": "Empty state when no saved route matches the search query",
+    "placeholders": {
+      "query": {
+        "type": "Object"
+      }
+    }
+  },
   "routePickerStarredHeader": "Starred",
-  "@routePickerStarredHeader": {"description": "Section header above the starred routes block in the picker"},
+  "@routePickerStarredHeader": {
+    "description": "Section header above the starred routes block in the picker"
+  },
   "routePickerAllRoutesHeader": "All routes",
-  "@routePickerAllRoutesHeader": {"description": "Section header above the non-starred routes block in the picker"},
+  "@routePickerAllRoutesHeader": {
+    "description": "Section header above the non-starred routes block in the picker"
+  },
   "importStatusImported": "Imported {count} runs from {label}",
-  "@importStatusImported": {"description": "Status line after a successful import with no errors", "placeholders": {"count": {"type": "Object"}, "label": {"type": "Object"}}},
+  "@importStatusImported": {
+    "description": "Status line after a successful import with no errors",
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      },
+      "label": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusImportedWithErrors": "Imported {count} runs ({errors} failed)",
-  "@importStatusImportedWithErrors": {"description": "Status line after an import that had some failures", "placeholders": {"count": {"type": "Object"}, "errors": {"type": "Object"}}},
+  "@importStatusImportedWithErrors": {
+    "description": "Status line after an import that had some failures",
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      },
+      "errors": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusNoGpsNote": "{base}. {label} has no route data, so these runs have no map.",
-  "@importStatusNoGpsNote": {"description": "Appended note when an imported source has no GPS route data", "placeholders": {"base": {"type": "Object"}, "label": {"type": "Object"}}},
+  "@importStatusNoGpsNote": {
+    "description": "Appended note when an imported source has no GPS route data",
+    "placeholders": {
+      "base": {
+        "type": "Object"
+      },
+      "label": {
+        "type": "Object"
+      }
+    }
+  },
   "importHealthRequestingPermission": "Requesting {label} permission...",
-  "@importHealthRequestingPermission": {"description": "Status while requesting the platform health-store permission", "placeholders": {"label": {"type": "Object"}}},
+  "@importHealthRequestingPermission": {
+    "description": "Status while requesting the platform health-store permission",
+    "placeholders": {
+      "label": {
+        "type": "Object"
+      }
+    }
+  },
   "importHealthPermissionDenied": "{label} permission denied",
-  "@importHealthPermissionDenied": {"description": "Status when the health-store permission was denied", "placeholders": {"label": {"type": "Object"}}},
+  "@importHealthPermissionDenied": {
+    "description": "Status when the health-store permission was denied",
+    "placeholders": {
+      "label": {
+        "type": "Object"
+      }
+    }
+  },
   "importHealthReadingWorkouts": "Reading workouts...",
-  "@importHealthReadingWorkouts": {"description": "Status while reading workouts from the health store"},
+  "@importHealthReadingWorkouts": {
+    "description": "Status while reading workouts from the health store"
+  },
   "importHealthFailed": "{label} import failed: {error}",
-  "@importHealthFailed": {"description": "Status when a health-store import fails", "placeholders": {"label": {"type": "Object"}, "error": {"type": "Object"}}},
+  "@importHealthFailed": {
+    "description": "Status when a health-store import fails",
+    "placeholders": {
+      "label": {
+        "type": "Object"
+      },
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusSavingLocally": "Saving locally...",
-  "@importStatusSavingLocally": {"description": "Status while saving imported runs to the local store"},
+  "@importStatusSavingLocally": {
+    "description": "Status while saving imported runs to the local store"
+  },
   "importStatusSkippedDuplicates": "Skipped {count} duplicate(s) already imported from another source",
-  "@importStatusSkippedDuplicates": {"description": "Status when cross-source duplicate runs are skipped during import", "placeholders": {"count": {"type": "Object"}}},
+  "@importStatusSkippedDuplicates": {
+    "description": "Status when cross-source duplicate runs are skipped during import",
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusSavedProgress": "Saved {done} of {total} locally",
-  "@importStatusSavedProgress": {"description": "Per-run progress status while saving imported runs locally", "placeholders": {"done": {"type": "Object"}, "total": {"type": "Object"}}},
+  "@importStatusSavedProgress": {
+    "description": "Per-run progress status while saving imported runs locally",
+    "placeholders": {
+      "done": {
+        "type": "Object"
+      },
+      "total": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusSyncingToCloud": "Syncing to cloud...",
-  "@importStatusSyncingToCloud": {"description": "Status while pushing imported runs to the cloud"},
+  "@importStatusSyncingToCloud": {
+    "description": "Status while pushing imported runs to the cloud"
+  },
   "importStatusSyncProgress": "Synced {done} of {total}",
-  "@importStatusSyncProgress": {"description": "Per-run progress status while syncing imported runs to the cloud", "placeholders": {"done": {"type": "Object"}, "total": {"type": "Object"}}},
+  "@importStatusSyncProgress": {
+    "description": "Per-run progress status while syncing imported runs to the cloud",
+    "placeholders": {
+      "done": {
+        "type": "Object"
+      },
+      "total": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusReadingCsv": "Reading CSV...",
-  "@importStatusReadingCsv": {"description": "Status while reading the selected CSV file"},
+  "@importStatusReadingCsv": {
+    "description": "Status while reading the selected CSV file"
+  },
   "importCsvFailed": "CSV import failed: {error}",
-  "@importCsvFailed": {"description": "Status when the CSV import fails", "placeholders": {"error": {"type": "Object"}}},
+  "@importCsvFailed": {
+    "description": "Status when the CSV import fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusRestoringBackup": "Restoring backup...",
-  "@importStatusRestoringBackup": {"description": "Status while restoring from a full-backup ZIP"},
+  "@importStatusRestoringBackup": {
+    "description": "Status while restoring from a full-backup ZIP"
+  },
   "importStatusBackupRestored": "Restored {runs} runs · {tracks} tracks · {routes} routes",
-  "@importStatusBackupRestored": {"description": "Status after a successful full-backup restore", "placeholders": {"runs": {"type": "Object"}, "tracks": {"type": "Object"}, "routes": {"type": "Object"}}},
+  "@importStatusBackupRestored": {
+    "description": "Status after a successful full-backup restore",
+    "placeholders": {
+      "runs": {
+        "type": "Object"
+      },
+      "tracks": {
+        "type": "Object"
+      },
+      "routes": {
+        "type": "Object"
+      }
+    }
+  },
   "importBackupFailed": "Backup restore failed: {error}",
-  "@importBackupFailed": {"description": "Status when restoring from a backup ZIP fails", "placeholders": {"error": {"type": "Object"}}},
+  "@importBackupFailed": {
+    "description": "Status when restoring from a backup ZIP fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "importStatusReadingExport": "Reading export...",
-  "@importStatusReadingExport": {"description": "Status while reading the Strava export ZIP"},
+  "@importStatusReadingExport": {
+    "description": "Status while reading the Strava export ZIP"
+  },
   "importStravaFailed": "Import failed: {error}",
-  "@importStravaFailed": {"description": "Status when the Strava ZIP import fails", "placeholders": {"error": {"type": "Object"}}},
+  "@importStravaFailed": {
+    "description": "Status when the Strava ZIP import fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "importTitle": "Import runs",
-  "@importTitle": {"description": "App bar title for the bulk-import screen"},
+  "@importTitle": {
+    "description": "App bar title for the bulk-import screen"
+  },
   "importStravaCardTitle": "Strava",
-  "@importStravaCardTitle": {"description": "Card title for the Strava import source"},
+  "@importStravaCardTitle": {
+    "description": "Card title for the Strava import source"
+  },
   "importStravaCardSubtitle": "Import every run from a Strava data export ZIP",
-  "@importStravaCardSubtitle": {"description": "Card subtitle describing the Strava ZIP import"},
+  "@importStravaCardSubtitle": {
+    "description": "Card subtitle describing the Strava ZIP import"
+  },
   "importStravaHowToHeader": "How to get your Strava export:",
-  "@importStravaHowToHeader": {"description": "Header above the Strava export step-by-step instructions"},
+  "@importStravaHowToHeader": {
+    "description": "Header above the Strava export step-by-step instructions"
+  },
   "importStravaHowToSteps": "1. Open Strava → Settings → My Account\n2. Scroll to \"Download or Delete Your Account\"\n3. Tap \"Get Started\" → \"Request your archive\"\n4. You'll get an email with a download link in a few hours\n5. Download the .zip and tap Import below",
-  "@importStravaHowToSteps": {"description": "Step-by-step instructions for requesting a Strava data export"},
+  "@importStravaHowToSteps": {
+    "description": "Step-by-step instructions for requesting a Strava data export"
+  },
   "importStravaButton": "Import Strava ZIP",
-  "@importStravaButton": {"description": "Button to pick and import a Strava export ZIP"},
+  "@importStravaButton": {
+    "description": "Button to pick and import a Strava export ZIP"
+  },
   "importHealthButton": "Import from {label}",
-  "@importHealthButton": {"description": "Button to import workouts from the platform health store", "placeholders": {"label": {"type": "Object"}}},
+  "@importHealthButton": {
+    "description": "Button to import workouts from the platform health store",
+    "placeholders": {
+      "label": {
+        "type": "Object"
+      }
+    }
+  },
   "importCsvCardTitle": "CSV",
-  "@importCsvCardTitle": {"description": "Card title for the CSV import source"},
+  "@importCsvCardTitle": {
+    "description": "Card title for the CSV import source"
+  },
   "importCsvCardSubtitle": "Re-import a CSV exported from Settings — runs only, no GPS",
-  "@importCsvCardSubtitle": {"description": "Card subtitle describing the CSV import source"},
+  "@importCsvCardSubtitle": {
+    "description": "Card subtitle describing the CSV import source"
+  },
   "importCsvCardDescription": "Each CSV row becomes a manual run (date, distance, duration, source). The map trace is not in the CSV, so imported runs won't have a route line.",
-  "@importCsvCardDescription": {"description": "Body copy explaining the CSV import limitations"},
+  "@importCsvCardDescription": {
+    "description": "Body copy explaining the CSV import limitations"
+  },
   "importCsvButton": "Import CSV",
-  "@importCsvButton": {"description": "Button to pick and import a CSV file"},
+  "@importCsvButton": {
+    "description": "Button to pick and import a CSV file"
+  },
   "importBackupCardTitle": "Full backup ZIP",
-  "@importBackupCardTitle": {"description": "Card title for the full-backup ZIP restore source"},
+  "@importBackupCardTitle": {
+    "description": "Card title for the full-backup ZIP restore source"
+  },
   "importBackupCardSubtitle": "Restore runs, routes, and GPS traces from a backup file",
-  "@importBackupCardSubtitle": {"description": "Card subtitle describing the full-backup restore"},
+  "@importBackupCardSubtitle": {
+    "description": "Card subtitle describing the full-backup restore"
+  },
   "importBackupCardDescription": "Loss-less round-trip. Works without signing in — restored runs sync to your account the next time you do. Make a backup from Settings → Full backup.",
-  "@importBackupCardDescription": {"description": "Body copy explaining the full-backup restore behaviour"},
+  "@importBackupCardDescription": {
+    "description": "Body copy explaining the full-backup restore behaviour"
+  },
   "importBackupButton": "Restore backup ZIP",
-  "@importBackupButton": {"description": "Button to pick and restore a full-backup ZIP"},
+  "@importBackupButton": {
+    "description": "Button to pick and restore a full-backup ZIP"
+  },
   "importErrorsHeader": "Errors",
-  "@importErrorsHeader": {"description": "Header above the list of per-file import errors"},
+  "@importErrorsHeader": {
+    "description": "Header above the list of per-file import errors"
+  },
   "importErrorsMore": "... and {count} more",
-  "@importErrorsMore": {"description": "Truncation line when more than ten import errors exist", "placeholders": {"count": {"type": "Object"}}},
+  "@importErrorsMore": {
+    "description": "Truncation line when more than ten import errors exist",
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
   "importHealthSubtitleIos": "Pull workouts you've recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health",
-  "@importHealthSubtitleIos": {"description": "iOS subtitle naming apps that write to Apple Health"},
+  "@importHealthSubtitleIos": {
+    "description": "iOS subtitle naming apps that write to Apple Health"
+  },
   "importHealthSubtitleAndroid": "Pull workouts from Google Fit, Samsung Health, Garmin, Fitbit, and any other Health Connect app",
-  "@importHealthSubtitleAndroid": {"description": "Android subtitle naming apps that write to Health Connect"},
+  "@importHealthSubtitleAndroid": {
+    "description": "Android subtitle naming apps that write to Health Connect"
+  },
   "importHealthDescriptionIos": "Reads workout summaries (date, distance, duration, type) from the last year. Apple Health doesn't expose GPS routes recorded by third-party apps — runs imported this way won't have a map trace.",
-  "@importHealthDescriptionIos": {"description": "iOS body copy explaining what is imported from Apple Health and the no-track caveat"},
+  "@importHealthDescriptionIos": {
+    "description": "iOS body copy explaining what is imported from Apple Health and the no-track caveat"
+  },
   "importHealthDescriptionAndroid": "Reads workout summaries (date, distance, duration, type) from the last year. GPS routes are not exposed by Health Connect — runs imported this way won't have a map trace.",
-  "@importHealthDescriptionAndroid": {"description": "Android body copy explaining what is imported from Health Connect and the no-track caveat"},
+  "@importHealthDescriptionAndroid": {
+    "description": "Android body copy explaining what is imported from Health Connect and the no-track caveat"
+  },
   "peopleFollowFailedBanner": "Could not update follow: {error}",
-  "@peopleFollowFailedBanner": {"description": "Error banner when toggling follow on a person fails", "placeholders": {"error": {"type": "Object"}}},
+  "@peopleFollowFailedBanner": {
+    "description": "Error banner when toggling follow on a person fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "peopleSearchHint": "Search runners by name",
-  "@peopleSearchHint": {"description": "Placeholder hint for the people-search field"},
+  "@peopleSearchHint": {
+    "description": "Placeholder hint for the people-search field"
+  },
   "peopleClearSearchTooltip": "Clear search",
-  "@peopleClearSearchTooltip": {"description": "Tooltip for the clear-search action button in the app bar"},
+  "@peopleClearSearchTooltip": {
+    "description": "Tooltip for the clear-search action button in the app bar"
+  },
   "commonClearSearch": "Clear search",
-  "@commonClearSearch": {"description": "Generic tooltip for a clear-search icon button"},
+  "@commonClearSearch": {
+    "description": "Generic tooltip for a clear-search icon button"
+  },
   "commonDismiss": "Dismiss",
-  "@commonDismiss": {"description": "Generic tooltip for a dismiss / close icon button"},
+  "@commonDismiss": {
+    "description": "Generic tooltip for a dismiss / close icon button"
+  },
   "settingsDevicesRemoveOverride": "Remove override",
-  "@settingsDevicesRemoveOverride": {"description": "Tooltip for the per-row remove-override icon button in the device override editor"},
+  "@settingsDevicesRemoveOverride": {
+    "description": "Tooltip for the per-row remove-override icon button in the device override editor"
+  },
   "peopleSearchResultsHeader": "Search results",
-  "@peopleSearchResultsHeader": {"description": "Section header shown above people search results"},
+  "@peopleSearchResultsHeader": {
+    "description": "Section header shown above people search results"
+  },
   "peopleSuggestedHeader": "Suggested for you",
-  "@peopleSuggestedHeader": {"description": "Section header shown above suggested people"},
+  "@peopleSuggestedHeader": {
+    "description": "Section header shown above suggested people"
+  },
   "peopleEmptySearchTitle": "No runners match \"{query}\"",
-  "@peopleEmptySearchTitle": {"description": "Empty-state title when no people match the search query", "placeholders": {"query": {"type": "Object"}}},
+  "@peopleEmptySearchTitle": {
+    "description": "Empty-state title when no people match the search query",
+    "placeholders": {
+      "query": {
+        "type": "Object"
+      }
+    }
+  },
   "peopleEmptySearchBody": "Try a shorter or different name. Display names are public; people who haven't set one yet won't show up here.",
-  "@peopleEmptySearchBody": {"description": "Empty-state body when no people match the search query"},
+  "@peopleEmptySearchBody": {
+    "description": "Empty-state body when no people match the search query"
+  },
   "peopleEmptySuggestionsTitle": "No suggestions yet",
-  "@peopleEmptySuggestionsTitle": {"description": "Empty-state title when there are no people suggestions"},
+  "@peopleEmptySuggestionsTitle": {
+    "description": "Empty-state title when there are no people suggestions"
+  },
   "peopleEmptySuggestionsBody": "Suggestions come from people in clubs you've joined. Join a club to start seeing them here.",
-  "@peopleEmptySuggestionsBody": {"description": "Empty-state body when there are no people suggestions"},
+  "@peopleEmptySuggestionsBody": {
+    "description": "Empty-state body when there are no people suggestions"
+  },
   "peoplePublicRunCount": "{count, plural, one{1 public run} other{{count} public runs}}",
-  "@peoplePublicRunCount": {"description": "Person-row metadata: count of the person's public runs", "placeholders": {"count": {"type": "num"}}},
+  "@peoplePublicRunCount": {
+    "description": "Person-row metadata: count of the person's public runs",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "peopleSharedClubsCount": "{count, plural, one{1 club together} other{{count} clubs together}}",
-  "@peopleSharedClubsCount": {"description": "Person-row metadata: count of clubs shared with the person", "placeholders": {"count": {"type": "num"}}},
+  "@peopleSharedClubsCount": {
+    "description": "Person-row metadata: count of clubs shared with the person",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "peopleFallbackDisplayName": "Runner",
-  "@peopleFallbackDisplayName": {"description": "Fallback display name for a person with no name set"},
+  "@peopleFallbackDisplayName": {
+    "description": "Fallback display name for a person with no name set"
+  },
   "peopleFollowingButton": "Following",
-  "@peopleFollowingButton": {"description": "Follow-toggle button label when already following the person"},
+  "@peopleFollowingButton": {
+    "description": "Follow-toggle button label when already following the person"
+  },
   "peopleFollowButton": "Follow",
-  "@peopleFollowButton": {"description": "Follow-toggle button label when not following the person"},
+  "@peopleFollowButton": {
+    "description": "Follow-toggle button label when not following the person"
+  },
   "readinessCardHeader": "READINESS",
-  "@readinessCardHeader": {"description": "Header label on the dashboard readiness-to-run card"},
+  "@readinessCardHeader": {
+    "description": "Header label on the dashboard readiness-to-run card"
+  },
   "readinessBandHigh": "high",
-  "@readinessBandHigh": {"description": "Readiness band pill label for a high readiness score"},
+  "@readinessBandHigh": {
+    "description": "Readiness band pill label for a high readiness score"
+  },
   "readinessBandModerate": "moderate",
-  "@readinessBandModerate": {"description": "Readiness band pill label for a moderate readiness score"},
+  "@readinessBandModerate": {
+    "description": "Readiness band pill label for a moderate readiness score"
+  },
   "readinessBandLow": "low",
-  "@readinessBandLow": {"description": "Readiness band pill label for a low readiness score"},
+  "@readinessBandLow": {
+    "description": "Readiness band pill label for a low readiness score"
+  },
   "missingMapTilesTitle": "Using OpenStreetMap fallback tiles",
-  "@missingMapTilesTitle": {"description": "Diagnostic banner title shown when no map-tile source is configured (dev-facing)"},
+  "@missingMapTilesTitle": {
+    "description": "Diagnostic banner title shown when no map-tile source is configured (dev-facing)"
+  },
   "prefsLanguage": "Language",
   "@prefsLanguage": {
     "description": "Settings > Preferences row title for the language picker"
@@ -407,7 +825,9 @@
   "@bodyMetricsSaveFailed": {
     "description": "Error toast when saving body metrics fails",
     "placeholders": {
-      "error": { "type": "String" }
+      "error": {
+        "type": "String"
+      }
     }
   },
   "safetyTitle": "Safety contacts",
@@ -458,7 +878,9 @@
   "@safetyAddFailed": {
     "description": "Error toast when adding a safety contact fails",
     "placeholders": {
-      "error": { "type": "String" }
+      "error": {
+        "type": "String"
+      }
     }
   },
   "safetyInvalidEmail": "Enter a valid email address.",
@@ -485,7 +907,9 @@
   "@safetyIncomingFrom": {
     "description": "Label naming the runner who sent an incoming request",
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
   "safetyConfirm": "Confirm",
@@ -1475,25 +1899,55 @@
     "description": "Empty-state shown when the active filters exclude every run"
   },
   "historyKindAll": "All",
-  "@historyKindAll": {"description": "Unified-timeline kind chip: all activity kinds"},
+  "@historyKindAll": {
+    "description": "Unified-timeline kind chip: all activity kinds"
+  },
   "historyKindRuns": "Runs",
-  "@historyKindRuns": {"description": "Unified-timeline kind chip: runs only"},
+  "@historyKindRuns": {
+    "description": "Unified-timeline kind chip: runs only"
+  },
   "historyKindLifts": "Lifts",
-  "@historyKindLifts": {"description": "Unified-timeline kind chip: gym sessions only"},
+  "@historyKindLifts": {
+    "description": "Unified-timeline kind chip: gym sessions only"
+  },
   "historyKindMeals": "Meals",
-  "@historyKindMeals": {"description": "Unified-timeline kind chip: logged meals only"},
+  "@historyKindMeals": {
+    "description": "Unified-timeline kind chip: logged meals only"
+  },
   "historyViewAll": "View all",
-  "@historyViewAll": {"description": "Link from a single-modality History tab to that modality's full page (runs list / gym / nutrition)"},
+  "@historyViewAll": {
+    "description": "Link from a single-modality History tab to that modality's full page (runs list / gym / nutrition)"
+  },
   "historyToday": "Today",
-  "@historyToday": {"description": "Day-group header for today in the unified timeline"},
+  "@historyToday": {
+    "description": "Day-group header for today in the unified timeline"
+  },
   "historyYesterday": "Yesterday",
-  "@historyYesterday": {"description": "Day-group header for yesterday in the unified timeline"},
+  "@historyYesterday": {
+    "description": "Day-group header for yesterday in the unified timeline"
+  },
   "historySetCount": "{n} sets",
-  "@historySetCount": {"description": "Lift row secondary: number of sets", "placeholders": {"n": {"type": "int"}}},
+  "@historySetCount": {
+    "description": "Lift row secondary: number of sets",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "historyKcal": "{n} kcal",
-  "@historyKcal": {"description": "Meal row secondary: calories", "placeholders": {"n": {"type": "int"}}},
+  "@historyKcal": {
+    "description": "Meal row secondary: calories",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "historyTimelineEmpty": "Nothing logged in this view yet.",
-  "@historyTimelineEmpty": {"description": "Empty state for a unified-timeline kind filter with no rows"},
+  "@historyTimelineEmpty": {
+    "description": "Empty state for a unified-timeline kind filter with no rows"
+  },
   "historyClearFilters": "Clear filters",
   "@historyClearFilters": {
     "description": "Button to reset all History filters when none match"
@@ -2899,28 +3353,48 @@
   "@routeDetailDescSentence": {
     "description": "Templated route description sentence with a surface word",
     "placeholders": {
-      "name": {"type": "String"},
-      "distance": {"type": "String"},
-      "surface": {"type": "String"},
-      "shape": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      },
+      "surface": {
+        "type": "String"
+      },
+      "shape": {
+        "type": "String"
+      }
     }
   },
   "routeDetailDescSentenceNoSurface": "{name} is a {distance} {shape} route.",
   "@routeDetailDescSentenceNoSurface": {
     "description": "Templated route description sentence when the surface is unknown",
     "placeholders": {
-      "name": {"type": "String"},
-      "distance": {"type": "String"},
-      "shape": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      },
+      "shape": {
+        "type": "String"
+      }
     }
   },
   "routeDetailDescClimb": "It has {gain} of climbing — {elevation}, about {perKm} per km.",
   "@routeDetailDescClimb": {
     "description": "Templated climb clause appended when the route has elevation gain",
     "placeholders": {
-      "gain": {"type": "String"},
-      "elevation": {"type": "String"},
-      "perKm": {"type": "String"}
+      "gain": {
+        "type": "String"
+      },
+      "elevation": {
+        "type": "String"
+      },
+      "perKm": {
+        "type": "String"
+      }
     }
   },
   "routeDetailDescFlat": "It has little to no elevation change.",
@@ -2931,7 +3405,9 @@
   "@routeDetailDescPerKm": {
     "description": "Per-kilometre gain figure embedded in the climb clause",
     "placeholders": {
-      "m": {"type": "int"}
+      "m": {
+        "type": "int"
+      }
     }
   },
   "routeDetailRunCount": "{count, plural, one{{count} run} other{{count} runs}}",
@@ -2974,7 +3450,11 @@
   "routeDetailRateStars": "Set rating to {n} of 5",
   "@routeDetailRateStars": {
     "description": "Accessible tooltip for each star button in the rate-route dialog",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "routeDetailReviewsOffline": "Reviews unavailable offline",
   "@routeDetailReviewsOffline": {
@@ -3579,12 +4059,20 @@
   "relativeMinutesAgo": "{count}m ago",
   "@relativeMinutesAgo": {
     "description": "Compact relative-time label, minutes",
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "relativeHoursAgo": "{count}h ago",
   "@relativeHoursAgo": {
     "description": "Compact relative-time label, hours",
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "relativeYesterday": "Yesterday",
   "@relativeYesterday": {
@@ -3593,12 +4081,20 @@
   "relativeDaysAgo": "{count}d ago",
   "@relativeDaysAgo": {
     "description": "Compact relative-time label, days",
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "relativeWeeksAgo": "{count, plural, =1{1 week ago} other{{count} weeks ago}}",
   "@relativeWeeksAgo": {
     "description": "Relative-time label, weeks",
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "coachArchiveToday": "Today",
   "@coachArchiveToday": {
@@ -3607,7 +4103,11 @@
   "coachArchiveDaysAgo": "{count, plural, other{{count} days ago}}",
   "@coachArchiveDaysAgo": {
     "description": "Coach archive label, days ago (full word)",
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "feedLast14Days": "Last 14 days",
   "@feedLast14Days": {
@@ -4515,7 +5015,11 @@
   "clubDetailRoutineExerciseCount": "{n} exercises",
   "@clubDetailRoutineExerciseCount": {
     "description": "Exercise count meta on a club gym-routine-template row",
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "eventNotFound": "Event not found.",
   "@eventNotFound": {
@@ -4855,22 +5359,38 @@
   "liveUpdatedSeconds": "Updated {n}s ago",
   "@liveUpdatedSeconds": {
     "description": "Spectator freshness — seconds since last ping",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "liveUpdatedMinutes": "Updated {n} min ago",
   "@liveUpdatedMinutes": {
     "description": "Spectator freshness — minutes since last ping",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "liveUpdatedHours": "Updated {n}h ago",
   "@liveUpdatedHours": {
     "description": "Spectator freshness — hours since last ping",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "liveUpdatedDays": "Updated {n}d ago",
   "@liveUpdatedDays": {
     "description": "Spectator freshness — days since last ping",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "liveCutoffTitle": "Next cut-off",
   "@liveCutoffTitle": {
@@ -4879,22 +5399,38 @@
   "liveCutoffToGo": "{distance} to go",
   "@liveCutoffToGo": {
     "description": "Spectator next-cutoff card — distance remaining to the cutoff",
-    "placeholders": { "distance": { "type": "String" } }
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
   },
   "liveCutoffEta": "Projected arrival {eta}",
   "@liveCutoffEta": {
     "description": "Spectator next-cutoff card — projected arrival as elapsed time",
-    "placeholders": { "eta": { "type": "String" } }
+    "placeholders": {
+      "eta": {
+        "type": "String"
+      }
+    }
   },
   "liveCutoffAhead": "{margin} to spare",
   "@liveCutoffAhead": {
     "description": "Spectator next-cutoff chip — projected to make the cutoff with margin to spare",
-    "placeholders": { "margin": { "type": "String" } }
+    "placeholders": {
+      "margin": {
+        "type": "String"
+      }
+    }
   },
   "liveCutoffBehind": "{margin} behind",
   "@liveCutoffBehind": {
     "description": "Spectator next-cutoff chip — projected to miss the cutoff by margin",
-    "placeholders": { "margin": { "type": "String" } }
+    "placeholders": {
+      "margin": {
+        "type": "String"
+      }
+    }
   },
   "liveCutoffWaitingSignal": "Waiting for a fresh signal to project arrival",
   "@liveCutoffWaitingSignal": {
@@ -5152,7 +5688,11 @@
   "planNewTemplateCloneFailed": "Couldn't adopt that template: {error}",
   "@planNewTemplateCloneFailed": {
     "description": "Toast when adopting a club template fails",
-    "placeholders": { "error": { "type": "String" } }
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "planNewTemplatePickerTitle": "Choose a template",
   "@planNewTemplatePickerTitle": {
@@ -5189,12 +5729,20 @@
   "planLibraryEmptySearch": "No plans match “{query}”.",
   "@planLibraryEmptySearch": {
     "description": "Public plan library",
-    "placeholders": {"query": {"type": "String"}}
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
   },
   "planLibraryByAuthor": "by {author}",
   "@planLibraryByAuthor": {
     "description": "Public plan library",
-    "placeholders": {"author": {"type": "String"}}
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
   },
   "planLibraryAnonymous": "a runner",
   "@planLibraryAnonymous": {
@@ -5203,12 +5751,20 @@
   "planLibraryWeeks": "{weeks} weeks",
   "@planLibraryWeeks": {
     "description": "Public plan library",
-    "placeholders": {"weeks": {"type": "int"}}
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
   },
   "planLibraryDaysPerWeek": "{days}×/week",
   "@planLibraryDaysPerWeek": {
     "description": "Public plan library",
-    "placeholders": {"days": {"type": "int"}}
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "planLibraryClone": "Clone into my plans",
   "@planLibraryClone": {
@@ -5225,7 +5781,11 @@
   "planLibraryCloneFailed": "Failed to clone: {error}",
   "@planLibraryCloneFailed": {
     "description": "Public plan library",
-    "placeholders": {"error": {"type": "String"}}
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "planLibraryStartDate": "Start date",
   "@planLibraryStartDate": {
@@ -5242,7 +5802,11 @@
   "planLibraryPreviewWeek": "Week {n}",
   "@planLibraryPreviewWeek": {
     "description": "Public plan library",
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "planDetailPublishLibraryLabel": "Public plan library",
   "@planDetailPublishLibraryLabel": {
@@ -5263,7 +5827,11 @@
   "planDetailPublishLibraryFailed": "Failed to publish: {error}",
   "@planDetailPublishLibraryFailed": {
     "description": "Public plan library",
-    "placeholders": {"error": {"type": "String"}}
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "planDetailUnpublishLibrary": "Unpublish",
   "@planDetailUnpublishLibrary": {
@@ -5276,7 +5844,11 @@
   "planDetailUnpublishFailed": "Failed to unpublish: {error}",
   "@planDetailUnpublishFailed": {
     "description": "Public plan library",
-    "placeholders": {"error": {"type": "String"}}
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "planDetailAlreadyPublished": "This plan is in the public library.",
   "@planDetailAlreadyPublished": {
@@ -5313,7 +5885,11 @@
   "planNewStarterCreateFailed": "Couldn't create that plan: {error}",
   "@planNewStarterCreateFailed": {
     "description": "Toast when creating from a starter plan fails",
-    "placeholders": { "error": { "type": "String" } }
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "planNewStarterC25k": "Couch to 5K (beginner walk-run)",
   "@planNewStarterC25k": {
@@ -5380,12 +5956,20 @@
   "planDetailDriftOverFlag": "Running {pct}% over plan this week — ease back on the easy days so you don't dig a fatigue hole.",
   "@planDetailDriftOverFlag": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "pct": { "type": "int" } }
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
   },
   "planDetailDriftUnderFlag": "Running {pct}% under plan this week — the planned volume drives the adaptation.",
   "@planDetailDriftUnderFlag": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "pct": { "type": "int" } }
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
   },
   "planDetailMissedLongMakeUp": "You missed this week's long run — fit it in if you can. It's the session that matters most.",
   "@planDetailMissedLongMakeUp": {
@@ -5411,7 +5995,14 @@
   "planDetailAdaptiveBadge": "Based on a trend — you've been {reason} ({confidence})",
   "@planDetailAdaptiveBadge": {
     "description": "Plan-detail adaptive re-plan trend badge",
-    "placeholders": { "reason": { "type": "String" }, "confidence": { "type": "String" } }
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      },
+      "confidence": {
+        "type": "String"
+      }
+    }
   },
   "@planDetailReplan": {
     "description": "Plan-detail adherence/replan/duplicate"
@@ -5423,7 +6014,11 @@
   "planDetailReplanApplied": "{n, plural, one{Adjusted 1 workout} other{Adjusted {n} workouts}}",
   "@planDetailReplanApplied": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "planDetailReplanPreviewTitle": "Proposed changes",
   "@planDetailReplanPreviewTitle": {
@@ -5432,12 +6027,26 @@
   "planDetailReplanMakeUp": "Long run {from} → {to} — make up a missed long run",
   "@planDetailReplanMakeUp": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
   },
   "planDetailReplanEase": "{from} → {to} — ease off after over-running",
   "@planDetailReplanEase": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
   },
   "planDetailReplanCancel": "Cancel",
   "@planDetailReplanCancel": {
@@ -5454,12 +6063,20 @@
   "planDetailDuplicateWeekDone": "Week {n} duplicated",
   "@planDetailDuplicateWeekDone": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "planDetailBulkFailed": "Couldn't update the plan: {error}",
   "@planDetailBulkFailed": {
     "description": "Plan-detail adherence/replan/duplicate",
-    "placeholders": { "error": { "type": "String" } }
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "planDetailEditTooltip": "Edit workout",
   "@planDetailEditTooltip": {
@@ -7671,17 +8288,32 @@
   "dashboardWeekStripCount": "{count, plural, one{{count} activity} other{{count} activities}}",
   "@dashboardWeekStripCount": {
     "description": "Activity count in the week-strip header",
-    "placeholders": {"count": {"type": "num"}}
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
   },
   "dashboardWeekStripDayAria": "{dow}: {dist}",
   "@dashboardWeekStripDayAria": {
     "description": "Accessibility label for a logged day cell in the week strip",
-    "placeholders": {"dow": {"type": "String"}, "dist": {"type": "String"}}
+    "placeholders": {
+      "dow": {
+        "type": "String"
+      },
+      "dist": {
+        "type": "String"
+      }
+    }
   },
   "dashboardWeekStripDayRestAria": "{dow}: rest day",
   "@dashboardWeekStripDayRestAria": {
     "description": "Accessibility label for a day cell with no logged activity",
-    "placeholders": {"dow": {"type": "String"}}
+    "placeholders": {
+      "dow": {
+        "type": "String"
+      }
+    }
   },
   "dashboardSectionLast20Weeks": "Last 20 Weeks",
   "@dashboardSectionLast20Weeks": {
@@ -9979,53 +10611,127 @@
     "description": "Training plan phase label: race week"
   },
   "runBackgroundLocationNudgeTitle": "Allow location all the time",
-  "@runBackgroundLocationNudgeTitle": {"description": "Title of the dialog nudging Android users to grant always-on location before a run"},
+  "@runBackgroundLocationNudgeTitle": {
+    "description": "Title of the dialog nudging Android users to grant always-on location before a run"
+  },
   "runBackgroundLocationNudgeBody": "Android only granted location while the app is open. For accurate distance when your screen is off, set location access to \"Allow all the time\" in Settings. You can start anyway — recording still works while the app is on screen.",
-  "@runBackgroundLocationNudgeBody": {"description": "Body of the background-location nudge dialog shown before a run on Android"},
+  "@runBackgroundLocationNudgeBody": {
+    "description": "Body of the background-location nudge dialog shown before a run on Android"
+  },
   "runBatteryOptHintTitle": "Keep recording alive in the background",
-  "@runBatteryOptHintTitle": {"description": "Title of the one-time battery-optimisation hint dialog shown before a run on Android"},
+  "@runBatteryOptHintTitle": {
+    "description": "Title of the one-time battery-optimisation hint dialog shown before a run on Android"
+  },
   "runBatteryOptHintBody": "Some phones (Samsung, Xiaomi, OnePlus and others) put apps to sleep to save battery, which can stop a long run from recording when your screen is off. To be safe, exclude this app from battery optimisation in Settings. Your run will record either way — this just stops the system from cutting it short.",
-  "@runBatteryOptHintBody": {"description": "Body of the battery-optimisation hint dialog shown before a run on Android"},
+  "@runBatteryOptHintBody": {
+    "description": "Body of the battery-optimisation hint dialog shown before a run on Android"
+  },
   "shareCardCaption": "{title} — {distance} in {duration}",
-  "@shareCardCaption": {"description": "Share text accompanying a run share image or exported file: title, distance, and duration", "placeholders": {"title": {"type": "Object"}, "distance": {"type": "Object"}, "duration": {"type": "Object"}}},
+  "@shareCardCaption": {
+    "description": "Share text accompanying a run share image or exported file: title, distance, and duration",
+    "placeholders": {
+      "title": {
+        "type": "Object"
+      },
+      "distance": {
+        "type": "Object"
+      },
+      "duration": {
+        "type": "Object"
+      }
+    }
+  },
   "settingsBackendNotConfigured": "Backend not configured",
-  "@settingsBackendNotConfigured": {"description": "Banner shown when a settings action needs a configured backend but none is available"},
+  "@settingsBackendNotConfigured": {
+    "description": "Banner shown when a settings action needs a configured backend but none is available"
+  },
   "settingsAccountSignedIn": "Signed in",
-  "@settingsAccountSignedIn": {"description": "Account settings tile subtitle shown when signed in but no email address is available"},
+  "@settingsAccountSignedIn": {
+    "description": "Account settings tile subtitle shown when signed in but no email address is available"
+  },
   "settingsDevicesSignedOutSubtitle": "Sign in to manage your devices",
-  "@settingsDevicesSignedOutSubtitle": {"description": "Devices settings tile subtitle shown when signed out"},
+  "@settingsDevicesSignedOutSubtitle": {
+    "description": "Devices settings tile subtitle shown when signed out"
+  },
   "verifiedClubTooltip": "Official verified club",
-  "@verifiedClubTooltip": {"description": "Tooltip on the verified-club badge"},
+  "@verifiedClubTooltip": {
+    "description": "Tooltip on the verified-club badge"
+  },
   "raceDistance5k": "5 km",
-  "@raceDistance5k": {"description": "Best-effort race distance label: 5 kilometres"},
+  "@raceDistance5k": {
+    "description": "Best-effort race distance label: 5 kilometres"
+  },
   "raceDistance10k": "10 km",
-  "@raceDistance10k": {"description": "Best-effort race distance label: 10 kilometres"},
+  "@raceDistance10k": {
+    "description": "Best-effort race distance label: 10 kilometres"
+  },
   "raceDistanceHalfMarathon": "Half Marathon",
-  "@raceDistanceHalfMarathon": {"description": "Best-effort race distance label: half marathon"},
+  "@raceDistanceHalfMarathon": {
+    "description": "Best-effort race distance label: half marathon"
+  },
   "raceDistanceMarathon": "Marathon",
-  "@raceDistanceMarathon": {"description": "Best-effort race distance label: marathon"},
+  "@raceDistanceMarathon": {
+    "description": "Best-effort race distance label: marathon"
+  },
   "settingsTabAccountSubtitle": "Sign in, backup, delete account",
-  "@settingsTabAccountSubtitle": {"description": "Settings landing: Account tile subtitle when signed out"},
+  "@settingsTabAccountSubtitle": {
+    "description": "Settings landing: Account tile subtitle when signed out"
+  },
   "settingsTabPreferencesSubtitle": "Units, theme, recording, training, privacy",
-  "@settingsTabPreferencesSubtitle": {"description": "Settings landing: Preferences tile subtitle"},
+  "@settingsTabPreferencesSubtitle": {
+    "description": "Settings landing: Preferences tile subtitle"
+  },
   "settingsTabIntegrationsSubtitle": "Strava, parkrun, heart-rate strap",
-  "@settingsTabIntegrationsSubtitle": {"description": "Settings landing: Integrations tile subtitle"},
+  "@settingsTabIntegrationsSubtitle": {
+    "description": "Settings landing: Integrations tile subtitle"
+  },
   "settingsTabDevicesSubtitle": "Where you're signed in and per-device overrides",
-  "@settingsTabDevicesSubtitle": {"description": "Settings landing: Devices tile subtitle when signed in"},
+  "@settingsTabDevicesSubtitle": {
+    "description": "Settings landing: Devices tile subtitle when signed in"
+  },
   "settingsTabGearSubtitle": "Track shoes + bikes and per-item mileage",
-  "@settingsTabGearSubtitle": {"description": "Settings landing: Gear tile subtitle"},
+  "@settingsTabGearSubtitle": {
+    "description": "Settings landing: Gear tile subtitle"
+  },
   "settingsTabCoachingSubtitle": "Coach athletes or follow your own coach",
-  "@settingsTabCoachingSubtitle": {"description": "Settings landing: Coaching tile subtitle"},
+  "@settingsTabCoachingSubtitle": {
+    "description": "Settings landing: Coaching tile subtitle"
+  },
   "settingsTabProSubtitle": "Subscribe, restore purchases, manage billing",
-  "@settingsTabProSubtitle": {"description": "Settings landing: Pro & support tile subtitle"},
+  "@settingsTabProSubtitle": {
+    "description": "Settings landing: Pro & support tile subtitle"
+  },
   "settingsTabLicensesSubtitle": "App version and open-source notices",
-  "@settingsTabLicensesSubtitle": {"description": "Settings landing: Licenses tile subtitle"},
+  "@settingsTabLicensesSubtitle": {
+    "description": "Settings landing: Licenses tile subtitle"
+  },
   "periodSummaryWeekOf": "Week of {date}",
-  "@periodSummaryWeekOf": {"description": "Period-summary title for a single week, e.g. 'Week of 13 Apr'", "placeholders": {"date": {"type": "Object"}}},
+  "@periodSummaryWeekOf": {
+    "description": "Period-summary title for a single week, e.g. 'Week of 13 Apr'",
+    "placeholders": {
+      "date": {
+        "type": "Object"
+      }
+    }
+  },
   "periodShareRunCount": "{count, plural, one{1 run} other{{count} runs}}",
-  "@periodShareRunCount": {"description": "Run count line in the period-summary share text", "placeholders": {"count": {"type": "int"}}},
+  "@periodShareRunCount": {
+    "description": "Run count line in the period-summary share text",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "periodShareAvgPace": "Avg pace: {pace}",
-  "@periodShareAvgPace": {"description": "Average-pace line in the period-summary share text", "placeholders": {"pace": {"type": "Object"}}},
+  "@periodShareAvgPace": {
+    "description": "Average-pace line in the period-summary share text",
+    "placeholders": {
+      "pace": {
+        "type": "Object"
+      }
+    }
+  },
   "gymTitle": "Gym",
   "gymLog": "Log workout",
   "gymUntitled": "Untitled workout",
@@ -10035,31 +10741,72 @@
   "gymEmptyBody": "Log a lift to track it here and feed your training load.",
   "gymPrBadge": "PR",
   "gymExercisesShort": "{count, plural, one{{count} exercise} other{{count} exercises}}",
-  "@gymExercisesShort": {"description": "Exercise count on a gym workout row", "placeholders": {"count": {"type": "int"}}},
+  "@gymExercisesShort": {
+    "description": "Exercise count on a gym workout row",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymVolumeShort": "{volume} kg",
-  "@gymVolumeShort": {"description": "Total working volume (kg) on a gym workout row", "placeholders": {"volume": {"type": "int"}}},
+  "@gymVolumeShort": {
+    "description": "Total working volume (kg) on a gym workout row",
+    "placeholders": {
+      "volume": {
+        "type": "int"
+      }
+    }
+  },
   "gymNotFound": "Workout not found.",
   "gymEdit": "Edit",
   "gymDelete": "Delete",
   "gymPublic": "Public",
-  "@gymPublic": { "description": "Visibility chip on the gym workout detail when the workout is shared publicly." },
+  "@gymPublic": {
+    "description": "Visibility chip on the gym workout detail when the workout is shared publicly."
+  },
   "gymPrivate": "Private",
-  "@gymPrivate": { "description": "Visibility chip on the gym workout detail when the workout is private." },
+  "@gymPrivate": {
+    "description": "Visibility chip on the gym workout detail when the workout is private."
+  },
   "gymMakePublic": "Make public",
-  "@gymMakePublic": { "description": "Action that flips a gym workout to public." },
+  "@gymMakePublic": {
+    "description": "Action that flips a gym workout to public."
+  },
   "gymMakePrivate": "Make private",
-  "@gymMakePrivate": { "description": "Action that flips a gym workout back to private." },
+  "@gymMakePrivate": {
+    "description": "Action that flips a gym workout back to private."
+  },
   "gymVisibilityFailed": "Couldn't update visibility: {error}",
-  "@gymVisibilityFailed": { "description": "Banner when toggling a gym workout's visibility fails.", "placeholders": { "error": {} } },
+  "@gymVisibilityFailed": {
+    "description": "Banner when toggling a gym workout's visibility fails.",
+    "placeholders": {
+      "error": {}
+    }
+  },
   "gymNotes": "Notes",
   "gymKg": "kg",
   "gymReps": "Reps",
   "gymRpe": "RPE",
   "gymDuration": "Time (s)",
   "gymDurationValue": "{seconds}s",
-  "@gymDurationValue": {"description": "A set's hold/interval time in seconds", "placeholders": {"seconds": {"type": "String"}}},
+  "@gymDurationValue": {
+    "description": "A set's hold/interval time in seconds",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
   "gymSetN": "Set {n}",
-  "@gymSetN": {"description": "Set ordinal label in a gym workout", "placeholders": {"n": {"type": "int"}}},
+  "@gymSetN": {
+    "description": "Set ordinal label in a gym workout",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "gymPrWeight": "Heaviest",
   "gymPrVolume": "Top volume",
   "gymPrE1rm": "Best est. 1RM",
@@ -10068,18 +10815,53 @@
   "gymRecordsSubtitle": "Your best lift for every weighted exercise.",
   "gymRecordsEmpty": "No weighted lifts logged yet. Add a weight to a set to start tracking your bests.",
   "gymRecordsLastDone": "Last {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, one{1 session} other{{count} sessions}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "Back to records",
   "gymExerciseEmpty": "No history for this exercise yet.",
   "gymSinceFirstUp": "up {delta} since first session",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "down {delta} since first session",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "no change since first session",
   "gymDetailLastTime": "Last time {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "Volume",
   "gymDeleteConfirmTitle": "Delete workout?",
   "gymDeleteConfirmBody": "This permanently removes the workout and its sets.",
@@ -10119,7 +10901,14 @@
   "gymRoutineBack": "Back to routines",
   "gymRoutineNotFound": "Routine not found.",
   "gymRoutineExerciseCount": "{count, plural, one{{count} exercise} other{{count} exercises}}",
-  "@gymRoutineExerciseCount": {"description": "Exercise count on a routine card / detail header", "placeholders": {"count": {"type": "int"}}},
+  "@gymRoutineExerciseCount": {
+    "description": "Exercise count on a routine card / detail header",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymRoutineStart": "Start routine",
   "gymRoutinePublishLabel": "Publish to a club",
   "@gymRoutinePublishLabel": {
@@ -10155,7 +10944,14 @@
   "gymRoutineEmptyBody": "Save a logged workout as a routine, or build one from scratch, to reuse it.",
   "gymRoutineTargetReps": "Target reps",
   "gymRoutineTargetWeight": "Target weight ({unit})",
-  "@gymRoutineTargetWeight": {"description": "Routine builder/detail: target weight column header with unit", "placeholders": {"unit": {"type": "String"}}},
+  "@gymRoutineTargetWeight": {
+    "description": "Routine builder/detail: target weight column header with unit",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
   "gymRoutineEditorNewTitle": "New routine",
   "gymRoutineEditorTitleLabel": "Routine name",
   "gymRoutineEditorTitlePlaceholder": "e.g. Push day A",
@@ -10184,7 +10980,14 @@
   "gymRoutineModalityBodyweightReps": "Bodyweight reps",
   "gymRoutineSupersetToggle": "Superset with the next exercise",
   "gymRoutineSupersetBadge": "Superset {group}",
-  "@gymRoutineSupersetBadge": {"description": "Routine detail: superset group badge", "placeholders": {"group": {"type": "int"}}},
+  "@gymRoutineSupersetBadge": {
+    "description": "Routine detail: superset group badge",
+    "placeholders": {
+      "group": {
+        "type": "int"
+      }
+    }
+  },
   "gymRoutineAdvanced": "Advanced",
   "gymRoutineProgression": "Progression",
   "gymRoutineProgressionNone": "None",
@@ -10194,10 +10997,24 @@
   "gymRoutineProgressionPercentCycle": "% of 1RM cycle",
   "gymRoutineProgressionRpeAutoreg": "RPE auto-regulation",
   "gymRoutineProgressionIncrementLabel": "Weight step ({unit})",
-  "@gymRoutineProgressionIncrementLabel": {"description": "Routine builder: progression weight increment field, with unit", "placeholders": {"unit": {"type": "String"}}},
+  "@gymRoutineProgressionIncrementLabel": {
+    "description": "Routine builder: progression weight increment field, with unit",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
   "gymRoutineProgressionPercentLabel": "% of 1RM",
   "gymRoutineProgressionOneRmLabel": "1RM ({unit})",
-  "@gymRoutineProgressionOneRmLabel": {"description": "Routine builder: progression 1RM field, with unit", "placeholders": {"unit": {"type": "String"}}},
+  "@gymRoutineProgressionOneRmLabel": {
+    "description": "Routine builder: progression 1RM field, with unit",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
   "gymRoutineProgressionTargetRpeLabel": "Target RPE",
   "gymRoutineNextTarget": "Next target",
   "gymRoutineNextTargetIncreaseWeight": "Add load next time",
@@ -10205,7 +11022,17 @@
   "gymRoutineNextTargetHold": "Hold — repeat this target",
   "gymRoutineNextTargetDeload": "Deload — back off the load",
   "gymRoutineNextTargetRepClimb": "rep climb {from}→{to}",
-  "@gymRoutineNextTargetRepClimb": {"description": "Workout review: next-target rep-climb delta", "placeholders": {"from": {"type": "int"}, "to": {"type": "int"}}},
+  "@gymRoutineNextTargetRepClimb": {
+    "description": "Workout review: next-target rep-climb delta",
+    "placeholders": {
+      "from": {
+        "type": "int"
+      },
+      "to": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionTitle": "Nutrition",
   "nutritionLogFood": "Log food",
   "nutritionCalories": "Calories",
@@ -10218,30 +11045,92 @@
   "nutritionNoTargets": "Add your height, weight, age and sex on the web app to see calorie + macro targets.",
   "nutritionWeeklyTrend": "Last 7 days",
   "nutritionCaloriesLeft": "{n} kcal left",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal over",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "On target",
   "nutritionMacroOver": "{n} over target",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "Target reached",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "Goal reached",
   "nutritionWaterRemaining": "{n} ml left",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "On goal",
   "nutritionWeekUnderGoal": "{n} under goal/day",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "{n} over goal/day",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "Daily goal",
   "nutritionGoalBreakdown": "Goal {base} + {exercise} kcal burned today",
   "dashGymReadinessIncluded": "Recent gym sessions are factored into your fatigue.",
   "dashGymReadinessExcluded": "Gym load is excluded from your run readiness.",
   "prefsExcludeGymFromReadiness": "Exclude gym load from run readiness",
   "prefsExcludeGymFromReadinessHint": "By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "No food logged today",
   "nutritionEmptyBody": "Log a meal to track your calories and macros.",
   "nutritionSlotBreakfast": "Breakfast",
@@ -10299,152 +11188,388 @@
   "nutritionAdd": "Add",
   "nutritionCancel": "Cancel",
   "sessionTitle": "Sessions",
-  "@sessionTitle": {"description": "App bar title for the session-plans list (yoga/pilates/class sequences)"},
+  "@sessionTitle": {
+    "description": "App bar title for the session-plans list (yoga/pilates/class sequences)"
+  },
   "sessionEmpty": "No session plans yet.",
-  "@sessionEmpty": {"description": "Empty-state line on the session-plans list"},
+  "@sessionEmpty": {
+    "description": "Empty-state line on the session-plans list"
+  },
   "sessionEmptyHint": "Build a reusable yoga, pilates or class sequence on the web.",
-  "@sessionEmptyHint": {"description": "Empty-state hint pointing to the web editor (mobile is read-only in P1)"},
+  "@sessionEmptyHint": {
+    "description": "Empty-state hint pointing to the web editor (mobile is read-only in P1)"
+  },
   "sessionUntitled": "Untitled session",
-  "@sessionUntitled": {"description": "Fallback title for a session plan with no title"},
+  "@sessionUntitled": {
+    "description": "Fallback title for a session plan with no title"
+  },
   "sessionNotFound": "Session plan not found.",
-  "@sessionNotFound": {"description": "Shown when a session plan can't be loaded"},
+  "@sessionNotFound": {
+    "description": "Shown when a session plan can't be loaded"
+  },
   "sessionMakePublic": "Make public",
-  "@sessionMakePublic": {"description": "Owner action to make a session plan publicly shareable"},
+  "@sessionMakePublic": {
+    "description": "Owner action to make a session plan publicly shareable"
+  },
   "sessionMakePrivate": "Make private",
-  "@sessionMakePrivate": {"description": "Owner action to make a public session plan private again"},
+  "@sessionMakePrivate": {
+    "description": "Owner action to make a public session plan private again"
+  },
   "sessionVisibilityError": "Couldn't change visibility.",
-  "@sessionVisibilityError": {"description": "Shown when toggling a session plan's public visibility fails"},
+  "@sessionVisibilityError": {
+    "description": "Shown when toggling a session plan's public visibility fails"
+  },
   "sessionSteps": "Sequence",
-  "@sessionSteps": {"description": "Heading above the expanded list of movement steps"},
+  "@sessionSteps": {
+    "description": "Heading above the expanded list of movement steps"
+  },
   "sessionStepHold": "{name} · hold {seconds}s",
-  "@sessionStepHold": {"description": "A timed hold step in the sequence", "placeholders": {"name": {"type": "Object"}, "seconds": {"type": "Object"}}},
+  "@sessionStepHold": {
+    "description": "A timed hold step in the sequence",
+    "placeholders": {
+      "name": {
+        "type": "Object"
+      },
+      "seconds": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionStepReps": "{name} · {reps} reps",
-  "@sessionStepReps": {"description": "A counted-reps step in the sequence", "placeholders": {"name": {"type": "Object"}, "reps": {"type": "Object"}}},
+  "@sessionStepReps": {
+    "description": "A counted-reps step in the sequence",
+    "placeholders": {
+      "name": {
+        "type": "Object"
+      },
+      "reps": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionStepFlow": "{name} · flow {seconds}s",
-  "@sessionStepFlow": {"description": "A continuous flow step in the sequence", "placeholders": {"name": {"type": "Object"}, "seconds": {"type": "Object"}}},
+  "@sessionStepFlow": {
+    "description": "A continuous flow step in the sequence",
+    "placeholders": {
+      "name": {
+        "type": "Object"
+      },
+      "seconds": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionSideLeft": "{name} (Left)",
-  "@sessionSideLeft": {"description": "The left half of a per-side movement step in the sequence", "placeholders": {"name": {"type": "Object"}}},
+  "@sessionSideLeft": {
+    "description": "The left half of a per-side movement step in the sequence",
+    "placeholders": {
+      "name": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionSideRight": "{name} (Right)",
-  "@sessionSideRight": {"description": "The right half of a per-side movement step in the sequence", "placeholders": {"name": {"type": "Object"}}},
+  "@sessionSideRight": {
+    "description": "The right half of a per-side movement step in the sequence",
+    "placeholders": {
+      "name": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionEstDuration": "Est. {minutes} min",
-  "@sessionEstDuration": {"description": "Estimated total duration of a session plan in minutes", "placeholders": {"minutes": {"type": "Object"}}},
+  "@sessionEstDuration": {
+    "description": "Estimated total duration of a session plan in minutes",
+    "placeholders": {
+      "minutes": {
+        "type": "Object"
+      }
+    }
+  },
   "gymSessionStart": "Start session",
-  "@gymSessionStart": {"description": "Button to begin the guided weightlifting session runner"},
+  "@gymSessionStart": {
+    "description": "Button to begin the guided weightlifting session runner"
+  },
   "gymSessionStep": "{exercise} · set {set} of {total}",
-  "@gymSessionStep": {"description": "Current step label in the guided weightlifting session", "placeholders": {"exercise": {"type": "Object"}, "set": {"type": "Object"}, "total": {"type": "Object"}}},
+  "@gymSessionStep": {
+    "description": "Current step label in the guided weightlifting session",
+    "placeholders": {
+      "exercise": {
+        "type": "Object"
+      },
+      "set": {
+        "type": "Object"
+      },
+      "total": {
+        "type": "Object"
+      }
+    }
+  },
   "gymSessionComplete": "Session complete",
-  "@gymSessionComplete": {"description": "Heading shown when every set in the session is done"},
+  "@gymSessionComplete": {
+    "description": "Heading shown when every set in the session is done"
+  },
   "gymSessionSkipSet": "Skip set",
-  "@gymSessionSkipSet": {"description": "Button to skip the current set in the session runner"},
+  "@gymSessionSkipSet": {
+    "description": "Button to skip the current set in the session runner"
+  },
   "gymSessionRewind": "Previous",
-  "@gymSessionRewind": {"description": "Button to step back to the previous set in the session runner"},
+  "@gymSessionRewind": {
+    "description": "Button to step back to the previous set in the session runner"
+  },
   "gymSessionAbandon": "Abandon",
-  "@gymSessionAbandon": {"description": "Button to abandon the guided weightlifting session"},
+  "@gymSessionAbandon": {
+    "description": "Button to abandon the guided weightlifting session"
+  },
   "gymSessionFinish": "Finish",
-  "@gymSessionFinish": {"description": "Button to finish and save the guided weightlifting session"},
+  "@gymSessionFinish": {
+    "description": "Button to finish and save the guided weightlifting session"
+  },
   "gymSessionDiscardTitle": "Discard session?",
-  "@gymSessionDiscardTitle": {"description": "Title of the dialog confirming abandonment of a guided session"},
+  "@gymSessionDiscardTitle": {
+    "description": "Title of the dialog confirming abandonment of a guided session"
+  },
   "gymSessionDiscardBody": "Your progress in this session won't be saved.",
-  "@gymSessionDiscardBody": {"description": "Body of the dialog confirming abandonment of a guided session"},
+  "@gymSessionDiscardBody": {
+    "description": "Body of the dialog confirming abandonment of a guided session"
+  },
   "gymSessionDiscardConfirm": "Discard",
-  "@gymSessionDiscardConfirm": {"description": "Confirm button to discard the guided session"},
+  "@gymSessionDiscardConfirm": {
+    "description": "Confirm button to discard the guided session"
+  },
   "gymSessionSaved": "Workout saved",
-  "@gymSessionSaved": {"description": "Banner shown after a guided session is saved"},
+  "@gymSessionSaved": {
+    "description": "Banner shown after a guided session is saved"
+  },
   "gymSessionSaveFailed": "Couldn't save workout",
-  "@gymSessionSaveFailed": {"description": "Banner shown when saving a guided session fails"},
+  "@gymSessionSaveFailed": {
+    "description": "Banner shown when saving a guided session fails"
+  },
   "gymSessionSetProgress": "{done}/{total}",
-  "@gymSessionSetProgress": {"description": "Logged-vs-planned set count on the guided-session finish view", "placeholders": {"done": {"type": "Object"}, "total": {"type": "Object"}}},
+  "@gymSessionSetProgress": {
+    "description": "Logged-vs-planned set count on the guided-session finish view",
+    "placeholders": {
+      "done": {
+        "type": "Object"
+      },
+      "total": {
+        "type": "Object"
+      }
+    }
+  },
   "gymSessionLogSet": "Complete set",
-  "@gymSessionLogSet": {"description": "Button to log the current set's reps/weight and advance the guided session"},
+  "@gymSessionLogSet": {
+    "description": "Button to log the current set's reps/weight and advance the guided session"
+  },
   "gymSessionRest": "Rest",
-  "@gymSessionRest": {"description": "Label for the rest period between sets in the session runner"},
+  "@gymSessionRest": {
+    "description": "Label for the rest period between sets in the session runner"
+  },
   "gymSessionRestRemaining": "Rest {seconds}s",
-  "@gymSessionRestRemaining": {"description": "Countdown of remaining rest seconds between sets", "placeholders": {"seconds": {"type": "Object"}}},
+  "@gymSessionRestRemaining": {
+    "description": "Countdown of remaining rest seconds between sets",
+    "placeholders": {
+      "seconds": {
+        "type": "Object"
+      }
+    }
+  },
   "gymSessionRestSkip": "Skip rest",
-  "@gymSessionRestSkip": {"description": "Button to skip the rest period and advance to the next set"},
+  "@gymSessionRestSkip": {
+    "description": "Button to skip the rest period and advance to the next set"
+  },
   "gymSessionTarget": "Target",
-  "@gymSessionTarget": {"description": "Label preceding the planned reps and weight for the current set"},
+  "@gymSessionTarget": {
+    "description": "Label preceding the planned reps and weight for the current set"
+  },
   "gymReviewAdherence": "{pct}% adherence",
-  "@gymReviewAdherence": {"description": "Adherence percentage summary on the guided-session review screen", "placeholders": {"pct": {"type": "Object"}}},
+  "@gymReviewAdherence": {
+    "description": "Adherence percentage summary on the guided-session review screen",
+    "placeholders": {
+      "pct": {
+        "type": "Object"
+      }
+    }
+  },
   "gymReviewVerdictCompleted": "Completed",
-  "@gymReviewVerdictCompleted": {"description": "Verdict label when the guided session was fully completed"},
+  "@gymReviewVerdictCompleted": {
+    "description": "Verdict label when the guided session was fully completed"
+  },
   "gymReviewVerdictPartial": "Partly done",
-  "@gymReviewVerdictPartial": {"description": "Verdict label when the guided session was partly completed"},
+  "@gymReviewVerdictPartial": {
+    "description": "Verdict label when the guided session was partly completed"
+  },
   "gymReviewVerdictAbandoned": "Abandoned",
-  "@gymReviewVerdictAbandoned": {"description": "Verdict label when the guided session was abandoned"},
+  "@gymReviewVerdictAbandoned": {
+    "description": "Verdict label when the guided session was abandoned"
+  },
   "gymReviewStatusHit": "Hit",
-  "@gymReviewStatusHit": {"description": "Per-set status when the planned target was met"},
+  "@gymReviewStatusHit": {
+    "description": "Per-set status when the planned target was met"
+  },
   "gymReviewStatusPartial": "Partial",
-  "@gymReviewStatusPartial": {"description": "Per-set status when only part of the planned target was met"},
+  "@gymReviewStatusPartial": {
+    "description": "Per-set status when only part of the planned target was met"
+  },
   "gymReviewStatusMissed": "Missed",
-  "@gymReviewStatusMissed": {"description": "Per-set status when the planned set was not performed"},
+  "@gymReviewStatusMissed": {
+    "description": "Per-set status when the planned set was not performed"
+  },
   "gymReviewStatusExtra": "Extra",
-  "@gymReviewStatusExtra": {"description": "Per-set status for a set performed beyond the plan"},
+  "@gymReviewStatusExtra": {
+    "description": "Per-set status for a set performed beyond the plan"
+  },
   "sessionRunStart": "Start session",
-  "@sessionRunStart": {"description": "Button to begin the timed yoga/pilates follow-along player"},
+  "@sessionRunStart": {
+    "description": "Button to begin the timed yoga/pilates follow-along player"
+  },
   "sessionRunStep": "{name}",
-  "@sessionRunStep": {"description": "Current movement name in the follow-along session player", "placeholders": {"name": {"type": "Object"}}},
+  "@sessionRunStep": {
+    "description": "Current movement name in the follow-along session player",
+    "placeholders": {
+      "name": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionRunDone": "Done",
-  "@sessionRunDone": {"description": "Button to mark the current movement complete in the session player"},
+  "@sessionRunDone": {
+    "description": "Button to mark the current movement complete in the session player"
+  },
   "sessionRunSkip": "Skip",
-  "@sessionRunSkip": {"description": "Button to skip the current movement in the session player"},
+  "@sessionRunSkip": {
+    "description": "Button to skip the current movement in the session player"
+  },
   "sessionRunPause": "Pause",
-  "@sessionRunPause": {"description": "Button to pause the follow-along session player"},
+  "@sessionRunPause": {
+    "description": "Button to pause the follow-along session player"
+  },
   "sessionRunResume": "Resume",
-  "@sessionRunResume": {"description": "Button to resume the paused follow-along session player"},
+  "@sessionRunResume": {
+    "description": "Button to resume the paused follow-along session player"
+  },
   "sessionRunAbandon": "Abandon",
-  "@sessionRunAbandon": {"description": "Button to abandon the follow-along session"},
+  "@sessionRunAbandon": {
+    "description": "Button to abandon the follow-along session"
+  },
   "sessionRunFinish": "Finish",
-  "@sessionRunFinish": {"description": "Button to finish and save the follow-along session"},
+  "@sessionRunFinish": {
+    "description": "Button to finish and save the follow-along session"
+  },
   "sessionRunRemaining": "{seconds}s",
-  "@sessionRunRemaining": {"description": "Remaining seconds on the current timed movement", "placeholders": {"seconds": {"type": "Object"}}},
+  "@sessionRunRemaining": {
+    "description": "Remaining seconds on the current timed movement",
+    "placeholders": {
+      "seconds": {
+        "type": "Object"
+      }
+    }
+  },
   "sessionRunComplete": "Session complete",
-  "@sessionRunComplete": {"description": "Heading shown when the follow-along session is finished"},
+  "@sessionRunComplete": {
+    "description": "Heading shown when the follow-along session is finished"
+  },
   "sessionRunSaved": "Session saved",
-  "@sessionRunSaved": {"description": "Banner shown after a follow-along session is saved"},
+  "@sessionRunSaved": {
+    "description": "Banner shown after a follow-along session is saved"
+  },
   "sessionRunSaveFailed": "Couldn't save session",
-  "@sessionRunSaveFailed": {"description": "Banner shown when saving a follow-along session fails"},
+  "@sessionRunSaveFailed": {
+    "description": "Banner shown when saving a follow-along session fails"
+  },
   "sessionRunDiscardTitle": "Discard session?",
-  "@sessionRunDiscardTitle": {"description": "Title of the dialog confirming abandonment of a follow-along session"},
+  "@sessionRunDiscardTitle": {
+    "description": "Title of the dialog confirming abandonment of a follow-along session"
+  },
   "sessionRunDiscardBody": "Your progress in this session won't be saved.",
-  "@sessionRunDiscardBody": {"description": "Body of the dialog confirming abandonment of a follow-along session"},
+  "@sessionRunDiscardBody": {
+    "description": "Body of the dialog confirming abandonment of a follow-along session"
+  },
   "sessionRunDiscardConfirm": "Discard",
-  "@sessionRunDiscardConfirm": {"description": "Confirm button to discard the follow-along session"},
+  "@sessionRunDiscardConfirm": {
+    "description": "Confirm button to discard the follow-along session"
+  },
   "sessionRunVerdictCompleted": "Completed",
-  "@sessionRunVerdictCompleted": {"description": "Verdict label when the follow-along session was fully completed"},
+  "@sessionRunVerdictCompleted": {
+    "description": "Verdict label when the follow-along session was fully completed"
+  },
   "sessionRunVerdictPartial": "Partly done",
-  "@sessionRunVerdictPartial": {"description": "Verdict label when the follow-along session was partly completed"},
+  "@sessionRunVerdictPartial": {
+    "description": "Verdict label when the follow-along session was partly completed"
+  },
   "sessionRunVerdictAbandoned": "Abandoned",
-  "@sessionRunVerdictAbandoned": {"description": "Verdict label when the follow-along session was abandoned"},
+  "@sessionRunVerdictAbandoned": {
+    "description": "Verdict label when the follow-along session was abandoned"
+  },
   "sessionRunStepCount": "Step {index} of {total}",
-  "@sessionRunStepCount": {"description": "Progress counter in the follow-along session player", "placeholders": {"index": {"type": "int"}, "total": {"type": "int"}}},
+  "@sessionRunStepCount": {
+    "description": "Progress counter in the follow-along session player",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "sessionRunSwitchSides": "Switch sides",
-  "@sessionRunSwitchSides": {"description": "Spoken cue when a per-side movement switches from left to right in the session player"},
-
+  "@sessionRunSwitchSides": {
+    "description": "Spoken cue when a per-side movement switches from left to right in the session player"
+  },
   "coachingTitle": "Coaching",
-  "@coachingTitle": {"description": "Title of the coach-athlete roster screen"},
+  "@coachingTitle": {
+    "description": "Title of the coach-athlete roster screen"
+  },
   "coachingLede": "Coach athletes by sharing an invite link, then review their training. Or follow your own coach here.",
-  "@coachingLede": {"description": "Intro line on the coaching roster screen"},
+  "@coachingLede": {
+    "description": "Intro line on the coaching roster screen"
+  },
   "coachingCancel": "Cancel",
-  "@coachingCancel": {"description": "Cancel button in coaching confirmation dialogs"},
+  "@coachingCancel": {
+    "description": "Cancel button in coaching confirmation dialogs"
+  },
   "coachingMyAthletes": "My athletes",
-  "@coachingMyAthletes": {"description": "Heading for the list of athletes a coach manages"},
+  "@coachingMyAthletes": {
+    "description": "Heading for the list of athletes a coach manages"
+  },
   "coachingMyAthletesSub": "Runners who accepted your invite",
-  "@coachingMyAthletesSub": {"description": "Subheading under My athletes"},
+  "@coachingMyAthletesSub": {
+    "description": "Subheading under My athletes"
+  },
   "coachingInviteAnAthlete": "Invite an athlete",
-  "@coachingInviteAnAthlete": {"description": "Button that mints + copies a coach invite link"},
+  "@coachingInviteAnAthlete": {
+    "description": "Button that mints + copies a coach invite link"
+  },
   "coachingCreating": "Creating…",
-  "@coachingCreating": {"description": "Label while a coach invite is being minted"},
+  "@coachingCreating": {
+    "description": "Label while a coach invite is being minted"
+  },
   "coachingPendingInvite": "Pending invite",
-  "@coachingPendingInvite": {"description": "Title of an unredeemed coach invite row"},
+  "@coachingPendingInvite": {
+    "description": "Title of an unredeemed coach invite row"
+  },
   "coachingPendingInviteSub": "Created {date} · not yet accepted",
-  "@coachingPendingInviteSub": {"description": "Subtitle of a pending invite row", "placeholders": {"date": {"type": "String"}}},
+  "@coachingPendingInviteSub": {
+    "description": "Subtitle of a pending invite row",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "coachingCopyLink": "Copy link",
-  "@coachingCopyLink": {"description": "Copy the invite link to the clipboard"},
+  "@coachingCopyLink": {
+    "description": "Copy the invite link to the clipboard"
+  },
   "coachingShareLink": "Share link",
-  "@coachingShareLink": {"description": "Share the invite link via the OS share sheet"},
+  "@coachingShareLink": {
+    "description": "Share the invite link via the OS share sheet"
+  },
   "coachingRevoke": "Revoke",
-  "@coachingRevoke": {"description": "Revoke (delete) a pending coach invite"},
+  "@coachingRevoke": {
+    "description": "Revoke (delete) a pending coach invite"
+  },
   "coachingNoAthletes": "No athletes yet. Invite one to get started.",
   "@coachingNoAthletes": {"description": "Empty state for the athletes list"},
   "coachingRosterTitle": "Athlete roster",
@@ -10465,285 +11590,715 @@
   "@coachingRosterRiskElevated": {"description": "Injury-risk band: elevated"},
   "coachingRosterRiskHigh": "High",
   "@coachingRosterRiskHigh": {"description": "Injury-risk band: high"},
+  "@coachingNoAthletes": {
+    "description": "Empty state for the athletes list"
+  },
   "coachingRunner": "Runner",
-  "@coachingRunner": {"description": "Fallback name for an athlete with no display name"},
+  "@coachingRunner": {
+    "description": "Fallback name for an athlete with no display name"
+  },
   "coachingCoachingSince": "Coaching since {date}",
-  "@coachingCoachingSince": {"description": "When a coach-athlete link was accepted", "placeholders": {"date": {"type": "String"}}},
+  "@coachingCoachingSince": {
+    "description": "When a coach-athlete link was accepted",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "coachingReview": "Review",
-  "@coachingReview": {"description": "Open the athlete review screen"},
+  "@coachingReview": {
+    "description": "Open the athlete review screen"
+  },
   "coachingRemove": "Remove",
-  "@coachingRemove": {"description": "Remove an athlete from the coach's roster"},
+  "@coachingRemove": {
+    "description": "Remove an athlete from the coach's roster"
+  },
   "coachingMyCoaches": "My coaches",
-  "@coachingMyCoaches": {"description": "Heading for the list of coaches an athlete is linked to"},
+  "@coachingMyCoaches": {
+    "description": "Heading for the list of coaches an athlete is linked to"
+  },
   "coachingMyCoachesSub": "Coaches who can see your training",
-  "@coachingMyCoachesSub": {"description": "Subheading under My coaches"},
+  "@coachingMyCoachesSub": {
+    "description": "Subheading under My coaches"
+  },
   "coachingNoCoaches": "You haven't accepted a coach invite yet.",
-  "@coachingNoCoaches": {"description": "Empty state for the coaches list"},
+  "@coachingNoCoaches": {
+    "description": "Empty state for the coaches list"
+  },
   "coachingCoach": "Coach",
-  "@coachingCoach": {"description": "Fallback name for a coach with no display name"},
+  "@coachingCoach": {
+    "description": "Fallback name for a coach with no display name"
+  },
   "coachingLinkedSince": "Linked since {date}",
-  "@coachingLinkedSince": {"description": "When the athlete linked to this coach", "placeholders": {"date": {"type": "String"}}},
+  "@coachingLinkedSince": {
+    "description": "When the athlete linked to this coach",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "coachingLeave": "Leave",
-  "@coachingLeave": {"description": "End the link with a coach"},
+  "@coachingLeave": {
+    "description": "End the link with a coach"
+  },
   "coachingInviteLinkCopied": "Invite link copied",
-  "@coachingInviteLinkCopied": {"description": "Confirmation banner after copying an invite link"},
+  "@coachingInviteLinkCopied": {
+    "description": "Confirmation banner after copying an invite link"
+  },
   "coachingThisAthlete": "this athlete",
-  "@coachingThisAthlete": {"description": "Fallback name in the remove-athlete confirmation"},
+  "@coachingThisAthlete": {
+    "description": "Fallback name in the remove-athlete confirmation"
+  },
   "coachingThisCoach": "this coach",
-  "@coachingThisCoach": {"description": "Fallback name in the leave-coach confirmation"},
+  "@coachingThisCoach": {
+    "description": "Fallback name in the leave-coach confirmation"
+  },
   "coachingRevokeTitle": "Revoke invite?",
-  "@coachingRevokeTitle": {"description": "Title of the revoke-invite confirmation dialog"},
+  "@coachingRevokeTitle": {
+    "description": "Title of the revoke-invite confirmation dialog"
+  },
   "coachingRevokeBody": "The invite link will stop working. You can always create a new one.",
-  "@coachingRevokeBody": {"description": "Body of the revoke-invite confirmation dialog"},
+  "@coachingRevokeBody": {
+    "description": "Body of the revoke-invite confirmation dialog"
+  },
   "coachingRemoveAthleteTitle": "Remove athlete?",
-  "@coachingRemoveAthleteTitle": {"description": "Title of the remove-athlete confirmation dialog"},
+  "@coachingRemoveAthleteTitle": {
+    "description": "Title of the remove-athlete confirmation dialog"
+  },
   "coachingRemoveAthleteBody": "Stop coaching {name}? You'll lose access to their runs and plans.",
-  "@coachingRemoveAthleteBody": {"description": "Body of the remove-athlete confirmation dialog", "placeholders": {"name": {"type": "String"}}},
+  "@coachingRemoveAthleteBody": {
+    "description": "Body of the remove-athlete confirmation dialog",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "coachingLeaveCoachTitle": "Leave coach?",
-  "@coachingLeaveCoachTitle": {"description": "Title of the leave-coach confirmation dialog"},
+  "@coachingLeaveCoachTitle": {
+    "description": "Title of the leave-coach confirmation dialog"
+  },
   "coachingLeaveCoachBody": "Stop sharing your training with {name}?",
-  "@coachingLeaveCoachBody": {"description": "Body of the leave-coach confirmation dialog", "placeholders": {"name": {"type": "String"}}},
+  "@coachingLeaveCoachBody": {
+    "description": "Body of the leave-coach confirmation dialog",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "coachingLoadError": "Couldn't load coaching: {error}",
-  "@coachingLoadError": {"description": "Error banner when the roster fails to load", "placeholders": {"error": {"type": "String"}}},
+  "@coachingLoadError": {
+    "description": "Error banner when the roster fails to load",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "coachingCreateInviteError": "Couldn't create invite: {error}",
-  "@coachingCreateInviteError": {"description": "Error banner when minting an invite fails", "placeholders": {"error": {"type": "String"}}},
+  "@coachingCreateInviteError": {
+    "description": "Error banner when minting an invite fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "coachingRevokeInviteError": "Couldn't revoke invite: {error}",
-  "@coachingRevokeInviteError": {"description": "Error banner when revoking an invite fails", "placeholders": {"error": {"type": "String"}}},
+  "@coachingRevokeInviteError": {
+    "description": "Error banner when revoking an invite fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "coachingRemoveAthleteError": "Couldn't remove athlete: {error}",
-  "@coachingRemoveAthleteError": {"description": "Error banner when removing an athlete fails", "placeholders": {"error": {"type": "String"}}},
+  "@coachingRemoveAthleteError": {
+    "description": "Error banner when removing an athlete fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "coachingEndLinkError": "Couldn't end the link: {error}",
-  "@coachingEndLinkError": {"description": "Error banner when leaving a coach fails", "placeholders": {"error": {"type": "String"}}},
-
+  "@coachingEndLinkError": {
+    "description": "Error banner when leaving a coach fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "coachingAthleteAthleteFallback": "Athlete",
-  "@coachingAthleteAthleteFallback": {"description": "App-bar fallback title for an athlete with no display name"},
+  "@coachingAthleteAthleteFallback": {
+    "description": "App-bar fallback title for an athlete with no display name"
+  },
   "coachingAthleteRunnerFallback": "Runner",
-  "@coachingAthleteRunnerFallback": {"description": "Header fallback name for an athlete with no display name"},
+  "@coachingAthleteRunnerFallback": {
+    "description": "Header fallback name for an athlete with no display name"
+  },
   "coachingAthleteCoachingSince": "Coaching since {date}",
-  "@coachingAthleteCoachingSince": {"description": "When the coaching link started, shown in the athlete header", "placeholders": {"date": {"type": "String"}}},
+  "@coachingAthleteCoachingSince": {
+    "description": "When the coaching link started, shown in the athlete header",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "coachingAthletePlanCompliance": "Plan compliance",
-  "@coachingAthletePlanCompliance": {"description": "Heading of the plan-compliance card on the athlete review screen"},
+  "@coachingAthletePlanCompliance": {
+    "description": "Heading of the plan-compliance card on the athlete review screen"
+  },
   "coachingAthleteNoActivePlan": "No active training plan.",
-  "@coachingAthleteNoActivePlan": {"description": "Shown when the athlete has no active plan"},
+  "@coachingAthleteNoActivePlan": {
+    "description": "Shown when the athlete has no active plan"
+  },
   "coachingAthleteAssignTitle": "Assign a plan",
-  "@coachingAthleteAssignTitle": {"description": "Heading of the assign-a-plan control"},
+  "@coachingAthleteAssignTitle": {
+    "description": "Heading of the assign-a-plan control"
+  },
   "coachingAthleteAssignHint": "Pick one of your plans to assign to {name}.",
-  "@coachingAthleteAssignHint": {"description": "Hint above the assign-a-plan control", "placeholders": {"name": {"type": "String"}}},
+  "@coachingAthleteAssignHint": {
+    "description": "Hint above the assign-a-plan control",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "coachingAthleteAssignSelectLabel": "Plan",
-  "@coachingAthleteAssignSelectLabel": {"description": "Label for the plan dropdown in the assign control"},
+  "@coachingAthleteAssignSelectLabel": {
+    "description": "Label for the plan dropdown in the assign control"
+  },
   "coachingAthleteAssignSelectPlaceholder": "Choose a plan…",
-  "@coachingAthleteAssignSelectPlaceholder": {"description": "Placeholder for the plan dropdown"},
+  "@coachingAthleteAssignSelectPlaceholder": {
+    "description": "Placeholder for the plan dropdown"
+  },
   "coachingAthleteAssignStartLabel": "Start date",
-  "@coachingAthleteAssignStartLabel": {"description": "Label for the start-date picker in the assign control"},
+  "@coachingAthleteAssignStartLabel": {
+    "description": "Label for the start-date picker in the assign control"
+  },
   "coachingAthleteAssigning": "Assigning…",
-  "@coachingAthleteAssigning": {"description": "Label on the assign button while assignment is in flight"},
+  "@coachingAthleteAssigning": {
+    "description": "Label on the assign button while assignment is in flight"
+  },
   "coachingAthleteAssignButton": "Assign plan",
-  "@coachingAthleteAssignButton": {"description": "Button that assigns the selected plan to the athlete"},
+  "@coachingAthleteAssignButton": {
+    "description": "Button that assigns the selected plan to the athlete"
+  },
   "coachingAthleteAssignNoPlans": "Create a training plan first, then you can assign it to your athletes.",
-  "@coachingAthleteAssignNoPlans": {"description": "Shown when the coach has no plans to assign"},
+  "@coachingAthleteAssignNoPlans": {
+    "description": "Shown when the coach has no plans to assign"
+  },
   "coachingAthleteAssignedByYou": "Assigned by you",
-  "@coachingAthleteAssignedByYou": {"description": "Badge when the active plan was assigned by the viewing coach"},
+  "@coachingAthleteAssignedByYou": {
+    "description": "Badge when the active plan was assigned by the viewing coach"
+  },
   "coachingAthleteCannotAssignHasPlan": "This athlete already has an active plan. They'll need to finish or end it before you can assign a new one.",
-  "@coachingAthleteCannotAssignHasPlan": {"description": "Hint when the athlete has a plan not assigned by this coach"},
+  "@coachingAthleteCannotAssignHasPlan": {
+    "description": "Hint when the athlete has a plan not assigned by this coach"
+  },
   "coachingAthleteComplete": "complete",
-  "@coachingAthleteComplete": {"description": "Word following the completion percentage, e.g. '40% complete'"},
+  "@coachingAthleteComplete": {
+    "description": "Word following the completion percentage, e.g. '40% complete'"
+  },
   "coachingAthleteDoneCount": "{done} of {total} done",
-  "@coachingAthleteDoneCount": {"description": "Completed-vs-total workout count", "placeholders": {"done": {"type": "int"}, "total": {"type": "int"}}},
+  "@coachingAthleteDoneCount": {
+    "description": "Completed-vs-total workout count",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "coachingAthleteMissedCount": "{n} missed",
-  "@coachingAthleteMissedCount": {"description": "Count of missed workouts", "placeholders": {"n": {"type": "int"}}},
+  "@coachingAthleteMissedCount": {
+    "description": "Count of missed workouts",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "coachingAthleteStatusDone": "Done",
-  "@coachingAthleteStatusDone": {"description": "Workout status pill: completed"},
+  "@coachingAthleteStatusDone": {
+    "description": "Workout status pill: completed"
+  },
   "coachingAthleteStatusMissed": "Missed",
-  "@coachingAthleteStatusMissed": {"description": "Workout status pill: missed"},
+  "@coachingAthleteStatusMissed": {
+    "description": "Workout status pill: missed"
+  },
   "coachingAthleteStatusUpcoming": "Upcoming",
-  "@coachingAthleteStatusUpcoming": {"description": "Workout status pill: upcoming"},
+  "@coachingAthleteStatusUpcoming": {
+    "description": "Workout status pill: upcoming"
+  },
   "coachingAthleteRecentRuns": "Recent runs",
-  "@coachingAthleteRecentRuns": {"description": "Heading of the recent-runs card on the athlete review screen"},
+  "@coachingAthleteRecentRuns": {
+    "description": "Heading of the recent-runs card on the athlete review screen"
+  },
   "coachingAthleteNoRunsYet": "No runs logged yet.",
-  "@coachingAthleteNoRunsYet": {"description": "Empty state for the recent-runs list"},
+  "@coachingAthleteNoRunsYet": {
+    "description": "Empty state for the recent-runs list"
+  },
   "coachingAthletePrivate": "Private",
-  "@coachingAthletePrivate": {"description": "Badge marking a private run visible to the coach"},
+  "@coachingAthletePrivate": {
+    "description": "Badge marking a private run visible to the coach"
+  },
   "coachingAthleteAssignSuccess": "Plan assigned to {name}",
-  "@coachingAthleteAssignSuccess": {"description": "Success banner after assigning a plan", "placeholders": {"name": {"type": "String"}}},
+  "@coachingAthleteAssignSuccess": {
+    "description": "Success banner after assigning a plan",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "coachingAthleteLoadError": "Couldn't load athlete: {error}",
-  "@coachingAthleteLoadError": {"description": "Error banner when the athlete review screen fails to load", "placeholders": {"error": {"type": "String"}}},
+  "@coachingAthleteLoadError": {
+    "description": "Error banner when the athlete review screen fails to load",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeMarkerHeading": "Course markers",
-  "@routeMarkerHeading": {"description": "Heading for the route course-markers panel"},
+  "@routeMarkerHeading": {
+    "description": "Heading for the route course-markers panel"
+  },
   "routeMarkerAdd": "Add marker",
-  "@routeMarkerAdd": {"description": "Add a course marker"},
+  "@routeMarkerAdd": {
+    "description": "Add a course marker"
+  },
   "routeMarkerEmpty": "No course markers yet. Add aid stations, cutoffs, and more along the route.",
-  "@routeMarkerEmpty": {"description": "Empty state for the course-markers panel"},
+  "@routeMarkerEmpty": {
+    "description": "Empty state for the course-markers panel"
+  },
   "routeMarkerEdit": "Edit marker",
-  "@routeMarkerEdit": {"description": "Edit a course marker"},
+  "@routeMarkerEdit": {
+    "description": "Edit a course marker"
+  },
   "routeMarkerDelete": "Delete",
-  "@routeMarkerDelete": {"description": "Delete a course marker"},
+  "@routeMarkerDelete": {
+    "description": "Delete a course marker"
+  },
   "routeMarkerCancel": "Cancel",
-  "@routeMarkerCancel": {"description": "Cancel the marker editor"},
+  "@routeMarkerCancel": {
+    "description": "Cancel the marker editor"
+  },
   "routeMarkerSave": "Save",
-  "@routeMarkerSave": {"description": "Save a course marker"},
+  "@routeMarkerSave": {
+    "description": "Save a course marker"
+  },
   "routeMarkerSaving": "Saving…",
-  "@routeMarkerSaving": {"description": "Saving a course marker"},
+  "@routeMarkerSaving": {
+    "description": "Saving a course marker"
+  },
   "routeMarkerKindLabel": "Type",
-  "@routeMarkerKindLabel": {"description": "Marker kind field label"},
+  "@routeMarkerKindLabel": {
+    "description": "Marker kind field label"
+  },
   "routeMarkerNameLabel": "Name",
-  "@routeMarkerNameLabel": {"description": "Marker name field label"},
+  "@routeMarkerNameLabel": {
+    "description": "Marker name field label"
+  },
   "routeMarkerNamePlaceholder": "e.g. Aid 2",
-  "@routeMarkerNamePlaceholder": {"description": "Marker name field hint"},
+  "@routeMarkerNamePlaceholder": {
+    "description": "Marker name field hint"
+  },
   "routeMarkerServicesLabel": "Services",
-  "@routeMarkerServicesLabel": {"description": "Aid services field label"},
+  "@routeMarkerServicesLabel": {
+    "description": "Aid services field label"
+  },
   "routeMarkerCutoffLabel": "Cut-off time",
-  "@routeMarkerCutoffLabel": {"description": "Cutoff time field label"},
+  "@routeMarkerCutoffLabel": {
+    "description": "Cutoff time field label"
+  },
   "routeMarkerNoteLabel": "Note",
-  "@routeMarkerNoteLabel": {"description": "Note field label"},
+  "@routeMarkerNoteLabel": {
+    "description": "Note field label"
+  },
   "routeMarkerTapToPlace": "Tap the map to place this marker.",
-  "@routeMarkerTapToPlace": {"description": "Hint to place a marker by tapping the map"},
+  "@routeMarkerTapToPlace": {
+    "description": "Hint to place a marker by tapping the map"
+  },
   "routeMarkerPlaced": "Placed. Tap the map again to move it.",
-  "@routeMarkerPlaced": {"description": "Confirmation that a marker was placed"},
+  "@routeMarkerPlaced": {
+    "description": "Confirmation that a marker was placed"
+  },
   "routeMarkerCutoffAt": "Cut-off {time}",
-  "@routeMarkerCutoffAt": {"description": "Cutoff time detail line", "placeholders": {"time": {"type": "String"}}},
+  "@routeMarkerCutoffAt": {
+    "description": "Cutoff time detail line",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "routeMarkerLabelRequired": "Give the marker a name.",
-  "@routeMarkerLabelRequired": {"description": "Validation: marker name required"},
+  "@routeMarkerLabelRequired": {
+    "description": "Validation: marker name required"
+  },
   "routeMarkerPlaceRequired": "Tap the map to place the marker first.",
-  "@routeMarkerPlaceRequired": {"description": "Validation: marker must be placed"},
+  "@routeMarkerPlaceRequired": {
+    "description": "Validation: marker must be placed"
+  },
   "routeMarkerSaveFailed": "Could not save marker: {error}",
-  "@routeMarkerSaveFailed": {"description": "Error: save marker failed", "placeholders": {"error": {"type": "String"}}},
+  "@routeMarkerSaveFailed": {
+    "description": "Error: save marker failed",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeMarkerDeleteFailed": "Could not delete marker: {error}",
-  "@routeMarkerDeleteFailed": {"description": "Error: delete marker failed", "placeholders": {"error": {"type": "String"}}},
+  "@routeMarkerDeleteFailed": {
+    "description": "Error: delete marker failed",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeMarkerDeleteConfirmTitle": "Delete marker?",
-  "@routeMarkerDeleteConfirmTitle": {"description": "Delete-marker confirm title"},
+  "@routeMarkerDeleteConfirmTitle": {
+    "description": "Delete-marker confirm title"
+  },
   "routeMarkerDeleteConfirmMessage": "This removes the marker from the route permanently.",
-  "@routeMarkerDeleteConfirmMessage": {"description": "Delete-marker confirm message"},
+  "@routeMarkerDeleteConfirmMessage": {
+    "description": "Delete-marker confirm message"
+  },
   "routeMarkerKindAidStation": "Aid station",
-  "@routeMarkerKindAidStation": {"description": "Marker kind: aid station"},
+  "@routeMarkerKindAidStation": {
+    "description": "Marker kind: aid station"
+  },
   "routeMarkerKindCutoff": "Cut-off",
-  "@routeMarkerKindCutoff": {"description": "Marker kind: cutoff"},
+  "@routeMarkerKindCutoff": {
+    "description": "Marker kind: cutoff"
+  },
   "routeMarkerKindCrewAccess": "Crew / parking",
-  "@routeMarkerKindCrewAccess": {"description": "Marker kind: crew access"},
+  "@routeMarkerKindCrewAccess": {
+    "description": "Marker kind: crew access"
+  },
   "routeMarkerKindHazard": "Hazard",
-  "@routeMarkerKindHazard": {"description": "Marker kind: hazard"},
+  "@routeMarkerKindHazard": {
+    "description": "Marker kind: hazard"
+  },
   "routeMarkerKindNote": "Note",
-  "@routeMarkerKindNote": {"description": "Marker kind: note"},
+  "@routeMarkerKindNote": {
+    "description": "Marker kind: note"
+  },
   "routeMarkerKindClimb": "Climb",
-  "@routeMarkerKindClimb": {"description": "Marker kind: climb"},
+  "@routeMarkerKindClimb": {
+    "description": "Marker kind: climb"
+  },
   "routeMarkerKindCustom": "Custom",
-  "@routeMarkerKindCustom": {"description": "Marker kind: custom"},
+  "@routeMarkerKindCustom": {
+    "description": "Marker kind: custom"
+  },
   "routeMarkerServiceWater": "Water",
-  "@routeMarkerServiceWater": {"description": "Aid service: water"},
+  "@routeMarkerServiceWater": {
+    "description": "Aid service: water"
+  },
   "routeMarkerServiceFood": "Food",
-  "@routeMarkerServiceFood": {"description": "Aid service: food"},
+  "@routeMarkerServiceFood": {
+    "description": "Aid service: food"
+  },
   "routeMarkerServiceMedical": "Medical",
-  "@routeMarkerServiceMedical": {"description": "Aid service: medical"},
+  "@routeMarkerServiceMedical": {
+    "description": "Aid service: medical"
+  },
   "routeMarkerServiceToilets": "Toilets",
-  "@routeMarkerServiceToilets": {"description": "Aid service: toilets"},
+  "@routeMarkerServiceToilets": {
+    "description": "Aid service: toilets"
+  },
   "routeMarkerServiceDropBag": "Drop bag",
-  "@routeMarkerServiceDropBag": {"description": "Aid service: drop bag"},
+  "@routeMarkerServiceDropBag": {
+    "description": "Aid service: drop bag"
+  },
   "clubFormEditTitle": "Edit club",
-  "@clubFormEditTitle": {"description": "Title of the edit-club form"},
+  "@clubFormEditTitle": {
+    "description": "Title of the edit-club form"
+  },
   "clubEditorWebsite": "Website",
-  "@clubEditorWebsite": {"description": "Club website link field label"},
+  "@clubEditorWebsite": {
+    "description": "Club website link field label"
+  },
   "clubEditorInstagram": "Instagram",
-  "@clubEditorInstagram": {"description": "Club Instagram link field label"},
+  "@clubEditorInstagram": {
+    "description": "Club Instagram link field label"
+  },
   "clubEditorStrava": "Strava",
-  "@clubEditorStrava": {"description": "Club Strava link field label"},
+  "@clubEditorStrava": {
+    "description": "Club Strava link field label"
+  },
   "clubEditorFacebook": "Facebook",
-  "@clubEditorFacebook": {"description": "Club Facebook link field label"},
+  "@clubEditorFacebook": {
+    "description": "Club Facebook link field label"
+  },
   "clubEditorSaveChanges": "Save changes",
-  "@clubEditorSaveChanges": {"description": "Save button on the edit-club form"},
+  "@clubEditorSaveChanges": {
+    "description": "Save button on the edit-club form"
+  },
   "clubDetailVisitWebsite": "Visit our website",
-  "@clubDetailVisitWebsite": {"description": "Club page website link label"},
+  "@clubDetailVisitWebsite": {
+    "description": "Club page website link label"
+  },
   "clubDetailEditClub": "Edit club",
-  "@clubDetailEditClub": {"description": "Club page edit action tooltip"},
+  "@clubDetailEditClub": {
+    "description": "Club page edit action tooltip"
+  },
   "roadbookTitle": "Roadbook",
-  "@roadbookTitle": {"description": "Roadbook screen title"},
+  "@roadbookTitle": {
+    "description": "Roadbook screen title"
+  },
   "roadbookCrewSheet": "Roadbook (crew sheet)",
-  "@roadbookCrewSheet": {"description": "Route-detail roadbook entry button"},
+  "@roadbookCrewSheet": {
+    "description": "Route-detail roadbook entry button"
+  },
   "roadbookGoalTime": "Goal time",
-  "@roadbookGoalTime": {"description": "Goal time field label"},
+  "@roadbookGoalTime": {
+    "description": "Goal time field label"
+  },
   "roadbookStartTime": "Start time",
-  "@roadbookStartTime": {"description": "Start time field label"},
+  "@roadbookStartTime": {
+    "description": "Start time field label"
+  },
   "roadbookEffort": "Effort",
-  "@roadbookEffort": {"description": "Effort pacing model"},
+  "@roadbookEffort": {
+    "description": "Effort pacing model"
+  },
   "roadbookEven": "Even",
-  "@roadbookEven": {"description": "Even pacing model"},
+  "@roadbookEven": {
+    "description": "Even pacing model"
+  },
   "roadbookStart": "Start",
-  "@roadbookStart": {"description": "Start checkpoint"},
+  "@roadbookStart": {
+    "description": "Start checkpoint"
+  },
   "roadbookFinish": "Finish",
-  "@roadbookFinish": {"description": "Finish checkpoint"},
+  "@roadbookFinish": {
+    "description": "Finish checkpoint"
+  },
   "roadbookShare": "Share",
-  "@roadbookShare": {"description": "Share roadbook"},
+  "@roadbookShare": {
+    "description": "Share roadbook"
+  },
   "roadbookNoMarkers": "Add course markers to build a roadbook.",
-  "@roadbookNoMarkers": {"description": "Empty state on the roadbook screen"},
+  "@roadbookNoMarkers": {
+    "description": "Empty state on the roadbook screen"
+  },
   "roadbookAddElevation": "Add elevation",
-  "@roadbookAddElevation": {"description": "Fetch elevation action"},
+  "@roadbookAddElevation": {
+    "description": "Fetch elevation action"
+  },
   "roadbookElevationUnavailable": "Elevation data unavailable for this route",
-  "@roadbookElevationUnavailable": {"description": "Elevation fetch failed"},
+  "@roadbookElevationUnavailable": {
+    "description": "Elevation fetch failed"
+  },
   "roadbookSummary": "{distance} · {vert} vert · goal {time}",
-  "@roadbookSummary": {"description": "Roadbook summary line", "placeholders": {"distance": {"type": "String"}, "vert": {"type": "String"}, "time": {"type": "String"}}},
+  "@roadbookSummary": {
+    "description": "Roadbook summary line",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "vert": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "roadbookFuel": "Fuel",
-  "@roadbookFuel": {"description": "Toggle to show the per-leg fueling plan on the roadbook"},
+  "@roadbookFuel": {
+    "description": "Toggle to show the per-leg fueling plan on the roadbook"
+  },
   "roadbookHeat": "Heat",
-  "@roadbookHeat": {"description": "Toggle that bumps fluid targets for hot conditions"},
+  "@roadbookHeat": {
+    "description": "Toggle that bumps fluid targets for hot conditions"
+  },
   "roadbookCarbs": "Carbs",
-  "@roadbookCarbs": {"description": "Carbohydrate column/label on the fueling plan"},
+  "@roadbookCarbs": {
+    "description": "Carbohydrate column/label on the fueling plan"
+  },
   "roadbookFluid": "Fluid",
-  "@roadbookFluid": {"description": "Fluid column/label on the fueling plan"},
+  "@roadbookFluid": {
+    "description": "Fluid column/label on the fueling plan"
+  },
   "roadbookCarbsValue": "{grams} g",
-  "@roadbookCarbsValue": {"description": "Per-leg carbohydrate amount in grams", "placeholders": {"grams": {"type": "String"}}},
+  "@roadbookCarbsValue": {
+    "description": "Per-leg carbohydrate amount in grams",
+    "placeholders": {
+      "grams": {
+        "type": "String"
+      }
+    }
+  },
   "roadbookFluidValue": "{ml} ml",
-  "@roadbookFluidValue": {"description": "Per-leg fluid amount in millilitres", "placeholders": {"ml": {"type": "String"}}},
+  "@roadbookFluidValue": {
+    "description": "Per-leg fluid amount in millilitres",
+    "placeholders": {
+      "ml": {
+        "type": "String"
+      }
+    }
+  },
   "roadbookCarryHint": "carry {gels} gels · {fluid} ml",
-  "@roadbookCarryHint": {"description": "Hint for what fuel to carry out of an aid station to reach the next one", "placeholders": {"gels": {"type": "String"}, "fluid": {"type": "String"}}},
+  "@roadbookCarryHint": {
+    "description": "Hint for what fuel to carry out of an aid station to reach the next one",
+    "placeholders": {
+      "gels": {
+        "type": "String"
+      },
+      "fluid": {
+        "type": "String"
+      }
+    }
+  },
   "checkpointCheckinAction": "Checkpoint check-in",
-  "@checkpointCheckinAction": {"description": "Organiser action on event detail opening the aid-station check-in screen"},
+  "@checkpointCheckinAction": {
+    "description": "Organiser action on event detail opening the aid-station check-in screen"
+  },
   "checkpointCheckinTitle": "Aid-station check-in",
-  "@checkpointCheckinTitle": {"description": "Title of the volunteer checkpoint check-in screen"},
+  "@checkpointCheckinTitle": {
+    "description": "Title of the volunteer checkpoint check-in screen"
+  },
   "checkpointSyncNow": "Sync now",
-  "@checkpointSyncNow": {"description": "Tooltip for the manual sync action"},
+  "@checkpointSyncNow": {
+    "description": "Tooltip for the manual sync action"
+  },
   "checkpointPending": "Unsynced",
-  "@checkpointPending": {"description": "Badge shown when there are crossings not yet pushed to the server"},
+  "@checkpointPending": {
+    "description": "Badge shown when there are crossings not yet pushed to the server"
+  },
   "checkpointLoadFailed": "Couldn't load checkpoints",
-  "@checkpointLoadFailed": {"description": "Error state title when checkpoints fail to load"},
+  "@checkpointLoadFailed": {
+    "description": "Error state title when checkpoints fail to load"
+  },
   "checkpointRetry": "Retry",
-  "@checkpointRetry": {"description": "Retry loading checkpoints"},
+  "@checkpointRetry": {
+    "description": "Retry loading checkpoints"
+  },
   "checkpointNone": "This race has no checkpoints yet. Add them on the web before crews check runners in.",
-  "@checkpointNone": {"description": "Empty state when an event has no checkpoints"},
+  "@checkpointNone": {
+    "description": "Empty state when an event has no checkpoints"
+  },
   "checkpointPickLabel": "CHECKPOINT",
-  "@checkpointPickLabel": {"description": "Label above the checkpoint dropdown"},
+  "@checkpointPickLabel": {
+    "description": "Label above the checkpoint dropdown"
+  },
   "checkpointBibLabel": "Bib number",
-  "@checkpointBibLabel": {"description": "Label for the bib entry field"},
+  "@checkpointBibLabel": {
+    "description": "Label for the bib entry field"
+  },
   "checkpointBibHint": "Scan or type a bib",
-  "@checkpointBibHint": {"description": "Hint for the bib entry field"},
+  "@checkpointBibHint": {
+    "description": "Hint for the bib entry field"
+  },
   "checkpointBibRequired": "Enter a bib number first",
-  "@checkpointBibRequired": {"description": "Validation banner when no bib is entered"},
+  "@checkpointBibRequired": {
+    "description": "Validation banner when no bib is entered"
+  },
   "checkpointStampIn": "Stamp IN",
-  "@checkpointStampIn": {"description": "Button to record a runner arriving at the checkpoint"},
+  "@checkpointStampIn": {
+    "description": "Button to record a runner arriving at the checkpoint"
+  },
   "checkpointStampOut": "Stamp OUT",
-  "@checkpointStampOut": {"description": "Button to record a runner leaving the checkpoint"},
+  "@checkpointStampOut": {
+    "description": "Button to record a runner leaving the checkpoint"
+  },
   "checkpointStampedIn": "Bib {bib} stamped in",
-  "@checkpointStampedIn": {"description": "Confirmation after stamping a runner in", "placeholders": {"bib": {"type": "String"}}},
+  "@checkpointStampedIn": {
+    "description": "Confirmation after stamping a runner in",
+    "placeholders": {
+      "bib": {
+        "type": "String"
+      }
+    }
+  },
   "checkpointStampedOut": "Bib {bib} stamped out",
-  "@checkpointStampedOut": {"description": "Confirmation after stamping a runner out", "placeholders": {"bib": {"type": "String"}}},
+  "@checkpointStampedOut": {
+    "description": "Confirmation after stamping a runner out",
+    "placeholders": {
+      "bib": {
+        "type": "String"
+      }
+    }
+  },
   "checkpointStampFailed": "Couldn't save that stamp",
-  "@checkpointStampFailed": {"description": "Error banner when a stamp fails to persist"},
+  "@checkpointStampFailed": {
+    "description": "Error banner when a stamp fails to persist"
+  },
   "checkpointLoggedHere": "LOGGED HERE ({count})",
-  "@checkpointLoggedHere": {"description": "Header above the list of runners stamped at this checkpoint", "placeholders": {"count": {"type": "int"}}},
+  "@checkpointLoggedHere": {
+    "description": "Header above the list of runners stamped at this checkpoint",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "checkpointNoneLoggedHere": "No runners logged at this checkpoint yet.",
-  "@checkpointNoneLoggedHere": {"description": "Empty state for the per-checkpoint crossing list"},
+  "@checkpointNoneLoggedHere": {
+    "description": "Empty state for the per-checkpoint crossing list"
+  },
   "checkpointBibRow": "Bib {bib}",
-  "@checkpointBibRow": {"description": "Row label for a logged crossing identified by bib", "placeholders": {"bib": {"type": "String"}}},
+  "@checkpointBibRow": {
+    "description": "Row label for a logged crossing identified by bib",
+    "placeholders": {
+      "bib": {
+        "type": "String"
+      }
+    }
+  },
   "checkpointInOut": "In {inTime} · Out {outTime}",
-  "@checkpointInOut": {"description": "Subtitle showing a crossing's in and out times", "placeholders": {"inTime": {"type": "String"}, "outTime": {"type": "String"}}},
+  "@checkpointInOut": {
+    "description": "Subtitle showing a crossing's in and out times",
+    "placeholders": {
+      "inTime": {
+        "type": "String"
+      },
+      "outTime": {
+        "type": "String"
+      }
+    }
+  },
   "checkpointWeighInTitle": "Weigh-in",
-  "@checkpointWeighInTitle": {"description": "Title of the Art 9 weigh-in capture sheet"},
+  "@checkpointWeighInTitle": {
+    "description": "Title of the Art 9 weigh-in capture sheet"
+  },
   "checkpointWeighInConsentBlurb": "Body weight and medical-hold notes are health data, recorded only with the runner's consent and visible only to race officials.",
-  "@checkpointWeighInConsentBlurb": {"description": "Explanatory text on the weigh-in consent sheet"},
+  "@checkpointWeighInConsentBlurb": {
+    "description": "Explanatory text on the weigh-in consent sheet"
+  },
   "checkpointWeighInConsent": "Runner consents to recording health data",
-  "@checkpointWeighInConsent": {"description": "Art 9 consent toggle on the weigh-in sheet"},
+  "@checkpointWeighInConsent": {
+    "description": "Art 9 consent toggle on the weigh-in sheet"
+  },
   "checkpointWeighInWeightKg": "Body weight (kg)",
-  "@checkpointWeighInWeightKg": {"description": "Body weight field label on the weigh-in sheet"},
+  "@checkpointWeighInWeightKg": {
+    "description": "Body weight field label on the weigh-in sheet"
+  },
   "checkpointMedicalHold": "Place on medical hold",
-  "@checkpointMedicalHold": {"description": "Medical-hold toggle on the weigh-in sheet"},
+  "@checkpointMedicalHold": {
+    "description": "Medical-hold toggle on the weigh-in sheet"
+  },
   "checkpointWeighInSave": "Save & stamp",
-  "@checkpointWeighInSave": {"description": "Confirm button on the weigh-in sheet"},
+  "@checkpointWeighInSave": {
+    "description": "Confirm button on the weigh-in sheet"
+  },
   "checkpointCancel": "Cancel",
   "@checkpointCancel": {"description": "Cancel the weigh-in sheet"},
   "challengesTitle": "Challenges",
@@ -10915,5 +12470,203 @@
   "integrationsRunsignupOpen": "Open the race calendar",
   "@integrationsRunsignupOpen": {"description": "Action linking to the race calendar from the RunSignUp tile"},
   "integrationsRunsignupUnavailable": "RunSignUp import isn't available yet. parkrun and manual paste still work.",
-  "@integrationsRunsignupUnavailable": {"description": "Explainer when the RunSignUp key is unconfigured"}
+  "@integrationsRunsignupUnavailable": {"description": "Explainer when the RunSignUp key is unconfigured"},
+  "@checkpointCancel": {
+    "description": "Cancel the weigh-in sheet"
+  },
+  "routeConditionsTitle": "Conditions",
+  "@routeConditionsTitle": {
+    "description": "Header for the route condition-reports panel"
+  },
+  "routeConditionsReport": "Report condition",
+  "@routeConditionsReport": {
+    "description": "Button to open the condition-report composer"
+  },
+  "routeConditionsReporting": "Reporting…",
+  "@routeConditionsReporting": {
+    "description": "Submit button busy label while a condition report is being sent"
+  },
+  "routeConditionsReported": "Condition reported",
+  "@routeConditionsReported": {
+    "description": "Confirmation banner after a condition report is filed"
+  },
+  "routeConditionsReportFailed": "Could not report condition",
+  "@routeConditionsReportFailed": {
+    "description": "Error banner when a condition report fails to send"
+  },
+  "routeConditionsEmpty": "No condition reports yet.",
+  "@routeConditionsEmpty": {
+    "description": "Empty state for the route condition-reports panel"
+  },
+  "routeConditionsLoading": "Loading…",
+  "@routeConditionsLoading": {
+    "description": "Loading state for the route condition-reports panel"
+  },
+  "routeConditionsCancel": "Cancel",
+  "@routeConditionsCancel": {
+    "description": "Cancel the condition-report composer"
+  },
+  "routeConditionsDelete": "Delete",
+  "@routeConditionsDelete": {
+    "description": "Delete a condition report"
+  },
+  "routeConditionsDeleteTitle": "Delete report?",
+  "@routeConditionsDeleteTitle": {
+    "description": "Title of the delete-condition confirmation dialog"
+  },
+  "routeConditionsDeleteConfirm": "This removes the condition report permanently.",
+  "@routeConditionsDeleteConfirm": {
+    "description": "Body of the delete-condition confirmation dialog"
+  },
+  "routeConditionsDeleteFailed": "Could not delete report",
+  "@routeConditionsDeleteFailed": {
+    "description": "Error banner when deleting a condition report fails"
+  },
+  "routeConditionsKindLabel": "Condition",
+  "@routeConditionsKindLabel": {
+    "description": "Label for the condition-kind dropdown in the composer"
+  },
+  "routeConditionsSeverityLabel": "Severity",
+  "@routeConditionsSeverityLabel": {
+    "description": "Label for the severity dropdown in the composer"
+  },
+  "routeConditionsNoteLabel": "Note",
+  "@routeConditionsNoteLabel": {
+    "description": "Label for the optional note field in the composer"
+  },
+  "routeConditionsNotePlaceholder": "What will the next runner hit?",
+  "@routeConditionsNotePlaceholder": {
+    "description": "Placeholder for the optional note field in the composer"
+  },
+  "routeConditionsAtDistance": "at {distance}",
+  "@routeConditionsAtDistance": {
+    "description": "Distance-along-route label on an anchored condition report",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "routeConditionMuddy": "Muddy",
+  "@routeConditionMuddy": {
+    "description": "Condition kind: muddy"
+  },
+  "routeConditionFlooded": "Flooded",
+  "@routeConditionFlooded": {
+    "description": "Condition kind: flooded"
+  },
+  "routeConditionSnowIce": "Snow / ice",
+  "@routeConditionSnowIce": {
+    "description": "Condition kind: snow or ice"
+  },
+  "routeConditionOvergrown": "Overgrown",
+  "@routeConditionOvergrown": {
+    "description": "Condition kind: overgrown"
+  },
+  "routeConditionClosed": "Closed",
+  "@routeConditionClosed": {
+    "description": "Condition kind: closed"
+  },
+  "routeConditionHazard": "Hazard",
+  "@routeConditionHazard": {
+    "description": "Condition kind: hazard"
+  },
+  "routeConditionClear": "Clear",
+  "@routeConditionClear": {
+    "description": "Condition kind: clear"
+  },
+  "routeConditionOther": "Other",
+  "@routeConditionOther": {
+    "description": "Condition kind: other"
+  },
+  "routeConditionSeverityInfo": "Info",
+  "@routeConditionSeverityInfo": {
+    "description": "Severity: info"
+  },
+  "routeConditionSeverityCaution": "Caution",
+  "@routeConditionSeverityCaution": {
+    "description": "Severity: caution"
+  },
+  "routeConditionSeverityImpassable": "Impassable",
+  "@routeConditionSeverityImpassable": {
+    "description": "Severity: impassable"
+  },
+  "prefTurnByTurnCues": "Turn-by-turn voice cues",
+  "@prefTurnByTurnCues": {
+    "description": "Settings toggle: spoken turn-by-turn cues while following a route"
+  },
+  "prefTurnByTurnCuesSubtitle": "Spoken turn directions while following a saved route",
+  "@prefTurnByTurnCuesSubtitle": {
+    "description": "Subtitle for the turn-by-turn voice cues settings toggle"
+  },
+  "ttsTurnLeftIn": "In {distance}, turn left",
+  "@ttsTurnLeftIn": {
+    "description": "Spoken turn cue: left turn ahead at a distance",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsTurnRightIn": "In {distance}, turn right",
+  "@ttsTurnRightIn": {
+    "description": "Spoken turn cue: right turn ahead at a distance",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsTurnLeftNow": "Turn left",
+  "@ttsTurnLeftNow": {
+    "description": "Spoken turn cue: turn left now"
+  },
+  "ttsTurnRightNow": "Turn right",
+  "@ttsTurnRightNow": {
+    "description": "Spoken turn cue: turn right now"
+  },
+  "ttsSlightLeft": "Bear left",
+  "@ttsSlightLeft": {
+    "description": "Spoken turn cue: slight left"
+  },
+  "ttsSlightRight": "Bear right",
+  "@ttsSlightRight": {
+    "description": "Spoken turn cue: slight right"
+  },
+  "ttsUturn": "Make a U-turn",
+  "@ttsUturn": {
+    "description": "Spoken turn cue: u-turn"
+  },
+  "routeOfflinePackDownloading": "Caching map: {done} / {total}",
+  "@routeOfflinePackDownloading": {
+    "description": "Progress label while an offline map tile pack downloads",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "routeOfflinePackReady": "Map saved for offline",
+  "@routeOfflinePackReady": {
+    "description": "Status when an offline map tile pack finished downloading"
+  },
+  "routeOfflinePackPartial": "Map partly saved ({done} / {total}) — retry",
+  "@routeOfflinePackPartial": {
+    "description": "Status when an offline map tile pack only partly downloaded",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "routeOfflinePackTooLarge": "This route is too large to cache offline",
+  "@routeOfflinePackTooLarge": {
+    "description": "Error when a route's offline tile pack would exceed the tile cap"
+  }
 }

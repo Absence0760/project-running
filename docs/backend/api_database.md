@@ -227,6 +227,48 @@ create index route_markers_route_pos on route_markers (route_id, position_m);
 
 ---
 
+#### `route_conditions`
+
+Community condition reports on a saved route — "creek crossing flooded",
+"trail closed for logging", "ice on the north face" (migration
+`20270215_001`). Unlike `route_markers` (owner-only), the INSERT is
+**visibility-gated** so **any signed-in viewer** of the route can file a
+report (`auth.uid() = user_id and exists (select 1 from routes where routes.id
+= route_conditions.route_id)`, picking up `routes` RLS); DELETE is the author
+**or** the route owner (spam cleanup). `condition` + `severity` are narrow
+unions (CHECK + TS unions `RouteConditionKind`/`RouteConditionSeverity` +
+`check_constraint_unions.mjs` guard). The anchor (`lat`/`lng`) is optional;
+`position_m` is derived from `routes.geom` by trigger (null when unanchored).
+The canonical display read is the `route_conditions_for_viewer(p_route_id)`
+SECURITY DEFINER RPC, which gates visibility and **nulls the
+lat/lng/position_m of any report inside the owner's privacy zones for a
+non-owner** (the condition analogue of `route_markers_for_viewer`; client read
+fails closed to `[]`). See [../features/trail_navigation.md](../features/trail_navigation.md)
++ [decisions.md § 171](../architecture/decisions.md).
+
+```sql
+create table route_conditions (
+  id          uuid primary key default gen_random_uuid(),
+  route_id    uuid references routes(id) on delete cascade not null,
+  user_id     uuid references auth.users(id) on delete cascade not null,
+  condition   text not null
+              check (condition in ('clear','muddy','flooded','snow_ice',
+                                   'overgrown','closed','hazard','other')),
+  severity    text not null default 'info'
+              check (severity in ('info','caution','impassable')),
+  note        text check (note is null or length(note) between 1 and 500),
+  lat         double precision check (lat is null or lat between -90 and 90),
+  lng         double precision check (lng is null or lng between -180 and 180),
+  position_m  numeric(10,2),   -- derived from routes.geom by trigger
+  created_at  timestamptz not null default now()
+);
+
+create index route_conditions_route_recent
+  on route_conditions (route_id, created_at desc);
+```
+
+---
+
 #### `run_matched_tracks`
 
 Per-run map-match output state. One row per run, populated by a trigger when `runs.track_url` lands or changes.

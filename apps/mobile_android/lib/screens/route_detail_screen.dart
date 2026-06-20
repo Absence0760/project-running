@@ -14,17 +14,20 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../local_route_store.dart';
+import '../offline_tile_pack.dart';
 import '../preferences.dart';
 import '../route_describe_client.dart';
 import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../route_gpx.dart';
 import '../social_service.dart' show ClubView, SocialService;
+import '../tile_pack.dart' show TileBbox;
 import 'roadbook_screen.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/route_markers_panel.dart';
+import '../widgets/route_conditions.dart';
 import '../widgets/route_photos.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
@@ -88,6 +91,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   late bool _isOfflinePinned =
       widget.routeStore.isOfflinePinned(widget.route.id);
   late List<String> _tags = List.from(widget.route.tags);
+
+  // Offline map-tile pack for a route the user pins for offline use. Lazily
+  // built (device-led, owns its own download lifecycle); the download is a
+  // best-effort L4 effect kicked from the pin toggle and never blocks it.
+  OfflineTilePackStore? _tilePackStore;
+  OfflineTilePackStore get _tilePacks => _tilePackStore ??= OfflineTilePackStore(
+        tileUrlTemplate: currentTileUrl(),
+      );
   // Mirrors widget.route.clubId initially so the transfer/detach button
   // can show the current ownership state and `_transferToClub` can
   // refresh it without rebuilding the screen.
@@ -150,6 +161,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     _fetchReviews();
     _loadBookmarkState();
     _resolveDisplayWaypoints();
+  }
+
+  @override
+  void dispose() {
+    _tilePackStore?.dispose();
+    super.dispose();
   }
 
   Future<void> _resolveDisplayWaypoints() async {
@@ -530,8 +547,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       // the SyncService doesn't try to push someone else's route up.
       await widget.routeStore.save(widget.route, markSynced: true);
       await widget.routeStore.pinOffline(id);
+      _downloadTilePack();
     } else {
       await widget.routeStore.unpinOffline(id);
+      // Best-effort — never block the pin toggle on a disk delete (L4).
+      unawaited(_tilePacks.deletePack(id).catchError(
+          (Object e) => debugPrint('tile-pack delete failed: $e')));
     }
     if (mounted) {
       showTopBanner(
@@ -541,6 +562,30 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             : AppLocalizations.of(context).routeDetailOfflineRemoved,
       );
     }
+  }
+
+  /// Kick a best-effort offline tile-pack download for the pinned route. L4:
+  /// the whole effect is fire-and-forget and swallow-on-fail — a failed or
+  /// partial pack never breaks the pin or the online map (decisions §170).
+  void _downloadTilePack() {
+    final wps = widget.route.waypoints;
+    if (wps.length < 2) return;
+    var minLat = wps.first.lat, maxLat = wps.first.lat;
+    var minLng = wps.first.lng, maxLng = wps.first.lng;
+    for (final w in wps) {
+      if (w.lat < minLat) minLat = w.lat;
+      if (w.lat > maxLat) maxLat = w.lat;
+      if (w.lng < minLng) minLng = w.lng;
+      if (w.lng > maxLng) maxLng = w.lng;
+    }
+    final bbox = TileBbox(
+      minLat: minLat,
+      minLng: minLng,
+      maxLat: maxLat,
+      maxLng: maxLng,
+    );
+    unawaited(_tilePacks.downloadPack(widget.route.id, bbox).catchError(
+        (Object e) => debugPrint('tile-pack download failed: $e')));
   }
 
   Future<void> _toggleStar() async {
@@ -1169,6 +1214,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             if (widget.apiClient != null) ...[
               const SizedBox(height: 8),
               RoutePhotos(
+                api: widget.apiClient!,
+                routeId: widget.route.id,
+                routeOwnerId: widget.route.userId,
+              ),
+              RouteConditions(
                 api: widget.apiClient!,
                 routeId: widget.route.id,
                 routeOwnerId: widget.route.userId,

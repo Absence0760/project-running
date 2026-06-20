@@ -169,6 +169,7 @@ enum ActivityType {
 class Preferences extends ChangeNotifier {
   static const _kUseMiles = 'use_miles';
   static const _kAudioCues = 'audio_cues';
+  static const _kTurnByTurnCues = 'turn_by_turn_cues';
   static const _kOnboarded = 'onboarded';
   static const _kTargetPaceSecPerKm = 'target_pace_sec_per_km';
   static const _kGoalsJson = 'goals_json';
@@ -267,6 +268,7 @@ class Preferences extends ChangeNotifier {
   late SharedPreferences _prefs;
   bool _useMiles = false;
   bool _audioCues = true;
+  bool _turnByTurnCues = true;
   bool _onboarded = false;
   int _targetPaceSecPerKm = 0;
   List<RunGoal> _goals = [];
@@ -291,6 +293,7 @@ class Preferences extends ChangeNotifier {
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
   bool get audioCues => _audioCues;
+  bool get turnByTurnCues => _turnByTurnCues;
   bool get onboarded => _onboarded;
   bool get advancedGps => _advancedGps;
 
@@ -485,6 +488,7 @@ class Preferences extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     _useMiles = _prefs.getBool(_kUseMiles) ?? false;
     _audioCues = _prefs.getBool(_kAudioCues) ?? true;
+    _turnByTurnCues = _prefs.getBool(_kTurnByTurnCues) ?? true;
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
@@ -554,6 +558,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setAudioCues(bool v) async {
     _audioCues = v;
     await _prefs.setBool(_kAudioCues, v);
+    notifyListeners();
+  }
+
+  Future<void> setTurnByTurnCues(bool v) async {
+    _turnByTurnCues = v;
+    await _prefs.setBool(_kTurnByTurnCues, v);
     notifyListeners();
   }
 

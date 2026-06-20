@@ -6,6 +6,7 @@
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RoutePhotos from '$lib/components/RoutePhotos.svelte';
+	import RouteConditions from '$lib/components/RouteConditions.svelte';
 	import {
 		buildRouteJsonLd,
 		buildRouteShareCanonical,
@@ -124,6 +125,8 @@
 			{/if}
 
 			<RoutePhotos routeId={route.id} routeOwnerId={route.user_id} />
+
+			<RouteConditions routeId={route.id} routeOwnerId={route.user_id} />
 		</main>
 
 		{#if !auth.loggedIn}

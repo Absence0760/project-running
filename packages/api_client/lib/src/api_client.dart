@@ -968,6 +968,67 @@ class ApiClient {
     await _client.from(RouteMarkerRow.table).delete().eq(RouteMarkerRow.colId, id);
   }
 
+  /// Community condition reports for a route, newest first. Reads through the
+  /// `route_conditions_for_viewer` RPC, which gates visibility and nulls the
+  /// anchor of any report inside the owner's privacy zones for a non-owner.
+  /// Fails closed (empty list) on error so a redaction failure never leaks.
+  Future<List<RouteConditionRow>> fetchRouteConditions(String routeId) async {
+    if (routeId.isEmpty) return const [];
+    try {
+      final data = await _client.rpc('route_conditions_for_viewer', params: {
+        'p_route_id': routeId,
+      });
+      if (data is! List) return const [];
+      return data
+          .whereType<Map>()
+          .map((m) => RouteConditionRow.fromJson(m.cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// File a condition report on a route the caller can see. The RLS
+  /// insert-gate enforces route visibility, so any signed-in viewer — not
+  /// just the owner — can report. Returns the inserted row (with the
+  /// server-derived `position_m` when an anchor was supplied).
+  Future<RouteConditionRow> addRouteCondition({
+    required String routeId,
+    required String condition,
+    required String severity,
+    String? note,
+    double? lat,
+    double? lng,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    final trimmed = note?.trim();
+    final row = await _client
+        .from(RouteConditionRow.table)
+        .insert(<String, dynamic>{
+          RouteConditionRow.colRouteId: routeId,
+          RouteConditionRow.colUserId: userId,
+          RouteConditionRow.colCondition: condition,
+          RouteConditionRow.colSeverity: severity,
+          RouteConditionRow.colNote:
+              (trimmed != null && trimmed.isNotEmpty) ? trimmed : null,
+          RouteConditionRow.colLat: lat,
+          RouteConditionRow.colLng: lng,
+        })
+        .select()
+        .single();
+    return RouteConditionRow.fromJson(row);
+  }
+
+  /// Delete a condition report. RLS allows the author OR the route owner
+  /// (spam cleanup on one's own route).
+  Future<void> deleteRouteCondition(String id) async {
+    await _client
+        .from(RouteConditionRow.table)
+        .delete()
+        .eq(RouteConditionRow.colId, id);
+  }
+
   /// Fetch the user's runs, newest first.
   ///
   /// Returned runs have an empty `track`. Use [fetchTrack] to download the

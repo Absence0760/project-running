@@ -70,6 +70,7 @@ const _tables = <String>{
   'route_reviews',
   'route_photos',
   'route_markers',
+  'route_conditions',
   'clubs',
   'club_members',
   'events',

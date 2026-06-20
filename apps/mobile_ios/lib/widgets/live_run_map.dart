@@ -278,7 +278,14 @@ class LiveRunMap extends StatefulWidget {
     this.markerPlacing = false,
     this.onMarkerPlace,
     this.onMarkerTap,
+    this.offlineTileProvider,
   });
+
+  /// Optional read-through tile provider serving a followed route's offline
+  /// pack from disk first, falling through to the network/LRU cache (set by
+  /// the recorder when following a route that has an offline pack pinned).
+  /// Null → the normal network-cached tile path (decisions §167).
+  final TileProvider? offlineTileProvider;
 
   /// Course markers (aid stations, cutoffs, …) painted as coloured pins
   /// with a label above the trace. Empty = no marker layer.
@@ -761,11 +768,12 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
               userAgentPackageName: 'com.threkir.app',
               maxNativeZoom: 19,
               maxZoom: 22,
-              tileProvider: CachedTileProvider(
-                store: TileCache.store,
-                maxStale: const Duration(days: 30),
-                dio: TileCache.dio,
-              ),
+              tileProvider: widget.offlineTileProvider ??
+                  CachedTileProvider(
+                    store: TileCache.store,
+                    maxStale: const Duration(days: 30),
+                    dio: TileCache.dio,
+                  ),
             ),
 
             // Planned route (underneath) — dashed-looking with lighter color

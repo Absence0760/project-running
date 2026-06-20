@@ -14,6 +14,7 @@
 	import RouteMarkerEditor from '$lib/components/RouteMarkerEditor.svelte';
 	import type { MapMarkerPin } from '$lib/components/RunMap.svelte';
 	import RoutePhotos from '$lib/components/RoutePhotos.svelte';
+	import RouteConditions from '$lib/components/RouteConditions.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
@@ -771,6 +772,8 @@
 			</section>
 
 			<RoutePhotos routeId={route.id} routeOwnerId={route.user_id} wrapperClass="section" />
+
+			<RouteConditions routeId={route.id} routeOwnerId={route.user_id} wrapperClass="section" />
 		</aside>
 		{/if}
 		{/snippet}

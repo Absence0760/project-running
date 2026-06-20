@@ -9668,4 +9668,141 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'La importación de RunSignUp aún no está disponible. parkrun y el pegado manual siguen funcionando.';
+
+  @override
+  String get routeConditionsTitle => 'Condiciones';
+
+  @override
+  String get routeConditionsReport => 'Reportar condición';
+
+  @override
+  String get routeConditionsReporting => 'Enviando…';
+
+  @override
+  String get routeConditionsReported => 'Condición reportada';
+
+  @override
+  String get routeConditionsReportFailed => 'No se pudo reportar la condición';
+
+  @override
+  String get routeConditionsEmpty => 'Aún no hay reportes.';
+
+  @override
+  String get routeConditionsLoading => 'Cargando…';
+
+  @override
+  String get routeConditionsCancel => 'Cancelar';
+
+  @override
+  String get routeConditionsDelete => 'Eliminar';
+
+  @override
+  String get routeConditionsDeleteTitle => '¿Eliminar reporte?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'Esto elimina el reporte de forma permanente.';
+
+  @override
+  String get routeConditionsDeleteFailed => 'No se pudo eliminar el reporte';
+
+  @override
+  String get routeConditionsKindLabel => 'Condición';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Gravedad';
+
+  @override
+  String get routeConditionsNoteLabel => 'Nota';
+
+  @override
+  String get routeConditionsNotePlaceholder =>
+      '¿Qué encontrará el próximo corredor?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'en $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Embarrado';
+
+  @override
+  String get routeConditionFlooded => 'Inundado';
+
+  @override
+  String get routeConditionSnowIce => 'Nieve / hielo';
+
+  @override
+  String get routeConditionOvergrown => 'Cubierto de maleza';
+
+  @override
+  String get routeConditionClosed => 'Cerrado';
+
+  @override
+  String get routeConditionHazard => 'Peligro';
+
+  @override
+  String get routeConditionClear => 'Despejado';
+
+  @override
+  String get routeConditionOther => 'Otro';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Precaución';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Intransitable';
+
+  @override
+  String get prefTurnByTurnCues => 'Indicaciones de voz giro a giro';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Direcciones habladas al seguir una ruta guardada';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'En $distance, gire a la izquierda';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'En $distance, gire a la derecha';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Gire a la izquierda';
+
+  @override
+  String get ttsTurnRightNow => 'Gire a la derecha';
+
+  @override
+  String get ttsSlightLeft => 'Manténgase a la izquierda';
+
+  @override
+  String get ttsSlightRight => 'Manténgase a la derecha';
+
+  @override
+  String get ttsUturn => 'Haga un cambio de sentido';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Almacenando mapa: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Mapa guardado sin conexión';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Mapa parcialmente guardado ($done / $total) — reintentar';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'Esta ruta es demasiado grande para guardar sin conexión';
 }
