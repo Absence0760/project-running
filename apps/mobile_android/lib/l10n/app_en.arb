@@ -11324,6 +11324,92 @@
   "@gymRoutineClubTemplateBadge": {
     "description": "Badge shown on a routine that is already a club-owned template"
   },
+  "gymRoutinePublicBadge": "In the public library",
+  "@gymRoutinePublicBadge": {
+    "description": "Badge shown on a routine that is published to the public library"
+  },
+  "gymRoutinePublishPublicLabel": "Public library",
+  "@gymRoutinePublishPublicLabel": {
+    "description": "Label above the public publish/unpublish control on the routine detail screen"
+  },
+  "gymRoutinePublishPublic": "Publish to public library",
+  "@gymRoutinePublishPublic": {
+    "description": "Button that publishes a personal routine to the public library"
+  },
+  "gymRoutineUnpublishPublic": "Remove from public library",
+  "@gymRoutineUnpublishPublic": {
+    "description": "Button that removes a routine from the public library"
+  },
+  "gymRoutinePublishPublicHint": "Anyone signed in can preview and adopt this routine. Logged workouts stay private.",
+  "@gymRoutinePublishPublicHint": {
+    "description": "Hint under the public-library publish control"
+  },
+  "gymRoutinePublishPublicSuccess": "Routine published to the public library.",
+  "@gymRoutinePublishPublicSuccess": {
+    "description": "Confirmation after publishing a routine to the public library"
+  },
+  "gymRoutineUnpublishPublicSuccess": "Routine removed from the public library.",
+  "@gymRoutineUnpublishPublicSuccess": {
+    "description": "Confirmation after removing a routine from the public library"
+  },
+  "gymRoutinePublishPublicFailed": "Couldn't update public visibility.",
+  "@gymRoutinePublishPublicFailed": {
+    "description": "Error after a failed public-library visibility toggle"
+  },
+  "gymLibraryLink": "Library",
+  "@gymLibraryLink": {
+    "description": "Action that opens the public routine library"
+  },
+  "gymLibraryTitle": "Public routine library",
+  "@gymLibraryTitle": {
+    "description": "App bar title of the public routine library"
+  },
+  "gymLibrarySearchHint": "Search routines by name",
+  "@gymLibrarySearchHint": {
+    "description": "Placeholder in the public routine library search field"
+  },
+  "gymLibraryLoadError": "Couldn't load the library.",
+  "@gymLibraryLoadError": {
+    "description": "Error state in the public routine library"
+  },
+  "gymLibraryEmpty": "No published routines yet.",
+  "@gymLibraryEmpty": {
+    "description": "Empty state when the public routine library has no routines"
+  },
+  "gymLibraryEmptySearch": "No routines match \"{query}\".",
+  "@gymLibraryEmptySearch": {
+    "description": "Empty state when a public routine library search returns nothing",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "gymLibraryByAuthor": "by {author}",
+  "@gymLibraryByAuthor": {
+    "description": "Attribution line on a public routine library entry",
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
+  },
+  "gymLibraryAnonymous": "a lifter",
+  "@gymLibraryAnonymous": {
+    "description": "Fallback author name when a public routine's author has no display name"
+  },
+  "gymLibraryAdopt": "Adopt into my routines",
+  "@gymLibraryAdopt": {
+    "description": "Button that clones a public routine into the viewer's library"
+  },
+  "gymLibraryAdopting": "Adopting…",
+  "@gymLibraryAdopting": {
+    "description": "Busy label while adopting a public routine"
+  },
+  "gymLibraryAdoptFailed": "Couldn't adopt the routine.",
+  "@gymLibraryAdoptFailed": {
+    "description": "Error after a failed public-routine adopt"
+  },
   "gymRoutineDelete": "Delete",
   "gymRoutineDeleteConfirmTitle": "Delete routine?",
   "gymRoutineDeleteConfirmBody": "This permanently removes the routine. Logged workouts are unaffected.",

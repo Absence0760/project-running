@@ -7512,6 +7512,7 @@ export interface GymRoutineSummary {
 	id: string;
 	author_id: string;
 	club_id: string | null;
+	is_public_template: boolean;
 	title: string;
 	notes: string | null;
 	exercise_count: number;
@@ -7589,7 +7590,7 @@ export async function fetchGymRoutinesWithError(
 	if (!userId) return { routines: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.gym_routines)
-		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('author_id', userId)
 		.order('last_modified_at', { ascending: false })
 		.limit(limit);
@@ -7605,7 +7606,7 @@ export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]
 export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetail | null> {
 	const { data: routine, error: rErr } = await supabase
 		.from(TABLES.gym_routines)
-		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('id', id)
 		.maybeSingle();
 	if (rErr || !routine) return null;
@@ -7692,7 +7693,7 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 			exercise_count: exercises.length,
 			last_modified_at: nowIso,
 		})
-		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
 		.single();
 	if (error || !data) throw error ?? new Error('createGymRoutine failed');
 	const routine = data as GymRoutineSummary;
@@ -8734,7 +8735,7 @@ export async function cloneSessionTemplate(templateId: string): Promise<string> 
 export async function fetchClubGymRoutineTemplates(clubId: string): Promise<GymRoutineSummary[]> {
 	const { data, error } = await supabase
 		.from(TABLES.gym_routines)
-		.select('id, author_id, club_id, title, notes, exercise_count, last_modified_at, created_at')
+		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('club_id', clubId)
 		.order('last_modified_at', { ascending: false });
 	if (error) {
@@ -8766,6 +8767,59 @@ export async function cloneGymRoutineTemplate(templateId: string): Promise<strin
 	});
 	if (error) throw error;
 	return data as string;
+}
+
+export type PublicGymRoutineEntry = GymRoutineSummary & {
+	author_handle: string | null;
+};
+
+/// Browse the public gym-routine library — routines published as public
+/// templates that any signed-in user can adopt (migration 20270224_001).
+/// Optional case-insensitive title search. Each entry carries the author's
+/// public display name (handle) joined from user_profiles; no other author
+/// data is exposed. Mirrors fetchPublicPlanLibrary + the mobile
+/// `ApiClient.fetchPublicGymRoutineLibrary`.
+export async function fetchPublicGymRoutineLibrary(
+	query = '',
+	limit = 100
+): Promise<{ routines: PublicGymRoutineEntry[]; error: string | null }> {
+	let q = supabase
+		.from(TABLES.gym_routines)
+		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
+		.eq('is_public_template', true)
+		.order('last_modified_at', { ascending: false })
+		.limit(limit);
+	const trimmed = query.trim();
+	if (trimmed) q = q.ilike('title', `%${trimmed}%`);
+	const { data, error } = await q;
+	if (error) return { routines: [], error: error.message };
+	const rows = (data ?? []) as GymRoutineSummary[];
+	const authorIds = [...new Set(rows.map((r) => r.author_id))];
+	const byId = new Map<string, string | null>();
+	if (authorIds.length > 0) {
+		const { data: profiles } = await supabase
+			.from('user_profiles')
+			.select('id, display_name')
+			.in('id', authorIds);
+		for (const p of profiles ?? []) byId.set(p.id, p.display_name);
+	}
+	return {
+		routines: rows.map((r) => ({ ...r, author_handle: byId.get(r.author_id) ?? null })),
+		error: null,
+	};
+}
+
+/** Publish (or unpublish) a personal gym routine to/from the public library.
+ *  The set_gym_routine_public RPC is author-gated + refuses a club-owned
+ *  routine server-side; publishing flips is_public_template on the routine
+ *  itself (the routine IS the template — no deep-copy, unlike the plan
+ *  library). Mirrors the mobile `ApiClient.setGymRoutinePublic`. */
+export async function setGymRoutinePublic(routineId: string, isPublic: boolean): Promise<void> {
+	const { error } = await supabase.rpc('set_gym_routine_public', {
+		p_routine_id: routineId,
+		p_public: isPublic
+	});
+	if (error) throw error;
 }
 
 // ──────────────────── Race-director checkpoints (P1–P4) ────────────────────

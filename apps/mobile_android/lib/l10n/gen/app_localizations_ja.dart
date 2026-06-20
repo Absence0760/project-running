@@ -8075,6 +8075,68 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymRoutineClubTemplateBadge => 'クラブテンプレート';
 
   @override
+  String get gymRoutinePublicBadge => '公開ライブラリに掲載中';
+
+  @override
+  String get gymRoutinePublishPublicLabel => '公開ライブラリ';
+
+  @override
+  String get gymRoutinePublishPublic => '公開ライブラリに公開';
+
+  @override
+  String get gymRoutineUnpublishPublic => '公開ライブラリから削除';
+
+  @override
+  String get gymRoutinePublishPublicHint =>
+      'サインインしているユーザーは誰でもこのルーティンをプレビューして取り込めます。記録したワークアウトは非公開のままです。';
+
+  @override
+  String get gymRoutinePublishPublicSuccess => 'ルーティンを公開ライブラリに公開しました。';
+
+  @override
+  String get gymRoutineUnpublishPublicSuccess => 'ルーティンを公開ライブラリから削除しました。';
+
+  @override
+  String get gymRoutinePublishPublicFailed => '公開設定を変更できませんでした。';
+
+  @override
+  String get gymLibraryLink => 'ライブラリ';
+
+  @override
+  String get gymLibraryTitle => '公開ルーティンライブラリ';
+
+  @override
+  String get gymLibrarySearchHint => '名前でルーティンを検索';
+
+  @override
+  String get gymLibraryLoadError => 'ライブラリを読み込めませんでした。';
+
+  @override
+  String get gymLibraryEmpty => '公開されたルーティンはまだありません。';
+
+  @override
+  String gymLibraryEmptySearch(String query) {
+    return '「$query」に一致するルーティンはありません。';
+  }
+
+  @override
+  String gymLibraryByAuthor(String author) {
+    return '$author 作成';
+  }
+
+  @override
+  String get gymLibraryAnonymous => 'あるユーザー';
+
+  @override
+  String get gymLibraryAdopt => '自分のルーティンに取り込む';
+
+  @override
+  String get gymLibraryAdopting => '取り込み中…';
+
+  @override
+  String get gymLibraryAdoptFailed => 'ルーティンを取り込めませんでした。';
+
+  @override
   String get gymRoutineDelete => '削除';
 
   @override

@@ -10,6 +10,7 @@ import '../social_service.dart';
 import '../widgets/routine_builder_sheet.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 import 'routine_detail_screen.dart';
+import 'routine_public_library_screen.dart';
 
 /// The routine library — mirrors web `/gym/routines`. Authored routines,
 /// most-recently-modified first; tap → detail. The `New routine` action opens
@@ -152,6 +153,19 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
     );
   }
 
+  void _openPublicLibrary() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RoutinePublicLibraryScreen(
+          api: widget.api,
+          store: widget.store,
+          gymStore: widget.gymStore,
+          social: widget.social,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -161,6 +175,11 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
       appBar: AppBar(
         title: Text(l10n.gymRoutineTitle),
         actions: [
+          IconButton(
+            tooltip: l10n.gymLibraryLink,
+            icon: const Icon(Icons.public),
+            onPressed: _openPublicLibrary,
+          ),
           IconButton(
             tooltip: l10n.gymRoutineNew,
             icon: const Icon(Icons.add),

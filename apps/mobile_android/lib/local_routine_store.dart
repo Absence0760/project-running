@@ -140,6 +140,11 @@ class StoredRoutine implements SyncEntry {
   /// publish control + drives the "Club template" badge on the detail screen.
   String? get clubId => row['club_id'] as String?;
 
+  /// True when this personal routine is published to the public library
+  /// (`gym_routines.is_public_template`, migration 20270224_001). Drives the
+  /// public publish/unpublish toggle + badge on the detail screen.
+  bool get isPublicTemplate => (row['is_public_template'] as bool?) ?? false;
+
   @override
   Map<String, dynamic> toJson() => {
         kLocalStoreVersionKey: kLocalStoreSchemaVersion,
@@ -263,6 +268,24 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     );
     await persist(stored);
     return stored;
+  }
+
+  /// Reflect a server-side public-library toggle in the local cache. The
+  /// `set_gym_routine_public` RPC has already flipped `is_public_template`
+  /// server-side; this updates the cached row in place (kept synced — the
+  /// server is the source of truth) so the detail screen renders the new
+  /// badge/toggle state offline. No-op for an unknown id.
+  Future<void> setPublicLocal(String id, bool isPublic) async {
+    final existing = rowsById[id];
+    if (existing == null) return;
+    final row = Map<String, dynamic>.from(existing.row);
+    row['is_public_template'] = isPublic;
+    await persist(StoredRoutine(
+      row: row,
+      exercises: existing.exercises,
+      syncState: existing.syncState,
+      lastModifiedAt: existing.lastModifiedAt,
+    ));
   }
 
   /// Delete a routine. A routine that was only ever local (pendingCreate)

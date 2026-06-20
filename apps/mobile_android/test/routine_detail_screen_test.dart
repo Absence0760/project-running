@@ -62,11 +62,12 @@ ClubView _club(String id, String name, String role) => ClubView(
     );
 
 Map<String, dynamic> _row(String id, String title,
-        {String? authorId, String? clubId}) =>
+        {String? authorId, String? clubId, bool isPublic = false}) =>
     <String, dynamic>{
       'id': id,
       'author_id': authorId,
       'club_id': clubId,
+      'is_public_template': isPublic,
       'title': title,
       'exercise_count': 1,
       'last_modified_at': DateTime.utc(2026, 5, 1).toIso8601String(),
@@ -216,6 +217,63 @@ void main() {
       await tester.pump();
       expect(find.text('Club template'), findsOneWidget);
       expect(find.text('Publish to a club'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('public publish row shows for the author of a personal routine',
+      (tester) async {
+    final f = await _fixture('public_show');
+    try {
+      await tester.runAsync(() =>
+          f.store.replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(_app(f.store, f.gym, 'r-1', viewerId: 'me'));
+      await tester.pump();
+      expect(find.text('Publish to public library'), findsOneWidget);
+      expect(find.text('In the public library'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('public badge + unpublish action show when already public',
+      (tester) async {
+    final f = await _fixture('public_badge');
+    try {
+      await tester.runAsync(() => f.store.replaceFromServer(
+          _seed(_row('r-1', 'Push day', authorId: 'me', isPublic: true))));
+      await tester.pumpWidget(_app(f.store, f.gym, 'r-1', viewerId: 'me'));
+      await tester.pump();
+      expect(find.text('In the public library'), findsOneWidget);
+      expect(find.text('Remove from public library'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('public publish row hides for a non-author', (tester) async {
+    final f = await _fixture('public_hide_nonauthor');
+    try {
+      await tester.runAsync(() => f.store.replaceFromServer(
+          _seed(_row('r-1', 'Push day', authorId: 'someone-else'))));
+      await tester.pumpWidget(_app(f.store, f.gym, 'r-1', viewerId: 'me'));
+      await tester.pump();
+      expect(find.text('Publish to public library'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('public publish row hides on a club-owned routine',
+      (tester) async {
+    final f = await _fixture('public_hide_club');
+    try {
+      await tester.runAsync(() => f.store.replaceFromServer(
+          _seed(_row('r-1', 'Push day', authorId: 'me', clubId: 'c-1'))));
+      await tester.pumpWidget(_app(f.store, f.gym, 'r-1', viewerId: 'me'));
+      await tester.pump();
+      expect(find.text('Publish to public library'), findsNothing);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

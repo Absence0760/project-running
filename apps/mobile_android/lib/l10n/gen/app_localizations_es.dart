@@ -8518,6 +8518,71 @@ class AppLocalizationsEs extends AppLocalizations {
   String get gymRoutineClubTemplateBadge => 'Plantilla del club';
 
   @override
+  String get gymRoutinePublicBadge => 'En la biblioteca pública';
+
+  @override
+  String get gymRoutinePublishPublicLabel => 'Biblioteca pública';
+
+  @override
+  String get gymRoutinePublishPublic => 'Publicar en la biblioteca pública';
+
+  @override
+  String get gymRoutineUnpublishPublic => 'Quitar de la biblioteca pública';
+
+  @override
+  String get gymRoutinePublishPublicHint =>
+      'Cualquier persona con sesión iniciada puede ver y adoptar esta rutina. Los entrenamientos registrados siguen siendo privados.';
+
+  @override
+  String get gymRoutinePublishPublicSuccess =>
+      'Rutina publicada en la biblioteca pública.';
+
+  @override
+  String get gymRoutineUnpublishPublicSuccess =>
+      'Rutina quitada de la biblioteca pública.';
+
+  @override
+  String get gymRoutinePublishPublicFailed =>
+      'No se pudo cambiar la visibilidad pública.';
+
+  @override
+  String get gymLibraryLink => 'Biblioteca';
+
+  @override
+  String get gymLibraryTitle => 'Biblioteca pública de rutinas';
+
+  @override
+  String get gymLibrarySearchHint => 'Buscar rutinas por nombre';
+
+  @override
+  String get gymLibraryLoadError => 'No se pudo cargar la biblioteca.';
+
+  @override
+  String get gymLibraryEmpty => 'Aún no hay rutinas publicadas.';
+
+  @override
+  String gymLibraryEmptySearch(String query) {
+    return 'Ninguna rutina coincide con \"$query\".';
+  }
+
+  @override
+  String gymLibraryByAuthor(String author) {
+    return 'por $author';
+  }
+
+  @override
+  String get gymLibraryAnonymous => 'un usuario';
+
+  @override
+  String get gymLibraryAdopt => 'Adoptar en mis rutinas';
+
+  @override
+  String get gymLibraryAdopting => 'Adoptando…';
+
+  @override
+  String get gymLibraryAdoptFailed => 'No se pudo adoptar la rutina.';
+
+  @override
   String get gymRoutineDelete => 'Eliminar';
 
   @override

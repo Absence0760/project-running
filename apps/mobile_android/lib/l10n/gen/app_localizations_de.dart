@@ -8522,6 +8522,73 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gymRoutineClubTemplateBadge => 'Club-Vorlage';
 
   @override
+  String get gymRoutinePublicBadge => 'In der öffentlichen Bibliothek';
+
+  @override
+  String get gymRoutinePublishPublicLabel => 'Öffentliche Bibliothek';
+
+  @override
+  String get gymRoutinePublishPublic =>
+      'In öffentlicher Bibliothek veröffentlichen';
+
+  @override
+  String get gymRoutineUnpublishPublic =>
+      'Aus öffentlicher Bibliothek entfernen';
+
+  @override
+  String get gymRoutinePublishPublicHint =>
+      'Alle angemeldeten Nutzer können diese Routine ansehen und übernehmen. Protokollierte Workouts bleiben privat.';
+
+  @override
+  String get gymRoutinePublishPublicSuccess =>
+      'Routine in der öffentlichen Bibliothek veröffentlicht.';
+
+  @override
+  String get gymRoutineUnpublishPublicSuccess =>
+      'Routine aus der öffentlichen Bibliothek entfernt.';
+
+  @override
+  String get gymRoutinePublishPublicFailed =>
+      'Öffentliche Sichtbarkeit konnte nicht geändert werden.';
+
+  @override
+  String get gymLibraryLink => 'Bibliothek';
+
+  @override
+  String get gymLibraryTitle => 'Öffentliche Routine-Bibliothek';
+
+  @override
+  String get gymLibrarySearchHint => 'Routinen nach Namen suchen';
+
+  @override
+  String get gymLibraryLoadError => 'Bibliothek konnte nicht geladen werden.';
+
+  @override
+  String get gymLibraryEmpty => 'Noch keine veröffentlichten Routinen.';
+
+  @override
+  String gymLibraryEmptySearch(String query) {
+    return 'Keine Routinen passen zu \"$query\".';
+  }
+
+  @override
+  String gymLibraryByAuthor(String author) {
+    return 'von $author';
+  }
+
+  @override
+  String get gymLibraryAnonymous => 'einem Sportler';
+
+  @override
+  String get gymLibraryAdopt => 'In meine Routinen übernehmen';
+
+  @override
+  String get gymLibraryAdopting => 'Wird übernommen…';
+
+  @override
+  String get gymLibraryAdoptFailed => 'Routine konnte nicht übernommen werden.';
+
+  @override
   String get gymRoutineDelete => 'Löschen';
 
   @override

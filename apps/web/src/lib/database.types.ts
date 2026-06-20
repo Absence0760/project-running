@@ -1672,6 +1672,7 @@ export type Database = {
           exercise_count: number
           external_id: string | null
           id: string
+          is_public_template: boolean
           last_modified_at: string
           notes: string | null
           periodisation: string
@@ -1684,6 +1685,7 @@ export type Database = {
           exercise_count?: number
           external_id?: string | null
           id?: string
+          is_public_template?: boolean
           last_modified_at?: string
           notes?: string | null
           periodisation?: string
@@ -1696,6 +1698,7 @@ export type Database = {
           exercise_count?: number
           external_id?: string | null
           id?: string
+          is_public_template?: boolean
           last_modified_at?: string
           notes?: string | null
           periodisation?: string
@@ -5197,6 +5200,10 @@ export type Database = {
           time_seconds: number
           user_id: string
         }[]
+      }
+      set_gym_routine_public: {
+        Args: { p_public: boolean; p_routine_id: string }
+        Returns: undefined
       }
       set_integration_tokens: {
         Args: {

@@ -8429,6 +8429,71 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymRoutineClubTemplateBadge => 'Club template';
 
   @override
+  String get gymRoutinePublicBadge => 'In the public library';
+
+  @override
+  String get gymRoutinePublishPublicLabel => 'Public library';
+
+  @override
+  String get gymRoutinePublishPublic => 'Publish to public library';
+
+  @override
+  String get gymRoutineUnpublishPublic => 'Remove from public library';
+
+  @override
+  String get gymRoutinePublishPublicHint =>
+      'Anyone signed in can preview and adopt this routine. Logged workouts stay private.';
+
+  @override
+  String get gymRoutinePublishPublicSuccess =>
+      'Routine published to the public library.';
+
+  @override
+  String get gymRoutineUnpublishPublicSuccess =>
+      'Routine removed from the public library.';
+
+  @override
+  String get gymRoutinePublishPublicFailed =>
+      'Couldn\'t update public visibility.';
+
+  @override
+  String get gymLibraryLink => 'Library';
+
+  @override
+  String get gymLibraryTitle => 'Public routine library';
+
+  @override
+  String get gymLibrarySearchHint => 'Search routines by name';
+
+  @override
+  String get gymLibraryLoadError => 'Couldn\'t load the library.';
+
+  @override
+  String get gymLibraryEmpty => 'No published routines yet.';
+
+  @override
+  String gymLibraryEmptySearch(String query) {
+    return 'No routines match \"$query\".';
+  }
+
+  @override
+  String gymLibraryByAuthor(String author) {
+    return 'by $author';
+  }
+
+  @override
+  String get gymLibraryAnonymous => 'a lifter';
+
+  @override
+  String get gymLibraryAdopt => 'Adopt into my routines';
+
+  @override
+  String get gymLibraryAdopting => 'Adopting…';
+
+  @override
+  String get gymLibraryAdoptFailed => 'Couldn\'t adopt the routine.';
+
+  @override
   String get gymRoutineDelete => 'Delete';
 
   @override
