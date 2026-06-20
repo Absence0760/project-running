@@ -286,6 +286,21 @@ func (f *fakeBackend) UpdatePhotoThumb512Path(_ context.Context, photoID, path s
 	return nil
 }
 
+// Club-photo surface — delegates onto the same storage map + error
+// fields as the run-photo methods, so handler_club_photo_process_test.go
+// reuses the same fixtures and assertions.
+func (f *fakeBackend) DownloadClubPhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return f.DownloadPhoto(ctx, path)
+}
+
+func (f *fakeBackend) UploadClubPhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	return f.UploadPhoto(ctx, path, body, contentType)
+}
+
+func (f *fakeBackend) UpdateClubPhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	return f.UpdatePhotoThumb512Path(ctx, photoID, path)
+}
+
 func (f *fakeBackend) FetchNotificationForEmail(_ context.Context, id string) (*NotificationRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

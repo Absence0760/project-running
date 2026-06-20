@@ -62,6 +62,7 @@ const (
 	TableEventExceptions         = "event_exceptions"
 	TableClubMembers             = "club_members"
 	TableClubPosts               = "club_posts"
+	TableClubPhotos              = "club_photos"
 	TableReports                 = "reports"
 	TableDirectMessages          = "direct_messages"
 	TableGymWorkouts             = "gym_workouts"
@@ -94,8 +95,9 @@ const (
 // `/storage/v1/object/<bucket>/`. Distinct from the like-named tables
 // (`run_photos` the table vs `run-photos` the bucket).
 const (
-	BucketRuns      = "runs"
-	BucketRunPhotos = "run-photos"
+	BucketRuns       = "runs"
+	BucketRunPhotos  = "run-photos"
+	BucketClubPhotos = "club-photos"
 )
 
 // MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag

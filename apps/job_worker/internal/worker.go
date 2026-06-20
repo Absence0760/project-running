@@ -74,6 +74,13 @@ type Backend interface {
 	// the column to decide whether to fetch the smaller file (gallery
 	// fast-paint) or fall back to the original.
 	UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error
+	// Club-photo-process path — the club_photos sibling of the run-photo
+	// methods above (kind='club_photo_process', migration 20270301_001).
+	// Same download → strip → 512w thumbnail → PATCH contract against the
+	// `club-photos` bucket + `club_photos` table.
+	DownloadClubPhoto(ctx context.Context, path string) (body []byte, contentType string, err error)
+	UploadClubPhoto(ctx context.Context, path string, body []byte, contentType string) error
+	UpdateClubPhotoThumb512Path(ctx context.Context, photoID, path string) error
 	// Notification-email path — used by the kind='notification_email'
 	// handler (migration 20261130_001). The notifications AFTER INSERT
 	// trigger enqueues one job per recipient; the handler reads the row,
@@ -338,6 +345,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleStravaEvent(ctx, job)
 	case "photo_process":
 		return w.handlePhotoProcess(ctx, job)
+	case "club_photo_process":
+		return w.handleClubPhotoProcess(ctx, job)
 	case "notification_email":
 		return w.handleNotificationEmail(ctx, job)
 	case "lifecycle_email":
