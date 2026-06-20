@@ -1857,14 +1857,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "notifications_challenge_id_fkey"
-            columns: ["challenge_id"]
-            isOneToOne: false
-            referencedRelation: "challenges"
             foreignKeyName: "notifications_achievement_id_fkey"
             columns: ["achievement_id"]
             isOneToOne: false
             referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
             referencedColumns: ["id"]
           },
           {
@@ -3492,27 +3495,6 @@ export type Database = {
         }
         Relationships: []
       }
-      pg_all_foreign_keys: {
-        Row: {
-          fk_columns: unknown[] | null
-          fk_constraint_name: unknown
-          fk_schema_name: unknown
-          fk_table_name: unknown
-          fk_table_oid: unknown
-          is_deferrable: boolean | null
-          is_deferred: boolean | null
-          match_type: string | null
-          on_delete: string | null
-          on_update: string | null
-          pk_columns: unknown[] | null
-          pk_constraint_name: unknown
-          pk_index_name: unknown
-          pk_schema_name: unknown
-          pk_table_name: unknown
-          pk_table_oid: unknown
-        }
-        Relationships: []
-      }
       public_profiles: {
         Row: {
           avatar_url: string | null
@@ -3680,50 +3662,16 @@ export type Database = {
           },
         ]
       }
-      tap_funky: {
-        Row: {
-          args: string | null
-          is_definer: boolean | null
-          is_strict: boolean | null
-          is_visible: boolean | null
-          kind: unknown
-          langoid: unknown
-          name: unknown
-          oid: unknown
-          owner: unknown
-          returns: string | null
-          returns_set: boolean | null
-          schema: unknown
-          volatility: string | null
-        }
-        Relationships: []
-      }
     }
     Functions: {
-      _cleanup: { Args: never; Returns: boolean }
-      _contract_on: { Args: { "": string }; Returns: unknown }
-      _currtest: { Args: never; Returns: number }
-      _db_privs: { Args: never; Returns: unknown[] }
-      _extensions: { Args: never; Returns: unknown[] }
-      _get: { Args: { "": string }; Returns: number }
-      _get_latest: { Args: { "": string }; Returns: number[] }
-      _get_note: { Args: { "": string }; Returns: string }
-      _is_verbose: { Args: never; Returns: boolean }
       _privacy_downsample: {
         Args: { arr: Json; max_out: number }
         Returns: Json
       }
-      _prokind: { Args: { p_oid: unknown }; Returns: unknown }
-      _query: { Args: { "": string }; Returns: string }
-      _refine_vol: { Args: { "": string }; Returns: string }
-      _retval: { Args: { "": string }; Returns: string }
       _run_comment_parent_is_top_level: {
         Args: { parent_id: string }
         Returns: boolean
       }
-      _table_privs: { Args: never; Returns: unknown[] }
-      _temptypes: { Args: { "": string }; Returns: string }
-      _todo: { Args: never; Returns: string }
       am_i_admin: { Args: never; Returns: boolean }
       approve_event_result: {
         Args: {
@@ -3954,20 +3902,6 @@ export type Database = {
         Args: { p_provider: string; p_user_id: string }
         Returns: number
       }
-      diag:
-        | {
-            Args: { msg: unknown }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.diag(msg => text), public.diag(msg => anyelement). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
-        | {
-            Args: { msg: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.diag(msg => text), public.diag(msg => anyelement). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
-      diag_test_name: { Args: { "": string }; Returns: string }
       discoverable_routes_in_bbox: {
         Args: {
           p_dist_max?: number[]
@@ -4002,9 +3936,6 @@ export type Database = {
           unread: number
         }[]
       }
-      do_tap:
-        | { Args: never; Returns: string[] }
-        | { Args: { "": string }; Returns: string[] }
       duplicate_plan_week: {
         Args: { p_plan_id: string; p_week_index: number }
         Returns: string
@@ -4029,9 +3960,6 @@ export type Database = {
           going_count: number
         }[]
       }
-      fail:
-        | { Args: never; Returns: string }
-        | { Args: { "": string }; Returns: string }
       fetch_checkpoint_crossings_for_organiser: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: {
@@ -4106,13 +4034,10 @@ export type Database = {
           locked_by: string
         }[]
       }
-      findfuncs: { Args: { "": string }; Returns: string[] }
-      finish: { Args: { exception_on_failure?: boolean }; Returns: string[] }
       finish_job: {
         Args: { err?: string; job_id: number; result_status: string }
         Returns: undefined
       }
-      format_type_string: { Args: { "": string }; Returns: string }
       get_club_invite_token: { Args: { target_club: string }; Returns: string }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
       get_event_meet_point: {
@@ -4190,7 +4115,6 @@ export type Database = {
           workout_id: string
         }[]
       }
-      has_unique: { Args: { "": string }; Returns: string }
       heatmap_points_in_bbox: {
         Args: {
           p_max_lat: number
@@ -4205,7 +4129,6 @@ export type Database = {
         }[]
       }
       host_can_take_payment: { Args: { p_user_id: string }; Returns: boolean }
-      in_todo: { Args: never; Returns: boolean }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
       is_blocked_either_way: {
         Args: { a: string; b: string }
@@ -4215,13 +4138,11 @@ export type Database = {
         Args: { target_challenge: string }
         Returns: boolean
       }
-      is_empty: { Args: { "": string }; Returns: string }
       is_event_visible: { Args: { p_event_id: string }; Returns: boolean }
       is_pro: { Args: never; Returns: boolean }
       is_public_club_by_id: { Args: { p_club_id: string }; Returns: boolean }
       is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }
       is_public_route_by_id: { Args: { p_route_id: string }; Returns: boolean }
-      isnt_empty: { Args: { "": string }; Returns: string }
       job_scheduled_at_for_user: {
         Args: { p_user_id: string }
         Returns: string
@@ -4273,7 +4194,6 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      lives_ok: { Args: { "": string }; Returns: string }
       mark_attendance: {
         Args: {
           p_attendance: string
@@ -4344,12 +4264,6 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      no_plan: { Args: never; Returns: boolean[] }
-      num_failed: { Args: never; Returns: number }
-      os_name: { Args: never; Returns: string }
-      pass:
-        | { Args: never; Returns: string }
-        | { Args: { "": string }; Returns: string }
       personal_records: {
         Args: never
         Returns: {
@@ -4358,9 +4272,6 @@ export type Database = {
           distance: string
         }[]
       }
-      pg_version: { Args: never; Returns: string }
-      pg_version_num: { Args: never; Returns: number }
-      pgtap_version: { Args: never; Returns: number }
       popular_route_tags: {
         Args: { tag_limit?: number }
         Returns: {
@@ -4514,9 +4425,6 @@ export type Database = {
           run_id: string
         }[]
       }
-      runtests:
-        | { Args: never; Returns: string[] }
-        | { Args: { "": string }; Returns: string[] }
       search_clubs: {
         Args: {
           p_center_lat?: number
@@ -4678,9 +4586,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      skip:
-        | { Args: { "": string }; Returns: string }
-        | { Args: { how_many: number; why: string }; Returns: string }
       submit_report: {
         Args: {
           p_notes?: string
@@ -4691,16 +4596,6 @@ export type Database = {
         Returns: string
       }
       sweep_challenge_completions: { Args: never; Returns: undefined }
-      throws_ok: { Args: { "": string }; Returns: string }
-      todo:
-        | { Args: { how_many: number }; Returns: boolean[] }
-        | { Args: { how_many: number; why: string }; Returns: boolean[] }
-        | { Args: { why: string }; Returns: boolean[] }
-        | { Args: { how_many: number; why: string }; Returns: boolean[] }
-      todo_end: { Args: never; Returns: boolean[] }
-      todo_start:
-        | { Args: never; Returns: boolean[] }
-        | { Args: { "": string }; Returns: boolean[] }
       try_consume_strava_quota: {
         Args: { p_day_limit?: number; p_short_limit?: number }
         Returns: boolean
@@ -4776,9 +4671,7 @@ export type Database = {
         | "walk_run"
     }
     CompositeTypes: {
-      _time_trial_type: {
-        a_time: number | null
-      }
+      [_ in never]: never
     }
   }
 }
