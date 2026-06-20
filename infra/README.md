@@ -123,7 +123,8 @@ While you're in the GitHub Secrets UI, add the **build-input** secrets too. Thes
 | `PUBLIC_SUPABASE_URL` | Supabase project settings → API → URL | yes |
 | `PUBLIC_SUPABASE_ANON_KEY` | Supabase project settings → API → `anon` `publishable` key (NOT `service_role`) | yes |
 | `PUBLIC_MAPTILER_KEY` | maptiler.com → Account → Keys | yes (maps don't render without it) |
-| `PUBLIC_REVENUECAT_WEB_API_KEY` | RevenueCat dashboard → API keys → Public web | optional (paywall UI degrades gracefully) |
+| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | RevenueCat dashboard → Web Paywall Link (`https://pay.rev.cat/<token>`) | yes for prod (build guard fails if unset; preview/dev degrade gracefully) |
+| `PUBLIC_REVENUECAT_WEB_PORTAL_URL` | RevenueCat dashboard → customer portal link | optional (manage-subscription button degrades to a hint) |
 | `PUBLIC_SENTRY_DSN` | Sentry → Settings → Projects → Client Keys (DSN) | optional |
 
 If a secret is unset, the workflow writes an empty string into `.env` and `svelte-check` errors with `Module '$env/static/public' has no exported member 'PUBLIC_X'`. Set the required three before the first deploy.

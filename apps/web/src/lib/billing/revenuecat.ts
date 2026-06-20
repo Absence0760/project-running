@@ -1,98 +1,64 @@
-/// RevenueCat web-SDK wrapper.
+/// RevenueCat hosted-checkout wrapper.
 ///
-/// The CTA on `/settings/upgrade` calls `startProCheckout()`; if the
-/// public RevenueCat key isn't configured (local dev, previews, CI),
-/// the wrapper reports `configured = false` and the caller falls back
-/// to a "coming soon" toast. Keeps the settings page compilable and
-/// testable without a real RC account.
+/// Pro checkout and subscription management both run through RevenueCat's
+/// HOSTED redirect surfaces — a Web Paywall Link for purchase and the
+/// no-code customer portal for management — rather than the embedded
+/// `@revenuecat/purchases-js` SDK. The SDK shipped ~178 KB gzipped into
+/// the `/settings/upgrade` bundle for two one-shot redirects; a hosted
+/// link does the same job with zero client JS. See
+/// docs/features/paywall.md § "Client → RevenueCat SDK" + decisions.md.
+///
+/// The CTA on `/settings/upgrade` calls `proCheckoutUrl()`; if the link
+/// isn't configured (local dev, previews, CI), the wrapper reports
+/// `configured = false` and the caller falls back to a "coming soon"
+/// toast. Keeps the settings page usable end-to-end without a real RC
+/// account.
 ///
 /// Production flow:
-///   1. `configure()` runs once, keyed by the signed-in Supabase user
-///      id so the subscription is portable across browsers / mobile.
-///   2. `getOfferings()` pulls the current offerings. We assume a
-///      single "default" offering with one package, the monthly Pro
-///      plan. Matching the paywall copy on the page.
-///   3. `purchase()` presents RC's hosted purchase sheet; on success
-///      we tell the caller to refetch the user profile — the
+///   1. The buyer is redirected to the Web Paywall Link with their
+///      Supabase user id appended, so RevenueCat keys the purchase to the
+///      same identity the webhook sees (`app_user_id`).
+///   2. On success RevenueCat redirects back to `/settings/upgrade`; the
 ///      `revenuecat-webhook` Edge Function flips `subscription_tier`
-///      server-side in the same round trip.
+///      server-side, and the page refetches the profile on load.
+///   3. Management routes to the hosted customer portal (active-sub
+///      lookup by email), so no per-user SDK `getCustomerInfo()` call is
+///      needed to derive a management URL.
+///
+/// URL construction lives in the `$env`-free `revenuecat_links.ts` so it
+/// stays unit-testable; this module is the thin env-reading shell.
 
 import { env } from '$env/dynamic/public';
-import { Purchases, type CustomerInfo, type Package } from '@revenuecat/purchases-js';
+
+import { buildCheckoutUrl } from './revenuecat_links';
 
 // Read via `$env/dynamic/public` rather than `static/public` so an
-// unconfigured build (no `PUBLIC_REVENUECAT_WEB_API_KEY`) returns an
-// empty string and the wrapper reports `configured = false`, instead
-// of failing the SvelteKit build with a 500.
-const PUBLIC_REVENUECAT_WEB_API_KEY = env.PUBLIC_REVENUECAT_WEB_API_KEY ?? '';
-
-let instance: Purchases | null = null;
-let configuredUserId: string | null = null;
+// unconfigured build returns an empty string and the wrapper reports
+// `configured = false`, instead of failing the SvelteKit build with a
+// 500.
+//
+// The checkout base is the project's Web Paywall Link of the form
+// `https://pay.rev.cat/<token>`; `<token>` is a public, per-project value
+// from the RevenueCat dashboard. The portal base is the no-code customer
+// portal link. Both are public by design (they're URLs a browser is
+// redirected to), so the PUBLIC_ prefix is correct.
+const CHECKOUT_BASE = env.PUBLIC_REVENUECAT_WEB_CHECKOUT_URL ?? '';
+const PORTAL_URL = env.PUBLIC_REVENUECAT_WEB_PORTAL_URL ?? '';
 
 export function isRevenueCatConfigured(): boolean {
-	return Boolean(PUBLIC_REVENUECAT_WEB_API_KEY);
+	return Boolean(CHECKOUT_BASE.trim());
 }
 
-/// Idempotently configure the SDK for a specific Supabase user id. A
-/// later call with a different user id re-configures so tokens don't
-/// leak across sign-outs; the SDK supports this via `configure` being
-/// called multiple times.
-export function configureRevenueCat(userId: string): Purchases | null {
-	if (!isRevenueCatConfigured()) return null;
-	if (instance && configuredUserId === userId) return instance;
-	instance = Purchases.configure(PUBLIC_REVENUECAT_WEB_API_KEY, userId);
-	configuredUserId = userId;
-	return instance;
+/// Build the Pro hosted-checkout URL for a specific Supabase user id.
+/// Returns `null` when the checkout link isn't configured on this build,
+/// so the caller can fail closed to the "coming soon" placeholder.
+export function proCheckoutUrl(userId: string, returnUrl?: string): string | null {
+	return buildCheckoutUrl(CHECKOUT_BASE, userId, returnUrl);
 }
 
-/// Start the Pro checkout. Caller provides the Supabase user id so the
-/// purchase is keyed to the same identity the webhook will see.
-/// Returns `{ purchased: boolean }` — `true` means the RC sheet
-/// reported a successful purchase; the tier flip on our side happens
-/// asynchronously via the webhook, so callers typically refetch the
-/// user profile a couple of seconds later.
-export async function startProCheckout(userId: string): Promise<{ purchased: boolean }> {
-	const rc = configureRevenueCat(userId);
-	if (!rc) throw new Error('RevenueCat is not configured on this build');
-
-	const offerings = await rc.getOfferings();
-	const pkg = pickProPackage(offerings);
-	if (!pkg) throw new Error('No Pro offering available');
-
-	try {
-		await rc.purchase({ rcPackage: pkg });
-		return { purchased: true };
-	} catch (err) {
-		// RC surfaces user-cancelled purchases as thrown errors; treat
-		// those as a benign "not purchased" so the UI doesn't show a
-		// red error toast for a normal dismissal.
-		const code = (err as { code?: string } | null)?.code;
-		if (code === 'UserCancelledError' || code === 'PurchaseCancelledError') {
-			return { purchased: false };
-		}
-		throw err;
-	}
-}
-
-function pickProPackage(offerings: { current: { availablePackages: Package[] } | null }): Package | null {
-	const current = offerings.current;
-	if (!current) return null;
-	// Prefer a monthly package if there is one; otherwise take the
-	// first available. Matches the "$9.99 / month" copy on the page.
-	return (
-		current.availablePackages.find((p) => /monthly|month/i.test(p.identifier ?? '')) ??
-		current.availablePackages[0] ??
-		null
-	);
-}
-
-/// Pull the management URL from the user's customer info (takes the
-/// user to RevenueCat's billing portal where they can cancel or change
-/// card). Returns `null` when there's no active subscription or when
-/// the SDK isn't configured.
-export async function managementUrl(userId: string): Promise<string | null> {
-	const rc = configureRevenueCat(userId);
-	if (!rc) return null;
-	const info = (await rc.getCustomerInfo()) as CustomerInfo & { managementURL?: string | null };
-	return info.managementURL ?? null;
+/// The hosted subscription-management URL. RevenueCat's no-code customer
+/// portal authenticates the user by email at the portal itself, so no
+/// per-user SDK call is needed. Returns `null` when unconfigured.
+export function managementUrl(): string | null {
+	return PORTAL_URL.trim() || null;
 }

@@ -127,6 +127,27 @@ test.describe('/settings/upgrade — free user', () => {
 		expect(urls[0]).toMatch(/^https:\/\/github\.com\/sponsors/);
 	});
 
+	test('Get Pro on an unconfigured build shows the "not configured" toast and does not navigate', async ({
+		page,
+	}) => {
+		// The e2e dev server boots with no PUBLIC_REVENUECAT_WEB_CHECKOUT_URL
+		// (playwright.config.ts forces the localhost services empty), so
+		// `isRevenueCatConfigured()` is false. The hosted-checkout path
+		// must fail closed: clicking "Get Pro" surfaces the info toast and
+		// stays on /settings/upgrade rather than redirecting anywhere.
+		await page.goto('/settings/upgrade');
+		const getPro = page.locator('.tier-pro').getByRole('button', { name: /Get Pro — /i });
+		await expect(getPro).toBeVisible({ timeout: 10_000 });
+
+		await getPro.click();
+
+		await expect(page.locator('.toast-info')).toContainText(/not configured/i, {
+			timeout: 5_000,
+		});
+		// No redirect — we're still on the upgrade page.
+		await expect(page).toHaveURL(/\/settings\/upgrade(\?|$)/);
+	});
+
 	test('tier grid stacks (single column) at narrow widths', async ({ page }) => {
 		// `.tier-grid` uses `grid-template-columns: repeat(auto-fit,
 		// minmax(20rem, 1fr))`. At a viewport narrower than two

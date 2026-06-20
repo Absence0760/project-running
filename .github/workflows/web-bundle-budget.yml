@@ -21,28 +21,27 @@ env:
   # 2026-06-10 — total raised 1500 → 1900. The app crossed 1500 through
   # ordinary cumulative growth since the 2026-05 ~972 KB baseline (gym,
   # nutrition, clubs, coaching, social, route-builder all shipped), NOT
-  # a regression: verified no duplication (maplibre-gl and the RevenueCat
-  # web SDK each land in exactly one JS chunk), and the two largest single
-  # libs are both feature-essential — maplibre-gl ~263 KB (the map) and
-  # @revenuecat/purchases-js ~178 KB (web Pro checkout, /settings/upgrade).
-  # Measured total at the bump: 1689 KB across 66 route surfaces. 1900 =
-  # ~12% headroom — deliberately tighter than the original 55% now that
-  # the surface is broad, so the gate still catches a major single-PR
-  # regression (e.g. a second map-scale lib, or a duplicated dep) while
-  # allowing ordinary 20-80 KB feature additions.
+  # a regression. Measured total at the bump: 1689 KB across 66 surfaces.
+  #
+  # 2026-06-20 — total lowered 1900 → 1720. The ~178 KB
+  # `@revenuecat/purchases-js` web SDK was removed: the /settings/upgrade
+  # Pro flow now uses RevenueCat's hosted-checkout redirect (no embedded
+  # SDK) — see docs/product/followups.md "Web bundle weight". That drops
+  # the SDK from the summed metric (1689 → ~1511 KB), so the ceiling is
+  # re-tightened to keep ~12% headroom rather than banking the saving as
+  # slack. maplibre-gl ~263 KB (the map) is now the only feature-essential
+  # large single lib. The gate still catches a major single-PR regression
+  # (a second map-scale lib, a duplicated dep) while allowing ordinary
+  # 20-80 KB feature additions.
   #
   # IMPORTANT: this metric sums ALL chunks, including lazy ones, so
   # code-splitting a dep does NOT lower it — only removing weight does.
-  # The durable way to claw back headroom is to externalise the RevenueCat
-  # SDK behind its hosted-checkout redirect (~178 KB), tracked in
-  # docs/product/followups.md — not done here to keep this CI fix's blast
-  # radius proportional (it would rewrite the billing flow).
   #
   # 33% headroom on largest (≥350) → keeps the main entry bundle from
   # quietly drifting toward code-split territory. Bump deliberately when
   # the right answer is "ship the feature", not casually because the job
   # failed.
-  MAX_TOTAL_KB: 1900
+  MAX_TOTAL_KB: 1720
   MAX_LARGEST_CHUNK_KB: 350
 
 jobs:

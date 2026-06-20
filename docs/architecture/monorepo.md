@@ -295,7 +295,7 @@ PARKRUN_USER_AGENT=RunApp/1.0 (contact@threkir.com)
 | `STRAVA_CLIENT_SECRET` | Edge Function deploy |
 | `AWS_DEPLOY_ROLE_ARN_PROD` | Web deployment — IAM role assumed via OIDC for tag `web@*` (see [releasing.md § Web (AWS deploy)](../ops/releasing.md#web-aws-deploy)) |
 | `AWS_DEPLOY_ROLE_ARN_PREVIEW` | Web deployment — same shape for the preview env (push to `main`) |
-| `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_API_KEY`, `PUBLIC_SENTRY_DSN` | Web build — inlined into `.env.production` before `npm run build` |
+| `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL`, `PUBLIC_REVENUECAT_WEB_PORTAL_URL`, `PUBLIC_SENTRY_DSN` | Web build — inlined into `.env.production` before `npm run build` |
 
 ---
 

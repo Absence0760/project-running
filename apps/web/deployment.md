@@ -136,7 +136,8 @@ The static SvelteKit build inlines `PUBLIC_*` vars at build time. The CI workflo
 | `PUBLIC_SUPABASE_URL` | `PUBLIC_SUPABASE_URL` | once custom domain is live, use `https://api.threkir.com` |
 | `PUBLIC_SUPABASE_ANON_KEY` | `PUBLIC_SUPABASE_ANON_KEY` | the **publishable** key, not service-role |
 | `PUBLIC_MAPTILER_KEY` | `PUBLIC_MAPTILER_KEY` | shared with mobile + Wear OS |
-| `PUBLIC_REVENUECAT_WEB_API_KEY` | `PUBLIC_REVENUECAT_WEB_API_KEY` | client-side web SDK key |
+| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | hosted Web Paywall Link; required for prod (build guard) |
+| `PUBLIC_REVENUECAT_WEB_PORTAL_URL` | `PUBLIC_REVENUECAT_WEB_PORTAL_URL` | optional customer-portal link |
 | `PUBLIC_SENTRY_DSN` | `PUBLIC_SENTRY_DSN` | optional — empty disables client-side capture |
 | `PUBLIC_APP_RELEASE` | derived from CI tag (e.g. `web@1.2.3`) | tags Sentry events |
 
@@ -356,7 +357,7 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 - [ ] Terraform applied (in order): `infra/dns`, `infra/github-oidc`, `infra/envs/preview`, `infra/envs/prod`
 - [ ] GitHub OIDC role trust policy verified (only the repo + ref scopes intended can assume it)
 - [ ] sops file populated: `infra/envs/prod/secrets.enc.yaml` (with `ANTHROPIC_API_KEY`, `SENTRY_DSN`); same for `preview/`
-- [ ] GitHub Secrets populated: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_API_KEY`, `PUBLIC_SENTRY_DSN`, `AWS_DEPLOY_ROLE_ARN_PROD`, `AWS_DEPLOY_ROLE_ARN_PREVIEW`
+- [ ] GitHub Secrets populated: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL`, `PUBLIC_REVENUECAT_WEB_PORTAL_URL`, `PUBLIC_SENTRY_DSN`, `AWS_DEPLOY_ROLE_ARN_PROD`, `AWS_DEPLOY_ROLE_ARN_PREVIEW`
 - [ ] First preview deploy green; smoke test sign-in + dashboard + run detail at `preview.threkir.com`
 - [ ] First prod deploy green via tag `web@0.1.0`
 - [ ] Coach endpoint responds (try a free user → expect 2 successful streamed replies, then a 3rd request → expect 429; free tier cap is `TIER_LIMITS.free.dailyLimit = 2` per `apps/web/src/lib/coach/types.ts`)

@@ -1614,7 +1614,7 @@ test('release-web.yml runs the production-env guard before npm run build', () =>
 		'PUBLIC_SUPABASE_URL',
 		'PUBLIC_SUPABASE_ANON_KEY',
 		'PUBLIC_MAPTILER_KEY',
-		'PUBLIC_REVENUECAT_WEB_API_KEY',
+		'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL',
 	]) {
 		assert.match(
 			env,

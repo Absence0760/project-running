@@ -234,12 +234,12 @@ No OAuth — the user types their parkrun athlete number into `/settings/account
 
 ### RevenueCat (Pro tier checkout)
 
-Optional — only needed if you're touching the paywall flow. Without `PUBLIC_REVENUECAT_WEB_API_KEY`, `/settings/upgrade` falls back to a "coming soon" toast.
+Optional — only needed if you're touching the paywall flow. Without `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL`, `/settings/upgrade` falls back to a "coming soon" toast. The web flow is a hosted-checkout redirect now (no embedded SDK).
 
 **Test path**
-1. Set `PUBLIC_REVENUECAT_WEB_API_KEY` in `.env.local` to your RevenueCat sandbox key.
-2. `/settings/upgrade` → **Get Pro** → RevenueCat checkout opens.
-3. Use a test card; on completion the user's `subscription_tier` flips to `pro` and the coach's daily cap is bypassed.
+1. Set `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` in `.env.local` to your RevenueCat sandbox Web Paywall Link (`https://pay.rev.cat/<token>`); optionally `PUBLIC_REVENUECAT_WEB_PORTAL_URL` for the manage-subscription link.
+2. `/settings/upgrade` → **Get Pro** → the browser redirects to the hosted RevenueCat checkout (with your user id as the App User ID + a `redirect_url` back to the page).
+3. Use a test card; on completion RevenueCat redirects back, the webhook flips the user's `subscription_tier` to `pro`, and the coach's daily cap is raised.
 
 **Bypass for non-paywall work**: set `BYPASS_PAYWALL=true` in `.env.local` to skip every tier check server-side without involving RevenueCat at all.
 
