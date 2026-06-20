@@ -2155,6 +2155,92 @@ class PlanWorkoutRow {
   };
 }
 
+/// Row shape for the `race_listings` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RaceListingRow {
+  static const String table = 'race_listings';
+  static const String colId = 'id';
+  static const String colProvider = 'provider';
+  static const String colProviderRaceId = 'provider_race_id';
+  static const String colName = 'name';
+  static const String colRaceDate = 'race_date';
+  static const String colDistanceM = 'distance_m';
+  static const String colLocationLabel = 'location_label';
+  static const String colLocationPoint = 'location_point';
+  static const String colEntryUrl = 'entry_url';
+  static const String colResultsUrl = 'results_url';
+  static const String colSubmittedBy = 'submitted_by';
+  static const String colIsVerified = 'is_verified';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String provider;
+  final String? providerRaceId;
+  final String name;
+  final DateTime raceDate;
+  final int? distanceM;
+  final String? locationLabel;
+  final dynamic locationPoint;
+  final String? entryUrl;
+  final String? resultsUrl;
+  final String? submittedBy;
+  final bool isVerified;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const RaceListingRow({
+    required this.id,
+    required this.provider,
+    this.providerRaceId,
+    required this.name,
+    required this.raceDate,
+    this.distanceM,
+    this.locationLabel,
+    this.locationPoint,
+    this.entryUrl,
+    this.resultsUrl,
+    this.submittedBy,
+    required this.isVerified,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory RaceListingRow.fromJson(Map<String, dynamic> json) => RaceListingRow(
+    id: json['id'] as String,
+    provider: json['provider'] as String,
+    providerRaceId: json['provider_race_id'] as String?,
+    name: json['name'] as String,
+    raceDate: DateTime.parse(json['race_date'] as String),
+    distanceM: (json['distance_m'] as num?)?.toInt(),
+    locationLabel: json['location_label'] as String?,
+    locationPoint: json['location_point'],
+    entryUrl: json['entry_url'] as String?,
+    resultsUrl: json['results_url'] as String?,
+    submittedBy: json['submitted_by'] as String?,
+    isVerified: (json['is_verified'] as bool?) ?? false,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colProvider: provider,
+    colProviderRaceId: providerRaceId,
+    colName: name,
+    colRaceDate: raceDate.toIso8601String(),
+    colDistanceM: distanceM,
+    colLocationLabel: locationLabel,
+    colLocationPoint: locationPoint,
+    colEntryUrl: entryUrl,
+    colResultsUrl: resultsUrl,
+    colSubmittedBy: submittedBy,
+    colIsVerified: isVerified,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `race_pings` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RacePingRow {
@@ -2847,6 +2933,7 @@ class RunRow {
   static const String colHrSeriesUrl = 'hr_series_url';
   static const String colActivityType = 'activity_type';
   static const String colIsDnf = 'is_dnf';
+  static const String colRaceListingId = 'race_listing_id';
 
   final String id;
   final String userId;
@@ -2865,6 +2952,7 @@ class RunRow {
   final String? hrSeriesUrl;
   final String activityType;
   final bool isDnf;
+  final String? raceListingId;
 
   const RunRow({
     required this.id,
@@ -2884,6 +2972,7 @@ class RunRow {
     this.hrSeriesUrl,
     required this.activityType,
     required this.isDnf,
+    this.raceListingId,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -2904,6 +2993,7 @@ class RunRow {
     hrSeriesUrl: json['hr_series_url'] as String?,
     activityType: json['activity_type'] as String,
     isDnf: (json['is_dnf'] as bool?) ?? false,
+    raceListingId: json['race_listing_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2924,6 +3014,7 @@ class RunRow {
     colHrSeriesUrl: hrSeriesUrl,
     colActivityType: activityType,
     colIsDnf: isDnf,
+    colRaceListingId: raceListingId,
   };
 }
 
