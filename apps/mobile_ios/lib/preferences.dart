@@ -251,6 +251,14 @@ class Preferences extends ChangeNotifier {
   // ordering. Per-device.
   static const _kLastLogType = 'last_log_type';
 
+  // Per-device debug/verification toggle: force the run-detail map to
+  // render the RAW recorded GPS track even when the backend has produced
+  // a map-matched line. Off by default (prefer matched-when-present, the
+  // shipped behaviour). Local-only — a verification aid, not a roaming
+  // account preference. Stats keep deriving from the raw track regardless;
+  // this only changes which polyline is drawn.
+  static const _kShowRawTrack = 'show_raw_track';
+
   // GDPR Art 7(3) / Art 21 withdrawal path for Sentry error reporting.
   // When true, main.dart skips Sentry.init at app launch — the SDK
   // never initialises so no traces, breadcrumbs, or events are
@@ -288,6 +296,7 @@ class Preferences extends ChangeNotifier {
   WeightUnit _weightUnit = WeightUnit.kg;
   bool _keepRunPrimary = false;
   String? _lastLogType;
+  bool _showRawTrack = false;
   bool _sentryOptOut = false;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
@@ -343,6 +352,19 @@ class Preferences extends ChangeNotifier {
   /// today because there's no followers-only column on `runs`).
   /// Defaults to `private` — matches the DB column default.
   String get privacyDefault => _privacyDefault;
+
+  /// Force the run-detail map to draw the RAW recorded track even when a
+  /// map-matched line exists. Off by default (matched-when-present). A
+  /// per-device verification aid — stats keep deriving from the raw track
+  /// either way. Toggle in Settings → Preferences → "Show raw GPS track".
+  bool get showRawTrack => _showRawTrack;
+
+  Future<void> setShowRawTrack(bool v) async {
+    if (v == _showRawTrack) return;
+    _showRawTrack = v;
+    await _prefs.setBool(_kShowRawTrack, v);
+    notifyListeners();
+  }
 
   /// GDPR Art 7(3) / Art 21 withdrawal flag for Sentry error
   /// reporting. When true, `main.dart` skips `SentryFlutter.init`
@@ -511,6 +533,7 @@ class Preferences extends ChangeNotifier {
     _weightUnit = WeightFormat.unitFromWire(_prefs.getString(_kWeightUnit));
     _keepRunPrimary = _prefs.getBool(_kKeepRunPrimary) ?? false;
     _lastLogType = _prefs.getString(_kLastLogType);
+    _showRawTrack = _prefs.getBool(_kShowRawTrack) ?? false;
     _sentryOptOut = _prefs.getBool(_kSentryOptOut) ?? false;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);

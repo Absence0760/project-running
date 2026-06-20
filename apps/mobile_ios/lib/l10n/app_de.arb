@@ -1721,6 +1721,8 @@
   "prefsKeepScreenOnSubtitle": "Während eines Laufs einen Wakelock halten",
   "prefsAdvancedGps": "Erweitertes GPS",
   "prefsAdvancedGpsSubtitle": "Höhere Genauigkeit, feinere Track-Details, mehr Akkuverbrauch",
+  "prefsShowRawTrack": "Rohen GPS-Track anzeigen",
+  "prefsShowRawTrackSubtitle": "Die ungeglättete aufgezeichnete Linie auf der Laufkarte anzeigen, auch wenn ein bereinigter, abgeglichener Track vorliegt",
   "prefsDefaultRunPrivacy": "Standard-Datenschutz für Läufe",
   "prefsStravaAutoShare": "Strava-Autoshare",
   "prefsStravaAutoShareSubtitle": "Jeden neuen Lauf automatisch an Strava senden. Erfordert eine verbundene Strava-Integration, sobald diese verfügbar ist.",

@@ -8475,6 +8475,14 @@
   "@prefsAdvancedGpsSubtitle": {
     "description": "Subtitle of the advanced-GPS toggle"
   },
+  "prefsShowRawTrack": "Show raw GPS track",
+  "@prefsShowRawTrack": {
+    "description": "Toggle title for forcing the raw GPS track on the run map instead of the map-matched line"
+  },
+  "prefsShowRawTrackSubtitle": "Draw the unsnapped recorded line on the run map, even when a cleaned-up matched track exists",
+  "@prefsShowRawTrackSubtitle": {
+    "description": "Subtitle of the show-raw-track toggle"
+  },
   "prefsDefaultRunPrivacy": "Default run privacy",
   "@prefsDefaultRunPrivacy": {
     "description": "Tile title for the default run privacy"

@@ -457,7 +457,7 @@ The target is **professional-grade Hidden Markov Model map matching**, the same 
 - [ ] Client display:
   - [x] `run_detail_screen` prefers the matched track when available, falls back to raw — `run_detail_screen.dart:522-524` `mapTrack = _matchInfo?.hasRenderableTrack == true ? _matchInfo!.track! : run.track`. Stats (splits, HR zones, elevation) keep deriving from `run.track` because those are properties of what the runner did, not how the line is drawn.
   - [x] `live_run_map` during recording still shows the raw track (live matching is out of scope — it's too slow and too expensive per fix) — implicit: `_maybeFetchMatchedTrack` only fires from `run_detail_screen`'s `initState`; the recording surface (`run_screen.dart`) never calls into it.
-  - [ ] Toggle in settings to show raw vs matched (for debugging / verification)
+  - [x] Toggle in settings to show raw vs matched (for debugging / verification) — mobile **Settings → Preferences → "Show raw GPS track"** (`Preferences.showRawTrack`, per-device, off by default). When on, `run_detail_screen` forces the raw recorded line via the pure `displayedRunTrack(run.track, _matchInfo, showRaw:)` selector even when a matched track exists; stats still derive from `run.track`. Mobile-only (web isn't a GPS-recording surface).
 - [ ] Privacy & reliability:
   - [ ] Graceful offline fallback — if the backend is unreachable, show the raw track and retry matching on next sync
   - [ ] Self-hosted from day one to avoid sending user tracks to a third party

@@ -1721,6 +1721,8 @@
   "prefsKeepScreenOnSubtitle": "ラン中はウェイクロックを保持します",
   "prefsAdvancedGps": "高度なGPS",
   "prefsAdvancedGpsSubtitle": "高精度、より細かいトラック、バッテリー消費増",
+  "prefsShowRawTrack": "生のGPSトラックを表示",
+  "prefsShowRawTrackSubtitle": "補正済みのトラックがある場合でも、未補正の記録ラインをランマップに描画します",
   "prefsDefaultRunPrivacy": "ランのデフォルトプライバシー",
   "prefsStravaAutoShare": "Stravaへ自動共有",
   "prefsStravaAutoShareSubtitle": "新しいランをすべてStravaに自動送信します。実装後はStrava連携の接続が必要です。",

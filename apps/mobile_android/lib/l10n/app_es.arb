@@ -1721,6 +1721,8 @@
   "prefsKeepScreenOnSubtitle": "Mantiene un wakelock durante una carrera",
   "prefsAdvancedGps": "GPS avanzado",
   "prefsAdvancedGpsSubtitle": "Mayor precisión, trazado más detallado, más consumo de batería",
+  "prefsShowRawTrack": "Mostrar trayecto GPS sin procesar",
+  "prefsShowRawTrackSubtitle": "Dibuja la línea grabada sin ajustar en el mapa de la carrera, aunque exista un trayecto ya corregido",
   "prefsDefaultRunPrivacy": "Privacidad predeterminada de las carreras",
   "prefsStravaAutoShare": "Compartir automático en Strava",
   "prefsStravaAutoShareSubtitle": "Envía automáticamente cada nueva carrera a Strava. Requiere una integración de Strava conectada cuando esté disponible.",

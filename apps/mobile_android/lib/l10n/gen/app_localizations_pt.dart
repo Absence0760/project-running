@@ -6338,6 +6338,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Mais precisão, trajeto mais detalhado, mais consumo de bateria';
 
   @override
+  String get prefsShowRawTrack => 'Mostrar trajeto GPS bruto';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      'Desenha a linha gravada sem ajuste no mapa da corrida, mesmo quando existe um trajeto corrigido';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Privacidade padrão das corridas';
 
   @override
@@ -16637,6 +16644,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsAdvancedGpsSubtitle =>
       'Mais precisão, trajeto mais detalhado, mais consumo de bateria';
+
+  @override
+  String get prefsShowRawTrack => 'Mostrar trajeto GPS bruto';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      'Desenha a linha gravada sem ajuste no mapa da corrida, mesmo quando existe um trajeto corrigido';
 
   @override
   String get prefsDefaultRunPrivacy => 'Privacidade padrão das corridas';

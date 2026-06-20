@@ -1087,6 +1087,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               value: prefs.advancedGps,
               onChanged: prefs.setAdvancedGps,
             ),
+            SwitchListTile(
+              title: Text(l10n.prefsShowRawTrack),
+              subtitle: Text(l10n.prefsShowRawTrackSubtitle),
+              value: prefs.showRawTrack,
+              onChanged: prefs.setShowRawTrack,
+            ),
             // multi_modal.md § "Protect the core runner": a pure runner can
             // keep the centre Log button as a one-tap run start (long-press
             // still opens the full capture sheet).

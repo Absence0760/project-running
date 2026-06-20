@@ -5983,6 +5983,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsAdvancedGpsSubtitle => '高精度、より細かいトラック、バッテリー消費増';
 
   @override
+  String get prefsShowRawTrack => '生のGPSトラックを表示';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      '補正済みのトラックがある場合でも、未補正の記録ラインをランマップに描画します';
+
+  @override
   String get prefsDefaultRunPrivacy => 'ランのデフォルトプライバシー';
 
   @override
