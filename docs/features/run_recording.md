@@ -266,6 +266,8 @@ In `live_run_map.dart`, `_smoothTrack` applies a 1-2-3-2-1 weighted moving avera
 
 Smoothing cannot correct systematic offset from the road (GPS bias, not noise). For that see the [map matching roadmap entry](../product/roadmap.md#future--map-matching-strava--nike-run-club-quality).
 
+When a backend map-matched track exists, `run_detail_screen` renders it instead of the raw line via the pure `displayedRunTrack(run.track, _matchInfo, showRaw:)` selector. **Settings → Preferences → "Show raw GPS track"** (`Preferences.showRawTrack`, per-device, off by default) forces the raw recorded line back on for debugging / verifying the matcher; stats keep deriving from `run.track` either way. Mobile-only — web isn't a GPS-recording surface.
+
 ### NRC-style polyline
 
 The live track is drawn as four stacked `PolylineLayer`s for a Nike-Run-Club-style glow and pace heatmap:
