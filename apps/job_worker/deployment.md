@@ -143,6 +143,8 @@ The worker dispatches by `jobs.kind`. Today:
 | `map_match` | `runs` AFTER INSERT/UPDATE trigger | Shipped. OSRM matcher behind `OSRM_URL`. |
 | `token_refresh` | pg_cron `enqueue-token-refresh` (migration `20260821_001`) | Replaces the `refresh-tokens` Edge Function. Strava OAuth rotation. Requires `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET`. |
 | `strava_event` | `POST /v1/strava/webhook` on the Go service | Replaces the `strava-webhook` Edge Function. The HTTP endpoint validates URL secret + verify-token + freshness + dedupes via `webhook_events`, then enqueues a job; the worker does the activity fetch + Storage upload + runs insert async. Requires `STRAVA_CLIENT_ID` / `_SECRET` (Strava API) + `STRAVA_WEBHOOK_SECRET` / `STRAVA_VERIFY_TOKEN` (URL-side gates). |
+| `photo_process` | `run_photos` AFTER INSERT trigger | Re-strips JPEG EXIF (defence in depth over the client-side strip) + writes a 512w `thumb_512_path` against the `run-photos` bucket. No extra env. |
+| `club_photo_process` | `club_photos` AFTER INSERT + AFTER UPDATE OF `storage_path` triggers (migration `20270301_001`) | The `photo_process` sibling against the `club-photos` bucket + `club_photos` table. Same download → strip → thumbnail → service-role PATCH. The AFTER-UPDATE trigger catches the mobile insert-then-PATCH placeholder path. No extra env. |
 
 **Data export** is the other Edge-Function move that lives in the Go service:
 

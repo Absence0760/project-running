@@ -381,6 +381,25 @@ create table route_photos (
 
 The owner of the parent route attaches photos (INSERT policy: `auth.uid() = owner_id AND owns the route`). Photo owner OR route owner can DELETE (moderation). SELECT gates on `private.is_route_visible_to(route_id, auth.uid())` (own / public / club-member) on both the table and the Storage bytes (joining through `route_photos.storage_path` OR `thumb_512_path`), so a route flipping public→private propagates within the signed-URL TTL. `storage_path` + `thumb_512_path` carry owner-prefix-shape CHECKs; a BEFORE-UPDATE trigger blocks clearing `storage_path` (use DELETE) and another blocks user-side `thumb_512_path` writes (service-role only). **EXIF stripping** is client-side before upload (web `stripExifFromFile`, mobile `stripJpegExif`); there is **no `photo_process` enqueue trigger** because the Go worker has no route-photo handler yet — `thumb_512_path` is carried for forward parity. Pinned by `rls_route_photos_test.sql` (13 assertions).
 
+#### `club_photos`
+
+Photos attached to a club — a member-contributed gallery (roadmap backlog row 8, the deferred "club-photo features"; migration `20270301_001`, decisions §190). Metadata in Postgres, bytes in the **private** `club-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}` (signed URLs, 15-min TTL).
+
+```sql
+create table club_photos (
+  id              uuid primary key default gen_random_uuid(),
+  club_id         uuid references clubs(id) on delete cascade not null,
+  owner_id        uuid references auth.users(id) on delete cascade not null,
+  storage_path    text not null,
+  thumb_512_path  text,
+  caption         text check (caption is null or length(caption) <= 280),
+  position_idx    smallint not null default 0,
+  created_at      timestamptz not null default now()
+);
+```
+
+Re-keys the `route_photos` shape to club membership. **INSERT** requires `auth.uid() = owner_id AND private.is_club_member(club_id)` — *any active member* contributes, not just the club owner. **SELECT** gates on club visibility (`clubs.is_public OR clubs.owner_id = auth.uid() OR private.is_club_member`) on both the table and the Storage bytes (joining `club_photos` → `clubs`), so a public club's gallery is readable by anyone (incl. anon) and a private club's only by active members / the owner; flipping a club private propagates within the signed-URL TTL. **DELETE** is photo-owner OR `private.is_club_admin(club_id)` (moderation). **Caption UPDATE** is photo-owner only. `storage_path` + `thumb_512_path` carry the same owner-prefix-shape CHECKs + the no-blank-clear + service-role-only-thumb BEFORE-UPDATE triggers as route_photos. **EXIF stripping** is two-layered: client-side before upload (web `stripExifFromFile`, mobile `stripJpegExif`) PLUS the Go worker `club_photo_process` handler (AFTER INSERT trigger + an AFTER UPDATE OF `storage_path` trigger for the mobile insert-then-PATCH path) which re-strips JPEG EXIF + writes the 512w `thumb_512_path` (service-role only). `club_photo_process` is in the `jobs.kind` allowlist. Pinned by `rls_club_photos_test.sql` (17 assertions). Exported in the GDPR Art 20 spec (owner_id-keyed).
+
 #### `notifications`
 
 Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows / club posts / completed runs) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, `event_attendees`, `club_posts`, and `runs` so the notification lands in the same transaction as the source write.
@@ -1099,7 +1118,7 @@ To read or write tokens, call the SECURITY DEFINER helpers:
 
 #### `jobs`
 
-Generic Postgres-backed job queue. First tenant was map matching (`kind = 'map_match'`); it now also hosts the Strava webhook ingest (`kind = 'strava_event'`) and hourly token rotation (`kind = 'token_refresh'`) that moved off Edge Functions (see `roadmap.md` Phase 2 backend bullets). Data export moved to the Go worker too but as a synchronous HTTP endpoint (`POST /v1/export`), not a job kind, since the user blocks on a signed URL.
+Generic Postgres-backed job queue. First tenant was map matching (`kind = 'map_match'`); it now also hosts the Strava webhook ingest (`kind = 'strava_event'`), hourly token rotation (`kind = 'token_refresh'`), the run-photo EXIF-strip + thumbnail (`kind = 'photo_process'`), and the club-photo EXIF-strip + thumbnail (`kind = 'club_photo_process'`, migration `20270301_001`) that moved off / never lived in Edge Functions (see `roadmap.md` Phase 2 backend bullets). The `kind` CHECK allowlist is maintained by ALTER migrations (latest adds `club_photo_process`); a new kind must extend the CHECK + the Go dispatch switch + the pgtap kind test together. Data export moved to the Go worker too but as a synchronous HTTP endpoint (`POST /v1/export`), not a job kind, since the user blocks on a signed URL.
 
 ```sql
 create table jobs (
