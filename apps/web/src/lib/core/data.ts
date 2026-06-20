@@ -1843,9 +1843,10 @@ export async function updateRaceListing(
 }
 
 export interface ImportRaceResultInput {
-	provider: 'runsignup' | 'paste';
+	provider: 'runsignup' | 'ultrasignup' | 'paste';
 	listingId: string;
 	runSignUpUserId?: string;
+	ultraSignUpAthleteId?: string;
 	/// When set, enrich THIS existing run in place (the auto-match seam) instead
 	/// of inserting a new race run.
 	matchRunId?: string;
@@ -1866,9 +1867,10 @@ export interface ImportRaceResultOutcome {
 	enriched: number;
 }
 
-/// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` when the provider
-/// key is unconfigured server-side (503), so the UI can show the explainer
-/// rather than a generic failure.
+/// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` /
+/// `ULTRASIGNUP_UNAVAILABLE` when the chosen provider key is unconfigured
+/// server-side (503), so the UI can show the explainer rather than a generic
+/// failure.
 export async function importRaceResult(
 	input: ImportRaceResultInput
 ): Promise<ImportRaceResultOutcome> {
@@ -1877,12 +1879,17 @@ export async function importRaceResult(
 			provider: input.provider,
 			listingId: input.listingId,
 			runSignUpUserId: input.runSignUpUserId,
+			ultraSignUpAthleteId: input.ultraSignUpAthleteId,
 			matchRunId: input.matchRunId,
 			result: input.result
 		}
 	});
 	if (error) {
-		if (await isProviderNotConfigured(error)) throw new Error('RUNSIGNUP_UNAVAILABLE');
+		if (await isProviderNotConfigured(error)) {
+			throw new Error(
+				input.provider === 'ultrasignup' ? 'ULTRASIGNUP_UNAVAILABLE' : 'RUNSIGNUP_UNAVAILABLE'
+			);
+		}
 		throw error;
 	}
 	return data as ImportRaceResultOutcome;
@@ -1893,6 +1900,16 @@ export async function importRaceResult(
 /// disable the RunSignUp card with an explainer.
 export async function isRunSignUpConfigured(): Promise<boolean> {
 	const { error } = await supabase.functions.invoke('race-listings-sync', { body: {} });
+	if (!error) return true;
+	return !(await isProviderNotConfigured(error));
+}
+
+/// Probe whether the UltraSignup leg is configured server-side. Same fail-closed
+/// shape as isRunSignUpConfigured, gating the independent UltraSignup key.
+export async function isUltraSignUpConfigured(): Promise<boolean> {
+	const { error } = await supabase.functions.invoke('race-listings-sync', {
+		body: { provider: 'ultrasignup' }
+	});
 	if (!error) return true;
 	return !(await isProviderNotConfigured(error));
 }

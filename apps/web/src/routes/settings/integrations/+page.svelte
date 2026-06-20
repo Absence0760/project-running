@@ -11,6 +11,7 @@
 		connectIntegration,
 		disconnectIntegration,
 		isRunSignUpConfigured,
+		isUltraSignUpConfigured,
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import {
@@ -57,6 +58,10 @@
 	// probe it once so the card can show the unavailable explainer fail-closed.
 	let runSignUpAvailable = $state(false);
 
+	// UltraSignup (trail/ultra results) is the same fail-closed shape on its own
+	// server-side key; probe it independently so the card can show the explainer.
+	let ultraSignUpAvailable = $state(false);
+
 	async function refreshIntegrations() {
 		const saved = await fetchIntegrations();
 		for (const ui of integrations) {
@@ -101,6 +106,12 @@
 			runSignUpAvailable = await isRunSignUpConfigured();
 		} catch {
 			runSignUpAvailable = false;
+		}
+
+		try {
+			ultraSignUpAvailable = await isUltraSignUpConfigured();
+		} catch {
+			ultraSignUpAvailable = false;
 		}
 
 		pageLoading = false;
@@ -458,6 +469,25 @@
 				{/if}
 			</div>
 		</section>
+
+		<section class="card runsignup-card" data-testid="ultrasignup-card">
+			<div class="integration-icon" data-provider="ultrasignup" aria-hidden="true">
+				<span class="material-symbols">terrain</span>
+			</div>
+			<div class="runsignup-body">
+				<h2>{m('integrations.ultrasignup')}</h2>
+				<p class="card-sub">{m('integrations.ultrasignupConnect')}</p>
+				{#if ultraSignUpAvailable}
+					<a class="btn btn-connect" href="/races" data-testid="ultrasignup-open">
+						{m('integrations.ultrasignupOpen')}
+					</a>
+				{:else}
+					<p class="runsignup-unavailable" data-testid="ultrasignup-unavailable" role="status">
+						{m('integrations.ultrasignupUnavailable')}
+					</p>
+				{/if}
+			</div>
+		</section>
 	{/if}
 </div>
 
@@ -643,6 +673,10 @@
 	.integration-icon[data-provider="runsignup"] {
 		background: rgba(217, 142, 207, 0.14);
 		color: #b85aad;
+	}
+	.integration-icon[data-provider="ultrasignup"] {
+		background: rgba(76, 145, 92, 0.14);
+		color: #3f7a4f;
 	}
 
 	.runsignup-card {
