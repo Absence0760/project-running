@@ -2107,6 +2107,8 @@ void main() {
         // flow doesn't trigger a runtime denial on iOS submission.
         'NSPhotoLibraryAddUsageDescription':
             'share-card save-to-photos write-back (UIImageWriteToSavedPhotosAlbum)',
+        'NSCameraUsageDescription':
+            'mobile_scanner (nutrition barcode scan fast-path)',
       };
       for (final entry in required.entries) {
         expect(

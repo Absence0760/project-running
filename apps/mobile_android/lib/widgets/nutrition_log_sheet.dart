@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../food_search.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -27,12 +29,25 @@ Future<bool?> showNutritionLogSheet({
   );
 }
 
+/// Returns a raw scanned barcode string, or null if the scan was cancelled.
+typedef BarcodeScanner = Future<String?> Function(BuildContext context);
+
 class NutritionLogSheet extends StatefulWidget {
   final LocalFoodStore store;
 
   /// Test seam — inject a canned Open Food Facts fetcher.
   final FoodFetcher? fetcher;
-  const NutritionLogSheet({super.key, required this.store, this.fetcher});
+
+  /// Test seam — inject the camera-scan source so the lookup-on-scan path is
+  /// drivable without a real camera. Defaults to the live [MobileScanner]
+  /// screen at the call site.
+  final BarcodeScanner? scanner;
+  const NutritionLogSheet({
+    super.key,
+    required this.store,
+    this.fetcher,
+    this.scanner,
+  });
 
   @override
   State<NutritionLogSheet> createState() => _NutritionLogSheetState();
@@ -48,6 +63,8 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
   Timer? _debounce;
   bool _manualOpen = false;
   bool _saving = false;
+  bool _scanning = false;
+  String? _scanError;
   String? _error;
 
   final _manualName = TextEditingController();
@@ -106,6 +123,48 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
         _searchFailed = true;
       });
     }
+  }
+
+  Future<void> _scan() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _scanning = true;
+      _scanError = null;
+    });
+    // L4: the entire camera-scan + lookup path is auxiliary to the manual log
+    // path. Any failure here (no camera, permission denied, network, parse)
+    // degrades to a message + the always-present search / manual fallback —
+    // it must never break the composer.
+    try {
+      final scanner = widget.scanner ?? _showScannerScreen;
+      final raw = await scanner(context);
+      if (!mounted) return;
+      if (raw == null) {
+        setState(() => _scanning = false);
+        return;
+      }
+      final result = await lookupBarcode(raw, fetcher: widget.fetcher);
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      if (result == null) {
+        setState(() => _scanError = l10n.nutritionScanNotFound);
+        return;
+      }
+      await _pick(result);
+    } catch (e) {
+      debugPrint('nutrition_log_sheet: barcode scan failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _scanning = false;
+        _scanError = l10n.nutritionScanFailed;
+      });
+    }
+  }
+
+  Future<String?> _showScannerScreen(BuildContext context) {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const _BarcodeScanScreen()),
+    );
   }
 
   Future<void> _pick(FoodSearchResult r) async {
@@ -197,14 +256,48 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
           ),
         ],
         const SizedBox(height: 12),
-        TextField(
-          controller: _queryCtl,
-          onChanged: _onQuery,
-          decoration: InputDecoration(
-            labelText: l10n.nutritionSearchHint,
-            prefixIcon: const Icon(Icons.search),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _queryCtl,
+                onChanged: _onQuery,
+                decoration: InputDecoration(
+                  labelText: l10n.nutritionSearchHint,
+                  prefixIcon: const Icon(Icons.search),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: l10n.nutritionScanBarcode,
+              icon: _scanning
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.qr_code_scanner),
+              onPressed: _scanning || _saving ? null : _scan,
+            ),
+          ],
         ),
+        if (_scanning)
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text(l10n.nutritionScanLookingUp),
+          ),
+        if (_scanError != null)
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text(
+              _scanError!,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         const SizedBox(height: 8),
         if (_searching)
           Padding(
@@ -340,6 +433,125 @@ class _PortionDialogState extends State<_PortionDialog> {
           child: Text(l10n.nutritionAdd),
         ),
       ],
+    );
+  }
+}
+
+/// Full-screen camera barcode scanner. Pops the first detected code (the raw
+/// string — the caller normalises + looks it up), or null on a back-out.
+/// Camera-permission denial surfaces an inline message + Open-settings
+/// affordance instead of a black frame, and is wrapped so it can't crash the
+/// composer that pushed it.
+class _BarcodeScanScreen extends StatefulWidget {
+  const _BarcodeScanScreen();
+
+  @override
+  State<_BarcodeScanScreen> createState() => _BarcodeScanScreenState();
+}
+
+class _BarcodeScanScreenState extends State<_BarcodeScanScreen> {
+  final _controller = MobileScannerController(
+    formats: const [
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+    ],
+  );
+  bool _handled = false;
+  bool _permissionDenied = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_handled) return;
+    final raw = capture.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
+    if (raw == null) return;
+    _handled = true;
+    Navigator.of(context).pop(raw);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.nutritionScanBarcode)),
+      body: _permissionDenied
+          ? _PermissionDeniedBody(l10n: l10n)
+          : Stack(
+              children: [
+                MobileScanner(
+                  controller: _controller,
+                  onDetect: _onDetect,
+                  errorBuilder: (context, error) {
+                    if (error.errorCode ==
+                            MobileScannerErrorCode.permissionDenied &&
+                        !_permissionDenied) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() => _permissionDenied = true);
+                      });
+                    }
+                    return _PermissionDeniedBody(l10n: l10n);
+                  },
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 32,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        l10n.nutritionScanHint,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _PermissionDeniedBody extends StatelessWidget {
+  final AppLocalizations l10n;
+  const _PermissionDeniedBody({required this.l10n});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.no_photography, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              l10n.nutritionScanPermissionDenied,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: openAppSettings,
+              icon: const Icon(Icons.settings),
+              label: Text(l10n.nutritionScanOpenSettings),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

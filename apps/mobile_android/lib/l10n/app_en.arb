@@ -11496,6 +11496,34 @@
   "nutritionNoResults": "No matches. Try another term or enter it manually below.",
   "nutritionSearchFailed": "Search failed. Check your connection, then retry or enter it manually below.",
   "nutritionSearchRetry": "Retry search",
+  "nutritionScanBarcode": "Scan barcode",
+  "@nutritionScanBarcode": {
+    "description": "Label/tooltip for the camera barcode-scan action in the nutrition log composer."
+  },
+  "nutritionScanHint": "Point the camera at a product barcode",
+  "@nutritionScanHint": {
+    "description": "Guidance shown on the barcode scanner screen while waiting for a scan."
+  },
+  "nutritionScanLookingUp": "Looking up…",
+  "@nutritionScanLookingUp": {
+    "description": "Shown while a scanned barcode is being looked up in the food database."
+  },
+  "nutritionScanNotFound": "No product found for that barcode. Try a search or enter it manually.",
+  "@nutritionScanNotFound": {
+    "description": "Shown when a scanned barcode has no matching product in the food database."
+  },
+  "nutritionScanFailed": "Scan failed. Try a search or enter it manually.",
+  "@nutritionScanFailed": {
+    "description": "Shown when the barcode lookup fails (network/parse error)."
+  },
+  "nutritionScanPermissionDenied": "Camera access is needed to scan a barcode. You can still search or enter food manually.",
+  "@nutritionScanPermissionDenied": {
+    "description": "Shown when the camera permission is denied for barcode scanning."
+  },
+  "nutritionScanOpenSettings": "Open settings",
+  "@nutritionScanOpenSettings": {
+    "description": "Action to open the OS app settings so the user can grant camera access."
+  },
   "nutritionSaveFailed": "Couldn't log food. Try again.",
   "nutritionMealSlot": "Meal",
   "nutritionManualEntry": "Enter manually",

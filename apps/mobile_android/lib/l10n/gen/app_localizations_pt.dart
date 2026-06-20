@@ -8824,6 +8824,31 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionSearchRetry => 'Tentar busca novamente';
 
   @override
+  String get nutritionScanBarcode => 'Escanear código de barras';
+
+  @override
+  String get nutritionScanHint =>
+      'Aponte a câmera para o código de barras do produto';
+
+  @override
+  String get nutritionScanLookingUp => 'Buscando…';
+
+  @override
+  String get nutritionScanNotFound =>
+      'Nenhum produto encontrado para esse código de barras. Faça uma busca ou insira manualmente.';
+
+  @override
+  String get nutritionScanFailed =>
+      'Falha ao escanear. Faça uma busca ou insira manualmente.';
+
+  @override
+  String get nutritionScanPermissionDenied =>
+      'É necessário acesso à câmera para escanear um código de barras. Você ainda pode buscar ou inserir o alimento manualmente.';
+
+  @override
+  String get nutritionScanOpenSettings => 'Abrir configurações';
+
+  @override
   String get nutritionSaveFailed =>
       'Não foi possível registrar o alimento. Tente novamente.';
 
@@ -19130,6 +19155,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionSearchRetry => 'Tentar busca novamente';
+
+  @override
+  String get nutritionScanBarcode => 'Escanear código de barras';
+
+  @override
+  String get nutritionScanHint =>
+      'Aponte a câmera para o código de barras do produto';
+
+  @override
+  String get nutritionScanLookingUp => 'Buscando…';
+
+  @override
+  String get nutritionScanNotFound =>
+      'Nenhum produto encontrado para esse código de barras. Faça uma busca ou insira manualmente.';
+
+  @override
+  String get nutritionScanFailed =>
+      'Falha ao escanear. Faça uma busca ou insira manualmente.';
+
+  @override
+  String get nutritionScanPermissionDenied =>
+      'É necessário acesso à câmera para escanear um código de barras. Você ainda pode buscar ou inserir o alimento manualmente.';
+
+  @override
+  String get nutritionScanOpenSettings => 'Abrir configurações';
 
   @override
   String get nutritionSaveFailed =>

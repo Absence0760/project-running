@@ -63,6 +63,14 @@ dependencies:
   # of an HR strap. /audit/all 2026-05-07.
   flutter_reactive_ble: ^5.5.0
   image_picker: ^1.1.2
+  # Camera barcode scan for the nutrition log fast-path (EAN/UPC → Open Food
+  # Facts product lookup). BSD-3-Clause (matches the flutter_reactive_ble
+  # licence preference). Uses CameraX/ML Kit on Android and AVFoundation/Apple
+  # Vision on iOS — both ship the scanner with the engine, no separate ML
+  # download. The scan is wrapped in its own try/catch in
+  # widgets/nutrition_log_sheet.dart so a camera/permission failure never
+  # breaks the manual-log path (Layered resilience, L4). See decisions.md.
+  mobile_scanner: ^7.2.0
   url_launcher: ^6.3.1
   # Native OAuth for the in-app Strava connect flow. On Android the
   # package opens a Chrome Custom Tab and intercepts the callback via
