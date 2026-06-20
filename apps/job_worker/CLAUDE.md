@@ -6,7 +6,10 @@ Generic Go service that drains the `jobs` queue (migration
 rotation, replaces the `refresh-tokens` Edge Function), `strava_event`
 (per-activity ingest enqueued by the `/v1/strava/webhook` endpoint,
 replaces the `strava-webhook` Edge Function), `photo_process` (EXIF
-strip on uploaded run photos), `notification_email` (the email
+strip + 512w thumbnail on uploaded run photos), `route_photo_process`
+(the `route_photos` sibling of `photo_process` — same download → strip →
+thumbnail → PATCH against the `route-photos` bucket + `route_photos` table,
+migration `20270224_001`), `notification_email` (the email
 delivery channel for the notifications inbox + event-day reminders —
 roadmap Phase 4b, `decisions.md § 117`), `lifecycle_email`
 (transactional/relationship mail with no notifications row — the welcome

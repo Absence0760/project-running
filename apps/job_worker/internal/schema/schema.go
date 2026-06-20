@@ -94,8 +94,9 @@ const (
 // `/storage/v1/object/<bucket>/`. Distinct from the like-named tables
 // (`run_photos` the table vs `run-photos` the bucket).
 const (
-	BucketRuns      = "runs"
-	BucketRunPhotos = "run-photos"
+	BucketRuns        = "runs"
+	BucketRunPhotos   = "run-photos"
+	BucketRoutePhotos = "route-photos"
 )
 
 // MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag
