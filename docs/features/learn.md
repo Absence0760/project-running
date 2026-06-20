@@ -23,7 +23,8 @@ Each guide is a markdown / MDsvex file committed in the repo, loaded by a build-
 ```
 apps/web/src/lib/learn/
   guides/*.md          # one .md per guide; filename stem = slug; YAML frontmatter
-  guides.ts            # import.meta.glob index + listGuides/getGuide/guidesByCategory + English-fallback resolver
+  guides.ts            # import.meta.glob index + listGuides/getGuide/guidesByCategory + the English-fallback resolver (getGuide / localizedGuideMeta / isEnglishFallback)
+  guides/<slug>.<locale>.md  # optional per-locale prose variants (de/fr/es/ja/pt-BR); resolver falls back to English when absent
   guides.test.ts       # frontmatter / slug-uniqueness / category / CTA guard (reads .md off disk; tsx-runnable)
   categories.ts        # CATEGORIES catalogue + CTA_TARGETS map (pure; labelKeys typed MessageKey)
   learn_meta.ts        # pure SEO builders (title / desc / canonical / Article+BreadcrumbList JSON-LD)
@@ -42,10 +43,17 @@ Sitemap entries (hub 0.8 / category 0.6 / guide 0.7 + frontmatter lastmod) are b
 2. Frontmatter: `title`, `description`, `category` (one of `CATEGORIES`), `slug` (= filename stem), `order`, `updated` (ISO date), optional `heroImage`, optional `cta.feature` (one of `CTA_TARGETS`).
 3. Write the body in markdown (`##`/`###`, lists, links). The end-of-article CTA is auto-appended from `cta.feature`.
 4. New category? Add it to `categories.ts` + its `labelKey` to `en.ts` and all five other locales.
-5. `npx tsx --test apps/web/src/lib/learn/guides.test.ts` validates frontmatter / slug / category / CTA.
+5. `npx tsx --test apps/web/src/lib/learn/guides.test.ts` validates frontmatter / slug / category / CTA (and, for localized files, sibling agreement — see below).
 6. `npm run build --workspace=apps/web` then confirm `build/learn/<slug>.html` exists and `build/sitemap.xml` lists it.
 
 No DB migration; no deploy step beyond the normal web build/release.
+
+### How to translate a guide
+
+1. Copy `apps/web/src/lib/learn/guides/<slug>.md` to `apps/web/src/lib/learn/guides/<slug>.<locale>.md` (`<locale>` ∈ `de/fr/es/ja/pt-BR`). The dash-bearing `pt-BR` is fine — the resolver splits on the FIRST dot, so `road-running-101.pt-BR.md` parses to slug `road-running-101`, locale `pt-BR`.
+2. Translate the `title`, `description`, and body. Keep `slug`, `category`, `order`, and `cta.feature` **identical to the English source** — `guides.test.ts` fails the build if they drift (the hub card route + section are driven off the English index, so a localized file under a different category/order would mis-file the card).
+3. `import.meta.glob` picks the new file up automatically; no registration. `getGuide(slug, locale)` serves it, `localizedGuideMeta(slug, locale)` localizes its hub/category card, and `isEnglishFallback` stops showing the notice for that locale.
+4. Re-run the guides test + a dev-mode build (`npx vite build --mode development --workspace=apps/web`) — the localized prose compiles into a client chunk; the English body still prerenders into the static `build/learn/<slug>.html` (canonical), with the localized component lazy-resolved client-side after hydration.
 
 ## Cross-linking (CTA targets)
 
@@ -68,12 +76,19 @@ All targets are auth-gated app routes; an anon reader who clicks is sent through
 
 There is no public race-finder feature yet (clubs have events, but no aggregated calendar). The **"your first race"** guide (`your-first-race.md`) links to the closest shipped surface, `/social?tab=clubs`, and flags the dependency in its body. When a race calendar ships, repoint the `racing` entry in `categories.ts` and update this table.
 
-## Localization (scope still owed)
+## Localization
 
 Two layers:
 
 1. **Chrome / UI strings** (`learn.*` namespace) — shipped in all six locales (`en, de, fr, es, ja, pt-BR`), enforced by `messages_parity.test.ts`.
-2. **Guide prose** — **English-only** today. `guides.ts` resolves a `<slug>.<locale>.md` variant and falls back to English when absent; the article page shows a one-line "this guide is in English" notice on fallback. The locale-suffix resolver is wired now; localized prose files are not authored. **Decision owed:** translate the starter set into the five other locales (and on what timeline), or stay English-only.
+2. **Guide prose** — **per-locale lookup with English fallback, shipped** (2026-06-20). `guides.ts` indexes every `<slug>.<locale>.md` variant from the same `import.meta.glob`. The resolution surface:
+   - `getGuide(slug, locale)` → the localized article body when a `<slug>.<locale>.md` exists, else the English entry. Drives the article `<GuideBody/>` + H1.
+   - `localizedGuideMeta(slug, locale)` → the localized `title` + `description`, **falling back field-by-field** to the English frontmatter. Drives the hub + category cards (`GuideCard.svelte`) AND the article H1, so a non-English visitor reads a consistent localized listing → body and never an English title above a localized body.
+   - `isEnglishFallback(slug, locale)` → drives the one-line "this guide is in English" notice, shown only when the active locale has no file for that slug.
+   - The English body still **prerenders** into the static `build/learn/<slug>.html` (the canonical, SEO-indexed copy — `<head>` meta is English by design); the localized component is lazy-resolved client-side after `initLocale` swaps the active locale.
+   - `guides.test.ts` guards the localized files: the suffix must be a supported non-default locale, an English source must exist to fall back to, `(slug, locale)` is unique, and the localized frontmatter agrees with its English sibling on `slug`/`category`/`order`/`cta.feature` (only `title`/`description` differ).
+
+   **Localized today:** all eight guides — `road-running-101`, `couch-to-5k`, `choosing-running-shoes`, `weekly-running-routine`, `how-to-pace-your-first-race`, `trail-running-basics`, `what-to-eat-before-a-long-run`, `your-first-race` — in all six locales (`en` source + `de/fr/es/ja/pt-BR`). The prose-localization content is **complete** (2026-06-20); the resolver's field-by-field English fallback stays wired for any future guide added before its translations land. See [decisions.md § 179](../architecture/decisions.md).
 
 ## Mobile / watch
 
@@ -82,4 +97,4 @@ Two layers:
 ## Tests
 
 - Unit (`npx tsx --test`): `guides.test.ts`, `learn_meta.test.ts`, `sitemap.test.ts` (extended).
-- Playwright (`apps/web/tests-e2e/learn/`): `hub`, `article`, `seo`, `category`, `cta-links-resolve`.
+- Playwright (`apps/web/tests-e2e/learn/`): `hub`, `article`, `seo`, `category`, `cta-links-resolve`, `localized-prose` (localized body + H1, English fallback + notice, localized hub-card title).
