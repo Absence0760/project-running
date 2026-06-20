@@ -45,6 +45,12 @@ void main() {
     expect(metricFromActivity({'duration_s': 1800}, ChallengeMetric.duration, null), 1800);
   });
 
+  test('metricFromActivity vert reads elevation_gain_m (number or string, missing → 0)', () {
+    expect(metricFromActivity({'elevation_gain_m': 640}, ChallengeMetric.vert, null), 640);
+    expect(metricFromActivity({'elevation_gain_m': '640'}, ChallengeMetric.vert, null), 640);
+    expect(metricFromActivity({}, ChallengeMetric.vert, null), 0);
+  });
+
   test('metricFromActivity count + streak each contribute 1', () {
     expect(metricFromActivity({}, ChallengeMetric.activityCount, null), 1);
     expect(metricFromActivity({}, ChallengeMetric.streakDays, null), 1);

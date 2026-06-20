@@ -10,7 +10,7 @@
 /// Pure functions, no Flutter / Supabase deps.
 library;
 
-enum ChallengeMetric { distance, duration, activityCount, streakDays }
+enum ChallengeMetric { distance, duration, vert, activityCount, streakDays }
 
 /// Fraction of the goal reached, clamped to 0..1. Null goal (pure-ranking
 /// board) → null: there is no bar to fill.
@@ -75,6 +75,8 @@ num metricFromActivity(
       return _numberOf(summary['distance_m']);
     case ChallengeMetric.duration:
       return _numberOf(summary['duration_s']);
+    case ChallengeMetric.vert:
+      return _numberOf(summary['elevation_gain_m']);
     case ChallengeMetric.activityCount:
       return 1;
     case ChallengeMetric.streakDays:
