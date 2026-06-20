@@ -52,6 +52,14 @@ func TestWeeklyDigest_OptedInSends(t *testing.T) {
 	if !strings.Contains(got.msg.ListUnsubscribe, "/unsubscribe/weekly-digest") {
 		t.Errorf("unsubscribe URL wrong: %q", got.msg.ListUnsubscribe)
 	}
+	// RFC 8058: the digest target honours the one-click POST, so the
+	// companion List-Unsubscribe-Post header must be advertised.
+	if !got.msg.ListUnsubscribeOneClick {
+		t.Error("opted-in digest must advertise RFC 8058 one-click POST")
+	}
+	if raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", got.msg); !strings.Contains(raw, "List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n") {
+		t.Errorf("digest MIME missing List-Unsubscribe-Post header:\n%s", raw)
+	}
 }
 
 func TestWeeklyDigest_DefaultOffSkips(t *testing.T) {

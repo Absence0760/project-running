@@ -257,6 +257,39 @@ func TestBuildMIME_HeadersAndCRLF(t *testing.T) {
 			t.Errorf("MIME missing %q in:\n%s", want, raw)
 		}
 	}
+	// A List-Unsubscribe pointing at a GET preferences page (one-click false)
+	// must NOT advertise List-Unsubscribe-Post — the page can't honour the POST.
+	if strings.Contains(raw, "List-Unsubscribe-Post") {
+		t.Errorf("GET-only unsubscribe must not advertise one-click POST:\n%s", raw)
+	}
+}
+
+func TestBuildMIME_OneClickPostHeader(t *testing.T) {
+	raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", Email{
+		Subject:                 "Digest",
+		Body:                    "weekly summary",
+		ListUnsubscribe:         "https://threkir.test/unsubscribe/weekly-digest?token=abc",
+		ListUnsubscribeOneClick: true,
+	})
+	if !strings.Contains(raw, "List-Unsubscribe: <https://threkir.test/unsubscribe/weekly-digest?token=abc>\r\n") {
+		t.Errorf("MIME missing List-Unsubscribe:\n%s", raw)
+	}
+	if !strings.Contains(raw, "List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n") {
+		t.Errorf("MIME missing RFC 8058 List-Unsubscribe-Post:\n%s", raw)
+	}
+}
+
+func TestBuildMIME_NoOneClickPostWithoutListUnsubscribe(t *testing.T) {
+	// One-click flag without a List-Unsubscribe URL emits neither header —
+	// the -Post header is meaningless on its own.
+	raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", Email{
+		Subject:                 "Hi",
+		Body:                    "body",
+		ListUnsubscribeOneClick: true,
+	})
+	if strings.Contains(raw, "List-Unsubscribe") {
+		t.Errorf("no List-Unsubscribe URL → no unsubscribe headers at all:\n%s", raw)
+	}
 }
 
 func TestBuildMIME_MultipartWhenHTMLPresent(t *testing.T) {

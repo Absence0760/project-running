@@ -24,12 +24,20 @@ type EmailSender interface {
 // inbox preview snippet (hidden at the top of the HTML). ListUnsubscribe is
 // the URL placed in the List-Unsubscribe header for a one-tap opt-out
 // ("" for transactional mail that isn't a subscription).
+// ListUnsubscribeOneClick is true only when ListUnsubscribe points at a
+// genuine RFC 8058 one-click POST endpoint (one that accepts the
+// `List-Unsubscribe=One-Click` body); it gates emission of the companion
+// List-Unsubscribe-Post header. It stays false for a List-Unsubscribe that is
+// merely a GET preferences page — that page can't honour a one-click POST, and
+// advertising List-Unsubscribe-Post for it would make Gmail/Yahoo fire a POST
+// the page rejects.
 type Email struct {
-	Subject         string
-	Preheader       string
-	Body            string // plain-text alternative
-	HTML            string // text/html part ("" → text-only message)
-	ListUnsubscribe string
+	Subject                 string
+	Preheader               string
+	Body                    string // plain-text alternative
+	HTML                    string // text/html part ("" → text-only message)
+	ListUnsubscribe         string
+	ListUnsubscribeOneClick bool
 }
 
 // Brand tokens — kept in lockstep with apps/web/src/app.css (--color-primary
@@ -82,6 +90,13 @@ func buildMIME(from, to string, msg Email) string {
 		// RFC 2369. Mail clients render a one-tap "Unsubscribe" that
 		// opens the preferences page.
 		fmt.Fprintf(&b, "List-Unsubscribe: <%s>\r\n", msg.ListUnsubscribe)
+		if msg.ListUnsubscribeOneClick {
+			// RFC 8058. Lets Gmail/Yahoo unsubscribe with a single
+			// background POST (List-Unsubscribe=One-Click) instead of
+			// opening the URL — only advertised when the target endpoint
+			// actually honours that POST.
+			b.WriteString("List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n")
+		}
 	}
 	b.WriteString("MIME-Version: 1.0\r\n")
 
@@ -122,27 +137,29 @@ func extractAddr(from string) string {
 // turns it into the text + HTML parts so every email shares one layout and
 // adding a template is just filling these fields.
 type emailContent struct {
-	lang            string // <html lang> (BCP-47); "" → "en"
-	subject         string
-	preheader       string   // inbox preview snippet
-	heading         string   // H1
-	body            []string // paragraphs
-	ctaLabel        string   // button text ("" → no button)
-	ctaURL          string
-	footer          string // "why you're receiving this" line (localized by caller)
-	prefsURL        string // manage-preferences link in the footer ("" → omit)
-	prefsLabel      string // localized "Manage email preferences" link text
-	prefsTextPrefix string // localized plain-text footer prefix
-	listUnsub       string // List-Unsubscribe header value ("" → none)
+	lang              string // <html lang> (BCP-47); "" → "en"
+	subject           string
+	preheader         string   // inbox preview snippet
+	heading           string   // H1
+	body              []string // paragraphs
+	ctaLabel          string   // button text ("" → no button)
+	ctaURL            string
+	footer            string // "why you're receiving this" line (localized by caller)
+	prefsURL          string // manage-preferences link in the footer ("" → omit)
+	prefsLabel        string // localized "Manage email preferences" link text
+	prefsTextPrefix   string // localized plain-text footer prefix
+	listUnsub         string // List-Unsubscribe header value ("" → none)
+	listUnsubOneClick bool   // listUnsub is an RFC 8058 one-click POST endpoint
 }
 
 func composeEmail(c emailContent) Email {
 	return Email{
-		Subject:         c.subject,
-		Preheader:       c.preheader,
-		Body:            renderTextBody(c),
-		HTML:            renderHTMLBody(c),
-		ListUnsubscribe: c.listUnsub,
+		Subject:                 c.subject,
+		Preheader:               c.preheader,
+		Body:                    renderTextBody(c),
+		HTML:                    renderHTMLBody(c),
+		ListUnsubscribe:         c.listUnsub,
+		ListUnsubscribeOneClick: c.listUnsubOneClick,
 	}
 }
 
@@ -511,6 +528,11 @@ func renderWeeklyDigest(s DigestSummary, baseURL, locale, unsubURL string) Email
 		prefsLabel:      shared.managePrefsLabel,
 		prefsTextPrefix: "",
 		listUnsub:       unsubURL,
+		// The digest's unsubscribe URL is the RFC 8058 one-click endpoint
+		// (internal/unsubscribe), which honours the POST body. The
+		// notification path's List-Unsubscribe is a GET preferences page, so it
+		// stays false there.
+		listUnsubOneClick: true,
 	})
 }
 
