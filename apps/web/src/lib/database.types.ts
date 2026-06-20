@@ -34,6 +34,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletion_receipts: {
+        Row: {
+          email_hash: string
+          sent_at: string
+        }
+        Insert: {
+          email_hash: string
+          sent_at?: string
+        }
+        Update: {
+          email_hash?: string
+          sent_at?: string
+        }
+        Relationships: []
+      }
       achievements: {
         Row: {
           badge_key: string
@@ -3802,6 +3817,7 @@ export type Database = {
           payload: Json
         }[]
       }
+      cleanup_account_deletion_receipts: { Args: never; Returns: undefined }
       cleanup_stale_export_blobs: { Args: never; Returns: number }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
       cleanup_stale_race_pings: { Args: never; Returns: number }
