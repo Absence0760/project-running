@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../ble_heart_rate.dart';
+import '../ble_treadmill.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../local_route_store.dart';
@@ -22,6 +23,7 @@ class YouScreen extends StatelessWidget {
   final LocalRouteStore? routeStore;
   final LocalGearStore? gearStore;
   final BleHeartRate heartRate;
+  final BleTreadmill treadmill;
   final SettingsSyncService? settingsSync;
 
   const YouScreen({
@@ -29,6 +31,7 @@ class YouScreen extends StatelessWidget {
     this.apiClient,
     required this.preferences,
     required this.heartRate,
+    required this.treadmill,
     this.runStore,
     this.routeStore,
     this.gearStore,
@@ -68,6 +71,7 @@ class YouScreen extends StatelessWidget {
                 routeStore: routeStore,
                 gearStore: gearStore,
                 heartRate: heartRate,
+                treadmill: treadmill,
                 settingsSync: settingsSync,
               ),
             ),

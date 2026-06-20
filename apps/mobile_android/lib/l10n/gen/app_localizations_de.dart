@@ -1152,6 +1152,28 @@ class AppLocalizationsDe extends AppLocalizations {
       'Weiterhin kein Gurt — Aufzeichnung läuft ohne HF weiter.';
 
   @override
+  String get runTreadmillModeLabel => 'Laufband-Modus';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'Band $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting =>
+      'Laufband verloren, neu verbinden…';
+
+  @override
+  String get runTreadmillReconnected => 'Laufband wieder verbunden';
+
+  @override
+  String get runTreadmillLostFallback =>
+      'Laufband verloren — Distanz wechselt zurück zu GPS';
+
+  @override
+  String get runTreadmillNotFound => 'Laufband nicht erreichbar';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Lokales Speichern fehlgeschlagen. Starte die App neu, um wiederherzustellen.';
 

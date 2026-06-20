@@ -1128,6 +1128,35 @@
   "@runHrStrapStillNotFound": {
     "description": "Banner shown when a manual heart-rate strap reconnect attempt fails"
   },
+  "runTreadmillModeLabel": "Treadmill mode",
+  "@runTreadmillModeLabel": {
+    "description": "Label for the live run-screen toggle that sources distance from a paired treadmill belt"
+  },
+  "runTreadmillModeSpeed": "Belt {speed}",
+  "@runTreadmillModeSpeed": {
+    "description": "Subtitle showing the live treadmill belt speed while treadmill mode is on",
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "runTreadmillLostReconnecting": "Treadmill lost, reconnecting…",
+  "@runTreadmillLostReconnecting": {
+    "description": "Banner shown when the treadmill belt drops and is reconnecting"
+  },
+  "runTreadmillReconnected": "Treadmill reconnected",
+  "@runTreadmillReconnected": {
+    "description": "Banner shown when the treadmill belt reconnects"
+  },
+  "runTreadmillLostFallback": "Treadmill lost — distance falling back to GPS",
+  "@runTreadmillLostFallback": {
+    "description": "Banner shown when the treadmill belt drops and distance reverts to the GPS/pedometer path"
+  },
+  "runTreadmillNotFound": "Couldn't reach the treadmill",
+  "@runTreadmillNotFound": {
+    "description": "Banner shown when treadmill mode is turned on but the belt can't be reached"
+  },
   "runSaveFailedRelaunch": "Couldn't save locally. Relaunch the app to recover.",
   "@runSaveFailedRelaunch": {
     "description": "Finish-summary error shown when the local save of a run failed"

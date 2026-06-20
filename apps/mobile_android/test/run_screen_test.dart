@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/audio_cues.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
@@ -14,6 +16,7 @@ import '../lib/race_controller.dart';
 import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
+import 'package:run_recorder/run_recorder.dart';
 
 bool _supabaseReady = false;
 late Directory _runsDir;
@@ -36,6 +39,7 @@ Future<({
   SocialService social,
   TrainingService training,
   BleHeartRate heartRate,
+  BleTreadmill treadmill,
   AudioCues audioCues,
   RaceController raceController,
 })> _makeStores() async {
@@ -56,6 +60,7 @@ Future<({
     social: social,
     training: TrainingService(),
     heartRate: BleHeartRate(),
+    treadmill: BleTreadmill(),
     audioCues: AudioCues(),
     raceController: RaceController(social),
   );
@@ -76,6 +81,7 @@ Future<void> _pump(WidgetTester tester, dynamic s) async {
         raceController: s.raceController,
         training: s.training,
         heartRate: s.heartRate,
+        treadmill: s.treadmill,
       ),
     ),
   );
@@ -277,5 +283,77 @@ void main() {
         );
       },
     );
+  });
+
+  group('RunScreen — treadmill live-mode toggle', () {
+    testWidgets('toggle is hidden at idle even when a belt is paired',
+        (tester) async {
+      // The toggle lives in the recording view (_buildLive). Pairing a belt
+      // must not surface it on the idle screen — it only appears once a run
+      // is in flight. This also guards the new plumbing renders idle cleanly.
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({
+          'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
+          'treadmill_device_name': 'NordicTrack T9',
+        });
+      });
+      final s = await _makeStores();
+      await _pump(tester, s);
+      // Let the post-frame pairedName() read settle.
+      await tester.pump();
+      expect(find.text('Treadmill mode'), findsNothing);
+    });
+
+    test('belt sample pump feeds the recorder; clearing reverts to GPS',
+        () async {
+      // The exact wiring _toggleTreadmillMode performs: belt stream → the
+      // recorder's setTreadmillSample seam, then clearTreadmillMode reverts.
+      final treadmill = BleTreadmill();
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+
+      final sub = treadmill.stream.listen((sample) {
+        r.setTreadmillSample(
+          sample.speedMps,
+          totalDistanceMetres: sample.totalDistanceMetres,
+        );
+      });
+
+      expect(r.treadmillMode, isFalse);
+      treadmill.debugEmitSample(
+        const TreadmillSample(
+            instantaneousSpeedKmh: 10, totalDistanceMetres: 50),
+      );
+      // Broadcast-stream delivery is a microtask — let it run.
+      await Future<void>.delayed(Duration.zero);
+      expect(r.treadmillMode, isTrue,
+          reason: 'first belt sample flips the recorder into treadmill mode');
+
+      r.clearTreadmillMode();
+      expect(r.treadmillMode, isFalse,
+          reason: 'turning the toggle off reverts to the GPS distance path');
+
+      await sub.cancel();
+    });
+
+    test('a sample-stream error is swallowed by the onError guard (L4)',
+        () async {
+      // The screen attaches an onError that debugPrints and never rethrows,
+      // so a belt fault can never tear down the recording zone.
+      final treadmill = BleTreadmill();
+      var caught = false;
+      final sub = treadmill.stream.listen(
+        (_) {},
+        onError: (Object e) {
+          // mirror the screen's guard — log + swallow, never rethrow.
+          caught = true;
+        },
+      );
+      treadmill.debugEmitSampleError(StateError('belt fault'));
+      await Future<void>.delayed(Duration.zero);
+      expect(caught, isTrue,
+          reason: 'onError must absorb the fault — nothing escapes the zone');
+      await sub.cancel();
+    });
   });
 }

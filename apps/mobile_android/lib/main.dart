@@ -33,6 +33,7 @@ import 'settings_sync.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
 import 'ble_heart_rate.dart';
+import 'ble_treadmill.dart';
 import 'tile_cache.dart';
 import 'training_service.dart';
 import 'watch_ingest_queue.dart';
@@ -294,6 +295,11 @@ void main() async {
   // strap previously, HR is ready when they tap Start; otherwise it's a
   // no-op and the run records without HR.
   unawaited(heartRate.connectCached());
+  // Same lifetime + auto-reconnect contract as the HR strap: one app-owned
+  // FTMS belt reader, connected at startup, so a belt paired in Settings is
+  // the same instance the run screen reads for treadmill mode.
+  final treadmill = BleTreadmill();
+  unawaited(treadmill.connectCached());
 
   // Apple Watch ingest path. The native iOS bridge
   // (`Runner/WatchIngestBridge.swift`) forwards `WCSession` payloads via
@@ -456,6 +462,7 @@ void main() async {
       raceController: raceController,
       training: training,
       heartRate: heartRate,
+      treadmill: treadmill,
       recoveredRun: recoveredRun,
       recoveryBannerMessage: recoveryBannerMessage,
     ));
@@ -533,6 +540,7 @@ class RunApp extends StatefulWidget {
   final RaceController raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
+  final BleTreadmill treadmill;
   final cm.Run? recoveredRun;
   final String? recoveryBannerMessage;
   const RunApp({
@@ -551,6 +559,7 @@ class RunApp extends StatefulWidget {
     required this.raceController,
     required this.training,
     required this.heartRate,
+    required this.treadmill,
     this.recoveredRun,
     this.recoveryBannerMessage,
   });
@@ -591,6 +600,7 @@ class _RunAppState extends State<RunApp> {
                   raceController: widget.raceController,
                   training: widget.training,
                   heartRate: widget.heartRate,
+                  treadmill: widget.treadmill,
                   settingsSync: widget.settingsSync,
                   recoveredRun: widget.recoveredRun,
                   recoveryBannerMessage: widget.recoveryBannerMessage,

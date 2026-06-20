@@ -1108,6 +1108,26 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runHrStrapStillNotFound => 'まだストラップがありません — 心拍なしで記録を続けます。';
 
   @override
+  String get runTreadmillModeLabel => 'トレッドミルモード';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'ベルト $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting => 'トレッドミルとの接続が切れました。再接続中…';
+
+  @override
+  String get runTreadmillReconnected => 'トレッドミルに再接続しました';
+
+  @override
+  String get runTreadmillLostFallback => 'トレッドミルとの接続が切れました — 距離はGPSに戻ります';
+
+  @override
+  String get runTreadmillNotFound => 'トレッドミルに接続できませんでした';
+
+  @override
   String get runSaveFailedRelaunch => 'ローカルに保存できませんでした。アプリを再起動して復元してください。';
 
   @override
