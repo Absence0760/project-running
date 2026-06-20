@@ -90,6 +90,12 @@ class SettingsKeys {
   /// + lift→load math elsewhere are unaffected; only the readiness series
   /// drops lifts. Web twin: `exclude_gym_from_readiness` (decisions §134).
   static const excludeGymFromReadiness = 'exclude_gym_from_readiness';
+  /// The runner's primary goal, set by the post-signup setup wizard
+  /// (`'general_fitness' | 'weight_loss' | '5k' | '10k' | 'half_marathon'
+  /// | 'marathon'`). Drives the planned post-onboarding plan suggestion.
+  /// Distance values map 1:1 to the training goal-event enum. Web twin:
+  /// `primary_goal` (`onboarding.ts`). See settings.md.
+  static const primaryGoal = 'primary_goal';
 
   // Device (D)
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';

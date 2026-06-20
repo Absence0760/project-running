@@ -2218,6 +2218,79 @@ class ApiClient {
     return UserProfileRow.fromJson(result as Map<String, dynamic>);
   }
 
+  /// Stamp `onboarded_at = now()` and nothing else — the minimum write the
+  /// home-screen onboarding gate needs to stop re-showing the setup wizard.
+  /// Mirrors web's `skipOnboarding` in `apps/web/src/routes/onboarding`.
+  /// Every other field stays at its existing default.
+  Future<void> markOnboarded() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return;
+    await _client.from(UserProfileRow.table).update({
+      UserProfileRow.colOnboardedAt: DateTime.now().toUtc().toIso8601String(),
+    }).eq(UserProfileRow.colId, uid);
+  }
+
+  /// Persist the post-signup setup-wizard answers and stamp `onboarded_at`
+  /// so the gate releases. Mirrors web's `finishAndExit`:
+  ///
+  /// - `display_name`, `preferred_unit`, and (always, when supplied)
+  ///   `date_of_birth` write to `user_profiles`. The bare DOB write is
+  ///   unconditional — it backs the under-18 minor-exclusion floor in
+  ///   people-search (a child-safety purpose distinct from consenting to
+  ///   USE the DOB for HR / age-banded leaderboards). A declined consent
+  ///   must not leave a NULL DOB that keeps the account discoverable.
+  /// - `gender` + the Art 9 consent stamp write only under
+  ///   [healthDataConsent]. `health_data_consent_at` is stamped
+  ///   server-side by `grant_health_data_consent` (first-stamp-wins); a
+  ///   direct write is rejected by the lock trigger (migration
+  ///   20261118_001), so it is NOT in the profile update.
+  ///
+  /// The caller (the wizard) is responsible for the universal-bag writes
+  /// (units, privacy default, primary goal, weight, consent-gated DOB
+  /// mirror) via [SettingsService.updateUniversal] — the bag write and the
+  /// profile write are independent.
+  Future<void> completeOnboarding({
+    String? displayName,
+    required String preferredUnit,
+    DateTime? dateOfBirth,
+    String? gender,
+    required bool healthDataConsent,
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return;
+    if (healthDataConsent) {
+      await grantHealthDataConsent();
+    }
+    final update = <String, dynamic>{
+      UserProfileRow.colPreferredUnit: preferredUnit,
+      UserProfileRow.colOnboardedAt:
+          DateTime.now().toUtc().toIso8601String(),
+    };
+    final trimmedName = displayName?.trim();
+    if (trimmedName != null && trimmedName.isNotEmpty) {
+      update[UserProfileRow.colDisplayName] = trimmedName;
+    }
+    if (dateOfBirth != null) {
+      update[UserProfileRow.colDateOfBirth] = dateOnly(dateOfBirth);
+    }
+    if (healthDataConsent) {
+      update[UserProfileRow.colGender] =
+          (gender != null && gender.isNotEmpty) ? gender : null;
+    }
+    await _client
+        .from(UserProfileRow.table)
+        .update(update)
+        .eq(UserProfileRow.colId, uid);
+  }
+
+  /// `YYYY-MM-DD` for a `date`-typed column. The wizard's DOB picker is a
+  /// calendar day, not an instant — store the wall-clock date with no zone
+  /// so a user east/west of UTC doesn't roll a day.
+  static String dateOnly(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
   /// Upload a profile avatar into the public `avatars` bucket and point
   /// `user_profiles.avatar_url` at it. Mirrors web `uploadAvatar` (data.ts):
   /// the caller strips EXIF/GPS before passing [bytes] (mobile strips in the
