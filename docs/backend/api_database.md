@@ -1841,6 +1841,32 @@ Returns `(exercise_name, uses)` — distinct trimmed exercise names + use counts
 
 ---
 
+## Challenges & competitions
+
+Migrations `20270209_001_challenges.sql` (schema + RLS) + `20270210_001_challenge_progress_rpc.sql` (RPCs + completion). See [challenges.md](../features/challenges.md).
+
+### Tables
+
+- **`challenges`** — `id, creator_id, club_id (null = open), title, description, metric, scope, goal_value (null = pure-ranking board), activity_type (null = any), starts_at, ends_at, is_public, created_at`. `metric ∈ {distance, duration, activity_count, streak_days}` and `scope ∈ {individual, club_vs_club, group_goal}` are CHECK-constrained and paired with the `ChallengeMetric` / `ChallengeScope` TS unions (in `check_constraint_unions.mjs`). `club_vs_club` forces `club_id = null` (it aggregates across many clubs).
+- **`challenge_participants`** — `(challenge_id, user_id)` PK + `team_club_id` (the club a member's total pools into, club_vs_club only), `joined_at`, `completed_at` (column-locked — written only by the completion RPC, mirroring the `event_attendees.attendance` lockdown; clients hold only the `team_club_id` column-UPDATE grant).
+- **`challenge_badges`** — durable completion record, `unique(user_id, challenge_id)`. INSERT closed to clients; written only by the SECURITY DEFINER completion path.
+
+### RLS
+
+- `challenges` SELECT: public OR creator OR participant OR active member of `club_id`. INSERT: `auth.uid() = creator_id` AND (open OR `is_club_admin(club_id)`). UPDATE/DELETE: creator OR club admin. The `is_challenge_visible(uuid)` SECURITY DEFINER helper encapsulates the SELECT predicate for the child tables.
+- `challenge_participants` SELECT inherits `is_challenge_visible`; INSERT is self-only + visible + (team join requires active membership of `team_club_id`); DELETE self-only.
+- `challenge_badges` SELECT: owner OR the badge's challenge is public.
+
+### RPCs
+
+- **`challenge_leaderboard(p_challenge_id uuid, p_by_team boolean default false)`** → `(user_id, display_name, team_club_id, value, rank)`. **SECURITY DEFINER**, gated on `is_challenge_visible`. ONE query joining participants to a per-user (or per-team) aggregate over each runner's `runs` within `[starts_at, ends_at)`, filtered by `activity_type` when set. DEFINER (not invoker) because the public-runs SELECT policy on `runs` was retired — an invoker aggregate would zero every competitor; the board exposes only the per-user SUM, never the run rows. `rank() over (order by value desc)`. N participants → 1 round trip.
+- **`my_active_challenges()`** → challenge fields + `my_value, my_rank, participant_count, completed_at`. SECURITY INVOKER. The self-hide driver: only challenges the caller has joined that are live or ended within 7 days. An empty result = render nothing.
+- **`recompute_challenge_completion(p_challenge_id, p_user_id)`** — SECURITY DEFINER. Recomputes the user's value; when `goal_value` is met and no badge exists, inserts `challenge_badges` + stamps `completed_at` + inserts a `challenge_complete` notification. Idempotent (the unique badge row guards). Called opportunistically client-side after a run saves + by the daily `sweep_challenge_completions()` pg_cron job (`sweep-challenge-completions`).
+
+pgTAP: `challenges_rls_test.sql`, `challenge_leaderboard_test.sql`, `challenge_completion_test.sql`, `challenge_participants_completed_lockdown_test.sql`.
+
+---
+
 ## Supabase Storage
 
 Three buckets in the live schema:

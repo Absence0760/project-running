@@ -50,6 +50,8 @@ const PAIRS = [
 	{ tableColumn: 'public_recaps.period_kind', tsUnion: 'RecapPeriodKind' },
 	{ tableColumn: 'achievements.tier', tsUnion: 'AchievementTier' },
 	{ tableColumn: 'achievements.source_kind', tsUnion: 'AchievementSourceKind' },
+	{ tableColumn: 'challenges.metric', tsUnion: 'ChallengeMetric' },
+	{ tableColumn: 'challenges.scope', tsUnion: 'ChallengeScope' },
 ];
 
 // Walk a SQL file, track the "current table" set by `create table <t>` or

@@ -9266,4 +9266,114 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancel';
+
+  @override
+  String get challengesTitle => 'Challenges';
+
+  @override
+  String get challengesMyChallenges => 'My challenges';
+
+  @override
+  String get challengesBrowse => 'Browse';
+
+  @override
+  String get challengesEmpty => 'No challenges yet.';
+
+  @override
+  String get challengesBrowseEmpty => 'No public challenges to join right now.';
+
+  @override
+  String get challengesJoin => 'Join';
+
+  @override
+  String get challengesLeave => 'Leave';
+
+  @override
+  String get challengesDelete => 'Delete';
+
+  @override
+  String get challengesMetricDistance => 'Distance';
+
+  @override
+  String get challengesMetricDuration => 'Time';
+
+  @override
+  String get challengesMetricActivityCount => 'Activities';
+
+  @override
+  String get challengesMetricStreak => 'Active days';
+
+  @override
+  String challengesGoalProgress(String value, String goal) {
+    return '$value of $goal';
+  }
+
+  @override
+  String get challengesProgressComplete => 'Complete';
+
+  @override
+  String challengesEndsIn(int n) {
+    return 'Ends in $n days';
+  }
+
+  @override
+  String get challengesEndsToday => 'Ends today';
+
+  @override
+  String get challengesEnded => 'Ended';
+
+  @override
+  String get challengesLeaderboard => 'Leaderboard';
+
+  @override
+  String get challengesLeaderboardEmpty => 'No progress logged yet.';
+
+  @override
+  String challengesLeaderboardRank(int rank) {
+    return '#$rank';
+  }
+
+  @override
+  String challengesParticipants(int n) {
+    return '$n joined';
+  }
+
+  @override
+  String get challengesBadgeEarned => 'Badge earned';
+
+  @override
+  String challengesUnitDays(int n) {
+    return '$n days';
+  }
+
+  @override
+  String challengesUnitActivities(int n) {
+    return '$n';
+  }
+
+  @override
+  String get challengesLeaveConfirmTitle => 'Leave challenge?';
+
+  @override
+  String get challengesLeaveConfirm =>
+      'Your progress in this challenge will no longer be tracked.';
+
+  @override
+  String get challengesDeleteConfirmTitle => 'Delete challenge?';
+
+  @override
+  String get challengesDeleteConfirm =>
+      'This removes the challenge and its leaderboard for everyone. This can\'t be undone.';
+
+  @override
+  String get challengesNotFound => 'This challenge isn\'t available.';
+
+  @override
+  String get challengesJoinFailed => 'Couldn\'t join the challenge.';
+
+  @override
+  String get challengesLeaveFailed => 'Couldn\'t leave the challenge.';
+
+  @override
+  String get challengesLoadFailed => 'Couldn\'t load challenges.';
 }

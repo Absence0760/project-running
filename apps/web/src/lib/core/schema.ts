@@ -62,6 +62,9 @@ export const TABLES = {
 	safety_contacts: 'safety_contacts',
 	public_recaps: 'public_recaps',
 	achievements: 'achievements',
+	challenges: 'challenges',
+	challenge_participants: 'challenge_participants',
+	challenge_badges: 'challenge_badges',
 } as const;
 
 /// Supabase Storage buckets reached via `supabase.storage.from(...)`.

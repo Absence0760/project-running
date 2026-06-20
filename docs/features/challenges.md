@@ -1,6 +1,10 @@
 # Challenges & competitions — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** **Shipped (web + mobile) 2026-06-19** — migrations `20270209_001_challenges.sql` + `20270210_001_challenge_progress_rpc.sql`. Three scopes (individual / club_vs_club / group_goal), four metrics (distance / duration / activity_count / streak_days; **`vert` deferred** — no first-class per-run elevation column, see Open Question 1), runs-only, self-hiding strip on web `/dashboard` + the `/social?tab=challenges` tab + the mobile Social Challenges sub-tab, completion badge + `challenge_complete` notification via the opportunistic RPC + a daily `sweep-challenge-completions` pg_cron job. The `challenge_progress` TS↔Dart parity pair backs the progress bar + ranking. No paywall, no compliance gate. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+>
+> **Design deltas from the original spec, decided at landing:**
+> - **`challenge_leaderboard` is SECURITY DEFINER, not invoker** (gated on `is_challenge_visible`). The "public runs readable by anyone" RLS policy on `runs` was retired (public access now flows through the `public_runs` view / `clip-public-track`), so a SECURITY INVOKER aggregate would see only the caller's own runs and zero every competitor. DEFINER + a visibility gate lets the board sum each opted-in participant's runs (incl. private ones — only the per-user SUM is exposed, never the rows, exactly like `event_results`). The completion RPC + sweep are likewise DEFINER and read base `runs` directly.
+> - **`vert` is not in the metric CHECK.** Shipped with distance / duration / activity_count / streak_days only.
 
 ## Goal & user value
 

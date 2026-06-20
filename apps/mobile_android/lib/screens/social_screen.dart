@@ -5,6 +5,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import 'challenges_screen.dart';
 import 'clubs_screen.dart';
 import 'discover_screen.dart';
 import 'feed_screen.dart';
@@ -61,9 +62,9 @@ class _SocialScreenState extends State<SocialScreen>
   void initState() {
     super.initState();
     _controller = TabController(
-      length: 4,
+      length: 5,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 3),
+      initialIndex: widget.initialTab.clamp(0, 4),
     );
     _controller.addListener(() {
       // Repaint so the FAB visibility tracks the active tab.
@@ -98,6 +99,9 @@ class _SocialScreenState extends State<SocialScreen>
             Tab(
                 text: l10n.socialTabDiscover,
                 icon: const Icon(Icons.event_available)),
+            Tab(
+                text: l10n.challengesTitle,
+                icon: const Icon(Icons.emoji_events_outlined)),
           ],
         ),
       ),
@@ -116,6 +120,10 @@ class _SocialScreenState extends State<SocialScreen>
           ),
           DiscoverScreen(
             api: widget.api,
+            social: widget.social,
+            embedded: true,
+          ),
+          ChallengesScreen(
             social: widget.social,
             embedded: true,
           ),

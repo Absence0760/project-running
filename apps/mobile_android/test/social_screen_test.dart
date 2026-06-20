@@ -91,11 +91,12 @@ void main() {
 
     expect(find.byType(TabBar), findsOneWidget);
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.tabs.length, 4);
+    expect(tabBar.tabs.length, 5);
     expect(find.text('Feed'), findsOneWidget);
     expect(find.text('People'), findsOneWidget);
     expect(find.text('Clubs'), findsOneWidget);
     expect(find.text('Discover'), findsOneWidget);
+    expect(find.text('Challenges'), findsOneWidget);
     // Routes relocated to Fitness → Runs; it must not reappear here.
     expect(find.descendant(of: find.byType(TabBar), matching: find.text('Routes')),
         findsNothing);
@@ -139,11 +140,11 @@ void main() {
       (tester) async {
     // Defensive: a future deep link that points at an unknown tab
     // (e.g. ?tab=99 after a tab is added then removed) must NOT
-    // crash. Pin the clamp behaviour. Upper bound is now 3 (Discover).
+    // crash. Pin the clamp behaviour. Upper bound is now 4 (Challenges).
     await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 99)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.controller!.index, lessThanOrEqualTo(3));
+    expect(tabBar.controller!.index, lessThanOrEqualTo(4));
     expect(tabBar.controller!.index, greaterThanOrEqualTo(0));
   });
 

@@ -118,6 +118,9 @@ const _tables = <String>{
   'event_checkpoints',
   'checkpoint_crossings',
   'achievements',
+  'challenges',
+  'challenge_participants',
+  'challenge_badges',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule

@@ -15557,6 +15557,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get checkpointCancel;
+
+  /// Challenges feature title / tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Challenges'**
+  String get challengesTitle;
+
+  /// Section heading for challenges the user joined
+  ///
+  /// In en, this message translates to:
+  /// **'My challenges'**
+  String get challengesMyChallenges;
+
+  /// Section heading for public challenges to join
+  ///
+  /// In en, this message translates to:
+  /// **'Browse'**
+  String get challengesBrowse;
+
+  /// Empty state for the my-challenges section
+  ///
+  /// In en, this message translates to:
+  /// **'No challenges yet.'**
+  String get challengesEmpty;
+
+  /// Empty state for the browse section
+  ///
+  /// In en, this message translates to:
+  /// **'No public challenges to join right now.'**
+  String get challengesBrowseEmpty;
+
+  /// Join a challenge button
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get challengesJoin;
+
+  /// Leave a challenge button
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get challengesLeave;
+
+  /// Delete a challenge button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get challengesDelete;
+
+  /// Distance metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get challengesMetricDistance;
+
+  /// Duration metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get challengesMetricDuration;
+
+  /// Activity-count metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Activities'**
+  String get challengesMetricActivityCount;
+
+  /// Streak-days metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Active days'**
+  String get challengesMetricStreak;
+
+  /// Progress label value vs goal
+  ///
+  /// In en, this message translates to:
+  /// **'{value} of {goal}'**
+  String challengesGoalProgress(String value, String goal);
+
+  /// Goal-met label
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get challengesProgressComplete;
+
+  /// Days-left label
+  ///
+  /// In en, this message translates to:
+  /// **'Ends in {n} days'**
+  String challengesEndsIn(int n);
+
+  /// Ends-today label
+  ///
+  /// In en, this message translates to:
+  /// **'Ends today'**
+  String get challengesEndsToday;
+
+  /// Past-end label
+  ///
+  /// In en, this message translates to:
+  /// **'Ended'**
+  String get challengesEnded;
+
+  /// Leaderboard heading
+  ///
+  /// In en, this message translates to:
+  /// **'Leaderboard'**
+  String get challengesLeaderboard;
+
+  /// Empty leaderboard state
+  ///
+  /// In en, this message translates to:
+  /// **'No progress logged yet.'**
+  String get challengesLeaderboardEmpty;
+
+  /// Rank label
+  ///
+  /// In en, this message translates to:
+  /// **'#{rank}'**
+  String challengesLeaderboardRank(int rank);
+
+  /// Participant count
+  ///
+  /// In en, this message translates to:
+  /// **'{n} joined'**
+  String challengesParticipants(int n);
+
+  /// Completion badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Badge earned'**
+  String get challengesBadgeEarned;
+
+  /// Active-days value
+  ///
+  /// In en, this message translates to:
+  /// **'{n} days'**
+  String challengesUnitDays(int n);
+
+  /// Activity-count value
+  ///
+  /// In en, this message translates to:
+  /// **'{n}'**
+  String challengesUnitActivities(int n);
+
+  /// Leave-confirm dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Leave challenge?'**
+  String get challengesLeaveConfirmTitle;
+
+  /// Leave-confirm dialog body
+  ///
+  /// In en, this message translates to:
+  /// **'Your progress in this challenge will no longer be tracked.'**
+  String get challengesLeaveConfirm;
+
+  /// Delete-confirm dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete challenge?'**
+  String get challengesDeleteConfirmTitle;
+
+  /// Delete-confirm dialog body
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the challenge and its leaderboard for everyone. This can\'t be undone.'**
+  String get challengesDeleteConfirm;
+
+  /// Not-found / no-access state
+  ///
+  /// In en, this message translates to:
+  /// **'This challenge isn\'t available.'**
+  String get challengesNotFound;
+
+  /// Join failure banner
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t join the challenge.'**
+  String get challengesJoinFailed;
+
+  /// Leave failure banner
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t leave the challenge.'**
+  String get challengesLeaveFailed;
+
+  /// Load failure banner
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load challenges.'**
+  String get challengesLoadFailed;
 }
 
 class _AppLocalizationsDelegate

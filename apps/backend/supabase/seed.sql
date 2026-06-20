@@ -2799,3 +2799,24 @@ INSERT INTO coach_athletes (id, coach_id, athlete_id, status, invite_token, acce
    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
    'c3d4e5f6-a7b8-9012-cdef-345678901234',
    'active', 'seed-coach-roster-morgan', now() - interval '20 days');
+-- ─────────────────────── Challenges (challenges.md) ───────────────────────
+-- A live open distance challenge the seed user has joined (so /challenges +
+-- the self-hiding dashboard strip are populated on reset) and a club-anchored
+-- group-goal for Richmond Run Club. now()-relative windows so they stay live.
+INSERT INTO challenges (id, creator_id, club_id, title, description, metric, scope, goal_value, starts_at, ends_at, is_public)
+VALUES
+  ('f0000001-0000-0000-0000-000000000001',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890', null,
+   'Run 100 km this month', 'Solo distance challenge — everyone competes on one board.',
+   'distance', 'individual', 100000,
+   now() - interval '5 days', now() + interval '25 days', true),
+  ('f0000002-0000-0000-0000-000000000002',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'c1111111-0000-0000-0000-000000000001',
+   'Club 1,000 km co-op', 'Richmond Run Club pools every member''s distance toward one shared goal.',
+   'distance', 'group_goal', 1000000,
+   now() - interval '5 days', now() + interval '25 days', false);
+
+INSERT INTO challenge_participants (challenge_id, user_id)
+VALUES
+  ('f0000001-0000-0000-0000-000000000001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
+  ('f0000002-0000-0000-0000-000000000002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');

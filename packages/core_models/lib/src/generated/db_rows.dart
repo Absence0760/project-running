@@ -108,6 +108,174 @@ class BodyMetricRow {
   };
 }
 
+/// Row shape for the `challenge_badges` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ChallengeBadgeRow {
+  static const String table = 'challenge_badges';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colChallengeId = 'challenge_id';
+  static const String colMetric = 'metric';
+  static const String colFinalValue = 'final_value';
+  static const String colAwardedAt = 'awarded_at';
+
+  final String id;
+  final String userId;
+  final String challengeId;
+  final String metric;
+  final double finalValue;
+  final DateTime awardedAt;
+
+  const ChallengeBadgeRow({
+    required this.id,
+    required this.userId,
+    required this.challengeId,
+    required this.metric,
+    required this.finalValue,
+    required this.awardedAt,
+  });
+
+  factory ChallengeBadgeRow.fromJson(Map<String, dynamic> json) => ChallengeBadgeRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    challengeId: json['challenge_id'] as String,
+    metric: json['metric'] as String,
+    finalValue: (json['final_value'] as num).toDouble(),
+    awardedAt: DateTime.parse(json['awarded_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colChallengeId: challengeId,
+    colMetric: metric,
+    colFinalValue: finalValue,
+    colAwardedAt: awardedAt.toIso8601String(),
+  };
+}
+
+/// Row shape for the `challenge_participants` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ChallengeParticipantRow {
+  static const String table = 'challenge_participants';
+  static const String colChallengeId = 'challenge_id';
+  static const String colUserId = 'user_id';
+  static const String colTeamClubId = 'team_club_id';
+  static const String colJoinedAt = 'joined_at';
+  static const String colCompletedAt = 'completed_at';
+
+  final String challengeId;
+  final String userId;
+  final String? teamClubId;
+  final DateTime joinedAt;
+  final DateTime? completedAt;
+
+  const ChallengeParticipantRow({
+    required this.challengeId,
+    required this.userId,
+    this.teamClubId,
+    required this.joinedAt,
+    this.completedAt,
+  });
+
+  factory ChallengeParticipantRow.fromJson(Map<String, dynamic> json) => ChallengeParticipantRow(
+    challengeId: json['challenge_id'] as String,
+    userId: json['user_id'] as String,
+    teamClubId: json['team_club_id'] as String?,
+    joinedAt: DateTime.parse(json['joined_at'] as String),
+    completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colChallengeId: challengeId,
+    colUserId: userId,
+    colTeamClubId: teamClubId,
+    colJoinedAt: joinedAt.toIso8601String(),
+    colCompletedAt: completedAt?.toIso8601String(),
+  };
+}
+
+/// Row shape for the `challenges` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class ChallengeRow {
+  static const String table = 'challenges';
+  static const String colId = 'id';
+  static const String colCreatorId = 'creator_id';
+  static const String colClubId = 'club_id';
+  static const String colTitle = 'title';
+  static const String colDescription = 'description';
+  static const String colMetric = 'metric';
+  static const String colScope = 'scope';
+  static const String colGoalValue = 'goal_value';
+  static const String colActivityType = 'activity_type';
+  static const String colStartsAt = 'starts_at';
+  static const String colEndsAt = 'ends_at';
+  static const String colIsPublic = 'is_public';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String creatorId;
+  final String? clubId;
+  final String title;
+  final String? description;
+  final String metric;
+  final String scope;
+  final double? goalValue;
+  final String? activityType;
+  final DateTime startsAt;
+  final DateTime endsAt;
+  final bool isPublic;
+  final DateTime createdAt;
+
+  const ChallengeRow({
+    required this.id,
+    required this.creatorId,
+    this.clubId,
+    required this.title,
+    this.description,
+    required this.metric,
+    required this.scope,
+    this.goalValue,
+    this.activityType,
+    required this.startsAt,
+    required this.endsAt,
+    required this.isPublic,
+    required this.createdAt,
+  });
+
+  factory ChallengeRow.fromJson(Map<String, dynamic> json) => ChallengeRow(
+    id: json['id'] as String,
+    creatorId: json['creator_id'] as String,
+    clubId: json['club_id'] as String?,
+    title: json['title'] as String,
+    description: json['description'] as String?,
+    metric: json['metric'] as String,
+    scope: json['scope'] as String,
+    goalValue: (json['goal_value'] as num?)?.toDouble(),
+    activityType: json['activity_type'] as String?,
+    startsAt: DateTime.parse(json['starts_at'] as String),
+    endsAt: DateTime.parse(json['ends_at'] as String),
+    isPublic: (json['is_public'] as bool?) ?? false,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colCreatorId: creatorId,
+    colClubId: clubId,
+    colTitle: title,
+    colDescription: description,
+    colMetric: metric,
+    colScope: scope,
+    colGoalValue: goalValue,
+    colActivityType: activityType,
+    colStartsAt: startsAt.toIso8601String(),
+    colEndsAt: endsAt.toIso8601String(),
+    colIsPublic: isPublic,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `checkpoint_crossings` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class CheckpointCrossingRow {
@@ -1943,6 +2111,7 @@ class NotificationRow {
   static const String colActivityId = 'activity_id';
   static const String colWebPushSentAt = 'web_push_sent_at';
   static const String colAchievementId = 'achievement_id';
+  static const String colChallengeId = 'challenge_id';
 
   final String id;
   final String userId;
@@ -1961,6 +2130,7 @@ class NotificationRow {
   final String? activityId;
   final DateTime? webPushSentAt;
   final String? achievementId;
+  final String? challengeId;
 
   const NotificationRow({
     required this.id,
@@ -1980,6 +2150,7 @@ class NotificationRow {
     this.activityId,
     this.webPushSentAt,
     this.achievementId,
+    this.challengeId,
   });
 
   factory NotificationRow.fromJson(Map<String, dynamic> json) => NotificationRow(
@@ -2000,6 +2171,7 @@ class NotificationRow {
     activityId: json['activity_id'] as String?,
     webPushSentAt: json['web_push_sent_at'] == null ? null : DateTime.parse(json['web_push_sent_at'] as String),
     achievementId: json['achievement_id'] as String?,
+    challengeId: json['challenge_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2020,6 +2192,7 @@ class NotificationRow {
     colActivityId: activityId,
     colWebPushSentAt: webPushSentAt?.toIso8601String(),
     colAchievementId: achievementId,
+    colChallengeId: challengeId,
   };
 }
 
