@@ -115,6 +115,11 @@ data class UniversalSettings(
     /// Body weight in kg for the post-run calorie estimate (persona
     /// samsung #34). Null → the shared default (70 kg) applies.
     val bodyWeightKg: Double? = null,
+    /// Distance-display preference (`preferred_unit`): `"km"` or `"mi"`.
+    /// Null → kilometres, the app default. Drives the distance / pace
+    /// read-outs on the running + post-run screens, the route "to go"
+    /// badge, and the active-run tile.
+    val preferredUnit: String? = null,
 )
 
 /// Allowed values for `default_activity_type`. Mirrors the CHECK
@@ -129,6 +134,12 @@ internal val UNIVERSAL_ACTIVITY_TYPES = setOf("run", "walk", "hike", "cycle")
 /// Rogue / future / typo values fall back to null → DB default
 /// (`false`) wins on save.
 internal val UNIVERSAL_PRIVACY_DEFAULTS = setOf("public", "followers", "private")
+
+/// Allowed values for `preferred_unit`. Mirrors the `PreferredUnit` TS
+/// union (`'km' | 'mi'`) + the CHECK constraint on `profiles
+/// .preferred_unit`. A rogue / future value falls back to null → the
+/// kilometre default wins.
+internal val UNIVERSAL_PREFERRED_UNITS = setOf("km", "mi")
 
 /// Pure parser for the PostgREST response body of
 /// `GET /rest/v1/user_settings?user_id=eq.<uid>&select=prefs&limit=1`.
@@ -162,6 +173,8 @@ internal fun parseUniversalSettings(body: String?): UniversalSettings? {
                 ?.takeIf { isValidIsoDate(it) },
             bodyWeightKg = (prefs["body_weight_kg"]?.jsonPrimitive?.doubleOrNull)
                 ?.takeIf { it in 20.0..400.0 },
+            preferredUnit = prefs["preferred_unit"]?.jsonPrimitive?.contentOrNull
+                ?.takeIf { it in UNIVERSAL_PREFERRED_UNITS },
         )
     } catch (_: Throwable) {
         null

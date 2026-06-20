@@ -78,6 +78,16 @@ class UniversalSettingsTest {
     }
 
     @Test
+    fun `preferred_unit parses km and mi, rejects rogue values`() {
+        assertEquals("mi", parseUniversalSettings("""[{"prefs":{"preferred_unit":"mi"}}]""")?.preferredUnit)
+        assertEquals("km", parseUniversalSettings("""[{"prefs":{"preferred_unit":"km"}}]""")?.preferredUnit)
+        // Rogue / future value → null (kilometres applies downstream).
+        assertNull(parseUniversalSettings("""[{"prefs":{"preferred_unit":"miles"}}]""")?.preferredUnit)
+        // Absent → null.
+        assertNull(parseUniversalSettings("""[{"prefs":{"default_activity_type":"run"}}]""")?.preferredUnit)
+    }
+
+    @Test
     fun `walk hike cycle all accepted`() {
         for (kind in listOf("walk", "hike", "cycle")) {
             val out = parseUniversalSettings("""[{"prefs":{"default_activity_type":"$kind"}}]""")

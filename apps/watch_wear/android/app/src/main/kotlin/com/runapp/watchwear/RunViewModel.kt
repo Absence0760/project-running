@@ -124,6 +124,12 @@ data class UiState(
     /// the PostRun calorie estimate (persona samsung #34). Null → the
     /// shared 70 kg default applies.
     val bodyWeightKg: Double? = null,
+    /// Distance-display unit resolved from `user_settings.prefs
+    /// .preferred_unit`. Drives the distance / pace read-outs on the
+    /// running + post-run screens and the route "to go" badge. Defaults
+    /// to kilometres until `applyUniversalPrefsAsync` lands the pref.
+    val preferredUnit: com.runapp.watchwear.recording.DistanceUnit =
+        com.runapp.watchwear.recording.DistanceUnit.KM,
     /// Latest GPS fix during this run, or null until the first fix
     /// lands. Drives the runner-position dot on the on-watch mini-map.
     val latestPoint: GpsPoint? = null,
@@ -717,6 +723,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             _state.value = _state.value.copy(
                 hrZoneCutoffs = resolved,
                 bodyWeightKg = settings.bodyWeightKg,
+                preferredUnit = com.runapp.watchwear.recording.DistanceUnit
+                    .fromPref(settings.preferredUnit),
             )
             // default_activity_type — only prime; never override a
             // started run or a manual chip choice.
@@ -784,6 +792,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             activityType = _state.value.activityType,
             routeWaypointsJson = route?.waypointsAsJson(),
             targetPaceSecPerKm = _state.value.targetPaceSecPerKm,
+            preferredUnit = _state.value.preferredUnit,
         )
     }
 

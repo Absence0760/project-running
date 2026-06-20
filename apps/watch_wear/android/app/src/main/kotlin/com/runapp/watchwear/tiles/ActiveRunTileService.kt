@@ -22,8 +22,10 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.runapp.watchwear.MainActivity
 import com.runapp.watchwear.R
+import com.runapp.watchwear.recording.DistanceUnit
 import com.runapp.watchwear.recording.RecordingRepository
-import com.runapp.watchwear.recording.formatKm
+import com.runapp.watchwear.recording.formatDistance
+import com.runapp.watchwear.recording.paceSecPerUnit
 import java.util.Locale
 
 /// Glanceable tile that shows the active-run summary on the runner's
@@ -248,31 +250,41 @@ internal fun formatElapsed(elapsedMs: Long): String {
     }
 }
 
-/// Render the secondary stat row: distance (km) and pace (min:ss/km)
-/// separated by a middle-dot. Pure helper so the layout file stays
-/// readable and the formatting is testable in isolation. The distance
-/// decimal separator follows [locale] (device locale at the call site);
-/// "km" is the SI abbreviation, identical across all six shipped locales.
+/// Render the secondary stat row: distance and pace separated by a
+/// middle-dot, both in the run's [DistanceUnit] (stamped on the metrics
+/// at run start from the runner's `preferred_unit` pref). Pure helper so
+/// the layout file stays readable and the formatting is testable in
+/// isolation. The distance decimal separator follows [locale] (device
+/// locale at the call site); the unit word ("km" / "mi") is invariant
+/// across the six shipped locales, the same way "km" was inlined before.
 internal fun formatStatRow(
     metrics: RecordingRepository.Metrics,
     locale: Locale = Locale.getDefault(),
 ): String {
-    val km = metrics.distanceM / 1000.0
-    val distLabel = if (km >= 10.0) {
-        "${formatKm(metrics.distanceM, 1, locale)} km"
-    } else {
-        "${formatKm(metrics.distanceM, 2, locale)} km"
+    val unit = metrics.preferredUnit
+    val unitWord = unitWord(unit)
+    val displayValue = when (unit) {
+        DistanceUnit.KM -> metrics.distanceM / 1000.0
+        DistanceUnit.MI -> metrics.distanceM / com.runapp.watchwear.recording.METRES_PER_MILE
     }
-    val paceLabel = formatPaceSecPerKm(metrics.paceSecPerKm)
+    val decimals = if (displayValue >= 10.0) 1 else 2
+    val distLabel = "${formatDistance(metrics.distanceM, unit, decimals, locale)} $unitWord"
+    val paceLabel = formatPaceSecPerUnit(metrics.paceSecPerKm, unit)
     return "$distLabel · $paceLabel"
 }
 
-internal fun formatPaceSecPerKm(secPerKm: Double?): String {
-    if (secPerKm == null || !secPerKm.isFinite() || secPerKm <= 0.0) return "—:—/km"
-    val total = secPerKm.toLong()
-    val mins = total / 60L
-    val secs = total % 60L
-    return String.format(Locale.ROOT, "%d:%02d/km", mins, secs)
+internal fun formatPaceSecPerUnit(secPerKm: Double?, unit: DistanceUnit): String {
+    val unitWord = unitWord(unit)
+    if (secPerKm == null || !secPerKm.isFinite() || secPerKm <= 0.0) return "—:—/$unitWord"
+    val perUnit = paceSecPerUnit(secPerKm, unit).toLong()
+    val mins = perUnit / 60L
+    val secs = perUnit % 60L
+    return String.format(Locale.ROOT, "%d:%02d/%s", mins, secs, unitWord)
+}
+
+private fun unitWord(unit: DistanceUnit): String = when (unit) {
+    DistanceUnit.KM -> "km"
+    DistanceUnit.MI -> "mi"
 }
 
 @Suppress("unused") // Reserved for a future per-tile launch action that
