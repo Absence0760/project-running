@@ -955,6 +955,7 @@ export type Database = {
           instance_start: string
           paid_at: string | null
           platform_fee_cents: number
+          refund_initiated_at: string | null
           refunded_at: string | null
           reserved_until: string | null
           status: string
@@ -972,6 +973,7 @@ export type Database = {
           instance_start: string
           paid_at?: string | null
           platform_fee_cents?: number
+          refund_initiated_at?: string | null
           refunded_at?: string | null
           reserved_until?: string | null
           status?: string
@@ -989,6 +991,7 @@ export type Database = {
           instance_start?: string
           paid_at?: string | null
           platform_fee_cents?: number
+          refund_initiated_at?: string | null
           refunded_at?: string | null
           reserved_until?: string | null
           status?: string
