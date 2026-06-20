@@ -9732,6 +9732,318 @@ class AppLocalizationsDe extends AppLocalizations {
   String get challengesLoadFailed => 'Challenges konnten nicht geladen werden.';
 
   @override
+  String fundraiserRaisedOfGoal(String raised, String goal) {
+    return '$raised von $goal gesammelt';
+  }
+
+  @override
+  String fundraiserDonorCount(int count) {
+    return '$count Unterstützer';
+  }
+
+  @override
+  String get fundraiserOverGoal => 'Ziel übertroffen!';
+
+  @override
+  String get fundraiserClosed => 'Diese Spendenaktion ist geschlossen.';
+
+  @override
+  String get fundraiserFeedTitle => 'Neueste Unterstützer';
+
+  @override
+  String get fundraiserFeedEmpty => 'Sei die erste Person, die spendet.';
+
+  @override
+  String get fundraiserAnonymous => 'Anonym';
+
+  @override
+  String get fundraiserDonateOnWeb => 'Im Web spenden';
+
+  @override
+  String get racesTitle => 'Rennkalender';
+
+  @override
+  String get racesSearchPlaceholder => 'Rennen nach Name suchen…';
+
+  @override
+  String get racesNearPlace => 'In der Nähe eines Ortes…';
+
+  @override
+  String racesKmAway(String distance) {
+    return '$distance entfernt';
+  }
+
+  @override
+  String get racesDistanceAny => 'Beliebige Distanz';
+
+  @override
+  String get racesDistance5k => '5 km';
+
+  @override
+  String get racesDistance10k => '10 km';
+
+  @override
+  String get racesDistanceHalf => 'Halbmarathon';
+
+  @override
+  String get racesDistanceMarathon => 'Marathon';
+
+  @override
+  String get racesDistanceUltra => 'Ultra';
+
+  @override
+  String get racesRegister => 'Anmelden';
+
+  @override
+  String get racesViewResults => 'Ergebnisse ansehen';
+
+  @override
+  String get racesImportResult => 'Mein Ergebnis importieren';
+
+  @override
+  String get racesSubmitRace => 'Rennen hinzufügen';
+
+  @override
+  String get racesUnverified => 'Nicht verifiziert';
+
+  @override
+  String get racesEmpty => 'Noch keine Rennen für diese Filter.';
+
+  @override
+  String get racesSearchFailed =>
+      'Rennen konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.';
+
+  @override
+  String racesMatchPrompt(String name) {
+    return 'War das der $name? Importiere dein offizielles Ergebnis.';
+  }
+
+  @override
+  String get racesMatchConfirm => 'Ergebnis importieren';
+
+  @override
+  String get racesMatchDismiss => 'Nicht dieses Rennen';
+
+  @override
+  String get racesImported => 'Offizielles Ergebnis importiert.';
+
+  @override
+  String get racesOfficialResult => 'Offizielles Ergebnis';
+
+  @override
+  String get racesChipTime => 'Nettozeit';
+
+  @override
+  String get racesGunTime => 'Bruttozeit';
+
+  @override
+  String get racesOverallPlace => 'Gesamtplatzierung';
+
+  @override
+  String get racesAgeGroupPlace => 'Platzierung Altersklasse';
+
+  @override
+  String get racesAgeGroup => 'Altersklasse';
+
+  @override
+  String get racesBib => 'Startnummer';
+
+  @override
+  String get racesPasteResultHint =>
+      'Gib deine Zielergebnisse von der Ergebnisseite des Rennens ein.';
+
+  @override
+  String get racesSave => 'Speichern';
+
+  @override
+  String get racesCancel => 'Abbrechen';
+
+  @override
+  String get racesEditorTitle => 'Rennen hinzufügen';
+
+  @override
+  String get racesFieldName => 'Rennname';
+
+  @override
+  String get racesFieldDate => 'Datum';
+
+  @override
+  String get racesFieldDistance => 'Distanz (Meter)';
+
+  @override
+  String get racesFieldLocation => 'Ort';
+
+  @override
+  String get racesFieldEntryUrl => 'Anmeldelink';
+
+  @override
+  String get racesFieldResultsUrl => 'Ergebnislink';
+
+  @override
+  String get racesSubmitFailed =>
+      'Das Rennen konnte nicht gespeichert werden. Bitte versuche es erneut.';
+
+  @override
+  String get racesImportFailed =>
+      'Das Ergebnis konnte nicht importiert werden. Bitte versuche es erneut.';
+
+  @override
+  String get navRaces => 'Rennen';
+
+  @override
+  String get integrationsRunsignup => 'RunSignUp';
+
+  @override
+  String get integrationsRunsignupConnect =>
+      'Rennergebnisse von RunSignUp importieren.';
+
+  @override
+  String get integrationsRunsignupOpen => 'Rennkalender öffnen';
+
+  @override
+  String get integrationsRunsignupUnavailable =>
+      'RunSignUp-Import ist noch nicht verfügbar. parkrun und manuelles Einfügen funktionieren weiterhin.';
+
+  @override
+  String get routeConditionsTitle => 'Bedingungen';
+
+  @override
+  String get routeConditionsReport => 'Bedingung melden';
+
+  @override
+  String get routeConditionsReporting => 'Wird gemeldet…';
+
+  @override
+  String get routeConditionsReported => 'Bedingung gemeldet';
+
+  @override
+  String get routeConditionsReportFailed =>
+      'Bedingung konnte nicht gemeldet werden';
+
+  @override
+  String get routeConditionsEmpty => 'Noch keine Meldungen.';
+
+  @override
+  String get routeConditionsLoading => 'Wird geladen…';
+
+  @override
+  String get routeConditionsCancel => 'Abbrechen';
+
+  @override
+  String get routeConditionsDelete => 'Löschen';
+
+  @override
+  String get routeConditionsDeleteTitle => 'Meldung löschen?';
+
+  @override
+  String get routeConditionsDeleteConfirm =>
+      'Dies entfernt die Meldung dauerhaft.';
+
+  @override
+  String get routeConditionsDeleteFailed =>
+      'Meldung konnte nicht gelöscht werden';
+
+  @override
+  String get routeConditionsKindLabel => 'Bedingung';
+
+  @override
+  String get routeConditionsSeverityLabel => 'Schweregrad';
+
+  @override
+  String get routeConditionsNoteLabel => 'Notiz';
+
+  @override
+  String get routeConditionsNotePlaceholder =>
+      'Was erwartet den nächsten Läufer?';
+
+  @override
+  String routeConditionsAtDistance(String distance) {
+    return 'bei $distance';
+  }
+
+  @override
+  String get routeConditionMuddy => 'Schlammig';
+
+  @override
+  String get routeConditionFlooded => 'Überflutet';
+
+  @override
+  String get routeConditionSnowIce => 'Schnee / Eis';
+
+  @override
+  String get routeConditionOvergrown => 'Zugewachsen';
+
+  @override
+  String get routeConditionClosed => 'Gesperrt';
+
+  @override
+  String get routeConditionHazard => 'Gefahr';
+
+  @override
+  String get routeConditionClear => 'Frei';
+
+  @override
+  String get routeConditionOther => 'Sonstiges';
+
+  @override
+  String get routeConditionSeverityInfo => 'Info';
+
+  @override
+  String get routeConditionSeverityCaution => 'Vorsicht';
+
+  @override
+  String get routeConditionSeverityImpassable => 'Unpassierbar';
+
+  @override
+  String get prefTurnByTurnCues => 'Sprachnavigation (Abbiegehinweise)';
+
+  @override
+  String get prefTurnByTurnCuesSubtitle =>
+      'Gesprochene Abbiegehinweise beim Folgen einer gespeicherten Route';
+
+  @override
+  String ttsTurnLeftIn(String distance) {
+    return 'In $distance links abbiegen';
+  }
+
+  @override
+  String ttsTurnRightIn(String distance) {
+    return 'In $distance rechts abbiegen';
+  }
+
+  @override
+  String get ttsTurnLeftNow => 'Links abbiegen';
+
+  @override
+  String get ttsTurnRightNow => 'Rechts abbiegen';
+
+  @override
+  String get ttsSlightLeft => 'Halten Sie sich links';
+
+  @override
+  String get ttsSlightRight => 'Halten Sie sich rechts';
+
+  @override
+  String get ttsUturn => 'Wenden Sie';
+
+  @override
+  String routeOfflinePackDownloading(int done, int total) {
+    return 'Karte wird zwischengespeichert: $done / $total';
+  }
+
+  @override
+  String get routeOfflinePackReady => 'Karte offline gespeichert';
+
+  @override
+  String routeOfflinePackPartial(int done, int total) {
+    return 'Karte teilweise gespeichert ($done / $total) — erneut versuchen';
+  }
+
+  @override
+  String get routeOfflinePackTooLarge =>
+      'Diese Route ist zu groß für den Offline-Cache';
+
+  @override
   String get badgesSectionTitle => 'Erfolge';
 
   @override
