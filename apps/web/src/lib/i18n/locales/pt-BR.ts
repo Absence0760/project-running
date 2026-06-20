@@ -2803,6 +2803,7 @@ export const messages = {
 	"races.importFailed": "Não foi possível importar o resultado. Tente novamente.",
 	"integrations.runsignup": "RunSignUp",
 	"integrations.runsignupConnect": "Importe resultados de corridas do RunSignUp.",
+	"integrations.runsignupOpen": "Abrir o calendário de corridas",
 	"integrations.runsignupUnavailable": "A importação do RunSignUp ainda não está disponível. parkrun e a colagem manual continuam funcionando.",
 	"socialHub.panelLabel": "Painel {section}",
 	"socialPeople.searchFailed": "Falha na busca: {error}",

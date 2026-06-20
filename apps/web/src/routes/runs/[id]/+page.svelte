@@ -15,6 +15,7 @@
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import RunGearChips from '$lib/components/RunGearChips.svelte';
+	import RunRaceResult from '$lib/components/RunRaceResult.svelte';
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
 	import RouteHistory from '$lib/components/RouteHistory.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
@@ -1482,6 +1483,13 @@
 		<section class="section">
 			<RunGearChips runId={run.id} runOwnerId={run.user_id} />
 		</section>
+
+		<RunRaceResult
+			runId={run.id}
+			runOwnerId={run.user_id}
+			startedAt={run.started_at}
+			distanceM={run.distance_m}
+		/>
 
 		<RunPhotos runId={run.id} runOwnerId={run.user_id} wrapperClass="section" />
 

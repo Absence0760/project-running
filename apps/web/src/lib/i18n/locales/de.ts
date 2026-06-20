@@ -2804,6 +2804,7 @@ export const messages = {
 	"races.importFailed": "Ergebnis konnte nicht importiert werden. Bitte versuche es erneut.",
 	"integrations.runsignup": "RunSignUp",
 	"integrations.runsignupConnect": "Rennergebnisse von RunSignUp importieren.",
+	"integrations.runsignupOpen": "Rennkalender öffnen",
 	"integrations.runsignupUnavailable": "Der RunSignUp-Import ist noch nicht verfügbar. parkrun und manuelles Einfügen funktionieren weiterhin.",
 	"socialHub.panelLabel": "Bereich {section}",
 	"socialPeople.searchFailed": "Suche fehlgeschlagen: {error}",

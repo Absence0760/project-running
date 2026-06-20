@@ -2813,6 +2813,7 @@ export const en = {
 	"races.importFailed": "Couldn't import the result. Please try again.",
 	"integrations.runsignup": "RunSignUp",
 	"integrations.runsignupConnect": "Import race results from RunSignUp.",
+	"integrations.runsignupOpen": "Open the race calendar",
 	"integrations.runsignupUnavailable":
 		"RunSignUp import isn't available yet. parkrun and manual paste still work.",
 	"socialHub.panelLabel": "{section} panel",

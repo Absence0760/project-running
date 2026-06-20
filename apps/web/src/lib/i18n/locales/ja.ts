@@ -2800,6 +2800,7 @@ export const messages = {
 	"races.importFailed": "記録をインポートできませんでした。もう一度お試しください。",
 	"integrations.runsignup": "RunSignUp",
 	"integrations.runsignupConnect": "RunSignUpからレース結果をインポートします。",
+	"integrations.runsignupOpen": "レースカレンダーを開く",
 	"integrations.runsignupUnavailable": "RunSignUpのインポートはまだ利用できません。parkrunと手動貼り付けは引き続き使えます。",
 	"socialHub.panelLabel": "{section}パネル",
 	"socialPeople.searchFailed": "検索に失敗しました: {error}",
