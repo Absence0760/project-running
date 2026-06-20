@@ -17,7 +17,11 @@ from a client. Three job kinds on the `jobs` queue drive it:
 - **`lifecycle_email`** — transactional / relationship mail that has **no**
   `notifications` row, keyed by a `template` name (`{user_id, template}`). The
   welcome (signup), the Pro-purchase receipt, and the payment-failed dunning.
-  `decisions.md § 119` + `§ 121`.
+  The **account-deletion receipt** (`account_deleted`) reuses this kind but is
+  the one inline-address template: its payload carries `{email, locale}` and no
+  `user_id` (the user is gone, so the worker can't resolve the address), and it
+  dedups on the non-cascading `account_deletion_receipts` table instead of
+  `lifecycle_email_log`. `decisions.md § 119` + `§ 121`.
 - **`safety_email`** — safety-contact mail. Neither of the above: no
   `notifications` row, and the recipient may be a **non-user identified only by
   an email**, with per-finish context in the copy. Two templates — `confirm`
@@ -72,7 +76,10 @@ Shared pieces:
 - **Idempotency** — `lifecycle_email_log (user_id, template)` is a send-once
   guard for **once-per-account** templates (welcome only). Recurring
   transactional templates (Pro receipt, dunning) deliberately skip it — the
-  enqueue trigger's transition guard is the dedupe. Delivery is at-least-once.
+  enqueue trigger's transition guard is the dedupe. The **account-deletion
+  receipt** can't use `lifecycle_email_log` (it FK-cascades away with the
+  deleted user), so it dedups on the non-cascading `account_deletion_receipts`
+  table keyed by a hash of the address. Delivery is at-least-once.
 
 ## Shipped
 
@@ -85,6 +92,7 @@ Shared pieces:
 | **Payment-failed dunning** | `lifecycle_email` (`payment_failed`) | `user_profiles` AFTER UPDATE, `billing_issue_at` null→non-null | ✓ | §121 |
 | **Safety-contact confirm** (opt-in request) | `safety_email` (`confirm`) | `safety_contacts` AFTER INSERT | ✓ | §131 |
 | **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` AFTER INSERT, per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
+| **Account-deletion receipt** | `lifecycle_email` (`account_deleted`) | `delete-account` EF enqueues it **inline** (address + locale in payload, no `user_id`) AFTER the cascade; send-once via the non-cascading `account_deletion_receipts` table | ✓ | §121 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | Branded HTML + inbox preview text | — | all email of the above | ✓ | — |
 
@@ -124,13 +132,22 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
 - [ ] **Lifecycle drip** (engagement) — re-engagement, onboarding drip,
   streak/goal nudges. Reuse the `lifecycle_email` kind + the digest's opt-in /
   suppression / unsubscribe rails. Not built. Same CISO/counsel gate.
-- [ ] **Account-deletion receipt** — feasible but needs a different mechanism:
-  the worker can't look up the address post-deletion, `delete-account` drains
-  the user's pending jobs, and the send-once log cascades away with the user.
-  Build = send inline from the `delete-account` EF (where `user.email` is live)
-  or enqueue a job carrying the address in the payload + a non-cascading record;
-  mind that the deleted user's email then lingers in `jobs.payload` until
-  drained. `decisions.md § 121`.
+- [x] **Account-deletion receipt** — SHIPPED 2026-06-20 (migration
+  `20270217_001`, `account_deleted` template). Built as **enqueue-with-inline-
+  address + a non-cascading send-once record** (not inline-send-from-EF — that
+  would mean a second SMTP transport + a duplicate i18n catalogue in Deno).
+  The `delete-account` EF captures `user.email` + the locale BEFORE the
+  cascade, then AFTER `admin.deleteUser` succeeds enqueues a `lifecycle_email`
+  job whose payload carries `{template, email, locale}` and **no `user_id`** —
+  so the EF's `payload->>user_id` job-drain leaves it untouched (no drain-exempt
+  special-casing needed). The worker's `handleLifecycleEmail` dispatches the
+  inline-address template to `handleAccountDeletionReceipt`, which dedups on a
+  SHA-256 hash of the address via the non-cascading `account_deletion_receipts`
+  table (`lifecycle_email_log` would have cascaded away with the user). The
+  receipt copy carries no `/settings/preferences` link (the account is gone).
+  The deleted address lingers in `jobs.payload` only until the job drains
+  (minutes), then in `account_deletion_receipts` only as a hash, pruned at 30
+  days. `decisions.md § 121`.
 - [x] **Web push server-side delivery** — SHIPPED 2026-06-04 (migration
   `20261219_001`, `web_push` kind). See the architecture note above. Gated on the
   operator-generated `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (self-generated, not a
@@ -191,7 +208,10 @@ None of this sends in prod until an operator:
   contacts + the `safety_email` kind), `20261219_001` (web-push channel + the
   `web_push` kind + `clear_push_subscription`), `20270108_001` (weekly-digest
   foundation — `weekly_digest` kind + `email_suppressions` + the opt-in pref +
-  the stateless-HMAC unsubscribe design).
+  the stateless-HMAC unsubscribe design), `20270217_001` (account-deletion
+  receipt — the non-cascading `account_deletion_receipts` send-once table; the
+  `account_deleted` template rides the existing `lifecycle_email` kind, so no
+  jobs.kind CHECK change).
 - Web push client leg: `apps/web/src/lib/util/push.ts` (subscribe/unsubscribe) +
   `apps/web/static/sw.js` (service worker render). The subscription lives on
   `user_device_settings.prefs.push_subscription` — `docs/backend/settings.md`.
