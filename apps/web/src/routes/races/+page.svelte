@@ -10,6 +10,7 @@
 		type RaceListingFilters,
 		type RaceDistanceBand
 	} from '$lib/core/data';
+	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RaceCalendarCard from '$lib/components/RaceCalendarCard.svelte';
 	import RaceListingEditor from '$lib/components/RaceListingEditor.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -203,6 +204,7 @@
 <svelte:head><title>{m('races.title')}</title></svelte:head>
 
 <div class="races-page">
+	<RunSurfaceTabs active="races" />
 	<header class="races-header">
 		<div>
 			<h1>{m('races.title')}</h1>

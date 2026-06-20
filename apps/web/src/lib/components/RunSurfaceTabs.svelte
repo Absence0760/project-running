@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
 
-	// Run-surface sub-tab strip: Runs · Routes · Plans. These are distinct
+	// Run-surface sub-tab strip: Runs · Routes · Plans · Races. These are distinct
 	// surfaces at distinct URLs, so the strip is a set of links (not an
-	// ARIA tablist — tabs imply same-page panels). Routes and Plans were
-	// relocated out of their own sidebar slots to live under the run surface.
-	let { active }: { active: 'runs' | 'routes' | 'plans' } = $props();
+	// ARIA tablist — tabs imply same-page panels). Routes, Plans, and the race
+	// calendar were relocated out of their own sidebar slots to live under the
+	// run surface.
+	let { active }: { active: 'runs' | 'routes' | 'plans' | 'races' } = $props();
 </script>
 
 <nav class="surface-tabs" aria-label={m('runSurface.label')}>
@@ -17,6 +18,9 @@
 	</a>
 	<a class="surface-tab" class:active={active === 'plans'} href="/plans" aria-current={active === 'plans' ? 'page' : undefined}>
 		{m('runSurface.tabPlans')}
+	</a>
+	<a class="surface-tab" class:active={active === 'races'} href="/races" aria-current={active === 'races' ? 'page' : undefined}>
+		{m('runSurface.tabRaces')}
 	</a>
 </nav>
 

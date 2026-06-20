@@ -10,6 +10,7 @@ export const messages = {
 	'runSurface.tabRuns': 'Courses',
 	'runSurface.tabRoutes': 'Itinéraires',
 	'runSurface.tabPlans': 'Plans',
+	'runSurface.tabRaces': 'Courses',
 	'shell.offline':
 		'Vous êtes hors ligne. Les nouvelles courses sont enregistrées localement et synchronisées dès votre retour en ligne.',
 	'shell.skipToMain': 'Aller au contenu principal',

@@ -10,6 +10,7 @@ export const messages = {
 	'runSurface.tabRuns': 'Läufe',
 	'runSurface.tabRoutes': 'Routen',
 	'runSurface.tabPlans': 'Pläne',
+	'runSurface.tabRaces': 'Rennen',
 	'shell.offline':
 		'Du bist offline. Neue Läufe werden lokal gespeichert und synchronisiert, sobald du wieder online bist.',
 	'shell.skipToMain': 'Zum Hauptinhalt springen',

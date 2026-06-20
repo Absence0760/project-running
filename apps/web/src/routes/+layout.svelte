@@ -122,7 +122,6 @@
 		{ href: '/nutrition', labelKey: 'nav.nutrition', icon: 'nutrition', accent: '#E8C07D' },
 		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
-		{ href: '/races', labelKey: 'nav.races', icon: 'flag', accent: '#D98ECF' },
 	];
 
 	// "Shell-less" surfaces: rendered without the app sidebar regardless of

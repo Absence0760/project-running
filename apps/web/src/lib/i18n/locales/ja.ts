@@ -10,6 +10,7 @@ export const messages = {
 	'runSurface.tabRuns': 'ラン',
 	'runSurface.tabRoutes': 'ルート',
 	'runSurface.tabPlans': 'プラン',
+	'runSurface.tabRaces': 'レース',
 	'shell.offline': 'オフラインです。新しいランはローカルに保存され、オンラインに戻ると同期されます。',
 	'shell.skipToMain': 'メインコンテンツへスキップ',
 	'shell.loading': '読み込み中…',
