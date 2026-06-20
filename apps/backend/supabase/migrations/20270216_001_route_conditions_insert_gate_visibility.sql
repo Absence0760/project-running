@@ -1,7 +1,7 @@
 -- Fix the route_conditions INSERT gate so a non-owner can report on a
 -- PUBLIC route — the whole point of a community condition layer.
 --
--- 20270212_001 copied the route_reviews insert-gate verbatim:
+-- 20270215_001 copied the route_reviews insert-gate verbatim:
 --   with check (auth.uid() = user_id and exists (
 --     select 1 from routes where routes.id = route_conditions.route_id))
 -- The intent (per the route_reviews header) was that the `exists` subquery
