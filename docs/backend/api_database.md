@@ -390,7 +390,7 @@ create table notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid references auth.users(id) on delete cascade not null,
   actor_id    uuid references auth.users(id) on delete set null,
-  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder','plan_assigned','achievement')),
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder','plan_assigned','achievement','challenge_complete','content_hidden')),
   run_id        uuid references runs(id) on delete cascade,
   comment_id    uuid references run_comments(id) on delete cascade,
   event_id      uuid references events(id) on delete cascade,
@@ -477,7 +477,7 @@ User-submitted reports against a profile, club, route, comment, club post, or ru
 
 Inserts go through the `submit_report(p_target_kind, p_target_id, p_reason, p_notes)` SECURITY DEFINER RPC, which validates the target row exists (per kind: `user_profiles` / `clubs` / `routes` / `run_comments` / `club_posts` / `runs`), rejects self-reports on `target_kind='user'` and on a self-authored comment / club post / run (a misclick) with `22023`, rate-limits via the shared `enforce_create_rate_limit` helper at 10/hour per reporter, and surfaces duplicate-pending as a 23505 with a "you already have a pending report" hint. RLS hides others' reports from each user — the only way to *read* `reports` cross-user is via service_role, which is intentional: reports are pending evidence, not public attribution.
 
-Moderation runs through the web admin surface `/admin/reports` (web-only back-office tooling — migration `20270104_001_admin_moderation.sql`). Auto-hide-after-N and reputation-weighted reports remain deferred and are tracked in [roadmap.md § Anti-spam / moderation](../product/roadmap.md#anti-spam--moderation--whats-shipped-whats-deferred). Migrations `20260908_001_user_reports.sql` (user/club/route), `20261117_001_report_comments.sql` (comment), `20270115_001_report_posts_and_runs.sql` (club_post + run). Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `report_comments_test.sql` (4) + `report_posts_and_runs_test.sql` (8) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e) + `report-post-and-run.spec.ts` (2 e2e) + `social/comment-report.spec.ts`.
+Moderation runs through the web admin surface `/admin/reports` (web-only back-office tooling — migration `20270104_001_admin_moderation.sql`). **Auto-hide-after-N + reputation-weighted reports shipped** (migration `20270218_001_auto_hide_reports.sql`, decisions §172) — see "Auto-hide on reports" below. Migrations `20260908_001_user_reports.sql` (user/club/route), `20261117_001_report_comments.sql` (comment), `20270115_001_report_posts_and_runs.sql` (club_post + run). Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `report_comments_test.sql` (4) + `report_posts_and_runs_test.sql` (8) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e) + `report-post-and-run.spec.ts` (2 e2e) + `social/comment-report.spec.ts`.
 
 #### `app_admins` + the moderation RPCs
 
@@ -488,11 +488,18 @@ Moderation runs through the web admin surface `/admin/reports` (web-only back-of
 Four RPCs, all SECURITY DEFINER, all (except the chrome gate) hard-denying a non-admin with a `42501` before touching any report data:
 
 - `am_i_admin()` → boolean. The only admin function in `public` (PostgREST-callable); used purely to pick page chrome — never the authorization boundary.
-- `fetch_pending_reports()` → one row per reported target with pending reports: `(target_kind, target_id, report_count, reporter_count, reasons jsonb, latest_at)`, newest-active first. Drives the queue.
+- `fetch_pending_reports()` → one row per reported target with pending reports: `(target_kind, target_id, report_count, reporter_count, reasons jsonb, latest_at, shadow_hidden boolean)`, newest-active first. Drives the queue; `shadow_hidden` reflects the per-kind auto-hide state so the queue can badge it + offer Unhide.
 - `fetch_reports_for_target(p_target_kind, p_target_id)` → every individual report (any status) against one target, newest first.
-- `resolve_target_reports(p_target_kind, p_target_id, p_status, p_resolution)` → sets all pending reports on the target to `'reviewed'`/`'dismissed'` with `reviewed_by = auth.uid()` + `reviewed_at = now()` + the note; returns the row count. Rejects an invalid status with `22023`. Triage-only — no content takedown / visibility flip in v1.
+- `resolve_target_reports(p_target_kind, p_target_id, p_status, p_resolution)` → sets all pending reports on the target to `'reviewed'`/`'dismissed'` with `reviewed_by = auth.uid()` + `reviewed_at = now()` + the note; returns the row count. Rejects an invalid status with `22023`. Triage-only.
+- `admin_unhide_target(p_target_kind, p_target_id)` → clears `shadow_hidden` on a user/club/route; returns true if a row flipped. The auto-hide revert (decisions §172).
 
 Pinned by `apps/backend/supabase/tests/admin_moderation_test.sql` (22 pgtap subtests; the load-bearing assertions are admin-allowed vs non-admin/anon-DENIED on every RPC) + `apps/web/tests-e2e/admin/reports.spec.ts`.
+
+#### Auto-hide on reports (`shadow_hidden`, migration `20270218_001`, decisions §172)
+
+`clubs.shadow_hidden` / `routes.shadow_hidden` / `user_profiles.shadow_hidden` (each `boolean not null default false`) are a soft, reversible hide. An AFTER INSERT trigger on `reports` calls the SECURITY DEFINER `auto_hide_target(kind, id)`, which counts DISTINCT pending reporters with **≥ 5 public runs** each (the `is_public`-run reputation gate, E3) and flips the target's `shadow_hidden` at **≥ 3** — notifying the owner once on the false→true transition with the new `content_hidden` notification kind. Only `user` / `club` / `route` participate (the function early-returns for `comment` / `club_post` / `run` — no column, manual takedown only). `auto_hide_target` has no anon/authenticated grant; the trigger is the sole caller.
+
+Shadow-hidden rows are filtered out of every public/search/discovery surface with `and not shadow_hidden`: the `public_routes` view (cascades to `search_public_routes` / `nearby_routes` / `routes_within_box`), `discoverable_routes_in_bbox`, `search_clubs` (+ a `grant select (shadow_hidden) on clubs` for its invoker-mode rowtype projection) + `clubs_in_bbox`, `public_profile_by_id`, `search_user_profiles`. Owner + admin reads go through other paths (owner RLS / admin RPCs), so a hidden owner still sees their own row. Admins revert via `admin_unhide_target`. Pinned by `apps/backend/supabase/tests/auto_hide_reports_test.sql` (19 pgtap subtests) + `apps/web/tests-e2e/admin/auto-hide-unhide.spec.ts`.
 
 ### Clubs & events
 

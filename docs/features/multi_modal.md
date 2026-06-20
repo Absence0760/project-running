@@ -550,6 +550,23 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 > matched this — `showNutritionLogSheet` is a fullscreen dialog, never a
 > nav push.
 
+> **Status (meal templates — shipped web + mobile, 2026-06-20, migration
+> `20270219_001`, [decisions § 173](../architecture/decisions.md)):** the Nutrition mid-tier "saved meals
+> logged with one tap" item. A **`meal_templates` + `meal_template_items`**
+> pair (owner-scoped RLS; items mirror the `food_log` row shape) is the
+> nutrition twin of gym `gym_routines`. `/nutrition` gains a **"Save as meal"**
+> action (promotes the day's logged entries into a named template via
+> `templateFromEntries`) + a **self-hiding Meal-templates section** (mirrors the
+> gym Routines section) that logs the whole meal with one tap
+> (`entriesFromTemplate` → `food_log` rows, slot resolving item → template-
+> default → log-time override) or deletes it behind `ConfirmDialog`. The
+> `meal_template.ts`↔`.dart` parity pair holds the pure plan↔log shaping; logging
+> **copies** into `food_log` (no FK, so deleting a template leaves logged meals
+> intact). Mobile mirrors via `LocalMealTemplateStore` (offline-first) + the
+> nutrition screen, byte-identical iOS twin. In the Art 20 DSAR export (items
+> nested). **Recipe builder + shared/public templates + an edit path stay
+> deferred.**
+
 ## Cross-modality touches (Tier 1 — ship with Phase 4; this is the headline)
 
 - **Home** composes all three modalities per the ordering above. *(Web gym

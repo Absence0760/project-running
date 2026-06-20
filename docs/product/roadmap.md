@@ -393,7 +393,7 @@ Not Phase 4 work — documented so future-us doesn't re-litigate scope when the 
 **Nutrition — mid (MyFitnessPal territory):**
 
 - Food database (USDA + Open Food Facts), barcode scan (mobile-only, camera permission).
-- Meal templates — saved meals users log with one tap.
+- ~~Meal templates — saved meals users log with one tap.~~ **Shipped web + mobile (2026-06-20, migration `20270219_001`).** `meal_templates` + `meal_template_items` (owner-scoped RLS); "Save as meal" on `/nutrition` promotes the day's logged entries into a named template (`templateFromEntries`), a self-hiding templates section logs the whole meal with one tap (`entriesFromTemplate` → `food_log` rows) or deletes it; the `meal_template` TS↔Dart parity pair holds the shaping. Mobile mirror via `LocalMealTemplateStore` (offline-first) + the nutrition screen; byte-identical iOS twin. In the Art 20 DSAR export. Recipe builder (next bullet) still deferred.
 - Recipe builder — N ingredients → one logged meal.
 
 **Nutrition — heavy (AI-driven):**
@@ -707,17 +707,23 @@ spam wave forces the prioritisation.
 
 ### Deferred
 
-- [ ] **Auto-hide after N reports** from vetted reporters. Once an
-  admin page exists, add a SECURITY DEFINER `auto_hide_target()`
-  function that flips a `clubs.shadow_hidden` / `routes.shadow_hidden`
-  / `user_profiles.shadow_hidden` boolean when ≥ N pending reports
-  from distinct reporters with ≥ M public runs each accumulate.
-  **Decisions settled (2026-06-12, backlog E1+E3 — build E1 & E3 together
-  since the reputation gate is the counting rule):** N = 3 distinct vetted
-  reports; M ≥ 5 public runs for a reporter to count; the owner IS notified
-  ("hidden pending review"); admin revert from `/admin/reports`. CISO review
-  was recommended (moderation surface) and the owner chose to proceed without
-  it — record that in the build PR. Not yet built.
+- [x] **Auto-hide after N reports** from vetted reporters — shipped
+  (backlog E1+E3, migration `20270218_001`). A SECURITY DEFINER
+  `auto_hide_target()` invoked by an AFTER INSERT trigger on `reports`
+  counts DISTINCT pending reporters with ≥ 5 public runs each and flips
+  `clubs.shadow_hidden` / `routes.shadow_hidden` / `user_profiles.shadow_hidden`
+  at ≥ 3, notifying the owner with a new `content_hidden` notification kind
+  (once, on the false→true transition). Shadow-hidden targets drop out of
+  every public/search/discovery surface (`public_routes` view,
+  `discoverable_routes_in_bbox`, `search_clubs`, `clubs_in_bbox`,
+  `public_profile_by_id`, `search_user_profiles`); the owner + admins still
+  see their own row. Admins revert via the admin-gated `admin_unhide_target`
+  RPC, surfaced as a Hidden badge + Unhide button on `/admin/reports`
+  (`fetch_pending_reports` gained a `shadow_hidden` column). N = 3, M ≥ 5
+  (E3 reputation gate). **CISO review was recommended for this moderation
+  surface; the owner chose to proceed without it — see decisions.md §172.**
+  pgtap + Playwright e2e. Comment/club_post/run reports never auto-hide
+  (no shadow column; v1 takedown stays a manual admin step).
 - [x] **Report buttons on more surfaces** — shipped (backlog E2,
   migration `20270115_001`). The MVP covered users / clubs / routes;
   this finalized `comment` as a first-class `ReportTargetKind` and
@@ -728,12 +734,12 @@ spam wave forces the prioritisation.
   non-author club-feed post + on runs (run-detail + share-run).
   Mobile: report affordance on club posts + the public-run screen
   (byte-identical iOS twin). pgtap + e2e + widget tests.
-- [ ] **Reputation-weighted reports.** A bot reporting a real user
-  from 5 puppet accounts shouldn't auto-hide them. When the auto-hide
-  feature ships, gate it on reporters with ≥ M public runs (the same
-  threshold the search People tab will use once the suggested-search
-  merge in decisions.md § 54 lands) so reports from drive-by accounts
-  count for less.
+- [x] **Reputation-weighted reports** — shipped with auto-hide (backlog
+  E3, migration `20270218_001`). `auto_hide_target()` counts only
+  reporters with ≥ 5 public runs (the same `is_public`-run gate
+  `public_run_counts` uses), so a bot reporting from puppet accounts with
+  no history doesn't trip the auto-hide. Verified in pgtap (a 2-vetted +
+  1-unvetted set does NOT hide; the 3rd vetted reporter does).
 - [x] **Friendly "slow down" toasts** for the create-rate-limit P0001
   errors — shipped (backlog E4). `data.ts` (createClub / saveRoute /
   importRoute) already rewraps the P0001 SQLSTATE into a friendly
