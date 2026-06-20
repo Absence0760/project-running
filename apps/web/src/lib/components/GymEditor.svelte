@@ -49,10 +49,23 @@
 		oncancel
 	}: Props = $props();
 
-	/// Local, growable copy of the catalogue. Seeded from the prop; a custom
-	/// entry created from the picker is appended here so it binds + autocompletes
-	/// immediately, without waiting for the host to reload from the server.
-	let entries = $state<Exercise[]>(untrack(() => [...catalogue]));
+	/// Customs created from the picker this session, kept locally so they bind +
+	/// autocomplete immediately without waiting for the host to reload.
+	let createdCustoms = $state<Exercise[]>([]);
+
+	/// The effective catalogue: the prop (which can arrive late — the host loads
+	/// it async, so this must track it, not snapshot it) unioned with this
+	/// session's created customs, de-duplicated by id.
+	const entries = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: Exercise[] = [];
+		for (const e of [...catalogue, ...createdCustoms]) {
+			if (seen.has(e.id)) continue;
+			seen.add(e.id);
+			out.push(e);
+		}
+		return out;
+	});
 
 	/// normalised name -> catalogue exercise id, for binding a typed name to its
 	/// catalogue entry at save time. Empty when no catalogue is supplied, in
@@ -91,8 +104,8 @@
 		closePicker();
 	}
 	function onCreated(e: Exercise) {
-		// Merge into the local catalogue so the typed name binds its id at save.
-		if (!entries.some((x) => x.id === e.id)) entries = [...entries, e];
+		// Keep the created custom locally so the typed name binds its id at save.
+		if (!createdCustoms.some((x) => x.id === e.id)) createdCustoms = [...createdCustoms, e];
 	}
 
 	type EditSet = { reps: string; weight: string; rpe: string; duration: string };
