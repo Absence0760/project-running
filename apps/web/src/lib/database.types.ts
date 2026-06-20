@@ -1510,6 +1510,70 @@ export type Database = {
         }
         Relationships: []
       }
+      gear_rotation_members: {
+        Row: {
+          created_at: string
+          gear_id: string
+          rotation_id: string
+        }
+        Insert: {
+          created_at?: string
+          gear_id: string
+          rotation_id: string
+        }
+        Update: {
+          created_at?: string
+          gear_id?: string
+          rotation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_rotation_members_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gear_rotation_members_gear_id_fkey"
+            columns: ["gear_id"]
+            isOneToOne: false
+            referencedRelation: "gear_with_distance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gear_rotation_members_rotation_id_fkey"
+            columns: ["rotation_id"]
+            isOneToOne: false
+            referencedRelation: "gear_rotations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gear_rotations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       gear_wear_logs: {
         Row: {
           area: string | null
