@@ -139,6 +139,12 @@ class _GymScreenState extends State<GymScreen> {
   bool _refreshing = false;
   bool _isOnline = true;
 
+  // Exercise catalogue (seeded globals + the user's customs, migration
+  // 20270222_001), fetched best-effort on refresh and merged into the
+  // composer's autocomplete. Empty offline / signed-out — the composer falls
+  // back to history-only suggestions and logs free-text, exactly as before.
+  List<GymCatalogueEntry> _catalogue = const [];
+
   // Routines (gym_programming.md P1) are a parallel planning surface owned by
   // this screen — the same "each surface owns its store" precedent the gym /
   // food stores follow (decisions §122). Lazily init'd; re-hydrates from disk.
@@ -187,6 +193,14 @@ class _GymScreenState extends State<GymScreen> {
       if (widget.store.hasPending) {
         await widget.store.syncWithServer(api);
       }
+      // Best-effort catalogue fetch — a failure leaves the prior list / empty,
+      // never blocks the workout list.
+      try {
+        final cat = await api.fetchExerciseCatalogue();
+        _catalogue = [for (final e in cat) (name: e.name, id: e.id)];
+      } catch (e) {
+        debugPrint('gym_screen: catalogue fetch failed: $e');
+      }
       _isOnline = true;
     } catch (e) {
       _isOnline = false;
@@ -207,6 +221,7 @@ class _GymScreenState extends State<GymScreen> {
       context: context,
       store: widget.store,
       suggestions: gymExerciseSuggestions(widget.store.workouts),
+      catalogue: _catalogue,
     );
     if (saved == true) await _maybeSync();
   }

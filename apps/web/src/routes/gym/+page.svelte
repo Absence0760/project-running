@@ -5,9 +5,11 @@
 		fetchGymWorkouts,
 		fetchGymSetHistory,
 		fetchSessionPlans,
+		fetchExerciseCatalogue,
 		type GymWorkout,
 		type GymSetWithDate,
 	} from '$lib/core/data';
+	import type { Exercise } from '$lib/types';
 	import { RunningPrTracker, type GymSetLike } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
@@ -17,6 +19,7 @@
 
 	let workouts = $state<GymWorkout[]>([]);
 	let history = $state<GymSetWithDate[]>([]);
+	let catalogue = $state<Exercise[]>([]);
 	// Session-plan count gates the Sessions link. Session plans are authored
 	// independently of gym workouts (a yoga user may have plans but no logged
 	// workouts), so this self-hides on its own data presence, not workouts.length.
@@ -25,14 +28,16 @@
 	let showCreate = $state(false);
 
 	async function load() {
-		const [w, h, plans] = await Promise.all([
+		const [w, h, plans, cat] = await Promise.all([
 			fetchGymWorkouts(100),
 			fetchGymSetHistory(),
 			fetchSessionPlans(),
+			fetchExerciseCatalogue(),
 		]);
 		workouts = w;
 		history = h;
 		sessionPlanCount = plans.length;
+		catalogue = cat;
 		loading = false;
 	}
 
@@ -211,7 +216,7 @@
 </div>
 
 <Modal open={showCreate} title={t('gym.editor.newTitle')} onclose={() => (showCreate = false)}>
-	<GymEditor {suggestions} oncreated={onCreated} oncancel={() => (showCreate = false)} />
+	<GymEditor {suggestions} {catalogue} oncreated={onCreated} oncancel={() => (showCreate = false)} />
 </Modal>
 
 <style>

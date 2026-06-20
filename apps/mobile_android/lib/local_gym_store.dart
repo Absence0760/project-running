@@ -388,6 +388,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
             'weight_kg': s.weightKg,
             'rpe': s.rpe,
             'duration_s': s.durationS,
+            'exercise_id': s.exerciseId,
           },
       ];
 
@@ -399,6 +400,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
             weightKg: (s['weight_kg'] as num?)?.toDouble(),
             rpe: (s['rpe'] as num?)?.toDouble(),
             durationS: (s['duration_s'] as num?)?.toInt(),
+            exerciseId: s['exercise_id'] as String?,
           ),
       ];
 }

@@ -85,6 +85,7 @@ GymSetInput _set(String name,
       weightKg: kg,
       rpe: rpe,
       durationS: durationS,
+      exerciseId: null,
     );
 
 ({Map<String, dynamic> workout, List<Map<String, dynamic>> sets}) _serverWorkout(

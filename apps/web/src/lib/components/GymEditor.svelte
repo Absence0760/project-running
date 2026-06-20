@@ -6,6 +6,8 @@
 		type GymWorkoutWithSets,
 		type GymSetInput,
 	} from '$lib/core/data';
+	import type { Exercise } from '$lib/types';
+	import { normaliseExerciseName } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
@@ -24,6 +26,11 @@
 		/// autocomplete (multi_modal.md § Gym — "autocomplete from the
 		/// user's own history, not a database").
 		suggestions?: string[];
+		/// The exercise catalogue (seeded globals + the user's customs, migration
+		/// 20270222_001). Names are merged into the same datalist; a typed name
+		/// that matches a catalogue entry by normalised key binds its
+		/// exercise_id onto the logged sets. Free text still logs with no id.
+		catalogue?: Exercise[];
 		oncreated?: () => void;
 		onupdated?: () => void;
 		oncancel: () => void;
@@ -34,10 +41,33 @@
 		prefill = null,
 		seed: seedWorkout = null,
 		suggestions = [],
+		catalogue = [],
 		oncreated,
 		onupdated,
 		oncancel
 	}: Props = $props();
+
+	/// normalised name -> catalogue exercise id, for binding a typed name to its
+	/// catalogue entry at save time. Built from the catalogue prop; empty when
+	/// no catalogue is supplied, in which case every set logs as free-text.
+	const catalogueByKey = $derived(
+		new Map(catalogue.map((e) => [normaliseExerciseName(e.name), e.id])),
+	);
+
+	/// The union of history suggestions + catalogue names, de-duplicated by
+	/// normalised key, for the datalist. History names win the display casing
+	/// when both carry the same key.
+	const datalistNames = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const n of [...suggestions, ...catalogue.map((e) => e.name)]) {
+			const key = normaliseExerciseName(n);
+			if (key === '' || seen.has(key)) continue;
+			seen.add(key);
+			out.push(n);
+		}
+		return out;
+	});
 
 	type EditSet = { reps: string; weight: string; rpe: string; duration: string };
 	type EditExercise = { name: string; sets: EditSet[] };
@@ -118,6 +148,9 @@
 		for (const ex of exercises) {
 			const name = ex.name.trim();
 			if (name === '') continue;
+			// Bind to a catalogue entry when the typed name matches one by
+			// normalised key; otherwise stay free-text (exercise_id null).
+			const exerciseId = catalogueByKey.get(normaliseExerciseName(name)) ?? null;
 			for (const set of ex.sets) {
 				out.push({
 					exercise_name: name,
@@ -126,6 +159,7 @@
 					weight_kg: parseWeight(set.weight),
 					rpe: num(set.rpe),
 					duration_s: intSeconds(set.duration),
+					exercise_id: exerciseId,
 				});
 			}
 		}
@@ -170,7 +204,7 @@
 	</label>
 
 	<datalist id="gym-exercise-suggestions">
-		{#each suggestions as s (s)}
+		{#each datalistNames as s (s)}
 			<option value={s}></option>
 		{/each}
 	</datalist>

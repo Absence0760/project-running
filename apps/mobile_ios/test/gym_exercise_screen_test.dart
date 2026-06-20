@@ -36,7 +36,7 @@ Future<({LocalGymStore store, Directory dir})> _seed(
 }
 
 GymSetInput _set(String name, {int? reps, double? weightKg}) =>
-    (exerciseName: name, reps: reps, weightKg: weightKg, rpe: null, durationS: null);
+    (exerciseName: name, reps: reps, weightKg: weightKg, rpe: null, durationS: null, exerciseId: null);
 
 Widget _screen(LocalGymStore store, String exercise) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

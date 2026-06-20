@@ -94,6 +94,91 @@ void main() {
     }
   });
 
+  testWidgets(
+      'typing a catalogue name binds exercise_id; free text leaves it null',
+      (tester) async {
+    // Migration 20270222_001: the composer is ADDITIVE. A typed name matching a
+    // catalogue entry (by normalised key) binds that exercise_id onto the set;
+    // any other typed name stays free-text with exercise_id null.
+    final f = await _store('catalogue_');
+    try {
+      const catalogue = <GymCatalogueEntry>[
+        (name: 'Bench Press', id: 'cat-bench-1'),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(store: f.store, catalogue: catalogue),
+        ),
+      ));
+      await tester.pump();
+
+      // Row layout: title(0); name(1) reps(2) weight(3) rpe(4) dur(5). Type a
+      // catalogue name with different casing / spacing — still binds by key.
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Bench day');
+      await tester.enterText(fields.at(1), 'bench  press');
+      await tester.enterText(fields.at(2), '5');
+      // Dismiss the autocomplete overlay before tapping Save.
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      await tester.tap(find.text('Save workout'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(f.store.workouts, hasLength(1));
+      final sets = f.store.workouts.first.sets;
+      expect(sets, hasLength(1));
+      expect(sets.first['exercise_name'], 'bench  press');
+      expect(sets.first['exercise_id'], 'cat-bench-1');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a free-text name with no catalogue match logs exercise_id null',
+      (tester) async {
+    final f = await _store('catalogue_free_');
+    try {
+      const catalogue = <GymCatalogueEntry>[
+        (name: 'Bench Press', id: 'cat-bench-1'),
+      ];
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(store: f.store, catalogue: catalogue),
+        ),
+      ));
+      await tester.pump();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Odd day');
+      await tester.enterText(fields.at(1), 'Made-up Lift');
+      await tester.enterText(fields.at(2), '8');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      await tester.tap(find.text('Save workout'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(f.store.workouts, hasLength(1));
+      final sets = f.store.workouts.first.sets;
+      expect(sets, hasLength(1));
+      expect(sets.first['exercise_name'], 'Made-up Lift');
+      expect(sets.first['exercise_id'], isNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('prefillTitle seeds a NEW composer title (class -> gym seam)',
       (tester) async {
     final f = await _store('prefill_');

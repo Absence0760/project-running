@@ -1,10 +1,16 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../preferences.dart';
 import 'full_screen_form.dart';
+
+/// One exercise-catalogue entry surfaced to the composer (migration
+/// 20270222_001): the display name plus the catalogue row id that gets bound to
+/// a logged set when the typed name matches by normalised key.
+typedef GymCatalogueEntry = ({String name, String id});
 
 /// Open the gym-workout composer as a fullscreen dialog. Pass [existing] to
 /// edit a stored workout in place; omit for a new one. Pass [seedSets] /
@@ -26,6 +32,7 @@ Future<bool?> showGymComposeSheet({
   List<GymSetInput>? seedSets,
   String? seedTitle,
   List<String> suggestions = const [],
+  List<GymCatalogueEntry> catalogue = const [],
   String? prefillTitle,
 }) {
   final l10n = AppLocalizations.of(context);
@@ -38,6 +45,7 @@ Future<bool?> showGymComposeSheet({
       seedSets: seedSets,
       seedTitle: seedTitle,
       suggestions: suggestions,
+      catalogue: catalogue,
       prefillTitle: prefillTitle,
     ),
   );
@@ -53,6 +61,11 @@ class GymComposeSheet extends StatefulWidget {
   final String? seedTitle;
   final List<String> suggestions;
 
+  /// Exercise catalogue (seeded globals + the user's customs, migration
+  /// 20270222_001). Names are merged into the autocomplete; a typed name that
+  /// matches a catalogue entry by normalised key binds its id onto the set.
+  final List<GymCatalogueEntry> catalogue;
+
   /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
   /// stay empty for the user to fill. Ignored when [existing] is set.
   final String? prefillTitle;
@@ -63,6 +76,7 @@ class GymComposeSheet extends StatefulWidget {
     this.seedSets,
     this.seedTitle,
     this.suggestions = const [],
+    this.catalogue = const [],
     this.prefillTitle,
   });
 
@@ -77,9 +91,28 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   String? _error;
   bool _saving = false;
 
+  /// normalised name -> catalogue id, for binding a typed name at save time.
+  late final Map<String, String> _catalogueByKey;
+
+  /// History suggestions ∪ catalogue names, de-duplicated by normalised key.
+  late final List<String> _datalistNames;
+
   @override
   void initState() {
     super.initState();
+    _catalogueByKey = {
+      for (final e in widget.catalogue) normaliseExerciseName(e.name): e.id,
+    };
+    final seenKeys = <String>{};
+    _datalistNames = [
+      for (final n in [
+        ...widget.suggestions,
+        ...widget.catalogue.map((e) => e.name),
+      ])
+        if (normaliseExerciseName(n).isNotEmpty &&
+            seenKeys.add(normaliseExerciseName(n)))
+          n,
+    ];
     final existing = widget.existing;
     _titleCtl = TextEditingController(
         text:
@@ -167,6 +200,9 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     for (final ex in _exercises) {
       final name = ex.name.text.trim();
       if (name.isEmpty) continue;
+      // Bind to a catalogue entry when the typed name matches by normalised
+      // key; otherwise stay free-text (exerciseId null).
+      final exerciseId = _catalogueByKey[normaliseExerciseName(name)];
       for (final s in ex.sets) {
         final durationS = int.tryParse(s.duration.text.trim());
         out.add((
@@ -177,6 +213,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           rpe: double.tryParse(s.rpe.text.trim()),
           // duration_s is a non-negative integer column; clamp a stray negative.
           durationS: durationS == null ? null : (durationS < 0 ? 0 : durationS),
+          exerciseId: exerciseId,
         ));
       }
     }
@@ -388,7 +425,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           border: const OutlineInputBorder(),
           hintText: l10n.gymEditorExercisePlaceholder,
         );
-    if (widget.suggestions.isEmpty) {
+    if (_datalistNames.isEmpty) {
       return TextField(
         controller: ex.name,
         focusNode: ex.nameFocus,
@@ -402,7 +439,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       optionsBuilder: (value) {
         final q = value.text.trim().toLowerCase();
         if (q.isEmpty) return const Iterable<String>.empty();
-        return widget.suggestions
+        return _datalistNames
             .where((s) => s.toLowerCase().contains(q))
             .take(6);
       },
