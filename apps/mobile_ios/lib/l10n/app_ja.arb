@@ -2200,18 +2200,53 @@
   "gymRecordsSubtitle": "重量種目ごとのあなたのベスト記録。",
   "gymRecordsEmpty": "重量種目の記録はまだありません。セットに重量を入力すると自己ベストの記録が始まります。",
   "gymRecordsLastDone": "最終 {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, other{{count}セッション}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "記録に戻る",
   "gymExerciseEmpty": "この種目の履歴はまだありません。",
   "gymSinceFirstUp": "初回から+{delta}",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "初回から−{delta}",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "初回から変化なし",
   "gymDetailLastTime": "前回 {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "ボリューム",
   "gymDeleteConfirmTitle": "ワークアウトを削除しますか？",
   "gymDeleteConfirmBody": "ワークアウトとそのセットが完全に削除されます。",
@@ -2314,30 +2349,92 @@
   "nutritionNoTargets": "カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。",
   "nutritionWeeklyTrend": "直近7日間",
   "nutritionCaloriesLeft": "残り {n} kcal",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal 超過",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "目標達成",
   "nutritionMacroOver": "{n} 超過",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "目標達成",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "目標達成",
   "nutritionWaterRemaining": "残り {n} ml",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "目標どおり",
   "nutritionWeekUnderGoal": "目標より1日 {n} 少ない",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "目標より1日 {n} 多い",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "1日の目標",
   "nutritionGoalBreakdown": "目標 {base} + 本日消費 {exercise} kcal",
   "dashGymReadinessIncluded": "最近のジムのセッションは疲労に反映されています。",
   "dashGymReadinessExcluded": "ジムの負荷はランの準備度から除外されています。",
   "prefsExcludeGymFromReadiness": "ジムの負荷をランの準備度から除外する",
   "prefsExcludeGymFromReadinessHint": "デフォルトでは、ジムのセッションはランと同様に疲労を増やし準備度を下げます。フィットネス・疲労・フォームをランのみに基づかせるにはこれをオンにしてください。",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "今日はまだ何も記録していません",
   "nutritionEmptyBody": "食事を記録してカロリーとマクロを管理しましょう。",
   "nutritionSlotBreakfast": "朝食",
@@ -2429,7 +2526,6 @@
   "sessionRunVerdictAbandoned": "中止",
   "sessionRunStepCount": "ステップ {index} / {total}",
   "sessionRunSwitchSides": "反対側に切り替え",
-
   "coachingTitle": "コーチング",
   "coachingLede": "招待リンクを共有してアスリートを指導し、トレーニングを確認できます。あるいは自分のコーチをここでフォローできます。",
   "coachingCancel": "キャンセル",
@@ -2476,7 +2572,6 @@
   "coachingRevokeInviteError": "招待を取り消せませんでした: {error}",
   "coachingRemoveAthleteError": "アスリートを削除できませんでした: {error}",
   "coachingEndLinkError": "連携を終了できませんでした: {error}",
-
   "coachingAthleteAthleteFallback": "アスリート",
   "coachingAthleteRunnerFallback": "ランナー",
   "coachingAthleteCoachingSince": "{date} から指導",
@@ -2624,5 +2719,99 @@
   "challengesNotFound": "このチャレンジは利用できません。",
   "challengesJoinFailed": "チャレンジに参加できませんでした。",
   "challengesLeaveFailed": "チャレンジから退出できませんでした。",
-  "challengesLoadFailed": "チャレンジを読み込めませんでした。"
+  "challengesLoadFailed": "チャレンジを読み込めませんでした。",
+  "badgesSectionTitle": "実績",
+  "badgesSectionSubtitle": "達成したマイルストーン",
+  "badgesEmpty": "まだバッジがありません。走り続けましょう。",
+  "badgesEmptyOther": "公開バッジはまだありません。",
+  "badgesEarnedOn": "{date}に獲得",
+  "badgesFeedEarned": "{name}さんが{badge}バッジを獲得しました",
+  "badgesARunner": "ランナー",
+  "badgesTierBronze": "ブロンズ",
+  "badgesTierSilver": "シルバー",
+  "badgesTierGold": "ゴールド",
+  "badgesTierPlatinum": "プラチナ",
+  "badgesDistanceSingle5kLabel": "初めての5K",
+  "badgesDistanceSingle5kDesc": "1回のランで5km走破",
+  "badgesDistanceSingleHalfLabel": "ハーフマラソン",
+  "badgesDistanceSingleHalfDesc": "1回のランで21.1km走破",
+  "badgesDistanceSingleMarathonLabel": "マラソン",
+  "badgesDistanceSingleMarathonDesc": "1回のランで42.2km走破",
+  "badgesDistanceSingleUltraLabel": "ウルトラ",
+  "badgesDistanceSingleUltraDesc": "1回のランで50km以上走破",
+  "badgesDistanceLifetime100Label": "100kmクラブ",
+  "badgesDistanceLifetime100Desc": "通算100kmを記録",
+  "badgesDistanceLifetime500Label": "500km",
+  "badgesDistanceLifetime500Desc": "通算500kmを記録",
+  "badgesDistanceLifetime1000Label": "1,000kmクラブ",
+  "badgesDistanceLifetime1000Desc": "通算1,000kmを記録",
+  "badgesDistanceLifetime5000Label": "5,000km",
+  "badgesDistanceLifetime5000Desc": "通算5,000kmを記録",
+  "badgesStreak7Label": "週間連続",
+  "badgesStreak7Desc": "7日連続で走破",
+  "badgesStreak30Label": "月間連続",
+  "badgesStreak30Desc": "30日連続で走破",
+  "badgesStreak100Label": "100日連続",
+  "badgesStreak100Desc": "100日連続で走破",
+  "badgesStreak365Label": "年間連続",
+  "badgesStreak365Desc": "365日連続で走破",
+  "badgesPr1Label": "初の自己ベスト",
+  "badgesPr1Desc": "初めての自己ベストを記録",
+  "badgesPr3Label": "トリプル自己ベスト",
+  "badgesPr3Desc": "3つの距離で自己ベストを保持",
+  "badgesPr5Label": "記録コレクター",
+  "badgesPr5Desc": "すべての距離で自己ベストを保持",
+  "badgesPlan1Label": "プラン完走",
+  "badgesPlan1Desc": "トレーニングプランを完了",
+  "badgesPlan3Label": "トリプル完走",
+  "badgesPlan3Desc": "3つのトレーニングプランを完了",
+  "badgesPlan10Label": "プランの達人",
+  "badgesPlan10Desc": "10のトレーニングプランを完了",
+  "badgesSectionTitle": "実績",
+  "badgesSectionSubtitle": "達成したマイルストーン",
+  "badgesEmpty": "まだバッジがありません。走り続けましょう。",
+  "badgesEmptyOther": "公開バッジはまだありません。",
+  "badgesEarnedOn": "{date}に獲得",
+  "badgesFeedEarned": "{name}さんが{badge}バッジを獲得しました",
+  "badgesARunner": "ランナー",
+  "badgesTierBronze": "ブロンズ",
+  "badgesTierSilver": "シルバー",
+  "badgesTierGold": "ゴールド",
+  "badgesTierPlatinum": "プラチナ",
+  "badgesDistanceSingle5kLabel": "初めての5K",
+  "badgesDistanceSingle5kDesc": "1回のランで5km走破",
+  "badgesDistanceSingleHalfLabel": "ハーフマラソン",
+  "badgesDistanceSingleHalfDesc": "1回のランで21.1km走破",
+  "badgesDistanceSingleMarathonLabel": "マラソン",
+  "badgesDistanceSingleMarathonDesc": "1回のランで42.2km走破",
+  "badgesDistanceSingleUltraLabel": "ウルトラ",
+  "badgesDistanceSingleUltraDesc": "1回のランで50km以上走破",
+  "badgesDistanceLifetime100Label": "100kmクラブ",
+  "badgesDistanceLifetime100Desc": "通算100kmを記録",
+  "badgesDistanceLifetime500Label": "500km",
+  "badgesDistanceLifetime500Desc": "通算500kmを記録",
+  "badgesDistanceLifetime1000Label": "1,000kmクラブ",
+  "badgesDistanceLifetime1000Desc": "通算1,000kmを記録",
+  "badgesDistanceLifetime5000Label": "5,000km",
+  "badgesDistanceLifetime5000Desc": "通算5,000kmを記録",
+  "badgesStreak7Label": "週間連続",
+  "badgesStreak7Desc": "7日連続で走破",
+  "badgesStreak30Label": "月間連続",
+  "badgesStreak30Desc": "30日連続で走破",
+  "badgesStreak100Label": "100日連続",
+  "badgesStreak100Desc": "100日連続で走破",
+  "badgesStreak365Label": "年間連続",
+  "badgesStreak365Desc": "365日連続で走破",
+  "badgesPr1Label": "初の自己ベスト",
+  "badgesPr1Desc": "初めての自己ベストを記録",
+  "badgesPr3Label": "トリプル自己ベスト",
+  "badgesPr3Desc": "3つの距離で自己ベストを保持",
+  "badgesPr5Label": "記録コレクター",
+  "badgesPr5Desc": "すべての距離で自己ベストを保持",
+  "badgesPlan1Label": "プラン完走",
+  "badgesPlan1Desc": "トレーニングプランを完了",
+  "badgesPlan3Label": "トリプル完走",
+  "badgesPlan3Desc": "3つのトレーニングプランを完了",
+  "badgesPlan10Label": "プランの達人",
+  "badgesPlan10Desc": "10のトレーニングプランを完了"
 }

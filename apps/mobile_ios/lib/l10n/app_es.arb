@@ -2200,18 +2200,53 @@
   "gymRecordsSubtitle": "Tu mejor marca en cada ejercicio con peso.",
   "gymRecordsEmpty": "Aún no hay ejercicios con peso registrados. Añade un peso a una serie para empezar a seguir tus récords.",
   "gymRecordsLastDone": "Último {date}",
-  "@gymRecordsLastDone": {"description": "Records card: when an exercise was last performed", "placeholders": {"date": {"type": "String"}}},
+  "@gymRecordsLastDone": {
+    "description": "Records card: when an exercise was last performed",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymRecordsSessions": "{count, plural, one{1 sesión} other{{count} sesiones}}",
-  "@gymRecordsSessions": {"description": "Records card: distinct session count for an exercise", "placeholders": {"count": {"type": "int"}}},
+  "@gymRecordsSessions": {
+    "description": "Records card: distinct session count for an exercise",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gymExerciseBack": "Volver a récords",
   "gymExerciseEmpty": "Aún no hay historial de este ejercicio.",
   "gymSinceFirstUp": "+{delta} desde la primera sesión",
-  "@gymSinceFirstUp": {"description": "Exercise progression: est-1RM gain since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstUp": {
+    "description": "Exercise progression: est-1RM gain since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstDown": "−{delta} desde la primera sesión",
-  "@gymSinceFirstDown": {"description": "Exercise progression: est-1RM loss since first session", "placeholders": {"delta": {"type": "String"}}},
+  "@gymSinceFirstDown": {
+    "description": "Exercise progression: est-1RM loss since first session",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
   "gymSinceFirstFlat": "sin cambios desde la primera sesión",
   "gymDetailLastTime": "Última vez {date}",
-  "@gymDetailLastTime": {"description": "Workout detail: vs-last-time hint date for an exercise", "placeholders": {"date": {"type": "String"}}},
+  "@gymDetailLastTime": {
+    "description": "Workout detail: vs-last-time hint date for an exercise",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "gymVolumeLabel": "Volumen",
   "gymDeleteConfirmTitle": "¿Eliminar entrenamiento?",
   "gymDeleteConfirmBody": "Esto elimina permanentemente el entrenamiento y sus series.",
@@ -2314,30 +2349,92 @@
   "nutritionNoTargets": "Añade tu altura, peso, edad y sexo en la app web para ver los objetivos de calorías y macros.",
   "nutritionWeeklyTrend": "Últimos 7 días",
   "nutritionCaloriesLeft": "{n} kcal restantes",
-  "@nutritionCaloriesLeft": {"description": "Calorie budget chip: kcal still to eat", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesLeft": {
+    "description": "Calorie budget chip: kcal still to eat",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionCaloriesOver": "{n} kcal de más",
-  "@nutritionCaloriesOver": {"description": "Calorie budget chip: kcal over the ceiling", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionCaloriesOver": {
+    "description": "Calorie budget chip: kcal over the ceiling",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionOnTarget": "En el objetivo",
   "nutritionMacroOver": "{n} por encima del objetivo",
-  "@nutritionMacroOver": {"description": "Macro ring badge: amount over a ceiling macro", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionMacroOver": {
+    "description": "Macro ring badge: amount over a ceiling macro",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionMacroReached": "Objetivo alcanzado",
   "nutritionWaterAmount": "{consumed} / {target} L",
-  "@nutritionWaterAmount": {"description": "Water card readout: consumed / target litres", "placeholders": {"consumed": {"type": "String"}, "target": {"type": "String"}}},
+  "@nutritionWaterAmount": {
+    "description": "Water card readout: consumed / target litres",
+    "placeholders": {
+      "consumed": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionWaterGoalReached": "Objetivo alcanzado",
   "nutritionWaterRemaining": "{n} ml restantes",
-  "@nutritionWaterRemaining": {"description": "Water budget chip: ml still to drink", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWaterRemaining": {
+    "description": "Water budget chip: ml still to drink",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOnGoal": "En el objetivo",
   "nutritionWeekUnderGoal": "{n} bajo el objetivo/día",
-  "@nutritionWeekUnderGoal": {"description": "Weekly trend chip: avg kcal under the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekUnderGoal": {
+    "description": "Weekly trend chip: avg kcal under the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionWeekOverGoal": "{n} sobre el objetivo/día",
-  "@nutritionWeekOverGoal": {"description": "Weekly trend chip: avg kcal over the daily goal", "placeholders": {"n": {"type": "int"}}},
+  "@nutritionWeekOverGoal": {
+    "description": "Weekly trend chip: avg kcal over the daily goal",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "Objetivo diario",
   "nutritionGoalBreakdown": "Meta {base} + {exercise} kcal quemadas hoy",
   "dashGymReadinessIncluded": "Tus sesiones de gimnasio recientes se incluyen en tu fatiga.",
   "dashGymReadinessExcluded": "La carga del gimnasio se excluye de tu preparación para correr.",
   "prefsExcludeGymFromReadiness": "Excluir la carga del gimnasio de la preparación para correr",
   "prefsExcludeGymFromReadinessHint": "De forma predeterminada, las sesiones de gimnasio aumentan tu fatiga y reducen tu preparación, igual que una carrera. Actívalo para que tu forma, fatiga y frescura se basen solo en las carreras.",
-  "@nutritionGoalBreakdown": {"description": "Calorie goal breakdown: base goal + exercise kcal added today", "placeholders": {"base": {"type": "int"}, "exercise": {"type": "int"}}},
+  "@nutritionGoalBreakdown": {
+    "description": "Calorie goal breakdown: base goal + exercise kcal added today",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionEmptyTitle": "Aún no has registrado comida hoy",
   "nutritionEmptyBody": "Registra una comida para controlar tus calorías y macros.",
   "nutritionSlotBreakfast": "Desayuno",
@@ -2429,7 +2526,6 @@
   "sessionRunVerdictAbandoned": "Abandonada",
   "sessionRunStepCount": "Paso {index} de {total}",
   "sessionRunSwitchSides": "Cambia de lado",
-
   "coachingTitle": "Entrenamiento",
   "coachingLede": "Entrena a atletas compartiendo un enlace de invitación y revisa su preparación. O sigue aquí a tu propio entrenador.",
   "coachingCancel": "Cancelar",
@@ -2476,7 +2572,6 @@
   "coachingRevokeInviteError": "No se pudo revocar la invitación: {error}",
   "coachingRemoveAthleteError": "No se pudo quitar al atleta: {error}",
   "coachingEndLinkError": "No se pudo finalizar el vínculo: {error}",
-
   "coachingAthleteAthleteFallback": "Atleta",
   "coachingAthleteRunnerFallback": "Corredor",
   "coachingAthleteCoachingSince": "Entrenando desde el {date}",
@@ -2624,5 +2719,99 @@
   "challengesNotFound": "Este desafío no está disponible.",
   "challengesJoinFailed": "No se pudo unir al desafío.",
   "challengesLeaveFailed": "No se pudo salir del desafío.",
-  "challengesLoadFailed": "No se pudieron cargar los desafíos."
+  "challengesLoadFailed": "No se pudieron cargar los desafíos.",
+  "badgesSectionTitle": "Logros",
+  "badgesSectionSubtitle": "Hitos que has conseguido",
+  "badgesEmpty": "Aún no tienes insignias: sigue corriendo.",
+  "badgesEmptyOther": "Todavía no hay insignias públicas.",
+  "badgesEarnedOn": "Conseguida el {date}",
+  "badgesFeedEarned": "{name} consiguió la insignia {badge}",
+  "badgesARunner": "Un corredor",
+  "badgesTierBronze": "Bronce",
+  "badgesTierSilver": "Plata",
+  "badgesTierGold": "Oro",
+  "badgesTierPlatinum": "Platino",
+  "badgesDistanceSingle5kLabel": "Primeros 5 km",
+  "badgesDistanceSingle5kDesc": "Corriste 5 km en una sola carrera",
+  "badgesDistanceSingleHalfLabel": "Media maratón",
+  "badgesDistanceSingleHalfDesc": "Corriste 21,1 km en una sola carrera",
+  "badgesDistanceSingleMarathonLabel": "Maratón",
+  "badgesDistanceSingleMarathonDesc": "Corriste 42,2 km en una sola carrera",
+  "badgesDistanceSingleUltraLabel": "Ultra",
+  "badgesDistanceSingleUltraDesc": "Corriste 50 km o más en una sola carrera",
+  "badgesDistanceLifetime100Label": "Club de los 100 km",
+  "badgesDistanceLifetime100Desc": "100 km registrados en total",
+  "badgesDistanceLifetime500Label": "500 km",
+  "badgesDistanceLifetime500Desc": "500 km registrados en total",
+  "badgesDistanceLifetime1000Label": "Club de los 1000 km",
+  "badgesDistanceLifetime1000Desc": "1000 km registrados en total",
+  "badgesDistanceLifetime5000Label": "5000 km",
+  "badgesDistanceLifetime5000Desc": "5000 km registrados en total",
+  "badgesStreak7Label": "Racha semanal",
+  "badgesStreak7Desc": "Corriste 7 días seguidos",
+  "badgesStreak30Label": "Racha mensual",
+  "badgesStreak30Desc": "Corriste 30 días seguidos",
+  "badgesStreak100Label": "Racha de cien",
+  "badgesStreak100Desc": "Corriste 100 días seguidos",
+  "badgesStreak365Label": "Racha anual",
+  "badgesStreak365Desc": "Corriste 365 días seguidos",
+  "badgesPr1Label": "Primer récord",
+  "badgesPr1Desc": "Estableciste tu primer récord personal",
+  "badgesPr3Label": "Triple récord",
+  "badgesPr3Desc": "Mantienes récords personales en 3 distancias",
+  "badgesPr5Label": "Coleccionista de récords",
+  "badgesPr5Desc": "Mantienes récords personales en todas las distancias",
+  "badgesPlan1Label": "Plan completado",
+  "badgesPlan1Desc": "Completaste un plan de entrenamiento",
+  "badgesPlan3Label": "Triple finalizador",
+  "badgesPlan3Desc": "Completaste 3 planes de entrenamiento",
+  "badgesPlan10Label": "Veterano de planes",
+  "badgesPlan10Desc": "Completaste 10 planes de entrenamiento",
+  "badgesSectionTitle": "Logros",
+  "badgesSectionSubtitle": "Hitos que has conseguido",
+  "badgesEmpty": "Aún no tienes insignias: sigue corriendo.",
+  "badgesEmptyOther": "Todavía no hay insignias públicas.",
+  "badgesEarnedOn": "Conseguida el {date}",
+  "badgesFeedEarned": "{name} consiguió la insignia {badge}",
+  "badgesARunner": "Un corredor",
+  "badgesTierBronze": "Bronce",
+  "badgesTierSilver": "Plata",
+  "badgesTierGold": "Oro",
+  "badgesTierPlatinum": "Platino",
+  "badgesDistanceSingle5kLabel": "Primeros 5 km",
+  "badgesDistanceSingle5kDesc": "Corriste 5 km en una sola carrera",
+  "badgesDistanceSingleHalfLabel": "Media maratón",
+  "badgesDistanceSingleHalfDesc": "Corriste 21,1 km en una sola carrera",
+  "badgesDistanceSingleMarathonLabel": "Maratón",
+  "badgesDistanceSingleMarathonDesc": "Corriste 42,2 km en una sola carrera",
+  "badgesDistanceSingleUltraLabel": "Ultra",
+  "badgesDistanceSingleUltraDesc": "Corriste 50 km o más en una sola carrera",
+  "badgesDistanceLifetime100Label": "Club de los 100 km",
+  "badgesDistanceLifetime100Desc": "100 km registrados en total",
+  "badgesDistanceLifetime500Label": "500 km",
+  "badgesDistanceLifetime500Desc": "500 km registrados en total",
+  "badgesDistanceLifetime1000Label": "Club de los 1000 km",
+  "badgesDistanceLifetime1000Desc": "1000 km registrados en total",
+  "badgesDistanceLifetime5000Label": "5000 km",
+  "badgesDistanceLifetime5000Desc": "5000 km registrados en total",
+  "badgesStreak7Label": "Racha semanal",
+  "badgesStreak7Desc": "Corriste 7 días seguidos",
+  "badgesStreak30Label": "Racha mensual",
+  "badgesStreak30Desc": "Corriste 30 días seguidos",
+  "badgesStreak100Label": "Racha de cien",
+  "badgesStreak100Desc": "Corriste 100 días seguidos",
+  "badgesStreak365Label": "Racha anual",
+  "badgesStreak365Desc": "Corriste 365 días seguidos",
+  "badgesPr1Label": "Primer récord",
+  "badgesPr1Desc": "Estableciste tu primer récord personal",
+  "badgesPr3Label": "Triple récord",
+  "badgesPr3Desc": "Mantienes récords personales en 3 distancias",
+  "badgesPr5Label": "Coleccionista de récords",
+  "badgesPr5Desc": "Mantienes récords personales en todas las distancias",
+  "badgesPlan1Label": "Plan completado",
+  "badgesPlan1Desc": "Completaste un plan de entrenamiento",
+  "badgesPlan3Label": "Triple finalizador",
+  "badgesPlan3Desc": "Completaste 3 planes de entrenamiento",
+  "badgesPlan10Label": "Veterano de planes",
+  "badgesPlan10Desc": "Completaste 10 planes de entrenamiento"
 }

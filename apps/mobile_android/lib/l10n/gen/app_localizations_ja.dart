@@ -9029,4 +9029,149 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get challengesLoadFailed => 'チャレンジを読み込めませんでした。';
+
+  @override
+  String get badgesSectionTitle => '実績';
+
+  @override
+  String get badgesSectionSubtitle => '達成したマイルストーン';
+
+  @override
+  String get badgesEmpty => 'まだバッジがありません。走り続けましょう。';
+
+  @override
+  String get badgesEmptyOther => '公開バッジはまだありません。';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return '$dateに獲得';
+  }
+
+  @override
+  String badgesFeedEarned(String name, String badge) {
+    return '$nameさんが$badgeバッジを獲得しました';
+  }
+
+  @override
+  String get badgesARunner => 'ランナー';
+
+  @override
+  String get badgesTierBronze => 'ブロンズ';
+
+  @override
+  String get badgesTierSilver => 'シルバー';
+
+  @override
+  String get badgesTierGold => 'ゴールド';
+
+  @override
+  String get badgesTierPlatinum => 'プラチナ';
+
+  @override
+  String get badgesDistanceSingle5kLabel => '初めての5K';
+
+  @override
+  String get badgesDistanceSingle5kDesc => '1回のランで5km走破';
+
+  @override
+  String get badgesDistanceSingleHalfLabel => 'ハーフマラソン';
+
+  @override
+  String get badgesDistanceSingleHalfDesc => '1回のランで21.1km走破';
+
+  @override
+  String get badgesDistanceSingleMarathonLabel => 'マラソン';
+
+  @override
+  String get badgesDistanceSingleMarathonDesc => '1回のランで42.2km走破';
+
+  @override
+  String get badgesDistanceSingleUltraLabel => 'ウルトラ';
+
+  @override
+  String get badgesDistanceSingleUltraDesc => '1回のランで50km以上走破';
+
+  @override
+  String get badgesDistanceLifetime100Label => '100kmクラブ';
+
+  @override
+  String get badgesDistanceLifetime100Desc => '通算100kmを記録';
+
+  @override
+  String get badgesDistanceLifetime500Label => '500km';
+
+  @override
+  String get badgesDistanceLifetime500Desc => '通算500kmを記録';
+
+  @override
+  String get badgesDistanceLifetime1000Label => '1,000kmクラブ';
+
+  @override
+  String get badgesDistanceLifetime1000Desc => '通算1,000kmを記録';
+
+  @override
+  String get badgesDistanceLifetime5000Label => '5,000km';
+
+  @override
+  String get badgesDistanceLifetime5000Desc => '通算5,000kmを記録';
+
+  @override
+  String get badgesStreak7Label => '週間連続';
+
+  @override
+  String get badgesStreak7Desc => '7日連続で走破';
+
+  @override
+  String get badgesStreak30Label => '月間連続';
+
+  @override
+  String get badgesStreak30Desc => '30日連続で走破';
+
+  @override
+  String get badgesStreak100Label => '100日連続';
+
+  @override
+  String get badgesStreak100Desc => '100日連続で走破';
+
+  @override
+  String get badgesStreak365Label => '年間連続';
+
+  @override
+  String get badgesStreak365Desc => '365日連続で走破';
+
+  @override
+  String get badgesPr1Label => '初の自己ベスト';
+
+  @override
+  String get badgesPr1Desc => '初めての自己ベストを記録';
+
+  @override
+  String get badgesPr3Label => 'トリプル自己ベスト';
+
+  @override
+  String get badgesPr3Desc => '3つの距離で自己ベストを保持';
+
+  @override
+  String get badgesPr5Label => '記録コレクター';
+
+  @override
+  String get badgesPr5Desc => 'すべての距離で自己ベストを保持';
+
+  @override
+  String get badgesPlan1Label => 'プラン完走';
+
+  @override
+  String get badgesPlan1Desc => 'トレーニングプランを完了';
+
+  @override
+  String get badgesPlan3Label => 'トリプル完走';
+
+  @override
+  String get badgesPlan3Desc => '3つのトレーニングプランを完了';
+
+  @override
+  String get badgesPlan10Label => 'プランの達人';
+
+  @override
+  String get badgesPlan10Desc => '10のトレーニングプランを完了';
 }

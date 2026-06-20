@@ -15785,6 +15785,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load challenges.'**
   String get challengesLoadFailed;
+
+  /// Achievements tab / section title
+  ///
+  /// In en, this message translates to:
+  /// **'Achievements'**
+  String get badgesSectionTitle;
+
+  /// Achievements section subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Milestones you\'ve earned'**
+  String get badgesSectionSubtitle;
+
+  /// Empty state on your own achievements list
+  ///
+  /// In en, this message translates to:
+  /// **'No badges yet — keep running.'**
+  String get badgesEmpty;
+
+  /// Empty state on someone else's achievements list
+  ///
+  /// In en, this message translates to:
+  /// **'No public badges yet.'**
+  String get badgesEmptyOther;
+
+  /// Earned-date line on a badge tile
+  ///
+  /// In en, this message translates to:
+  /// **'Earned {date}'**
+  String badgesEarnedOn(String date);
+
+  /// Feed badge-strip chip text
+  ///
+  /// In en, this message translates to:
+  /// **'{name} earned the {badge} badge'**
+  String badgesFeedEarned(String name, String badge);
+
+  /// Fallback name when a badge awardee has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'A runner'**
+  String get badgesARunner;
+
+  /// Bronze tier label
+  ///
+  /// In en, this message translates to:
+  /// **'Bronze'**
+  String get badgesTierBronze;
+
+  /// Silver tier label
+  ///
+  /// In en, this message translates to:
+  /// **'Silver'**
+  String get badgesTierSilver;
+
+  /// Gold tier label
+  ///
+  /// In en, this message translates to:
+  /// **'Gold'**
+  String get badgesTierGold;
+
+  /// Platinum tier label
+  ///
+  /// In en, this message translates to:
+  /// **'Platinum'**
+  String get badgesTierPlatinum;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'First 5K'**
+  String get badgesDistanceSingle5kLabel;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 5 km in a single run'**
+  String get badgesDistanceSingle5kDesc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Half marathon'**
+  String get badgesDistanceSingleHalfLabel;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 21.1 km in a single run'**
+  String get badgesDistanceSingleHalfDesc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Marathon'**
+  String get badgesDistanceSingleMarathonLabel;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 42.2 km in a single run'**
+  String get badgesDistanceSingleMarathonDesc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Ultra'**
+  String get badgesDistanceSingleUltraLabel;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 50 km or more in a single run'**
+  String get badgesDistanceSingleUltraDesc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'100 km club'**
+  String get badgesDistanceLifetime100Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'100 km logged all-time'**
+  String get badgesDistanceLifetime100Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'500 km'**
+  String get badgesDistanceLifetime500Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'500 km logged all-time'**
+  String get badgesDistanceLifetime500Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'1,000 km club'**
+  String get badgesDistanceLifetime1000Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'1,000 km logged all-time'**
+  String get badgesDistanceLifetime1000Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'5,000 km'**
+  String get badgesDistanceLifetime5000Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'5,000 km logged all-time'**
+  String get badgesDistanceLifetime5000Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Week streak'**
+  String get badgesStreak7Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 7 days in a row'**
+  String get badgesStreak7Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Month streak'**
+  String get badgesStreak30Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 30 days in a row'**
+  String get badgesStreak30Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Century streak'**
+  String get badgesStreak100Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 100 days in a row'**
+  String get badgesStreak100Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Year streak'**
+  String get badgesStreak365Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 365 days in a row'**
+  String get badgesStreak365Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'First PR'**
+  String get badgesPr1Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Set your first personal record'**
+  String get badgesPr1Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Triple PR'**
+  String get badgesPr3Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Hold personal records at 3 distances'**
+  String get badgesPr3Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'PR collector'**
+  String get badgesPr5Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Hold personal records at every distance'**
+  String get badgesPr5Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Plan finisher'**
+  String get badgesPlan1Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Completed a training plan'**
+  String get badgesPlan1Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Triple finisher'**
+  String get badgesPlan3Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Completed 3 training plans'**
+  String get badgesPlan3Desc;
+
+  /// Badge label
+  ///
+  /// In en, this message translates to:
+  /// **'Plan veteran'**
+  String get badgesPlan10Label;
+
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Completed 10 training plans'**
+  String get badgesPlan10Desc;
 }
 
 class _AppLocalizationsDelegate

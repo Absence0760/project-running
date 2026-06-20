@@ -9491,6 +9491,154 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
+
+  @override
+  String get badgesSectionTitle => 'Conquistas';
+
+  @override
+  String get badgesSectionSubtitle => 'Marcos que você alcançou';
+
+  @override
+  String get badgesEmpty => 'Ainda sem medalhas — continue correndo.';
+
+  @override
+  String get badgesEmptyOther => 'Ainda não há medalhas públicas.';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return 'Conquistada em $date';
+  }
+
+  @override
+  String badgesFeedEarned(String name, String badge) {
+    return '$name conquistou a medalha $badge';
+  }
+
+  @override
+  String get badgesARunner => 'Um corredor';
+
+  @override
+  String get badgesTierBronze => 'Bronze';
+
+  @override
+  String get badgesTierSilver => 'Prata';
+
+  @override
+  String get badgesTierGold => 'Ouro';
+
+  @override
+  String get badgesTierPlatinum => 'Platina';
+
+  @override
+  String get badgesDistanceSingle5kLabel => 'Primeiros 5 km';
+
+  @override
+  String get badgesDistanceSingle5kDesc => 'Correu 5 km em uma única corrida';
+
+  @override
+  String get badgesDistanceSingleHalfLabel => 'Meia maratona';
+
+  @override
+  String get badgesDistanceSingleHalfDesc =>
+      'Correu 21,1 km em uma única corrida';
+
+  @override
+  String get badgesDistanceSingleMarathonLabel => 'Maratona';
+
+  @override
+  String get badgesDistanceSingleMarathonDesc =>
+      'Correu 42,2 km em uma única corrida';
+
+  @override
+  String get badgesDistanceSingleUltraLabel => 'Ultra';
+
+  @override
+  String get badgesDistanceSingleUltraDesc =>
+      'Correu 50 km ou mais em uma única corrida';
+
+  @override
+  String get badgesDistanceLifetime100Label => 'Clube dos 100 km';
+
+  @override
+  String get badgesDistanceLifetime100Desc => '100 km registrados no total';
+
+  @override
+  String get badgesDistanceLifetime500Label => '500 km';
+
+  @override
+  String get badgesDistanceLifetime500Desc => '500 km registrados no total';
+
+  @override
+  String get badgesDistanceLifetime1000Label => 'Clube dos 1.000 km';
+
+  @override
+  String get badgesDistanceLifetime1000Desc => '1.000 km registrados no total';
+
+  @override
+  String get badgesDistanceLifetime5000Label => '5.000 km';
+
+  @override
+  String get badgesDistanceLifetime5000Desc => '5.000 km registrados no total';
+
+  @override
+  String get badgesStreak7Label => 'Sequência semanal';
+
+  @override
+  String get badgesStreak7Desc => 'Correu 7 dias seguidos';
+
+  @override
+  String get badgesStreak30Label => 'Sequência mensal';
+
+  @override
+  String get badgesStreak30Desc => 'Correu 30 dias seguidos';
+
+  @override
+  String get badgesStreak100Label => 'Sequência de cem';
+
+  @override
+  String get badgesStreak100Desc => 'Correu 100 dias seguidos';
+
+  @override
+  String get badgesStreak365Label => 'Sequência anual';
+
+  @override
+  String get badgesStreak365Desc => 'Correu 365 dias seguidos';
+
+  @override
+  String get badgesPr1Label => 'Primeiro recorde';
+
+  @override
+  String get badgesPr1Desc => 'Estabeleceu seu primeiro recorde pessoal';
+
+  @override
+  String get badgesPr3Label => 'Recorde triplo';
+
+  @override
+  String get badgesPr3Desc => 'Detém recordes pessoais em 3 distâncias';
+
+  @override
+  String get badgesPr5Label => 'Colecionador de recordes';
+
+  @override
+  String get badgesPr5Desc => 'Detém recordes pessoais em todas as distâncias';
+
+  @override
+  String get badgesPlan1Label => 'Plano concluído';
+
+  @override
+  String get badgesPlan1Desc => 'Concluiu um plano de treino';
+
+  @override
+  String get badgesPlan3Label => 'Triplo concluído';
+
+  @override
+  String get badgesPlan3Desc => 'Concluiu 3 planos de treino';
+
+  @override
+  String get badgesPlan10Label => 'Veterano de planos';
+
+  @override
+  String get badgesPlan10Desc => 'Concluiu 10 planos de treino';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18979,4 +19127,152 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
+
+  @override
+  String get badgesSectionTitle => 'Conquistas';
+
+  @override
+  String get badgesSectionSubtitle => 'Marcos que você alcançou';
+
+  @override
+  String get badgesEmpty => 'Ainda sem medalhas — continue correndo.';
+
+  @override
+  String get badgesEmptyOther => 'Ainda não há medalhas públicas.';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return 'Conquistada em $date';
+  }
+
+  @override
+  String badgesFeedEarned(String name, String badge) {
+    return '$name conquistou a medalha $badge';
+  }
+
+  @override
+  String get badgesARunner => 'Um corredor';
+
+  @override
+  String get badgesTierBronze => 'Bronze';
+
+  @override
+  String get badgesTierSilver => 'Prata';
+
+  @override
+  String get badgesTierGold => 'Ouro';
+
+  @override
+  String get badgesTierPlatinum => 'Platina';
+
+  @override
+  String get badgesDistanceSingle5kLabel => 'Primeiros 5 km';
+
+  @override
+  String get badgesDistanceSingle5kDesc => 'Correu 5 km em uma única corrida';
+
+  @override
+  String get badgesDistanceSingleHalfLabel => 'Meia maratona';
+
+  @override
+  String get badgesDistanceSingleHalfDesc =>
+      'Correu 21,1 km em uma única corrida';
+
+  @override
+  String get badgesDistanceSingleMarathonLabel => 'Maratona';
+
+  @override
+  String get badgesDistanceSingleMarathonDesc =>
+      'Correu 42,2 km em uma única corrida';
+
+  @override
+  String get badgesDistanceSingleUltraLabel => 'Ultra';
+
+  @override
+  String get badgesDistanceSingleUltraDesc =>
+      'Correu 50 km ou mais em uma única corrida';
+
+  @override
+  String get badgesDistanceLifetime100Label => 'Clube dos 100 km';
+
+  @override
+  String get badgesDistanceLifetime100Desc => '100 km registrados no total';
+
+  @override
+  String get badgesDistanceLifetime500Label => '500 km';
+
+  @override
+  String get badgesDistanceLifetime500Desc => '500 km registrados no total';
+
+  @override
+  String get badgesDistanceLifetime1000Label => 'Clube dos 1.000 km';
+
+  @override
+  String get badgesDistanceLifetime1000Desc => '1.000 km registrados no total';
+
+  @override
+  String get badgesDistanceLifetime5000Label => '5.000 km';
+
+  @override
+  String get badgesDistanceLifetime5000Desc => '5.000 km registrados no total';
+
+  @override
+  String get badgesStreak7Label => 'Sequência semanal';
+
+  @override
+  String get badgesStreak7Desc => 'Correu 7 dias seguidos';
+
+  @override
+  String get badgesStreak30Label => 'Sequência mensal';
+
+  @override
+  String get badgesStreak30Desc => 'Correu 30 dias seguidos';
+
+  @override
+  String get badgesStreak100Label => 'Sequência de cem';
+
+  @override
+  String get badgesStreak100Desc => 'Correu 100 dias seguidos';
+
+  @override
+  String get badgesStreak365Label => 'Sequência anual';
+
+  @override
+  String get badgesStreak365Desc => 'Correu 365 dias seguidos';
+
+  @override
+  String get badgesPr1Label => 'Primeiro recorde';
+
+  @override
+  String get badgesPr1Desc => 'Estabeleceu seu primeiro recorde pessoal';
+
+  @override
+  String get badgesPr3Label => 'Recorde triplo';
+
+  @override
+  String get badgesPr3Desc => 'Detém recordes pessoais em 3 distâncias';
+
+  @override
+  String get badgesPr5Label => 'Colecionador de recordes';
+
+  @override
+  String get badgesPr5Desc => 'Detém recordes pessoais em todas as distâncias';
+
+  @override
+  String get badgesPlan1Label => 'Plano concluído';
+
+  @override
+  String get badgesPlan1Desc => 'Concluiu um plano de treino';
+
+  @override
+  String get badgesPlan3Label => 'Triplo concluído';
+
+  @override
+  String get badgesPlan3Desc => 'Concluiu 3 planos de treino';
+
+  @override
+  String get badgesPlan10Label => 'Veterano de planos';
+
+  @override
+  String get badgesPlan10Desc => 'Concluiu 10 planos de treino';
 }
