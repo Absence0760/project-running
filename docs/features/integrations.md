@@ -4,9 +4,9 @@ A reference for every external data source the app connects to, how each integra
 
 ---
 
-**Contents:** [Overview](#overview) · [Apple HealthKit](#apple-healthkit) · [Android Health Connect](#android-health-connect) · [Strava](#strava) · [parkrun](#parkrun) · [Garmin Connect](#garmin-connect) · [Race results (RunSignUp + general scraping)](#race-results-runsignup--general-scraping) · [Treadmills (BLE FTMS) — deferred](#treadmills-ble-ftms--deferred) · [The `health` Flutter package](#the-health-flutter-package) · [Deduplication strategy](#deduplication-strategy)
+**Contents:** [Overview](#overview) · [Apple HealthKit](#apple-healthkit) · [Android Health Connect](#android-health-connect) · [Strava](#strava) · [parkrun](#parkrun) · [Garmin Connect](#garmin-connect) · [Race results (RunSignUp + general scraping)](#race-results-runsignup--general-scraping) · [Treadmills (BLE FTMS)](#treadmills-ble-ftms) · [The `health` Flutter package](#the-health-flutter-package) · [Deduplication strategy](#deduplication-strategy)
 
-> The Treadmills (BLE FTMS) section heading keeps its `— deferred` suffix only to preserve the anchor; the integration itself has **shipped on mobile** (read its first paragraph). Only the live run-screen mode toggle remains deferred.
+> The Treadmills (BLE FTMS) integration has **shipped on mobile**, including the live run-screen treadmill-mode toggle. The watch (Wear OS / watchOS) BLE plumbing is the remaining follow-up.
 
 ## Overview
 
@@ -422,9 +422,9 @@ Common timing platforms and their URL patterns:
 
 ---
 
-## Treadmills (BLE FTMS) — deferred
+## Treadmills (BLE FTMS)
 
-**Status:** **shipped on mobile** (Android + the byte-identical iOS twin; iOS unverified on Mac runtime per [decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). The only piece still deferred is the **live run-screen treadmill-mode toggle** — UI wiring against the already-shipped recorder seam, no recorder change needed (parity backlog C3). Web is N/A: it's the canonical *feature* surface, not a recording surface ([decisions.md § 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)). Matches the `parity.md` Treadmill row and roadmap item 13.
+**Status:** **shipped on mobile** (Android + the byte-identical iOS twin; iOS unverified on Mac runtime per [decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)), now including the **live run-screen treadmill-mode toggle** (`run_screen.dart` `_toggleTreadmillMode`, gated on a paired belt, L4 opt-in; the belt is the app-owned `BleTreadmill` singleton paired in Settings and read by the run screen, mirroring the HR strap — see [treadmill_live_mode.md](treadmill_live_mode.md)). Web is N/A: it's the canonical *feature* surface, not a recording surface ([decisions.md § 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)). Matches the `parity.md` Treadmill row and roadmap item 13.
 
 ### What it gives you
 
@@ -438,12 +438,13 @@ The mobile implementation mirrors the existing BLE chest-strap pattern in `apps/
 
 1. **BLE backend:** `flutter_reactive_ble` — the same backend the HR reader uses (**not** `flutter_blue_plus`).
 2. **Reader module:** `apps/mobile_android/lib/ble_treadmill.dart` exposes a `Stream<TreadmillSample>` (`BleTreadmill`). The pure `parseTreadmillData(raw)` function decodes the FTMS `0x2ACD` payload per its leading flags bitfield, and `statusStream` surfaces a `BleTreadmillStatus` (`disconnected` / `connecting` / `connected` / `reconnecting` / `connectFailed`) with backoff auto-reconnect after a working connection drops — mirroring the HR reader's reconnect contract. ~20 unit tests in `apps/mobile_android/test/ble_treadmill_test.dart`.
-3. **Settings tile:** `TreadmillTile` in `apps/mobile_android/lib/screens/settings_integrations_screen.dart` (Settings → Integrations) runs an FTMS-filtered scan, lets the user pick a device, and pairs it. The paired belt's id + name persist to the reader's **own `SharedPreferences` keys** (`treadmill_device_id` / `treadmill_device_name`), **not** `user_device_settings.prefs` — pairing is an on-device capability that doesn't roam (same reasoning as the Health Connect write-back flag), so subsequent sessions auto-reconnect silently.
+3. **Settings tile:** `TreadmillTile` in `apps/mobile_android/lib/screens/settings_integrations_screen.dart` (Settings → Integrations) runs an FTMS-filtered scan, lets the user pick a device, and pairs it. It takes the app-owned `BleTreadmill` **singleton** (constructed in `main.dart`, `connectCached` kicked at startup, threaded through `HomeScreen` → `YouScreen` → `SettingsScreen` → integrations, mirroring the HR strap) so the belt paired here is the same instance the run screen reads — no second GATT client. The paired belt's id + name persist to the reader's **own `SharedPreferences` keys** (`treadmill_device_id` / `treadmill_device_name`), **not** `user_device_settings.prefs` — pairing is an on-device capability that doesn't roam (same reasoning as the Health Connect write-back flag), so subsequent sessions auto-reconnect silently.
 4. **Recorder seam:** `packages/run_recorder/lib/src/run_recorder.dart` exposes an additive opt-in seam — `setTreadmillSample(speedMps, {totalDistanceMetres})` flips the recorder into treadmill mode (belt distance overrides the GPS-accumulated headline distance), and `clearTreadmillMode()` reverts to the GPS path. Belt distance only influences a run while treadmill mode is on; the GPS L0/L1 + auto-pause path is untouched, paused belt-advance is excluded, and a dropped BLE link falls back to the L0 clock. On `stop()` the recorder writes `metadata['indoor_source'] = 'treadmill'` (and `metadata['distance_source'] = 'treadmill'`).
 5. **Metadata flag:** `metadata.indoor_source = "treadmill"` sits alongside the existing `indoor_estimated` / `distance_source` keys; no new union. Registered in [docs/backend/metadata.md](../backend/metadata.md).
 6. Map / off-route / privacy-zone surfaces are skipped automatically because the run carries no track points — the same code path indoor pedometer runs already use.
+7. **Run-screen toggle:** `run_screen.dart` `_toggleTreadmillMode` renders a `SwitchListTile` over the recording view, gated on a paired belt (`pairedName()`). Turning it on subscribes the belt `stream` and pumps each sample into `setTreadmillSample`; turning it off cancels and calls `clearTreadmillMode`. It's an **L4 opt-in** — the subscription + recorder calls each carry their own try/catch + `debugPrint`, a fault shows a banner and reverts the toggle, and the L0 clock / L1 distance path is never disturbed. The belt's `statusStream` drives drop/reconnect disclosure banners (mirroring the HR strap), and `connectFailed` offers a one-tap reconnect. The toggle is off by default and never auto-engages, so a belt in range can't hijack an outdoor GPS run. See [treadmill_live_mode.md](treadmill_live_mode.md).
 
-**Still deferred:** the live run-screen mode toggle (the UI that lets the user flip treadmill mode on mid-run against the shipped seam). The watch (Wear OS / watchOS) BLE plumbing is also a follow-up — Wear OS has its own `BluetoothGatt` API and Apple Watch can pair FTMS via `CBCentralManager`; watch pairing is downstream of phone pairing, not a parallel item.
+**Still deferred:** the watch (Wear OS / watchOS) BLE plumbing — Wear OS has its own `BluetoothGatt` API and Apple Watch can pair FTMS via `CBCentralManager`; watch pairing is downstream of phone pairing, not a parallel item.
 
 ### The catch
 
