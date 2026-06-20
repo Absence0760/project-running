@@ -499,11 +499,11 @@ A single markdown table that lists every user-visible feature with a checkmark p
 
 Single automated test that writes a run via one client and reads it via another, asserting round-trip equality on every field.
 
-- [ ] Start local Supabase (`supabase start`) in CI.
-- [ ] Dart integration test: `api_client.saveRun(<fixture>)` against the local instance.
-- [ ] Node script: fetch the same run via the web's `fetchRunById` and `parseInt(run.metadata?.steps)` etc., assert deep equality with the fixture.
-- [ ] Run on every PR. Red if any field round-trips incorrectly.
-- [ ] Extend to `routes`, in-progress runs, auth flows, and sync paths over time.
+- [x] Start local Supabase (`supabase start`) in CI. The `cross-client-roundtrip` job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) boots the stack via the shared `start-supabase` composite action.
+- [x] Dart integration test: `api_client.saveRun(<fixture>)` against the local instance. [`packages/api_client/test/cross_client_roundtrip_test.dart`](../../packages/api_client/test/cross_client_roundtrip_test.dart) — saves a fixture run (distance, duration, source, `activity_type`, `metadata.steps` as an int, `metadata.age_grade` as a float, a 3-point track) and emits the expected-field fixture JSON.
+- [x] Node script: fetch the same run via the web's `fetchRunById` shape and `parseInt(run.metadata?.steps)` etc., assert deep equality with the fixture. [`apps/web/scripts/cross_client_roundtrip_read.mjs`](../../apps/web/scripts/cross_client_roundtrip_read.mjs) — re-reads through the exact `fetchRunById` query shape + the real `parseRunSource` from `src/lib/types`, asserts all fields (incl. `started_at` instant, `metadata.steps` is a JSON number, the float `age_grade`, and the gzipped track decode).
+- [x] Run on every PR. Red if any field round-trips incorrectly. The Node half exits non-zero on any mismatch.
+- [ ] Extend to `routes`, in-progress runs, auth flows, and sync paths over time. **(Stretch — not yet built.)** The runs round-trip + CI wiring shipped first; the route / in-progress-run / auth / sync round-trips follow the same Dart-write → Node-read fixture pattern.
 
 **Expected effect**: the last line of defence — catches drift that slips past type generation (e.g. metadata fields that are untyped `Json` on both sides) and past the human parity matrix check.
 

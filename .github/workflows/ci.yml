@@ -428,6 +428,85 @@ jobs:
           SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
         run: flutter test test/services_integration_test.dart
 
+  cross-client-roundtrip:
+    name: Cross-client run round-trip (Dart write -> web read)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Proves a run SAVED by the Dart api_client reads back field-for-field
+    # through the WEB data layer's read shape (fetchRunById) against the same
+    # local Supabase. This catches TS<->Dart row-type drift at RUNTIME — a
+    # value-serialisation skew (steps written as a string vs read as a number,
+    # a started_at timezone bug, a RunSource enum that doesn't survive the
+    # round-trip) that the static gen:types:check can't see, because both type
+    # files generate cleanly from the same migrations yet can still disagree on
+    # the value a write produces vs a read consumes. The Dart half writes the
+    # run + an expected-field fixture; the Node half re-reads via the web's
+    # exact query shape (importing the real parseRunSource from src/lib/types)
+    # and asserts deep equality.
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          # Node 24 — the web read half decodes the gzipped track with the
+          # native DecompressionStream (landed in Node 18, stable since), and
+          # @supabase/realtime-js needs native WebSocket (22+). Match the rest
+          # of the Node jobs.
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        with:
+          version: 2.84.2
+      # supabase start applies migrations + seed.sql; the seed user
+      # (runner@test.com) is the fixture both halves sign in as. Retry +
+      # port-cleanup rationale lives in the composite action.
+      - name: Start local Supabase stack
+        uses: ./.github/actions/start-supabase
+      - name: Verify the seed loaded
+        working-directory: apps/backend
+        run: |
+          DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
+          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where email = 'runner@test.com'")
+          if [ "$seeded" != "1" ]; then
+            echo "::error::supabase start did not seed runner@test.com — the round-trip cannot sign in"
+            exit 1
+          fi
+      - run: dart pub global activate melos
+      - run: melos bootstrap
+      - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
+      - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
+      - run: flutter precache
+      - name: Read Supabase URL + anon key
+        id: sb
+        working-directory: apps/backend
+        run: |
+          ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
+          API_URL=$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '"')
+          echo "anon_key=$ANON_KEY" >> "$GITHUB_OUTPUT"
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+      # 1) Dart WRITE half: saveRun a fixture run + emit its expected-field
+      #    fixture to a workspace file the read half consumes.
+      - name: Dart write half (api_client saveRun)
+        working-directory: packages/api_client
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          CROSS_CLIENT_FIXTURE_OUT: ${{ github.workspace }}/cross_client_fixture.json
+        run: flutter test test/cross_client_roundtrip_test.dart
+      # 2) Web READ half: re-read the same run through fetchRunById's shape
+      #    (tsx resolves the TS import of parseRunSource from src/lib/types).
+      #    Exits non-zero on any field mismatch, failing the PR red.
+      - name: Web read half (fetchRunById shape + deep-equal assert)
+        working-directory: apps/web
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          CROSS_CLIENT_FIXTURE_IN: ${{ github.workspace }}/cross_client_fixture.json
+        run: npx tsx scripts/cross_client_roundtrip_read.mjs
+
   edge-functions:
     name: Edge Function tests (Deno)
     runs-on: ubuntu-latest
