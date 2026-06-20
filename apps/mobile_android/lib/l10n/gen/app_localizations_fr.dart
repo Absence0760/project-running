@@ -1162,6 +1162,28 @@ class AppLocalizationsFr extends AppLocalizations {
       'Toujours pas de ceinture — l\'enregistrement continue sans FC.';
 
   @override
+  String get runTreadmillModeLabel => 'Mode tapis de course';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'Tapis $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting =>
+      'Tapis de course perdu, reconnexion…';
+
+  @override
+  String get runTreadmillReconnected => 'Tapis de course reconnecté';
+
+  @override
+  String get runTreadmillLostFallback =>
+      'Tapis de course perdu — distance basculée sur le GPS';
+
+  @override
+  String get runTreadmillNotFound => 'Impossible de joindre le tapis de course';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Impossible d\'enregistrer localement. Relancez l\'app pour récupérer.';
 

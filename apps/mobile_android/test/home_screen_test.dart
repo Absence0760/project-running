@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/audio_cues.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/local_gear_store.dart';
@@ -29,6 +30,7 @@ Future<({
   SocialService social,
   TrainingService training,
   BleHeartRate heartRate,
+  BleTreadmill treadmill,
   AudioCues audioCues,
   RaceController raceController,
 })> _makeStores() async {
@@ -55,6 +57,7 @@ Future<({
   final social = SocialService();
   final training = TrainingService();
   final heartRate = BleHeartRate();
+  final treadmill = BleTreadmill();
   final audioCues = AudioCues();
   final raceController = RaceController(social);
 
@@ -68,6 +71,7 @@ Future<({
     social: social,
     training: training,
     heartRate: heartRate,
+    treadmill: treadmill,
     audioCues: audioCues,
     raceController: raceController,
   );
@@ -91,6 +95,7 @@ Future<void> _pump(WidgetTester tester, dynamic s) async {
         raceController: s.raceController,
         training: s.training,
         heartRate: s.heartRate,
+        treadmill: s.treadmill,
       ),
     ),
   );

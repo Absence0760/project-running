@@ -2075,6 +2075,42 @@ abstract class AppLocalizations {
   /// **'Still no strap — recording continues without HR.'**
   String get runHrStrapStillNotFound;
 
+  /// Label for the live run-screen toggle that sources distance from a paired treadmill belt
+  ///
+  /// In en, this message translates to:
+  /// **'Treadmill mode'**
+  String get runTreadmillModeLabel;
+
+  /// Subtitle showing the live treadmill belt speed while treadmill mode is on
+  ///
+  /// In en, this message translates to:
+  /// **'Belt {speed}'**
+  String runTreadmillModeSpeed(String speed);
+
+  /// Banner shown when the treadmill belt drops and is reconnecting
+  ///
+  /// In en, this message translates to:
+  /// **'Treadmill lost, reconnecting…'**
+  String get runTreadmillLostReconnecting;
+
+  /// Banner shown when the treadmill belt reconnects
+  ///
+  /// In en, this message translates to:
+  /// **'Treadmill reconnected'**
+  String get runTreadmillReconnected;
+
+  /// Banner shown when the treadmill belt drops and distance reverts to the GPS/pedometer path
+  ///
+  /// In en, this message translates to:
+  /// **'Treadmill lost — distance falling back to GPS'**
+  String get runTreadmillLostFallback;
+
+  /// Banner shown when treadmill mode is turned on but the belt can't be reached
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the treadmill'**
+  String get runTreadmillNotFound;
+
   /// Finish-summary error shown when the local save of a run failed
   ///
   /// In en, this message translates to:

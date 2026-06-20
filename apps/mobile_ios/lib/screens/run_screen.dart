@@ -21,6 +21,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../audio_cues.dart';
 import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
+import '../ble_treadmill.dart';
 import '../embedded_bests.dart';
 import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -68,6 +69,7 @@ class RunScreen extends StatefulWidget {
   final RaceController? raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
+  final BleTreadmill treadmill;
   final cm.Route? initialRoute;
   /// Source of the user's privacy zones for the live-broadcast path.
   /// Wired by the host (HomeScreen → SettingsSyncService.effective) so
@@ -94,6 +96,7 @@ class RunScreen extends StatefulWidget {
     this.raceController,
     required this.training,
     required this.heartRate,
+    required this.treadmill,
     this.initialRoute,
     this.initialWorkout,
   });
@@ -120,6 +123,18 @@ class _RunScreenState extends State<RunScreen> {
   BleHrStatus _hrStatus = BleHrStatus.disconnected;
   final List<int> _bpmSamples = [];
   int? _currentBpm;
+
+  // Treadmill (FTMS belt) live-mode toggle. Opt-in L4 distance-source
+  // override: when on, belt samples drive the recorder's headline distance
+  // via setTreadmillSample; when off the GPS/pedometer path is authoritative.
+  // The belt link is the same app-owned singleton paired in Settings, so a
+  // belt failure can never disturb the L0 clock / L1 distance path.
+  StreamSubscription<TreadmillSample>? _treadmillSub;
+  StreamSubscription<BleTreadmillStatus>? _treadmillStatusSub;
+  bool _treadmillMode = false;
+  bool _treadmillPaired = false;
+  BleTreadmillStatus _treadmillStatus = BleTreadmillStatus.disconnected;
+  double? _treadmillSpeedKmh;
 
   // Countdown
   int _countdownValue = 3;
@@ -320,6 +335,7 @@ class _RunScreenState extends State<RunScreen> {
     _activityType =
         ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
+    _loadTreadmillPairing();
     _maybePreloadWorkoutRunner();
     _refreshUpcomingEvent();
     _refreshPlanOverview();
@@ -330,6 +346,20 @@ class _RunScreenState extends State<RunScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onPendingStartWorkout();
     });
+  }
+
+  /// Best-effort check for a previously-paired treadmill. The mode toggle
+  /// only renders when a belt is paired — otherwise it would do nothing, so
+  /// the user is pointed at Settings → Integrations instead. L4: a read
+  /// failure leaves the toggle hidden rather than disturbing the screen.
+  Future<void> _loadTreadmillPairing() async {
+    try {
+      final name = await widget.treadmill.pairedName();
+      if (!mounted) return;
+      setState(() => _treadmillPaired = name != null);
+    } catch (e) {
+      debugPrint('treadmill pairedName check failed: $e');
+    }
   }
 
   void _onPendingStartWorkout() {
@@ -1030,6 +1060,52 @@ class _RunScreenState extends State<RunScreen> {
       }
     });
 
+    // Disclose treadmill belt drops / reconnects while recording. The sample
+    // pump is NOT started here — treadmill mode is an explicit opt-in via the
+    // toggle (so a belt that happens to be in range can't hijack an outdoor
+    // GPS run). This only mirrors the belt's connection state into the UI and
+    // surfaces a banner on a mid-run drop; when the belt is lost the recorder
+    // already degrades to the L0 clock + the pedometer-distance fallback.
+    _treadmillStatus = widget.treadmill.status;
+    _treadmillStatusSub = widget.treadmill.statusStream.listen((s) {
+      final prev = _treadmillStatus;
+      _treadmillStatus = s;
+      if (!mounted) return;
+      // Only disclose when the user actually engaged treadmill mode — a
+      // background belt's connection churn shouldn't banner an outdoor run.
+      if (!_treadmillMode) {
+        setState(() {});
+        return;
+      }
+      switch (s) {
+        case BleTreadmillStatus.reconnecting:
+          if (prev == BleTreadmillStatus.connected) {
+            _showTopBanner(_l10n.runTreadmillLostReconnecting);
+          }
+          setState(() => _treadmillSpeedKmh = null);
+        case BleTreadmillStatus.connected:
+          if (prev == BleTreadmillStatus.reconnecting) {
+            _showTopBanner(_l10n.runTreadmillReconnected,
+                duration: const Duration(seconds: 2));
+          }
+        case BleTreadmillStatus.disconnected:
+          if (prev == BleTreadmillStatus.reconnecting) {
+            _showTopBanner(_l10n.runTreadmillLostFallback);
+          }
+          setState(() => _treadmillSpeedKmh = null);
+        case BleTreadmillStatus.connectFailed:
+          setState(() => _treadmillSpeedKmh = null);
+          _showTopBanner(
+            _l10n.runTreadmillNotFound,
+            duration: const Duration(seconds: 6),
+            actionLabel: _l10n.runReconnect,
+            onAction: _reconnectTreadmill,
+          );
+        case BleTreadmillStatus.connecting:
+          break;
+      }
+    });
+
     // Crash-safe incremental persistence — every 10s, write the current
     // track + stats to a separate file so a force-kill mid-run is recoverable.
     _incrementalSaveTimer =
@@ -1080,6 +1156,93 @@ class _RunScreenState extends State<RunScreen> {
       }
     } catch (e) {
       debugPrint('Manual HR reconnect failed: $e');
+    }
+  }
+
+  /// Turn treadmill (FTMS belt) live mode on/off mid-run. An L4 auxiliary
+  /// effect layered on top of the live recording: on a failure it shows a
+  /// banner and reverts the toggle, never tearing down the recorder. The
+  /// recorder's [RunRecorder.setTreadmillSample] self-guards (own try/catch,
+  /// drops bad samples), so this is the second layer of the contract — the
+  /// L0 clock + L1 distance path survive any belt failure. Each effect
+  /// (stream listen, recorder call) gets its own guard + debugPrint; the
+  /// catch here is the toggle-level fallback, not a widened single catch.
+  Future<void> _toggleTreadmillMode(bool on) async {
+    if (on) {
+      try {
+        await _treadmillSub?.cancel();
+        _treadmillSub = widget.treadmill.stream.listen(
+          (sample) {
+            try {
+              _recorder?.setTreadmillSample(
+                sample.speedMps,
+                totalDistanceMetres: sample.totalDistanceMetres,
+              );
+            } catch (e) {
+              debugPrint('treadmill setTreadmillSample failed: $e');
+            }
+            if (mounted) {
+              setState(() => _treadmillSpeedKmh = sample.instantaneousSpeedKmh);
+            }
+          },
+          onError: (Object e) {
+            debugPrint('treadmill sample stream error: $e');
+          },
+        );
+        setState(() {
+          _treadmillMode = true;
+          _treadmillSpeedKmh = null;
+        });
+        // A belt that was off / out of range at launch reports connectFailed
+        // and never auto-retries — offer a one-tap reconnect, mirroring HR.
+        if (_treadmillStatus == BleTreadmillStatus.connectFailed) {
+          _showTopBanner(
+            _l10n.runTreadmillNotFound,
+            duration: const Duration(seconds: 6),
+            actionLabel: _l10n.runReconnect,
+            onAction: _reconnectTreadmill,
+          );
+        }
+      } catch (e) {
+        debugPrint('Enabling treadmill mode failed: $e');
+        await _treadmillSub?.cancel();
+        _treadmillSub = null;
+        if (mounted) {
+          setState(() => _treadmillMode = false);
+          _showTopBanner(_l10n.runTreadmillNotFound);
+        }
+      }
+    } else {
+      await _treadmillSub?.cancel();
+      _treadmillSub = null;
+      try {
+        _recorder?.clearTreadmillMode();
+      } catch (e) {
+        debugPrint('clearTreadmillMode failed: $e');
+      }
+      if (mounted) {
+        setState(() {
+          _treadmillMode = false;
+          _treadmillSpeedKmh = null;
+        });
+      }
+    }
+  }
+
+  /// Manual treadmill reconnect from the belt-not-found banner. Best-effort
+  /// L4 aux effect — a BLE failure can never disturb the live recording.
+  Future<void> _reconnectTreadmill() async {
+    try {
+      final ok = await widget.treadmill.reconnect();
+      if (!mounted) return;
+      if (!ok) {
+        _showTopBanner(
+          _l10n.runTreadmillNotFound,
+          duration: const Duration(seconds: 4),
+        );
+      }
+    } catch (e) {
+      debugPrint('Manual treadmill reconnect failed: $e');
     }
   }
 
@@ -1613,6 +1776,10 @@ class _RunScreenState extends State<RunScreen> {
     _hrSub = null;
     await _hrStatusSub?.cancel();
     _hrStatusSub = null;
+    await _treadmillSub?.cancel();
+    _treadmillSub = null;
+    await _treadmillStatusSub?.cancel();
+    _treadmillStatusSub = null;
 
     // Structured-workout review trail. Three keys are registered in
     // [docs/backend/metadata.md]: plan_workout_id, workout_step_results,
@@ -1836,6 +2003,12 @@ class _RunScreenState extends State<RunScreen> {
   void _discard() {
     _snapshotSub?.cancel();
     _stepSub?.cancel();
+    _treadmillSub?.cancel();
+    _treadmillSub = null;
+    _treadmillStatusSub?.cancel();
+    _treadmillStatusSub = null;
+    _treadmillMode = false;
+    _treadmillSpeedKmh = null;
     _countdownTimer?.cancel();
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
@@ -1905,6 +2078,10 @@ class _RunScreenState extends State<RunScreen> {
     // drop them so a mid-run screen tear-down doesn't leak listeners.
     _hrSub?.cancel();
     _hrStatusSub?.cancel();
+    // The belt reader is app-owned (the singleton outlives the screen); only
+    // our subscriptions are local — drop them, never disconnect the belt.
+    _treadmillSub?.cancel();
+    _treadmillStatusSub?.cancel();
     // Active top banner is global (Overlay-backed); dismiss any
     // entry we own so the screen tear-down doesn't leave one stuck.
     hideTopBanner();
@@ -2697,6 +2874,18 @@ class _RunScreenState extends State<RunScreen> {
               ),
             ),
           ),
+        // Treadmill live-mode toggle — only when a belt is paired (otherwise
+        // it would do nothing; the user is pointed at Settings instead). Sits
+        // just above the stats overlay so it's reachable without leaving the
+        // recording screen. An L4 opt-in distance-source override.
+        if (_treadmillPaired)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: _statsOverlayHeight + 12,
+            child: _buildTreadmillToggle(context, l10n),
+          ),
+
         // Top banner is rendered via the Overlay-based `showTopBanner`
         // helper (lib/widgets/top_banner.dart) — no inline pill needed
         // in the recording Stack.
@@ -2799,6 +2988,38 @@ class _RunScreenState extends State<RunScreen> {
       });
     }
     return false;
+  }
+
+  /// The treadmill live-mode toggle card shown over the recording view.
+  /// When on, the subtitle shows the live belt speed (unit-aware); while the
+  /// belt is reconnecting it shows an inline hint rather than freezing the
+  /// last speed read-out.
+  Widget _buildTreadmillToggle(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    String? subtitle;
+    if (_treadmillMode) {
+      if (_treadmillStatus == BleTreadmillStatus.reconnecting) {
+        subtitle = l10n.runTreadmillLostReconnecting;
+      } else if (_treadmillSpeedKmh != null) {
+        final kmh = _treadmillSpeedKmh!;
+        final value = _unit == DistanceUnit.mi ? kmh / 1.609344 : kmh;
+        final speed =
+            '${formatFixed(value, 1, activeLocaleTag)} ${UnitFormat.speedLabel(_unit)}';
+        subtitle = l10n.runTreadmillModeSpeed(speed);
+      }
+    }
+    return Card(
+      color: theme.colorScheme.surface.withValues(alpha: 0.94),
+      margin: EdgeInsets.zero,
+      child: SwitchListTile(
+        dense: true,
+        secondary: const Icon(Icons.directions_run_outlined),
+        title: Text(l10n.runTreadmillModeLabel),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        value: _treadmillMode,
+        onChanged: (on) => _toggleTreadmillMode(on),
+      ),
+    );
   }
 
   Widget _buildFinished(BuildContext context) {

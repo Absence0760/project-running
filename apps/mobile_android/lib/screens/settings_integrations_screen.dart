@@ -19,12 +19,14 @@ import '../widgets/top_banner.dart';
 class SettingsIntegrationsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final BleHeartRate heartRate;
+  final BleTreadmill treadmill;
   final Preferences preferences;
 
   const SettingsIntegrationsScreen({
     super.key,
     required this.apiClient,
     required this.heartRate,
+    required this.treadmill,
     required this.preferences,
   });
 
@@ -356,7 +358,7 @@ class _SettingsIntegrationsScreenState
             const Divider(),
             HeartRateMonitorTile(heartRate: widget.heartRate),
             const Divider(),
-            const TreadmillTile(),
+            TreadmillTile(treadmill: widget.treadmill),
             if (Platform.isAndroid) ...[
               const Divider(),
               SwitchListTile(
@@ -588,19 +590,19 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
 }
 
 /// Settings tile to pair / forget a BLE FTMS treadmill. Mirrors
-/// [HeartRateMonitorTile]; owns its own [BleTreadmill] (self-contained, like
-/// the HR reader, persisting to its own SharedPreferences keys) so it doesn't
-/// need an instance threaded through the whole app graph. While connected it
-/// shows the live belt speed so the user can confirm the pairing works.
+/// [HeartRateMonitorTile]; takes the app-owned [BleTreadmill] singleton so the
+/// belt paired here is the same instance the run screen reads for treadmill
+/// mode. While connected it shows the live belt speed so the user can confirm
+/// the pairing works.
 class TreadmillTile extends StatefulWidget {
-  const TreadmillTile({super.key});
+  final BleTreadmill treadmill;
+  const TreadmillTile({super.key, required this.treadmill});
 
   @override
   State<TreadmillTile> createState() => _TreadmillTileState();
 }
 
 class _TreadmillTileState extends State<TreadmillTile> {
-  final BleTreadmill _treadmill = BleTreadmill();
   String? _pairedName;
   bool _loading = true;
   double? _liveSpeedKmh;
@@ -610,7 +612,7 @@ class _TreadmillTileState extends State<TreadmillTile> {
   void initState() {
     super.initState();
     _refresh();
-    _sampleSub = _treadmill.stream.listen(
+    _sampleSub = widget.treadmill.stream.listen(
       (s) {
         if (mounted) setState(() => _liveSpeedKmh = s.instantaneousSpeedKmh);
       },
@@ -621,12 +623,11 @@ class _TreadmillTileState extends State<TreadmillTile> {
   @override
   void dispose() {
     _sampleSub?.cancel();
-    unawaited(_treadmill.dispose());
     super.dispose();
   }
 
   Future<void> _refresh() async {
-    final name = await _treadmill.pairedName();
+    final name = await widget.treadmill.pairedName();
     if (!mounted) return;
     setState(() {
       _pairedName = name;
@@ -638,11 +639,11 @@ class _TreadmillTileState extends State<TreadmillTile> {
     final device = await showModalBottomSheet<BleTreadmillCandidate>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _TreadmillScanSheet(treadmill: _treadmill),
+      builder: (ctx) => _TreadmillScanSheet(treadmill: widget.treadmill),
     );
     if (device != null) {
       try {
-        await _treadmill.pair(device);
+        await widget.treadmill.pair(device);
       } catch (e) {
         if (mounted) {
           showTopBanner(context,
@@ -674,7 +675,7 @@ class _TreadmillTileState extends State<TreadmillTile> {
         ) ??
         false;
     if (!ok) return;
-    await _treadmill.forget();
+    await widget.treadmill.forget();
     if (mounted) setState(() => _liveSpeedKmh = null);
     await _refresh();
   }

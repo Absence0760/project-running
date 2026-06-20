@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/settings_integrations_screen.dart';
 
-Widget _host() => const MaterialApp(
+Widget _host() => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: TreadmillTile()),
+      home: Scaffold(body: TreadmillTile(treadmill: BleTreadmill())),
     );
 
 void main() {

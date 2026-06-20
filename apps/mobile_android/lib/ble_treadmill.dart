@@ -75,6 +75,25 @@ class BleTreadmill {
     if (!_statusController.isClosed) _statusController.add(s);
   }
 
+  /// Push a sample into [stream] without a BLE stack — for widget tests that
+  /// exercise the run-screen sample pump.
+  @visibleForTesting
+  void debugEmitSample(TreadmillSample s) {
+    if (!_controller.isClosed) _controller.add(s);
+  }
+
+  /// Push an error into [stream] without a BLE stack — for widget tests that
+  /// verify the run-screen onError guard (L4) doesn't crash the screen.
+  @visibleForTesting
+  void debugEmitSampleError(Object e) {
+    if (!_controller.isClosed) _controller.addError(e);
+  }
+
+  /// Drive a connection-state transition without a BLE stack — for widget
+  /// tests that verify the drop/reconnect disclosure banners.
+  @visibleForTesting
+  void debugEmitStatus(BleTreadmillStatus s) => _setStatus(s);
+
   /// Scan for FTMS treadmill candidates advertising the Fitness Machine
   /// Service. Emits a de-duplicated list as more devices are discovered.
   /// Stops scanning after [timeout].

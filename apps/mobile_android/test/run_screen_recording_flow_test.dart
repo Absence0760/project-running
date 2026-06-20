@@ -12,6 +12,7 @@ import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interfac
 
 import '../lib/audio_cues.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
@@ -259,6 +260,7 @@ void main() {
     SocialService social,
     TrainingService training,
     BleHeartRate heartRate,
+    BleTreadmill treadmill,
     AudioCues audioCues,
     RaceController raceController,
   })> makeStores() async {
@@ -278,6 +280,7 @@ void main() {
       social: social,
       training: TrainingService(),
       heartRate: BleHeartRate(),
+      treadmill: BleTreadmill(),
       audioCues: AudioCues(),
       raceController: RaceController(social),
     );
@@ -299,6 +302,7 @@ void main() {
           raceController: s.raceController,
           training: s.training,
           heartRate: s.heartRate,
+          treadmill: s.treadmill,
         ),
       ),
     );
@@ -457,6 +461,7 @@ void main() {
             raceController: s.raceController,
             training: s.training,
             heartRate: s.heartRate,
+            treadmill: s.treadmill,
           ),
         ),
       );
@@ -537,6 +542,7 @@ void main() {
             raceController: s.raceController,
             training: s.training,
             heartRate: s.heartRate,
+            treadmill: s.treadmill,
           ),
         ),
       );

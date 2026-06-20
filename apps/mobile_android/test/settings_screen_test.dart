@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -41,6 +42,7 @@ Future<void> _pump(
       home: SettingsScreen(
         preferences: prefs,
         heartRate: heartRate,
+        treadmill: BleTreadmill(),
         runStore: runStore,
       ),
     ),

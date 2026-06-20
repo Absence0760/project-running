@@ -1158,6 +1158,28 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ainda sem cinta — a gravação continua sem FC.';
 
   @override
+  String get runTreadmillModeLabel => 'Modo passadeira';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'Passadeira $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting =>
+      'Passadeira perdida, a reconectar…';
+
+  @override
+  String get runTreadmillReconnected => 'Passadeira reconectada';
+
+  @override
+  String get runTreadmillLostFallback =>
+      'Passadeira perdida — distância a voltar para o GPS';
+
+  @override
+  String get runTreadmillNotFound => 'Não foi possível conectar à passadeira';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Não foi possível salvar localmente. Reinicie o app para recuperar.';
 
@@ -10623,6 +10645,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runHrStrapStillNotFound =>
       'Ainda sem cinta — a gravação continua sem FC.';
+
+  @override
+  String get runTreadmillModeLabel => 'Modo esteira';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'Esteira $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting => 'Esteira perdida, reconectando…';
+
+  @override
+  String get runTreadmillReconnected => 'Esteira reconectada';
+
+  @override
+  String get runTreadmillLostFallback =>
+      'Esteira perdida — distância voltando para o GPS';
+
+  @override
+  String get runTreadmillNotFound => 'Não foi possível conectar à esteira';
 
   @override
   String get runSaveFailedRelaunch =>

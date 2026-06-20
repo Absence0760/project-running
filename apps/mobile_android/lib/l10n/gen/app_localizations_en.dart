@@ -1149,6 +1149,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Still no strap — recording continues without HR.';
 
   @override
+  String get runTreadmillModeLabel => 'Treadmill mode';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'Belt $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting => 'Treadmill lost, reconnecting…';
+
+  @override
+  String get runTreadmillReconnected => 'Treadmill reconnected';
+
+  @override
+  String get runTreadmillLostFallback =>
+      'Treadmill lost — distance falling back to GPS';
+
+  @override
+  String get runTreadmillNotFound => 'Couldn\'t reach the treadmill';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Couldn\'t save locally. Relaunch the app to recover.';
 

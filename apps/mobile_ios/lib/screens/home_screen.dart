@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart' as cm;
 
 import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
+import '../ble_treadmill.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
 import '../local_gear_store.dart';
@@ -40,6 +41,7 @@ class HomeScreen extends StatefulWidget {
   final RaceController raceController;
   final TrainingService training;
   final BleHeartRate heartRate;
+  final BleTreadmill treadmill;
   final SettingsSyncService? settingsSync;
   final cm.Run? recoveredRun;
 
@@ -64,6 +66,7 @@ class HomeScreen extends StatefulWidget {
     required this.raceController,
     required this.training,
     required this.heartRate,
+    required this.treadmill,
     this.settingsSync,
     this.recoveredRun,
     this.recoveryBannerMessage,
@@ -207,6 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
           raceController: widget.raceController,
           training: widget.training,
           heartRate: widget.heartRate,
+          treadmill: widget.treadmill,
           initialRoute: _preselectedRoute,
         ),
       ),
@@ -244,6 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
           routeStore: widget.routeStore,
           gearStore: widget.gearStore,
           heartRate: widget.heartRate,
+          treadmill: widget.treadmill,
           settingsSync: widget.settingsSync,
         ),
       ),

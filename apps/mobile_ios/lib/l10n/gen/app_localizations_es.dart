@@ -1158,6 +1158,29 @@ class AppLocalizationsEs extends AppLocalizations {
       'Sigue sin haber banda — la grabación continúa sin FC.';
 
   @override
+  String get runTreadmillModeLabel => 'Modo cinta de correr';
+
+  @override
+  String runTreadmillModeSpeed(String speed) {
+    return 'Cinta $speed';
+  }
+
+  @override
+  String get runTreadmillLostReconnecting =>
+      'Cinta de correr perdida, reconectando…';
+
+  @override
+  String get runTreadmillReconnected => 'Cinta de correr reconectada';
+
+  @override
+  String get runTreadmillLostFallback =>
+      'Cinta de correr perdida — la distancia vuelve al GPS';
+
+  @override
+  String get runTreadmillNotFound =>
+      'No se pudo conectar con la cinta de correr';
+
+  @override
   String get runSaveFailedRelaunch =>
       'No se pudo guardar localmente. Reinicia la app para recuperar.';
 
