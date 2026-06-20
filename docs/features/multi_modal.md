@@ -499,8 +499,17 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   Open Food Facts, caches recent/frequent picks per user, and falls back
   to manual entry only when nothing matches.
 - **Barcode scan** (mobile-only, camera — the one place mobile leads) is
-  the fast path on top of the same Open Food Facts lookup; it's a v1.1
-  add, not a blocker, but the data layer is shared with search.
+  the fast path on top of the same Open Food Facts lookup; the data layer
+  is shared with search. **Shipped (2026-06-20, mobile):** a Scan-barcode
+  action in `nutrition_log_sheet.dart` scans an EAN/UPC via `mobile_scanner`
+  (BSD-3), normalises it, and looks it up through the OFF product-by-barcode
+  endpoint (`lookupBarcode` / `parseOffProduct` in the `food_search` parity
+  pair), then drops into the existing confirm-portion flow. No-match and
+  scan/lookup failure fall back to search / manual entry; the camera scan is
+  wrapped per the L4 layered-resilience contract so it can't break manual
+  logging, and camera-permission denial surfaces an inline message +
+  Open-settings affordance. Web is **not** a scan surface (no camera-record
+  surface); the helper exists on web only for TS↔Dart lockstep.
 - Manual macro entry remains as the **fallback**, not the primary path.
 - **Dynamic TDEE ("base + exercise").** The daily calorie goal is the
   Mifflin-St Jeor base (activity level treated as your *non-exercise*
@@ -828,7 +837,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` — **shipped (G5)** (run summary already lived on the dashboard) |
 | History | `screens/runs_screen.dart` (the History tab — hosts the kind chips + unified timeline) + `widgets/activity_timeline_list.dart` + the pure `activity_timeline.dart` day-grouper, assembled from the local stores via `lib/local_activities.dart` (offline-first, not `fetchActivities`) — **shipped** |
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
-| Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
+| Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart` (search + the v1.1 camera barcode-scan fast-path via `mobile_scanner`), `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts search + `lookupBarcode`/`parseOffProduct` product-by-barcode lookup, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Consumers wired on both platforms**: web `web/src/lib/gym/lift_load.ts` and mobile `mobile_android/lib/lift_load.dart` (`liftsFromSetHistory`, pure + tested parity pair) feed each dashboard's load curve; `TrainingLoadChart` (web + mobile) shows the "gym sessions included" hint when `liftStress > 0` |
 | Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart` + the recent-lifts trend card (`widgets/recent_lifts_card.dart`); the **unified mobile History timeline is now shipped** (`runs_screen.dart` + `widgets/activity_timeline_list.dart`, assembled from the LOCAL stores via `lib/local_activities.dart` — offline-first, all modalities, not `fetchActivities`) |
