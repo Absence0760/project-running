@@ -3086,6 +3086,46 @@ class AppLocalizationsPt extends AppLocalizations {
   String get heatmapLensHiddenGems => 'Joias escondidas';
 
   @override
+  String get runHeatmapTitle => 'Seu mapa de calor';
+
+  @override
+  String get runHeatmapTooltip => 'Mapa de calor de corridas';
+
+  @override
+  String get runHeatmapLoading => 'Carregando suas corridas…';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'Carregando suas corridas… $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'Nenhuma corrida mapeada ainda';
+
+  @override
+  String get runHeatmapEmptyBody =>
+      'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapLegendTitle => 'Seu mapa de calor';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return '$n corrida mapeada — mais brilhante onde você corre mais.';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return '$n corridas mapeadas — mais brilhante onde você corre mais.';
+  }
+
+  @override
+  String get runHeatmapScaleLess => 'menos';
+
+  @override
+  String get runHeatmapScaleMore => 'mais';
+
+  @override
   String get publicRouteFallbackTitle => 'Rota';
 
   @override
@@ -12876,6 +12916,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get heatmapLensHiddenGems => 'Joias escondidas';
+
+  @override
+  String get runHeatmapTitle => 'Seu mapa de calor';
+
+  @override
+  String get runHeatmapTooltip => 'Mapa de calor de corridas';
+
+  @override
+  String get runHeatmapLoading => 'Carregando suas corridas…';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'Carregando suas corridas… $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'Nenhuma corrida mapeada ainda';
+
+  @override
+  String get runHeatmapEmptyBody =>
+      'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapLegendTitle => 'Seu mapa de calor';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return '$n corrida mapeada — mais brilhante onde você corre mais.';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return '$n corridas mapeadas — mais brilhante onde você corre mais.';
+  }
+
+  @override
+  String get runHeatmapScaleLess => 'menos';
+
+  @override
+  String get runHeatmapScaleMore => 'mais';
 
   @override
   String get publicRouteFallbackTitle => 'Rota';

@@ -3062,6 +3062,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get heatmapLensHiddenGems => 'Hidden gems';
 
   @override
+  String get runHeatmapTitle => 'Your heatmap';
+
+  @override
+  String get runHeatmapTooltip => 'Run heatmap';
+
+  @override
+  String get runHeatmapLoading => 'Loading your runs…';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'Loading your runs… $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'No mapped runs yet';
+
+  @override
+  String get runHeatmapEmptyBody =>
+      'Record or import runs with GPS tracks and they\'ll light up here.';
+
+  @override
+  String get runHeatmapLegendTitle => 'Your heatmap';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return '$n mapped run — brighter where you run most.';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return '$n mapped runs — brighter where you run most.';
+  }
+
+  @override
+  String get runHeatmapScaleLess => 'less';
+
+  @override
+  String get runHeatmapScaleMore => 'more';
+
+  @override
   String get publicRouteFallbackTitle => 'Route';
 
   @override

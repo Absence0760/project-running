@@ -3095,6 +3095,46 @@ class AppLocalizationsFr extends AppLocalizations {
   String get heatmapLensHiddenGems => 'Trésors cachés';
 
   @override
+  String get runHeatmapTitle => 'Votre carte de chaleur';
+
+  @override
+  String get runHeatmapTooltip => 'Carte de chaleur des courses';
+
+  @override
+  String get runHeatmapLoading => 'Chargement de vos courses…';
+
+  @override
+  String runHeatmapLoadingProgress(int n, int total) {
+    return 'Chargement de vos courses… $n/$total';
+  }
+
+  @override
+  String get runHeatmapEmptyTitle => 'Aucune course cartographiée';
+
+  @override
+  String get runHeatmapEmptyBody =>
+      'Enregistrez ou importez des courses avec des traces GPS et elles s\'illumineront ici.';
+
+  @override
+  String get runHeatmapLegendTitle => 'Votre carte de chaleur';
+
+  @override
+  String runHeatmapLegendSummaryOne(int n) {
+    return '$n course cartographiée — plus lumineux là où vous courez le plus.';
+  }
+
+  @override
+  String runHeatmapLegendSummaryMany(int n) {
+    return '$n courses cartographiées — plus lumineux là où vous courez le plus.';
+  }
+
+  @override
+  String get runHeatmapScaleLess => 'moins';
+
+  @override
+  String get runHeatmapScaleMore => 'plus';
+
+  @override
   String get publicRouteFallbackTitle => 'Itinéraire';
 
   @override

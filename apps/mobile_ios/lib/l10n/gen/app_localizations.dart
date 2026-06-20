@@ -5192,6 +5192,72 @@ abstract class AppLocalizations {
   /// **'Hidden gems'**
   String get heatmapLensHiddenGems;
 
+  /// AppBar title for the personal run-track heatmap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Your heatmap'**
+  String get runHeatmapTitle;
+
+  /// Tooltip on the run-list action that opens the personal run-track heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Run heatmap'**
+  String get runHeatmapTooltip;
+
+  /// Status pill shown while the personal heatmap downloads tracks
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your runs…'**
+  String get runHeatmapLoading;
+
+  /// Status pill with track download progress on the personal heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your runs… {n}/{total}'**
+  String runHeatmapLoadingProgress(int n, int total);
+
+  /// Empty-state title on the personal run-track heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'No mapped runs yet'**
+  String get runHeatmapEmptyTitle;
+
+  /// Empty-state body on the personal run-track heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Record or import runs with GPS tracks and they\'ll light up here.'**
+  String get runHeatmapEmptyBody;
+
+  /// Legend title on the personal run-track heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Your heatmap'**
+  String get runHeatmapLegendTitle;
+
+  /// Legend summary on the personal heatmap for a single mapped run
+  ///
+  /// In en, this message translates to:
+  /// **'{n} mapped run — brighter where you run most.'**
+  String runHeatmapLegendSummaryOne(int n);
+
+  /// Legend summary on the personal heatmap for multiple mapped runs
+  ///
+  /// In en, this message translates to:
+  /// **'{n} mapped runs — brighter where you run most.'**
+  String runHeatmapLegendSummaryMany(int n);
+
+  /// Low end of the colour-scale legend on the personal heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'less'**
+  String get runHeatmapScaleLess;
+
+  /// High end of the colour-scale legend on the personal heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'more'**
+  String get runHeatmapScaleMore;
+
   /// AppBar title for the public route view before the route name loads
   ///
   /// In en, this message translates to:

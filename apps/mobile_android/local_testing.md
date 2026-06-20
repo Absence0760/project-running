@@ -356,6 +356,7 @@ See [run_recording.md](../../docs/features/run_recording.md) for the architectur
 - **Unified timeline (multi-modal)** — once you've logged a lift (Log → Log lift) or a meal (Log → Log food), the History tab grows `All / Runs / Lifts / Meals` chips at the top and a day-grouped cross-modality timeline. **All / Lifts / Meals** show the timeline (run rows → run detail, lift rows → gym detail, meals read-only); the **Runs** chip restores the full run list with all its filters / sort / bulk-delete. A pure runner (no lifts or meals) never sees the chips. Pull-to-refresh updates both the runs and the activities feed.
 - **Sync button** — bulk-upload all unsynced runs (when signed in)
 - **Offline indicator** — runs saved offline show a cloud-off icon
+- **Personal run heatmap** — the flame action in the run-list AppBar opens a Strava-style "everywhere you've run" map built from your OWN GPS tracks (mirror of web `/runs/heatmap`, distinct from the public route-discovery heatmap). Heat-cloud dots zoomed out, your actual track lines fade in as you zoom past street level; empty state when no run carries a GPS track.
 
 The run detail screen adapts to runs without a track: the map shows the linked route's planned path if one is attached (or is hidden entirely if not), the "Moving" stat column is dropped (it would equal Time), and the Splits section is hidden.
 
