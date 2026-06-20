@@ -148,8 +148,9 @@ lambda/
                     # og_recap_png (buildRecapOgSvg, 1200x630). Opt-in + revocable; 200
                     # branded fallback on a missing/revoked recap. The SvelteKit
                     # /recap/share/[id] + /og/recap/[id].png routes (prerender=false) own
-                    # the path in dev. infra/ CloudFront+OIDC+release wiring is a
-                    # deploy-time follow-up (mirror share-run). See lambda/share-recap/README.md.
+                    # the path in dev. infra/ CloudFront+OIDC+release wiring landed
+                    # (mirrors share-run/share-route); only terraform apply + first deploy
+                    # remain. See lambda/share-recap/README.md.
 ```
 
 ## Development
