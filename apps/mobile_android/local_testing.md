@@ -277,7 +277,8 @@ The Android app supports the following. For a side-by-side view against Strava, 
 
 ### First launch
 
-- **Onboarding flow** — 3-page welcome tour with location permission request
+- **Onboarding flow** — 3-page welcome tour with location permission request (local `Preferences.onboarded` flag, runs before sign-in)
+- **Post-signup setup wizard** — a 7-step account-setup wizard (display name → units → goal → demographics + GDPR Art 9 consent → privacy default → notifications → done), the mobile twin of web's `/onboarding`. Gated on `user_profiles.onboarded_at`: `home_screen.dart` fetches the profile after the first frame and pushes `setup_wizard_screen.dart` exactly once when the column is null, then `Finish` (or the header `Skip setup`) stamps it via `ApiClient.completeOnboarding` / `markOnboarded` so it never re-fires. **To test:** sign in as a *fresh* account (the seed runner already has `onboarded_at` backfilled, so it won't show — null the column in Studio at `localhost:54323` → `user_profiles` to re-trigger). The Art 9 consent checkbox only appears once a gender or DOB is chosen; gender + the consent stamp are written only under consent, but DOB is always written (it backs the under-18 people-search exclusion). The notifications step sets the `push_notifications` bag pref (`important`/`all`/`off`) — there's no native OS prompt here, unlike web's push step.
 - **Offline ready** — no sign-in required to record and store runs locally
 
 ### Dashboard
