@@ -406,3 +406,21 @@ class PendingSafetyRequest {
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 }
+
+/// A public achievement-badge award from someone the viewer follows, paired
+/// with the awardee's profile — the feed badge-strip entry. Mobile mirror of
+/// the web `BadgeAwardFeedEntry` interface (`apps/web/src/lib/core/data.ts`).
+/// Public rows only (RLS), newest first, cursor-paged over `(earned_at, id)`.
+class BadgeAwardEntry {
+  final AchievementRow badge;
+  final String authorId;
+  final String? authorName;
+  final String? authorAvatarUrl;
+
+  const BadgeAwardEntry({
+    required this.badge,
+    required this.authorId,
+    this.authorName,
+    this.authorAvatarUrl,
+  });
+}

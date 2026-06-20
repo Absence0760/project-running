@@ -9,6 +9,7 @@ import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../widgets/badge_grid.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/run_track_preview.dart';
@@ -54,6 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<RunRow> _runs = const [];
   List<UserProfileRow> _followers = const [];
   List<UserProfileRow> _following = const [];
+  List<AchievementRow> _badges = const [];
   List<NotificationView> _notifications = const [];
   bool _followBusy = false;
   bool _blocked = false;
@@ -70,7 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _loadingMoreFollowing = false;
 
   bool get _isSelf => widget.api.userId == widget.userId;
-  int get _tabCount => _isSelf ? 4 : 3;
+  int get _tabCount => _isSelf ? 5 : 4;
 
   @override
   void initState() {
@@ -104,6 +106,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize);
       final followingF =
           widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize);
+      final badgesF = widget.api.fetchUserBadges(widget.userId);
       final notifF = _isSelf
           ? widget.api.fetchNotificationViews(limit: 100)
           : Future.value(const <NotificationView>[]);
@@ -116,6 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         runsF,
         followersF,
         followingF,
+        badgesF,
         notifF,
         blockedF,
       ]);
@@ -125,8 +129,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         _runs = results[1] as List<RunRow>;
         _followers = results[2] as List<UserProfileRow>;
         _following = results[3] as List<UserProfileRow>;
-        _notifications = results[4] as List<NotificationView>;
-        _blocked = results[5] as bool;
+        _badges = results[4] as List<AchievementRow>;
+        _notifications = results[5] as List<NotificationView>;
+        _blocked = results[6] as bool;
         _followersHasMore = _followers.length == _kFollowsPageSize;
         _followingHasMore = _following.length == _kFollowsPageSize;
         _loading = false;
@@ -409,6 +414,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final l10n = AppLocalizations.of(context);
     final tabs = <Tab>[
       Tab(text: l10n.profileTabRuns),
+      Tab(text: l10n.badgesSectionTitle),
       Tab(text: l10n.profileTabFollowers),
       Tab(text: l10n.profileTabFollowing),
       if (_isSelf) Tab(text: l10n.profileTabNotifications),
@@ -460,6 +466,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             controller: _tabs,
                             children: [
                               _buildRunsTab(theme),
+                              BadgeGrid(badges: _badges, isOwner: _isSelf),
                               _buildPeopleTab(
                                 _followers,
                                 l10n.profileFollowersEmpty,

@@ -9399,310 +9399,148 @@ class AppLocalizationsEn extends AppLocalizations {
   String get challengesLoadFailed => 'Couldn\'t load challenges.';
 
   @override
-  String fundraiserRaisedOfGoal(String raised, String goal) {
-    return '$raised of $goal raised';
+  String get badgesSectionTitle => 'Achievements';
+
+  @override
+  String get badgesSectionSubtitle => 'Milestones you\'ve earned';
+
+  @override
+  String get badgesEmpty => 'No badges yet — keep running.';
+
+  @override
+  String get badgesEmptyOther => 'No public badges yet.';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return 'Earned $date';
   }
 
   @override
-  String fundraiserDonorCount(int count) {
-    return '$count supporters';
+  String badgesFeedEarned(String name, String badge) {
+    return '$name earned the $badge badge';
   }
 
   @override
-  String get fundraiserOverGoal => 'Over goal!';
+  String get badgesARunner => 'A runner';
 
   @override
-  String get fundraiserClosed => 'This fundraiser is closed.';
+  String get badgesTierBronze => 'Bronze';
 
   @override
-  String get fundraiserFeedTitle => 'Recent supporters';
+  String get badgesTierSilver => 'Silver';
 
   @override
-  String get fundraiserFeedEmpty => 'Be the first to donate.';
+  String get badgesTierGold => 'Gold';
 
   @override
-  String get fundraiserAnonymous => 'Anonymous';
+  String get badgesTierPlatinum => 'Platinum';
 
   @override
-  String get fundraiserDonateOnWeb => 'Donate on web';
+  String get badgesDistanceSingle5kLabel => 'First 5K';
 
   @override
-  String get racesTitle => 'Race calendar';
+  String get badgesDistanceSingle5kDesc => 'Ran 5 km in a single run';
 
   @override
-  String get racesSearchPlaceholder => 'Search races by name…';
+  String get badgesDistanceSingleHalfLabel => 'Half marathon';
 
   @override
-  String get racesNearPlace => 'Near a place…';
+  String get badgesDistanceSingleHalfDesc => 'Ran 21.1 km in a single run';
 
   @override
-  String racesKmAway(String distance) {
-    return '$distance away';
-  }
+  String get badgesDistanceSingleMarathonLabel => 'Marathon';
 
   @override
-  String get racesDistanceAny => 'Any distance';
+  String get badgesDistanceSingleMarathonDesc => 'Ran 42.2 km in a single run';
 
   @override
-  String get racesDistance5k => '5K';
+  String get badgesDistanceSingleUltraLabel => 'Ultra';
 
   @override
-  String get racesDistance10k => '10K';
+  String get badgesDistanceSingleUltraDesc =>
+      'Ran 50 km or more in a single run';
 
   @override
-  String get racesDistanceHalf => 'Half';
+  String get badgesDistanceLifetime100Label => '100 km club';
 
   @override
-  String get racesDistanceMarathon => 'Marathon';
+  String get badgesDistanceLifetime100Desc => '100 km logged all-time';
 
   @override
-  String get racesDistanceUltra => 'Ultra';
+  String get badgesDistanceLifetime500Label => '500 km';
 
   @override
-  String get racesRegister => 'Register';
+  String get badgesDistanceLifetime500Desc => '500 km logged all-time';
 
   @override
-  String get racesViewResults => 'View results';
+  String get badgesDistanceLifetime1000Label => '1,000 km club';
 
   @override
-  String get racesImportResult => 'Import my result';
+  String get badgesDistanceLifetime1000Desc => '1,000 km logged all-time';
 
   @override
-  String get racesSubmitRace => 'Add a race';
+  String get badgesDistanceLifetime5000Label => '5,000 km';
 
   @override
-  String get racesUnverified => 'Unverified';
+  String get badgesDistanceLifetime5000Desc => '5,000 km logged all-time';
 
   @override
-  String get racesEmpty => 'No races match these filters yet.';
+  String get badgesStreak7Label => 'Week streak';
 
   @override
-  String get racesSearchFailed =>
-      'Couldn\'t load races. Check your connection and try again.';
+  String get badgesStreak7Desc => 'Ran 7 days in a row';
 
   @override
-  String racesMatchPrompt(String name) {
-    return 'Was this the $name? Import your official result.';
-  }
+  String get badgesStreak30Label => 'Month streak';
 
   @override
-  String get racesMatchConfirm => 'Import result';
+  String get badgesStreak30Desc => 'Ran 30 days in a row';
 
   @override
-  String get racesMatchDismiss => 'Not this race';
+  String get badgesStreak100Label => 'Century streak';
 
   @override
-  String get racesImported => 'Official result imported.';
+  String get badgesStreak100Desc => 'Ran 100 days in a row';
 
   @override
-  String get racesOfficialResult => 'Official result';
+  String get badgesStreak365Label => 'Year streak';
 
   @override
-  String get racesChipTime => 'Chip time';
+  String get badgesStreak365Desc => 'Ran 365 days in a row';
 
   @override
-  String get racesGunTime => 'Gun time';
+  String get badgesPr1Label => 'First PR';
 
   @override
-  String get racesOverallPlace => 'Overall place';
+  String get badgesPr1Desc => 'Set your first personal record';
 
   @override
-  String get racesAgeGroupPlace => 'Age-group place';
+  String get badgesPr3Label => 'Triple PR';
 
   @override
-  String get racesAgeGroup => 'Age group';
+  String get badgesPr3Desc => 'Hold personal records at 3 distances';
 
   @override
-  String get racesBib => 'Bib';
+  String get badgesPr5Label => 'PR collector';
 
   @override
-  String get racesPasteResultHint =>
-      'Enter your finishing details from the race\'s results page.';
+  String get badgesPr5Desc => 'Hold personal records at every distance';
 
   @override
-  String get racesSave => 'Save';
+  String get badgesPlan1Label => 'Plan finisher';
 
   @override
-  String get racesCancel => 'Cancel';
+  String get badgesPlan1Desc => 'Completed a training plan';
 
   @override
-  String get racesEditorTitle => 'Add a race';
+  String get badgesPlan3Label => 'Triple finisher';
 
   @override
-  String get racesFieldName => 'Race name';
+  String get badgesPlan3Desc => 'Completed 3 training plans';
 
   @override
-  String get racesFieldDate => 'Date';
+  String get badgesPlan10Label => 'Plan veteran';
 
   @override
-  String get racesFieldDistance => 'Distance (metres)';
-
-  @override
-  String get racesFieldLocation => 'Location';
-
-  @override
-  String get racesFieldEntryUrl => 'Registration link';
-
-  @override
-  String get racesFieldResultsUrl => 'Results link';
-
-  @override
-  String get racesSubmitFailed => 'Couldn\'t save the race. Please try again.';
-
-  @override
-  String get racesImportFailed =>
-      'Couldn\'t import the result. Please try again.';
-
-  @override
-  String get navRaces => 'Races';
-
-  @override
-  String get integrationsRunsignup => 'RunSignUp';
-
-  @override
-  String get integrationsRunsignupConnect =>
-      'Import race results from RunSignUp.';
-
-  @override
-  String get integrationsRunsignupOpen => 'Open the race calendar';
-
-  @override
-  String get integrationsRunsignupUnavailable =>
-      'RunSignUp import isn\'t available yet. parkrun and manual paste still work.';
-
-  @override
-  String get routeConditionsTitle => 'Conditions';
-
-  @override
-  String get routeConditionsReport => 'Report condition';
-
-  @override
-  String get routeConditionsReporting => 'Reporting…';
-
-  @override
-  String get routeConditionsReported => 'Condition reported';
-
-  @override
-  String get routeConditionsReportFailed => 'Could not report condition';
-
-  @override
-  String get routeConditionsEmpty => 'No condition reports yet.';
-
-  @override
-  String get routeConditionsLoading => 'Loading…';
-
-  @override
-  String get routeConditionsCancel => 'Cancel';
-
-  @override
-  String get routeConditionsDelete => 'Delete';
-
-  @override
-  String get routeConditionsDeleteTitle => 'Delete report?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'This removes the condition report permanently.';
-
-  @override
-  String get routeConditionsDeleteFailed => 'Could not delete report';
-
-  @override
-  String get routeConditionsKindLabel => 'Condition';
-
-  @override
-  String get routeConditionsSeverityLabel => 'Severity';
-
-  @override
-  String get routeConditionsNoteLabel => 'Note';
-
-  @override
-  String get routeConditionsNotePlaceholder => 'What will the next runner hit?';
-
-  @override
-  String routeConditionsAtDistance(String distance) {
-    return 'at $distance';
-  }
-
-  @override
-  String get routeConditionMuddy => 'Muddy';
-
-  @override
-  String get routeConditionFlooded => 'Flooded';
-
-  @override
-  String get routeConditionSnowIce => 'Snow / ice';
-
-  @override
-  String get routeConditionOvergrown => 'Overgrown';
-
-  @override
-  String get routeConditionClosed => 'Closed';
-
-  @override
-  String get routeConditionHazard => 'Hazard';
-
-  @override
-  String get routeConditionClear => 'Clear';
-
-  @override
-  String get routeConditionOther => 'Other';
-
-  @override
-  String get routeConditionSeverityInfo => 'Info';
-
-  @override
-  String get routeConditionSeverityCaution => 'Caution';
-
-  @override
-  String get routeConditionSeverityImpassable => 'Impassable';
-
-  @override
-  String get prefTurnByTurnCues => 'Turn-by-turn voice cues';
-
-  @override
-  String get prefTurnByTurnCuesSubtitle =>
-      'Spoken turn directions while following a saved route';
-
-  @override
-  String ttsTurnLeftIn(String distance) {
-    return 'In $distance, turn left';
-  }
-
-  @override
-  String ttsTurnRightIn(String distance) {
-    return 'In $distance, turn right';
-  }
-
-  @override
-  String get ttsTurnLeftNow => 'Turn left';
-
-  @override
-  String get ttsTurnRightNow => 'Turn right';
-
-  @override
-  String get ttsSlightLeft => 'Bear left';
-
-  @override
-  String get ttsSlightRight => 'Bear right';
-
-  @override
-  String get ttsUturn => 'Make a U-turn';
-
-  @override
-  String routeOfflinePackDownloading(int done, int total) {
-    return 'Caching map: $done / $total';
-  }
-
-  @override
-  String get routeOfflinePackReady => 'Map saved for offline';
-
-  @override
-  String routeOfflinePackPartial(int done, int total) {
-    return 'Map partly saved ($done / $total) — retry';
-  }
-
-  @override
-  String get routeOfflinePackTooLarge =>
-      'This route is too large to cache offline';
+  String get badgesPlan10Desc => 'Completed 10 training plans';
 }

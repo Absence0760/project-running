@@ -1,6 +1,6 @@
 # Achievements / badges
 
-> **Status:** **Web shipped 2026-06-19** (migration `20270208_001_achievements.sql`; the spec's `20270203_001` placeholder collided with landed migrations, so the next free sequential date was used). Mobile twin deferred to follow-up. The rest of this file is the original implementation-handoff plan; the **Shipped state** section below records what actually landed and where it diverged. Tracked in [roadmap.md](../product/roadmap.md).
+> **Status:** **Web shipped 2026-06-19** (migration `20270208_001_achievements.sql`; the spec's `20270203_001` placeholder collided with landed migrations, so the next free sequential date was used). **Mobile read surface shipped 2026-06-20.** The rest of this file is the original implementation-handoff plan; the **Shipped state** section below records what actually landed and where it diverged. Tracked in [roadmap.md](../product/roadmap.md).
 >
 > ## Shipped state (web)
 >
@@ -10,7 +10,19 @@
 > - **Narrow unions:** `AchievementTier` + `AchievementSourceKind` in `types.ts` (+ the `Achievement` overlay), both pairs added to `check_constraint_unions.mjs`; `'achievement'` added to `NotificationKind`.
 > - **Web surfaces:** `BadgeGrid.svelte` mounted as a new **Achievements** tab on `/u/[id]` (owner sees private + a per-badge public toggle + share-link; non-owner sees only public via RLS); a recent-badges strip in `SocialFeed.svelte` (`fetchFollowingBadgeAwards`); the public `/share/badge/[id]` page + `/og/badge/[id].png` endpoint + the `apps/web/lambda/share-badge/` SSR handler (mirrors `share-run`). data.ts: `fetchUserBadges` / `fetchMyBadges` / `setBadgeVisibility` / `fetchBadgeForShare` / `fetchFollowingBadgeAwards`. 4 Playwright assertions in `tests-e2e/social/badges.spec.ts`.
 > - **i18n:** all six web locales (chrome + a label/desc pair per catalogue entry).
-> - **Deferred:** the mobile twin (`badges.dart`, `badge_grid.dart`, profile/feed/notification branches, ARBs), the CloudFront wiring + release-workflow entry for the `share-badge` Lambda (SvelteKit dev endpoints own the path locally; static build serves the SPA-shell fallback in prod until wired), and segment badges.
+>
+> ## Shipped state (mobile read surface, 2026-06-20)
+>
+> The mobile twin mirrors web's **read** surfaces (profile grid + feed strip). Awards are still derived server-side by the trigger; mobile never writes `achievements`. The owner visibility-toggle, per-badge share-link, and the `/share/badge/[id]` page stay **web-only** (no Dart twin) — sharing a badge from mobile is a future follow-up.
+>
+> - **Catalogue twin:** `apps/mobile_android/lib/badges.dart` — `kBadgeCatalogue` + `evaluateBadges` + `tierFor`, byte-identical ids / tier thresholds / tier order / icon ligature names to `badges.ts` (only the label/desc keys differ: web `MessageKey`s ↔ mobile camelCase ARB keys, not part of the lockstep). Registered as the `badges` parity pair; 15 mirror tests in `test/badges_test.dart`.
+> - **Widget:** `apps/mobile_android/lib/widgets/badge_grid.dart` — a tier-coloured tile `GridView` (`BadgeGrid`) + the shared `badgeLabelFor` / `badgeIconData` / `badgeTierColor` / `badgeTierLabel` resolvers (the Material-Symbols ligature → `IconData` map + the dotted-key → `AppLocalizations` switch). 6 tests in `test/badge_grid_test.dart`.
+> - **api_client:** `fetchUserBadges(userId)` / `fetchMyBadges()` / `fetchFollowingBadgeAwards({limit, cursor})` returning the generated `AchievementRow` + the `BadgeAwardEntry` core_models view (`social.dart`). RLS gates the rows exactly as on web (owner all, non-owner public-only).
+> - **Surfaces:** the **Achievements** tab on `ProfileScreen` (after Runs, visible to all viewers — RLS hides another user's private badges) + a recent-badge `ActionChip` strip on `FeedScreen` above the feed list (tapping a chip opens the awardee's profile). The strip loads on its own (L4 auxiliary) so a badge-awards failure can never blank the core feed.
+> - **i18n:** the same key set as web, camelCased into all six mobile ARBs (`en/de/es/fr/ja/pt_BR` + the `pt` fallback), gen-l10n regenerated and mirrored to the iOS twin.
+> - **Twin:** every `lib/`+`test/` change mirrored byte-for-byte into `apps/mobile_ios/` ([decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)).
+>
+> - **Deferred:** the CloudFront wiring + release-workflow entry for the `share-badge` Lambda (SvelteKit dev endpoints own the path locally; static build serves the SPA-shell fallback in prod until wired), the mobile owner visibility-toggle / badge share-sheet, and segment badges.
 
 # Achievements / badges — implementation plan
 

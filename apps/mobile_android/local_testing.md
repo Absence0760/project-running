@@ -358,6 +358,14 @@ See [run_recording.md](../../docs/features/run_recording.md) for the architectur
 
 The run detail screen adapts to runs without a track: the map shows the linked route's planned path if one is attached (or is hidden entirely if not), the "Moving" stat column is dropped (it would equal Time), and the Splits section is hidden.
 
+### Achievements / badges (read surface)
+
+Mirror of web's read surfaces (the catalogue + awards are derived server-side; the app only reads).
+
+- **Profile → Achievements tab** — open your own profile (dashboard avatar / profile action) and the **Achievements** tab (after Runs) shows a tier-coloured badge grid. To seed badges locally, run enough to clear a threshold (e.g. a 5 km run earns the bronze "First 5K") — the SECURITY DEFINER trigger awards them on the next `runs` write, then pull-to-refresh / reopen the profile. An empty grid shows "No badges yet — keep running." On another user's profile the same tab shows only their **public** badges (RLS).
+- **Feed badge strip** — the activity feed (dashboard → feed action) shows a horizontal strip of recent badge chips ("Name earned the X badge") from people you follow, above the run cards. Tap a chip to open that runner's profile. The strip is best-effort (an auxiliary load) — if it can't load it simply doesn't show, and the feed still renders.
+- **No owner controls on mobile** — the per-badge make-public / make-private toggle and the badge share-link are web-only; mobile is read-only.
+
 ### Settings
 
 - **Sign in / Sign out** — email/password against the same backend as the web app

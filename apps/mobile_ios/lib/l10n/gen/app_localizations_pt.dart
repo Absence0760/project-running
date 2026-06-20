@@ -9493,316 +9493,152 @@ class AppLocalizationsPt extends AppLocalizations {
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
 
   @override
-  String fundraiserRaisedOfGoal(String raised, String goal) {
-    return '$raised de $goal angariados';
+  String get badgesSectionTitle => 'Conquistas';
+
+  @override
+  String get badgesSectionSubtitle => 'Marcos que você alcançou';
+
+  @override
+  String get badgesEmpty => 'Ainda sem medalhas — continue correndo.';
+
+  @override
+  String get badgesEmptyOther => 'Ainda não há medalhas públicas.';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return 'Conquistada em $date';
   }
 
   @override
-  String fundraiserDonorCount(int count) {
-    return '$count apoiantes';
+  String badgesFeedEarned(String name, String badge) {
+    return '$name conquistou a medalha $badge';
   }
 
   @override
-  String get fundraiserOverGoal => 'Meta superada!';
+  String get badgesARunner => 'Um corredor';
 
   @override
-  String get fundraiserClosed => 'Esta campanha está encerrada.';
+  String get badgesTierBronze => 'Bronze';
 
   @override
-  String get fundraiserFeedTitle => 'Apoiantes recentes';
+  String get badgesTierSilver => 'Prata';
 
   @override
-  String get fundraiserFeedEmpty => 'Seja o primeiro a doar.';
+  String get badgesTierGold => 'Ouro';
 
   @override
-  String get fundraiserAnonymous => 'Anónimo';
+  String get badgesTierPlatinum => 'Platina';
 
   @override
-  String get fundraiserDonateOnWeb => 'Doar na web';
+  String get badgesDistanceSingle5kLabel => 'Primeiros 5 km';
 
   @override
-  String get racesTitle => 'Calendário de corridas';
+  String get badgesDistanceSingle5kDesc => 'Correu 5 km em uma única corrida';
 
   @override
-  String get racesSearchPlaceholder => 'Procurar corridas por nome…';
+  String get badgesDistanceSingleHalfLabel => 'Meia maratona';
 
   @override
-  String get racesNearPlace => 'Perto de um local…';
+  String get badgesDistanceSingleHalfDesc =>
+      'Correu 21,1 km em uma única corrida';
 
   @override
-  String racesKmAway(String distance) {
-    return 'a $distance';
-  }
+  String get badgesDistanceSingleMarathonLabel => 'Maratona';
 
   @override
-  String get racesDistanceAny => 'Qualquer distância';
+  String get badgesDistanceSingleMarathonDesc =>
+      'Correu 42,2 km em uma única corrida';
 
   @override
-  String get racesDistance5k => '5K';
+  String get badgesDistanceSingleUltraLabel => 'Ultra';
 
   @override
-  String get racesDistance10k => '10K';
+  String get badgesDistanceSingleUltraDesc =>
+      'Correu 50 km ou mais em uma única corrida';
 
   @override
-  String get racesDistanceHalf => 'Meia';
+  String get badgesDistanceLifetime100Label => 'Clube dos 100 km';
 
   @override
-  String get racesDistanceMarathon => 'Maratona';
+  String get badgesDistanceLifetime100Desc => '100 km registrados no total';
 
   @override
-  String get racesDistanceUltra => 'Ultra';
+  String get badgesDistanceLifetime500Label => '500 km';
 
   @override
-  String get racesRegister => 'Inscrever-se';
+  String get badgesDistanceLifetime500Desc => '500 km registrados no total';
 
   @override
-  String get racesViewResults => 'Ver resultados';
+  String get badgesDistanceLifetime1000Label => 'Clube dos 1.000 km';
 
   @override
-  String get racesImportResult => 'Importar o meu resultado';
+  String get badgesDistanceLifetime1000Desc => '1.000 km registrados no total';
 
   @override
-  String get racesSubmitRace => 'Adicionar uma corrida';
+  String get badgesDistanceLifetime5000Label => '5.000 km';
 
   @override
-  String get racesUnverified => 'Não verificada';
+  String get badgesDistanceLifetime5000Desc => '5.000 km registrados no total';
 
   @override
-  String get racesEmpty =>
-      'Ainda não há corridas que correspondam a estes filtros.';
+  String get badgesStreak7Label => 'Sequência semanal';
 
   @override
-  String get racesSearchFailed =>
-      'Não foi possível carregar as corridas. Verifica a tua ligação e tenta novamente.';
+  String get badgesStreak7Desc => 'Correu 7 dias seguidos';
 
   @override
-  String racesMatchPrompt(String name) {
-    return 'Foi esta a $name? Importa o teu resultado oficial.';
-  }
+  String get badgesStreak30Label => 'Sequência mensal';
 
   @override
-  String get racesMatchConfirm => 'Importar resultado';
+  String get badgesStreak30Desc => 'Correu 30 dias seguidos';
 
   @override
-  String get racesMatchDismiss => 'Não é esta corrida';
+  String get badgesStreak100Label => 'Sequência de cem';
 
   @override
-  String get racesImported => 'Resultado oficial importado.';
+  String get badgesStreak100Desc => 'Correu 100 dias seguidos';
 
   @override
-  String get racesOfficialResult => 'Resultado oficial';
+  String get badgesStreak365Label => 'Sequência anual';
 
   @override
-  String get racesChipTime => 'Tempo líquido';
+  String get badgesStreak365Desc => 'Correu 365 dias seguidos';
 
   @override
-  String get racesGunTime => 'Tempo bruto';
+  String get badgesPr1Label => 'Primeiro recorde';
 
   @override
-  String get racesOverallPlace => 'Classificação geral';
+  String get badgesPr1Desc => 'Estabeleceu seu primeiro recorde pessoal';
 
   @override
-  String get racesAgeGroupPlace => 'Classificação por escalão';
+  String get badgesPr3Label => 'Recorde triplo';
 
   @override
-  String get racesAgeGroup => 'Escalão etário';
+  String get badgesPr3Desc => 'Detém recordes pessoais em 3 distâncias';
 
   @override
-  String get racesBib => 'Dorsal';
+  String get badgesPr5Label => 'Colecionador de recordes';
 
   @override
-  String get racesPasteResultHint =>
-      'Introduz os detalhes da tua chegada a partir da página de resultados da corrida.';
+  String get badgesPr5Desc => 'Detém recordes pessoais em todas as distâncias';
 
   @override
-  String get racesSave => 'Guardar';
+  String get badgesPlan1Label => 'Plano concluído';
 
   @override
-  String get racesCancel => 'Cancelar';
+  String get badgesPlan1Desc => 'Concluiu um plano de treino';
 
   @override
-  String get racesEditorTitle => 'Adicionar uma corrida';
+  String get badgesPlan3Label => 'Triplo concluído';
 
   @override
-  String get racesFieldName => 'Nome da corrida';
+  String get badgesPlan3Desc => 'Concluiu 3 planos de treino';
 
   @override
-  String get racesFieldDate => 'Data';
+  String get badgesPlan10Label => 'Veterano de planos';
 
   @override
-  String get racesFieldDistance => 'Distância (metros)';
-
-  @override
-  String get racesFieldLocation => 'Localização';
-
-  @override
-  String get racesFieldEntryUrl => 'Link de inscrição';
-
-  @override
-  String get racesFieldResultsUrl => 'Link de resultados';
-
-  @override
-  String get racesSubmitFailed =>
-      'Não foi possível guardar a corrida. Tenta novamente.';
-
-  @override
-  String get racesImportFailed =>
-      'Não foi possível importar o resultado. Tenta novamente.';
-
-  @override
-  String get navRaces => 'Corridas';
-
-  @override
-  String get integrationsRunsignup => 'RunSignUp';
-
-  @override
-  String get integrationsRunsignupConnect =>
-      'Importa resultados de corridas do RunSignUp.';
-
-  @override
-  String get integrationsRunsignupOpen => 'Abrir o calendário de corridas';
-
-  @override
-  String get integrationsRunsignupUnavailable =>
-      'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
-
-  @override
-  String get routeConditionsTitle => 'Condições';
-
-  @override
-  String get routeConditionsReport => 'Relatar condição';
-
-  @override
-  String get routeConditionsReporting => 'Enviando…';
-
-  @override
-  String get routeConditionsReported => 'Condição relatada';
-
-  @override
-  String get routeConditionsReportFailed =>
-      'Não foi possível relatar a condição';
-
-  @override
-  String get routeConditionsEmpty => 'Ainda não há relatos.';
-
-  @override
-  String get routeConditionsLoading => 'Carregando…';
-
-  @override
-  String get routeConditionsCancel => 'Cancelar';
-
-  @override
-  String get routeConditionsDelete => 'Excluir';
-
-  @override
-  String get routeConditionsDeleteTitle => 'Excluir relato?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Isso remove o relato permanentemente.';
-
-  @override
-  String get routeConditionsDeleteFailed => 'Não foi possível excluir o relato';
-
-  @override
-  String get routeConditionsKindLabel => 'Condição';
-
-  @override
-  String get routeConditionsSeverityLabel => 'Gravidade';
-
-  @override
-  String get routeConditionsNoteLabel => 'Nota';
-
-  @override
-  String get routeConditionsNotePlaceholder =>
-      'O que o próximo corredor vai encontrar?';
-
-  @override
-  String routeConditionsAtDistance(String distance) {
-    return 'em $distance';
-  }
-
-  @override
-  String get routeConditionMuddy => 'Lamacento';
-
-  @override
-  String get routeConditionFlooded => 'Alagado';
-
-  @override
-  String get routeConditionSnowIce => 'Neve / gelo';
-
-  @override
-  String get routeConditionOvergrown => 'Coberto de vegetação';
-
-  @override
-  String get routeConditionClosed => 'Fechado';
-
-  @override
-  String get routeConditionHazard => 'Perigo';
-
-  @override
-  String get routeConditionClear => 'Livre';
-
-  @override
-  String get routeConditionOther => 'Outro';
-
-  @override
-  String get routeConditionSeverityInfo => 'Info';
-
-  @override
-  String get routeConditionSeverityCaution => 'Cuidado';
-
-  @override
-  String get routeConditionSeverityImpassable => 'Intransitável';
-
-  @override
-  String get prefTurnByTurnCues => 'Instruções de voz curva a curva';
-
-  @override
-  String get prefTurnByTurnCuesSubtitle =>
-      'Direções faladas ao seguir uma rota salva';
-
-  @override
-  String ttsTurnLeftIn(String distance) {
-    return 'Em $distance, vire à esquerda';
-  }
-
-  @override
-  String ttsTurnRightIn(String distance) {
-    return 'Em $distance, vire à direita';
-  }
-
-  @override
-  String get ttsTurnLeftNow => 'Vire à esquerda';
-
-  @override
-  String get ttsTurnRightNow => 'Vire à direita';
-
-  @override
-  String get ttsSlightLeft => 'Mantenha-se à esquerda';
-
-  @override
-  String get ttsSlightRight => 'Mantenha-se à direita';
-
-  @override
-  String get ttsUturn => 'Faça um retorno';
-
-  @override
-  String routeOfflinePackDownloading(int done, int total) {
-    return 'Salvando mapa: $done / $total';
-  }
-
-  @override
-  String get routeOfflinePackReady => 'Mapa salvo para uso offline';
-
-  @override
-  String routeOfflinePackPartial(int done, int total) {
-    return 'Mapa parcialmente salvo ($done / $total) — tentar de novo';
-  }
-
-  @override
-  String get routeOfflinePackTooLarge =>
-      'Esta rota é grande demais para salvar offline';
+  String get badgesPlan10Desc => 'Concluiu 10 planos de treino';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -19293,314 +19129,150 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
 
   @override
-  String fundraiserRaisedOfGoal(String raised, String goal) {
-    return '$raised de $goal arrecadados';
+  String get badgesSectionTitle => 'Conquistas';
+
+  @override
+  String get badgesSectionSubtitle => 'Marcos que você alcançou';
+
+  @override
+  String get badgesEmpty => 'Ainda sem medalhas — continue correndo.';
+
+  @override
+  String get badgesEmptyOther => 'Ainda não há medalhas públicas.';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return 'Conquistada em $date';
   }
 
   @override
-  String fundraiserDonorCount(int count) {
-    return '$count apoiadores';
+  String badgesFeedEarned(String name, String badge) {
+    return '$name conquistou a medalha $badge';
   }
 
   @override
-  String get fundraiserOverGoal => 'Meta superada!';
+  String get badgesARunner => 'Um corredor';
 
   @override
-  String get fundraiserClosed => 'Esta campanha está encerrada.';
+  String get badgesTierBronze => 'Bronze';
 
   @override
-  String get fundraiserFeedTitle => 'Apoiadores recentes';
+  String get badgesTierSilver => 'Prata';
 
   @override
-  String get fundraiserFeedEmpty => 'Seja o primeiro a doar.';
+  String get badgesTierGold => 'Ouro';
 
   @override
-  String get fundraiserAnonymous => 'Anônimo';
+  String get badgesTierPlatinum => 'Platina';
 
   @override
-  String get fundraiserDonateOnWeb => 'Doar na web';
+  String get badgesDistanceSingle5kLabel => 'Primeiros 5 km';
 
   @override
-  String get racesTitle => 'Calendário de corridas';
+  String get badgesDistanceSingle5kDesc => 'Correu 5 km em uma única corrida';
 
   @override
-  String get racesSearchPlaceholder => 'Pesquisar corridas por nome…';
+  String get badgesDistanceSingleHalfLabel => 'Meia maratona';
 
   @override
-  String get racesNearPlace => 'Perto de um local…';
+  String get badgesDistanceSingleHalfDesc =>
+      'Correu 21,1 km em uma única corrida';
 
   @override
-  String racesKmAway(String distance) {
-    return 'a $distance';
-  }
+  String get badgesDistanceSingleMarathonLabel => 'Maratona';
 
   @override
-  String get racesDistanceAny => 'Qualquer distância';
+  String get badgesDistanceSingleMarathonDesc =>
+      'Correu 42,2 km em uma única corrida';
 
   @override
-  String get racesDistance5k => '5K';
+  String get badgesDistanceSingleUltraLabel => 'Ultra';
 
   @override
-  String get racesDistance10k => '10K';
+  String get badgesDistanceSingleUltraDesc =>
+      'Correu 50 km ou mais em uma única corrida';
 
   @override
-  String get racesDistanceHalf => 'Meia';
+  String get badgesDistanceLifetime100Label => 'Clube dos 100 km';
 
   @override
-  String get racesDistanceMarathon => 'Maratona';
+  String get badgesDistanceLifetime100Desc => '100 km registrados no total';
 
   @override
-  String get racesDistanceUltra => 'Ultra';
+  String get badgesDistanceLifetime500Label => '500 km';
 
   @override
-  String get racesRegister => 'Inscrever-se';
+  String get badgesDistanceLifetime500Desc => '500 km registrados no total';
 
   @override
-  String get racesViewResults => 'Ver resultados';
+  String get badgesDistanceLifetime1000Label => 'Clube dos 1.000 km';
 
   @override
-  String get racesImportResult => 'Importar meu resultado';
+  String get badgesDistanceLifetime1000Desc => '1.000 km registrados no total';
 
   @override
-  String get racesSubmitRace => 'Adicionar uma corrida';
+  String get badgesDistanceLifetime5000Label => '5.000 km';
 
   @override
-  String get racesUnverified => 'Não verificada';
+  String get badgesDistanceLifetime5000Desc => '5.000 km registrados no total';
 
   @override
-  String get racesEmpty =>
-      'Ainda não há corridas que correspondam a esses filtros.';
+  String get badgesStreak7Label => 'Sequência semanal';
 
   @override
-  String get racesSearchFailed =>
-      'Não foi possível carregar as corridas. Verifique sua conexão e tente novamente.';
+  String get badgesStreak7Desc => 'Correu 7 dias seguidos';
 
   @override
-  String racesMatchPrompt(String name) {
-    return 'Foi esta a $name? Importe seu resultado oficial.';
-  }
+  String get badgesStreak30Label => 'Sequência mensal';
 
   @override
-  String get racesMatchConfirm => 'Importar resultado';
+  String get badgesStreak30Desc => 'Correu 30 dias seguidos';
 
   @override
-  String get racesMatchDismiss => 'Não é esta corrida';
+  String get badgesStreak100Label => 'Sequência de cem';
 
   @override
-  String get racesImported => 'Resultado oficial importado.';
+  String get badgesStreak100Desc => 'Correu 100 dias seguidos';
 
   @override
-  String get racesOfficialResult => 'Resultado oficial';
+  String get badgesStreak365Label => 'Sequência anual';
 
   @override
-  String get racesChipTime => 'Tempo líquido';
+  String get badgesStreak365Desc => 'Correu 365 dias seguidos';
 
   @override
-  String get racesGunTime => 'Tempo bruto';
+  String get badgesPr1Label => 'Primeiro recorde';
 
   @override
-  String get racesOverallPlace => 'Classificação geral';
+  String get badgesPr1Desc => 'Estabeleceu seu primeiro recorde pessoal';
 
   @override
-  String get racesAgeGroupPlace => 'Classificação por categoria';
+  String get badgesPr3Label => 'Recorde triplo';
 
   @override
-  String get racesAgeGroup => 'Categoria de idade';
+  String get badgesPr3Desc => 'Detém recordes pessoais em 3 distâncias';
 
   @override
-  String get racesBib => 'Número de peito';
+  String get badgesPr5Label => 'Colecionador de recordes';
 
   @override
-  String get racesPasteResultHint =>
-      'Insira os detalhes da sua chegada a partir da página de resultados da corrida.';
+  String get badgesPr5Desc => 'Detém recordes pessoais em todas as distâncias';
 
   @override
-  String get racesSave => 'Salvar';
+  String get badgesPlan1Label => 'Plano concluído';
 
   @override
-  String get racesCancel => 'Cancelar';
+  String get badgesPlan1Desc => 'Concluiu um plano de treino';
 
   @override
-  String get racesEditorTitle => 'Adicionar uma corrida';
+  String get badgesPlan3Label => 'Triplo concluído';
 
   @override
-  String get racesFieldName => 'Nome da corrida';
+  String get badgesPlan3Desc => 'Concluiu 3 planos de treino';
 
   @override
-  String get racesFieldDate => 'Data';
+  String get badgesPlan10Label => 'Veterano de planos';
 
   @override
-  String get racesFieldDistance => 'Distância (metros)';
-
-  @override
-  String get racesFieldLocation => 'Local';
-
-  @override
-  String get racesFieldEntryUrl => 'Link de inscrição';
-
-  @override
-  String get racesFieldResultsUrl => 'Link de resultados';
-
-  @override
-  String get racesSubmitFailed =>
-      'Não foi possível salvar a corrida. Tente novamente.';
-
-  @override
-  String get racesImportFailed =>
-      'Não foi possível importar o resultado. Tente novamente.';
-
-  @override
-  String get navRaces => 'Corridas';
-
-  @override
-  String get integrationsRunsignup => 'RunSignUp';
-
-  @override
-  String get integrationsRunsignupConnect =>
-      'Importe resultados de corridas do RunSignUp.';
-
-  @override
-  String get integrationsRunsignupOpen => 'Abrir o calendário de corridas';
-
-  @override
-  String get integrationsRunsignupUnavailable =>
-      'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
-
-  @override
-  String get routeConditionsTitle => 'Condições';
-
-  @override
-  String get routeConditionsReport => 'Relatar condição';
-
-  @override
-  String get routeConditionsReporting => 'Enviando…';
-
-  @override
-  String get routeConditionsReported => 'Condição relatada';
-
-  @override
-  String get routeConditionsReportFailed =>
-      'Não foi possível relatar a condição';
-
-  @override
-  String get routeConditionsEmpty => 'Ainda não há relatos.';
-
-  @override
-  String get routeConditionsLoading => 'Carregando…';
-
-  @override
-  String get routeConditionsCancel => 'Cancelar';
-
-  @override
-  String get routeConditionsDelete => 'Excluir';
-
-  @override
-  String get routeConditionsDeleteTitle => 'Excluir relato?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Isso remove o relato permanentemente.';
-
-  @override
-  String get routeConditionsDeleteFailed => 'Não foi possível excluir o relato';
-
-  @override
-  String get routeConditionsKindLabel => 'Condição';
-
-  @override
-  String get routeConditionsSeverityLabel => 'Gravidade';
-
-  @override
-  String get routeConditionsNoteLabel => 'Nota';
-
-  @override
-  String get routeConditionsNotePlaceholder =>
-      'O que o próximo corredor vai encontrar?';
-
-  @override
-  String routeConditionsAtDistance(String distance) {
-    return 'em $distance';
-  }
-
-  @override
-  String get routeConditionMuddy => 'Lamacento';
-
-  @override
-  String get routeConditionFlooded => 'Alagado';
-
-  @override
-  String get routeConditionSnowIce => 'Neve / gelo';
-
-  @override
-  String get routeConditionOvergrown => 'Coberto de vegetação';
-
-  @override
-  String get routeConditionClosed => 'Fechado';
-
-  @override
-  String get routeConditionHazard => 'Perigo';
-
-  @override
-  String get routeConditionClear => 'Livre';
-
-  @override
-  String get routeConditionOther => 'Outro';
-
-  @override
-  String get routeConditionSeverityInfo => 'Info';
-
-  @override
-  String get routeConditionSeverityCaution => 'Cuidado';
-
-  @override
-  String get routeConditionSeverityImpassable => 'Intransitável';
-
-  @override
-  String get prefTurnByTurnCues => 'Instruções de voz curva a curva';
-
-  @override
-  String get prefTurnByTurnCuesSubtitle =>
-      'Direções faladas ao seguir uma rota salva';
-
-  @override
-  String ttsTurnLeftIn(String distance) {
-    return 'Em $distance, vire à esquerda';
-  }
-
-  @override
-  String ttsTurnRightIn(String distance) {
-    return 'Em $distance, vire à direita';
-  }
-
-  @override
-  String get ttsTurnLeftNow => 'Vire à esquerda';
-
-  @override
-  String get ttsTurnRightNow => 'Vire à direita';
-
-  @override
-  String get ttsSlightLeft => 'Mantenha-se à esquerda';
-
-  @override
-  String get ttsSlightRight => 'Mantenha-se à direita';
-
-  @override
-  String get ttsUturn => 'Faça um retorno';
-
-  @override
-  String routeOfflinePackDownloading(int done, int total) {
-    return 'Salvando mapa: $done / $total';
-  }
-
-  @override
-  String get routeOfflinePackReady => 'Mapa salvo para uso offline';
-
-  @override
-  String routeOfflinePackPartial(int done, int total) {
-    return 'Mapa parcialmente salvo ($done / $total) — tentar de novo';
-  }
-
-  @override
-  String get routeOfflinePackTooLarge =>
-      'Esta rota é grande demais para salvar offline';
+  String get badgesPlan10Desc => 'Concluiu 10 planos de treino';
 }

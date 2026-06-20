@@ -5807,6 +5807,88 @@ class ApiClient {
     }
   }
 
+  // --- Achievements / badges ---
+  // Reads go through RLS: the owner sees all of their rows, a non-owner sees
+  // only is_public = true (the achievements_public_select policy). Awards are
+  // written only by the SECURITY DEFINER award function — no client path.
+
+  /// A profile's badges, newest first. RLS returns all rows for the owner and
+  /// only public rows for anyone else. Mirrors web `fetchUserBadges`.
+  Future<List<AchievementRow>> fetchUserBadges(String userId) async {
+    final data = await _client
+        .from(AchievementRow.table)
+        .select()
+        .eq(AchievementRow.colUserId, userId)
+        .order(AchievementRow.colEarnedAt, ascending: false);
+    return data
+        .map<AchievementRow>((row) => AchievementRow.fromJson(row))
+        .toList();
+  }
+
+  /// The signed-in user's own badges (incl. private). Empty when signed out.
+  Future<List<AchievementRow>> fetchMyBadges() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    return fetchUserBadges(uid);
+  }
+
+  /// Public badge awards from people the viewer follows, cursor-paged over
+  /// (earned_at, id) like the run feed. Public rows only (RLS), newest first.
+  /// Mirrors web `fetchFollowingBadgeAwards`.
+  Future<List<BadgeAwardEntry>> fetchFollowingBadgeAwards({
+    int limit = 20,
+    ({DateTime earnedAt, String id})? cursor,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+
+    final edges = await _client
+        .from(UserFollowRow.table)
+        .select(UserFollowRow.colFolloweeId)
+        .eq(UserFollowRow.colFollowerId, viewerId);
+    final authors = edges
+        .map<String>((e) => e[UserFollowRow.colFolloweeId] as String)
+        .toList();
+    if (authors.isEmpty) return const [];
+
+    var q = _client
+        .from(AchievementRow.table)
+        .select()
+        .inFilter(AchievementRow.colUserId, authors)
+        .eq(AchievementRow.colIsPublic, true);
+    if (cursor != null) {
+      final iso = cursor.earnedAt.toIso8601String();
+      q = q.or(
+        'earned_at.lt.$iso,and(earned_at.eq.$iso,id.lt.${cursor.id})',
+      );
+    }
+    final rows = await q
+        .order(AchievementRow.colEarnedAt, ascending: false)
+        .order(AchievementRow.colId, ascending: false)
+        .limit(limit);
+    if (rows.isEmpty) return const [];
+
+    final badges =
+        rows.map<AchievementRow>((r) => AchievementRow.fromJson(r)).toList();
+    final ids = badges.map((b) => b.userId).toSet().toList();
+    final profiles = await _client
+        .from(UserProfileRow.table)
+        .select('id, display_name, avatar_url')
+        .inFilter('id', ids);
+    final byId = <String, Map<String, dynamic>>{
+      for (final p in profiles) p['id'] as String: p,
+    };
+    return [
+      for (final b in badges)
+        BadgeAwardEntry(
+          badge: b,
+          authorId: b.userId,
+          authorName: byId[b.userId]?['display_name'] as String?,
+          authorAvatarUrl: byId[b.userId]?['avatar_url'] as String?,
+        ),
+    ];
+  }
+
   static String _isoDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

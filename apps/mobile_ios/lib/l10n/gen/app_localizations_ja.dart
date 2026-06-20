@@ -9031,303 +9031,147 @@ class AppLocalizationsJa extends AppLocalizations {
   String get challengesLoadFailed => 'チャレンジを読み込めませんでした。';
 
   @override
-  String fundraiserRaisedOfGoal(String raised, String goal) {
-    return '目標 $goal のうち $raised を達成';
+  String get badgesSectionTitle => '実績';
+
+  @override
+  String get badgesSectionSubtitle => '達成したマイルストーン';
+
+  @override
+  String get badgesEmpty => 'まだバッジがありません。走り続けましょう。';
+
+  @override
+  String get badgesEmptyOther => '公開バッジはまだありません。';
+
+  @override
+  String badgesEarnedOn(String date) {
+    return '$dateに獲得';
   }
 
   @override
-  String fundraiserDonorCount(int count) {
-    return '支援者 $count 人';
+  String badgesFeedEarned(String name, String badge) {
+    return '$nameさんが$badgeバッジを獲得しました';
   }
 
   @override
-  String get fundraiserOverGoal => '目標達成！';
+  String get badgesARunner => 'ランナー';
 
   @override
-  String get fundraiserClosed => 'この募金は終了しました。';
+  String get badgesTierBronze => 'ブロンズ';
 
   @override
-  String get fundraiserFeedTitle => '最近の支援者';
+  String get badgesTierSilver => 'シルバー';
 
   @override
-  String get fundraiserFeedEmpty => '最初の寄付者になりましょう。';
+  String get badgesTierGold => 'ゴールド';
 
   @override
-  String get fundraiserAnonymous => '匿名';
+  String get badgesTierPlatinum => 'プラチナ';
 
   @override
-  String get fundraiserDonateOnWeb => 'ウェブで寄付する';
+  String get badgesDistanceSingle5kLabel => '初めての5K';
 
   @override
-  String get racesTitle => 'レースカレンダー';
+  String get badgesDistanceSingle5kDesc => '1回のランで5km走破';
 
   @override
-  String get racesSearchPlaceholder => 'レースを名前で検索…';
+  String get badgesDistanceSingleHalfLabel => 'ハーフマラソン';
 
   @override
-  String get racesNearPlace => '場所の近くで…';
+  String get badgesDistanceSingleHalfDesc => '1回のランで21.1km走破';
 
   @override
-  String racesKmAway(String distance) {
-    return '$distance先';
-  }
+  String get badgesDistanceSingleMarathonLabel => 'マラソン';
 
   @override
-  String get racesDistanceAny => 'すべての距離';
+  String get badgesDistanceSingleMarathonDesc => '1回のランで42.2km走破';
 
   @override
-  String get racesDistance5k => '5K';
+  String get badgesDistanceSingleUltraLabel => 'ウルトラ';
 
   @override
-  String get racesDistance10k => '10K';
+  String get badgesDistanceSingleUltraDesc => '1回のランで50km以上走破';
 
   @override
-  String get racesDistanceHalf => 'ハーフ';
+  String get badgesDistanceLifetime100Label => '100kmクラブ';
 
   @override
-  String get racesDistanceMarathon => 'マラソン';
+  String get badgesDistanceLifetime100Desc => '通算100kmを記録';
 
   @override
-  String get racesDistanceUltra => 'ウルトラ';
+  String get badgesDistanceLifetime500Label => '500km';
 
   @override
-  String get racesRegister => '登録';
+  String get badgesDistanceLifetime500Desc => '通算500kmを記録';
 
   @override
-  String get racesViewResults => '結果を見る';
+  String get badgesDistanceLifetime1000Label => '1,000kmクラブ';
 
   @override
-  String get racesImportResult => '自分の結果をインポート';
+  String get badgesDistanceLifetime1000Desc => '通算1,000kmを記録';
 
   @override
-  String get racesSubmitRace => 'レースを追加';
+  String get badgesDistanceLifetime5000Label => '5,000km';
 
   @override
-  String get racesUnverified => '未確認';
+  String get badgesDistanceLifetime5000Desc => '通算5,000kmを記録';
 
   @override
-  String get racesEmpty => 'このフィルターに一致するレースはまだありません。';
+  String get badgesStreak7Label => '週間連続';
 
   @override
-  String get racesSearchFailed => 'レースを読み込めませんでした。接続を確認して再試行してください。';
+  String get badgesStreak7Desc => '7日連続で走破';
 
   @override
-  String racesMatchPrompt(String name) {
-    return 'これは$nameでしたか？公式結果をインポートします。';
-  }
+  String get badgesStreak30Label => '月間連続';
 
   @override
-  String get racesMatchConfirm => '結果をインポート';
+  String get badgesStreak30Desc => '30日連続で走破';
 
   @override
-  String get racesMatchDismiss => 'このレースではない';
+  String get badgesStreak100Label => '100日連続';
 
   @override
-  String get racesImported => '公式結果をインポートしました。';
+  String get badgesStreak100Desc => '100日連続で走破';
 
   @override
-  String get racesOfficialResult => '公式結果';
+  String get badgesStreak365Label => '年間連続';
 
   @override
-  String get racesChipTime => 'ネットタイム';
+  String get badgesStreak365Desc => '365日連続で走破';
 
   @override
-  String get racesGunTime => 'グロスタイム';
+  String get badgesPr1Label => '初の自己ベスト';
 
   @override
-  String get racesOverallPlace => '総合順位';
+  String get badgesPr1Desc => '初めての自己ベストを記録';
 
   @override
-  String get racesAgeGroupPlace => '年代別順位';
+  String get badgesPr3Label => 'トリプル自己ベスト';
 
   @override
-  String get racesAgeGroup => '年代';
+  String get badgesPr3Desc => '3つの距離で自己ベストを保持';
 
   @override
-  String get racesBib => 'ゼッケン';
+  String get badgesPr5Label => '記録コレクター';
 
   @override
-  String get racesPasteResultHint => 'レースの結果ページから完走の詳細を入力してください。';
+  String get badgesPr5Desc => 'すべての距離で自己ベストを保持';
 
   @override
-  String get racesSave => '保存';
+  String get badgesPlan1Label => 'プラン完走';
 
   @override
-  String get racesCancel => 'キャンセル';
+  String get badgesPlan1Desc => 'トレーニングプランを完了';
 
   @override
-  String get racesEditorTitle => 'レースを追加';
+  String get badgesPlan3Label => 'トリプル完走';
 
   @override
-  String get racesFieldName => 'レース名';
+  String get badgesPlan3Desc => '3つのトレーニングプランを完了';
 
   @override
-  String get racesFieldDate => '日付';
+  String get badgesPlan10Label => 'プランの達人';
 
   @override
-  String get racesFieldDistance => '距離（メートル）';
-
-  @override
-  String get racesFieldLocation => '場所';
-
-  @override
-  String get racesFieldEntryUrl => '登録リンク';
-
-  @override
-  String get racesFieldResultsUrl => '結果リンク';
-
-  @override
-  String get racesSubmitFailed => 'レースを保存できませんでした。もう一度お試しください。';
-
-  @override
-  String get racesImportFailed => '結果をインポートできませんでした。もう一度お試しください。';
-
-  @override
-  String get navRaces => 'レース';
-
-  @override
-  String get integrationsRunsignup => 'RunSignUp';
-
-  @override
-  String get integrationsRunsignupConnect => 'RunSignUpからレース結果をインポートします。';
-
-  @override
-  String get integrationsRunsignupOpen => 'レースカレンダーを開く';
-
-  @override
-  String get integrationsRunsignupUnavailable =>
-      'RunSignUpのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
-
-  @override
-  String get routeConditionsTitle => 'コンディション';
-
-  @override
-  String get routeConditionsReport => 'コンディションを報告';
-
-  @override
-  String get routeConditionsReporting => '報告中…';
-
-  @override
-  String get routeConditionsReported => 'コンディションを報告しました';
-
-  @override
-  String get routeConditionsReportFailed => 'コンディションを報告できませんでした';
-
-  @override
-  String get routeConditionsEmpty => 'まだ報告はありません。';
-
-  @override
-  String get routeConditionsLoading => '読み込み中…';
-
-  @override
-  String get routeConditionsCancel => 'キャンセル';
-
-  @override
-  String get routeConditionsDelete => '削除';
-
-  @override
-  String get routeConditionsDeleteTitle => '報告を削除しますか？';
-
-  @override
-  String get routeConditionsDeleteConfirm => 'コンディション報告を完全に削除します。';
-
-  @override
-  String get routeConditionsDeleteFailed => '報告を削除できませんでした';
-
-  @override
-  String get routeConditionsKindLabel => '状態';
-
-  @override
-  String get routeConditionsSeverityLabel => '深刻度';
-
-  @override
-  String get routeConditionsNoteLabel => 'メモ';
-
-  @override
-  String get routeConditionsNotePlaceholder => '次のランナーは何に遭遇しますか？';
-
-  @override
-  String routeConditionsAtDistance(String distance) {
-    return '$distance 地点';
-  }
-
-  @override
-  String get routeConditionMuddy => '泥';
-
-  @override
-  String get routeConditionFlooded => '冠水';
-
-  @override
-  String get routeConditionSnowIce => '雪・氷';
-
-  @override
-  String get routeConditionOvergrown => '草木が繁茂';
-
-  @override
-  String get routeConditionClosed => '閉鎖';
-
-  @override
-  String get routeConditionHazard => '危険';
-
-  @override
-  String get routeConditionClear => '良好';
-
-  @override
-  String get routeConditionOther => 'その他';
-
-  @override
-  String get routeConditionSeverityInfo => '情報';
-
-  @override
-  String get routeConditionSeverityCaution => '注意';
-
-  @override
-  String get routeConditionSeverityImpassable => '通行不能';
-
-  @override
-  String get prefTurnByTurnCues => 'ターンバイターン音声ガイド';
-
-  @override
-  String get prefTurnByTurnCuesSubtitle => '保存したルートを辿る際に曲がる方向を音声で案内';
-
-  @override
-  String ttsTurnLeftIn(String distance) {
-    return '$distance先、左折します';
-  }
-
-  @override
-  String ttsTurnRightIn(String distance) {
-    return '$distance先、右折します';
-  }
-
-  @override
-  String get ttsTurnLeftNow => '左折します';
-
-  @override
-  String get ttsTurnRightNow => '右折します';
-
-  @override
-  String get ttsSlightLeft => 'やや左へ';
-
-  @override
-  String get ttsSlightRight => 'やや右へ';
-
-  @override
-  String get ttsUturn => 'Uターンします';
-
-  @override
-  String routeOfflinePackDownloading(int done, int total) {
-    return '地図をキャッシュ中: $done / $total';
-  }
-
-  @override
-  String get routeOfflinePackReady => '地図をオフライン保存しました';
-
-  @override
-  String routeOfflinePackPartial(int done, int total) {
-    return '地図を一部保存 ($done / $total) — 再試行';
-  }
-
-  @override
-  String get routeOfflinePackTooLarge => 'このルートはオフライン保存には大きすぎます';
+  String get badgesPlan10Desc => '10のトレーニングプランを完了';
 }

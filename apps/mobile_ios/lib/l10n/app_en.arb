@@ -160,13 +160,16 @@
     "description": "App bar title for the year-in-running recap screen"
   },
   "recapShareTooltip": "Share recap",
-  "@recapShareTooltip": {"description": "Tooltip for the share-recap icon button"},
-  "recapPublishAndShare": "Publish & share link",
-  "@recapPublishAndShare": {"description": "Tooltip/label for the publish-and-share-link action on the recap screen"},
-  "recapPublishFailed": "Couldn't publish the recap. Try again.",
-  "@recapPublishFailed": {"description": "Banner shown when publishing a public recap fails"},
   "@recapShareTooltip": {
     "description": "Tooltip for the share-recap icon button"
+  },
+  "recapPublishAndShare": "Publish & share link",
+  "@recapPublishAndShare": {
+    "description": "Tooltip/label for the publish-and-share-link action on the recap screen"
+  },
+  "recapPublishFailed": "Couldn't publish the recap. Try again.",
+  "@recapPublishFailed": {
+    "description": "Banner shown when publishing a public recap fails"
   },
   "recapPrevYear": "Previous year",
   "@recapPrevYear": {
@@ -11571,27 +11574,44 @@
     "description": "Revoke (delete) a pending coach invite"
   },
   "coachingNoAthletes": "No athletes yet. Invite one to get started.",
-  "@coachingNoAthletes": {"description": "Empty state for the athletes list"},
-  "coachingRosterTitle": "Athlete roster",
-  "@coachingRosterTitle": {"description": "Athlete roster card title"},
-  "coachingRosterSubtitle": "Every athlete at a glance — load, plan compliance, and injury risk.",
-  "@coachingRosterSubtitle": {"description": "Athlete roster card subtitle"},
-  "coachingRosterNeverRun": "No runs yet",
-  "@coachingRosterNeverRun": {"description": "Roster cell when athlete has no runs"},
-  "coachingRosterNoPlan": "No plan",
-  "@coachingRosterNoPlan": {"description": "Roster cell when athlete has no active plan"},
-  "coachingRosterRiskInsufficient": "New",
-  "@coachingRosterRiskInsufficient": {"description": "Injury-risk band: insufficient history"},
-  "coachingRosterRiskLow": "Low",
-  "@coachingRosterRiskLow": {"description": "Injury-risk band: low"},
-  "coachingRosterRiskOptimal": "Optimal",
-  "@coachingRosterRiskOptimal": {"description": "Injury-risk band: optimal"},
-  "coachingRosterRiskElevated": "Elevated",
-  "@coachingRosterRiskElevated": {"description": "Injury-risk band: elevated"},
-  "coachingRosterRiskHigh": "High",
-  "@coachingRosterRiskHigh": {"description": "Injury-risk band: high"},
   "@coachingNoAthletes": {
     "description": "Empty state for the athletes list"
+  },
+  "coachingRosterTitle": "Athlete roster",
+  "@coachingRosterTitle": {
+    "description": "Athlete roster card title"
+  },
+  "coachingRosterSubtitle": "Every athlete at a glance — load, plan compliance, and injury risk.",
+  "@coachingRosterSubtitle": {
+    "description": "Athlete roster card subtitle"
+  },
+  "coachingRosterNeverRun": "No runs yet",
+  "@coachingRosterNeverRun": {
+    "description": "Roster cell when athlete has no runs"
+  },
+  "coachingRosterNoPlan": "No plan",
+  "@coachingRosterNoPlan": {
+    "description": "Roster cell when athlete has no active plan"
+  },
+  "coachingRosterRiskInsufficient": "New",
+  "@coachingRosterRiskInsufficient": {
+    "description": "Injury-risk band: insufficient history"
+  },
+  "coachingRosterRiskLow": "Low",
+  "@coachingRosterRiskLow": {
+    "description": "Injury-risk band: low"
+  },
+  "coachingRosterRiskOptimal": "Optimal",
+  "@coachingRosterRiskOptimal": {
+    "description": "Injury-risk band: optimal"
+  },
+  "coachingRosterRiskElevated": "Elevated",
+  "@coachingRosterRiskElevated": {
+    "description": "Injury-risk band: elevated"
+  },
+  "coachingRosterRiskHigh": "High",
+  "@coachingRosterRiskHigh": {
+    "description": "Injury-risk band: high"
   },
   "coachingRunner": "Runner",
   "@coachingRunner": {
@@ -12300,179 +12320,404 @@
     "description": "Confirm button on the weigh-in sheet"
   },
   "checkpointCancel": "Cancel",
-  "@checkpointCancel": {"description": "Cancel the weigh-in sheet"},
-  "challengesTitle": "Challenges",
-  "@challengesTitle": {"description": "Challenges feature title / tab label"},
-  "challengesMyChallenges": "My challenges",
-  "@challengesMyChallenges": {"description": "Section heading for challenges the user joined"},
-  "challengesBrowse": "Browse",
-  "@challengesBrowse": {"description": "Section heading for public challenges to join"},
-  "challengesEmpty": "No challenges yet.",
-  "@challengesEmpty": {"description": "Empty state for the my-challenges section"},
-  "challengesBrowseEmpty": "No public challenges to join right now.",
-  "@challengesBrowseEmpty": {"description": "Empty state for the browse section"},
-  "challengesJoin": "Join",
-  "@challengesJoin": {"description": "Join a challenge button"},
-  "challengesLeave": "Leave",
-  "@challengesLeave": {"description": "Leave a challenge button"},
-  "challengesDelete": "Delete",
-  "@challengesDelete": {"description": "Delete a challenge button"},
-  "challengesMetricDistance": "Distance",
-  "@challengesMetricDistance": {"description": "Distance metric label"},
-  "challengesMetricDuration": "Time",
-  "@challengesMetricDuration": {"description": "Duration metric label"},
-  "challengesMetricActivityCount": "Activities",
-  "@challengesMetricActivityCount": {"description": "Activity-count metric label"},
-  "challengesMetricStreak": "Active days",
-  "@challengesMetricStreak": {"description": "Streak-days metric label"},
-  "challengesGoalProgress": "{value} of {goal}",
-  "@challengesGoalProgress": {"description": "Progress label value vs goal", "placeholders": {"value": {"type": "String"}, "goal": {"type": "String"}}},
-  "challengesProgressComplete": "Complete",
-  "@challengesProgressComplete": {"description": "Goal-met label"},
-  "challengesEndsIn": "Ends in {n} days",
-  "@challengesEndsIn": {"description": "Days-left label", "placeholders": {"n": {"type": "int"}}},
-  "challengesEndsToday": "Ends today",
-  "@challengesEndsToday": {"description": "Ends-today label"},
-  "challengesEnded": "Ended",
-  "@challengesEnded": {"description": "Past-end label"},
-  "challengesLeaderboard": "Leaderboard",
-  "@challengesLeaderboard": {"description": "Leaderboard heading"},
-  "challengesLeaderboardEmpty": "No progress logged yet.",
-  "@challengesLeaderboardEmpty": {"description": "Empty leaderboard state"},
-  "challengesLeaderboardRank": "#{rank}",
-  "@challengesLeaderboardRank": {"description": "Rank label", "placeholders": {"rank": {"type": "int"}}},
-  "challengesParticipants": "{n} joined",
-  "@challengesParticipants": {"description": "Participant count", "placeholders": {"n": {"type": "int"}}},
-  "challengesBadgeEarned": "Badge earned",
-  "@challengesBadgeEarned": {"description": "Completion badge label"},
-  "challengesUnitDays": "{n} days",
-  "@challengesUnitDays": {"description": "Active-days value", "placeholders": {"n": {"type": "int"}}},
-  "challengesUnitActivities": "{n}",
-  "@challengesUnitActivities": {"description": "Activity-count value", "placeholders": {"n": {"type": "int"}}},
-  "challengesLeaveConfirmTitle": "Leave challenge?",
-  "@challengesLeaveConfirmTitle": {"description": "Leave-confirm dialog title"},
-  "challengesLeaveConfirm": "Your progress in this challenge will no longer be tracked.",
-  "@challengesLeaveConfirm": {"description": "Leave-confirm dialog body"},
-  "challengesDeleteConfirmTitle": "Delete challenge?",
-  "@challengesDeleteConfirmTitle": {"description": "Delete-confirm dialog title"},
-  "challengesDeleteConfirm": "This removes the challenge and its leaderboard for everyone. This can't be undone.",
-  "@challengesDeleteConfirm": {"description": "Delete-confirm dialog body"},
-  "challengesNotFound": "This challenge isn't available.",
-  "@challengesNotFound": {"description": "Not-found / no-access state"},
-  "challengesJoinFailed": "Couldn't join the challenge.",
-  "@challengesJoinFailed": {"description": "Join failure banner"},
-  "challengesLeaveFailed": "Couldn't leave the challenge.",
-  "@challengesLeaveFailed": {"description": "Leave failure banner"},
-  "challengesLoadFailed": "Couldn't load challenges.",
-  "@challengesLoadFailed": {"description": "Load failure banner"},
-  "fundraiserRaisedOfGoal": "{raised} of {goal} raised",
-  "@fundraiserRaisedOfGoal": {"description": "Thermometer raised-of-goal label", "placeholders": {"raised": {"type": "String"}, "goal": {"type": "String"}}},
-  "fundraiserDonorCount": "{count} supporters",
-  "@fundraiserDonorCount": {"description": "Donor count under the thermometer", "placeholders": {"count": {"type": "int"}}},
-  "fundraiserOverGoal": "Over goal!",
-  "@fundraiserOverGoal": {"description": "Shown when a fundraiser exceeds its goal"},
-  "fundraiserClosed": "This fundraiser is closed.",
-  "@fundraiserClosed": {"description": "Closed-fundraiser notice"},
-  "fundraiserFeedTitle": "Recent supporters",
-  "@fundraiserFeedTitle": {"description": "Donation feed heading"},
-  "fundraiserFeedEmpty": "Be the first to donate.",
-  "@fundraiserFeedEmpty": {"description": "Empty donation feed"},
-  "fundraiserAnonymous": "Anonymous",
-  "@fundraiserAnonymous": {"description": "Anonymous donor label"},
-  "fundraiserDonateOnWeb": "Donate on web",
-  "@fundraiserDonateOnWeb": {"description": "Mobile web-handoff donate button"},
-  "racesTitle": "Race calendar",
-  "@racesTitle": {"description": "Title of the race calendar / discovery screen"},
-  "racesSearchPlaceholder": "Search races by name…",
-  "@racesSearchPlaceholder": {"description": "Placeholder for the race name search field"},
-  "racesNearPlace": "Near a place…",
-  "@racesNearPlace": {"description": "Placeholder for the near-a-place geocode field"},
-  "racesKmAway": "{distance} away",
-  "@racesKmAway": {"description": "Distance-from-you label on a race card", "placeholders": {"distance": {"type": "String"}}},
-  "racesDistanceAny": "Any distance",
-  "@racesDistanceAny": {"description": "Distance-band chip: no filter"},
-  "racesDistance5k": "5K",
-  "@racesDistance5k": {"description": "Distance-band chip: 5K"},
-  "racesDistance10k": "10K",
-  "@racesDistance10k": {"description": "Distance-band chip: 10K"},
-  "racesDistanceHalf": "Half",
-  "@racesDistanceHalf": {"description": "Distance-band chip: half marathon"},
-  "racesDistanceMarathon": "Marathon",
-  "@racesDistanceMarathon": {"description": "Distance-band chip: marathon"},
-  "racesDistanceUltra": "Ultra",
-  "@racesDistanceUltra": {"description": "Distance-band chip: ultra"},
-  "racesRegister": "Register",
-  "@racesRegister": {"description": "Link to a race's registration page"},
-  "racesViewResults": "View results",
-  "@racesViewResults": {"description": "Link to a race's results page"},
-  "racesImportResult": "Import my result",
-  "@racesImportResult": {"description": "Action to import a runner's official race result"},
-  "racesSubmitRace": "Add a race",
-  "@racesSubmitRace": {"description": "Action to submit a crowd-sourced race listing"},
-  "racesUnverified": "Unverified",
-  "@racesUnverified": {"description": "Badge on a user-submitted, not-yet-verified listing"},
-  "racesEmpty": "No races match these filters yet.",
-  "@racesEmpty": {"description": "Empty state for the race calendar"},
-  "racesSearchFailed": "Couldn't load races. Check your connection and try again.",
-  "@racesSearchFailed": {"description": "Error state when the race search fails"},
-  "racesMatchPrompt": "Was this the {name}? Import your official result.",
-  "@racesMatchPrompt": {"description": "Inform-tier auto-match prompt on run detail", "placeholders": {"name": {"type": "String"}}},
-  "racesMatchConfirm": "Import result",
-  "@racesMatchConfirm": {"description": "Confirm importing a matched race result"},
-  "racesMatchDismiss": "Not this race",
-  "@racesMatchDismiss": {"description": "Dismiss the auto-match prompt"},
-  "racesImported": "Official result imported.",
-  "@racesImported": {"description": "Toast after a result is imported"},
-  "racesOfficialResult": "Official result",
-  "@racesOfficialResult": {"description": "Heading for the imported official-result panel"},
-  "racesChipTime": "Chip time",
-  "@racesChipTime": {"description": "Chip-time field label"},
-  "racesGunTime": "Gun time",
-  "@racesGunTime": {"description": "Gun-time field label"},
-  "racesOverallPlace": "Overall place",
-  "@racesOverallPlace": {"description": "Overall-place field label"},
-  "racesAgeGroupPlace": "Age-group place",
-  "@racesAgeGroupPlace": {"description": "Age-group-place field label"},
-  "racesAgeGroup": "Age group",
-  "@racesAgeGroup": {"description": "Age-group field label"},
-  "racesBib": "Bib",
-  "@racesBib": {"description": "Bib field label"},
-  "racesPasteResultHint": "Enter your finishing details from the race's results page.",
-  "@racesPasteResultHint": {"description": "Hint above the manual result paste form"},
-  "racesSave": "Save",
-  "@racesSave": {"description": "Save a race listing"},
-  "racesCancel": "Cancel",
-  "@racesCancel": {"description": "Cancel a race form"},
-  "racesEditorTitle": "Add a race",
-  "@racesEditorTitle": {"description": "Title of the submit-listing form"},
-  "racesFieldName": "Race name",
-  "@racesFieldName": {"description": "Race name field label"},
-  "racesFieldDate": "Date",
-  "@racesFieldDate": {"description": "Race date field label"},
-  "racesFieldDistance": "Distance (metres)",
-  "@racesFieldDistance": {"description": "Race distance field label"},
-  "racesFieldLocation": "Location",
-  "@racesFieldLocation": {"description": "Race location field label"},
-  "racesFieldEntryUrl": "Registration link",
-  "@racesFieldEntryUrl": {"description": "Registration link field label"},
-  "racesFieldResultsUrl": "Results link",
-  "@racesFieldResultsUrl": {"description": "Results link field label"},
-  "racesSubmitFailed": "Couldn't save the race. Please try again.",
-  "@racesSubmitFailed": {"description": "Error when submitting a listing fails"},
-  "racesImportFailed": "Couldn't import the result. Please try again.",
-  "@racesImportFailed": {"description": "Error when importing a result fails"},
-  "navRaces": "Races",
-  "@navRaces": {"description": "Nav label for the races surface"},
-  "integrationsRunsignup": "RunSignUp",
-  "@integrationsRunsignup": {"description": "RunSignUp integration name"},
-  "integrationsRunsignupConnect": "Import race results from RunSignUp.",
-  "@integrationsRunsignupConnect": {"description": "RunSignUp integration description"},
-  "integrationsRunsignupOpen": "Open the race calendar",
-  "@integrationsRunsignupOpen": {"description": "Action linking to the race calendar from the RunSignUp tile"},
-  "integrationsRunsignupUnavailable": "RunSignUp import isn't available yet. parkrun and manual paste still work.",
-  "@integrationsRunsignupUnavailable": {"description": "Explainer when the RunSignUp key is unconfigured"},
   "@checkpointCancel": {
     "description": "Cancel the weigh-in sheet"
+  },
+  "challengesTitle": "Challenges",
+  "@challengesTitle": {
+    "description": "Challenges feature title / tab label"
+  },
+  "challengesMyChallenges": "My challenges",
+  "@challengesMyChallenges": {
+    "description": "Section heading for challenges the user joined"
+  },
+  "challengesBrowse": "Browse",
+  "@challengesBrowse": {
+    "description": "Section heading for public challenges to join"
+  },
+  "challengesEmpty": "No challenges yet.",
+  "@challengesEmpty": {
+    "description": "Empty state for the my-challenges section"
+  },
+  "challengesBrowseEmpty": "No public challenges to join right now.",
+  "@challengesBrowseEmpty": {
+    "description": "Empty state for the browse section"
+  },
+  "challengesJoin": "Join",
+  "@challengesJoin": {
+    "description": "Join a challenge button"
+  },
+  "challengesLeave": "Leave",
+  "@challengesLeave": {
+    "description": "Leave a challenge button"
+  },
+  "challengesDelete": "Delete",
+  "@challengesDelete": {
+    "description": "Delete a challenge button"
+  },
+  "challengesMetricDistance": "Distance",
+  "@challengesMetricDistance": {
+    "description": "Distance metric label"
+  },
+  "challengesMetricDuration": "Time",
+  "@challengesMetricDuration": {
+    "description": "Duration metric label"
+  },
+  "challengesMetricActivityCount": "Activities",
+  "@challengesMetricActivityCount": {
+    "description": "Activity-count metric label"
+  },
+  "challengesMetricStreak": "Active days",
+  "@challengesMetricStreak": {
+    "description": "Streak-days metric label"
+  },
+  "challengesGoalProgress": "{value} of {goal}",
+  "@challengesGoalProgress": {
+    "description": "Progress label value vs goal",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      },
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
+  "challengesProgressComplete": "Complete",
+  "@challengesProgressComplete": {
+    "description": "Goal-met label"
+  },
+  "challengesEndsIn": "Ends in {n} days",
+  "@challengesEndsIn": {
+    "description": "Days-left label",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesEndsToday": "Ends today",
+  "@challengesEndsToday": {
+    "description": "Ends-today label"
+  },
+  "challengesEnded": "Ended",
+  "@challengesEnded": {
+    "description": "Past-end label"
+  },
+  "challengesLeaderboard": "Leaderboard",
+  "@challengesLeaderboard": {
+    "description": "Leaderboard heading"
+  },
+  "challengesLeaderboardEmpty": "No progress logged yet.",
+  "@challengesLeaderboardEmpty": {
+    "description": "Empty leaderboard state"
+  },
+  "challengesLeaderboardRank": "#{rank}",
+  "@challengesLeaderboardRank": {
+    "description": "Rank label",
+    "placeholders": {
+      "rank": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesParticipants": "{n} joined",
+  "@challengesParticipants": {
+    "description": "Participant count",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesBadgeEarned": "Badge earned",
+  "@challengesBadgeEarned": {
+    "description": "Completion badge label"
+  },
+  "challengesUnitDays": "{n} days",
+  "@challengesUnitDays": {
+    "description": "Active-days value",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesUnitActivities": "{n}",
+  "@challengesUnitActivities": {
+    "description": "Activity-count value",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesLeaveConfirmTitle": "Leave challenge?",
+  "@challengesLeaveConfirmTitle": {
+    "description": "Leave-confirm dialog title"
+  },
+  "challengesLeaveConfirm": "Your progress in this challenge will no longer be tracked.",
+  "@challengesLeaveConfirm": {
+    "description": "Leave-confirm dialog body"
+  },
+  "challengesDeleteConfirmTitle": "Delete challenge?",
+  "@challengesDeleteConfirmTitle": {
+    "description": "Delete-confirm dialog title"
+  },
+  "challengesDeleteConfirm": "This removes the challenge and its leaderboard for everyone. This can't be undone.",
+  "@challengesDeleteConfirm": {
+    "description": "Delete-confirm dialog body"
+  },
+  "challengesNotFound": "This challenge isn't available.",
+  "@challengesNotFound": {
+    "description": "Not-found / no-access state"
+  },
+  "challengesJoinFailed": "Couldn't join the challenge.",
+  "@challengesJoinFailed": {
+    "description": "Join failure banner"
+  },
+  "challengesLeaveFailed": "Couldn't leave the challenge.",
+  "@challengesLeaveFailed": {
+    "description": "Leave failure banner"
+  },
+  "challengesLoadFailed": "Couldn't load challenges.",
+  "@challengesLoadFailed": {
+    "description": "Load failure banner"
+  },
+  "fundraiserRaisedOfGoal": "{raised} of {goal} raised",
+  "@fundraiserRaisedOfGoal": {
+    "description": "Thermometer raised-of-goal label",
+    "placeholders": {
+      "raised": {
+        "type": "String"
+      },
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
+  "fundraiserDonorCount": "{count} supporters",
+  "@fundraiserDonorCount": {
+    "description": "Donor count under the thermometer",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fundraiserOverGoal": "Over goal!",
+  "@fundraiserOverGoal": {
+    "description": "Shown when a fundraiser exceeds its goal"
+  },
+  "fundraiserClosed": "This fundraiser is closed.",
+  "@fundraiserClosed": {
+    "description": "Closed-fundraiser notice"
+  },
+  "fundraiserFeedTitle": "Recent supporters",
+  "@fundraiserFeedTitle": {
+    "description": "Donation feed heading"
+  },
+  "fundraiserFeedEmpty": "Be the first to donate.",
+  "@fundraiserFeedEmpty": {
+    "description": "Empty donation feed"
+  },
+  "fundraiserAnonymous": "Anonymous",
+  "@fundraiserAnonymous": {
+    "description": "Anonymous donor label"
+  },
+  "fundraiserDonateOnWeb": "Donate on web",
+  "@fundraiserDonateOnWeb": {
+    "description": "Mobile web-handoff donate button"
+  },
+  "racesTitle": "Race calendar",
+  "@racesTitle": {
+    "description": "Title of the race calendar / discovery screen"
+  },
+  "racesSearchPlaceholder": "Search races by name…",
+  "@racesSearchPlaceholder": {
+    "description": "Placeholder for the race name search field"
+  },
+  "racesNearPlace": "Near a place…",
+  "@racesNearPlace": {
+    "description": "Placeholder for the near-a-place geocode field"
+  },
+  "racesKmAway": "{distance} away",
+  "@racesKmAway": {
+    "description": "Distance-from-you label on a race card",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "racesDistanceAny": "Any distance",
+  "@racesDistanceAny": {
+    "description": "Distance-band chip: no filter"
+  },
+  "racesDistance5k": "5K",
+  "@racesDistance5k": {
+    "description": "Distance-band chip: 5K"
+  },
+  "racesDistance10k": "10K",
+  "@racesDistance10k": {
+    "description": "Distance-band chip: 10K"
+  },
+  "racesDistanceHalf": "Half",
+  "@racesDistanceHalf": {
+    "description": "Distance-band chip: half marathon"
+  },
+  "racesDistanceMarathon": "Marathon",
+  "@racesDistanceMarathon": {
+    "description": "Distance-band chip: marathon"
+  },
+  "racesDistanceUltra": "Ultra",
+  "@racesDistanceUltra": {
+    "description": "Distance-band chip: ultra"
+  },
+  "racesRegister": "Register",
+  "@racesRegister": {
+    "description": "Link to a race's registration page"
+  },
+  "racesViewResults": "View results",
+  "@racesViewResults": {
+    "description": "Link to a race's results page"
+  },
+  "racesImportResult": "Import my result",
+  "@racesImportResult": {
+    "description": "Action to import a runner's official race result"
+  },
+  "racesSubmitRace": "Add a race",
+  "@racesSubmitRace": {
+    "description": "Action to submit a crowd-sourced race listing"
+  },
+  "racesUnverified": "Unverified",
+  "@racesUnverified": {
+    "description": "Badge on a user-submitted, not-yet-verified listing"
+  },
+  "racesEmpty": "No races match these filters yet.",
+  "@racesEmpty": {
+    "description": "Empty state for the race calendar"
+  },
+  "racesSearchFailed": "Couldn't load races. Check your connection and try again.",
+  "@racesSearchFailed": {
+    "description": "Error state when the race search fails"
+  },
+  "racesMatchPrompt": "Was this the {name}? Import your official result.",
+  "@racesMatchPrompt": {
+    "description": "Inform-tier auto-match prompt on run detail",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "racesMatchConfirm": "Import result",
+  "@racesMatchConfirm": {
+    "description": "Confirm importing a matched race result"
+  },
+  "racesMatchDismiss": "Not this race",
+  "@racesMatchDismiss": {
+    "description": "Dismiss the auto-match prompt"
+  },
+  "racesImported": "Official result imported.",
+  "@racesImported": {
+    "description": "Toast after a result is imported"
+  },
+  "racesOfficialResult": "Official result",
+  "@racesOfficialResult": {
+    "description": "Heading for the imported official-result panel"
+  },
+  "racesChipTime": "Chip time",
+  "@racesChipTime": {
+    "description": "Chip-time field label"
+  },
+  "racesGunTime": "Gun time",
+  "@racesGunTime": {
+    "description": "Gun-time field label"
+  },
+  "racesOverallPlace": "Overall place",
+  "@racesOverallPlace": {
+    "description": "Overall-place field label"
+  },
+  "racesAgeGroupPlace": "Age-group place",
+  "@racesAgeGroupPlace": {
+    "description": "Age-group-place field label"
+  },
+  "racesAgeGroup": "Age group",
+  "@racesAgeGroup": {
+    "description": "Age-group field label"
+  },
+  "racesBib": "Bib",
+  "@racesBib": {
+    "description": "Bib field label"
+  },
+  "racesPasteResultHint": "Enter your finishing details from the race's results page.",
+  "@racesPasteResultHint": {
+    "description": "Hint above the manual result paste form"
+  },
+  "racesSave": "Save",
+  "@racesSave": {
+    "description": "Save a race listing"
+  },
+  "racesCancel": "Cancel",
+  "@racesCancel": {
+    "description": "Cancel a race form"
+  },
+  "racesEditorTitle": "Add a race",
+  "@racesEditorTitle": {
+    "description": "Title of the submit-listing form"
+  },
+  "racesFieldName": "Race name",
+  "@racesFieldName": {
+    "description": "Race name field label"
+  },
+  "racesFieldDate": "Date",
+  "@racesFieldDate": {
+    "description": "Race date field label"
+  },
+  "racesFieldDistance": "Distance (metres)",
+  "@racesFieldDistance": {
+    "description": "Race distance field label"
+  },
+  "racesFieldLocation": "Location",
+  "@racesFieldLocation": {
+    "description": "Race location field label"
+  },
+  "racesFieldEntryUrl": "Registration link",
+  "@racesFieldEntryUrl": {
+    "description": "Registration link field label"
+  },
+  "racesFieldResultsUrl": "Results link",
+  "@racesFieldResultsUrl": {
+    "description": "Results link field label"
+  },
+  "racesSubmitFailed": "Couldn't save the race. Please try again.",
+  "@racesSubmitFailed": {
+    "description": "Error when submitting a listing fails"
+  },
+  "racesImportFailed": "Couldn't import the result. Please try again.",
+  "@racesImportFailed": {
+    "description": "Error when importing a result fails"
+  },
+  "navRaces": "Races",
+  "@navRaces": {
+    "description": "Nav label for the races surface"
+  },
+  "integrationsRunsignup": "RunSignUp",
+  "@integrationsRunsignup": {
+    "description": "RunSignUp integration name"
+  },
+  "integrationsRunsignupConnect": "Import race results from RunSignUp.",
+  "@integrationsRunsignupConnect": {
+    "description": "RunSignUp integration description"
+  },
+  "integrationsRunsignupOpen": "Open the race calendar",
+  "@integrationsRunsignupOpen": {
+    "description": "Action linking to the race calendar from the RunSignUp tile"
+  },
+  "integrationsRunsignupUnavailable": "RunSignUp import isn't available yet. parkrun and manual paste still work.",
+  "@integrationsRunsignupUnavailable": {
+    "description": "Explainer when the RunSignUp key is unconfigured"
   },
   "routeConditionsTitle": "Conditions",
   "@routeConditionsTitle": {
@@ -12668,5 +12913,206 @@
   "routeOfflinePackTooLarge": "This route is too large to cache offline",
   "@routeOfflinePackTooLarge": {
     "description": "Error when a route's offline tile pack would exceed the tile cap"
+  },
+  "badgesSectionTitle": "Achievements",
+  "@badgesSectionTitle": {
+    "description": "Achievements tab / section title"
+  },
+  "badgesSectionSubtitle": "Milestones you've earned",
+  "@badgesSectionSubtitle": {
+    "description": "Achievements section subtitle"
+  },
+  "badgesEmpty": "No badges yet — keep running.",
+  "@badgesEmpty": {
+    "description": "Empty state on your own achievements list"
+  },
+  "badgesEmptyOther": "No public badges yet.",
+  "@badgesEmptyOther": {
+    "description": "Empty state on someone else's achievements list"
+  },
+  "badgesEarnedOn": "Earned {date}",
+  "@badgesEarnedOn": {
+    "description": "Earned-date line on a badge tile",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "badgesFeedEarned": "{name} earned the {badge} badge",
+  "@badgesFeedEarned": {
+    "description": "Feed badge-strip chip text",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "badge": {
+        "type": "String"
+      }
+    }
+  },
+  "badgesARunner": "A runner",
+  "@badgesARunner": {
+    "description": "Fallback name when a badge awardee has no display name"
+  },
+  "badgesTierBronze": "Bronze",
+  "@badgesTierBronze": {
+    "description": "Bronze tier label"
+  },
+  "badgesTierSilver": "Silver",
+  "@badgesTierSilver": {
+    "description": "Silver tier label"
+  },
+  "badgesTierGold": "Gold",
+  "@badgesTierGold": {
+    "description": "Gold tier label"
+  },
+  "badgesTierPlatinum": "Platinum",
+  "@badgesTierPlatinum": {
+    "description": "Platinum tier label"
+  },
+  "badgesDistanceSingle5kLabel": "First 5K",
+  "@badgesDistanceSingle5kLabel": {
+    "description": "Badge label"
+  },
+  "badgesDistanceSingle5kDesc": "Ran 5 km in a single run",
+  "@badgesDistanceSingle5kDesc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceSingleHalfLabel": "Half marathon",
+  "@badgesDistanceSingleHalfLabel": {
+    "description": "Badge label"
+  },
+  "badgesDistanceSingleHalfDesc": "Ran 21.1 km in a single run",
+  "@badgesDistanceSingleHalfDesc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceSingleMarathonLabel": "Marathon",
+  "@badgesDistanceSingleMarathonLabel": {
+    "description": "Badge label"
+  },
+  "badgesDistanceSingleMarathonDesc": "Ran 42.2 km in a single run",
+  "@badgesDistanceSingleMarathonDesc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceSingleUltraLabel": "Ultra",
+  "@badgesDistanceSingleUltraLabel": {
+    "description": "Badge label"
+  },
+  "badgesDistanceSingleUltraDesc": "Ran 50 km or more in a single run",
+  "@badgesDistanceSingleUltraDesc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceLifetime100Label": "100 km club",
+  "@badgesDistanceLifetime100Label": {
+    "description": "Badge label"
+  },
+  "badgesDistanceLifetime100Desc": "100 km logged all-time",
+  "@badgesDistanceLifetime100Desc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceLifetime500Label": "500 km",
+  "@badgesDistanceLifetime500Label": {
+    "description": "Badge label"
+  },
+  "badgesDistanceLifetime500Desc": "500 km logged all-time",
+  "@badgesDistanceLifetime500Desc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceLifetime1000Label": "1,000 km club",
+  "@badgesDistanceLifetime1000Label": {
+    "description": "Badge label"
+  },
+  "badgesDistanceLifetime1000Desc": "1,000 km logged all-time",
+  "@badgesDistanceLifetime1000Desc": {
+    "description": "Badge description"
+  },
+  "badgesDistanceLifetime5000Label": "5,000 km",
+  "@badgesDistanceLifetime5000Label": {
+    "description": "Badge label"
+  },
+  "badgesDistanceLifetime5000Desc": "5,000 km logged all-time",
+  "@badgesDistanceLifetime5000Desc": {
+    "description": "Badge description"
+  },
+  "badgesStreak7Label": "Week streak",
+  "@badgesStreak7Label": {
+    "description": "Badge label"
+  },
+  "badgesStreak7Desc": "Ran 7 days in a row",
+  "@badgesStreak7Desc": {
+    "description": "Badge description"
+  },
+  "badgesStreak30Label": "Month streak",
+  "@badgesStreak30Label": {
+    "description": "Badge label"
+  },
+  "badgesStreak30Desc": "Ran 30 days in a row",
+  "@badgesStreak30Desc": {
+    "description": "Badge description"
+  },
+  "badgesStreak100Label": "Century streak",
+  "@badgesStreak100Label": {
+    "description": "Badge label"
+  },
+  "badgesStreak100Desc": "Ran 100 days in a row",
+  "@badgesStreak100Desc": {
+    "description": "Badge description"
+  },
+  "badgesStreak365Label": "Year streak",
+  "@badgesStreak365Label": {
+    "description": "Badge label"
+  },
+  "badgesStreak365Desc": "Ran 365 days in a row",
+  "@badgesStreak365Desc": {
+    "description": "Badge description"
+  },
+  "badgesPr1Label": "First PR",
+  "@badgesPr1Label": {
+    "description": "Badge label"
+  },
+  "badgesPr1Desc": "Set your first personal record",
+  "@badgesPr1Desc": {
+    "description": "Badge description"
+  },
+  "badgesPr3Label": "Triple PR",
+  "@badgesPr3Label": {
+    "description": "Badge label"
+  },
+  "badgesPr3Desc": "Hold personal records at 3 distances",
+  "@badgesPr3Desc": {
+    "description": "Badge description"
+  },
+  "badgesPr5Label": "PR collector",
+  "@badgesPr5Label": {
+    "description": "Badge label"
+  },
+  "badgesPr5Desc": "Hold personal records at every distance",
+  "@badgesPr5Desc": {
+    "description": "Badge description"
+  },
+  "badgesPlan1Label": "Plan finisher",
+  "@badgesPlan1Label": {
+    "description": "Badge label"
+  },
+  "badgesPlan1Desc": "Completed a training plan",
+  "@badgesPlan1Desc": {
+    "description": "Badge description"
+  },
+  "badgesPlan3Label": "Triple finisher",
+  "@badgesPlan3Label": {
+    "description": "Badge label"
+  },
+  "badgesPlan3Desc": "Completed 3 training plans",
+  "@badgesPlan3Desc": {
+    "description": "Badge description"
+  },
+  "badgesPlan10Label": "Plan veteran",
+  "@badgesPlan10Label": {
+    "description": "Badge label"
+  },
+  "badgesPlan10Desc": "Completed 10 training plans",
+  "@badgesPlan10Desc": {
+    "description": "Badge description"
   }
 }

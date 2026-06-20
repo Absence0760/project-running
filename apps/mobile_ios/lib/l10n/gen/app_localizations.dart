@@ -15786,569 +15786,287 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load challenges.'**
   String get challengesLoadFailed;
 
-  /// Thermometer raised-of-goal label
+  /// Achievements tab / section title
   ///
   /// In en, this message translates to:
-  /// **'{raised} of {goal} raised'**
-  String fundraiserRaisedOfGoal(String raised, String goal);
+  /// **'Achievements'**
+  String get badgesSectionTitle;
 
-  /// Donor count under the thermometer
+  /// Achievements section subtitle
   ///
   /// In en, this message translates to:
-  /// **'{count} supporters'**
-  String fundraiserDonorCount(int count);
+  /// **'Milestones you\'ve earned'**
+  String get badgesSectionSubtitle;
 
-  /// Shown when a fundraiser exceeds its goal
+  /// Empty state on your own achievements list
   ///
   /// In en, this message translates to:
-  /// **'Over goal!'**
-  String get fundraiserOverGoal;
+  /// **'No badges yet — keep running.'**
+  String get badgesEmpty;
 
-  /// Closed-fundraiser notice
+  /// Empty state on someone else's achievements list
   ///
   /// In en, this message translates to:
-  /// **'This fundraiser is closed.'**
-  String get fundraiserClosed;
+  /// **'No public badges yet.'**
+  String get badgesEmptyOther;
 
-  /// Donation feed heading
+  /// Earned-date line on a badge tile
   ///
   /// In en, this message translates to:
-  /// **'Recent supporters'**
-  String get fundraiserFeedTitle;
+  /// **'Earned {date}'**
+  String badgesEarnedOn(String date);
 
-  /// Empty donation feed
+  /// Feed badge-strip chip text
   ///
   /// In en, this message translates to:
-  /// **'Be the first to donate.'**
-  String get fundraiserFeedEmpty;
+  /// **'{name} earned the {badge} badge'**
+  String badgesFeedEarned(String name, String badge);
 
-  /// Anonymous donor label
+  /// Fallback name when a badge awardee has no display name
   ///
   /// In en, this message translates to:
-  /// **'Anonymous'**
-  String get fundraiserAnonymous;
+  /// **'A runner'**
+  String get badgesARunner;
 
-  /// Mobile web-handoff donate button
+  /// Bronze tier label
   ///
   /// In en, this message translates to:
-  /// **'Donate on web'**
-  String get fundraiserDonateOnWeb;
+  /// **'Bronze'**
+  String get badgesTierBronze;
 
-  /// Title of the race calendar / discovery screen
+  /// Silver tier label
   ///
   /// In en, this message translates to:
-  /// **'Race calendar'**
-  String get racesTitle;
+  /// **'Silver'**
+  String get badgesTierSilver;
 
-  /// Placeholder for the race name search field
+  /// Gold tier label
   ///
   /// In en, this message translates to:
-  /// **'Search races by name…'**
-  String get racesSearchPlaceholder;
+  /// **'Gold'**
+  String get badgesTierGold;
 
-  /// Placeholder for the near-a-place geocode field
+  /// Platinum tier label
   ///
   /// In en, this message translates to:
-  /// **'Near a place…'**
-  String get racesNearPlace;
+  /// **'Platinum'**
+  String get badgesTierPlatinum;
 
-  /// Distance-from-you label on a race card
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'{distance} away'**
-  String racesKmAway(String distance);
+  /// **'First 5K'**
+  String get badgesDistanceSingle5kLabel;
 
-  /// Distance-band chip: no filter
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Any distance'**
-  String get racesDistanceAny;
+  /// **'Ran 5 km in a single run'**
+  String get badgesDistanceSingle5kDesc;
 
-  /// Distance-band chip: 5K
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'5K'**
-  String get racesDistance5k;
+  /// **'Half marathon'**
+  String get badgesDistanceSingleHalfLabel;
 
-  /// Distance-band chip: 10K
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'10K'**
-  String get racesDistance10k;
+  /// **'Ran 21.1 km in a single run'**
+  String get badgesDistanceSingleHalfDesc;
 
-  /// Distance-band chip: half marathon
-  ///
-  /// In en, this message translates to:
-  /// **'Half'**
-  String get racesDistanceHalf;
-
-  /// Distance-band chip: marathon
+  /// Badge label
   ///
   /// In en, this message translates to:
   /// **'Marathon'**
-  String get racesDistanceMarathon;
+  String get badgesDistanceSingleMarathonLabel;
 
-  /// Distance-band chip: ultra
+  /// Badge description
+  ///
+  /// In en, this message translates to:
+  /// **'Ran 42.2 km in a single run'**
+  String get badgesDistanceSingleMarathonDesc;
+
+  /// Badge label
   ///
   /// In en, this message translates to:
   /// **'Ultra'**
-  String get racesDistanceUltra;
+  String get badgesDistanceSingleUltraLabel;
 
-  /// Link to a race's registration page
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Register'**
-  String get racesRegister;
+  /// **'Ran 50 km or more in a single run'**
+  String get badgesDistanceSingleUltraDesc;
 
-  /// Link to a race's results page
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'View results'**
-  String get racesViewResults;
+  /// **'100 km club'**
+  String get badgesDistanceLifetime100Label;
 
-  /// Action to import a runner's official race result
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Import my result'**
-  String get racesImportResult;
+  /// **'100 km logged all-time'**
+  String get badgesDistanceLifetime100Desc;
 
-  /// Action to submit a crowd-sourced race listing
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Add a race'**
-  String get racesSubmitRace;
+  /// **'500 km'**
+  String get badgesDistanceLifetime500Label;
 
-  /// Badge on a user-submitted, not-yet-verified listing
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Unverified'**
-  String get racesUnverified;
+  /// **'500 km logged all-time'**
+  String get badgesDistanceLifetime500Desc;
 
-  /// Empty state for the race calendar
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'No races match these filters yet.'**
-  String get racesEmpty;
+  /// **'1,000 km club'**
+  String get badgesDistanceLifetime1000Label;
 
-  /// Error state when the race search fails
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t load races. Check your connection and try again.'**
-  String get racesSearchFailed;
+  /// **'1,000 km logged all-time'**
+  String get badgesDistanceLifetime1000Desc;
 
-  /// Inform-tier auto-match prompt on run detail
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Was this the {name}? Import your official result.'**
-  String racesMatchPrompt(String name);
+  /// **'5,000 km'**
+  String get badgesDistanceLifetime5000Label;
 
-  /// Confirm importing a matched race result
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Import result'**
-  String get racesMatchConfirm;
+  /// **'5,000 km logged all-time'**
+  String get badgesDistanceLifetime5000Desc;
 
-  /// Dismiss the auto-match prompt
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Not this race'**
-  String get racesMatchDismiss;
+  /// **'Week streak'**
+  String get badgesStreak7Label;
 
-  /// Toast after a result is imported
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Official result imported.'**
-  String get racesImported;
+  /// **'Ran 7 days in a row'**
+  String get badgesStreak7Desc;
 
-  /// Heading for the imported official-result panel
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Official result'**
-  String get racesOfficialResult;
+  /// **'Month streak'**
+  String get badgesStreak30Label;
 
-  /// Chip-time field label
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Chip time'**
-  String get racesChipTime;
+  /// **'Ran 30 days in a row'**
+  String get badgesStreak30Desc;
 
-  /// Gun-time field label
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Gun time'**
-  String get racesGunTime;
+  /// **'Century streak'**
+  String get badgesStreak100Label;
 
-  /// Overall-place field label
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Overall place'**
-  String get racesOverallPlace;
+  /// **'Ran 100 days in a row'**
+  String get badgesStreak100Desc;
 
-  /// Age-group-place field label
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Age-group place'**
-  String get racesAgeGroupPlace;
+  /// **'Year streak'**
+  String get badgesStreak365Label;
 
-  /// Age-group field label
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Age group'**
-  String get racesAgeGroup;
+  /// **'Ran 365 days in a row'**
+  String get badgesStreak365Desc;
 
-  /// Bib field label
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Bib'**
-  String get racesBib;
+  /// **'First PR'**
+  String get badgesPr1Label;
 
-  /// Hint above the manual result paste form
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Enter your finishing details from the race\'s results page.'**
-  String get racesPasteResultHint;
+  /// **'Set your first personal record'**
+  String get badgesPr1Desc;
 
-  /// Save a race listing
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Save'**
-  String get racesSave;
+  /// **'Triple PR'**
+  String get badgesPr3Label;
 
-  /// Cancel a race form
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Cancel'**
-  String get racesCancel;
+  /// **'Hold personal records at 3 distances'**
+  String get badgesPr3Desc;
 
-  /// Title of the submit-listing form
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Add a race'**
-  String get racesEditorTitle;
+  /// **'PR collector'**
+  String get badgesPr5Label;
 
-  /// Race name field label
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Race name'**
-  String get racesFieldName;
+  /// **'Hold personal records at every distance'**
+  String get badgesPr5Desc;
 
-  /// Race date field label
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Date'**
-  String get racesFieldDate;
+  /// **'Plan finisher'**
+  String get badgesPlan1Label;
 
-  /// Race distance field label
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Distance (metres)'**
-  String get racesFieldDistance;
+  /// **'Completed a training plan'**
+  String get badgesPlan1Desc;
 
-  /// Race location field label
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Location'**
-  String get racesFieldLocation;
+  /// **'Triple finisher'**
+  String get badgesPlan3Label;
 
-  /// Registration link field label
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Registration link'**
-  String get racesFieldEntryUrl;
+  /// **'Completed 3 training plans'**
+  String get badgesPlan3Desc;
 
-  /// Results link field label
+  /// Badge label
   ///
   /// In en, this message translates to:
-  /// **'Results link'**
-  String get racesFieldResultsUrl;
+  /// **'Plan veteran'**
+  String get badgesPlan10Label;
 
-  /// Error when submitting a listing fails
+  /// Badge description
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t save the race. Please try again.'**
-  String get racesSubmitFailed;
-
-  /// Error when importing a result fails
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t import the result. Please try again.'**
-  String get racesImportFailed;
-
-  /// Nav label for the races surface
-  ///
-  /// In en, this message translates to:
-  /// **'Races'**
-  String get navRaces;
-
-  /// RunSignUp integration name
-  ///
-  /// In en, this message translates to:
-  /// **'RunSignUp'**
-  String get integrationsRunsignup;
-
-  /// RunSignUp integration description
-  ///
-  /// In en, this message translates to:
-  /// **'Import race results from RunSignUp.'**
-  String get integrationsRunsignupConnect;
-
-  /// Action linking to the race calendar from the RunSignUp tile
-  ///
-  /// In en, this message translates to:
-  /// **'Open the race calendar'**
-  String get integrationsRunsignupOpen;
-
-  /// Explainer when the RunSignUp key is unconfigured
-  ///
-  /// In en, this message translates to:
-  /// **'RunSignUp import isn\'t available yet. parkrun and manual paste still work.'**
-  String get integrationsRunsignupUnavailable;
-
-  /// Header for the route condition-reports panel
-  ///
-  /// In en, this message translates to:
-  /// **'Conditions'**
-  String get routeConditionsTitle;
-
-  /// Button to open the condition-report composer
-  ///
-  /// In en, this message translates to:
-  /// **'Report condition'**
-  String get routeConditionsReport;
-
-  /// Submit button busy label while a condition report is being sent
-  ///
-  /// In en, this message translates to:
-  /// **'Reporting…'**
-  String get routeConditionsReporting;
-
-  /// Confirmation banner after a condition report is filed
-  ///
-  /// In en, this message translates to:
-  /// **'Condition reported'**
-  String get routeConditionsReported;
-
-  /// Error banner when a condition report fails to send
-  ///
-  /// In en, this message translates to:
-  /// **'Could not report condition'**
-  String get routeConditionsReportFailed;
-
-  /// Empty state for the route condition-reports panel
-  ///
-  /// In en, this message translates to:
-  /// **'No condition reports yet.'**
-  String get routeConditionsEmpty;
-
-  /// Loading state for the route condition-reports panel
-  ///
-  /// In en, this message translates to:
-  /// **'Loading…'**
-  String get routeConditionsLoading;
-
-  /// Cancel the condition-report composer
-  ///
-  /// In en, this message translates to:
-  /// **'Cancel'**
-  String get routeConditionsCancel;
-
-  /// Delete a condition report
-  ///
-  /// In en, this message translates to:
-  /// **'Delete'**
-  String get routeConditionsDelete;
-
-  /// Title of the delete-condition confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete report?'**
-  String get routeConditionsDeleteTitle;
-
-  /// Body of the delete-condition confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'This removes the condition report permanently.'**
-  String get routeConditionsDeleteConfirm;
-
-  /// Error banner when deleting a condition report fails
-  ///
-  /// In en, this message translates to:
-  /// **'Could not delete report'**
-  String get routeConditionsDeleteFailed;
-
-  /// Label for the condition-kind dropdown in the composer
-  ///
-  /// In en, this message translates to:
-  /// **'Condition'**
-  String get routeConditionsKindLabel;
-
-  /// Label for the severity dropdown in the composer
-  ///
-  /// In en, this message translates to:
-  /// **'Severity'**
-  String get routeConditionsSeverityLabel;
-
-  /// Label for the optional note field in the composer
-  ///
-  /// In en, this message translates to:
-  /// **'Note'**
-  String get routeConditionsNoteLabel;
-
-  /// Placeholder for the optional note field in the composer
-  ///
-  /// In en, this message translates to:
-  /// **'What will the next runner hit?'**
-  String get routeConditionsNotePlaceholder;
-
-  /// Distance-along-route label on an anchored condition report
-  ///
-  /// In en, this message translates to:
-  /// **'at {distance}'**
-  String routeConditionsAtDistance(String distance);
-
-  /// Condition kind: muddy
-  ///
-  /// In en, this message translates to:
-  /// **'Muddy'**
-  String get routeConditionMuddy;
-
-  /// Condition kind: flooded
-  ///
-  /// In en, this message translates to:
-  /// **'Flooded'**
-  String get routeConditionFlooded;
-
-  /// Condition kind: snow or ice
-  ///
-  /// In en, this message translates to:
-  /// **'Snow / ice'**
-  String get routeConditionSnowIce;
-
-  /// Condition kind: overgrown
-  ///
-  /// In en, this message translates to:
-  /// **'Overgrown'**
-  String get routeConditionOvergrown;
-
-  /// Condition kind: closed
-  ///
-  /// In en, this message translates to:
-  /// **'Closed'**
-  String get routeConditionClosed;
-
-  /// Condition kind: hazard
-  ///
-  /// In en, this message translates to:
-  /// **'Hazard'**
-  String get routeConditionHazard;
-
-  /// Condition kind: clear
-  ///
-  /// In en, this message translates to:
-  /// **'Clear'**
-  String get routeConditionClear;
-
-  /// Condition kind: other
-  ///
-  /// In en, this message translates to:
-  /// **'Other'**
-  String get routeConditionOther;
-
-  /// Severity: info
-  ///
-  /// In en, this message translates to:
-  /// **'Info'**
-  String get routeConditionSeverityInfo;
-
-  /// Severity: caution
-  ///
-  /// In en, this message translates to:
-  /// **'Caution'**
-  String get routeConditionSeverityCaution;
-
-  /// Severity: impassable
-  ///
-  /// In en, this message translates to:
-  /// **'Impassable'**
-  String get routeConditionSeverityImpassable;
-
-  /// Settings toggle: spoken turn-by-turn cues while following a route
-  ///
-  /// In en, this message translates to:
-  /// **'Turn-by-turn voice cues'**
-  String get prefTurnByTurnCues;
-
-  /// Subtitle for the turn-by-turn voice cues settings toggle
-  ///
-  /// In en, this message translates to:
-  /// **'Spoken turn directions while following a saved route'**
-  String get prefTurnByTurnCuesSubtitle;
-
-  /// Spoken turn cue: left turn ahead at a distance
-  ///
-  /// In en, this message translates to:
-  /// **'In {distance}, turn left'**
-  String ttsTurnLeftIn(String distance);
-
-  /// Spoken turn cue: right turn ahead at a distance
-  ///
-  /// In en, this message translates to:
-  /// **'In {distance}, turn right'**
-  String ttsTurnRightIn(String distance);
-
-  /// Spoken turn cue: turn left now
-  ///
-  /// In en, this message translates to:
-  /// **'Turn left'**
-  String get ttsTurnLeftNow;
-
-  /// Spoken turn cue: turn right now
-  ///
-  /// In en, this message translates to:
-  /// **'Turn right'**
-  String get ttsTurnRightNow;
-
-  /// Spoken turn cue: slight left
-  ///
-  /// In en, this message translates to:
-  /// **'Bear left'**
-  String get ttsSlightLeft;
-
-  /// Spoken turn cue: slight right
-  ///
-  /// In en, this message translates to:
-  /// **'Bear right'**
-  String get ttsSlightRight;
-
-  /// Spoken turn cue: u-turn
-  ///
-  /// In en, this message translates to:
-  /// **'Make a U-turn'**
-  String get ttsUturn;
-
-  /// Progress label while an offline map tile pack downloads
-  ///
-  /// In en, this message translates to:
-  /// **'Caching map: {done} / {total}'**
-  String routeOfflinePackDownloading(int done, int total);
-
-  /// Status when an offline map tile pack finished downloading
-  ///
-  /// In en, this message translates to:
-  /// **'Map saved for offline'**
-  String get routeOfflinePackReady;
-
-  /// Status when an offline map tile pack only partly downloaded
-  ///
-  /// In en, this message translates to:
-  /// **'Map partly saved ({done} / {total}) — retry'**
-  String routeOfflinePackPartial(int done, int total);
-
-  /// Error when a route's offline tile pack would exceed the tile cap
-  ///
-  /// In en, this message translates to:
-  /// **'This route is too large to cache offline'**
-  String get routeOfflinePackTooLarge;
+  /// **'Completed 10 training plans'**
+  String get badgesPlan10Desc;
 }
 
 class _AppLocalizationsDelegate

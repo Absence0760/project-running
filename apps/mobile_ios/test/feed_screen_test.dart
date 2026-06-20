@@ -53,6 +53,26 @@ UserProfileRow _profileRow(String id, String name) => UserProfileRow(
       displayName: name,
     );
 
+BadgeAwardEntry _badgeAward({
+  String authorId = 'u-1',
+  String? authorName = 'Alex Runner',
+  String badgeKey = 'streak',
+  String tier = 'gold',
+}) =>
+    BadgeAwardEntry(
+      badge: AchievementRow(
+        id: '$badgeKey-$tier-$authorId',
+        userId: authorId,
+        badgeKey: badgeKey,
+        tier: tier,
+        sourceKind: 'streak',
+        earnedAt: DateTime.utc(2026, 6, 9, 8),
+        isPublic: true,
+      ),
+      authorId: authorId,
+      authorName: authorName,
+    );
+
 /// Fake feed-backing ApiClient. Reports a signed-in user, returns canned
 /// entries + followees + engagement, and records kudos give/rescind calls.
 class _FakeApi extends ApiClient {
@@ -60,12 +80,14 @@ class _FakeApi extends ApiClient {
     this.entries = const [],
     this.followees = const [],
     this.engagement = const {},
+    this.badgeAwards = const [],
     this.signedIn = true,
   });
   List<ActivityFeedEntry> entries;
   List<UserProfileRow> followees;
   Map<String, ({int kudosCount, bool viewerHasKudos, int commentCount})>
       engagement;
+  List<BadgeAwardEntry> badgeAwards;
   bool signedIn;
   int giveCalls = 0;
   int rescindCalls = 0;
@@ -112,6 +134,13 @@ class _FakeApi extends ApiClient {
   Future<void> rescindKudos(String runId) async {
     rescindCalls++;
   }
+
+  @override
+  Future<List<BadgeAwardEntry>> fetchFollowingBadgeAwards({
+    int limit = 20,
+    ({DateTime earnedAt, String id})? cursor,
+  }) async =>
+      badgeAwards;
 }
 
 /// Fake whose initial feed load throws, to drive the error state.
@@ -305,6 +334,29 @@ void main() {
       // The failure is surfaced, not swallowed.
       expect(find.textContaining('Could not update kudos'), findsOneWidget);
       await tester.pump(const Duration(seconds: 4)); // drain banner timer
+    });
+  });
+
+  group('FeedScreen — badge strip', () {
+    testWidgets('renders a chip per recent badge award above the feed',
+        (tester) async {
+      final api = _FakeApi(
+        entries: [_runEntry()],
+        badgeAwards: [_badgeAward(authorName: 'Alex Runner')],
+      );
+      await _pump(tester, api);
+      await _settle(tester);
+      expect(
+        find.textContaining('Alex Runner earned the Century streak badge'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('no strip when there are no badge awards', (tester) async {
+      final api = _FakeApi(entries: [_runEntry()], badgeAwards: const []);
+      await _pump(tester, api);
+      await _settle(tester);
+      expect(find.byType(ActionChip), findsNothing);
     });
   });
 }
