@@ -1,6 +1,6 @@
 # Fundraising / donation pages on a run or event — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** **Built web + mobile-read (gated)** — landed 2026-06-19 (migration `20270212_001_fundraisers.sql`, ADR §161). The full code path ships behind a fail-closed prod gate (live Stripe keys unset + owner/CISO/counsel sign-off — see § Gating). **Web:** public `/fundraisers/[id]` page (thermometer + donation feed + amount-picker → Stripe-hosted destination-charge Checkout), create/edit/close via `FundraiserEditor`, attach affordance on run-detail + event-detail. **Mobile (Android + iOS twin):** read + web-handoff card on run-detail + event-detail (donate opens the web page). The sections below were the implementation plan; they now describe shipped behaviour except where a step is explicitly deferred (e.g. mobile authoring, direct-to-charity payout). Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 ## Goal & user value
 
