@@ -2282,6 +2282,72 @@ class RaceSessionRow {
   };
 }
 
+/// Row shape for the `route_conditions` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class RouteConditionRow {
+  static const String table = 'route_conditions';
+  static const String colId = 'id';
+  static const String colRouteId = 'route_id';
+  static const String colUserId = 'user_id';
+  static const String colCondition = 'condition';
+  static const String colSeverity = 'severity';
+  static const String colNote = 'note';
+  static const String colLat = 'lat';
+  static const String colLng = 'lng';
+  static const String colPositionM = 'position_m';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String routeId;
+  final String userId;
+  final String condition;
+  final String severity;
+  final String? note;
+  final double? lat;
+  final double? lng;
+  final double? positionM;
+  final DateTime createdAt;
+
+  const RouteConditionRow({
+    required this.id,
+    required this.routeId,
+    required this.userId,
+    required this.condition,
+    required this.severity,
+    this.note,
+    this.lat,
+    this.lng,
+    this.positionM,
+    required this.createdAt,
+  });
+
+  factory RouteConditionRow.fromJson(Map<String, dynamic> json) => RouteConditionRow(
+    id: json['id'] as String,
+    routeId: json['route_id'] as String,
+    userId: json['user_id'] as String,
+    condition: json['condition'] as String,
+    severity: json['severity'] as String,
+    note: json['note'] as String?,
+    lat: (json['lat'] as num?)?.toDouble(),
+    lng: (json['lng'] as num?)?.toDouble(),
+    positionM: (json['position_m'] as num?)?.toDouble(),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colRouteId: routeId,
+    colUserId: userId,
+    colCondition: condition,
+    colSeverity: severity,
+    colNote: note,
+    colLat: lat,
+    colLng: lng,
+    colPositionM: positionM,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `route_markers` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class RouteMarkerRow {

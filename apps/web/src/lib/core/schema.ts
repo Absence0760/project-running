@@ -45,6 +45,7 @@ export const TABLES = {
 	route_reviews: 'route_reviews',
 	route_photos: 'route_photos',
 	route_markers: 'route_markers',
+	route_conditions: 'route_conditions',
 	run_kudos: 'run_kudos',
 	run_comments: 'run_comments',
 	run_photos: 'run_photos',
