@@ -258,6 +258,13 @@ class LiveRunMap extends StatefulWidget {
   /// `_PulsingDot` so the visual language stays consistent.
   final Waypoint? previewPosition;
 
+  /// When true the current-position marker renders as the approximate
+  /// `_CoarseDot` (a hollow amber ring) instead of the solid pulsing
+  /// dot. Set by the spectator screen for the privacy-zone last-seen
+  /// fix (migration 20270121_001) so it reads as a ~1 km cell, not a
+  /// precise current position.
+  final bool coarsePosition;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -274,6 +281,7 @@ class LiveRunMap extends StatefulWidget {
     this.ghostPosition,
     this.hoverIdx,
     this.previewPosition,
+    this.coarsePosition = false,
     this.courseMarkers = const [],
     this.markerPlacing = false,
     this.onMarkerPlace,
@@ -973,7 +981,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     point: currentLatLng,
                     width: 48,
                     height: 48,
-                    child: _PulsingDot(animation: _pulseAnimation),
+                    child: widget.coarsePosition
+                        ? const _CoarseDot()
+                        : _PulsingDot(animation: _pulseAnimation),
                   ),
                 ],
               ),
@@ -1104,6 +1114,38 @@ class _GhostDot extends StatelessWidget {
         border: Border.all(
           color: const Color(0xCC818CF8),
           width: 2,
+        ),
+      ),
+    );
+  }
+}
+
+/// Approximate last-seen marker for a privacy-zone coarse fix
+/// (migration 20270121_001). A hollow amber ring with a wide soft halo,
+/// deliberately distinct from the solid live `_PulsingDot` so a SAR
+/// watcher reads it as a ~1 km cell, not a precise current position.
+/// Mirrors the web `.runner-dot.coarse` style. No pulse — it is a
+/// stale-but-retained last position, not a live fix.
+class _CoarseDot extends StatelessWidget {
+  const _CoarseDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.transparent,
+          border: Border.all(color: const Color(0xFFF59E0B), width: 3),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x38F59E0B),
+              blurRadius: 4,
+              spreadRadius: 8,
+            ),
+          ],
         ),
       ),
     );

@@ -1076,6 +1076,8 @@
   "liveSpectatorBadgeIdle": "停止中",
   "liveSpectatorBadgeConnecting": "接続中",
   "liveSpectatorBadgeStale": "遅延",
+  "liveSpectatorBadgeApproximate": "おおよその位置",
+  "liveSpectatorApproximateSub": "この付近で最後に確認 — おおよその位置",
   "liveSpectatorBadgeFinished": "終了",
   "liveSpectatorBadgeDnf": "DNF",
   "liveUpdatedNow": "たった今更新",
