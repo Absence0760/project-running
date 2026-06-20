@@ -50,6 +50,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
+	import ClubPhotos from '$lib/components/ClubPhotos.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -65,8 +66,8 @@
 	let members = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
-	type Tab = 'feed' | 'events' | 'routes' | 'templates' | 'members';
-	const TABS: readonly Tab[] = ['feed', 'events', 'routes', 'templates', 'members'];
+	type Tab = 'feed' | 'events' | 'routes' | 'templates' | 'photos' | 'members';
+	const TABS: readonly Tab[] = ['feed', 'events', 'routes', 'templates', 'photos', 'members'];
 	let tab = $state<Tab>('feed');
 	let showEventModal = $state(false);
 
@@ -985,6 +986,16 @@
 			>
 				{tr('clubHome.tabTemplates')}{templatesCount ? ` (${templatesCount})` : ''}
 			</button>
+			<button
+				role="tab"
+				class="tab"
+				class:active={tab === 'photos'}
+				aria-selected={tab === 'photos'}
+				tabindex={tab === 'photos' ? 0 : -1}
+				onclick={() => setTab('photos')}
+			>
+				{tr('clubHome.tabPhotos')}
+			</button>
 		</div>
 
 		{#if tab === 'feed'}
@@ -1461,6 +1472,8 @@
 			</section>
 			{/if}
 			{/if}
+		{:else if tab === 'photos'}
+			<ClubPhotos clubId={club.id} canUpload={isMember} canModerate={isAdmin} />
 		{:else if tab === 'members'}
 			{#if members.length === 0}
 				<div class="empty-card">
