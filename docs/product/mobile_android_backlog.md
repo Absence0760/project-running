@@ -20,7 +20,6 @@ Of the 16 `✗` Android rows, several are **not Android gaps**: they're web-cano
 | Gap | Section in parity.md | Note |
 |---|---|---|
 | Event photo gallery (multi-attendee) | Clubs and events | Web ships the per-event gallery; mobile mirror deferred. |
-| Finisher certificate (downloadable) | Clubs and events | Web ships the downloadable cert; mobile deferred. |
 | Direct messages (1:1) | Following and feed | Web `/messages`; mobile deferred. |
 | Display matched track on run detail | Map matching | Web `/runs/[id]` renders the HMM-matched line; mobile not yet wired. |
 
@@ -48,10 +47,10 @@ The structural foundations (`api_client`, `core_models`, stores, `ui_kit`) all e
 
 1. **Treadmill C3 run-screen wiring** — smallest, highest-confidence: thread a shared `BleTreadmill` through `RunApp` → `run_screen`, add a treadmill-mode toggle that subscribes the belt stream and calls the already-shipped `setTreadmillSample`. No new plumbing.
 2. **Per-device "+ Add override" editor** — bounded Settings change on top of the existing write-path.
-3. **The read-path screens** (event photo gallery, finisher certificate, direct messages, matched-track on run detail) — each is one screen composing existing `api_client` methods; mirror the web shape.
+3. **The read-path screens** (event photo gallery, direct messages, matched-track on run detail) — each is one screen composing existing `api_client` methods; mirror the web shape.
 4. **Native Strava OAuth + native paywall sheets** — land the code behind the existing env-gates; the paywall sheets only *go live* once RevenueCat credentials are provisioned (fail-closed until then, per the compliance/credential-gate rule).
 
-*Shipped since this doc was written:* the **post-signup setup wizard** (`setup_wizard_screen.dart` + the `home_screen.dart` `onboarded_at` gate + `ApiClient.completeOnboarding`/`markOnboarded`) and the **personal run-track heatmap** (`run_heatmap_screen.dart` + the pure `run_heatmap.dart` twin).
+*Shipped since this doc was written:* the **post-signup setup wizard** (`setup_wizard_screen.dart` + the `home_screen.dart` `onboarded_at` gate + `ApiClient.completeOnboarding`/`markOnboarded`), the **personal run-track heatmap** (`run_heatmap_screen.dart` + the pure `run_heatmap.dart` twin), and the **finisher certificate** (`widgets/finisher_certificate_card.dart` on the event-detail leaderboard).
 
 Every item still obeys the rule: **don't fan a screen out into ad-hoc `Supabase.instance.client` queries** — go through the typed `api_client`, adding a method there first if one is missing.
 

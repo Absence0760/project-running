@@ -228,6 +228,7 @@ class EventResultView {
   final double distanceM;
   final int? rank;
   final String finisherStatus;
+  final bool organiserApproved;
   final double? ageGradePct;
   final String? note;
   final DateTime createdAt;
@@ -242,6 +243,7 @@ class EventResultView {
     required this.distanceM,
     required this.rank,
     required this.finisherStatus,
+    required this.organiserApproved,
     required this.ageGradePct,
     required this.note,
     required this.createdAt,
@@ -1295,6 +1297,7 @@ class SocialService extends ChangeNotifier {
           distanceM: (r['distance_m'] as num).toDouble(),
           rank: r['rank'] as int?,
           finisherStatus: r['finisher_status'] as String,
+          organiserApproved: r['organiser_approved'] as bool? ?? false,
           ageGradePct: (r['age_grade_pct'] as num?)?.toDouble(),
           note: r['note'] as String?,
           createdAt: DateTime.parse(r['created_at'] as String),

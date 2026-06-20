@@ -7893,6 +7893,40 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'ジムログに追加しました';
 
   @override
+  String get clubEventDownloadCertificate => '完走証';
+
+  @override
+  String get clubEventCertificateShare => '保存または共有';
+
+  @override
+  String clubEventCertificateShareText(String event) {
+    return '$event を完走しました！';
+  }
+
+  @override
+  String get clubEventCertificateFailed => '証明書を作成できませんでした。もう一度お試しください。';
+
+  @override
+  String get clubEventCertificateHeading => '完走証明書';
+
+  @override
+  String get clubEventCertificateCertifies => '以下を証明します';
+
+  @override
+  String get clubEventCertificateCompleted => 'が完走しました';
+
+  @override
+  String get clubEventCertificateTime => 'タイム';
+
+  @override
+  String get clubEventCertificateDistance => '距離';
+
+  @override
+  String clubEventCertificatePlace(String place) {
+    return '$place位';
+  }
+
+  @override
   String get gymEditorNewTitle => '新しいワークアウト';
 
   @override

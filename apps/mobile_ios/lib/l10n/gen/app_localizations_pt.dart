@@ -8330,6 +8330,41 @@ class AppLocalizationsPt extends AppLocalizations {
       'Adicionado ao seu registro de academia';
 
   @override
+  String get clubEventDownloadCertificate => 'Certificado de conclusão';
+
+  @override
+  String get clubEventCertificateShare => 'Guardar ou partilhar';
+
+  @override
+  String clubEventCertificateShareText(String event) {
+    return 'Concluí $event!';
+  }
+
+  @override
+  String get clubEventCertificateFailed =>
+      'Não foi possível gerar o certificado. Tente novamente.';
+
+  @override
+  String get clubEventCertificateHeading => 'Certificado de Conclusão';
+
+  @override
+  String get clubEventCertificateCertifies => 'Isto certifica que';
+
+  @override
+  String get clubEventCertificateCompleted => 'concluiu';
+
+  @override
+  String get clubEventCertificateTime => 'Tempo';
+
+  @override
+  String get clubEventCertificateDistance => 'Distância';
+
+  @override
+  String clubEventCertificatePlace(String place) {
+    return '$place lugar';
+  }
+
+  @override
   String get gymEditorNewTitle => 'Novo treino';
 
   @override
@@ -18160,6 +18195,41 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get clubEventLogAsWorkoutSaved =>
       'Adicionado ao seu registro de academia';
+
+  @override
+  String get clubEventDownloadCertificate => 'Certificado de conclusão';
+
+  @override
+  String get clubEventCertificateShare => 'Salvar ou compartilhar';
+
+  @override
+  String clubEventCertificateShareText(String event) {
+    return 'Concluí $event!';
+  }
+
+  @override
+  String get clubEventCertificateFailed =>
+      'Não foi possível gerar o certificado. Tente novamente.';
+
+  @override
+  String get clubEventCertificateHeading => 'Certificado de Conclusão';
+
+  @override
+  String get clubEventCertificateCertifies => 'Isto certifica que';
+
+  @override
+  String get clubEventCertificateCompleted => 'concluiu';
+
+  @override
+  String get clubEventCertificateTime => 'Tempo';
+
+  @override
+  String get clubEventCertificateDistance => 'Distância';
+
+  @override
+  String clubEventCertificatePlace(String place) {
+    return '$place lugar';
+  }
 
   @override
   String get gymEditorNewTitle => 'Novo treino';

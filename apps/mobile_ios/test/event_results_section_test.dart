@@ -5,14 +5,20 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/event_detail_screen.dart';
 import '../lib/social_service.dart';
 
-EventResultView _result({required String? userId}) => EventResultView(
+EventResultView _result({
+  required String? userId,
+  String finisherStatus = 'finished',
+  bool organiserApproved = false,
+}) =>
+    EventResultView(
       userId: userId,
       displayName: 'Me',
       runId: null,
       durationS: 1500,
       distanceM: 5000,
       rank: 1,
-      finisherStatus: 'finished',
+      finisherStatus: finisherStatus,
+      organiserApproved: organiserApproved,
       ageGradePct: null,
       note: null,
       createdAt: DateTime(2026, 1, 1),
@@ -37,6 +43,9 @@ Future<void> _pump(
           submitting: submitting,
           onSubmit: onSubmit,
           onRemove: onRemove,
+          eventTitle: 'Riverside 10K',
+          clubName: 'Richmond Run Club',
+          certificateDate: DateTime(2026, 6, 12),
         ),
       ),
     ),
@@ -135,6 +144,67 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Remove your result?'), findsNothing);
       expect(removed, isFalse);
+    });
+  });
+
+  group('EventResultsSection — finisher certificate', () {
+    Finder certButton() =>
+        find.byIcon(Icons.workspace_premium_outlined);
+
+    testWidgets('shows the certificate action for an approved finisher',
+        (tester) async {
+      await _pump(
+        tester,
+        results: [
+          _result(
+            userId: 'u1',
+            finisherStatus: 'finished',
+            organiserApproved: true,
+          )
+        ],
+        myUserId: 'u1',
+        submitting: false,
+        onRemove: () {},
+        onSubmit: () {},
+      );
+      expect(certButton(), findsOneWidget);
+    });
+
+    testWidgets('hides the certificate action until the result is approved',
+        (tester) async {
+      await _pump(
+        tester,
+        results: [
+          _result(
+            userId: 'someone-else',
+            finisherStatus: 'finished',
+            organiserApproved: false,
+          )
+        ],
+        myUserId: 'u1',
+        submitting: false,
+        onRemove: () {},
+        onSubmit: () {},
+      );
+      expect(certButton(), findsNothing);
+    });
+
+    testWidgets('hides the certificate action for a DNF', (tester) async {
+      await _pump(
+        tester,
+        results: [
+          _result(
+            userId: 'someone-else',
+            finisherStatus: 'dnf',
+            organiserApproved: true,
+          )
+        ],
+        myUserId: 'u1',
+        submitting: false,
+        onRemove: () {},
+        onSubmit: () {},
+      );
+      expect(certButton(), findsNothing);
     });
   });
 }

@@ -11143,6 +11143,52 @@
   "@clubEventLogAsWorkoutSaved": {
     "description": "Confirmation banner shown after the user saves the class as a gym workout."
   },
+  "clubEventDownloadCertificate": "Finisher certificate",
+  "@clubEventDownloadCertificate": {
+    "description": "Tooltip / title for the action that opens a finisher's downloadable certificate."
+  },
+  "clubEventCertificateShare": "Save or share",
+  "@clubEventCertificateShare": {
+    "description": "Button that captures the finisher certificate and opens the OS share sheet."
+  },
+  "clubEventCertificateShareText": "I finished {event}!",
+  "@clubEventCertificateShareText": {
+    "description": "Caption attached when sharing a finisher certificate image.",
+    "placeholders": {
+      "event": { "type": "String" }
+    }
+  },
+  "clubEventCertificateFailed": "Could not generate the certificate. Please try again.",
+  "@clubEventCertificateFailed": {
+    "description": "Error banner when the finisher certificate image fails to render."
+  },
+  "clubEventCertificateHeading": "Certificate of Completion",
+  "@clubEventCertificateHeading": {
+    "description": "Headline printed on the finisher certificate."
+  },
+  "clubEventCertificateCertifies": "This certifies that",
+  "@clubEventCertificateCertifies": {
+    "description": "Line above the finisher's name on the certificate."
+  },
+  "clubEventCertificateCompleted": "completed",
+  "@clubEventCertificateCompleted": {
+    "description": "Line above the event title on the certificate."
+  },
+  "clubEventCertificateTime": "Time",
+  "@clubEventCertificateTime": {
+    "description": "Label before the finish time in the certificate's stat row."
+  },
+  "clubEventCertificateDistance": "Distance",
+  "@clubEventCertificateDistance": {
+    "description": "Label before the distance in the certificate's stat row."
+  },
+  "clubEventCertificatePlace": "{place} place",
+  "@clubEventCertificatePlace": {
+    "description": "Placing entry in the certificate's stat row, e.g. '3rd place'.",
+    "placeholders": {
+      "place": { "type": "String" }
+    }
+  },
   "gymEditorNewTitle": "New workout",
   "gymEditorEditTitle": "Edit workout",
   "gymEditorTitleLabel": "Title (optional)",

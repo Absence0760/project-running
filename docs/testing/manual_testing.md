@@ -297,6 +297,7 @@ See [clubs.md](../features/clubs.md) for the deferred items.
 | Create event | `/clubs/[slug]/events/new` | One-off OR weekly/biweekly/monthly recurrence (see `recurrence_test.dart` — 8 tests pin the expansion). RSVP per-instance. |
 | Event detail | `/clubs/[slug]/events/[id]` | RSVP toggles `event_attendees` row; updates list under the event; recurring events render the next instance with its own state. |
 | Approve event result | Admin on `/clubs/[slug]/events/[id]` | `approve_event_result` RPC flips the row visibility (decisions.md mentions the role separation). |
+| Finisher certificate | Web `/clubs/[slug]/events/[id]`; mobile event detail | On each finished + organiser-approved leaderboard row, a certificate action appears. Web downloads a PNG; mobile (`event_detail_screen.dart`) opens a card preview → "Save or share" hands the rendered PNG to the OS share sheet. Absent on DNF/DNS rows and on finished-but-unapproved rows. |
 | Club-owned route | Admin on `/routes/[id]` → Transfer to club | `routes.club_id` set; non-members can't see the route in My routes but can see it under the club's Routes tab. |
 
 ---
