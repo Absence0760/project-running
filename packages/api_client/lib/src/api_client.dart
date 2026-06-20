@@ -472,6 +472,42 @@ class ApiClient {
     return SafetyContact.fromJson(data);
   }
 
+  /// Publish (or re-publish) a Year-in-Running recap as a public, OG-
+  /// unfurlable snapshot and return its share id (the uuid in the
+  /// /recap/share/[id] web link). Owner-only via RLS. The snapshot is FROZEN
+  /// aggregate data only (totals / badges / monthly strip) — no GPS, no
+  /// per-run rows. Upserts on (user_id, period_kind, period_key) so a
+  /// re-publish refreshes the same link instead of minting a new one.
+  /// Returns null when signed-out or the write fails (the caller surfaces it).
+  /// `periodKind` is 'year' or 'month'; `periodKey` is '2026' or '2026-03'.
+  Future<String?> publishRecap({
+    required String periodKind,
+    required String periodKey,
+    required Map<String, dynamic> snapshot,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return null;
+    try {
+      final data = await _client
+          .from('public_recaps')
+          .upsert(
+            <String, dynamic>{
+              'user_id': userId,
+              'period_kind': periodKind,
+              'period_key': periodKey,
+              'snapshot': snapshot,
+            },
+            onConflict: 'user_id,period_kind,period_key',
+          )
+          .select('id')
+          .single();
+      return data['id'] as String?;
+    } catch (e) {
+      debugPrint('publishRecap failed: $e');
+      return null;
+    }
+  }
+
   /// Remove a safety contact the owner added (RLS gates to `owner_id = me`).
   Future<void> removeSafetyContact(String id) async {
     await _client

@@ -125,6 +125,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recapShareTooltip => 'Compartir resumen';
 
   @override
+  String get recapPublishAndShare => 'Publicar y compartir enlace';
+
+  @override
+  String get recapPublishFailed =>
+      'No se pudo publicar el resumen. Inténtalo de nuevo.';
+
+  @override
   String get recapPrevYear => 'Año anterior';
 
   @override

@@ -173,6 +173,10 @@ export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 // no route/results); `social` is a meetup. Enforced by the events_category_check
 // CHECK constraint (migration 20261227_001) — keep this union in lockstep.
 export type EventCategory = 'run' | 'cycle' | 'class' | 'social';
+// public_recaps.period_kind — a published "Wrapped" recap is either a whole
+// year or one calendar month. Enforced by a CHECK constraint (migration
+// 20270207_001) — keep this union in lockstep (check_constraint_unions.mjs PAIRS).
+export type RecapPeriodKind = 'year' | 'month';
 // Paid registration (club_events.md slice P1). Each is enforced by a CHECK
 // constraint (migration 20261229_001) — keep these unions in lockstep
 // (check_constraint_unions.mjs PAIRS).

@@ -52,6 +52,8 @@ import {
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
+import type { RecapPeriodKind } from '../types';
+import type { YearInRunningRecap } from '../runs/recap';
 import type {
 	CoachAthleteStatus,
 	SessionPlan,
@@ -180,6 +182,60 @@ export async function fetchRecapExtras(
 	return {
 		photoCount: photos.error ? 0 : photos.count ?? 0,
 		personalRecordCount: prs.error ? 0 : prs.count ?? 0,
+	};
+}
+
+/// Publish (or re-publish) a recap as a public, OG-unfurlable snapshot and
+/// return its share id (the uuid in the /recap/share/[id] link). Owner-only:
+/// RLS rejects writes for any other user. The snapshot is FROZEN aggregate
+/// data only (totals / badges / monthly strip) — no GPS, no per-run rows.
+/// Upserts on (user_id, period_kind, period_key) so re-publishing the same
+/// period refreshes the same link instead of minting a new one. Returns null
+/// when signed-out or the write fails (the caller surfaces the failure).
+export async function publishRecap(
+	periodKind: RecapPeriodKind,
+	periodKey: string,
+	snapshot: YearInRunningRecap,
+): Promise<string | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	const { data, error } = await supabase
+		.from(TABLES.public_recaps)
+		.upsert(
+			{
+				user_id: userId,
+				period_kind: periodKind,
+				period_key: periodKey,
+				snapshot: snapshot as unknown as Record<string, unknown>,
+			},
+			{ onConflict: 'user_id,period_kind,period_key' },
+		)
+		.select('id')
+		.single();
+	if (error || !data) {
+		console.warn('publishRecap failed', error);
+		return null;
+	}
+	return data.id;
+}
+
+/// Fetch a published recap snapshot by its share id. Anon-readable (the id
+/// is the capability token; RLS allows SELECT by id). Used by the public
+/// share page; returns null when the id doesn't resolve (never published,
+/// or revoked).
+export async function fetchPublicRecap(
+	id: string,
+): Promise<{ periodKind: RecapPeriodKind; periodKey: string; snapshot: YearInRunningRecap } | null> {
+	const { data, error } = await supabase
+		.from(TABLES.public_recaps)
+		.select('period_kind, period_key, snapshot')
+		.eq('id', id)
+		.maybeSingle();
+	if (error || !data) return null;
+	return {
+		periodKind: data.period_kind as RecapPeriodKind,
+		periodKey: data.period_key,
+		snapshot: data.snapshot as unknown as YearInRunningRecap,
 	};
 }
 

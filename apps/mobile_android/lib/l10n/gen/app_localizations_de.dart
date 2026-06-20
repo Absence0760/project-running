@@ -124,6 +124,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get recapShareTooltip => 'Rückblick teilen';
 
   @override
+  String get recapPublishAndShare => 'Veröffentlichen & Link teilen';
+
+  @override
+  String get recapPublishFailed =>
+      'Rückblick konnte nicht veröffentlicht werden. Bitte erneut versuchen.';
+
+  @override
   String get recapPrevYear => 'Vorheriges Jahr';
 
   @override

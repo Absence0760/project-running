@@ -30,6 +30,8 @@
   "recapShareSubject": "Retrospectiva {year}",
   "recapTitle": "Ano na corrida",
   "recapShareTooltip": "Compartilhar retrospectiva",
+  "recapPublishAndShare": "Publicar e partilhar ligação",
+  "recapPublishFailed": "Não foi possível publicar o resumo. Tente novamente.",
   "recapPrevYear": "Ano anterior",
   "recapNextYear": "Próximo ano",
   "recapNoRunsForYear": "Nenhuma corrida para a retrospectiva de {year}.",

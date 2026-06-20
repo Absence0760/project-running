@@ -23,6 +23,7 @@ Run _run({
   Duration duration = const Duration(minutes: 25),
   String? routeId,
   String activity = 'run',
+  double? elevationM,
 }) =>
     Run(
       id: id,
@@ -31,7 +32,10 @@ Run _run({
       distanceMetres: distanceM,
       source: RunSource.app,
       routeId: routeId,
-      metadata: {'activity_type': activity},
+      metadata: {
+        'activity_type': activity,
+        if (elevationM != null) 'elevation_m': elevationM,
+      },
     );
 
 void main() {
@@ -339,6 +343,260 @@ void main() {
       final r = buildYearInRunningRecap(runs, 3000);
       expect(r.runCount, 0);
       expect(r.totalDistanceM, 0);
+    });
+
+    test('elevation totals sum the metadata.elevation_m key, falling back to 0',
+        () {
+      final runs = [
+        _run(id: 'a', startedAt: DateTime(2025, 2, 1), distanceM: 5000),
+        _run(
+          id: 'b',
+          startedAt: DateTime(2025, 2, 2),
+          distanceM: 5000,
+          elevationM: 50,
+        ),
+      ];
+      final r = buildYearInRunningRecap(runs, 2025);
+      expect(r.totalElevationM, 50);
+    });
+
+    test('zero runs → null earliest + latest start', () {
+      final r = buildYearInRunningRecap(const [], 2025);
+      expect(r.earliestStartLocal, isNull);
+      expect(r.latestStartLocal, isNull);
+    });
+  });
+
+  group('extras + badges', () {
+    test('extras default to 0 and emit no photo / PR badge', () {
+      final r = buildYearInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 3, 1), distanceM: 5000)],
+        2025,
+      );
+      expect(r.photoCount, 0);
+      expect(r.personalRecordCount, 0);
+      expect(r.badges.any((b) => b.id.startsWith('photo')), isFalse);
+      expect(r.badges.any((b) => b.id.startsWith('pr')), isFalse);
+    });
+
+    test('extras surface photo + PR counts and the highest badge tier', () {
+      final r = buildYearInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 3, 1), distanceM: 5000)],
+        2025,
+        const RecapExtras(photoCount: 30, personalRecordCount: 6),
+      );
+      expect(r.photoCount, 30);
+      expect(r.personalRecordCount, 6);
+      expect(r.badges.firstWhere((b) => b.id.startsWith('photo')).id, 'photo-25');
+      expect(r.badges.firstWhere((b) => b.id.startsWith('pr')).id, 'pr-5');
+    });
+
+    test('negative extras are clamped to a non-negative int', () {
+      final r = buildYearInRunningRecap(
+        const [],
+        2025,
+        const RecapExtras(photoCount: -3, personalRecordCount: 2),
+      );
+      expect(r.photoCount, 0);
+      expect(r.personalRecordCount, 2);
+    });
+
+    test('one badge per category — the highest tier reached wins', () {
+      // 1,200 km should produce the 1,000 km badge only.
+      final runs = [
+        for (var i = 0; i < 12; i++)
+          _run(
+            id: 'r$i',
+            startedAt: DateTime(2025, (i % 9) + 1, (i % 9) + 1, 10),
+            distanceM: 100000,
+            duration: const Duration(minutes: 500),
+          ),
+      ];
+      final r = buildYearInRunningRecap(runs, 2025);
+      final distBadges =
+          r.badges.where((b) => b.id.startsWith('dist-')).toList();
+      expect(distBadges.length, 1);
+      expect(distBadges.first.id, 'dist-1000');
+    });
+
+    test('a marathon-length longest run earns the Marathon trophy', () {
+      final r = buildYearInRunningRecap(
+        [
+          _run(
+            id: 'a',
+            startedAt: DateTime(2025, 4, 1, 8),
+            distanceM: 42300,
+            duration: const Duration(hours: 4),
+          ),
+        ],
+        2025,
+      );
+      expect(r.badges.any((b) => b.id == 'long-marathon'), isTrue);
+      expect(r.badges.any((b) => b.id == 'long-ultra'), isFalse);
+    });
+
+    test('an early start before 06:00 earns the Early bird trophy', () {
+      final r = buildYearInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 5, 1, 5, 15), distanceM: 5000)],
+        2025,
+      );
+      expect(r.badges.any((b) => b.id == 'early'), isTrue);
+      expect(r.badges.any((b) => b.id == 'night'), isFalse);
+    });
+
+    test('an empty year earns no trophies', () {
+      final r = buildYearInRunningRecap(const [], 2025);
+      expect(r.badges.length, 0);
+    });
+  });
+
+  group('recapHeadline', () {
+    test('km vs mi switches the unit string', () {
+      final recap = buildYearInRunningRecap(
+        [
+          _run(
+            id: 'a',
+            startedAt: DateTime(2025, 1, 1, 10),
+            distanceM: 1609344,
+            duration: const Duration(seconds: 540000),
+          ),
+        ],
+        2025,
+      );
+      expect(recapHeadline(recap, 'km'), '2025: 1609 km across 1 runs.');
+      expect(recapHeadline(recap, 'mi'), '2025: 1000 mi across 1 runs.');
+    });
+
+    test('empty recap shows the "no runs" string', () {
+      final recap = buildYearInRunningRecap(const [], 2025);
+      expect(recapHeadline(recap, 'km'), 'No runs in 2025 yet.');
+    });
+  });
+
+  group('buildMonthInRunningRecap', () {
+    test('projects out a single month', () {
+      final runs = [
+        _run(
+          id: 'a',
+          startedAt: DateTime(2025, 3, 5, 10),
+          distanceM: 5000,
+          duration: const Duration(minutes: 25),
+        ),
+        _run(
+          id: 'b',
+          startedAt: DateTime(2025, 3, 20, 10),
+          distanceM: 7000,
+          duration: const Duration(minutes: 35),
+        ),
+        _run(
+          id: 'c',
+          startedAt: DateTime(2025, 6, 1, 10),
+          distanceM: 10000,
+        ),
+      ];
+      final r = buildMonthInRunningRecap(runs, 2025, 3);
+      expect(r.month, 3);
+      expect(r.runCount, 2);
+      expect(r.totalDistanceM, 12000);
+      expect(r.totalDurationS, 60 * 60);
+      expect(r.longestRunM, 7000);
+    });
+
+    test('empty month → zeros, keeps the 12-month strip', () {
+      final runs = [
+        _run(id: 'c', startedAt: DateTime(2025, 6, 1, 10), distanceM: 10000),
+      ];
+      final r = buildMonthInRunningRecap(runs, 2025, 3);
+      expect(r.month, 3);
+      expect(r.runCount, 0);
+      expect(r.totalDistanceM, 0);
+      expect(r.longestRunM, 0);
+      expect(r.monthly.length, 12);
+      expect(r.monthly[5].distanceM, 10000);
+    });
+
+    test('a cycle ride is not the month longest run / fastest pace', () {
+      final runs = [
+        _run(
+          id: 'run',
+          startedAt: DateTime(2025, 4, 1, 10),
+          distanceM: 5000,
+          duration: const Duration(minutes: 25),
+        ),
+        _run(
+          id: 'ride',
+          startedAt: DateTime(2025, 4, 2, 10),
+          distanceM: 40000,
+          duration: const Duration(minutes: 80),
+          activity: 'cycle',
+        ),
+      ];
+      final r = buildMonthInRunningRecap(runs, 2025, 4);
+      expect(r.longestRunM, 5000);
+      expect(r.fastestPaceSecPerKm, closeTo(300, 0.1));
+      expect(r.totalDistanceM, 45000);
+    });
+
+    test('extras flow through to month badges', () {
+      final r = buildMonthInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 5, 1, 10), distanceM: 5000)],
+        2025,
+        5,
+        const RecapExtras(photoCount: 30, personalRecordCount: 6),
+      );
+      expect(r.photoCount, 30);
+      expect(r.personalRecordCount, 6);
+      expect(r.badges.firstWhere((b) => b.id.startsWith('photo')).id, 'photo-25');
+      expect(r.badges.firstWhere((b) => b.id.startsWith('pr')).id, 'pr-5');
+    });
+
+    test('out-of-range month is zero, never throws', () {
+      final r = buildMonthInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 5, 1, 10), distanceM: 5000)],
+        2025,
+        13,
+      );
+      expect(r.runCount, 0);
+      expect(r.totalDistanceM, 0);
+    });
+  });
+
+  group('recapSnapshotJson', () {
+    test('serialises the aggregate-only shape the public_recaps table stores', () {
+      final r = buildYearInRunningRecap(
+        [
+          _run(
+            id: 'a',
+            startedAt: DateTime(2025, 3, 1, 8),
+            distanceM: 42300,
+            duration: const Duration(hours: 4),
+          ),
+        ],
+        2025,
+        const RecapExtras(photoCount: 3, personalRecordCount: 2),
+      );
+      final json = recapSnapshotJson(r);
+      // The field set matches the web YearInRunningRecap so the web share
+      // page + og:image render a mobile-published recap identically.
+      expect(json['year'], 2025);
+      expect(json.containsKey('month'), isFalse); // annual recap → no month key
+      expect(json['runCount'], 1);
+      expect(json['totalDistanceM'], 42300);
+      expect((json['monthly'] as List).length, 12);
+      expect(json['badges'], isA<List>());
+      // Aggregate-only: no GPS / per-run keys leak into the snapshot.
+      expect(json.containsKey('track'), isFalse);
+      expect(json.containsKey('runs'), isFalse);
+    });
+
+    test('a monthly recap carries the month key', () {
+      final r = buildMonthInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 3, 1, 8), distanceM: 5000)],
+        2025,
+        3,
+      );
+      final json = recapSnapshotJson(r);
+      expect(json['month'], 3);
     });
   });
 }

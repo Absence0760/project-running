@@ -55,6 +55,8 @@ export interface RecapExtras {
 
 export interface YearInRunningRecap {
 	year: number;
+	/** Present only on a monthly recap (1-based). Absent on the annual card. */
+	month?: number;
 	runCount: number;
 	totalDistanceM: number;
 	totalDurationS: number;
@@ -336,6 +338,141 @@ export function buildYearInRunningRecap(
 		earliestStartLocal,
 		latestStartLocal,
 		monthly,
+		topWeek,
+		uniqueRouteCount: uniqueRoutes.size,
+		mostUsedActivity,
+		photoCount,
+		personalRecordCount,
+		badges,
+	};
+}
+
+/**
+ * Monthly recap — same engine, one calendar month. Reuses
+ * `buildYearInRunningRecap` over the whole run set and projects out the
+ * single requested month, so every per-run rule (run-family longest /
+ * fastest, cross-modal totals, route + activity tallies) stays identical
+ * to the annual card by construction. The headline numbers are re-derived
+ * from the month's runs only; the month-scaled badges reuse the same
+ * tier ladder (most year tiers simply won't trigger in a month, which is
+ * the intended behaviour — a month-long streak in a single month is still
+ * a month-long streak).
+ *
+ * `month` is 1-based (1=Jan … 12=Dec). Pass *all* runs; the helper filters
+ * internally, and the streak still anchors at the end of the month.
+ */
+export function buildMonthInRunningRecap(
+	runs: Run[],
+	year: number,
+	month: number,
+	extras: RecapExtras = {},
+): YearInRunningRecap {
+	const yearRecap = buildYearInRunningRecap(runs, year, extras);
+	const bucket = yearRecap.monthly[month - 1] ?? {
+		month,
+		distanceM: 0,
+		durationS: 0,
+		runCount: 0,
+	};
+
+	const inMonth: Run[] = [];
+	for (const r of runs) {
+		const d = new Date(r.started_at);
+		if (d.getFullYear() === year && d.getMonth() + 1 === month) inMonth.push(r);
+	}
+
+	let totalElevation = 0;
+	let longest = 0;
+	let fastestPaceSecPerKm: number | null = null;
+	let earliestMin: number | null = null;
+	let latestMin: number | null = null;
+	let earliestRun: Date | null = null;
+	let latestRun: Date | null = null;
+	const activityCounts = new Map<string, number>();
+	const weeklyTotals = new Map<string, { distanceM: number; runCount: number }>();
+	const uniqueRoutes = new Set<string>();
+
+	for (const r of inMonth) {
+		const d = new Date(r.started_at);
+		totalElevation += elevationOf(r);
+		const isRunFamily = (r.activity_type ?? 'run') !== 'cycle';
+		if (isRunFamily && r.distance_m > longest) longest = r.distance_m;
+		if (isRunFamily && r.distance_m > 500 && r.duration_s > 0) {
+			const pace = r.duration_s / (r.distance_m / 1000);
+			if (fastestPaceSecPerKm == null || pace < fastestPaceSecPerKm) fastestPaceSecPerKm = pace;
+		}
+		const startMin = d.getHours() * 60 + d.getMinutes();
+		if (earliestMin == null || startMin < earliestMin) {
+			earliestMin = startMin;
+			earliestRun = d;
+		}
+		if (latestMin == null || startMin > latestMin) {
+			latestMin = startMin;
+			latestRun = d;
+		}
+		const wk = mondayOf(d);
+		const cur = weeklyTotals.get(wk) ?? { distanceM: 0, runCount: 0 };
+		cur.distanceM += r.distance_m;
+		cur.runCount += 1;
+		weeklyTotals.set(wk, cur);
+		if (r.route_id) uniqueRoutes.add(r.route_id);
+		const activity = r.activity_type ?? 'run';
+		activityCounts.set(activity, (activityCounts.get(activity) ?? 0) + 1);
+	}
+
+	let topWeek: RecapWeekTop | null = null;
+	for (const [weekStart, totals] of weeklyTotals.entries()) {
+		if (topWeek == null || totals.distanceM > topWeek.distanceM) {
+			topWeek = { weekStart, distanceM: totals.distanceM, runCount: totals.runCount };
+		}
+	}
+
+	let mostUsedActivity: string | null = null;
+	for (const [name, count] of activityCounts.entries()) {
+		if (mostUsedActivity == null || count > (activityCounts.get(mostUsedActivity) ?? 0)) {
+			mostUsedActivity = name;
+		}
+	}
+
+	const endOfMonth = new Date(year, month, 0, 23, 59); // day 0 of next month = last day of this
+	const streaks = computeRunStreaks(
+		runs.map((r) => new Date(r.started_at)),
+		endOfMonth,
+	);
+
+	const photoCount = Math.max(0, Math.trunc(extras.photoCount ?? 0));
+	const personalRecordCount = Math.max(0, Math.trunc(extras.personalRecordCount ?? 0));
+	const earliestStartLocal = earliestRun ? hhmm(earliestRun) : null;
+	const latestStartLocal = latestRun ? hhmm(latestRun) : null;
+
+	const badges = computeRecapBadges({
+		totalDistanceM: bucket.distanceM,
+		runCount: bucket.runCount,
+		bestStreakDays: streaks.best,
+		totalElevationM: totalElevation,
+		longestRunM: longest,
+		activeMonths: bucket.runCount > 0 ? 1 : 0,
+		distinctActivities: activityCounts.size,
+		earliestStartLocal,
+		latestStartLocal,
+		photoCount,
+		personalRecordCount,
+	});
+
+	return {
+		year,
+		month,
+		runCount: bucket.runCount,
+		totalDistanceM: bucket.distanceM,
+		totalDurationS: bucket.durationS,
+		totalElevationM: totalElevation,
+		longestRunM: longest,
+		fastestPaceSecPerKm,
+		bestStreakDays: streaks.best,
+		currentStreakDays: streaks.current,
+		earliestStartLocal,
+		latestStartLocal,
+		monthly: yearRecap.monthly,
 		topWeek,
 		uniqueRouteCount: uniqueRoutes.size,
 		mostUsedActivity,
