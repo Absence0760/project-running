@@ -288,6 +288,7 @@ export const messages = {
 	"dash.unhide": "再表示",
 	"dash.recentRunsTitle": "最近のラン",
 	"dash.todayLiftLabel": "今日の筋トレ",
+	"dash.todayNutritionLabel": "今日の栄養",
 	"dash.recentLiftsTitle": "最近の筋トレ",
 	"dash.viewAllGym": "すべて表示",
 	"dash.logALift": "筋トレを記録",

@@ -301,6 +301,7 @@ export const en = {
 	"dash.unhide": "Unhide",
 	"dash.recentRunsTitle": "Recent Runs",
 	"dash.todayLiftLabel": "Today's lift",
+	"dash.todayNutritionLabel": "Today's nutrition",
 	"dash.recentLiftsTitle": "Recent lifts",
 	"dash.viewAllGym": "View all",
 	"dash.logALift": "Log a lift",
