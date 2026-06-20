@@ -3,6 +3,8 @@ package internal
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
 )
 
 // Web-push channel preference, stored in user_settings.prefs.push_notifications.
@@ -82,4 +84,27 @@ func renderWebPushPayload(n NotificationRow, baseURL, locale string) ([]byte, er
 		URL:   pathForKind(n.Kind, base, n),
 		Tag:   "notif-" + n.ID,
 	})
+}
+
+// renderNativeMessage turns a notification row into the native-push Message for
+// FCM/APNs, localized from the SAME shared email catalogue the web-push and
+// bell renders use — one copy source across every channel. Title is the
+// heading; Body is the inbox preheader (falling back to the first body line);
+// URL is the deep link the tap handler opens; Tag (== the notification id)
+// coalesces a retry so a duplicate replaces rather than stacks.
+func renderNativeMessage(n NotificationRow, baseURL, locale string) nativepush.Message {
+	base := strings.TrimRight(baseURL, "/")
+	loc := normalizeEmailLocale(locale)
+	s := lookupEmailStrings(loc, keyForKind(n.Kind))
+
+	body := s.preheader
+	if body == "" && len(s.body) > 0 {
+		body = s.body[0]
+	}
+	return nativepush.Message{
+		Title: s.heading,
+		Body:  body,
+		URL:   pathForKind(n.Kind, base, n),
+		Tag:   "notif-" + n.ID,
+	}
 }

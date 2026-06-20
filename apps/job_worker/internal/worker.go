@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
 )
 
@@ -96,6 +97,16 @@ type Backend interface {
 	MarkNotificationWebPushed(ctx context.Context, notificationID string) error
 	FetchPushSubscriptions(ctx context.Context, userID string) ([]PushSubscriptionRow, error)
 	ClearPushSubscription(ctx context.Context, userID, deviceID string) error
+	// Native-push path — used by the kind='native_push' handler (migration
+	// 20270212_001), the third consumer of the same notifications row the
+	// email + web-push handlers read. NativePushSentAt is the per-channel
+	// idempotency guard; device tokens are the per-device FCM/APNs
+	// registrations on device_tokens (is_notifications_enabled = true);
+	// ClearDeviceToken prunes a dead one (FCM UNREGISTERED / APNs 410).
+	FetchNotificationForNativePush(ctx context.Context, notificationID string) (*NotificationRow, error)
+	MarkNotificationNativePushed(ctx context.Context, notificationID string) error
+	FetchDeviceTokens(ctx context.Context, userID string) ([]DeviceTokenRow, error)
+	ClearDeviceToken(ctx context.Context, token string) error
 	// Weekly-digest path — kind='weekly_digest' (migration 20270108_001),
 	// engagement mail BEHIND THE GATE. IsEmailSuppressed is the hard-block
 	// check the handler MUST run before any send; BuildWeeklyDigest assembles
@@ -110,6 +121,16 @@ type Backend interface {
 // non-nil error only on a transport failure before the request completes.
 type WebPushSender interface {
 	Send(ctx context.Context, sub webpush.Subscription, payload []byte) (int, error)
+}
+
+// NativePushSender is the transport for kind='native_push' jobs. Production
+// wires *nativepush.Sender (FCM HTTP v1 + APNs HTTP/2 behind one router); tests
+// substitute a fake recorder. Returns the push-service HTTP status (so the
+// handler can prune a 404/410, retry a 429/5xx) and a non-nil error only on a
+// transport failure, or nativepush.ErrPlatformNotConfigured when that
+// platform's credentials are unset.
+type NativePushSender interface {
+	Send(ctx context.Context, token nativepush.DeviceToken, msg nativepush.Message) (int, error)
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
@@ -168,6 +189,12 @@ type Worker struct {
 	// notification rows pending so a later VAPID-enabled deploy can still
 	// send. Wired in main.go when VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY are set.
 	WebPush WebPushSender
+	// NativePush is the transport for kind='native_push' jobs. Nil disables the
+	// send path — the handler finishes those jobs done but leaves the
+	// notification rows pending so a later credentialed deploy (FCM/APNs keys
+	// set) can still send. Wired in main.go when FCM and/or APNs credentials
+	// are present.
+	NativePush NativePushSender
 	// AppBaseURL is the web origin used to build deep links + the
 	// unsubscribe URL in rendered email (APP_BASE_URL). Empty falls back
 	// to relative-looking links; production sets it.
@@ -311,6 +338,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleSafetyEmail(ctx, job)
 	case "web_push":
 		return w.handleWebPush(ctx, job)
+	case "native_push":
+		return w.handleNativePush(ctx, job)
 	case "weekly_digest":
 		return w.handleWeeklyDigest(ctx, job)
 	default:

@@ -1364,6 +1364,93 @@ func (c *SupabaseClient) ClearPushSubscription(ctx context.Context, userID, devi
 	}, nil)
 }
 
+// FetchNotificationForNativePush is the native-push sibling of
+// FetchNotificationForWebPush — same row, but selects native_push_sent_at (the
+// per-channel guard) instead of web_push_sent_at. Returns (nil, nil) when the
+// row is gone (inbox cleared before the job drained).
+func (c *SupabaseClient) FetchNotificationForNativePush(ctx context.Context, notificationID string) (*NotificationRow, error) {
+	q := url.Values{}
+	q.Set("id", "eq."+notificationID)
+	q.Set("select", "id,user_id,kind,run_id,event_id,club_id,comment_id,native_push_sent_at")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []NotificationRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &rows[0], nil
+}
+
+// MarkNotificationNativePushed stamps native_push_sent_at so the row reaches a
+// terminal state for the native-push channel — sent OR deliberately skipped
+// (opted out, no token). Independent of email_sent_at / web_push_sent_at: a
+// notification can be emailed, web-pushed, and native-pushed independently.
+func (c *SupabaseClient) MarkNotificationNativePushed(ctx context.Context, notificationID string) error {
+	q := url.Values{}
+	q.Set("id", "eq."+notificationID)
+	u := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + q.Encode()
+	payload, err := json.Marshal(map[string]string{
+		"native_push_sent_at": time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
+// FetchDeviceTokens reads every enabled device-push registration a user has on
+// device_tokens (one per device). The is_notifications_enabled=true filter keeps
+// the read to opted-in devices so a fully-opted-out user costs a single empty
+// fetch.
+func (c *SupabaseClient) FetchDeviceTokens(ctx context.Context, userID string) ([]DeviceTokenRow, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("is_notifications_enabled", "eq.true")
+	q.Set("select", "platform,token")
+	u := c.BaseURL + "/rest/v1/" + schema.TableDeviceTokens + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []DeviceTokenRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// ClearDeviceToken deletes a dead device token after FCM reports UNREGISTERED
+// or APNs returns 410. Goes through the clear_device_token SECURITY DEFINER RPC
+// (migration 20270212_001) so the delete is one atomic, service-role-only
+// statement scoped by the (user_id, token) uniqueness to exactly the dead row.
+func (c *SupabaseClient) ClearDeviceToken(ctx context.Context, token string) error {
+	return c.rpc(ctx, "clear_device_token", map[string]string{
+		"p_token": token,
+	}, nil)
+}
+
 // LifecycleEmailAlreadySent reports whether a (user, template) row exists in
 // lifecycle_email_log — the send-once guard for transactional lifecycle mail.
 func (c *SupabaseClient) LifecycleEmailAlreadySent(ctx context.Context, userID, template string) (bool, error) {

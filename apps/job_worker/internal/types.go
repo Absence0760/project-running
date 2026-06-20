@@ -148,6 +148,11 @@ type NotificationRow struct {
 	// 20261219_001). Only the FetchNotificationForWebPush projection selects
 	// it; the email projection leaves it nil.
 	WebPushSentAt *string `json:"web_push_sent_at"`
+	// NativePushSentAt is the native-push channel's idempotency guard — the
+	// sibling of WebPushSentAt for the kind='native_push' consumer (migration
+	// 20270212_001). Only the FetchNotificationForNativePush projection selects
+	// it; the other projections leave it nil.
+	NativePushSentAt *string `json:"native_push_sent_at"`
 }
 
 // WebPushPayload is the payload the notifications AFTER INSERT trigger writes
@@ -170,6 +175,26 @@ type PushSubscriptionRow struct {
 	Endpoint string
 	P256dh   string
 	Auth     string
+}
+
+// NativePushPayload is the payload the notifications AFTER INSERT trigger writes
+// for `kind='native_push'` jobs (migration 20270212_001). The native-push
+// handler is the THIRD sibling consumer of the same notifications row the email
+// and web-push handlers read: it loads the row, checks the recipient's
+// push-channel preference, loads their registered device tokens, and sends an
+// FCM (Android) / APNs (iOS) push to each.
+type NativePushPayload struct {
+	NotificationID string `json:"notification_id"`
+}
+
+// DeviceTokenRow is one registered device, read out of device_tokens where
+// is_notifications_enabled = true. Platform routes the send (FCM for android,
+// APNs for ios); Token is the platform-minted registration token. A dead token
+// (FCM UNREGISTERED 404 / APNs 410) is pruned by the worker via the
+// clear_device_token RPC.
+type DeviceTokenRow struct {
+	Platform string `json:"platform"`
+	Token    string `json:"token"`
 }
 
 // LifecycleEmailPayload is the payload for `kind='lifecycle_email'` jobs
