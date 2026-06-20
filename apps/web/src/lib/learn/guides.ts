@@ -117,6 +117,36 @@ export function isEnglishFallback(slug: string, locale: string): boolean {
 	return !ALL_ENTRIES.some((e) => e.slug === slug && e.locale === locale);
 }
 
+export type GuideMeta = {
+	slug: string;
+	title: string;
+	description: string;
+	category: string;
+};
+
+/// The localized title + description for a guide card. The hub + category
+/// listings build off the English index (one card per slug), so a
+/// non-English visitor would otherwise read an English title above a body
+/// that localizes on the article page a click away. This re-resolves the
+/// card's title + description from the active locale's frontmatter, falling
+/// back to the English entry's field when the localized file is absent — so
+/// the listing stays consistent with the article. Returns `null` for an
+/// unknown slug.
+export function localizedGuideMeta(slug: string, locale: string = DEFAULT_LOCALE): GuideMeta | null {
+	const en = ALL_ENTRIES.find((e) => e.slug === slug && e.locale === DEFAULT_LOCALE);
+	if (!en) return null;
+	const localized =
+		locale === DEFAULT_LOCALE
+			? undefined
+			: ALL_ENTRIES.find((e) => e.slug === slug && e.locale === locale);
+	return {
+		slug,
+		title: localized?.title ?? en.title,
+		description: localized?.description ?? en.description,
+		category: en.category,
+	};
+}
+
 export function guidesByCategory(category: string): GuideIndexEntry[] {
 	return listGuides().filter((e) => e.category === category);
 }

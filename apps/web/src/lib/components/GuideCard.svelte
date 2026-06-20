@@ -1,19 +1,23 @@
 <script lang="ts">
-	import { m } from '$lib/i18n/store.svelte';
+	import { m, currentLocale } from '$lib/i18n/store.svelte';
 	import { getCategory } from '$lib/learn/categories';
-	import type { GuideIndexEntry } from '$lib/learn/guides';
+	import { localizedGuideMeta, type GuideIndexEntry } from '$lib/learn/guides';
 
 	let { guide }: { guide: GuideIndexEntry } = $props();
 
 	const category = $derived(getCategory(guide.category));
+	// Re-resolve the card's title + description for the active locale so the
+	// listing matches the localized article body a click away; falls back to
+	// the English frontmatter field-by-field when no localized file exists.
+	const meta = $derived(localizedGuideMeta(guide.slug, currentLocale()) ?? guide);
 </script>
 
 <a class="card-elevated guide-card" href="/learn/{guide.slug}">
 	{#if category}
 		<span class="category-pill">{m(category.labelKey)}</span>
 	{/if}
-	<h3>{guide.title}</h3>
-	<p class="guide-desc">{guide.description}</p>
+	<h3>{meta.title}</h3>
+	<p class="guide-desc">{meta.description}</p>
 	<span class="read-more">{m('learn.readGuide')}</span>
 </a>
 
