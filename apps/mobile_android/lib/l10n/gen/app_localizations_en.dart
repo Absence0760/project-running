@@ -6273,6 +6273,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Higher accuracy, finer track detail, more battery usage';
 
   @override
+  String get prefsShowRawTrack => 'Show raw GPS track';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      'Draw the unsnapped recorded line on the run map, even when a cleaned-up matched track exists';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Default run privacy';
 
   @override

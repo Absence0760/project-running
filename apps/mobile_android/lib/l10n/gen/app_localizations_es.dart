@@ -6341,6 +6341,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Mayor precisión, trazado más detallado, más consumo de batería';
 
   @override
+  String get prefsShowRawTrack => 'Mostrar trayecto GPS sin procesar';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      'Dibuja la línea grabada sin ajustar en el mapa de la carrera, aunque exista un trayecto ya corregido';
+
+  @override
   String get prefsDefaultRunPrivacy =>
       'Privacidad predeterminada de las carreras';
 

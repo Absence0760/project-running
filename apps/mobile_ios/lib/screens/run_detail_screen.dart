@@ -53,6 +53,24 @@ int? replayDotIndex(int? replayIndex, int rawLength, int displayedLength) {
   return (frac * (displayedLength - 1)).round().clamp(0, displayedLength - 1);
 }
 
+/// Which polyline the run-detail map should draw. Prefers the matched
+/// (road-snapped) line when the worker produced a renderable one, falling
+/// back to the raw recorded track otherwise. The `showRaw` preference
+/// (Settings → Show raw GPS track) forces the raw line for verification,
+/// even when a matched track exists. Stats keep deriving from the raw
+/// track regardless — this only changes the rendered geometry.
+@visibleForTesting
+List<Waypoint> displayedRunTrack(
+  List<Waypoint> rawTrack,
+  RunMatchInfo? matchInfo, {
+  required bool showRaw,
+}) {
+  if (!showRaw && matchInfo?.hasRenderableTrack == true) {
+    return matchInfo!.track!;
+  }
+  return rawTrack;
+}
+
 /// Detail view for a completed run, showing the route map, splits, and stats.
 class RunDetailScreen extends StatefulWidget {
   final Run run;
@@ -754,10 +772,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       // because those are properties of what the
                       // runner did, not how the projected line is
                       // drawn — switching the visual layer must not
-                      // alter the numbers.
-                      final mapTrack = _matchInfo?.hasRenderableTrack == true
-                          ? _matchInfo!.track!
-                          : run.track;
+                      // alter the numbers. The "Show raw GPS track"
+                      // preference forces the raw line for verification.
+                      final mapTrack = displayedRunTrack(
+                        run.track,
+                        _matchInfo,
+                        showRaw: widget.preferences.showRawTrack,
+                      );
                       // The replay index advances over `run.track`, but
                       // the line on screen is `mapTrack` — the matched
                       // line when the worker produced one, with a

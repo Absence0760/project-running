@@ -6355,6 +6355,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Plus de précision, tracé plus détaillé, plus de batterie';
 
   @override
+  String get prefsShowRawTrack => 'Afficher le tracé GPS brut';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      'Affiche la ligne enregistrée non ajustée sur la carte de course, même lorsqu\'un tracé corrigé existe';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Confidentialité par défaut des courses';
 
   @override

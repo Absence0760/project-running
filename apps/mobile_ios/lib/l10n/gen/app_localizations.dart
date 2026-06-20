@@ -10447,6 +10447,18 @@ abstract class AppLocalizations {
   /// **'Higher accuracy, finer track detail, more battery usage'**
   String get prefsAdvancedGpsSubtitle;
 
+  /// Toggle title for forcing the raw GPS track on the run map instead of the map-matched line
+  ///
+  /// In en, this message translates to:
+  /// **'Show raw GPS track'**
+  String get prefsShowRawTrack;
+
+  /// Subtitle of the show-raw-track toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Draw the unsnapped recorded line on the run map, even when a cleaned-up matched track exists'**
+  String get prefsShowRawTrackSubtitle;
+
   /// Tile title for the default run privacy
   ///
   /// In en, this message translates to:

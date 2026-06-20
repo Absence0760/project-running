@@ -6346,6 +6346,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Höhere Genauigkeit, feinere Track-Details, mehr Akkuverbrauch';
 
   @override
+  String get prefsShowRawTrack => 'Rohen GPS-Track anzeigen';
+
+  @override
+  String get prefsShowRawTrackSubtitle =>
+      'Die ungeglättete aufgezeichnete Linie auf der Laufkarte anzeigen, auch wenn ein bereinigter, abgeglichener Track vorliegt';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Standard-Datenschutz für Läufe';
 
   @override
