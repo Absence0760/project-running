@@ -6130,6 +6130,104 @@ export async function deleteGearWearLog(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+// --- Gear rotations (roadmap §7 — named multi-pair grouping) ---
+
+export interface GearRotation {
+	id: string;
+	owner_id: string;
+	name: string;
+	created_at: string;
+	updated_at: string;
+}
+
+/// A rotation plus the ids of the gear it contains. The membership ids
+/// are fetched alongside so the settings UI can group the gear list by
+/// rotation and pre-check the assignment toggles without a second round
+/// trip per rotation.
+export interface GearRotationWithMembers extends GearRotation {
+	gear_ids: string[];
+}
+
+/// Fetch every rotation the signed-in user owns, each with its member
+/// gear ids. Two owner-scoped reads (rotations + the membership join)
+/// stitched client-side — both are tiny (a runner has a handful of
+/// rotations), and RLS scopes each to the owner.
+export async function fetchMyGearRotations(): Promise<GearRotationWithMembers[]> {
+	const { data: rotations, error: rotErr } = await supabase
+		.from(TABLES.gear_rotations)
+		.select('*')
+		.order('name', { ascending: true });
+	if (rotErr) {
+		console.error('fetchMyGearRotations failed', rotErr);
+		return [];
+	}
+	const { data: members, error: memErr } = await supabase
+		.from(TABLES.gear_rotation_members)
+		.select('rotation_id, gear_id');
+	if (memErr) {
+		console.error('fetchMyGearRotations members failed', memErr);
+		return [];
+	}
+	const byRotation = new Map<string, string[]>();
+	for (const m of (members ?? []) as { rotation_id: string; gear_id: string }[]) {
+		const list = byRotation.get(m.rotation_id) ?? [];
+		list.push(m.gear_id);
+		byRotation.set(m.rotation_id, list);
+	}
+	return ((rotations ?? []) as GearRotation[]).map((r) => ({
+		...r,
+		gear_ids: byRotation.get(r.id) ?? [],
+	}));
+}
+
+export async function createGearRotation(name: string): Promise<GearRotation> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { data, error } = await supabase
+		.from(TABLES.gear_rotations)
+		.insert({ owner_id: userId, name })
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('createGearRotation failed');
+	return data as GearRotation;
+}
+
+export async function renameGearRotation(id: string, name: string): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.gear_rotations)
+		.update({ name })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+/// Delete a rotation. Membership rows cascade away via the FK; the gear
+/// itself is untouched (a rotation is just a grouping).
+export async function deleteGearRotation(id: string): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.gear_rotations)
+		.delete()
+		.eq('id', id);
+	if (error) throw error;
+}
+
+/// Replace the full gear set assigned to a rotation. Delete-then-insert,
+/// mirroring [setRunGear] — the join has no natural-key churn worth a
+/// smarter diff. RLS gates both halves to the rotation + gear owner.
+export async function setGearRotationMembers(
+	rotationId: string,
+	gearIds: string[],
+): Promise<void> {
+	const del = await supabase
+		.from(TABLES.gear_rotation_members)
+		.delete()
+		.eq('rotation_id', rotationId);
+	if (del.error) throw del.error;
+	if (gearIds.length === 0) return;
+	const rows = gearIds.map((gear_id) => ({ rotation_id: rotationId, gear_id }));
+	const ins = await supabase.from(TABLES.gear_rotation_members).insert(rows);
+	if (ins.error) throw ins.error;
+}
+
 // --- Safety contacts (decisions §131) ---
 
 export interface SafetyContact {
