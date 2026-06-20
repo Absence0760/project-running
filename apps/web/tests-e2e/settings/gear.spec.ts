@@ -538,6 +538,155 @@ test.describe('/settings/gear — empty state', () => {
 	});
 });
 
+test.describe('/settings/gear — rotations', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test.afterEach(async () => {
+		const admin = getAdminClient();
+		// gear_rotations cascade their members; only the rotations are test
+		// artifacts here (seed gear stays).
+		await admin.from('gear_rotations').delete().eq('owner_id', USER_A.id);
+	});
+
+	test('create a rotation, assign gear, filter the list, then delete it', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const rotName = `E2E Daily ${Date.now()}`;
+
+		await page.goto('/settings/gear');
+		await expect(page.locator('.gear-list')).toBeVisible({ timeout: 10_000 });
+
+		// Create a rotation.
+		await page
+			.locator('.rotation-create input')
+			.fill(rotName);
+		await page
+			.locator('.rotation-create')
+			.getByRole('button', { name: 'Create' })
+			.click();
+
+		const rotRow = page.locator('.rotation-row', { hasText: rotName });
+		await expect(rotRow).toBeVisible({ timeout: 5_000 });
+
+		// Backend: rotation row exists, owned by USER_A.
+		const { data: created } = await admin
+			.from('gear_rotations')
+			.select('id, name')
+			.eq('owner_id', USER_A.id)
+			.eq('name', rotName)
+			.maybeSingle();
+		expect(created?.name).toBe(rotName);
+
+		// Assign the Ghost 16 (a seed shoe) to the rotation via the member modal.
+		await rotRow.getByRole('button', { name: 'Edit gear' }).click();
+		const memberModal = page.locator('.modal');
+		await expect(memberModal).toBeVisible({ timeout: 5_000 });
+		await memberModal
+			.locator('.member-row', { hasText: 'Ghost 16' })
+			.locator('input[type="checkbox"]')
+			.check();
+		await memberModal.getByRole('button', { name: 'Done' }).click();
+		await expect(memberModal).toBeHidden({ timeout: 5_000 });
+
+		// Backend: exactly one membership, pointing at Ghost 16's id.
+		const GHOST_ID = '11111111-aaaa-bbbb-cccc-222222222202';
+		await expect
+			.poll(
+				async () => {
+					const { data } = await admin
+						.from('gear_rotation_members')
+						.select('gear_id')
+						.eq('rotation_id', created!.id);
+					return data?.map((m) => m.gear_id) ?? [];
+				},
+				{ timeout: 5_000 }
+			)
+			.toEqual([GHOST_ID]);
+
+		// Member count chip updates.
+		await expect(rotRow).toContainText('1 item');
+
+		// Filter by the rotation: only Ghost 16 shows, Pegasus 40 hides.
+		await page.locator('.rotation-filter select').selectOption(rotName);
+		await expect(
+			page.locator('.gear-row', { hasText: 'Ghost 16' })
+		).toBeVisible();
+		await expect(
+			page.locator('.gear-row', { hasText: 'Pegasus 40' })
+		).toHaveCount(0);
+
+		// Back to All — both shoes show again.
+		await page.locator('.rotation-filter select').selectOption({ label: 'All' });
+		await expect(
+			page.locator('.gear-row', { hasText: 'Pegasus 40' })
+		).toBeVisible();
+
+		// Delete the rotation via the confirm dialog.
+		await rotRow.getByRole('button', { name: 'Delete', exact: true }).click();
+		const confirm = page.locator('.modal');
+		await expect(
+			confirm.getByRole('heading', { name: 'Delete rotation?' })
+		).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		await expect(
+			page.locator('.rotation-row', { hasText: rotName })
+		).toHaveCount(0, { timeout: 5_000 });
+
+		// Backend: rotation gone (membership cascaded). Gear itself untouched.
+		await expect
+			.poll(
+				async () => {
+					const { count } = await admin
+						.from('gear_rotations')
+						.select('id', { count: 'exact', head: true })
+						.eq('id', created!.id);
+					return count ?? 0;
+				},
+				{ timeout: 5_000 }
+			)
+			.toBe(0);
+		const { count: ghostStillThere } = await admin
+			.from('gear')
+			.select('id', { count: 'exact', head: true })
+			.eq('id', GHOST_ID);
+		expect(ghostStillThere).toBe(1);
+	});
+
+	test('rename a rotation persists', async ({ page }) => {
+		const admin = getAdminClient();
+		const orig = `E2E Rot ${Date.now()}`;
+		const { data: rot } = await admin
+			.from('gear_rotations')
+			.insert({ owner_id: USER_A.id, name: orig })
+			.select('id')
+			.single();
+
+		await page.goto('/settings/gear');
+		const rotRow = page.locator('.rotation-row', { hasText: orig });
+		await expect(rotRow).toBeVisible({ timeout: 10_000 });
+
+		await rotRow.getByRole('button', { name: 'Rename' }).click();
+		const dialog = page.locator('.modal');
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+		const renamed = `${orig} renamed`;
+		await dialog.locator('input[type="text"]').fill(renamed);
+		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(dialog).toBeHidden({ timeout: 5_000 });
+
+		await expect(
+			page.locator('.rotation-row', { hasText: renamed })
+		).toBeVisible({ timeout: 5_000 });
+		const { data } = await admin
+			.from('gear_rotations')
+			.select('name')
+			.eq('id', rot!.id)
+			.maybeSingle();
+		expect(data?.name).toBe(renamed);
+	});
+});
+
 test.describe('/settings/gear — wear status', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
