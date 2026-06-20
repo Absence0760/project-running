@@ -16,6 +16,7 @@ import 'package:ui_kit/ui_kit.dart';
 import 'audio_cues.dart';
 import 'background_sync.dart';
 import 'dev_auto_login.dart';
+import 'firebase_push_messaging.dart';
 import 'in_progress_recovery.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
@@ -25,6 +26,7 @@ import 'local_gym_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
+import 'push_messaging_bridge.dart';
 import 'race_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -44,6 +46,11 @@ import 'wear_routes_bridge.dart';
 /// belt-and-braces for future reconnect logic) can cancel any prior
 /// listener instead of stacking duplicates.
 StreamSubscription<AuthState>? _authStateSub;
+
+/// The native-push (FCM/APNs) device-token bridge, attached in [main] after
+/// Supabase init. Top-level so a re-entrant main can detach a prior instance.
+/// A no-op when Firebase isn't configured on the device (the credential gate).
+PushMessagingBridge? _pushBridge;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -175,6 +182,12 @@ void main() async {
           .catchError((Object e) {
         debugPrint('Supabase init failed, running offline: $e');
       }),
+    // Best-effort Firebase init for native push. Succeeds only when the
+    // operator's google-services.json / GoogleService-Info.plist are present in
+    // the native project (the credential gate); without them this throws and we
+    // run with push disabled — the PushMessagingBridge no-ops on
+    // FirebasePushMessaging.isAvailable == false. Never blocks startup.
+    initFirebaseForPush(),
   ]);
 
   // Expose the loaded Preferences via the top-level accessor in
@@ -398,6 +411,14 @@ void main() async {
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
     WearRoutesBridge().attach(routeStore);
+    // Native-push device-token registration. No-ops when Firebase isn't
+    // configured on the device (FirebasePushMessaging.isAvailable == false).
+    // L4 auxiliary effect — attach() never throws into the startup path.
+    _pushBridge?.detach();
+    _pushBridge = PushMessagingBridge(
+      messaging: FirebasePushMessaging(),
+      api: apiNonNull,
+    )..attach();
     final devEmail = dotenv.env['DEV_USER_EMAIL'];
     final devPassword = dotenv.env['DEV_USER_PASSWORD'];
     Future(() async {

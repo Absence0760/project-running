@@ -7,6 +7,7 @@ import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
+import '../push_messaging_bridge.dart';
 import '../settings_sync.dart';
 import 'settings_body_metrics_screen.dart';
 
@@ -661,6 +662,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.pushNotifications, picked);
+      // Mirror the channel choice down to this device's native-push opt-in
+      // flag so the worker's per-device fan-out filter matches. 'off' disables
+      // this device; 'all'/'important' re-enable it (the worker still applies
+      // the category gate). Best-effort — no-ops when push isn't configured.
+      await PushMessagingBridge.instance
+          ?.setNotificationsEnabled(picked != 'off');
     }
   }
 
