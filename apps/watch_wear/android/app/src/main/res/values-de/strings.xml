@@ -6,6 +6,9 @@
     <string name="distance_km_recorded">%1$s km aufgezeichnet</string>
     <string name="distance_km_to_go">noch %1$s km</string>
     <string name="pace_per_km">%1$s /km</string>
+    <string name="distance_mi">%1$s mi</string>
+    <string name="distance_mi_to_go">noch %1$s mi</string>
+    <string name="pace_per_mi">%1$s /mi</string>
     <string name="bpm">%1$d bpm</string>
     <string name="bpm_zone">%1$d bpm · Z%2$d</string>
     <string name="bpm_avg">%1$d bpm Ø</string>
