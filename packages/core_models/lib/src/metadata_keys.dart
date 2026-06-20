@@ -80,5 +80,6 @@ class StorageBuckets {
   static const String runs = 'runs';
   static const String runPhotos = 'run-photos';
   static const String routePhotos = 'route-photos';
+  static const String clubPhotos = 'club-photos';
   static const String avatars = 'avatars';
 }

@@ -62,6 +62,7 @@ const (
 	TableEventExceptions         = "event_exceptions"
 	TableClubMembers             = "club_members"
 	TableClubPosts               = "club_posts"
+	TableClubPhotos              = "club_photos"
 	TableReports                 = "reports"
 	TableDirectMessages          = "direct_messages"
 	TableGymWorkouts             = "gym_workouts"
@@ -97,6 +98,7 @@ const (
 	BucketRuns        = "runs"
 	BucketRunPhotos   = "run-photos"
 	BucketRoutePhotos = "route-photos"
+	BucketClubPhotos  = "club-photos"
 )
 
 // MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag

@@ -286,10 +286,11 @@ func (f *fakeBackend) UpdatePhotoThumb512Path(_ context.Context, photoID, path s
 	return nil
 }
 
-// The route-photo methods share the run-photo fake's storage map +
-// error fields — the two handlers exercise the identical strip/thumbnail
-// path, only the bucket + table differ in production. A route-photo test
-// sets up photoByPath / photoThumbPaths / the *PhotoErr fields the same way.
+// The route- and club-photo methods share the run-photo fake's storage
+// map + error fields — all three handlers exercise the identical
+// strip/thumbnail path, only the bucket + table differ in production. A
+// route- or club-photo test sets up photoByPath / photoThumbPaths / the
+// *PhotoErr fields the same way.
 func (f *fakeBackend) DownloadRoutePhoto(ctx context.Context, path string) ([]byte, string, error) {
 	return f.DownloadPhoto(ctx, path)
 }
@@ -299,6 +300,18 @@ func (f *fakeBackend) UploadRoutePhoto(ctx context.Context, path string, body []
 }
 
 func (f *fakeBackend) UpdateRoutePhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	return f.UpdatePhotoThumb512Path(ctx, photoID, path)
+}
+
+func (f *fakeBackend) DownloadClubPhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return f.DownloadPhoto(ctx, path)
+}
+
+func (f *fakeBackend) UploadClubPhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	return f.UploadPhoto(ctx, path, body, contentType)
+}
+
+func (f *fakeBackend) UpdateClubPhotoThumb512Path(ctx context.Context, photoID, path string) error {
 	return f.UpdatePhotoThumb512Path(ctx, photoID, path)
 }
 

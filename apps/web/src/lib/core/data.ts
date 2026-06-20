@@ -5625,6 +5625,156 @@ export async function updateRoutePhotoCaption(
 	if (error) throw error;
 }
 
+// --- Club photos (gallery; migration 20270301_001) ---
+// Mirrors the route-photo path but keyed on club membership: any active
+// member may upload; a photo's owner OR a club admin may delete (moderation).
+
+export interface ClubPhoto {
+	id: string;
+	club_id: string;
+	owner_id: string;
+	storage_path: string;
+	thumb_512_path: string | null;
+	caption: string | null;
+	position_idx: number;
+	created_at: string;
+	url: string;
+	thumbUrl: string | null;
+}
+
+async function signClubPhotoPaths(paths: string[]): Promise<Record<string, string>> {
+	if (paths.length === 0) return {};
+	const { data, error } = await supabase.storage
+		.from(BUCKETS.club_photos)
+		.createSignedUrls(paths, PHOTO_SIGNED_URL_TTL_S);
+	if (error || !data) {
+		console.error('signClubPhotoPaths failed', error);
+		return {};
+	}
+	const out: Record<string, string> = {};
+	for (const row of data) {
+		if (row.path && row.signedUrl) out[row.path] = row.signedUrl;
+	}
+	return out;
+}
+
+export async function fetchClubPhotos(clubId: string, limit = 50): Promise<ClubPhoto[]> {
+	const { data, error } = await supabase
+		.from(TABLES.club_photos)
+		.select('*')
+		.eq('club_id', clubId)
+		.order('position_idx', { ascending: true })
+		.order('created_at', { ascending: true })
+		.limit(limit);
+	if (error) {
+		console.error('fetchClubPhotos failed', error);
+		return [];
+	}
+	const rows = data ?? [];
+	const paths: string[] = [];
+	for (const r of rows) {
+		paths.push(r.storage_path);
+		if (r.thumb_512_path) paths.push(r.thumb_512_path);
+	}
+	const signed = await signClubPhotoPaths(paths);
+	return rows.map((r) => ({
+		...r,
+		url: signed[r.storage_path] ?? '',
+		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
+	}));
+}
+
+export async function addClubPhoto(input: {
+	club_id: string;
+	file: File;
+	caption?: string | null;
+}): Promise<ClubPhoto> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+
+	const ext = PHOTO_MIME_TO_EXT[input.file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
+	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
+
+	const file = await stripExifFromFile(input.file);
+
+	const photoId = crypto.randomUUID();
+	const storagePath = `${userId}/${photoId}.${ext}`;
+
+	const { error: upErr } = await supabase.storage
+		.from(BUCKETS.club_photos)
+		.upload(storagePath, file, {
+			contentType: file.type,
+			upsert: false,
+		});
+	if (upErr) throw upErr;
+
+	const { data: posData } = await supabase
+		.from(TABLES.club_photos)
+		.select('position_idx')
+		.eq('club_id', input.club_id)
+		.order('position_idx', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	const nextIdx = (posData?.position_idx ?? -1) + 1;
+
+	const { data, error } = await supabase
+		.from(TABLES.club_photos)
+		.insert({
+			id: photoId,
+			club_id: input.club_id,
+			owner_id: userId,
+			storage_path: storagePath,
+			caption: input.caption?.trim() || null,
+			position_idx: nextIdx,
+		})
+		.select('*')
+		.single();
+	if (error || !data) {
+		await supabase.storage.from(BUCKETS.club_photos).remove([storagePath]);
+		throw error ?? new Error('Insert failed');
+	}
+	const { data: signed } = await supabase.storage
+		.from(BUCKETS.club_photos)
+		.createSignedUrl(storagePath, PHOTO_SIGNED_URL_TTL_S);
+	return {
+		...data,
+		url: signed?.signedUrl ?? '',
+		thumbUrl: null,
+	};
+}
+
+export async function deleteClubPhoto(photoId: string): Promise<void> {
+	const { data: row, error: fetchErr } = await supabase
+		.from(TABLES.club_photos)
+		.select('storage_path, thumb_512_path')
+		.eq('id', photoId)
+		.maybeSingle();
+	if (fetchErr) throw fetchErr;
+
+	const { error } = await supabase.from(TABLES.club_photos).delete().eq('id', photoId);
+	if (error) throw error;
+
+	const paths = [row?.storage_path, row?.thumb_512_path].filter(
+		(p: string | null | undefined): p is string => !!p,
+	);
+	if (paths.length > 0) {
+		await supabase.storage.from(BUCKETS.club_photos).remove(paths);
+	}
+}
+
+export async function updateClubPhotoCaption(
+	photoId: string,
+	caption: string | null,
+): Promise<void> {
+	const trimmed = caption?.trim() || null;
+	const { error } = await supabase
+		.from(TABLES.club_photos)
+		.update({ caption: trimmed })
+		.eq('id', photoId);
+	if (error) throw error;
+}
+
 // --- Route course markers (migration 20270129_001) ---
 
 function asRouteMarker(row: Record<string, unknown>): RouteMarker {

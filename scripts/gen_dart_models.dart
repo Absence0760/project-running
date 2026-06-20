@@ -73,6 +73,7 @@ const _tables = <String>{
   'route_conditions',
   'clubs',
   'club_members',
+  'club_photos',
   'events',
   'event_attendees',
   'club_posts',

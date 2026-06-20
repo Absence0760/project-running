@@ -4978,6 +4978,10 @@
   "@clubDetailTabTemplates": {
     "description": "Club detail tab — plan templates"
   },
+  "clubDetailTabPhotos": "Photos",
+  "@clubDetailTabPhotos": {
+    "description": "Club detail tab — photo gallery"
+  },
   "clubDetailReportClub": "Report club",
   "@clubDetailReportClub": {
     "description": "Tooltip on the report-club button"
@@ -9368,6 +9372,102 @@
   "routePhotosCaptionError": "Could not update caption: {error}",
   "@routePhotosCaptionError": {
     "description": "Banner when updating a route-photo caption fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubPhotosLoading": "Loading photos…",
+  "@clubPhotosLoading": {
+    "description": "Loading state for the club photo gallery"
+  },
+  "clubPhotosTitle": "Photos",
+  "@clubPhotosTitle": {
+    "description": "Header for the club photo gallery"
+  },
+  "clubPhotosAdd": "Add photo",
+  "@clubPhotosAdd": {
+    "description": "Button to add a photo to a club"
+  },
+  "clubPhotosEmpty": "No photos in this club yet.",
+  "@clubPhotosEmpty": {
+    "description": "Empty state for the club photo gallery"
+  },
+  "clubPhotosCaptionPendingHint": "Caption (optional, 280 chars)",
+  "@clubPhotosCaptionPendingHint": {
+    "description": "Hint in the caption field for a club photo about to be uploaded"
+  },
+  "clubPhotosCaptionHint": "Caption…",
+  "@clubPhotosCaptionHint": {
+    "description": "Hint in the inline caption-edit field for a club photo"
+  },
+  "clubPhotosCancel": "Cancel",
+  "@clubPhotosCancel": {
+    "description": "Cancel button in the club photo gallery"
+  },
+  "clubPhotosSave": "Save",
+  "@clubPhotosSave": {
+    "description": "Save button for an edited club-photo caption"
+  },
+  "clubPhotosUpload": "Upload",
+  "@clubPhotosUpload": {
+    "description": "Button to upload the pending club photo"
+  },
+  "clubPhotosUploading": "Uploading…",
+  "@clubPhotosUploading": {
+    "description": "Button label while a club photo is uploading"
+  },
+  "clubPhotosEditCaption": "Edit caption",
+  "@clubPhotosEditCaption": {
+    "description": "Tooltip on the edit-caption button for a club photo"
+  },
+  "clubPhotosDeleteTooltip": "Delete photo",
+  "@clubPhotosDeleteTooltip": {
+    "description": "Tooltip on the delete-photo button for a club photo"
+  },
+  "clubPhotosDeleteTitle": "Delete photo?",
+  "@clubPhotosDeleteTitle": {
+    "description": "Title of the club delete-photo confirmation dialog"
+  },
+  "clubPhotosDeleteBody": "This removes the photo from the club permanently.",
+  "@clubPhotosDeleteBody": {
+    "description": "Body of the club delete-photo confirmation dialog"
+  },
+  "clubPhotosDeleteConfirm": "Delete",
+  "@clubPhotosDeleteConfirm": {
+    "description": "Confirm button in the club delete-photo dialog"
+  },
+  "clubPhotosPickerError": "Could not open picker: {error}",
+  "@clubPhotosPickerError": {
+    "description": "Banner when the image picker can't be opened for a club photo",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubPhotosUploadError": "Upload failed: {error}",
+  "@clubPhotosUploadError": {
+    "description": "Banner when a club photo upload fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubPhotosDeleteError": "Delete failed: {error}",
+  "@clubPhotosDeleteError": {
+    "description": "Banner when deleting a club photo fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubPhotosCaptionError": "Could not update caption: {error}",
+  "@clubPhotosCaptionError": {
+    "description": "Banner when updating a club-photo caption fails",
     "placeholders": {
       "error": {
         "type": "String"

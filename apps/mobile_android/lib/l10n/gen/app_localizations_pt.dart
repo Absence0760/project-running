@@ -3673,6 +3673,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailTabTemplates => 'Modelos';
 
   @override
+  String get clubDetailTabPhotos => 'Fotos';
+
+  @override
   String get clubDetailReportClub => 'Denunciar clube';
 
   @override
@@ -7003,6 +7006,73 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'Não foi possível atualizar a legenda: $error';
+  }
+
+  @override
+  String get clubPhotosLoading => 'Carregando fotos…';
+
+  @override
+  String get clubPhotosTitle => 'Fotos';
+
+  @override
+  String get clubPhotosAdd => 'Adicionar foto';
+
+  @override
+  String get clubPhotosEmpty => 'Ainda não há fotos neste clube.';
+
+  @override
+  String get clubPhotosCaptionPendingHint =>
+      'Legenda (opcional, 280 caracteres)';
+
+  @override
+  String get clubPhotosCaptionHint => 'Legenda…';
+
+  @override
+  String get clubPhotosCancel => 'Cancelar';
+
+  @override
+  String get clubPhotosSave => 'Salvar';
+
+  @override
+  String get clubPhotosUpload => 'Enviar';
+
+  @override
+  String get clubPhotosUploading => 'Enviando…';
+
+  @override
+  String get clubPhotosEditCaption => 'Editar legenda';
+
+  @override
+  String get clubPhotosDeleteTooltip => 'Excluir foto';
+
+  @override
+  String get clubPhotosDeleteTitle => 'Excluir foto?';
+
+  @override
+  String get clubPhotosDeleteBody =>
+      'Isto remove a foto do clube permanentemente.';
+
+  @override
+  String get clubPhotosDeleteConfirm => 'Excluir';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'Não foi possível abrir o seletor: $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'Falha no envio: $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'Não foi possível atualizar a legenda: $error';
   }
 
@@ -14250,6 +14320,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get clubDetailTabTemplates => 'Modelos';
 
   @override
+  String get clubDetailTabPhotos => 'Fotos';
+
+  @override
   String get clubDetailReportClub => 'Denunciar clube';
 
   @override
@@ -17580,6 +17653,73 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'Não foi possível atualizar a legenda: $error';
+  }
+
+  @override
+  String get clubPhotosLoading => 'Carregando fotos…';
+
+  @override
+  String get clubPhotosTitle => 'Fotos';
+
+  @override
+  String get clubPhotosAdd => 'Adicionar foto';
+
+  @override
+  String get clubPhotosEmpty => 'Ainda não há fotos neste clube.';
+
+  @override
+  String get clubPhotosCaptionPendingHint =>
+      'Legenda (opcional, 280 caracteres)';
+
+  @override
+  String get clubPhotosCaptionHint => 'Legenda…';
+
+  @override
+  String get clubPhotosCancel => 'Cancelar';
+
+  @override
+  String get clubPhotosSave => 'Salvar';
+
+  @override
+  String get clubPhotosUpload => 'Enviar';
+
+  @override
+  String get clubPhotosUploading => 'Enviando…';
+
+  @override
+  String get clubPhotosEditCaption => 'Editar legenda';
+
+  @override
+  String get clubPhotosDeleteTooltip => 'Excluir foto';
+
+  @override
+  String get clubPhotosDeleteTitle => 'Excluir foto?';
+
+  @override
+  String get clubPhotosDeleteBody =>
+      'Isto remove a foto do clube permanentemente.';
+
+  @override
+  String get clubPhotosDeleteConfirm => 'Excluir';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'Não foi possível abrir o seletor: $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'Falha no envio: $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'Não foi possível atualizar a legenda: $error';
   }
 

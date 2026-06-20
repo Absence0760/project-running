@@ -12,12 +12,22 @@ The top-level "Social" sidebar item hosts the club browse UI as one of three tab
 |---|---|
 | `/social?tab=clubs` | Two sub-tabs: **My clubs** (default) and **Browse** (public clubs, searchable by name/location). The legacy `/clubs` URL redirects here; `/clubs?tab=browse` deep-links into the Browse sub-tab via `clubs-sub=browse`. The Browse search is region-aware: typing a place name (`"Virginia"`, `"Berlin"`, `"Austin, TX"`) geocodes the query via MapTiler and `ST_DWithin`-filters against `clubs.location_point` — so a club labelled "Richmond, VA" still appears when the user searches "Virginia". Falls back to plain ILIKE on `name` / `location_label` when geocoding doesn't resolve. See migration `20260905_001_clubs_location_point.sql` for the schema. |
 | `/clubs/new` | Create a club (name, optional description + location, visibility: public/private, join policy: anyone / approval required / invite-only, optional "require an activity-risk acknowledgement to join"). |
-| `/clubs/[slug]` | Club home. Four tabs: **Feed** (admin posts + "next event" card, with threaded replies), **Events** (upcoming + past), **Routes** (club-owned routes — see below), **Members**. Join/Leave button in the hero. Admins see "New event", a post composer, a pending-requests panel (per-row Approve / Reject plus an "Approve all" button when more than one request is pending, via `bulkApproveMembers`), and the invite-link panel. |
+| `/clubs/[slug]` | Club home. Tabs: **Feed** (admin posts + "next event" card, with threaded replies), **Events** (upcoming + past), **Routes** (club-owned routes — see below), **Templates**, **Photos** (the club photo gallery — see below), **Members**. Join/Leave button in the hero. Admins see "New event", a post composer, a pending-requests panel (per-row Approve / Reject plus an "Approve all" button when more than one request is pending, via `bulkApproveMembers`), and the invite-link panel. |
 | `/clubs/[slug]/events/new` | Admin-only. Title, date/time, duration, meeting point, optional attached route, distance, target pace, capacity, recurrence (`none` / `weekly` / `biweekly` / `monthly` + weekday picker + until-date or end-after-N-occurrences). |
 | `/clubs/[slug]/events/[id]` | Event detail. RSVP buttons (Going / Maybe / Can't make it), attendee list, **results leaderboard with Submit-my-time flow**, admin-only per-event updates, linked route chip. Recurring events add an instance picker; that plus the richer event-detail capabilities (capacity & waitlist, cancel-occurrence, certificates, CSV import, result claims, photo gallery, meetup map) are detailed in [§ Event detail capabilities](#event-detail-capabilities). |
 | `/clubs/join/[token]` | Public invite-link landing page. Redeems the token via the `join_club_by_token` RPC and redirects to the club page. |
 
 Admin = the club owner or a member with `role = 'admin'` whose `status = 'active'`. The owner is auto-enrolled as an `'owner'`-role member at club creation (trigger `enroll_club_owner`), so `is_club_admin()` works uniformly for them too.
+
+### Club photo gallery
+
+The **Photos** tab is a member-contributed gallery for the club (roadmap row 8, migration `20270301_001`, decisions §190) — distinct from the per-event photo gallery (which tags `run_photos` to an event occurrence). Backed by the `club_photos` table + the private `club-photos` Storage bucket, re-keying the `route_photos` shape to club membership:
+
+- **Upload** is open to **any active member** (`club_photos` INSERT gate: `owner_id = auth.uid() AND private.is_club_member(club_id)`) — not just admins. Bytes are EXIF-stripped client-side before upload (web `stripExifFromFile`, mobile `stripJpegExif`); the Go worker `club_photo_process` re-strips + writes a 512w thumbnail server-side (defence in depth).
+- **Visibility** tracks the club: a **public** club's gallery is readable by anyone (incl. logged-out viewers); a **private** club's only by active members / the owner. The SELECT policy joins `club_photos → clubs` on `is_public OR owner OR private.is_club_member`, so flipping a club private propagates within the signed-URL TTL.
+- **Delete** is photo-owner OR club admin (a moderation primitive — an owner/admin removes anyone's photo). **Caption edit** is photo-owner only.
+- **Surfaces**: web `ClubPhotos.svelte` (`/clubs/[slug]?tab=photos`); mobile `widgets/club_photos.dart` mounted on `club_detail_screen.dart` (byte-identical iOS twin). Pinned by `rls_club_photos_test.sql` (17 pgtap assertions) + `clubs/photos.spec.ts` (Playwright) + `club_photos_helpers_test.dart`.
+- **Prod gate**: a privacy-boundary surface — the RLS is fail-closed and pgtap-pinned, but a privacy / storage audit is a pre-prod deploy gate (decisions §190).
 
 ### Event detail capabilities
 
@@ -149,7 +159,7 @@ Subscriptions unmount cleanly: the web pages call `supabase.removeChannel` in `o
 | Screen | Purpose |
 |---|---|
 | `clubs_screen.dart` | 6th bottom-nav tab. Segmented **Browse** / **My clubs**, search input, tappable club cards. |
-| `club_detail_screen.dart` | Club home with tabs: **Feed** (next-event card, threaded post replies, admin composer), **Events** (upcoming list), **Members** (placeholder count — full roster is a later polish). Join/Leave CTA in the hero. |
+| `club_detail_screen.dart` | Club home with tabs: **Feed** (next-event card, threaded post replies, admin composer), **Events** (upcoming list), **Members** (placeholder count — full roster is a later polish), **Routes**, **Templates**, **Photos** (the club photo gallery via `widgets/club_photos.dart` — member-upload / owner-or-admin-delete, mirrors web `ClubPhotos`). Join/Leave CTA in the hero. |
 | `event_detail_screen.dart` | Per-instance RSVP buttons (`I'm in` / `Maybe` / `Can't make it`), recurrence chips for picking an occurrence, attendee pills, **results leaderboard with Submit-my-time bottom sheet**, admin-only update composer that tags the post to the active instance, **members-only meetup map + "Get directions"** (persona #10) via `SocialService.fetchEventMeetPoint` → `geo:` / Google Maps launch. |
 | `widgets/upcoming_event_card.dart` | Displayed on the Run tab idle state when `SocialService.fetchNextRsvpedEvent` returns a `going` RSVP within 48h. Replaces the Last-Run card in that window — imminent commitment beats recent history. |
 

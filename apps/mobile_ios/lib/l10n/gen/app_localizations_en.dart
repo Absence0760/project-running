@@ -3643,6 +3643,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubDetailTabTemplates => 'Templates';
 
   @override
+  String get clubDetailTabPhotos => 'Photos';
+
+  @override
   String get clubDetailReportClub => 'Report club';
 
   @override
@@ -6934,6 +6937,72 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'Could not update caption: $error';
+  }
+
+  @override
+  String get clubPhotosLoading => 'Loading photos…';
+
+  @override
+  String get clubPhotosTitle => 'Photos';
+
+  @override
+  String get clubPhotosAdd => 'Add photo';
+
+  @override
+  String get clubPhotosEmpty => 'No photos in this club yet.';
+
+  @override
+  String get clubPhotosCaptionPendingHint => 'Caption (optional, 280 chars)';
+
+  @override
+  String get clubPhotosCaptionHint => 'Caption…';
+
+  @override
+  String get clubPhotosCancel => 'Cancel';
+
+  @override
+  String get clubPhotosSave => 'Save';
+
+  @override
+  String get clubPhotosUpload => 'Upload';
+
+  @override
+  String get clubPhotosUploading => 'Uploading…';
+
+  @override
+  String get clubPhotosEditCaption => 'Edit caption';
+
+  @override
+  String get clubPhotosDeleteTooltip => 'Delete photo';
+
+  @override
+  String get clubPhotosDeleteTitle => 'Delete photo?';
+
+  @override
+  String get clubPhotosDeleteBody =>
+      'This removes the photo from the club permanently.';
+
+  @override
+  String get clubPhotosDeleteConfirm => 'Delete';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'Could not open picker: $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'Upload failed: $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return 'Delete failed: $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'Could not update caption: $error';
   }
 

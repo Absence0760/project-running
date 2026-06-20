@@ -385,6 +385,47 @@ export type Database = {
           },
         ]
       }
+      club_photos: {
+        Row: {
+          caption: string | null
+          club_id: string
+          created_at: string
+          id: string
+          owner_id: string
+          position_idx: number
+          storage_path: string
+          thumb_512_path: string | null
+        }
+        Insert: {
+          caption?: string | null
+          club_id: string
+          created_at?: string
+          id?: string
+          owner_id: string
+          position_idx?: number
+          storage_path: string
+          thumb_512_path?: string | null
+        }
+        Update: {
+          caption?: string | null
+          club_id?: string
+          created_at?: string
+          id?: string
+          owner_id?: string
+          position_idx?: number
+          storage_path?: string
+          thumb_512_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_photos_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_posts: {
         Row: {
           author_id: string

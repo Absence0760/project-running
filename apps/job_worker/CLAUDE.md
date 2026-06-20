@@ -9,7 +9,10 @@ replaces the `strava-webhook` Edge Function), `photo_process` (EXIF
 strip + 512w thumbnail on uploaded run photos), `route_photo_process`
 (the `route_photos` sibling of `photo_process` — same download → strip →
 thumbnail → PATCH against the `route-photos` bucket + `route_photos` table,
-migration `20270224_001`), `notification_email` (the email
+migration `20270224_001`), `club_photo_process` (the `club_photos`
+sibling of `photo_process` — same download → strip → 512w thumbnail →
+PATCH against the `club-photos` bucket + `club_photos` table, migration
+`20270301_001`), `notification_email` (the email
 delivery channel for the notifications inbox + event-day reminders —
 roadmap Phase 4b, `decisions.md § 117`), `lifecycle_email`
 (transactional/relationship mail with no notifications row — the welcome
@@ -206,6 +209,9 @@ apps/job_worker/
 │   │   └── server_test.go   # 16 tests: resend/ses bounce+complaint / soft-bounce no-op / dedupe / 503 / 403 / 405 / 400 / 500 / classify branches
 │   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload
 │   ├── handler_strava_event_test.go # 10 tests on the ingest dispatch
+│   ├── handler_photo_process.go  # kind='photo_process' run-photo EXIF strip + 512w thumbnail
+│   ├── handler_club_photo_process.go # kind='club_photo_process' club-photo EXIF strip + 512w thumbnail (sibling of photo_process, against the club-photos bucket + club_photos table)
+│   ├── handler_club_photo_process_test.go # 7 tests mirroring the run-photo handler
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests
 │   ├── livehub/             # live spectator pub/sub + HTTP + WebSocket
 │   │   ├── types.go         # Ping wire shape

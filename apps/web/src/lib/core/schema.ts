@@ -43,6 +43,7 @@ export const TABLES = {
 	activities: 'activities',
 	club_members: 'club_members',
 	club_posts: 'club_posts',
+	club_photos: 'club_photos',
 	event_attendees: 'event_attendees',
 	event_results: 'event_results',
 	event_checkpoints: 'event_checkpoints',
@@ -81,6 +82,7 @@ export const BUCKETS = {
 	runs: 'runs',
 	run_photos: 'run-photos',
 	route_photos: 'route-photos',
+	club_photos: 'club-photos',
 	avatars: 'avatars',
 } as const;
 

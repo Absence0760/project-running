@@ -3457,6 +3457,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailTabTemplates => 'テンプレート';
 
   @override
+  String get clubDetailTabPhotos => '写真';
+
+  @override
   String get clubDetailReportClub => 'クラブを報告';
 
   @override
@@ -6625,6 +6628,71 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String routePhotosCaptionError(String error) {
+    return 'キャプションを更新できませんでした: $error';
+  }
+
+  @override
+  String get clubPhotosLoading => '写真を読み込み中…';
+
+  @override
+  String get clubPhotosTitle => '写真';
+
+  @override
+  String get clubPhotosAdd => '写真を追加';
+
+  @override
+  String get clubPhotosEmpty => 'このクラブにはまだ写真がありません。';
+
+  @override
+  String get clubPhotosCaptionPendingHint => 'キャプション（任意、280文字）';
+
+  @override
+  String get clubPhotosCaptionHint => 'キャプション…';
+
+  @override
+  String get clubPhotosCancel => 'キャンセル';
+
+  @override
+  String get clubPhotosSave => '保存';
+
+  @override
+  String get clubPhotosUpload => 'アップロード';
+
+  @override
+  String get clubPhotosUploading => 'アップロード中…';
+
+  @override
+  String get clubPhotosEditCaption => 'キャプションを編集';
+
+  @override
+  String get clubPhotosDeleteTooltip => '写真を削除';
+
+  @override
+  String get clubPhotosDeleteTitle => '写真を削除しますか？';
+
+  @override
+  String get clubPhotosDeleteBody => 'この操作で写真はクラブから完全に削除されます。';
+
+  @override
+  String get clubPhotosDeleteConfirm => '削除';
+
+  @override
+  String clubPhotosPickerError(String error) {
+    return 'ピッカーを開けませんでした: $error';
+  }
+
+  @override
+  String clubPhotosUploadError(String error) {
+    return 'アップロードに失敗しました: $error';
+  }
+
+  @override
+  String clubPhotosDeleteError(String error) {
+    return '削除に失敗しました: $error';
+  }
+
+  @override
+  String clubPhotosCaptionError(String error) {
     return 'キャプションを更新できませんでした: $error';
   }
 

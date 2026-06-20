@@ -20,6 +20,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
+import '../widgets/club_photos.dart';
 import '../widgets/event_form_sheet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/route_track_preview.dart';
@@ -88,7 +89,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
     _tabs.addListener(_onTabChanged);
     _load();
   }
@@ -376,6 +377,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             Tab(text: AppLocalizations.of(context).clubDetailTabMembers),
             Tab(text: AppLocalizations.of(context).clubDetailTabRoutes),
             Tab(text: AppLocalizations.of(context).clubDetailTabTemplates),
+            Tab(text: AppLocalizations.of(context).clubDetailTabPhotos),
           ],
         ),
       ),
@@ -407,6 +409,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 _buildMembersTab(theme, c),
                 _buildRoutesTab(theme, c),
                 _buildTemplatesTab(theme, c),
+                _buildPhotosTab(theme, c),
               ],
             ),
           ),
@@ -1621,6 +1624,35 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildPhotosTab(ThemeData theme, ClubView c) {
+    // The ClubInviteScreen redemption path omits apiClient; the gallery
+    // needs a client to fetch / upload, so fall back to a quiet message.
+    final api = widget.apiClient;
+    if (api == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            AppLocalizations.of(context).clubPhotosEmpty,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        ClubPhotos(
+          api: api,
+          clubId: c.row.id,
+          canUpload: c.isMember,
+          canModerate: c.isAdmin,
+        ),
+      ],
     );
   }
 }

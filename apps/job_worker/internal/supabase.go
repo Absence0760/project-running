@@ -331,6 +331,26 @@ func (c *SupabaseClient) UpdateRoutePhotoThumb512Path(ctx context.Context, photo
 	return c.updateThumb512Path(ctx, schema.TableRoutePhotos, photoID, path)
 }
 
+// DownloadClubPhoto fetches a club photo from the club-photos bucket — the
+// club_photos sibling of DownloadPhoto, used by the club_photo_process handler.
+func (c *SupabaseClient) DownloadClubPhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return c.downloadFromBucket(ctx, schema.BucketClubPhotos, path)
+}
+
+// UploadClubPhoto writes a club photo back to the club-photos bucket. Used by
+// the club_photo_process handler after EXIF stripping.
+func (c *SupabaseClient) UploadClubPhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	return c.uploadToBucket(ctx, schema.BucketClubPhotos, path, body, contentType)
+}
+
+// UpdateClubPhotoThumb512Path PATCHes club_photos.thumb_512_path after the
+// worker uploads the resized variant. The club_photos thumb column is
+// service-role-only (a BEFORE UPDATE trigger rejects authenticated writes),
+// so this service-role PATCH is the only legitimate writer.
+func (c *SupabaseClient) UpdateClubPhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	return c.updateThumb512Path(ctx, schema.TableClubPhotos, photoID, path)
+}
+
 // ErrStaleSourceTrackURL is returned by UpdateMatchedTrackRow when the
 // conditional PATCH found zero rows — meaning a re-upload trigger
 // reset the row's source_track_url between the worker reading it and
@@ -1916,6 +1936,13 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// own data under Art 20 and ships here. Keyed by owner_id (NOT user_id),
 		// so the guard's user_id scan can't flag it — wired in explicitly.
 		{name: "route_photos.json", table: schema.TableRoutePhotos, filter: "owner_id=eq." + uid, sel: "*"},
+		// club_photos — the subject's own photo metadata attached to clubs
+		// (migration 20270301_001). owner_id is the uploader. The image bytes
+		// live in the club-photos Storage bucket keyed off storage_path; the
+		// metadata row (caption, ordering, paths, timestamps) is the subject's
+		// own data under Art 20 and ships here. Keyed by owner_id (NOT user_id),
+		// so the guard's user_id scan can't flag it — wired in explicitly.
+		{name: "club_photos.json", table: schema.TableClubPhotos, filter: "owner_id=eq." + uid, sel: "*"},
 		// event_orders — the subject's paid-registration ledger, both legs:
 		// orders they placed as the buyer (buyer_user_id) and orders placed for
 		// their events as the host (host_user_id). The financial record of a
