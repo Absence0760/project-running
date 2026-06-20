@@ -11292,6 +11292,32 @@
   "gymEditorCancel": "Cancel",
   "gymEditorSave": "Save workout",
   "gymEditorNeedExercise": "Add at least one exercise with a name.",
+  "gymCatalogueBrowse": "Browse catalogue",
+  "gymCatalogueTitle": "Exercise catalogue",
+  "gymCatalogueSearchPlaceholder": "Search exercises",
+  "gymCatalogueCategoryLabel": "Category",
+  "gymCatalogueEmpty": "No exercises match.",
+  "gymCatalogueCustomBadge": "Custom",
+  "gymCatalogueCreate": "Add “{name}” as a custom exercise",
+  "@gymCatalogueCreate": {
+    "description": "Create-custom affordance in the exercise catalogue picker",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gymCatalogueCreateFailed": "Couldn't add that exercise.",
+  "gymCatalogueCategoryAll": "All",
+  "gymCatalogueCategoryChest": "Chest",
+  "gymCatalogueCategoryBack": "Back",
+  "gymCatalogueCategoryShoulders": "Shoulders",
+  "gymCatalogueCategoryLegs": "Legs",
+  "gymCatalogueCategoryArms": "Arms",
+  "gymCatalogueCategoryCore": "Core",
+  "gymCatalogueCategoryCardio": "Cardio",
+  "gymCatalogueCategoryFullBody": "Full body",
+  "gymCatalogueCategoryOther": "Other",
   "gymSaveFailed": "Couldn't save workout.",
   "gymRoutineLink": "Routines",
   "gymRoutineTitle": "Routines",

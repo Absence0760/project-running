@@ -14022,6 +14022,114 @@ abstract class AppLocalizations {
   /// **'Add at least one exercise with a name.'**
   String get gymEditorNeedExercise;
 
+  /// No description provided for @gymCatalogueBrowse.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse catalogue'**
+  String get gymCatalogueBrowse;
+
+  /// No description provided for @gymCatalogueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Exercise catalogue'**
+  String get gymCatalogueTitle;
+
+  /// No description provided for @gymCatalogueSearchPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Search exercises'**
+  String get gymCatalogueSearchPlaceholder;
+
+  /// No description provided for @gymCatalogueCategoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get gymCatalogueCategoryLabel;
+
+  /// No description provided for @gymCatalogueEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No exercises match.'**
+  String get gymCatalogueEmpty;
+
+  /// No description provided for @gymCatalogueCustomBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get gymCatalogueCustomBadge;
+
+  /// Create-custom affordance in the exercise catalogue picker
+  ///
+  /// In en, this message translates to:
+  /// **'Add “{name}” as a custom exercise'**
+  String gymCatalogueCreate(String name);
+
+  /// No description provided for @gymCatalogueCreateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add that exercise.'**
+  String get gymCatalogueCreateFailed;
+
+  /// No description provided for @gymCatalogueCategoryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get gymCatalogueCategoryAll;
+
+  /// No description provided for @gymCatalogueCategoryChest.
+  ///
+  /// In en, this message translates to:
+  /// **'Chest'**
+  String get gymCatalogueCategoryChest;
+
+  /// No description provided for @gymCatalogueCategoryBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get gymCatalogueCategoryBack;
+
+  /// No description provided for @gymCatalogueCategoryShoulders.
+  ///
+  /// In en, this message translates to:
+  /// **'Shoulders'**
+  String get gymCatalogueCategoryShoulders;
+
+  /// No description provided for @gymCatalogueCategoryLegs.
+  ///
+  /// In en, this message translates to:
+  /// **'Legs'**
+  String get gymCatalogueCategoryLegs;
+
+  /// No description provided for @gymCatalogueCategoryArms.
+  ///
+  /// In en, this message translates to:
+  /// **'Arms'**
+  String get gymCatalogueCategoryArms;
+
+  /// No description provided for @gymCatalogueCategoryCore.
+  ///
+  /// In en, this message translates to:
+  /// **'Core'**
+  String get gymCatalogueCategoryCore;
+
+  /// No description provided for @gymCatalogueCategoryCardio.
+  ///
+  /// In en, this message translates to:
+  /// **'Cardio'**
+  String get gymCatalogueCategoryCardio;
+
+  /// No description provided for @gymCatalogueCategoryFullBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Full body'**
+  String get gymCatalogueCategoryFullBody;
+
+  /// No description provided for @gymCatalogueCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get gymCatalogueCategoryOther;
+
   /// No description provided for @gymSaveFailed.
   ///
   /// In en, this message translates to:

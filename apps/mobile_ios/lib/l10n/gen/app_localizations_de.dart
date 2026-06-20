@@ -8478,6 +8478,63 @@ class AppLocalizationsDe extends AppLocalizations {
       'Füge mindestens eine Übung mit Namen hinzu.';
 
   @override
+  String get gymCatalogueBrowse => 'Katalog durchsuchen';
+
+  @override
+  String get gymCatalogueTitle => 'Übungskatalog';
+
+  @override
+  String get gymCatalogueSearchPlaceholder => 'Übungen suchen';
+
+  @override
+  String get gymCatalogueCategoryLabel => 'Kategorie';
+
+  @override
+  String get gymCatalogueEmpty => 'Keine Übung passt.';
+
+  @override
+  String get gymCatalogueCustomBadge => 'Eigene';
+
+  @override
+  String gymCatalogueCreate(String name) {
+    return '„$name“ als eigene Übung hinzufügen';
+  }
+
+  @override
+  String get gymCatalogueCreateFailed =>
+      'Übung konnte nicht hinzugefügt werden.';
+
+  @override
+  String get gymCatalogueCategoryAll => 'Alle';
+
+  @override
+  String get gymCatalogueCategoryChest => 'Brust';
+
+  @override
+  String get gymCatalogueCategoryBack => 'Rücken';
+
+  @override
+  String get gymCatalogueCategoryShoulders => 'Schultern';
+
+  @override
+  String get gymCatalogueCategoryLegs => 'Beine';
+
+  @override
+  String get gymCatalogueCategoryArms => 'Arme';
+
+  @override
+  String get gymCatalogueCategoryCore => 'Rumpf';
+
+  @override
+  String get gymCatalogueCategoryCardio => 'Cardio';
+
+  @override
+  String get gymCatalogueCategoryFullBody => 'Ganzkörper';
+
+  @override
+  String get gymCatalogueCategoryOther => 'Sonstige';
+
+  @override
   String get gymSaveFailed => 'Training konnte nicht gespeichert werden.';
 
   @override

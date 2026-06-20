@@ -469,8 +469,14 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 ```
 
 - **Exercise name is free text** (autocomplete from the user's own
-  history, not a database — the exercise DB is a depth tier). One tap
-  re-logs a recent exercise name.
+  history). One tap re-logs a recent exercise name. The exercise DB
+  depth-tier landed additively (migration `20270222_001`, decisions §176):
+  catalogue names merge into the same autocomplete and a **Browse
+  catalogue** affordance per block opens a searchable, category-filterable
+  picker (globals + the user's customs, with inline create-custom) —
+  picking fills the name and binds `gym_sets.exercise_id` via the existing
+  normalised-key path. Browse self-hides offline / signed-out; free-text
+  logging is never required.
 - **Sets are rows** with reps + weight + optional RPE; weight stored in
   kg, rendered in the user's unit. Add/remove set and exercise inline.
 - `gym_screen` (list) and `gym_detail_screen` (read-only review +

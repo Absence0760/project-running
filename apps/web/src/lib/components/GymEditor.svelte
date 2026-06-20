@@ -11,6 +11,8 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import ExerciseCataloguePicker from '$lib/components/ExerciseCataloguePicker.svelte';
 
 	interface Props {
 		existing?: GymWorkoutWithSets | null;
@@ -47,11 +49,29 @@
 		oncancel
 	}: Props = $props();
 
+	/// Customs created from the picker this session, kept locally so they bind +
+	/// autocomplete immediately without waiting for the host to reload.
+	let createdCustoms = $state<Exercise[]>([]);
+
+	/// The effective catalogue: the prop (which can arrive late — the host loads
+	/// it async, so this must track it, not snapshot it) unioned with this
+	/// session's created customs, de-duplicated by id.
+	const entries = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: Exercise[] = [];
+		for (const e of [...catalogue, ...createdCustoms]) {
+			if (seen.has(e.id)) continue;
+			seen.add(e.id);
+			out.push(e);
+		}
+		return out;
+	});
+
 	/// normalised name -> catalogue exercise id, for binding a typed name to its
-	/// catalogue entry at save time. Built from the catalogue prop; empty when
-	/// no catalogue is supplied, in which case every set logs as free-text.
+	/// catalogue entry at save time. Empty when no catalogue is supplied, in
+	/// which case every set logs as free-text.
 	const catalogueByKey = $derived(
-		new Map(catalogue.map((e) => [normaliseExerciseName(e.name), e.id])),
+		new Map(entries.map((e) => [normaliseExerciseName(e.name), e.id])),
 	);
 
 	/// The union of history suggestions + catalogue names, de-duplicated by
@@ -60,7 +80,7 @@
 	const datalistNames = $derived.by(() => {
 		const seen = new Set<string>();
 		const out: string[] = [];
-		for (const n of [...suggestions, ...catalogue.map((e) => e.name)]) {
+		for (const n of [...suggestions, ...entries.map((e) => e.name)]) {
 			const key = normaliseExerciseName(n);
 			if (key === '' || seen.has(key)) continue;
 			seen.add(key);
@@ -68,6 +88,25 @@
 		}
 		return out;
 	});
+
+	// The catalogue browse/picker opens against a specific exercise block; its
+	// index is held here while open so a pick fills the right block's name.
+	let pickerForIndex = $state<number | null>(null);
+
+	function openPicker(i: number) {
+		pickerForIndex = i;
+	}
+	function closePicker() {
+		pickerForIndex = null;
+	}
+	function onPick(e: Exercise) {
+		if (pickerForIndex != null) exercises[pickerForIndex].name = e.name;
+		closePicker();
+	}
+	function onCreated(e: Exercise) {
+		// Keep the created custom locally so the typed name binds its id at save.
+		if (!createdCustoms.some((x) => x.id === e.id)) createdCustoms = [...createdCustoms, e];
+	}
 
 	type EditSet = { reps: string; weight: string; rpe: string; duration: string };
 	type EditExercise = { name: string; sets: EditSet[] };
@@ -219,6 +258,18 @@
 					bind:value={exercises[ei].name}
 					placeholder={t('gym.editor.exercisePlaceholder')}
 				/>
+				{#if catalogue.length > 0}
+					<button
+						type="button"
+						class="icon-btn browse"
+						title={t('gym.catalogue.browse')}
+						aria-label={t('gym.catalogue.browse')}
+						onclick={() => openPicker(ei)}
+						data-testid="catalogue-browse"
+					>
+						<span class="material-symbols">menu_book</span>
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="icon-btn"
@@ -331,6 +382,15 @@
 	</div>
 </div>
 
+<Modal
+	open={pickerForIndex != null}
+	title={t('gym.catalogue.title')}
+	onclose={closePicker}
+	data-testid="catalogue-modal"
+>
+	<ExerciseCataloguePicker catalogue={entries} onpick={onPick} oncreated={onCreated} />
+</Modal>
+
 <style>
 	.gym-editor {
 		gap: var(--space-lg);
@@ -423,6 +483,12 @@
 	}
 	.set-remove {
 		justify-self: center;
+	}
+	/* The browse-catalogue button is a neutral action, not destructive — keep
+	   it on the primary accent on hover rather than the delete-red. */
+	.icon-btn.browse:hover {
+		color: var(--color-primary);
+		background: var(--color-primary-light);
 	}
 
 	.add-set,

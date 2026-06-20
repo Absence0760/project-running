@@ -8033,6 +8033,62 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymEditorNeedExercise => '名前付きの種目を少なくとも1つ追加してください。';
 
   @override
+  String get gymCatalogueBrowse => 'カタログを見る';
+
+  @override
+  String get gymCatalogueTitle => '種目カタログ';
+
+  @override
+  String get gymCatalogueSearchPlaceholder => '種目を検索';
+
+  @override
+  String get gymCatalogueCategoryLabel => 'カテゴリ';
+
+  @override
+  String get gymCatalogueEmpty => '該当する種目がありません。';
+
+  @override
+  String get gymCatalogueCustomBadge => 'カスタム';
+
+  @override
+  String gymCatalogueCreate(String name) {
+    return '「$name」をカスタム種目として追加';
+  }
+
+  @override
+  String get gymCatalogueCreateFailed => '種目を追加できませんでした。';
+
+  @override
+  String get gymCatalogueCategoryAll => 'すべて';
+
+  @override
+  String get gymCatalogueCategoryChest => '胸';
+
+  @override
+  String get gymCatalogueCategoryBack => '背中';
+
+  @override
+  String get gymCatalogueCategoryShoulders => '肩';
+
+  @override
+  String get gymCatalogueCategoryLegs => '脚';
+
+  @override
+  String get gymCatalogueCategoryArms => '腕';
+
+  @override
+  String get gymCatalogueCategoryCore => '体幹';
+
+  @override
+  String get gymCatalogueCategoryCardio => '有酸素';
+
+  @override
+  String get gymCatalogueCategoryFullBody => '全身';
+
+  @override
+  String get gymCatalogueCategoryOther => 'その他';
+
+  @override
   String get gymSaveFailed => 'ワークアウトを保存できませんでした。';
 
   @override

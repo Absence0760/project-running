@@ -197,7 +197,10 @@ class _GymScreenState extends State<GymScreen> {
       // never blocks the workout list.
       try {
         final cat = await api.fetchExerciseCatalogue();
-        _catalogue = [for (final e in cat) (name: e.name, id: e.id)];
+        _catalogue = [
+          for (final e in cat)
+            (name: e.name, id: e.id, category: e.category, authorId: e.authorId),
+        ];
       } catch (e) {
         debugPrint('gym_screen: catalogue fetch failed: $e');
       }
@@ -222,6 +225,7 @@ class _GymScreenState extends State<GymScreen> {
       store: widget.store,
       suggestions: gymExerciseSuggestions(widget.store.workouts),
       catalogue: _catalogue,
+      api: widget.api,
     );
     if (saved == true) await _maybeSync();
   }
