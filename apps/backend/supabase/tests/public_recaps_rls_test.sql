@@ -1,0 +1,106 @@
+-- Pins migration 20270206_001 (public_recaps table + RLS).
+--
+-- A published recap is the FAIL-CLOSED public-share artifact for the
+-- Year-in-Running / "Wrapped" recap. RLS contract:
+--   1. Owner has full CRUD on their own rows (publish / re-publish / revoke).
+--   2. The uuid id IS the capability token: anyone (authenticated OR anon) may
+--      SELECT any row by id — that's what lets the share page + og:image
+--      render for a non-owner viewer.
+--   3. A non-owner CANNOT write (insert/update/delete) another user's recap.
+--   4. The (user_id, period_kind, period_key) unique key makes re-publishing a
+--      period an upsert, not a duplicate.
+--   5. Rows cascade-delete when the owner's auth.users row is deleted.
+begin;
+select plan(11);
+
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values
+  ('aaaaaaaa-0000-0000-0000-0000000000a1', 'authenticated', 'authenticated', 'owner@recap.local', '', now(), now()),
+  ('aaaaaaaa-0000-0000-0000-0000000000e1', 'authenticated', 'authenticated', 'stranger@recap.local', '', now(), now());
+
+-- Seed (superuser, RLS bypassed): the owner has one published year recap.
+insert into public_recaps (id, user_id, period_kind, period_key, snapshot)
+values
+  ('aaaaaaaa-0000-0000-0000-0000000000f1', 'aaaaaaaa-0000-0000-0000-0000000000a1',
+   'year', '2026', '{"year":2026,"runCount":142,"totalDistanceM":1234000}'::jsonb);
+
+set local role authenticated;
+
+-- ============================================================
+-- 1. Owner full CRUD
+-- ============================================================
+set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000a1","role":"authenticated"}';
+
+select is(
+  (select count(*)::int from public_recaps where user_id = 'aaaaaaaa-0000-0000-0000-0000000000a1'),
+  1, 'owner reads their own recap');
+
+select lives_ok(
+  $$ insert into public_recaps (user_id, period_kind, period_key, snapshot)
+       values ('aaaaaaaa-0000-0000-0000-0000000000a1', 'month', '2026-03', '{"year":2026,"month":3}'::jsonb) $$,
+  'owner can publish a new (month) recap');
+
+select lives_ok(
+  $$ update public_recaps set snapshot = '{"year":2026,"runCount":200}'::jsonb
+       where id = 'aaaaaaaa-0000-0000-0000-0000000000f1' $$,
+  'owner can re-publish (update) their recap');
+
+select lives_ok(
+  $$ delete from public_recaps where period_kind = 'month' and user_id = 'aaaaaaaa-0000-0000-0000-0000000000a1' $$,
+  'owner can revoke (delete) their recap');
+
+-- The unique key makes a same-period re-publish an upsert target, not a dup.
+select throws_ok(
+  $$ insert into public_recaps (user_id, period_kind, period_key, snapshot)
+       values ('aaaaaaaa-0000-0000-0000-0000000000a1', 'year', '2026', '{}'::jsonb) $$,
+  '23505',
+  null,
+  'a second row for the same (user, kind, key) violates the unique key');
+
+-- ============================================================
+-- 2 + 3. A stranger can READ by id but cannot WRITE another user's recap
+-- ============================================================
+set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000e1","role":"authenticated"}';
+
+select is(
+  (select count(*)::int from public_recaps where id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
+  1, 'a stranger CAN read the owner''s recap by id (the share link)');
+
+select throws_ok(
+  $$ insert into public_recaps (user_id, period_kind, period_key, snapshot)
+       values ('aaaaaaaa-0000-0000-0000-0000000000a1', 'year', '2025', '{}'::jsonb) $$,
+  '42501',
+  null,
+  'a stranger cannot publish a recap owned by someone else');
+
+-- Update/delete against the owner's row are RLS-filtered to zero rows.
+select lives_ok(
+  $$ update public_recaps set snapshot = '{"hijacked":true}'::jsonb
+       where id = 'aaaaaaaa-0000-0000-0000-0000000000f1' $$,
+  'a stranger''s update runs but is RLS-filtered');
+select is(
+  (select snapshot->>'hijacked' from public_recaps where id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
+  null, 'the stranger''s update matched no writable row (snapshot unchanged)');
+
+-- ============================================================
+-- anon (the actual share-page audience)
+-- ============================================================
+set local role anon;
+set local "request.jwt.claims" = '{"role":"anon"}';
+
+select is(
+  (select count(*)::int from public_recaps where id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
+  1, 'anon reads the published recap by id (the unfurl path)');
+
+reset role;
+
+-- ============================================================
+-- 5. Cascade on owner delete
+-- ============================================================
+delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-0000000000a1';
+select is(
+  (select count(*)::int from public_recaps where user_id = 'aaaaaaaa-0000-0000-0000-0000000000a1'),
+  0, 'deleting the owner cascades away their published recaps');
+
+select * from finish();
+rollback;
