@@ -213,3 +213,101 @@ export function extractRunSignUpResults(payload: unknown): RunSignUpResult[] {
   }
   return out;
 }
+
+// ── UltraSignup ──────────────────────────────────────────────────────────────
+//
+// UltraSignup powers most US trail + ultra events and exposes a per-athlete
+// results feed. Its field names differ from RunSignUp's (it spells the bib
+// `bibno`, the finishing clock `formattime`, the overall position `place`, the
+// age-group rank `agerank`, and the division string `agegroup`), so it gets its
+// own tolerant row shape + mapper rather than being forced through the
+// RunSignUp one. The mapped output is the SAME `MappedRaceRun` (source='race',
+// the race:{name}:{date}:{bib} dedup id, the owner-only race metadata) so a
+// UltraSignup-imported result dedups against a paste/recorded counterpart for
+// the same race exactly like the other providers.
+
+/** A finisher row as UltraSignup returns it (the fields we consume). */
+export interface UltraSignUpResult {
+  bibno?: unknown;
+  bib?: unknown;
+  formattime?: unknown; // "1:47:23" finishing clock
+  time?: unknown; // fallback time field on some feeds
+  place?: unknown; // overall place
+  agerank?: unknown; // age-group place
+  age_group_place?: unknown;
+  agegroup?: unknown; // division string, e.g. "M35-39"
+  age_group?: unknown;
+}
+
+/**
+ * Map one UltraSignup finisher onto a runs row for `userId`. `raceName` +
+ * `raceDate` + `distanceM` come from the race_listings row being imported.
+ * Returns null when there is no usable time at all (a DNS/DNF row is not a run).
+ */
+export function mapUltraSignUpResult(
+  r: UltraSignUpResult,
+  opts: {
+    userId: string;
+    listingId: string;
+    raceName: string;
+    raceDate: string;
+    distanceM: number | null;
+    isPublic: boolean;
+  },
+): MappedRaceRun | null {
+  return mapRunSignUpResult(
+    {
+      bib_num: r.bibno ?? r.bib,
+      chip_time: r.formattime ?? r.time,
+      place: r.place,
+      age_group_place: r.agerank ?? r.age_group_place,
+      age_group: r.agegroup ?? r.age_group,
+    },
+    opts,
+  );
+}
+
+/**
+ * Build the UltraSignup athlete-results URL. `athleteId` is the runner's
+ * UltraSignup participant id (uid in the public results URL pattern). The
+ * api_key/api_secret carry our credential (gated server-side); `format=json`
+ * asks for the structured feed.
+ */
+export function ultraSignUpResultsUrl(opts: {
+  athleteId: string;
+  apiKey: string;
+  apiSecret: string;
+}): string {
+  const u = new URL('https://ultrasignup.com/service/events.svc/results/athlete');
+  u.searchParams.set('format', 'json');
+  u.searchParams.set('uid', opts.athleteId);
+  u.searchParams.set('api_key', opts.apiKey);
+  u.searchParams.set('api_secret', opts.apiSecret);
+  return u.toString();
+}
+
+/**
+ * Pull the flat finisher array out of the UltraSignup results envelope, capped.
+ * The feed is usually a bare top-level array; tolerate a `{ results: [...] }`
+ * wrapper too.
+ */
+export function extractUltraSignUpResults(payload: unknown): UltraSignUpResult[] {
+  const out: UltraSignUpResult[] = [];
+  if (Array.isArray(payload)) {
+    for (const r of payload) {
+      out.push(r as UltraSignUpResult);
+      if (out.length >= MAX_RESULTS_ROWS) return out;
+    }
+    return out;
+  }
+  if (payload && typeof payload === 'object') {
+    const rows = (payload as Record<string, unknown>).results;
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        out.push(r as UltraSignUpResult);
+        if (out.length >= MAX_RESULTS_ROWS) return out;
+      }
+    }
+  }
+  return out;
+}

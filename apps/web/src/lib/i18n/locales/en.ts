@@ -2954,6 +2954,11 @@ export const en = {
 	"integrations.runsignupOpen": "Open the race calendar",
 	"integrations.runsignupUnavailable":
 		"RunSignUp import isn't available yet. parkrun and manual paste still work.",
+	"integrations.ultrasignup": "UltraSignup",
+	"integrations.ultrasignupConnect": "Import trail and ultra results from UltraSignup.",
+	"integrations.ultrasignupOpen": "Open the race calendar",
+	"integrations.ultrasignupUnavailable":
+		"UltraSignup import isn't available yet. parkrun and manual paste still work.",
 	"socialHub.panelLabel": "{section} panel",
 	"socialPeople.searchFailed": "Search failed: {error}",
 	"socialPeople.followFailed": "Could not update follow: {error}",

@@ -5,13 +5,16 @@ import {
 import {
   capField,
   extractRunSignUpResults,
+  extractUltraSignUpResults,
   mapRunSignUpResult,
+  mapUltraSignUpResult,
   MAX_FIELD_LEN,
   MAX_RESULTS_ROWS,
   parseClockToSeconds,
   parseRaceResultRow,
   raceExternalId,
   runSignUpResultsUrl,
+  ultraSignUpResultsUrl,
 } from './lib.ts';
 
 const OPTS = {
@@ -154,4 +157,92 @@ Deno.test('extractRunSignUpResults tolerates a top-level results array + caps', 
   assertEquals(extractRunSignUpResults({}).length, 0);
   const big = { results: Array.from({ length: MAX_RESULTS_ROWS + 100 }, () => ({ bib_num: 'x' })) };
   assertEquals(extractRunSignUpResults(big).length, MAX_RESULTS_ROWS);
+});
+
+// ── UltraSignup ──────────────────────────────────────────────────────────────
+
+// A committed sample of the UltraSignup athlete-results JSON (bare top-level
+// array, its native field names) so the mapper is testable without the live
+// site or an API key.
+const ULTRA_FIXTURE = [
+  {
+    bibno: '88',
+    formattime: '4:32:10',
+    place: 12,
+    agerank: 3,
+    agegroup: 'M40-49',
+  },
+  {
+    bib: '91',
+    time: '5:01:44',
+    place: 21,
+  },
+  { bibno: '99', formattime: 'DNF', place: 0 }, // no usable time → dropped
+];
+
+const ULTRA_OPTS = {
+  userId: 'u-1',
+  listingId: 'L-9',
+  raceName: 'Bighorn 100',
+  raceDate: '2025-06-20',
+  distanceM: 160934,
+  isPublic: false,
+};
+
+Deno.test('mapUltraSignUpResult maps an UltraSignup finisher onto a race run', () => {
+  const run = mapUltraSignUpResult(ULTRA_FIXTURE[0], ULTRA_OPTS);
+  assert(run !== null);
+  assertEquals(run!.source, 'race');
+  assertEquals(run!.activity_type, 'run');
+  assertEquals(run!.distance_m, 160934);
+  assertEquals(run!.duration_s, 4 * 3600 + 32 * 60 + 10);
+  assertEquals(run!.external_id, 'race:Bighorn 100:2025-06-20:88');
+  assertEquals(run!.race_listing_id, 'L-9');
+  assertEquals(run!.started_at, '2025-06-20T10:00:00Z');
+  assertEquals(run!.metadata.race_name, 'Bighorn 100');
+  assertEquals(run!.metadata.bib, '88');
+  assertEquals(run!.metadata.chip_time, '4:32:10');
+  assertEquals(run!.metadata.overall_place, 12);
+  assertEquals(run!.metadata.age_group_place, 3);
+  assertEquals(run!.metadata.age_group, 'M40-49');
+});
+
+Deno.test('mapUltraSignUpResult tolerates the bib/time field aliases', () => {
+  const run = mapUltraSignUpResult(ULTRA_FIXTURE[1], ULTRA_OPTS);
+  assert(run !== null);
+  assertEquals(run!.metadata.bib, '91');
+  assertEquals(run!.duration_s, 5 * 3600 + 1 * 60 + 44);
+  assertEquals(run!.metadata.overall_place, 21);
+  assertEquals(run!.metadata.age_group, undefined);
+});
+
+Deno.test('mapUltraSignUpResult returns null on a DNF row with no usable time', () => {
+  assertEquals(mapUltraSignUpResult(ULTRA_FIXTURE[2], ULTRA_OPTS), null);
+});
+
+Deno.test('mapUltraSignUpResult shares the dedup external_id shape with paste/runsignup', () => {
+  const ultra = mapUltraSignUpResult({ bibno: '88', formattime: '4:32:10' }, ULTRA_OPTS);
+  const paste = parseRaceResultRow({ bib: '88', chip_time: '4:32:10' }, ULTRA_OPTS);
+  assertEquals(ultra!.external_id, paste!.external_id);
+});
+
+Deno.test('ultraSignUpResultsUrl includes uid/key/secret/format', () => {
+  const url = ultraSignUpResultsUrl({ athleteId: 'uid-42', apiKey: 'KEY', apiSecret: 'SECRET' });
+  assert(url.startsWith('https://ultrasignup.com/service/events.svc/results/athlete'));
+  assert(url.includes('format=json'));
+  assert(url.includes('uid=uid-42'));
+  assert(url.includes('api_key=KEY'));
+  assert(url.includes('api_secret=SECRET'));
+});
+
+Deno.test('extractUltraSignUpResults reads a bare array and a results wrapper', () => {
+  assertEquals(extractUltraSignUpResults(ULTRA_FIXTURE).length, 3);
+  assertEquals(extractUltraSignUpResults({ results: [{ bibno: '1' }] }).length, 1);
+  assertEquals(extractUltraSignUpResults(null).length, 0);
+  assertEquals(extractUltraSignUpResults({}).length, 0);
+});
+
+Deno.test('extractUltraSignUpResults caps a huge feed', () => {
+  const big = Array.from({ length: MAX_RESULTS_ROWS + 100 }, () => ({ bibno: 'x' }));
+  assertEquals(extractUltraSignUpResults(big).length, MAX_RESULTS_ROWS);
 });
