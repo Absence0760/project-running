@@ -14,9 +14,11 @@ import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../local_food_store.dart';
 import '../local_meal_template_store.dart';
+import '../local_recipe_store.dart';
 import '../meal_template.dart';
 import '../nutrition_budget.dart';
 import '../nutrition_targets.dart';
+import '../recipe.dart';
 import '../nutrition_totals.dart';
 import '../nutrition_week.dart';
 import '../settings_sync.dart';
@@ -98,6 +100,12 @@ class _NutritionScreenState extends State<NutritionScreen> {
   bool _loggingTemplateId = false;
   String? _loggingId;
 
+  /// Owned offline-first cache for saved recipes (sibling of `_templateStore`).
+  /// Where a template logs each item, a recipe logs ONE summed entry.
+  final LocalRecipeStore _recipeStore = LocalRecipeStore();
+  bool _loggingRecipe = false;
+  String? _loggingRecipeId;
+
   /// Today's run + gym active minutes — feeds the hydration goal's
   /// sweat-replacement add (runs/gym without a duration contribute nothing).
   int _exerciseMinutes = 0;
@@ -107,8 +115,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
     super.initState();
     widget.store.addListener(_onStoreChange);
     _templateStore.addListener(_onStoreChange);
+    _recipeStore.addListener(_onStoreChange);
     _loadWater();
     _templateStore.loadAll();
+    _recipeStore.loadAll();
     _refresh();
   }
 
@@ -116,6 +126,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
   void dispose() {
     widget.store.removeListener(_onStoreChange);
     _templateStore.removeListener(_onStoreChange);
+    _recipeStore.removeListener(_onStoreChange);
     super.dispose();
   }
 
@@ -168,6 +179,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
       );
       if (widget.store.hasPending) await widget.store.syncWithServer(api);
       await _hydrateTemplates(api);
+      await _hydrateRecipes(api);
       _weightKg = await api.fetchLatestBodyWeightKg();
       final exercise = await _todayExercise(api, _weightKg);
       _exerciseMinutes = exercise.minutes;
@@ -440,6 +452,245 @@ class _NutritionScreenState extends State<NutritionScreen> {
     await _maybeSyncTemplates();
   }
 
+  /// Best-effort: pull saved recipes (with their ingredients) and overlay the
+  /// offline cache. A failure leaves the cache as-is (offline-first).
+  Future<void> _hydrateRecipes(ApiClient api) async {
+    try {
+      final summaries = await api.fetchRecipes();
+      final detailed = <({
+        Map<String, dynamic> recipe,
+        List<StoredRecipeIngredient> ingredients
+      })>[];
+      for (final r in summaries) {
+        final d = await api.fetchRecipeDetail(r.id);
+        if (d == null) continue;
+        detailed.add((
+          recipe: d.recipe.toJson(),
+          ingredients: [
+            for (final it in d.ingredients)
+              StoredRecipeIngredient(
+                itemName: it.itemName,
+                quantity: it.quantity,
+                calories: it.calories,
+                proteinG: it.proteinG,
+                carbsG: it.carbsG,
+                fatG: it.fatG,
+                externalId: it.externalId,
+              ),
+          ],
+        ));
+      }
+      await _recipeStore.replaceFromServer(detailed);
+      if (_recipeStore.hasPending) await _recipeStore.syncWithServer(api);
+    } catch (e) {
+      debugPrint('nutrition_screen: recipe hydrate failed: $e');
+    }
+  }
+
+  Future<void> _maybeSyncRecipes() async {
+    final api = widget.api;
+    if (api == null || !_isOnline) return;
+    await _recipeStore.syncWithServer(api);
+  }
+
+  /// Promote today's logged entries into a named recipe. The name + servings
+  /// are collected in an AlertDialog; the ingredients come from `recipeFromEntries`.
+  Future<void> _saveAsRecipe() async {
+    final l10n = AppLocalizations.of(context);
+    final today = _todayEntries;
+    if (today.isEmpty) return;
+    final nameController = TextEditingController();
+    final servingsController = TextEditingController(text: '1');
+    final result = await showDialog<({String name, double servings})>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.nutritionSaveAsRecipeTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: l10n.nutritionRecipeName,
+                hintText: l10n.nutritionRecipeNamePlaceholder,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: servingsController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(labelText: l10n.nutritionRecipeServings),
+            ),
+            const SizedBox(height: 8),
+            Text(l10n.nutritionRecipeServingsHint,
+                style: Theme.of(ctx).textTheme.bodySmall),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.nutritionCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(
+              ctx,
+              (
+                name: nameController.text,
+                servings: double.tryParse(servingsController.text) ?? 1,
+              ),
+            ),
+            child: Text(l10n.nutritionSaveRecipe),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    final draft = recipeFromEntries(
+      result.name,
+      [
+        for (final e in today)
+          RecipeSourceEntry(
+            itemName: e.itemName,
+            calories: e.calories,
+            proteinG: e.proteinG,
+            carbsG: e.carbsG,
+            fatG: e.fatG,
+            externalId: e.externalId,
+          ),
+      ],
+    );
+    try {
+      await _recipeStore.createLocal(
+        name: draft.name,
+        servings: result.servings >= 1 ? result.servings : 1,
+        mealSlot: _commonSlot(today),
+        ingredients: [
+          for (final it in draft.ingredients)
+            StoredRecipeIngredient(
+              itemName: it.itemName,
+              quantity: it.quantity,
+              calories: it.calories,
+              proteinG: it.proteinG,
+              carbsG: it.carbsG,
+              fatG: it.fatG,
+              externalId: it.externalId,
+            ),
+        ],
+      );
+      await _maybeSyncRecipes();
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionRecipeSaved);
+      }
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionRecipeSaveFailed(e.toString()));
+      }
+    }
+  }
+
+  /// The common meal slot across today's entries when they all agree, else
+  /// null — used as the recipe's default slot (mirrors web, which derives it
+  /// the same way via templateFromEntries).
+  static String? _commonSlot(List<FoodEntry> entries) {
+    String? found;
+    for (final e in entries) {
+      final s = e.mealSlot;
+      if (s == null) continue;
+      if (found == null) {
+        found = s;
+      } else if (found != s) {
+        return null;
+      }
+    }
+    return found;
+  }
+
+  /// Log ONE serving of [r] as a single food_log entry carrying the summed
+  /// per-serving macros, via the pure `logInputFromRecipe` parity helper +
+  /// an offline-first write to the food store.
+  Future<void> _logRecipe(StoredRecipe r) async {
+    if (_loggingRecipe) return;
+    setState(() {
+      _loggingRecipe = true;
+      _loggingRecipeId = r.id;
+    });
+    final l10n = AppLocalizations.of(context);
+    try {
+      final input = logInputFromRecipe(PlannedRecipe(
+        name: r.name,
+        servings: r.servings,
+        mealSlot: r.mealSlot,
+        ingredients: [
+          for (var i = 0; i < r.ingredients.length; i++)
+            PlannedRecipeIngredient(
+              position: i,
+              itemName: r.ingredients[i].itemName,
+              quantity: r.ingredients[i].quantity,
+              calories: r.ingredients[i].calories,
+              proteinG: r.ingredients[i].proteinG,
+              carbsG: r.ingredients[i].carbsG,
+              fatG: r.ingredients[i].fatG,
+              externalId: r.ingredients[i].externalId,
+            ),
+        ],
+      ));
+      if (input != null) {
+        await widget.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: input.itemName,
+          mealSlot: input.mealSlot,
+          calories: input.calories,
+          proteinG: input.proteinG,
+          carbsG: input.carbsG,
+          fatG: input.fatG,
+        );
+        await _maybeSync();
+        if (mounted) {
+          showTopBanner(context, l10n.nutritionRecipeLogged(1, r.name));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionRecipeLogFailed(e.toString()));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loggingRecipe = false;
+          _loggingRecipeId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteRecipe(StoredRecipe r) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(l10n.nutritionDeleteRecipeTitle),
+            content: Text(l10n.nutritionDeleteRecipeMessage(r.name)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.nutritionCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                child: Text(l10n.nutritionDeleteRecipe),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    await _recipeStore.deleteLocal(r.id);
+    await _maybeSyncRecipes();
+  }
+
   Future<void> _delete(FoodEntry e) async {
     final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
@@ -488,6 +739,12 @@ class _NutritionScreenState extends State<NutritionScreen> {
               icon: const Icon(Icons.bookmark_add_outlined),
               onPressed: _refreshing ? null : _saveAsMeal,
             ),
+          if (today.isNotEmpty)
+            IconButton(
+              tooltip: l10n.nutritionSaveAsRecipe,
+              icon: const Icon(Icons.menu_book_outlined),
+              onPressed: _refreshing ? null : _saveAsRecipe,
+            ),
           IconButton(
             tooltip: l10n.nutritionLogFood,
             icon: const Icon(Icons.add),
@@ -529,6 +786,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   const SizedBox(height: 12),
                   if (_templateStore.templates.isNotEmpty) ...[
                     _templatesCard(theme, l10n),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_recipeStore.recipes.isNotEmpty) ...[
+                    _recipesCard(theme, l10n),
                     const SizedBox(height: 12),
                   ],
                   if (groups.isEmpty)
@@ -589,6 +850,57 @@ class _NutritionScreenState extends State<NutritionScreen> {
                       tooltip: l10n.nutritionDeleteTemplate,
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () => _deleteTemplate(t),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Saved recipes — a self-hiding section, sibling of the templates card.
+  /// Each row logs ONE summed serving with one tap or deletes behind a dialog.
+  Widget _recipesCard(ThemeData theme, AppLocalizations l10n) {
+    final recipes = _recipeStore.recipes;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                l10n.nutritionRecipes,
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+            for (final r in recipes)
+              ListTile(
+                title: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                    l10n.nutritionRecipeMeta(r.ingredientCount, r.servings)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_loggingRecipe && _loggingRecipeId == r.id)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      TextButton(
+                        onPressed: _loggingRecipe ? null : () => _logRecipe(r),
+                        child: Text(l10n.nutritionLogRecipe),
+                      ),
+                    IconButton(
+                      tooltip: l10n.nutritionDeleteRecipe,
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _deleteRecipe(r),
                     ),
                   ],
                 ),

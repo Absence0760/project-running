@@ -13,10 +13,17 @@
 		createMealTemplate,
 		deleteMealTemplate,
 		logMealTemplate,
+		fetchRecipesWithError,
+		fetchRecipeDetail,
+		createRecipe,
+		deleteRecipe,
+		logRecipe,
 		type FoodEntry,
 		type MealTemplateSummary,
+		type RecipeSummary,
 	} from '$lib/core/data';
 	import { templateFromEntries } from '$lib/nutrition/meal_template';
+	import { recipeFromEntries } from '$lib/nutrition/recipe';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import {
 		computeNutritionTargets,
@@ -62,6 +69,16 @@
 	let loggingTemplateId = $state<string | null>(null);
 	let confirmDeleteTemplate = $state<MealTemplateSummary | null>(null);
 	let deletingTemplate = $state(false);
+
+	let recipes = $state<RecipeSummary[]>([]);
+	let recipesError = $state(false);
+	let showSaveRecipe = $state(false);
+	let recipeName = $state('');
+	let recipeServings = $state(1);
+	let savingRecipe = $state(false);
+	let loggingRecipeId = $state<string | null>(null);
+	let confirmDeleteRecipe = $state<RecipeSummary | null>(null);
+	let deletingRecipe = $state(false);
 
 	const WATER_UNIT_ML = 250;
 
@@ -172,6 +189,7 @@
 			waterMl = stored ? Number(stored) || 0 : 0;
 
 			await loadTemplates();
+			await loadRecipes();
 		} catch (e) {
 			console.warn('nutrition load failed', e);
 		}
@@ -182,6 +200,12 @@
 		const res = await fetchMealTemplatesWithError();
 		templates = res.templates;
 		templatesError = res.error !== null;
+	}
+
+	async function loadRecipes() {
+		const res = await fetchRecipesWithError();
+		recipes = res.recipes;
+		recipesError = res.error !== null;
 	}
 
 	function onLogged() {
@@ -247,6 +271,69 @@
 			showToast(m('nutrition.deleteTemplateFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			deletingTemplate = false;
+		}
+	}
+
+	async function saveRecipe() {
+		if (savingRecipe || entries.length === 0) return;
+		savingRecipe = true;
+		try {
+			const draft = recipeFromEntries(recipeName, entries);
+			await createRecipe({
+				name: draft.name,
+				servings: recipeServings >= 1 ? recipeServings : 1,
+				meal_slot: draft.mealSlot,
+				ingredients: draft.ingredients.map((it) => ({
+					position: it.position,
+					item_name: it.itemName,
+					quantity: it.quantity,
+					calories: it.calories,
+					protein_g: it.proteinG,
+					carbs_g: it.carbsG,
+					fat_g: it.fatG,
+					external_id: it.externalId,
+				})),
+			});
+			showToast(m('nutrition.recipeSaved'), 'success');
+			showSaveRecipe = false;
+			recipeName = '';
+			recipeServings = 1;
+			await loadRecipes();
+		} catch (e) {
+			showToast(m('nutrition.recipeSaveFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			savingRecipe = false;
+		}
+	}
+
+	async function logRecipeEntry(r: RecipeSummary) {
+		if (loggingRecipeId) return;
+		loggingRecipeId = r.id;
+		try {
+			const detail = await fetchRecipeDetail(r.id);
+			if (!detail) throw new Error('not found');
+			const n = await logRecipe(detail);
+			showToast(m('nutrition.recipeLogged', { n, name: r.name }), 'success');
+			await load();
+		} catch (e) {
+			showToast(m('nutrition.recipeLogFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			loggingRecipeId = null;
+		}
+	}
+
+	async function removeRecipe() {
+		const r = confirmDeleteRecipe;
+		if (!r || deletingRecipe) return;
+		deletingRecipe = true;
+		try {
+			await deleteRecipe(r.id);
+			recipes = recipes.filter((x) => x.id !== r.id);
+			confirmDeleteRecipe = null;
+		} catch (e) {
+			showToast(m('nutrition.deleteRecipeFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			deletingRecipe = false;
 		}
 	}
 
@@ -470,6 +557,50 @@
 			</section>
 		{/if}
 
+		{#if recipesError}
+			<section class="card-elevated templates-card" data-testid="recipes-error">
+				<div class="card-head">
+					<span class="section-label">{m('nutrition.recipes')}</span>
+				</div>
+				<p class="section-hint">
+					<span class="material-symbols hint-icon" aria-hidden="true">error</span>
+					{m('nutrition.recipesLoadFailed')}
+					<button class="btn btn-outline btn-sm" type="button" onclick={() => void loadRecipes()}>{m('nutrition.templatesRetry')}</button>
+				</p>
+			</section>
+		{:else if recipes.length > 0}
+			<section class="card-elevated templates-card" data-testid="recipes">
+				<div class="card-head">
+					<span class="section-label">{m('nutrition.recipes')}</span>
+				</div>
+				<ul class="template-list">
+					{#each recipes as r (r.id)}
+						<li class="template-row">
+							<div class="template-main">
+								<span class="template-name">{r.name}</span>
+								<span class="template-meta">{m('nutrition.recipeMeta', { n: r.ingredient_count, servings: r.servings })}</span>
+							</div>
+							<button
+								class="btn btn-primary btn-sm"
+								type="button"
+								disabled={loggingRecipeId === r.id}
+								onclick={() => void logRecipeEntry(r)}
+								data-testid="log-recipe"
+							>{m('nutrition.logRecipe')}</button>
+							<button
+								class="icon-btn"
+								type="button"
+								onclick={() => (confirmDeleteRecipe = r)}
+								aria-label={`${m('nutrition.deleteRecipe')} ${r.name}`}
+							>
+								<span class="material-symbols" aria-hidden="true">delete</span>
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
 		{#if !hasMeals}
 			<section class="card-elevated empty" data-testid="macro-rings-empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
@@ -492,6 +623,16 @@
 							}}
 							data-testid="save-as-meal"
 						>{m('nutrition.saveAsMeal')}</button>
+						<button
+							class="btn btn-outline btn-sm"
+							type="button"
+							onclick={() => {
+								recipeName = '';
+								recipeServings = 1;
+								showSaveRecipe = true;
+							}}
+							data-testid="save-as-recipe"
+						>{m('nutrition.saveAsRecipe')}</button>
 					</div>
 				</div>
 				<div class="meal-groups">
@@ -629,6 +770,53 @@
 	confirmLabel={m('nutrition.deleteTemplate')}
 	onconfirm={removeTemplate}
 	oncancel={() => (confirmDeleteTemplate = null)}
+	danger
+/>
+
+<Modal open={showSaveRecipe} title={m('nutrition.saveAsRecipeTitle')} narrow onclose={() => (showSaveRecipe = false)}>
+	<form
+		class="editor-form save-meal-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			void saveRecipe();
+		}}
+	>
+		<label class="field">
+			<span class="section-label">{m('nutrition.recipeName')}</span>
+			<input
+				type="text"
+				bind:value={recipeName}
+				placeholder={m('nutrition.recipeNamePlaceholder')}
+				data-testid="recipe-name"
+			/>
+		</label>
+		<label class="field">
+			<span class="section-label">{m('nutrition.recipeServings')}</span>
+			<input
+				type="number"
+				min="1"
+				step="0.5"
+				bind:value={recipeServings}
+				data-testid="recipe-servings"
+			/>
+		</label>
+		<p class="section-hint">{m('nutrition.recipeServingsHint')}</p>
+		<div class="save-meal-actions">
+			<button class="btn btn-outline" type="button" onclick={() => (showSaveRecipe = false)}>{m('nutrition.cancel')}</button>
+			<button class="btn btn-primary" type="submit" disabled={savingRecipe || entries.length === 0} data-testid="confirm-save-recipe">
+				{m('nutrition.saveRecipe')}
+			</button>
+		</div>
+	</form>
+</Modal>
+
+<ConfirmDialog
+	open={confirmDeleteRecipe !== null}
+	title={m('nutrition.deleteRecipeTitle')}
+	message={m('nutrition.deleteRecipeMessage', { name: confirmDeleteRecipe?.name ?? '' })}
+	confirmLabel={m('nutrition.deleteRecipe')}
+	onconfirm={removeRecipe}
+	oncancel={() => (confirmDeleteRecipe = null)}
 	danger
 />
 
