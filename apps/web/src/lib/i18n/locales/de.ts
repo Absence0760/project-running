@@ -1945,6 +1945,7 @@ export const messages = {
 	"landing.loading": "Wird geladen...",
 	"landing.navApps": "Apps",
 	"landing.navFeatures": "Funktionen",
+	"landing.navLearn": "Lernen",
 	"landing.signIn": "Anmelden",
 	"landing.heroLine1": "Routen planen.",
 	"landing.heroLine2": "Läufe aufzeichnen.",

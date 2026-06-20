@@ -1954,6 +1954,7 @@ export const en = {
 	"landing.loading": "Loading...",
 	"landing.navApps": "Apps",
 	"landing.navFeatures": "Features",
+	"landing.navLearn": "Learn",
 	"landing.signIn": "Sign In",
 	"landing.heroLine1": "Plan routes.",
 	"landing.heroLine2": "Track runs.",

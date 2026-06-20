@@ -69,6 +69,7 @@
 	<div class="nav-links">
 		<a href="#apps" class="nav-link">{m('landing.navApps')}</a>
 		<a href="#features" class="nav-link">{m('landing.navFeatures')}</a>
+		<a href="/learn" class="nav-link">{m('landing.navLearn')}</a>
 		<a href="/login" class="nav-signin">{m('landing.signIn')}</a>
 	</div>
 </nav>
@@ -141,6 +142,7 @@
 		<a href="/login">{m('landing.signIn')}</a>
 		<a href="#apps">{m('landing.navApps')}</a>
 		<a href="#features">{m('landing.navFeatures')}</a>
+		<a href="/learn">{m('landing.navLearn')}</a>
 		<a href="/privacy">{m('landing.footerPrivacy')}</a>
 		<a href="/terms">{m('landing.footerTerms')}</a>
 		<a href="/cookie-notice">{m('landing.footerCookies')}</a>

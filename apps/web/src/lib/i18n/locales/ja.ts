@@ -1941,6 +1941,7 @@ export const messages = {
 	"landing.loading": "読み込み中...",
 	"landing.navApps": "アプリ",
 	"landing.navFeatures": "機能",
+	"landing.navLearn": "学ぶ",
 	"landing.signIn": "ログイン",
 	"landing.heroLine1": "ルートを計画。",
 	"landing.heroLine2": "ランを記録。",
