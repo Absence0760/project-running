@@ -256,6 +256,20 @@ type WeeklyDigestPayload struct {
 	UserID string `json:"user_id"`
 }
 
+// LifecycleDripPayload is the payload for `kind='lifecycle_drip'` jobs
+// (migration 20270223_001). Engagement mail — the sibling of the weekly
+// digest, BEHIND THE SAME GATE: the `enqueue_lifecycle_drip()` pg_cron selects
+// the cohort (onboarding / re-engagement / streak) in SQL and writes the chosen
+// `template` into the payload; the handler skips unless the recipient's opt-IN
+// `email_lifecycle_drip` pref == 'on' and the address is NOT in
+// email_suppressions. There is no notifications row and no per-user summary —
+// the copy is fixed per template, rendered via the localized catalogue with an
+// RFC 8058 unsubscribe token.
+type LifecycleDripPayload struct {
+	UserID   string `json:"user_id"`
+	Template string `json:"template"`
+}
+
 // DigestSummary is the bounded weekly roll-up the digest handler renders.
 // Every field is a small scalar derived from a single windowed COUNT/SUM
 // over an existing table — no track downloads, no fan-out. RunCount==0 with

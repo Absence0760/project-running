@@ -126,4 +126,11 @@ const (
 	// consent from a transactional-email setting). Only the literal 'on'
 	// opts a recipient in; anything else (absent, 'off', non-string) is a skip.
 	PrefsEmailWeeklyDigest = "email_weekly_digest"
+	// PrefsEmailLifecycleDrip is the opt-IN consent for the lifecycle drip
+	// (onboarding / re-engagement / streak nudges — migration 20270223_001).
+	// Marketing/promotional mail, like the digest — a SEPARATE key from both
+	// email_notifications (transactional) AND email_weekly_digest (the other
+	// engagement stream): opting into one engagement stream is not consent to
+	// the other. Default 'off'; only the literal 'on' opts a recipient in.
+	PrefsEmailLifecycleDrip = "email_lifecycle_drip"
 )

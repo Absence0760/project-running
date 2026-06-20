@@ -350,6 +350,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleNativePush(ctx, job)
 	case "weekly_digest":
 		return w.handleWeeklyDigest(ctx, job)
+	case "lifecycle_drip":
+		return w.handleLifecycleDrip(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

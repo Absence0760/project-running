@@ -47,6 +47,9 @@ func TestEmailCatalogueParity(t *testing.T) {
 		if sh.footerNotification == "" || sh.footerWelcome == "" || sh.managePrefsLabel == "" || sh.managePrefsTextPrefix == "" {
 			t.Errorf("locale %q has an empty shared string", loc)
 		}
+		if sh.footerDigest == "" || sh.footerDrip == "" {
+			t.Errorf("locale %q has an empty engagement-mail footer", loc)
+		}
 	}
 }
 
