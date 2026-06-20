@@ -2575,5 +2575,13 @@
   "checkpointWeighInWeightKg": "Poids corporel (kg)",
   "checkpointMedicalHold": "Mettre sous surveillance médicale",
   "checkpointWeighInSave": "Enregistrer et pointer",
-  "checkpointCancel": "Annuler"
+  "checkpointCancel": "Annuler",
+  "fundraiserRaisedOfGoal": "{raised} sur {goal} collectés",
+  "fundraiserDonorCount": "{count} soutiens",
+  "fundraiserOverGoal": "Objectif dépassé !",
+  "fundraiserClosed": "Cette collecte est clôturée.",
+  "fundraiserFeedTitle": "Soutiens récents",
+  "fundraiserFeedEmpty": "Soyez le premier à faire un don.",
+  "fundraiserAnonymous": "Anonyme",
+  "fundraiserDonateOnWeb": "Faire un don sur le web"
 }

@@ -189,6 +189,70 @@ class EventResultView {
   });
 }
 
+/// A charity fundraiser attached to a run or event (fundraising.md). Mobile is
+/// read + web-handoff only: it reads the fundraiser row (RLS-gated to a public
+/// anchor), the thermometer totals, and the public donation feed. Donation
+/// checkout is a web handoff (the `/fundraisers/[id]` page), mirroring how paid-
+/// event registration is web-checkout-only.
+class FundraiserView {
+  final String id;
+  final String title;
+  final String charityName;
+  final String? charityUrl;
+  final String? story;
+  final int goalCents;
+  final String currency;
+  final String status;
+
+  const FundraiserView({
+    required this.id,
+    required this.title,
+    required this.charityName,
+    required this.charityUrl,
+    required this.story,
+    required this.goalCents,
+    required this.currency,
+    required this.status,
+  });
+
+  bool get isClosed => status == 'closed';
+}
+
+/// Thermometer totals for a fundraiser — the `fundraiser_totals` RPC projection.
+class FundraiserTotalsView {
+  final int raisedCents;
+  final int donorCount;
+  final int goalCents;
+  final String currency;
+
+  const FundraiserTotalsView({
+    required this.raisedCents,
+    required this.donorCount,
+    required this.goalCents,
+    required this.currency,
+  });
+}
+
+/// A public donation-feed entry — the `fundraiser_feed` RPC projection
+/// (public-safe columns only; donor identity / Stripe ids never surface).
+class DonationFeedEntry {
+  final String? displayName;
+  final String? message;
+  final int amountCents;
+  final String currency;
+  final bool isAnonymous;
+  final DateTime? paidAt;
+
+  const DonationFeedEntry({
+    required this.displayName,
+    required this.message,
+    required this.amountCents,
+    required this.currency,
+    required this.isAnonymous,
+    required this.paidAt,
+  });
+}
+
 /// All Supabase calls for the social layer. Instances are notifier-backed so
 /// the screens can subscribe to refresh events (joined a club, posted an
 /// update, RSVP'd) without threading callbacks. One instance per app.
@@ -233,6 +297,90 @@ class SocialService extends ChangeNotifier {
   /// Public mirror of [_uid] for screens that need the viewer id but
   /// shouldn't be reaching into `Supabase.instance.client.auth` directly.
   String? get currentUserId => _uid;
+
+  // ── Fundraisers (fundraising.md) — read + web-handoff only on mobile ──────
+  // The fundraisers SELECT policy returns the row only when its anchor (run or
+  // event) is publicly visible (or the caller owns it). The thermometer + feed
+  // come from the visibility-gated `fundraiser_totals` / `fundraiser_feed`
+  // SECURITY DEFINER RPCs, which project public-safe columns only. There is no
+  // create/donate path here — authoring + checkout are web-canonical.
+
+  FundraiserView? _fundraiserFromRow(Map<String, dynamic> row) {
+    return FundraiserView(
+      id: row['id'] as String,
+      title: row['title'] as String,
+      charityName: row['charity_name'] as String,
+      charityUrl: row['charity_url'] as String?,
+      story: row['story'] as String?,
+      goalCents: (row['goal_cents'] as num).toInt(),
+      currency: (row['currency'] as String?) ?? 'usd',
+      status: (row['status'] as String?) ?? 'open',
+    );
+  }
+
+  Future<FundraiserView?> fetchFundraiserForRun(String runId) async {
+    final row = await _c
+        .from('fundraisers')
+        .select(
+          'id, title, charity_name, charity_url, story, goal_cents, currency, status',
+        )
+        .eq('run_id', runId)
+        .maybeSingle();
+    if (row == null) return null;
+    return _fundraiserFromRow(Map<String, dynamic>.from(row));
+  }
+
+  Future<FundraiserView?> fetchFundraiserForEvent(String eventId) async {
+    final row = await _c
+        .from('fundraisers')
+        .select(
+          'id, title, charity_name, charity_url, story, goal_cents, currency, status',
+        )
+        .eq('event_id', eventId)
+        .maybeSingle();
+    if (row == null) return null;
+    return _fundraiserFromRow(Map<String, dynamic>.from(row));
+  }
+
+  Future<FundraiserTotalsView?> fetchFundraiserTotals(
+    String fundraiserId,
+  ) async {
+    final raw = await _c.rpc(
+      'fundraiser_totals',
+      params: {'p_fundraiser_id': fundraiserId},
+    );
+    if (raw is! List || raw.isEmpty) return null;
+    final row = Map<String, dynamic>.from(raw.first as Map);
+    return FundraiserTotalsView(
+      raisedCents: (row['raised_cents'] as num?)?.toInt() ?? 0,
+      donorCount: (row['donor_count'] as num?)?.toInt() ?? 0,
+      goalCents: (row['goal_cents'] as num?)?.toInt() ?? 0,
+      currency: (row['currency'] as String?) ?? 'usd',
+    );
+  }
+
+  Future<List<DonationFeedEntry>> fetchFundraiserFeed(
+    String fundraiserId, {
+    int limit = 50,
+  }) async {
+    final raw = await _c.rpc(
+      'fundraiser_feed',
+      params: {'p_fundraiser_id': fundraiserId, 'p_limit': limit},
+    );
+    if (raw is! List) return const [];
+    return raw.map((r) {
+      final row = Map<String, dynamic>.from(r as Map);
+      final paid = row['paid_at'] as String?;
+      return DonationFeedEntry(
+        displayName: row['display_name'] as String?,
+        message: row['message'] as String?,
+        amountCents: (row['amount_cents'] as num?)?.toInt() ?? 0,
+        currency: (row['currency'] as String?) ?? 'usd',
+        isAnonymous: (row['is_anonymous'] as bool?) ?? false,
+        paidAt: paid != null ? DateTime.tryParse(paid) : null,
+      );
+    }).toList();
+  }
 
   /// Public clubs matching an optional search term.
   Future<List<ClubView>> browseClubs({String? query}) async {

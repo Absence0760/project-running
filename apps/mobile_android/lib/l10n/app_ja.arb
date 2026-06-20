@@ -2575,5 +2575,13 @@
   "checkpointWeighInWeightKg": "体重 (kg)",
   "checkpointMedicalHold": "メディカルホールドにする",
   "checkpointWeighInSave": "保存して記録",
-  "checkpointCancel": "キャンセル"
+  "checkpointCancel": "キャンセル",
+  "fundraiserRaisedOfGoal": "目標 {goal} のうち {raised} を達成",
+  "fundraiserDonorCount": "支援者 {count} 人",
+  "fundraiserOverGoal": "目標達成！",
+  "fundraiserClosed": "この募金は終了しました。",
+  "fundraiserFeedTitle": "最近の支援者",
+  "fundraiserFeedEmpty": "最初の寄付者になりましょう。",
+  "fundraiserAnonymous": "匿名",
+  "fundraiserDonateOnWeb": "ウェブで寄付する"
 }

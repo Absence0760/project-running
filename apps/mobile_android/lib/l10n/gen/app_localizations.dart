@@ -15491,6 +15491,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get checkpointCancel;
+
+  /// Thermometer raised-of-goal label
+  ///
+  /// In en, this message translates to:
+  /// **'{raised} of {goal} raised'**
+  String fundraiserRaisedOfGoal(String raised, String goal);
+
+  /// Donor count under the thermometer
+  ///
+  /// In en, this message translates to:
+  /// **'{count} supporters'**
+  String fundraiserDonorCount(int count);
+
+  /// Shown when a fundraiser exceeds its goal
+  ///
+  /// In en, this message translates to:
+  /// **'Over goal!'**
+  String get fundraiserOverGoal;
+
+  /// Closed-fundraiser notice
+  ///
+  /// In en, this message translates to:
+  /// **'This fundraiser is closed.'**
+  String get fundraiserClosed;
+
+  /// Donation feed heading
+  ///
+  /// In en, this message translates to:
+  /// **'Recent supporters'**
+  String get fundraiserFeedTitle;
+
+  /// Empty donation feed
+  ///
+  /// In en, this message translates to:
+  /// **'Be the first to donate.'**
+  String get fundraiserFeedEmpty;
+
+  /// Anonymous donor label
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous'**
+  String get fundraiserAnonymous;
+
+  /// Mobile web-handoff donate button
+  ///
+  /// In en, this message translates to:
+  /// **'Donate on web'**
+  String get fundraiserDonateOnWeb;
 }
 
 class _AppLocalizationsDelegate

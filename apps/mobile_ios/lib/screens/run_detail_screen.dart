@@ -25,6 +25,8 @@ import '../route_simplify.dart';
 import '../grade_adjusted_pace.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
+import '../social_service.dart';
+import '../widgets/fundraiser_section.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/track_segment.dart';
 import '../widgets/run_gear_chips.dart';
@@ -75,6 +77,7 @@ class RunDetailScreen extends StatefulWidget {
 class _RunDetailScreenState extends State<RunDetailScreen>
     with SingleTickerProviderStateMixin {
   late Run run = widget.run;
+  late final SocialService _social = SocialService();
   bool _loadingTrack = false;
   bool _trackFetchFailed = false;
   /// Indoor/treadmill HR sidecar samples (bpm + timestamp, no coordinates),
@@ -300,6 +303,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   void dispose() {
     _replayController?.dispose();
     _replayIndex.dispose();
+    _social.dispose();
     super.dispose();
   }
 
@@ -1171,6 +1175,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               api: widget.apiClient!,
               runId: run.id,
               runOwnerId: widget.apiClient!.userId!,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FundraiserSection(social: _social, runId: run.id),
             ),
           ],
 

@@ -8868,4 +8868,32 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'キャンセル';
+
+  @override
+  String fundraiserRaisedOfGoal(String raised, String goal) {
+    return '目標 $goal のうち $raised を達成';
+  }
+
+  @override
+  String fundraiserDonorCount(int count) {
+    return '支援者 $count 人';
+  }
+
+  @override
+  String get fundraiserOverGoal => '目標達成！';
+
+  @override
+  String get fundraiserClosed => 'この募金は終了しました。';
+
+  @override
+  String get fundraiserFeedTitle => '最近の支援者';
+
+  @override
+  String get fundraiserFeedEmpty => '最初の寄付者になりましょう。';
+
+  @override
+  String get fundraiserAnonymous => '匿名';
+
+  @override
+  String get fundraiserDonateOnWeb => 'ウェブで寄付する';
 }

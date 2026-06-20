@@ -2575,5 +2575,13 @@
   "checkpointWeighInWeightKg": "Peso corporal (kg)",
   "checkpointMedicalHold": "Colocar em retenção médica",
   "checkpointWeighInSave": "Salvar e registrar",
-  "checkpointCancel": "Cancelar"
+  "checkpointCancel": "Cancelar",
+  "fundraiserRaisedOfGoal": "{raised} de {goal} arrecadados",
+  "fundraiserDonorCount": "{count} apoiadores",
+  "fundraiserOverGoal": "Meta superada!",
+  "fundraiserClosed": "Esta campanha está encerrada.",
+  "fundraiserFeedTitle": "Apoiadores recentes",
+  "fundraiserFeedEmpty": "Seja o primeiro a doar.",
+  "fundraiserAnonymous": "Anônimo",
+  "fundraiserDonateOnWeb": "Doar na web"
 }

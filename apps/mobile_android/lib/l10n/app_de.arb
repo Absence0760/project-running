@@ -2575,5 +2575,13 @@
   "checkpointWeighInWeightKg": "Körpergewicht (kg)",
   "checkpointMedicalHold": "Medizinischen Stopp anordnen",
   "checkpointWeighInSave": "Speichern & stempeln",
-  "checkpointCancel": "Abbrechen"
+  "checkpointCancel": "Abbrechen",
+  "fundraiserRaisedOfGoal": "{raised} von {goal} gesammelt",
+  "fundraiserDonorCount": "{count} Unterstützer",
+  "fundraiserOverGoal": "Ziel übertroffen!",
+  "fundraiserClosed": "Diese Spendenaktion ist geschlossen.",
+  "fundraiserFeedTitle": "Neueste Unterstützer",
+  "fundraiserFeedEmpty": "Sei die erste Person, die spendet.",
+  "fundraiserAnonymous": "Anonym",
+  "fundraiserDonateOnWeb": "Im Web spenden"
 }

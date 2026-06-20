@@ -9325,4 +9325,32 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get checkpointCancel => 'Cancelar';
+
+  @override
+  String fundraiserRaisedOfGoal(String raised, String goal) {
+    return '$raised de $goal recaudado';
+  }
+
+  @override
+  String fundraiserDonorCount(int count) {
+    return '$count colaboradores';
+  }
+
+  @override
+  String get fundraiserOverGoal => '¡Meta superada!';
+
+  @override
+  String get fundraiserClosed => 'Esta campaña está cerrada.';
+
+  @override
+  String get fundraiserFeedTitle => 'Colaboradores recientes';
+
+  @override
+  String get fundraiserFeedEmpty => 'Sé el primero en donar.';
+
+  @override
+  String get fundraiserAnonymous => 'Anónimo';
+
+  @override
+  String get fundraiserDonateOnWeb => 'Donar en la web';
 }
