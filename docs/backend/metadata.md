@@ -111,14 +111,17 @@ Written by the `parkrun-import` Edge Function when scraping a runner's results p
 
 ### Race fields
 
-Set on runs imported from a registered race surface (chip-timing exports, RunSignUp results scrapers — none of which has a writer in source today). Documented in [api_database.md](api_database.md#runs) for `source = 'race'` runs; classified owner-only and stripped from the `public_runs` view by `20260714_001`.
+Set on runs imported from a registered race surface (chip-timing exports, the RunSignUp results endpoint, or a manual paste). Written by the `race-results-import` Edge Function (race_calendar.md) — either onto a fresh `source = 'race'` run, or merged onto an existing recorded run via the auto-match-on-record seam. Documented in [api_database.md](api_database.md#runs) for `source = 'race'` runs; classified owner-only and stripped from the `public_runs` view by `20260714_001` (the original four) and `20270206_001` (the three age-group / gun-time keys this importer added). Read by `RaceService.fetchRaceResultForRun` (mobile) + `fetchRaceResultForRun` (web `data.ts`) for the run-detail official-result panel.
 
 | Key | Shape | Writers | Readers | Required? | Notes |
 |---|---|---|---|---|---|
-| `race_name` | `string` — registered race name (e.g. `"Richmond Half Marathon"`) | (no writer in source today; reserved for future race importers) | — | Optional | Owner-only. Links the runner to a specific race registration; stripped from `public_runs`. |
-| `bib` | `string` — runner's bib number | Same | — | Optional | Owner-only. Permanent real-world identity link; stripped from `public_runs`. |
-| `overall_place` | `int` — finishing position overall | Same | — | Optional, audit-only | Owner-only conservatively — the position is also on the public race results page so this doesn't add information about a runner who's already on the leaderboard, but stripped to keep the view's surface consistent for runners who'd rather not have their finish-time linked from share pages. |
-| `chip_time` | `string` — chip-timed race duration (e.g. `"1:47:23"`) | Same | — | Optional, audit-only | Owner-only. Redundant with `duration_s` but reveals chip-vs-gun precision the runner may not want public; stripped from `public_runs`. |
+| `race_name` | `string` — registered race name (e.g. `"Richmond Half Marathon"`) | `race-results-import` EF (RunSignUp + paste) | `fetchRaceResultForRun` (web + mobile) | Optional | Owner-only. Links the runner to a specific race registration; stripped from `public_runs`. |
+| `bib` | `string` — runner's bib number | Same | Same | Optional | Owner-only. Permanent real-world identity link; stripped from `public_runs`. |
+| `overall_place` | `int` — finishing position overall | Same | Same | Optional, audit-only | Owner-only conservatively — the position is also on the public race results page so this doesn't add information about a runner who's already on the leaderboard, but stripped to keep the view's surface consistent for runners who'd rather not have their finish-time linked from share pages. |
+| `chip_time` | `string` — chip-timed race duration (e.g. `"1:47:23"`) | Same | Same | Optional, audit-only | Owner-only. Redundant with `duration_s` but reveals chip-vs-gun precision the runner may not want public; stripped from `public_runs`. |
+| `gun_time` | `string` — gun-timed race duration (e.g. `"1:48:01"`) | Same | Same | Optional, audit-only | Owner-only. The fallback when no chip time is available; stripped from `public_runs` by `20270206_001`. |
+| `age_group_place` | `int` — finishing position within the runner's age group | Same | Same | Optional, audit-only | Owner-only. Reveals the runner's age band; stripped from `public_runs` by `20270206_001`. |
+| `age_group` | `string` — the runner's age-group bucket (e.g. `"M40-44"`) | Same | Same | Optional, audit-only | Owner-only. Age-band identity hint; stripped from `public_runs` by `20270206_001`. |
 | `perceived_effort` | `int` — RPE on the Borg 1–10 scale | Seed only (`apps/backend/supabase/seed.sql`) — no application writer exists today | — | Optional, audit-only | Owner-only. Until a real UI for user-entered RPE lands, this key only appears on seed runs; stripped from `public_runs` by `20260714_001` so the seed's public-run rows don't expose it through the view. |
 
 ### Training plan linkage
@@ -231,9 +234,10 @@ When a run's `is_public = true`, the row's `metadata` jsonb travels alongside it
 - `last_modified_at` — sync-state internal; leaks device-upload cadence
 - `recovered_from_crash`, `in_progress_saved_at`, `in_progress`, `manual_entry`, `indoor_estimated`, `distance_source` — recorder internals
 - `race_name`, `bib`, `overall_place`, `chip_time` — race-source identity link (added to the strip list in `20260714_001`)
+- `gun_time`, `age_group_place`, `age_group` — race-source age-band / gun-time fields written by `race-results-import` (added to the strip list in `20270206_001`)
 - `perceived_effort` — RPE on the Borg scale (seed-only today; classified owner-only when a real writer lands)
 
-When you add a new key, classify it explicitly — and update the strip list in the most recent `public_runs` projection migration (current head: `20261207_001_promote_activity_type_is_dnf.sql` — the view has been redefined several times since `20260714_001`: `20260724_001`, `20260807_001`, `20260924_001`, `20261105_001`, then `20261207_001`) if it lands on the owner-only side. The seed assertions in `apps/backend/supabase/seed.sql` for `public_runs` exercise the projection; an unclassified key that's accidentally dropped (or accidentally exposed) will fail the seed.
+When you add a new key, classify it explicitly — and update the strip list in the most recent `public_runs` projection migration (current head: `20270206_001_race_calendar.sql` — the view has been redefined several times since `20260714_001`: `20260724_001`, `20260807_001`, `20260924_001`, `20261105_001`, `20261207_001`, then `20270206_001`, which added the `race_listing_id` pass-through column + the three race age-group / gun-time keys to the denylist) if it lands on the owner-only side. The seed assertions in `apps/backend/supabase/seed.sql` for `public_runs` exercise the projection; an unclassified key that's accidentally dropped (or accidentally exposed) will fail the seed.
 
 ## Enforcement
 

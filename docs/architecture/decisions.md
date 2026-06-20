@@ -3245,6 +3245,22 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 ---
 
+## 161. Race results live on the `runs` row (`source='race'`), a public `race_listings` calendar is its own table, and auto-match-on-record is an inform-tier, layered-resilience-wrapped post-save check
+
+**Decided (2026-06-20, migration `20270206_001`, race_calendar.md).** The race calendar + results-import feature (parity backlog #10) makes four shape decisions worth pinning:
+
+1. **No parallel results table.** An imported / auto-matched race result is written **onto the runner's existing `runs` row** — `source='race'` (already in the `runs.source` CHECK since `20260505_001`) plus the owner-only race metadata keys (`race_name`/`bib`/`chip_time`/`gun_time`/`overall_place`/`age_group_place`/`age_group`). This reuses the per-user `external_id` dedup index (`external_id = race:{name}:{date}:{bib}`) and the existing `public_runs` owner-only strip rather than standing up a second results entity. A nullable `runs.race_listing_id` FK links a matched run back to its calendar entry, mirroring `runs.event_id`.
+
+2. **The calendar (`race_listings`) is its own table and publicly discoverable.** A race calendar is public discovery data, so the table has a `for select using (true)` policy (anon included) and one `security invoker` proximity RPC (`search_race_listings`) cloned from the `search_public_events` precedent. Authenticated users may submit a `manual` listing; a `before insert or update` trigger (`force_unverified_listing`) forces `is_verified=false` on any non-service-role write so a submitter can't masquerade a crowd listing as provider-verified, and the UPDATE policy locks a listing once verified.
+
+3. **Auto-match-on-record is inform-tier and layered-resilience-wrapped.** After a run is saved, a best-effort check offers — but never silently writes — an official result when a same-day listing matches by distance band (+ proximity when a start point is known). The scoring is the pure `race_match` TS↔Dart parity pair (`raceMatchScore`, same-day required, signals normalised over what's available, threshold 0.5). The match enriches the **existing** in-app run row (no duplicate `race:` run) and the importer's `onConflict` insert path is only for results with no recorded counterpart. The candidate fetch is swallowed (an L4 auxiliary effect) so a race lookup can never break run detail.
+
+4. **RunSignUp is built fail-closed behind a missing API key; parkrun stays the shipped scraper; per-site scrapers are deferred.** The `race-results-import` + `race-listings-sync` Edge Functions return `503 provider_not_configured` when `RUNSIGNUP_API_KEY`/`_SECRET` are unset (the dev/CI default), and the UI shows an unavailable explainer — the whole RunSignUp leg is inert until the credential is provisioned (a genuine external blocker, per the compliance-sign-offs-gate-prod house rule: write the full path now, gate it fail-closed). parkrun's existing scraper pattern (auth-before-parse, tiered rate limit, body caps, fail-loud upstream, `privacy_default` honouring) is mirrored exactly. Per-site scrapers (ChronoTrack / UltraSignup / RaceResult) stay scoped follow-ups to avoid brittle/abusive crawling; the durable non-API path is structured manual paste.
+
+**Trade-off.** Storing results on `runs` means the race result is only as durable as the run row and can't exist without one for a recorded-then-matched run; the importer's separate-insert path covers the no-recording case. Re-evaluate the parallel-table question only if a result needs fields that don't fit the metadata bag or needs to exist wholly independent of a run.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
