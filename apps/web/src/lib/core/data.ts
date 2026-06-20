@@ -40,7 +40,9 @@ import type {
 	GymExerciseModality,
 	GymProgressionScheme,
 	RouteMarker,
-	RouteMarkerKind
+	RouteMarkerKind,
+	RaceListing,
+	RaceProvider
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, type RunSource } from '../types';
@@ -1651,6 +1653,240 @@ export async function searchPublicEvents(
 		throw error;
 	}
 	return (data ?? []) as PublicEventResult[];
+}
+
+// ── Race calendar + results import (race_calendar.md, migration 20270206_001) ──
+
+export type RaceDistanceBand = '5k' | '10k' | 'half' | 'marathon' | 'ultra';
+
+export interface RaceListingFilters {
+	query?: string;
+	distance?: RaceDistanceBand;
+	from?: string; // ISO date
+	to?: string; // ISO date
+	center?: { lng: number; lat: number };
+	radiusM?: number;
+	limit?: number;
+}
+
+/// A discoverable race calendar entry (the search_race_listings projection:
+/// listing cols + distance_m_away when a center was supplied).
+export interface RaceListingResult {
+	id: string;
+	provider: string;
+	provider_race_id: string | null;
+	name: string;
+	race_date: string;
+	distance_m: number | null;
+	location_label: string | null;
+	entry_url: string | null;
+	results_url: string | null;
+	is_verified: boolean;
+	distance_m_away: number | null;
+}
+
+/// Race discovery (security invoker, public clubs/listings). Mirrors
+/// searchPublicEvents — proximity by the listing's geocoded location_point.
+export async function searchRaceListings(
+	f: RaceListingFilters = {}
+): Promise<RaceListingResult[]> {
+	const { data, error } = await supabase.rpc('search_race_listings', {
+		p_query: f.query?.trim() || undefined,
+		p_distance: f.distance ?? undefined,
+		p_from: f.from ?? undefined,
+		p_to: f.to ?? undefined,
+		p_center_lng: f.center?.lng ?? undefined,
+		p_center_lat: f.center?.lat ?? undefined,
+		p_radius_m: f.radiusM ?? undefined,
+		p_limit: f.limit ?? 60
+	});
+	if (error) throw error;
+	return (data ?? []) as RaceListingResult[];
+}
+
+export interface RaceListingInput {
+	provider?: RaceProvider; // defaults to 'manual'
+	name: string;
+	race_date: string;
+	distance_m?: number | null;
+	location_label?: string | null;
+	entry_url?: string | null;
+	results_url?: string | null;
+}
+
+/// Submit a crowd-sourced race listing. is_verified is forced false by the DB
+/// trigger; submitted_by is stamped to the caller (RLS requires the match).
+export async function submitRaceListing(input: RaceListingInput): Promise<RaceListing> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { data, error } = await supabase
+		.from('race_listings')
+		.insert({
+			provider: input.provider ?? 'manual',
+			name: input.name.trim(),
+			race_date: input.race_date,
+			distance_m: input.distance_m ?? null,
+			location_label: input.location_label?.trim() || null,
+			entry_url: input.entry_url?.trim() || null,
+			results_url: input.results_url?.trim() || null,
+			submitted_by: userId
+		})
+		.select('*')
+		.single();
+	if (error) throw error;
+	return data as RaceListing;
+}
+
+/// Edit one's own unverified listing (RLS locks verified ones).
+export async function updateRaceListing(
+	id: string,
+	patch: Partial<RaceListingInput>
+): Promise<void> {
+	const fields: Record<string, unknown> = {};
+	if (patch.name != null) fields.name = patch.name.trim();
+	if (patch.race_date != null) fields.race_date = patch.race_date;
+	if (patch.distance_m !== undefined) fields.distance_m = patch.distance_m;
+	if (patch.location_label !== undefined)
+		fields.location_label = patch.location_label?.trim() || null;
+	if (patch.entry_url !== undefined) fields.entry_url = patch.entry_url?.trim() || null;
+	if (patch.results_url !== undefined) fields.results_url = patch.results_url?.trim() || null;
+	const { error } = await supabase.from('race_listings').update(fields).eq('id', id);
+	if (error) throw error;
+}
+
+export interface ImportRaceResultInput {
+	provider: 'runsignup' | 'paste';
+	listingId: string;
+	runSignUpUserId?: string;
+	/// When set, enrich THIS existing run in place (the auto-match seam) instead
+	/// of inserting a new race run.
+	matchRunId?: string;
+	/// paste-mode single result.
+	result?: {
+		bib?: string;
+		chip_time?: string;
+		gun_time?: string;
+		overall_place?: number;
+		age_group_place?: number;
+		age_group?: string;
+	};
+}
+
+export interface ImportRaceResultOutcome {
+	imported: number;
+	skipped: number;
+	enriched: number;
+}
+
+/// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` when the provider
+/// key is unconfigured server-side (503), so the UI can show the explainer
+/// rather than a generic failure.
+export async function importRaceResult(
+	input: ImportRaceResultInput
+): Promise<ImportRaceResultOutcome> {
+	const { data, error } = await supabase.functions.invoke('race-results-import', {
+		body: {
+			provider: input.provider,
+			listingId: input.listingId,
+			runSignUpUserId: input.runSignUpUserId,
+			matchRunId: input.matchRunId,
+			result: input.result
+		}
+	});
+	if (error) {
+		if (await isProviderNotConfigured(error)) throw new Error('RUNSIGNUP_UNAVAILABLE');
+		throw error;
+	}
+	return data as ImportRaceResultOutcome;
+}
+
+/// Probe whether the RunSignUp leg is configured server-side. Returns false
+/// (unavailable) on a 503 provider_not_configured, true otherwise. Used to
+/// disable the RunSignUp card with an explainer.
+export async function isRunSignUpConfigured(): Promise<boolean> {
+	const { error } = await supabase.functions.invoke('race-listings-sync', { body: {} });
+	if (!error) return true;
+	return !(await isProviderNotConfigured(error));
+}
+
+async function isProviderNotConfigured(error: unknown): Promise<boolean> {
+	const ctx = (error as { context?: Response })?.context;
+	if (ctx && typeof ctx.status === 'number') {
+		if (ctx.status !== 503) return false;
+		try {
+			const body = await ctx.clone().json();
+			return (body as { error?: string })?.error === 'provider_not_configured';
+		} catch {
+			return true;
+		}
+	}
+	const msg = (error as { message?: string })?.message ?? '';
+	return msg.includes('provider_not_configured') || msg.includes('503');
+}
+
+/// The matched-race view for a run: the run's owner-only race metadata + its
+/// linked listing (when any). Owner-scoped — reads the base runs row.
+export interface RaceResultForRun {
+	race_listing: RaceListing | null;
+	race_name: string | null;
+	bib: string | null;
+	chip_time: string | null;
+	gun_time: string | null;
+	overall_place: number | null;
+	age_group_place: number | null;
+	age_group: string | null;
+}
+
+export async function fetchRaceResultForRun(runId: string): Promise<RaceResultForRun | null> {
+	const { data, error } = await supabase
+		.from('runs')
+		.select('metadata, race_listing_id')
+		.eq('id', runId)
+		.maybeSingle();
+	if (error || !data) return null;
+	const meta = (data.metadata as Record<string, unknown> | null) ?? {};
+	let listing: RaceListing | null = null;
+	if (data.race_listing_id) {
+		const { data: l } = await supabase
+			.from('race_listings')
+			.select('*')
+			.eq('id', data.race_listing_id as string)
+			.maybeSingle();
+		listing = (l as RaceListing) ?? null;
+	}
+	return {
+		race_listing: listing,
+		race_name: (meta.race_name as string) ?? null,
+		bib: (meta.bib as string) ?? null,
+		chip_time: (meta.chip_time as string) ?? null,
+		gun_time: (meta.gun_time as string) ?? null,
+		overall_place: (meta.overall_place as number) ?? null,
+		age_group_place: (meta.age_group_place as number) ?? null,
+		age_group: (meta.age_group as string) ?? null
+	};
+}
+
+/// The auto-match seam: given a run's id, return same-day nearby race listings
+/// to offer "Is this your race?". Reads the run's date + start point, then asks
+/// search_race_listings for that day's listings near the start; scoring is the
+/// pure raceMatchScore (integrations/race_match.ts), applied by the caller.
+export async function findRaceMatchCandidates(runId: string): Promise<RaceListingResult[]> {
+	const { data: run, error } = await supabase
+		.from('runs')
+		.select('started_at, track_url')
+		.eq('id', runId)
+		.maybeSingle();
+	if (error || !run?.started_at) return [];
+	const day = (run.started_at as string).slice(0, 10);
+	// The run's GPS start point isn't a column; the caller passes the recorded
+	// start latlng into raceMatchScore. Here we window on the date and let the
+	// caller filter by proximity + distance band. A same-day window keeps the
+	// candidate set tiny.
+	try {
+		return await searchRaceListings({ from: day, to: day, limit: 20 });
+	} catch {
+		return [];
+	}
 }
 
 /** Clubs the current user belongs to (owner or member). */
