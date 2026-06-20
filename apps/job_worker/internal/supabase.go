@@ -1776,6 +1776,69 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			filter: "contact_user_id=eq." + uid,
 			sel:    "id,owner_id,contact_user_id,contact_email,confirmed_at,created_at,updated_at",
 		},
+		// session_plans (+ blocks + items via nested embeds). The yoga/pilates
+		// session-planner P1 authored content (migration 20270103_001). Keyed by
+		// author_id (NOT user_id), so the export-completeness guard's user_id-column
+		// scan can't flag it — it is wired in explicitly. session_plan_blocks /
+		// session_plan_items have no owner column of their own (they cascade from
+		// the parent plan), so the export nests them two levels deep, mirroring the
+		// gym_routines embed. Keep in lockstep with the TS twin in backup_spec.ts.
+		{
+			name: "session_plans.json", table: schema.TableSessionPlans,
+			filter: "author_id=eq." + uid,
+			sel:    "*,blocks:session_plan_blocks(*),items:session_plan_items(*)",
+		},
+		// route_photos — the subject's own photo metadata attached to routes
+		// (migration 20270114_001). owner_id is the uploader. The image bytes
+		// live in the run-photos Storage bucket keyed off storage_path; the
+		// metadata row (caption, ordering, paths, timestamps) is the subject's
+		// own data under Art 20 and ships here. Keyed by owner_id (NOT user_id),
+		// so the guard's user_id scan can't flag it — wired in explicitly.
+		{name: "route_photos.json", table: schema.TableRoutePhotos, filter: "owner_id=eq." + uid, sel: "*"},
+		// event_orders — the subject's paid-registration ledger, both legs:
+		// orders they placed as the buyer (buyer_user_id) and orders placed for
+		// their events as the host (host_user_id). The financial record of a
+		// transaction the subject was party to — amounts, currency, fees,
+		// status, timestamps — is their own data under Art 15/20. Keyed by
+		// buyer_user_id / host_user_id (NOT user_id), so the guard's user_id
+		// scan can't flag it — wired in explicitly. The Stripe id columns are
+		// references (not secret keys), so `*` leaks no credential.
+		{
+			name: "event_orders_as_buyer.json", table: schema.TableEventOrders,
+			filter: "buyer_user_id=eq." + uid, sel: "*",
+		},
+		{
+			name: "event_orders_as_host.json", table: schema.TableEventOrders,
+			filter: "host_user_id=eq." + uid, sel: "*",
+		},
+		// event_pricing — the price sheets the subject set as the host of their
+		// events (migration 20261229_001). event_pricing has no owner column of
+		// its own; the host link is event_id → events.host_user_id. The export
+		// inner-joins the parent event and filters on its host_user_id, so only
+		// the subject's own events' pricing ships. The embedded events object
+		// projects nothing but host_user_id (the subject's own id), leaking no
+		// third-party event data. Pricing is the host's own commercial input —
+		// Art 15/20 personal data of the subject who authored it.
+		{
+			name: "event_pricing_as_host.json", table: schema.TableEventPricing,
+			filter: "events.host_user_id=eq." + uid,
+			sel:    "*,events!inner(host_user_id)",
+		},
+		// achievements — the subject's earned badges (PR / segment / streak /
+		// distance / plan), tier, and earned_at. Owner-scoped (user_id) Art 20
+		// personal data. Surfaced by the widened export-completeness guard
+		// (2026-06-20) as a pre-existing gap.
+		{name: "achievements.json", table: schema.TableAchievements, filter: uidEq, sel: "*"},
+		// challenge_participants — the subject's challenge enrolments (joined_at,
+		// completed_at, optional team club). Owner-scoped (user_id) Art 20 data.
+		{name: "challenge_participants.json", table: schema.TableChallengeParticipants, filter: uidEq, sel: "*"},
+		// challenge_badges — the subject's durable challenge-completion records
+		// (final_value + awarded_at). Owner-scoped (user_id) Art 20 data.
+		{name: "challenge_badges.json", table: schema.TableChallengeBadges, filter: uidEq, sel: "*"},
+		// public_recaps — the subject's published Year/Month-in-Running snapshots
+		// (the frozen aggregate behind a share link). Owner-scoped (user_id) Art
+		// 20 data the subject authored + chose to publish.
+		{name: "public_recaps.json", table: schema.TablePublicRecaps, filter: uidEq, sel: "*"},
 	}
 }
 
