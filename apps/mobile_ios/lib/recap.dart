@@ -354,8 +354,8 @@ YearInRunningRecap buildYearInRunningRecap(
   final photoCount = extras.photoCount < 0 ? 0 : extras.photoCount;
   final personalRecordCount =
       extras.personalRecordCount < 0 ? 0 : extras.personalRecordCount;
-  final earliestStartLocal = earliestRun == null ? null : _hhmm(earliestRun!);
-  final latestStartLocal = latestRun == null ? null : _hhmm(latestRun!);
+  final earliestStartLocal = earliestRun == null ? null : _hhmm(earliestRun);
+  final latestStartLocal = latestRun == null ? null : _hhmm(latestRun);
 
   final badges = computeRecapBadges(_BadgeInputs(
     totalDistanceM: totalDistance,
@@ -481,8 +481,8 @@ YearInRunningRecap buildMonthInRunningRecap(
   final photoCount = extras.photoCount < 0 ? 0 : extras.photoCount;
   final personalRecordCount =
       extras.personalRecordCount < 0 ? 0 : extras.personalRecordCount;
-  final earliestStartLocal = earliestRun == null ? null : _hhmm(earliestRun!);
-  final latestStartLocal = latestRun == null ? null : _hhmm(latestRun!);
+  final earliestStartLocal = earliestRun == null ? null : _hhmm(earliestRun);
+  final latestStartLocal = latestRun == null ? null : _hhmm(latestRun);
 
   final badges = computeRecapBadges(_BadgeInputs(
     totalDistanceM: bucket.distanceM,
@@ -520,6 +520,49 @@ YearInRunningRecap buildMonthInRunningRecap(
     badges: badges,
   );
 }
+
+/// Serialise a recap into the frozen-snapshot jsonb the `public_recaps`
+/// table stores — the SAME field shape the web `YearInRunningRecap` carries,
+/// so the web share page + og:image render a mobile-published recap
+/// identically. Aggregate-only (no GPS, no per-run rows).
+Map<String, dynamic> recapSnapshotJson(YearInRunningRecap r) => {
+      'year': r.year,
+      if (r.month != null) 'month': r.month,
+      'runCount': r.runCount,
+      'totalDistanceM': r.totalDistanceM,
+      'totalDurationS': r.totalDurationS,
+      'totalElevationM': r.totalElevationM,
+      'longestRunM': r.longestRunM,
+      'fastestPaceSecPerKm': r.fastestPaceSecPerKm,
+      'bestStreakDays': r.bestStreakDays,
+      'currentStreakDays': r.currentStreakDays,
+      'earliestStartLocal': r.earliestStartLocal,
+      'latestStartLocal': r.latestStartLocal,
+      'monthly': [
+        for (final m in r.monthly)
+          {
+            'month': m.month,
+            'distanceM': m.distanceM,
+            'durationS': m.durationS,
+            'runCount': m.runCount,
+          },
+      ],
+      'topWeek': r.topWeek == null
+          ? null
+          : {
+              'weekStart': r.topWeek!.weekStart,
+              'distanceM': r.topWeek!.distanceM,
+              'runCount': r.topWeek!.runCount,
+            },
+      'uniqueRouteCount': r.uniqueRouteCount,
+      'mostUsedActivity': r.mostUsedActivity,
+      'photoCount': r.photoCount,
+      'personalRecordCount': r.personalRecordCount,
+      'badges': [
+        for (final b in r.badges)
+          {'id': b.id, 'icon': b.icon, 'label': b.label, 'detail': b.detail},
+      ],
+    };
 
 /// Smallish utility for the share-card copy. Mirror of `recapHeadline`.
 String recapHeadline(YearInRunningRecap recap, String kmOrMi) {

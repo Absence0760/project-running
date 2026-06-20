@@ -124,6 +124,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recapShareTooltip => 'Compartilhar retrospectiva';
 
   @override
+  String get recapPublishAndShare => 'Publicar e partilhar ligação';
+
+  @override
+  String get recapPublishFailed =>
+      'Não foi possível publicar o resumo. Tente novamente.';
+
+  @override
   String get recapPrevYear => 'Ano anterior';
 
   @override
@@ -9443,6 +9450,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get recapShareTooltip => 'Compartilhar retrospectiva';
+
+  @override
+  String get recapPublishAndShare => 'Publicar e compartilhar link';
+
+  @override
+  String get recapPublishFailed =>
+      'Não foi possível publicar o resumo. Tente novamente.';
 
   @override
   String get recapPrevYear => 'Ano anterior';

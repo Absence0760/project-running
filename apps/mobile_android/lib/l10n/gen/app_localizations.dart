@@ -287,6 +287,18 @@ abstract class AppLocalizations {
   /// **'Share recap'**
   String get recapShareTooltip;
 
+  /// Tooltip/label for the publish-and-share-link action on the recap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Publish & share link'**
+  String get recapPublishAndShare;
+
+  /// Banner shown when publishing a public recap fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t publish the recap. Try again.'**
+  String get recapPublishFailed;
+
   /// Tooltip for the previous-year chevron on the recap screen
   ///
   /// In en, this message translates to:

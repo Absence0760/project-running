@@ -1,26 +1,37 @@
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../recap.dart';
+import '../widgets/top_banner.dart';
 
 /// Year-in-running recap. Mobile mirror of web `/recap/[year]`.
 /// Reads runs from the local store + the LocalRunStore's already-
 /// fetched cache (no extra Supabase round-trip) and builds the
 /// hero numbers via `buildYearInRunningRecap`. Includes a share
-/// CTA that hands a one-line summary to the OS share sheet.
+/// CTA that hands a one-line summary to the OS share sheet, plus a
+/// "Publish & share link" action (when `api` is wired) that freezes a
+/// public snapshot via the web `public_recaps` table and shares the
+/// web /recap/share/[id] link — the device OS-share-sheet is the
+/// mobile-additive part; the page it links to is web-canonical.
 class RecapScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final Preferences preferences;
   final int? year;
+
+  /// Optional — when wired, enables the "Publish & share link" action.
+  final ApiClient? api;
 
   const RecapScreen({
     super.key,
     required this.runStore,
     required this.preferences,
     this.year,
+    this.api,
   });
 
   @override
@@ -29,6 +40,7 @@ class RecapScreen extends StatefulWidget {
 
 class _RecapScreenState extends State<RecapScreen> {
   late int _year;
+  bool _publishing = false;
 
   @override
   void initState() {
@@ -38,6 +50,41 @@ class _RecapScreenState extends State<RecapScreen> {
 
   void _shiftYear(int delta) {
     setState(() => _year = _year + delta);
+  }
+
+  String get _webBase {
+    final raw = (dotenv.maybeGet('WEB_BASE_URL') ?? 'https://threkir.com').trim();
+    return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
+  }
+
+  Future<void> _publishAndShare(YearInRunningRecap recap) async {
+    final api = widget.api;
+    if (api == null || _publishing) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _publishing = true);
+    try {
+      final id = await api.publishRecap(
+        periodKind: 'year',
+        periodKey: '${recap.year}',
+        snapshot: recapSnapshotJson(recap),
+      );
+      if (!mounted) return;
+      if (id == null) {
+        showTopBanner(context, l10n.recapPublishFailed);
+        return;
+      }
+      await SharePlus.instance.share(
+        ShareParams(
+          text: '$_webBase/recap/share/$id',
+          subject: l10n.recapShareSubject(recap.year),
+        ),
+      );
+    } catch (e) {
+      debugPrint('publishAndShare failed: $e');
+      if (mounted) showTopBanner(context, l10n.recapPublishFailed);
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
   }
 
   Future<void> _share(YearInRunningRecap recap) async {
@@ -73,6 +120,20 @@ class _RecapScreenState extends State<RecapScreen> {
       appBar: AppBar(
         title: Text(l10n.recapTitle),
         actions: [
+          if (widget.api != null)
+            IconButton(
+              icon: _publishing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.link),
+              tooltip: l10n.recapPublishAndShare,
+              onPressed: recap.runCount == 0 || _publishing
+                  ? null
+                  : () => _publishAndShare(recap),
+            ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: l10n.recapShareTooltip,

@@ -581,6 +581,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               builder: (_) => RecapScreen(
                 runStore: widget.runStore,
                 preferences: widget.preferences,
+                api: api,
               ),
             ),
           ),

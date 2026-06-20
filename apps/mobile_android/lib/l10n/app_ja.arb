@@ -30,6 +30,8 @@
   "recapShareSubject": "{year}年の振り返り",
   "recapTitle": "ランニングの1年",
   "recapShareTooltip": "振り返りを共有",
+  "recapPublishAndShare": "公開してリンクを共有",
+  "recapPublishFailed": "まとめを公開できませんでした。もう一度お試しください。",
   "recapPrevYear": "前の年",
   "recapNextYear": "次の年",
   "recapNoRunsForYear": "{year}年は振り返るランがありません。",

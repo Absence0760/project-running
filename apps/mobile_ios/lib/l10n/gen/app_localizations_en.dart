@@ -123,6 +123,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recapShareTooltip => 'Share recap';
 
   @override
+  String get recapPublishAndShare => 'Publish & share link';
+
+  @override
+  String get recapPublishFailed => 'Couldn\'t publish the recap. Try again.';
+
+  @override
   String get recapPrevYear => 'Previous year';
 
   @override

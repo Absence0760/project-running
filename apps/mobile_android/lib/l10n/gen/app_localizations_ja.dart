@@ -120,6 +120,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recapShareTooltip => '振り返りを共有';
 
   @override
+  String get recapPublishAndShare => '公開してリンクを共有';
+
+  @override
+  String get recapPublishFailed => 'まとめを公開できませんでした。もう一度お試しください。';
+
+  @override
   String get recapPrevYear => '前の年';
 
   @override

@@ -30,6 +30,8 @@
   "recapShareSubject": "Resumen de {year}",
   "recapTitle": "Resumen del año",
   "recapShareTooltip": "Compartir resumen",
+  "recapPublishAndShare": "Publicar y compartir enlace",
+  "recapPublishFailed": "No se pudo publicar el resumen. Inténtalo de nuevo.",
   "recapPrevYear": "Año anterior",
   "recapNextYear": "Año siguiente",
   "recapNoRunsForYear": "No hay carreras para resumir en {year}.",

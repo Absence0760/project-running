@@ -30,6 +30,8 @@
   "recapShareSubject": "Bilan {year}",
   "recapTitle": "Année en course",
   "recapShareTooltip": "Partager le bilan",
+  "recapPublishAndShare": "Publier et partager le lien",
+  "recapPublishFailed": "Impossible de publier le récap. Réessayez.",
   "recapPrevYear": "Année précédente",
   "recapNextYear": "Année suivante",
   "recapNoRunsForYear": "Aucune course à récapituler pour {year}.",

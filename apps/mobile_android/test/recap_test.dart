@@ -560,4 +560,43 @@ void main() {
       expect(r.totalDistanceM, 0);
     });
   });
+
+  group('recapSnapshotJson', () {
+    test('serialises the aggregate-only shape the public_recaps table stores', () {
+      final r = buildYearInRunningRecap(
+        [
+          _run(
+            id: 'a',
+            startedAt: DateTime(2025, 3, 1, 8),
+            distanceM: 42300,
+            duration: const Duration(hours: 4),
+          ),
+        ],
+        2025,
+        const RecapExtras(photoCount: 3, personalRecordCount: 2),
+      );
+      final json = recapSnapshotJson(r);
+      // The field set matches the web YearInRunningRecap so the web share
+      // page + og:image render a mobile-published recap identically.
+      expect(json['year'], 2025);
+      expect(json.containsKey('month'), isFalse); // annual recap → no month key
+      expect(json['runCount'], 1);
+      expect(json['totalDistanceM'], 42300);
+      expect((json['monthly'] as List).length, 12);
+      expect(json['badges'], isA<List>());
+      // Aggregate-only: no GPS / per-run keys leak into the snapshot.
+      expect(json.containsKey('track'), isFalse);
+      expect(json.containsKey('runs'), isFalse);
+    });
+
+    test('a monthly recap carries the month key', () {
+      final r = buildMonthInRunningRecap(
+        [_run(id: 'a', startedAt: DateTime(2025, 3, 1, 8), distanceM: 5000)],
+        2025,
+        3,
+      );
+      final json = recapSnapshotJson(r);
+      expect(json['month'], 3);
+    });
+  });
 }
