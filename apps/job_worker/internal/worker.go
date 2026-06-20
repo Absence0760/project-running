@@ -74,6 +74,13 @@ type Backend interface {
 	// the column to decide whether to fetch the smaller file (gallery
 	// fast-paint) or fall back to the original.
 	UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error
+	// Route-photo-process path — the route_photos sibling of the run-photo
+	// methods above (kind='route_photo_process', migration 20270224_001).
+	// Same download → strip → thumbnail → PATCH shape, against the
+	// `route-photos` bucket + `route_photos` table.
+	DownloadRoutePhoto(ctx context.Context, path string) (body []byte, contentType string, err error)
+	UploadRoutePhoto(ctx context.Context, path string, body []byte, contentType string) error
+	UpdateRoutePhotoThumb512Path(ctx context.Context, photoID, path string) error
 	// Notification-email path — used by the kind='notification_email'
 	// handler (migration 20261130_001). The notifications AFTER INSERT
 	// trigger enqueues one job per recipient; the handler reads the row,
@@ -338,6 +345,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleStravaEvent(ctx, job)
 	case "photo_process":
 		return w.handlePhotoProcess(ctx, job)
+	case "route_photo_process":
+		return w.handleRoutePhotoProcess(ctx, job)
 	case "notification_email":
 		return w.handleNotificationEmail(ctx, job)
 	case "lifecycle_email":

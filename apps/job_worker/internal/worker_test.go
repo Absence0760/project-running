@@ -286,6 +286,22 @@ func (f *fakeBackend) UpdatePhotoThumb512Path(_ context.Context, photoID, path s
 	return nil
 }
 
+// The route-photo methods share the run-photo fake's storage map +
+// error fields — the two handlers exercise the identical strip/thumbnail
+// path, only the bucket + table differ in production. A route-photo test
+// sets up photoByPath / photoThumbPaths / the *PhotoErr fields the same way.
+func (f *fakeBackend) DownloadRoutePhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return f.DownloadPhoto(ctx, path)
+}
+
+func (f *fakeBackend) UploadRoutePhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	return f.UploadPhoto(ctx, path, body, contentType)
+}
+
+func (f *fakeBackend) UpdateRoutePhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	return f.UpdatePhotoThumb512Path(ctx, photoID, path)
+}
+
 func (f *fakeBackend) FetchNotificationForEmail(_ context.Context, id string) (*NotificationRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

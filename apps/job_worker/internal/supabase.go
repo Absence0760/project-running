@@ -226,13 +226,13 @@ func (c *SupabaseClient) UploadMatchedTrack(ctx context.Context, path string, po
 	return err
 }
 
-// DownloadPhoto fetches the raw bytes of a photo from the run-photos
-// Storage bucket. Returns the body + the response's Content-Type so
-// the caller can preserve it on the re-upload (some browsers fall
-// back to extension-sniffing when it's missing, but Supabase Storage
-// signed URLs only use the stored header).
-func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte, string, error) {
-	url := c.BaseURL + "/storage/v1/object/" + schema.BucketRunPhotos + "/" + path
+// downloadFromBucket fetches the raw bytes of an object from a Storage
+// bucket. Returns the body + the response's Content-Type so the caller
+// can preserve it on a re-upload (some browsers fall back to extension-
+// sniffing when it's missing, but Supabase Storage signed URLs only use
+// the stored header).
+func (c *SupabaseClient) downloadFromBucket(ctx context.Context, bucket, path string) ([]byte, string, error) {
+	url := c.BaseURL + "/storage/v1/object/" + bucket + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, "", err
@@ -257,13 +257,11 @@ func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte
 	return body, resp.Header.Get("Content-Type"), nil
 }
 
-// UploadPhoto writes [body] back to the same Storage path as
-// DownloadPhoto, with `x-upsert: true` so a re-process overwrites
-// the original. Used by the photo_process handler after EXIF
-// stripping. Idempotent — uploading already-stripped bytes a second
-// time produces no observable difference.
-func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error {
-	url := c.BaseURL + "/storage/v1/object/" + schema.BucketRunPhotos + "/" + path
+// uploadToBucket writes [body] to a Storage path with `x-upsert: true`
+// so a re-process overwrites the existing object. Idempotent — uploading
+// the same bytes a second time produces no observable difference.
+func (c *SupabaseClient) uploadToBucket(ctx context.Context, bucket, path string, body []byte, contentType string) error {
+	url := c.BaseURL + "/storage/v1/object/" + bucket + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -277,12 +275,11 @@ func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []by
 	return err
 }
 
-// UpdatePhotoThumb512Path PATCHes the `thumb_512_path` column on a
-// run_photos row after the worker has uploaded the resized variant.
-// Service role bypasses RLS so the standard PostgREST surface works
-// without a definer function.
-func (c *SupabaseClient) UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error {
-	url := c.BaseURL + "/rest/v1/" + schema.TableRunPhotos + "?id=eq." + photoID
+// updateThumb512Path PATCHes the `thumb_512_path` column on a photo row
+// after the worker has uploaded the resized variant. Service role bypasses
+// RLS so the standard PostgREST surface works without a definer function.
+func (c *SupabaseClient) updateThumb512Path(ctx context.Context, table, photoID, path string) error {
+	url := c.BaseURL + "/rest/v1/" + table + "?id=eq." + photoID
 	body, err := json.Marshal(map[string]string{"thumb_512_path": path})
 	if err != nil {
 		return err
@@ -295,6 +292,43 @@ func (c *SupabaseClient) UpdatePhotoThumb512Path(ctx context.Context, photoID, p
 	req.Header.Set("Prefer", "return=minimal")
 	_, err = c.do(ctx, req)
 	return err
+}
+
+// DownloadPhoto fetches a run photo from the run-photos Storage bucket.
+func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return c.downloadFromBucket(ctx, schema.BucketRunPhotos, path)
+}
+
+// UploadPhoto writes a run photo back to the run-photos bucket. Used by
+// the photo_process handler after EXIF stripping.
+func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	return c.uploadToBucket(ctx, schema.BucketRunPhotos, path, body, contentType)
+}
+
+// UpdatePhotoThumb512Path PATCHes run_photos.thumb_512_path. Clients use
+// the column to decide whether to fetch the smaller file (gallery
+// fast-paint) or fall back to the original.
+func (c *SupabaseClient) UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	return c.updateThumb512Path(ctx, schema.TableRunPhotos, photoID, path)
+}
+
+// DownloadRoutePhoto fetches a route photo from the route-photos bucket.
+func (c *SupabaseClient) DownloadRoutePhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return c.downloadFromBucket(ctx, schema.BucketRoutePhotos, path)
+}
+
+// UploadRoutePhoto writes a route photo back to the route-photos bucket.
+// Used by the route_photo_process handler after EXIF stripping.
+func (c *SupabaseClient) UploadRoutePhoto(ctx context.Context, path string, body []byte, contentType string) error {
+	return c.uploadToBucket(ctx, schema.BucketRoutePhotos, path, body, contentType)
+}
+
+// UpdateRoutePhotoThumb512Path PATCHes route_photos.thumb_512_path after
+// the worker uploads the resized variant. The route_photos thumb column is
+// service-role-only (a BEFORE UPDATE trigger rejects authenticated writes),
+// so this service-role PATCH is the only legitimate writer.
+func (c *SupabaseClient) UpdateRoutePhotoThumb512Path(ctx context.Context, photoID, path string) error {
+	return c.updateThumb512Path(ctx, schema.TableRoutePhotos, photoID, path)
 }
 
 // ErrStaleSourceTrackURL is returned by UpdateMatchedTrackRow when the
