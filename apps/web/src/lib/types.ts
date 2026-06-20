@@ -31,6 +31,7 @@ type CoachAthleteRow = Database['public']['Tables']['coach_athletes']['Row'];
 type ChallengeRow = Database['public']['Tables']['challenges']['Row'];
 type ChallengeParticipantRow = Database['public']['Tables']['challenge_participants']['Row'];
 type ChallengeBadgeRow = Database['public']['Tables']['challenge_badges']['Row'];
+type ExerciseRow = Database['public']['Tables']['exercises']['Row'];
 
 // Coach-athlete link lifecycle (persona #46). Enforced by the
 // `coach_athletes_status_check` CHECK in 20261102_001_coach_athletes.sql;
@@ -299,6 +300,24 @@ export type GymProgressionScheme =
 	| 'rpe_autoreg';
 // gym_routine_sets.set_type — set role within an exercise.
 export type GymSetType = 'warmup' | 'working' | 'dropset' | 'amrap' | 'failure' | 'backoff';
+// exercises.category — catalogue muscle-group / category (migration 20270222_001).
+export type ExerciseCategory =
+	| 'chest'
+	| 'back'
+	| 'shoulders'
+	| 'legs'
+	| 'arms'
+	| 'core'
+	| 'cardio'
+	| 'full_body'
+	| 'other';
+// exercises — the structured exercise catalogue. author_id null = a seeded
+// global (read-only); set = an owner-created custom. modality reuses
+// GymExerciseModality so a catalogue pick can seed a gym_routine_exercise.
+export type Exercise = Omit<ExerciseRow, 'category' | 'modality'> & {
+	category: ExerciseCategory;
+	modality: GymExerciseModality;
+};
 // Polymorphic report target. Kept in lockstep with the `reports.target_kind`
 // CHECK constraint (migrations 20260908_001 / 20261117_001 / 20270115_001)
 // via apps/web/scripts/check_constraint_unions.mjs.
@@ -317,7 +336,8 @@ export type NotificationKind =
 	| 'event_reminder'
 	| 'plan_assigned'
 	| 'achievement'
-	| 'challenge_complete';
+	| 'challenge_complete'
+	| 'content_hidden';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)

@@ -169,6 +169,65 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		}
 	});
 
+	test('catalogue: picking a seeded exercise binds gym_sets.exercise_id (migration 20270222_001)', async ({
+		page,
+	}) => {
+		// The exercise catalogue is ADDITIVE: typing a name that matches a seeded
+		// global by normalised key binds that exercise_id onto the logged sets,
+		// while free text still logs with exercise_id null. Log a set under the
+		// seeded "Bench Press" and assert the stored set carries the catalogue id.
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E Catalogue day ${stamp}`;
+
+		// Resolve the seeded global "Bench Press" id (author_id null).
+		const { data: cat } = await admin
+			.from('exercises')
+			.select('id')
+			.is('author_id', null)
+			.eq('name_key', 'bench press')
+			.single();
+		const benchId = (cat as { id: string }).id;
+		expect(benchId).toBeTruthy();
+
+		await page.goto('/gym');
+		await page.getByTestId('gym-log').click();
+
+		await page.getByPlaceholder('e.g. Push day').fill(title);
+		// Type the catalogue name verbatim (the datalist offers it; a free-text
+		// match by normalised key is what binds the id at save time).
+		await page.getByPlaceholder('Exercise name').first().fill('Bench Press');
+		const setRow = page.locator('.set-row').first();
+		await setRow.locator('input[type="number"]').nth(0).fill('5');
+		await setRow.locator('input[type="number"]').nth(1).fill('80');
+
+		await page.getByRole('button', { name: 'Save workout' }).click();
+
+		const row = page.locator('.workout-row', { hasText: title });
+		await expect(row).toBeVisible({ timeout: 10_000 });
+
+		const { data: created } = await admin
+			.from('gym_workouts')
+			.select('id')
+			.eq('user_id', USER_A.id)
+			.eq('title', title);
+		expect(created?.length).toBe(1);
+		const workoutId = created![0].id as string;
+
+		try {
+			const { data: sets } = await admin
+				.from('gym_sets')
+				.select('exercise_name, exercise_id')
+				.eq('workout_id', workoutId);
+			expect(sets?.length).toBe(1);
+			expect(sets![0].exercise_name).toBe('Bench Press');
+			// The catalogue link was bound from the typed name.
+			expect(sets![0].exercise_id).toBe(benchId);
+		} finally {
+			await admin.from('gym_workouts').delete().eq('id', workoutId);
+		}
+	});
+
 	test('weight_unit=lbs: entry parses to canonical kg + display renders lbs (F19)', async ({
 		page,
 	}) => {

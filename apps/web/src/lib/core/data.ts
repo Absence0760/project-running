@@ -9,6 +9,7 @@ import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
 import { assemblePublicRoute } from '../routes/public_route_assembly';
 import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
+import { logInputFromRecipe } from '../nutrition/recipe';
 import type {
 	Run,
 	Route,
@@ -69,7 +70,8 @@ import {
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
-import type { RecapPeriodKind } from '../types';
+import type { RecapPeriodKind, Exercise, ExerciseCategory, GymExerciseModality } from '../types';
+import { normaliseExerciseName } from '../gym/gym_prs';
 import type { YearInRunningRecap } from '../runs/recap';
 import type {
 	CoachAthleteStatus,
@@ -7047,6 +7049,10 @@ export interface GymSet {
 	/// Optional hold/interval time in seconds for timed work (planks, holds);
 	/// null for rep/load-only sets (migration 20270101_001).
 	duration_s: number | null;
+	/// Optional link to a public.exercises catalogue entry (migration
+	/// 20270222_001). null = a free-text set (the default). exercise_name is
+	/// always present regardless — the link is provenance, not the PR key.
+	exercise_id: string | null;
 }
 
 export interface GymWorkoutWithSets {
@@ -7060,6 +7066,10 @@ export interface GymSetInput {
 	weight_kg?: number | null;
 	rpe?: number | null;
 	duration_s?: number | null;
+	/// Optional catalogue link (migration 20270222_001). Omit / null for a
+	/// free-text set; the editor resolves it by matching the typed name against
+	/// the catalogue at save time.
+	exercise_id?: string | null;
 }
 
 /// One row per historical set, joined to its workout's start time, for
@@ -7282,6 +7292,57 @@ export async function fetchGymExerciseNames(): Promise<string[]> {
 	return ((data ?? []) as Array<{ exercise_name: string }>).map((r) => r.exercise_name);
 }
 
+/// The exercise catalogue visible to the signed-in user: every seeded global
+/// (author_id null) plus their own custom entries. RLS scopes the read; an
+/// ordered name list lets the gym editor merge these into its autocomplete
+/// datalist and bind a typed name to an exercise_id (migration 20270222_001).
+/// Additive — a user who never picks a catalogue entry logs exactly as before.
+export async function fetchExerciseCatalogue(): Promise<Exercise[]> {
+	if (!auth.user?.id) return [];
+	const { data, error } = await supabase
+		.from(TABLES.exercises)
+		.select('*')
+		.order('name', { ascending: true });
+	if (error) {
+		console.error('fetchExerciseCatalogue failed', error);
+		return [];
+	}
+	return (data ?? []) as Exercise[];
+}
+
+/// Create an owner-scoped custom exercise. name_key is the normalised name so
+/// it binds to logged sets the same way gym_prs / gym_routine_exercises key.
+/// RLS rejects an insert with any author_id other than the caller. Returns the
+/// created row, or null on conflict/error (e.g. a duplicate name_key).
+export async function createCustomExercise(input: {
+	name: string;
+	category?: ExerciseCategory;
+	modality?: GymExerciseModality;
+}): Promise<Exercise | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	const name = input.name.trim();
+	if (name.length === 0) return null;
+	const nowIso = new Date().toISOString();
+	const { data, error } = await supabase
+		.from(TABLES.exercises)
+		.insert({
+			author_id: userId,
+			name,
+			name_key: normaliseExerciseName(name),
+			category: input.category ?? 'other',
+			modality: input.modality ?? 'weight_reps',
+			last_modified_at: nowIso,
+		})
+		.select('*')
+		.single();
+	if (error || !data) {
+		console.error('createCustomExercise failed', error);
+		return null;
+	}
+	return data as Exercise;
+}
+
 async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<void> {
 	const { error: delErr } = await supabase
 		.from(TABLES.gym_sets)
@@ -7297,6 +7358,7 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 			weight_kg: s.weight_kg ?? null,
 			rpe: s.rpe ?? null,
 			duration_s: s.duration_s ?? null,
+			exercise_id: s.exercise_id ?? null,
 		}))
 		.filter((r) => r.exercise_name.length > 0);
 	if (rows.length === 0) return;
@@ -7921,6 +7983,200 @@ export async function logMealTemplate(
 	const { error } = await supabase.from(TABLES.food_log).insert(rows);
 	if (error) throw error;
 	return rows.length;
+}
+
+// --- Recipes: N ingredients summed into one logged meal (multi_modal.md) ---
+//
+// A reusable plan: recipes parent + recipe_ingredients. Owner-scoped RLS
+// (migration 20270221_001). last_modified_at + ingredient_count are
+// client-stamped (newer-wins sync, non-authoritative count — no server
+// trigger), like meal_templates. The difference from a meal template: logging
+// a recipe sums its ingredients into ONE food_log entry (the recipe's combined
+// macros, scaled by servings), not one entry per item. The summing + the
+// single log input is the pure recipe.ts parity pair; these helpers are the
+// Supabase round-trips. A recipe is NOT a dated activity, so it never feeds
+// the activities view.
+
+export interface RecipeSummary {
+	id: string;
+	user_id: string;
+	name: string;
+	servings: number;
+	meal_slot: MealSlot | null;
+	ingredient_count: number;
+	last_modified_at: string;
+	created_at: string;
+}
+
+export interface RecipeIngredientRow {
+	position: number;
+	item_name: string;
+	quantity: number;
+	calories: number | null;
+	protein_g: number | null;
+	carbs_g: number | null;
+	fat_g: number | null;
+	external_id: string | null;
+}
+
+export interface RecipeDetail {
+	recipe: RecipeSummary;
+	ingredients: RecipeIngredientRow[];
+}
+
+/// The shape recipeFromEntries / the save-as-recipe flow hand to the create
+/// call. Mirrors RecipeDraft from $lib/nutrition/recipe.ts.
+export interface RecipeInput {
+	name: string;
+	servings?: number;
+	meal_slot?: MealSlot | null;
+	ingredients: Array<{
+		position: number;
+		item_name: string;
+		quantity?: number;
+		calories?: number | null;
+		protein_g?: number | null;
+		carbs_g?: number | null;
+		fat_g?: number | null;
+		external_id?: string | null;
+	}>;
+}
+
+/// Saved recipes for the signed-in user, most-recently-modified first.
+/// Surfaces the error so the list can show a "couldn't load — retry" state
+/// rather than an empty list, mirroring `fetchMealTemplatesWithError`.
+export async function fetchRecipesWithError(
+	limit = 100,
+): Promise<{ recipes: RecipeSummary[]; error: string | null }> {
+	const userId = auth.user?.id;
+	if (!userId) return { recipes: [], error: null };
+	const { data, error } = await supabase
+		.from(TABLES.recipes)
+		.select('id, user_id, name, servings, meal_slot, ingredient_count, last_modified_at, created_at')
+		.eq('user_id', userId)
+		.order('last_modified_at', { ascending: false })
+		.limit(limit);
+	return { recipes: (data ?? []) as RecipeSummary[], error: error?.message ?? null };
+}
+
+export async function fetchRecipes(limit = 100): Promise<RecipeSummary[]> {
+	return (await fetchRecipesWithError(limit)).recipes;
+}
+
+/// A single recipe with its ingredients ordered by `position`. Returns null
+/// when the id doesn't resolve (RLS hides others').
+export async function fetchRecipeDetail(id: string): Promise<RecipeDetail | null> {
+	const { data: recipe, error: rErr } = await supabase
+		.from(TABLES.recipes)
+		.select('id, user_id, name, servings, meal_slot, ingredient_count, last_modified_at, created_at')
+		.eq('id', id)
+		.maybeSingle();
+	if (rErr || !recipe) return null;
+	const { data: ingredientRows, error: iErr } = await supabase
+		.from(TABLES.recipe_ingredients)
+		.select('position, item_name, quantity, calories, protein_g, carbs_g, fat_g, external_id')
+		.eq('recipe_id', id)
+		.order('position', { ascending: true });
+	if (iErr) console.error('fetchRecipeDetail ingredients failed', iErr);
+	return {
+		recipe: recipe as RecipeSummary,
+		ingredients: (ingredientRows ?? []) as RecipeIngredientRow[],
+	};
+}
+
+/// Insert a recipe + its ingredients. Blank-named ingredients are dropped.
+/// ingredient_count is stamped client-side from the surviving list
+/// (non-authoritative cache). Two round-trips, mirroring `createMealTemplate`.
+export async function createRecipe(input: RecipeInput): Promise<RecipeSummary> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const ingredients = input.ingredients.filter((it) => it.item_name.trim().length > 0);
+	const nowIso = new Date().toISOString();
+	const { data, error } = await supabase
+		.from(TABLES.recipes)
+		.insert({
+			user_id: userId,
+			name: input.name.trim(),
+			servings: input.servings && input.servings >= 1 ? input.servings : 1,
+			meal_slot: input.meal_slot ?? null,
+			ingredient_count: ingredients.length,
+			last_modified_at: nowIso,
+		})
+		.select('id, user_id, name, servings, meal_slot, ingredient_count, last_modified_at, created_at')
+		.single();
+	if (error || !data) throw error ?? new Error('createRecipe failed');
+	const recipe = data as RecipeSummary;
+	if (ingredients.length === 0) return recipe;
+	const ingredientRows = ingredients.map((it, i) => ({
+		recipe_id: recipe.id,
+		position: i,
+		item_name: it.item_name.trim(),
+		quantity: it.quantity && it.quantity >= 0 ? it.quantity : 1,
+		calories: it.calories ?? null,
+		protein_g: it.protein_g ?? null,
+		carbs_g: it.carbs_g ?? null,
+		fat_g: it.fat_g ?? null,
+		external_id: it.external_id ?? null,
+	}));
+	const { error: iErr } = await supabase.from(TABLES.recipe_ingredients).insert(ingredientRows);
+	if (iErr) throw iErr;
+	return recipe;
+}
+
+/// Delete a recipe; its ingredients cascade via FK (migration 20270221_001).
+/// Logged food_log entries are untouched — the recipe is a parallel plan,
+/// never linked to the meals it spawned.
+export async function deleteRecipe(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.recipes).delete().eq('id', id);
+	if (error) throw error;
+}
+
+/// Log ONE serving of a recipe as a SINGLE food_log entry at `startedAt`
+/// (default now): the recipe's name + its per-serving summed macros. Returns
+/// the number of entries logged (1, or 0 for an empty recipe). The summing +
+/// slot resolution is the pure `logInputFromRecipe` parity helper so the
+/// per-serving macros can't drift from the mobile twin.
+export async function logRecipe(
+	detail: RecipeDetail,
+	opts: { startedAt?: string; slotOverride?: MealSlot | null } = {},
+): Promise<number> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const input = logInputFromRecipe(
+		{
+			name: detail.recipe.name,
+			servings: detail.recipe.servings,
+			mealSlot: detail.recipe.meal_slot,
+			ingredients: detail.ingredients.map((it) => ({
+				position: it.position,
+				itemName: it.item_name,
+				quantity: it.quantity,
+				calories: it.calories,
+				proteinG: it.protein_g,
+				carbsG: it.carbs_g,
+				fatG: it.fat_g,
+				externalId: it.external_id,
+			})),
+		},
+		opts.slotOverride ?? null,
+	);
+	if (!input) return 0;
+	const startedAt = opts.startedAt ?? new Date().toISOString();
+	const nowIso = new Date().toISOString();
+	const { error } = await supabase.from(TABLES.food_log).insert({
+		user_id: userId,
+		item_name: input.itemName,
+		meal_slot: input.mealSlot,
+		calories: input.calories,
+		protein_g: input.proteinG,
+		carbs_g: input.carbsG,
+		fat_g: input.fatG,
+		started_at: startedAt,
+		external_id: input.externalId,
+		last_modified_at: nowIso,
+	});
+	if (error) throw error;
+	return 1;
 }
 
 /// The user's most recent recorded weight, or null if none. Owner-only
