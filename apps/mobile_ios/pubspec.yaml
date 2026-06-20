@@ -85,6 +85,16 @@ dependencies:
   # lib/main.dart's runZonedGuarded so unhandled errors land tagged with
   # the build's versionName; off when SENTRY_DSN is unset (dev / debug).
   sentry_flutter: ^9.0.0
+  # Native push (FCM / APNs). The Dart bridge in `lib/push_messaging_bridge.dart`
+  # gates every call on Firebase being initialised (`Firebase.apps.isNotEmpty`),
+  # so a build WITHOUT the operator's `google-services.json` /
+  # `GoogleService-Info.plist` compiles + runs with push disabled (the bridge
+  # no-ops). The native config files + the Android google-services gradle plugin
+  # / iOS APNs entitlement are operator-supplied deploy-time artifacts — see
+  # docs/features/email.md "Production ops". firebase_messaging pulls
+  # firebase_core transitively but we depend on it explicitly for the init call.
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
   flutter_localizations:
     sdk: flutter
   # Pinned by flutter_localizations; kept unconstrained so the resolver

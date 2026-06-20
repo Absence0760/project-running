@@ -3068,6 +3068,73 @@ class ApiClient {
         .eq(UserDeviceSettingRow.colDeviceId, deviceId);
   }
 
+  // ──────────────────── Push device tokens (device_tokens) ─────────
+  //
+  // The FCM/APNs registration the native-push channel fans out over
+  // (migration 20260506_001 + the native_push channel 20270212_001). The
+  // mobile push bridge registers a token on sign-in and on rotation, mirrors
+  // the per-device opt-in flag from the push_notifications pref, and removes
+  // the token on sign-out so the next user on the device doesn't inherit
+  // pushes. The worker reads enabled tokens and prunes dead ones.
+
+  /// Register (or refresh) this device's push token. Upsert on
+  /// `(user_id, token)` so a re-register with the same token is a no-op
+  /// beyond bumping `last_seen_at` / `app_version` / `locale`. Called by the
+  /// push bridge on sign-in and on `onTokenRefresh`.
+  Future<void> registerDeviceToken({
+    required String platform,
+    required String token,
+    String? appVersion,
+    String? locale,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client.from(DeviceTokenRow.table).upsert(
+      {
+        DeviceTokenRow.colUserId: viewerId,
+        DeviceTokenRow.colPlatform: platform,
+        DeviceTokenRow.colToken: token,
+        DeviceTokenRow.colAppVersion: appVersion,
+        DeviceTokenRow.colLocale: locale,
+        DeviceTokenRow.colLastSeenAt:
+            DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict:
+          '${DeviceTokenRow.colUserId},${DeviceTokenRow.colToken}',
+    );
+  }
+
+  /// Flip this device's push opt-in flag. Tracks the `push_notifications`
+  /// preference so the worker's per-device fan-out filter
+  /// (`is_notifications_enabled`) matches what the user toggled — the token
+  /// row stays so a later opt-in doesn't require re-registering with the
+  /// platform.
+  Future<void> setDeviceNotificationsEnabled({
+    required String token,
+    required bool enabled,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(DeviceTokenRow.table)
+        .update({DeviceTokenRow.colIsNotificationsEnabled: enabled})
+        .eq(DeviceTokenRow.colUserId, viewerId)
+        .eq(DeviceTokenRow.colToken, token);
+  }
+
+  /// Forget this device's push token (sign-out). Removes only the current
+  /// token so the next account on the device starts clean — matches the
+  /// device-changed-hands semantics in the `device_tokens` DDL.
+  Future<void> removeDeviceToken(String token) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(DeviceTokenRow.table)
+        .delete()
+        .eq(DeviceTokenRow.colUserId, viewerId)
+        .eq(DeviceTokenRow.colToken, token);
+  }
+
   /// Routes owned by a club. Read-gated by RLS to club members; used
   /// by the club home Routes tab and event-editor route pickers.
   Future<List<Route>> fetchClubRoutes(String clubId) async {

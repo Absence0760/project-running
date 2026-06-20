@@ -1814,6 +1814,7 @@ export type Database = {
           run_id: string | null
           user_id: string
           web_push_sent_at: string | null
+          native_push_sent_at: string | null
         }
         Insert: {
           achievement_id?: string | null
@@ -1834,6 +1835,7 @@ export type Database = {
           run_id?: string | null
           user_id: string
           web_push_sent_at?: string | null
+          native_push_sent_at?: string | null
         }
         Update: {
           achievement_id?: string | null
@@ -1854,6 +1856,7 @@ export type Database = {
           run_id?: string | null
           user_id?: string
           web_push_sent_at?: string | null
+          native_push_sent_at?: string | null
         }
         Relationships: [
           {

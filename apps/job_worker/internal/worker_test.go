@@ -101,6 +101,14 @@ type fakeBackend struct {
 	markedWebPushed []string // notification ids stamped web_push_sent_at
 	clearedSubs     []string // "user_id|device_id" pruned this run
 
+	// native_push inputs/outputs.
+	deviceTokens       map[string][]DeviceTokenRow // keyed by user_id
+	fetchTokensErr     error
+	markNativePushErr  error
+	clearTokenErr      error
+	markedNativePushed []string // notification ids stamped native_push_sent_at
+	clearedTokens      []string // tokens pruned this run
+
 	// weekly_digest inputs.
 	suppressed     map[string]bool // keyed by email → on the hard-block list
 	suppressErr    error
@@ -400,6 +408,56 @@ func (f *fakeBackend) ClearPushSubscription(_ context.Context, userID, deviceID 
 		return err
 	}
 	f.clearedSubs = append(f.clearedSubs, userID+"|"+deviceID)
+	return nil
+}
+
+func (f *fakeBackend) FetchNotificationForNativePush(_ context.Context, id string) (*NotificationRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchNotifErr != nil {
+		err := f.fetchNotifErr
+		f.fetchNotifErr = nil
+		return nil, err
+	}
+	return f.notifications[id], nil
+}
+
+func (f *fakeBackend) MarkNotificationNativePushed(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.markNativePushErr != nil {
+		err := f.markNativePushErr
+		f.markNativePushErr = nil
+		return err
+	}
+	f.markedNativePushed = append(f.markedNativePushed, id)
+	if n := f.notifications[id]; n != nil {
+		stamped := "2026-01-01T00:00:00Z"
+		n.NativePushSentAt = &stamped
+	}
+	return nil
+}
+
+func (f *fakeBackend) FetchDeviceTokens(_ context.Context, userID string) ([]DeviceTokenRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchTokensErr != nil {
+		err := f.fetchTokensErr
+		f.fetchTokensErr = nil
+		return nil, err
+	}
+	return f.deviceTokens[userID], nil
+}
+
+func (f *fakeBackend) ClearDeviceToken(_ context.Context, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.clearTokenErr != nil {
+		err := f.clearTokenErr
+		f.clearTokenErr = nil
+		return err
+	}
+	f.clearedTokens = append(f.clearedTokens, token)
 	return nil
 }
 

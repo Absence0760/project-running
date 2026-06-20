@@ -18,6 +18,7 @@ import (
 	"github.com/Absence0760/project-running/apps/job_worker/internal/bouncehook"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/dataexport"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/unsubscribe"
@@ -356,6 +357,38 @@ func main() {
 		logger.Warn("web_push: DISABLED — VAPID_PUBLIC_KEY unset; web_push jobs finish without sending")
 	}
 
+	// Native-push sender for kind='native_push' jobs (FCM HTTP v1 for Android,
+	// APNs HTTP/2 for iOS). Optional + fail-closed — when neither transport is
+	// credentialed the worker still drains every other kind, and native_push
+	// jobs finish done while leaving the rows pending (so a later credentialed
+	// deploy delivers the backlog). FCM needs FCM_SERVICE_ACCOUNT_JSON +
+	// FCM_PROJECT_ID; APNs needs APNS_KEY_P8 + APNS_KEY_ID + APNS_TEAM_ID +
+	// APNS_TOPIC (+ optional APNS_SANDBOX=1). Either group alone enables that
+	// platform; an invalid credential fails the worker at startup (exit 2).
+	var nativePushSender internal.NativePushSender
+	nativeCfg := nativepush.Config{
+		FCMServiceAccountJSON: []byte(os.Getenv("FCM_SERVICE_ACCOUNT_JSON")),
+		FCMProjectID:          os.Getenv("FCM_PROJECT_ID"),
+		APNSKeyP8:             []byte(os.Getenv("APNS_KEY_P8")),
+		APNSKeyID:             os.Getenv("APNS_KEY_ID"),
+		APNSTeamID:            os.Getenv("APNS_TEAM_ID"),
+		APNSTopic:             os.Getenv("APNS_TOPIC"),
+		APNSSandbox:           os.Getenv("APNS_SANDBOX") == "1",
+	}
+	if sender, err := nativepush.NewSender(nativeCfg, client.HTTP); err != nil {
+		// A configured-but-invalid credential is a deploy misconfiguration —
+		// fail loudly rather than silently dropping every native push.
+		logger.Error("native_push: invalid FCM/APNs configuration — refusing to start", "err", err)
+		os.Exit(2)
+	} else if sender != nil {
+		nativePushSender = sender
+		logger.Info("native_push: enabled",
+			"fcm", nativeCfg.FCMProjectID != "",
+			"apns", len(nativeCfg.APNSKeyP8) > 0)
+	} else {
+		logger.Warn("native_push: DISABLED — no FCM/APNs credentials set; native_push jobs finish without sending")
+	}
+
 	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
 	// worker's poll loop bumps it on every successful poll
 	// (claim-or-empty), so /health flips to 503 only when the loop
@@ -380,6 +413,7 @@ func main() {
 		Strava:            strava,
 		Email:             emailSender,
 		WebPush:           webPushSender,
+		NativePush:        nativePushSender,
 		AppBaseURL:        appBaseURL,
 		DigestUnsubSecret: digestUnsubSecret,
 		Config: internal.Config{
