@@ -10255,6 +10255,18 @@ abstract class AppLocalizations {
   /// **'Opt in to a weekly summary of your training and community highlights. Off by default; separate from your notification emails.'**
   String get prefsEmailWeeklyDigestHint;
 
+  /// Toggle title for opting in to the lifecycle-drip engagement email
+  ///
+  /// In en, this message translates to:
+  /// **'Tips & encouragement email'**
+  String get prefsEmailLifecycleDrip;
+
+  /// Subtitle for the lifecycle-drip opt-in toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.'**
+  String get prefsEmailLifecycleDripHint;
+
   /// Tile and picker title for the week-start day
   ///
   /// In en, this message translates to:

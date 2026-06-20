@@ -1689,6 +1689,8 @@
   "prefsPushNotifOff": "オフ",
   "prefsEmailWeeklyDigest": "週刊ダイジェストメール",
   "prefsEmailWeeklyDigestHint": "トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。",
+  "prefsEmailLifecycleDrip": "ヒントと応援メール",
+  "prefsEmailLifecycleDripHint": "オンボーディング、再開、連続記録のリマインダーを時々受け取ります。初期設定はオフで、週刊ダイジェストや通知メールとは別です。",
   "prefsWeekStart": "週の開始曜日",
   "prefsWeekStartMonday": "月曜日",
   "prefsWeekStartSunday": "日曜日",

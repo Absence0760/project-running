@@ -52,6 +52,13 @@ class SettingsKeys {
   /// `weekly_digest` handler; the send is gated separately (migration
   /// 20270108_001).
   static const emailWeeklyDigest = 'email_weekly_digest';
+  /// Opt-IN consent for the lifecycle drip — `'on'` | `'off'` (default
+  /// `'off'`). A SEPARATE key from both [emailNotifications] (transactional)
+  /// and [emailWeeklyDigest] (the other engagement stream): opting into one
+  /// engagement stream is never consent to the other. Read server-side by the
+  /// Go worker's `lifecycle_drip` handler; the send is gated separately
+  /// (migration 20270223_001).
+  static const emailLifecycleDrip = 'email_lifecycle_drip';
   /// The user's preferred language for server-sent email, as a BCP-47 tag
   /// (`en`/`de`/`fr`/`es`/`ja`/`pt-BR`). Written by the clients as a side
   /// effect of the language picker so the Go worker can localize email

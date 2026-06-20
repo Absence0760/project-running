@@ -6231,6 +6231,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.';
 
   @override
+  String get prefsEmailLifecycleDrip => 'E-mail de dicas e incentivo';
+
+  @override
+  String get prefsEmailLifecycleDripHint =>
+      'Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.';
+
+  @override
   String get prefsWeekStart => 'A semana começa em';
 
   @override
@@ -16537,6 +16544,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsEmailWeeklyDigestHint =>
       'Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.';
+
+  @override
+  String get prefsEmailLifecycleDrip => 'E-mail de dicas e incentivo';
+
+  @override
+  String get prefsEmailLifecycleDripHint =>
+      'Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.';
 
   @override
   String get prefsWeekStart => 'A semana começa em';

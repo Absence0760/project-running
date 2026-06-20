@@ -8332,6 +8332,14 @@
   "@prefsEmailWeeklyDigestHint": {
     "description": "Subtitle for the weekly-digest opt-in toggle"
   },
+  "prefsEmailLifecycleDrip": "Tips & encouragement email",
+  "@prefsEmailLifecycleDrip": {
+    "description": "Toggle title for opting in to the lifecycle-drip engagement email"
+  },
+  "prefsEmailLifecycleDripHint": "Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.",
+  "@prefsEmailLifecycleDripHint": {
+    "description": "Subtitle for the lifecycle-drip opt-in toggle"
+  },
   "prefsWeekStart": "Week starts on",
   "@prefsWeekStart": {
     "description": "Tile and picker title for the week-start day"

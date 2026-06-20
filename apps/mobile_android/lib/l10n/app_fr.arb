@@ -1689,6 +1689,8 @@
   "prefsPushNotifOff": "Désactivées",
   "prefsEmailWeeklyDigest": "E-mail récapitulatif hebdomadaire",
   "prefsEmailWeeklyDigestHint": "Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.",
+  "prefsEmailLifecycleDrip": "E-mail de conseils et encouragements",
+  "prefsEmailLifecycleDripHint": "Inscrivez-vous pour recevoir occasionnellement des rappels de prise en main, de réengagement et de série. Désactivé par défaut ; distinct de votre récapitulatif hebdomadaire et de vos e-mails de notification.",
   "prefsWeekStart": "La semaine commence le",
   "prefsWeekStartMonday": "Lundi",
   "prefsWeekStartSunday": "Dimanche",
