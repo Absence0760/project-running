@@ -528,6 +528,31 @@ jobs:
           SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
           CROSS_CLIENT_ROUTE_FIXTURE_IN: ${{ github.workspace }}/cross_client_route_fixture.json
         run: npx tsx scripts/cross_client_roundtrip_route_read.mjs
+      # 5) Dart WRITE half for IN-PROGRESS (live spectator) runs: open a live
+      #    broadcast (beginLiveBroadcast) + append a few live_run_pings
+      #    (insertLivePing) + emit its expected-field fixture. Distinct fixture
+      #    file from the run + route halves.
+      - name: Dart write half — live (api_client beginLiveBroadcast + insertLivePing)
+        working-directory: packages/api_client
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          CROSS_CLIENT_LIVE_FIXTURE_OUT: ${{ github.workspace }}/cross_client_live_fixture.json
+        run: flutter test test/cross_client_roundtrip_live_test.dart
+      # 6) Web READ half for IN-PROGRESS runs: re-read via the /live/[id]
+      #    spectator read shapes — the public_runs visibility view + the
+      #    live_run_pings catch-up query (ordered by at asc). Asserts the
+      #    per-ping lat/lng/ele/distance_m/elapsed_s, that the stub run is
+      #    visible via public_runs at all (the is_public round-trip), and that
+      #    the trigger-owned coarse column round-trips false. Exits non-zero on
+      #    any mismatch, failing the PR.
+      - name: Web read half — live (public_runs + live_run_pings shape + deep-equal assert)
+        working-directory: apps/web
+        env:
+          SUPABASE_TEST_URL: ${{ steps.sb.outputs.api_url }}
+          SUPABASE_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          CROSS_CLIENT_LIVE_FIXTURE_IN: ${{ github.workspace }}/cross_client_live_fixture.json
+        run: npx tsx scripts/cross_client_roundtrip_live_read.mjs
 
   edge-functions:
     name: Edge Function tests (Deno)
