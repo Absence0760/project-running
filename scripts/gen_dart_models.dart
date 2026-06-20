@@ -101,6 +101,8 @@ const _tables = <String>{
   'run_matched_tracks',
   'gear',
   'gear_wear_logs',
+  'gear_rotations',
+  'gear_rotation_members',
   'run_gear',
   'coach_athletes',
   'gym_workouts',

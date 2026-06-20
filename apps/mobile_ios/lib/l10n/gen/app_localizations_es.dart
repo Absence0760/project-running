@@ -5999,6 +5999,68 @@ class AppLocalizationsEs extends AppLocalizations {
   String get gearRestore => 'Restaurar';
 
   @override
+  String get gearRotationsTitle => 'Rotaciones';
+
+  @override
+  String get gearRotationsHint =>
+      'Agrupa el equipo que alternas: un conjunto de «Entrenamiento diario», un conjunto de «Día de carrera». Una rotación es solo una agrupación con nombre; no cambia qué par etiqueta automáticamente las nuevas carreras.';
+
+  @override
+  String get gearRotationsEmpty =>
+      'Aún no hay rotaciones. Crea una para agrupar un conjunto de zapatillas o bicicletas.';
+
+  @override
+  String get gearRotationName => 'Nombre de la rotación';
+
+  @override
+  String get gearRotationNew => 'Nueva rotación';
+
+  @override
+  String get gearRotationCreate => 'Crear';
+
+  @override
+  String get gearRotationRename => 'Renombrar';
+
+  @override
+  String get gearRotationManage => 'Editar equipo';
+
+  @override
+  String gearRotationManageTitle(String name) {
+    return 'Equipo en «$name»';
+  }
+
+  @override
+  String get gearRotationDeleteTitle => '¿Eliminar rotación?';
+
+  @override
+  String gearRotationDeleteBody(String name) {
+    return '¿Eliminar la rotación «$name»? Tu equipo no se ve afectado: solo se elimina la agrupación.';
+  }
+
+  @override
+  String gearRotationMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count elementos',
+      one: '$count elemento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRotationNoGear =>
+      'Añade primero algo de equipo y luego podrás agruparlo en una rotación.';
+
+  @override
+  String gearRotationSaveFailed(Object error) {
+    return 'No se pudo guardar la rotación: $error';
+  }
+
+  @override
+  String get gearRotationDone => 'Listo';
+
+  @override
   String get privacyZonesTitle => 'Zonas de privacidad';
 
   @override

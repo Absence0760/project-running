@@ -3027,6 +3027,89 @@ class ApiClient {
         .eq(GearWearLogRow.colId, id);
   }
 
+  // ─────────────────── Gear rotations (roadmap §7) ───────────────────
+
+  /// Fetch every rotation the signed-in user owns, each paired with the
+  /// gear ids it contains. Two owner-scoped reads (rotations + the join)
+  /// stitched client-side — both are tiny. Mirrors the web's
+  /// `fetchMyGearRotations`. Rotations sit OUTSIDE [LocalGearStore]
+  /// (online-only, like the wear-log + backfill sub-flows) — a rotation
+  /// is inventory organisation, not a record that must survive offline.
+  Future<List<GearRotationWithMembers>> fetchMyGearRotations() async {
+    final rotations = await _client
+        .from(GearRotationRow.table)
+        .select()
+        .order(GearRotationRow.colName, ascending: true);
+    final members = await _client
+        .from(GearRotationMemberRow.table)
+        .select(
+            '${GearRotationMemberRow.colRotationId}, ${GearRotationMemberRow.colGearId}');
+    final byRotation = <String, List<String>>{};
+    for (final m in (members as List)) {
+      final map = m as Map<String, dynamic>;
+      final rid = map[GearRotationMemberRow.colRotationId] as String;
+      (byRotation[rid] ??= <String>[])
+          .add(map[GearRotationMemberRow.colGearId] as String);
+    }
+    return (rotations as List).map<GearRotationWithMembers>((r) {
+      final row = GearRotationRow.fromJson(r as Map<String, dynamic>);
+      return GearRotationWithMembers(
+        rotation: row,
+        gearIds: byRotation[row.id] ?? const <String>[],
+      );
+    }).toList();
+  }
+
+  /// Create a named rotation. Mirrors the web's `createGearRotation`.
+  Future<GearRotationRow> createGearRotation(String name) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(GearRotationRow.table)
+        .insert({
+          GearRotationRow.colOwnerId: viewerId,
+          GearRotationRow.colName: name,
+        })
+        .select()
+        .single();
+    return GearRotationRow.fromJson(row);
+  }
+
+  /// Rename a rotation. RLS scopes to the owner.
+  Future<void> renameGearRotation(String id, String name) async {
+    await _client
+        .from(GearRotationRow.table)
+        .update({GearRotationRow.colName: name}).eq(GearRotationRow.colId, id);
+  }
+
+  /// Delete a rotation. Membership rows cascade via the FK; the gear
+  /// itself is untouched. Mirrors the web's `deleteGearRotation`.
+  Future<void> deleteGearRotation(String id) async {
+    await _client
+        .from(GearRotationRow.table)
+        .delete()
+        .eq(GearRotationRow.colId, id);
+  }
+
+  /// Replace the full gear set assigned to a rotation. Delete-then-insert,
+  /// mirroring [setRunGear]. RLS gates both halves to the rotation + gear
+  /// owner. Mirrors the web's `setGearRotationMembers`.
+  Future<void> setGearRotationMembers(
+      String rotationId, List<String> gearIds) async {
+    await _client
+        .from(GearRotationMemberRow.table)
+        .delete()
+        .eq(GearRotationMemberRow.colRotationId, rotationId);
+    if (gearIds.isEmpty) return;
+    final rows = gearIds
+        .map((g) => {
+              GearRotationMemberRow.colRotationId: rotationId,
+              GearRotationMemberRow.colGearId: g,
+            })
+        .toList();
+    await _client.from(GearRotationMemberRow.table).insert(rows);
+  }
+
   /// Replace the full gear set assigned to a run. Empty list clears
   /// the assignment. RLS gates both the delete and the insert to the
   /// run + gear owner; a non-owner gets a 42501 PostgREST error.

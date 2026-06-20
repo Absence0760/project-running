@@ -5998,6 +5998,68 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gearRestore => 'Restaurar';
 
   @override
+  String get gearRotationsTitle => 'Rodízios';
+
+  @override
+  String get gearRotationsHint =>
+      'Agrupe os equipamentos que você reveza — um conjunto de \"Treino diário\", um conjunto de \"Dia de prova\". Um rodízio é apenas um agrupamento nomeado; ele não muda qual par marca automaticamente as novas corridas.';
+
+  @override
+  String get gearRotationsEmpty =>
+      'Nenhum rodízio ainda. Crie um para agrupar um conjunto de tênis ou bicicletas.';
+
+  @override
+  String get gearRotationName => 'Nome do rodízio';
+
+  @override
+  String get gearRotationNew => 'Novo rodízio';
+
+  @override
+  String get gearRotationCreate => 'Criar';
+
+  @override
+  String get gearRotationRename => 'Renomear';
+
+  @override
+  String get gearRotationManage => 'Editar equipamentos';
+
+  @override
+  String gearRotationManageTitle(String name) {
+    return 'Equipamentos em \"$name\"';
+  }
+
+  @override
+  String get gearRotationDeleteTitle => 'Excluir rodízio?';
+
+  @override
+  String gearRotationDeleteBody(String name) {
+    return 'Excluir o rodízio \"$name\"? Seu equipamento não é afetado — apenas o agrupamento é removido.';
+  }
+
+  @override
+  String gearRotationMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count itens',
+      one: '$count item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRotationNoGear =>
+      'Adicione equipamentos primeiro, depois você poderá agrupá-los em um rodízio.';
+
+  @override
+  String gearRotationSaveFailed(Object error) {
+    return 'Não foi possível salvar o rodízio: $error';
+  }
+
+  @override
+  String get gearRotationDone => 'Concluído';
+
+  @override
   String get privacyZonesTitle => 'Zonas de privacidade';
 
   @override
@@ -16511,6 +16573,68 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gearRestore => 'Restaurar';
+
+  @override
+  String get gearRotationsTitle => 'Rodízios';
+
+  @override
+  String get gearRotationsHint =>
+      'Agrupe os equipamentos que você reveza — um conjunto de \"Treino diário\", um conjunto de \"Dia de prova\". Um rodízio é apenas um agrupamento nomeado; ele não muda qual par marca automaticamente as novas corridas.';
+
+  @override
+  String get gearRotationsEmpty =>
+      'Nenhum rodízio ainda. Crie um para agrupar um conjunto de tênis ou bicicletas.';
+
+  @override
+  String get gearRotationName => 'Nome do rodízio';
+
+  @override
+  String get gearRotationNew => 'Novo rodízio';
+
+  @override
+  String get gearRotationCreate => 'Criar';
+
+  @override
+  String get gearRotationRename => 'Renomear';
+
+  @override
+  String get gearRotationManage => 'Editar equipamentos';
+
+  @override
+  String gearRotationManageTitle(String name) {
+    return 'Equipamentos em \"$name\"';
+  }
+
+  @override
+  String get gearRotationDeleteTitle => 'Excluir rodízio?';
+
+  @override
+  String gearRotationDeleteBody(String name) {
+    return 'Excluir o rodízio \"$name\"? Seu equipamento não é afetado — apenas o agrupamento é removido.';
+  }
+
+  @override
+  String gearRotationMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count itens',
+      one: '$count item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRotationNoGear =>
+      'Adicione equipamentos primeiro, depois você poderá agrupá-los em um rodízio.';
+
+  @override
+  String gearRotationSaveFailed(Object error) {
+    return 'Não foi possível salvar o rodízio: $error';
+  }
+
+  @override
+  String get gearRotationDone => 'Concluído';
 
   @override
   String get privacyZonesTitle => 'Zonas de privacidade';

@@ -8029,6 +8029,86 @@
   "@gearRestore": {
     "description": "Popup-menu item to un-retire gear"
   },
+  "gearRotationsTitle": "Rotations",
+  "@gearRotationsTitle": {
+    "description": "AppBar title + gear-screen action for the gear rotations screen"
+  },
+  "gearRotationsHint": "Group the gear you cycle through — a \"Daily trainers\" set, a \"Race day\" set. A rotation is just a named grouping; it doesn't change which pair auto-tags new runs.",
+  "@gearRotationsHint": {
+    "description": "Instructional copy on the rotations screen"
+  },
+  "gearRotationsEmpty": "No rotations yet. Create one to group a set of shoes or bikes.",
+  "@gearRotationsEmpty": {
+    "description": "Empty-state copy on the rotations screen"
+  },
+  "gearRotationName": "Rotation name",
+  "@gearRotationName": {
+    "description": "Label/hint for the rotation-name field"
+  },
+  "gearRotationNew": "New rotation",
+  "@gearRotationNew": {
+    "description": "Tooltip/label to create a rotation"
+  },
+  "gearRotationCreate": "Create",
+  "@gearRotationCreate": {
+    "description": "Button to create a rotation"
+  },
+  "gearRotationRename": "Rename",
+  "@gearRotationRename": {
+    "description": "Popup-menu item to rename a rotation"
+  },
+  "gearRotationManage": "Edit gear",
+  "@gearRotationManage": {
+    "description": "Popup-menu item / button to edit a rotation's gear members"
+  },
+  "gearRotationManageTitle": "Gear in \"{name}\"",
+  "@gearRotationManageTitle": {
+    "description": "Title of the rotation member-edit sheet",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gearRotationDeleteTitle": "Delete rotation?",
+  "@gearRotationDeleteTitle": {
+    "description": "Title of the delete-rotation confirmation dialog"
+  },
+  "gearRotationDeleteBody": "Delete the \"{name}\" rotation? Your gear isn't affected — only the grouping is removed.",
+  "@gearRotationDeleteBody": {
+    "description": "Body of the delete-rotation confirmation dialog",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gearRotationMemberCount": "{count, plural, one{{count} item} other{{count} items}}",
+  "@gearRotationMemberCount": {
+    "description": "Member count chip on a rotation row",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gearRotationNoGear": "Add some gear first, then you can group it into a rotation.",
+  "@gearRotationNoGear": {
+    "description": "Shown in the member-edit sheet when the user has no gear"
+  },
+  "gearRotationSaveFailed": "Couldn't save rotation: {error}",
+  "@gearRotationSaveFailed": {
+    "description": "Banner shown when a rotation operation fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "gearRotationDone": "Done",
+  "@gearRotationDone": {
+    "description": "Save/confirm button in the rotation member-edit sheet"
+  },
   "privacyZonesTitle": "Privacy zones",
   "@privacyZonesTitle": {
     "description": "AppBar title for the Settings > Privacy zones screen"

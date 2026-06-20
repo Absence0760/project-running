@@ -96,14 +96,117 @@
 		}
 	}
 
+	// Rotations — named multi-pair groupings, distinct from the single
+	// `is_default` current pair. A rotation can span both shoes and bikes
+	// in principle, so the rotation section + filter are not tab-scoped.
+	let rotations = $state<GearRotationWithMembers[]>([]);
+	let rotationFilter = $state<string | null>(null);
+	let newRotationName = $state('');
+	let creatingRotation = $state(false);
+	let renamingRotation = $state<GearRotationWithMembers | null>(null);
+	let renameRotationName = $state('');
+	let confirmingRotationDelete = $state<GearRotationWithMembers | null>(null);
+	// Member-assignment modal: the rotation being edited + the working set.
+	let managingRotation = $state<GearRotationWithMembers | null>(null);
+	let managingMemberIds = $state<Set<string>>(new Set());
+	let savingMembers = $state(false);
+
+	async function reloadRotations() {
+		rotations = await fetchMyGearRotations();
+		// Drop a stale filter if its rotation was deleted.
+		if (rotationFilter && !rotations.some((r) => r.id === rotationFilter)) {
+			rotationFilter = null;
+		}
+	}
+
+	async function handleCreateRotation() {
+		const name = newRotationName.trim();
+		if (!name) return;
+		creatingRotation = true;
+		try {
+			await createGearRotation(name);
+			newRotationName = '';
+			await reloadRotations();
+		} catch (e) {
+			showToast(t('settingsGear.rotationSaveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			creatingRotation = false;
+		}
+	}
+
+	async function handleRenameRotation() {
+		const r = renamingRotation;
+		const name = renameRotationName.trim();
+		if (!r || !name) return;
+		try {
+			await renameGearRotation(r.id, name);
+			renamingRotation = null;
+			renameRotationName = '';
+			await reloadRotations();
+		} catch (e) {
+			showToast(t('settingsGear.rotationSaveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		}
+	}
+
+	async function handleDeleteRotation() {
+		const r = confirmingRotationDelete;
+		if (!r) return;
+		try {
+			await deleteGearRotation(r.id);
+			await reloadRotations();
+		} catch (e) {
+			showToast(t('settingsGear.rotationSaveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			confirmingRotationDelete = null;
+		}
+	}
+
+	function openManageRotation(r: GearRotationWithMembers) {
+		managingRotation = r;
+		managingMemberIds = new Set(r.gear_ids);
+	}
+
+	function toggleMember(gearId: string) {
+		const next = new Set(managingMemberIds);
+		if (next.has(gearId)) next.delete(gearId);
+		else next.add(gearId);
+		managingMemberIds = next;
+	}
+
+	async function handleSaveMembers() {
+		const r = managingRotation;
+		if (!r) return;
+		savingMembers = true;
+		try {
+			await setGearRotationMembers(r.id, [...managingMemberIds]);
+			managingRotation = null;
+			await reloadRotations();
+		} catch (e) {
+			showToast(t('settingsGear.rotationSaveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			savingMembers = false;
+		}
+	}
+
 	onMount(async () => {
 		await auth.ready();
 		if (!auth.user) return;
 		gear = await fetchMyGear();
+		await reloadRotations();
 		loading = false;
 	});
 
-	const visible = $derived(gear.filter((g) => g.kind === activeTab));
+	// The set of gear ids in the active rotation filter (null filter → all).
+	const filterMemberIds = $derived(
+		rotationFilter == null
+			? null
+			: new Set(rotations.find((r) => r.id === rotationFilter)?.gear_ids ?? []),
+	);
+	const visible = $derived(
+		gear
+			.filter((g) => g.kind === activeTab)
+			.filter((g) => filterMemberIds == null || filterMemberIds.has(g.id)),
+	);
 	const active = $derived(visible.filter((g) => !g.retired_at));
 	const retired = $derived(visible.filter((g) => g.retired_at));
 
@@ -259,6 +362,17 @@
 			<span class="material-symbols" aria-hidden="true">directions_bike</span> {t('settingsGear.tabBikes')}
 		</button>
 		<div class="spacer"></div>
+		{#if rotations.length > 0}
+			<label class="rotation-filter">
+				<span class="sr-only">{t('settingsGear.rotationFilterLabel')}</span>
+				<select bind:value={rotationFilter} aria-label={t('settingsGear.rotationFilterLabel')}>
+					<option value={null}>{t('settingsGear.rotationFilterAll')}</option>
+					{#each rotations as r (r.id)}
+						<option value={r.id}>{r.name}</option>
+					{/each}
+				</select>
+			</label>
+		{/if}
 		<button
 			class="btn-primary"
 			onclick={() => {
@@ -404,7 +518,147 @@
 			</ul>
 		{/if}
 	{/if}
+
+	{#if !loading}
+		<section class="rotations">
+			<h2 class="section-title">{t('settingsGear.rotationsHeading')}</h2>
+			<p class="rotations-hint">{t('settingsGear.rotationsHint')}</p>
+
+			<form
+				class="rotation-create"
+				onsubmit={(e) => {
+					e.preventDefault();
+					handleCreateRotation();
+				}}
+			>
+				<input
+					type="text"
+					bind:value={newRotationName}
+					maxlength="60"
+					placeholder={t('settingsGear.rotationNamePlaceholder')}
+					aria-label={t('settingsGear.rotationName')}
+				/>
+				<button class="btn-primary btn-sm" type="submit" disabled={creatingRotation || !newRotationName.trim()}>
+					{t('settingsGear.rotationCreate')}
+				</button>
+			</form>
+
+			{#if rotations.length === 0}
+				<p class="rotations-empty">{t('settingsGear.rotationsEmpty')}</p>
+			{:else}
+				<ul class="rotation-list">
+					{#each rotations as r (r.id)}
+						<li class="rotation-row">
+							<div class="rotation-info">
+								<strong>{r.name}</strong>
+								<span class="muted">
+									{t(r.gear_ids.length === 1 ? 'settingsGear.rotationMemberCount' : 'settingsGear.rotationMemberCountMany', { n: r.gear_ids.length })}
+								</span>
+							</div>
+							<div class="rotation-actions">
+								<button class="btn-outline btn-sm" onclick={() => openManageRotation(r)}>
+									{t('settingsGear.rotationManage')}
+								</button>
+								<button
+									class="btn-outline btn-sm"
+									onclick={() => {
+										renamingRotation = r;
+										renameRotationName = r.name;
+									}}
+								>
+									{t('settingsGear.rotationRename')}
+								</button>
+								<button class="btn-danger btn-sm" onclick={() => (confirmingRotationDelete = r)}>
+									{t('settingsGear.delete')}
+								</button>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+	{/if}
 </div>
+
+<Modal
+	open={managingRotation !== null}
+	onclose={() => (managingRotation = null)}
+	title={managingRotation ? t('settingsGear.rotationManageTitle', { name: managingRotation.name }) : ''}
+>
+	{#if gear.length === 0}
+		<p class="rotations-empty">{t('settingsGear.rotationNoGear')}</p>
+	{:else}
+		<ul class="member-list">
+			{#each gear as g (g.id)}
+				<li>
+					<label class="member-row">
+						<input
+							type="checkbox"
+							checked={managingMemberIds.has(g.id)}
+							onchange={() => toggleMember(g.id)}
+						/>
+						<span class="member-name">
+							{g.name}
+							{#if g.brand || g.model}
+								<span class="muted">{[g.brand, g.model].filter(Boolean).join(' ')}</span>
+							{/if}
+							{#if g.retired_at}
+								<span class="muted">· {t('settingsGear.retiredSection')}</span>
+							{/if}
+						</span>
+					</label>
+				</li>
+			{/each}
+		</ul>
+	{/if}
+	<footer class="member-footer">
+		<button class="btn-outline" type="button" onclick={() => (managingRotation = null)}>
+			{t('settingsGear.cancel')}
+		</button>
+		<button class="btn-primary" type="button" disabled={savingMembers} onclick={handleSaveMembers}>
+			{savingMembers ? t('settingsGear.saving') : t('settingsGear.rotationDone')}
+		</button>
+	</footer>
+</Modal>
+
+<Modal
+	open={renamingRotation !== null}
+	onclose={() => (renamingRotation = null)}
+	title={t('settingsGear.rotationRename')}
+>
+	<form
+		class="gear-form"
+		onsubmit={(e) => {
+			e.preventDefault();
+			handleRenameRotation();
+		}}
+	>
+		<label>
+			{t('settingsGear.rotationName')}
+			<input type="text" bind:value={renameRotationName} maxlength="60" required />
+		</label>
+		<footer>
+			<button class="btn-outline" type="button" onclick={() => (renamingRotation = null)}>
+				{t('settingsGear.cancel')}
+			</button>
+			<button class="btn-primary" type="submit" disabled={!renameRotationName.trim()}>
+				{t('settingsGear.save')}
+			</button>
+		</footer>
+	</form>
+</Modal>
+
+<ConfirmDialog
+	open={confirmingRotationDelete !== null}
+	title={t('settingsGear.rotationDeleteConfirmTitle')}
+	message={confirmingRotationDelete
+		? t('settingsGear.rotationDeleteConfirmMessage', { name: confirmingRotationDelete.name })
+		: ''}
+	confirmLabel={t('settingsGear.delete')}
+	danger={true}
+	onconfirm={handleDeleteRotation}
+	oncancel={() => (confirmingRotationDelete = null)}
+/>
 
 <Modal
 	open={showCreate || editingId !== null}
@@ -957,4 +1211,105 @@
 	}
 	.wear-del:hover { color: var(--color-danger); background: var(--color-surface); }
 	.wear-del .material-symbols { font-size: 1rem; }
+
+	.rotation-filter select {
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+		background: var(--color-bg);
+		color: var(--color-text);
+	}
+	.rotations {
+		margin-top: var(--space-2xl);
+		padding-top: var(--space-xl);
+		border-top: 1px solid var(--color-border);
+	}
+	.rotations-hint {
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		line-height: 1.5;
+		margin: 0 0 var(--space-md);
+		max-width: 44rem;
+	}
+	.rotation-create {
+		display: flex;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+		max-width: 30rem;
+	}
+	.rotation-create input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.9rem;
+		background: var(--color-bg);
+		color: var(--color-text);
+	}
+	.rotations-empty {
+		color: var(--color-text-tertiary);
+		font-size: 0.9rem;
+		margin: 0;
+	}
+	.rotation-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+	.rotation-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.rotation-info {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+	.rotation-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-shrink: 0;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+	.member-list {
+		list-style: none;
+		padding: 0;
+		margin: 0 0 var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.member-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.4rem;
+		cursor: pointer;
+		font-size: 0.9rem;
+	}
+	.member-name {
+		display: flex;
+		gap: 0.4rem;
+		align-items: baseline;
+		flex-wrap: wrap;
+	}
+	.member-footer {
+		display: flex;
+		gap: var(--space-sm);
+		justify-content: flex-end;
+		margin-top: var(--space-sm);
+	}
 </style>

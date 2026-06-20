@@ -9847,6 +9847,96 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get gearRestore;
 
+  /// AppBar title + gear-screen action for the gear rotations screen
+  ///
+  /// In en, this message translates to:
+  /// **'Rotations'**
+  String get gearRotationsTitle;
+
+  /// Instructional copy on the rotations screen
+  ///
+  /// In en, this message translates to:
+  /// **'Group the gear you cycle through — a \"Daily trainers\" set, a \"Race day\" set. A rotation is just a named grouping; it doesn\'t change which pair auto-tags new runs.'**
+  String get gearRotationsHint;
+
+  /// Empty-state copy on the rotations screen
+  ///
+  /// In en, this message translates to:
+  /// **'No rotations yet. Create one to group a set of shoes or bikes.'**
+  String get gearRotationsEmpty;
+
+  /// Label/hint for the rotation-name field
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation name'**
+  String get gearRotationName;
+
+  /// Tooltip/label to create a rotation
+  ///
+  /// In en, this message translates to:
+  /// **'New rotation'**
+  String get gearRotationNew;
+
+  /// Button to create a rotation
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get gearRotationCreate;
+
+  /// Popup-menu item to rename a rotation
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get gearRotationRename;
+
+  /// Popup-menu item / button to edit a rotation's gear members
+  ///
+  /// In en, this message translates to:
+  /// **'Edit gear'**
+  String get gearRotationManage;
+
+  /// Title of the rotation member-edit sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Gear in \"{name}\"'**
+  String gearRotationManageTitle(String name);
+
+  /// Title of the delete-rotation confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete rotation?'**
+  String get gearRotationDeleteTitle;
+
+  /// Body of the delete-rotation confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the \"{name}\" rotation? Your gear isn\'t affected — only the grouping is removed.'**
+  String gearRotationDeleteBody(String name);
+
+  /// Member count chip on a rotation row
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} item} other{{count} items}}'**
+  String gearRotationMemberCount(int count);
+
+  /// Shown in the member-edit sheet when the user has no gear
+  ///
+  /// In en, this message translates to:
+  /// **'Add some gear first, then you can group it into a rotation.'**
+  String get gearRotationNoGear;
+
+  /// Banner shown when a rotation operation fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save rotation: {error}'**
+  String gearRotationSaveFailed(Object error);
+
+  /// Save/confirm button in the rotation member-edit sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get gearRotationDone;
+
   /// AppBar title for the Settings > Privacy zones screen
   ///
   /// In en, this message translates to:

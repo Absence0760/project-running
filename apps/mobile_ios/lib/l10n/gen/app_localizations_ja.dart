@@ -5653,6 +5653,66 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gearRestore => '復帰させる';
 
   @override
+  String get gearRotationsTitle => 'ローテーション';
+
+  @override
+  String get gearRotationsHint =>
+      'ローテーションで使うギアをグループ化します（「普段履き」セット、「レース用」セットなど）。ローテーションは名前付きのグループにすぎず、新しいランに自動でタグ付けされるペアは変わりません。';
+
+  @override
+  String get gearRotationsEmpty =>
+      'ローテーションはまだありません。シューズやバイクのセットをまとめるには作成してください。';
+
+  @override
+  String get gearRotationName => 'ローテーション名';
+
+  @override
+  String get gearRotationNew => '新しいローテーション';
+
+  @override
+  String get gearRotationCreate => '作成';
+
+  @override
+  String get gearRotationRename => '名前を変更';
+
+  @override
+  String get gearRotationManage => 'ギアを編集';
+
+  @override
+  String gearRotationManageTitle(String name) {
+    return '「$name」内のギア';
+  }
+
+  @override
+  String get gearRotationDeleteTitle => 'ローテーションを削除しますか？';
+
+  @override
+  String gearRotationDeleteBody(String name) {
+    return '「$name」ローテーションを削除しますか？ギアには影響しません。グループ分けのみが解除されます。';
+  }
+
+  @override
+  String gearRotationMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRotationNoGear => 'まずギアを追加すると、ローテーションにまとめられます。';
+
+  @override
+  String gearRotationSaveFailed(Object error) {
+    return 'ローテーションを保存できませんでした: $error';
+  }
+
+  @override
+  String get gearRotationDone => '完了';
+
+  @override
   String get privacyZonesTitle => 'プライバシーゾーン';
 
   @override
