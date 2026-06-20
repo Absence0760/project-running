@@ -8,9 +8,15 @@
 		buildLearnCanonical,
 	} from '$lib/learn/learn_meta';
 	import { getGuide, isEnglishFallback } from '$lib/learn/guides';
+	import { getCategory } from '$lib/learn/categories';
 	import LearnCta from '$lib/components/LearnCta.svelte';
 
 	let { data } = $props();
+
+	// Resolve the category in-component (its labelKey is a typed
+	// MessageKey) rather than threading the key through load, where
+	// SvelteKit's serialised PageData widens it back to string.
+	const category = $derived(getCategory(data.categoryId));
 
 	// Re-resolve client-side for the active locale so a non-English
 	// visitor gets the localized guide when one exists (and the
@@ -19,19 +25,21 @@
 	const guide = $derived(getGuide(data.guide.slug, currentLocale()) ?? data.guide);
 	const showFallbackNotice = $derived(isEnglishFallback(data.guide.slug, currentLocale()));
 
-	const pageTitle = buildGuideTitle(data.guide.title);
-	const pageDesc = buildGuideDescription(data.guide.description);
-	const canonicalUrl = buildLearnCanonical(data.siteUrl, `/learn/${data.guide.slug}`);
-	const ogImage = data.guide.heroImage || '/og-default.png';
-	const jsonLd = buildGuideJsonLd({
-		title: data.guide.title,
-		description: data.guide.description,
-		slug: data.guide.slug,
-		updated: data.guide.updated,
-		categoryId: data.categoryId,
-		categoryLabel: data.categoryLabelKey ? m(data.categoryLabelKey) : '',
-		base: data.siteUrl,
-	});
+	const pageTitle = $derived(buildGuideTitle(data.guide.title));
+	const pageDesc = $derived(buildGuideDescription(data.guide.description));
+	const canonicalUrl = $derived(buildLearnCanonical(data.siteUrl, `/learn/${data.guide.slug}`));
+	const ogImage = $derived(data.guide.heroImage || '/og-default.png');
+	const jsonLd = $derived(
+		buildGuideJsonLd({
+			title: data.guide.title,
+			description: data.guide.description,
+			slug: data.guide.slug,
+			updated: data.guide.updated,
+			categoryId: data.categoryId,
+			categoryLabel: category ? m(category.labelKey) : '',
+			base: data.siteUrl,
+		}),
+	);
 
 	const GuideBody = $derived(guide.component);
 </script>
@@ -68,9 +76,9 @@
 			<a href="/">{m('learn.breadcrumbHome')}</a>
 			<span class="sep">/</span>
 			<a href="/learn">{m('learn.breadcrumbLearn')}</a>
-			{#if data.categoryLabelKey}
+			{#if category}
 				<span class="sep">/</span>
-				<a href="/learn/category/{data.categoryId}">{m(data.categoryLabelKey)}</a>
+				<a href="/learn/category/{category.id}">{m(category.labelKey)}</a>
 			{/if}
 		</nav>
 

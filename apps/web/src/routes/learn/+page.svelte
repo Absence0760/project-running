@@ -6,9 +6,9 @@
 
 	let { data } = $props();
 
-	const pageTitle = m('learn.hubPageTitle');
-	const pageDesc = m('learn.hubPageDescription');
-	const canonicalUrl = buildLearnCanonical(data.siteUrl, '/learn');
+	const pageTitle = $derived(m('learn.hubPageTitle'));
+	const pageDesc = $derived(m('learn.hubPageDescription'));
+	const canonicalUrl = $derived(buildLearnCanonical(data.siteUrl, '/learn'));
 </script>
 
 <svelte:head>

@@ -14,6 +14,7 @@
 /// back to English when a localized file is absent — the fallback is
 /// wired now even though only English files are authored in this phase.
 
+import type { Component } from 'svelte';
 import { CATEGORIES, isKnownCategory, isKnownCtaFeature } from './categories';
 
 export type GuideFrontmatter = {
@@ -27,7 +28,7 @@ export type GuideFrontmatter = {
 	cta?: { feature: string };
 };
 
-export type GuideComponent = unknown;
+export type GuideComponent = Component;
 
 export type GuideModule = {
 	metadata: GuideFrontmatter;
