@@ -147,7 +147,7 @@
 			// Re-merge the failed batch (newer pending edits win) so it isn't lost.
 			pendingChanges = { ...batch, ...pendingChanges };
 			saveStatus = 'idle';
-			showToast(`Couldn't save: ${(e as Error).message}`, 'error');
+			showToast(m('prefs.saveFailed', { error: (e as Error).message }), 'error');
 		}
 	}
 
@@ -183,7 +183,7 @@
 				if (error) throw error;
 			} catch (e) {
 				saveStatus = 'idle';
-				showToast(`Couldn't save: ${(e as Error).message}`, 'error');
+				showToast(m('prefs.saveFailed', { error: (e as Error).message }), 'error');
 				return;
 			}
 		}
@@ -421,7 +421,7 @@
 				const { data: stampedAt, error: consentErr } =
 					await supabase.rpc('grant_health_data_consent');
 				if (consentErr) {
-					showToast(`Save failed: ${consentErr.message}`, 'error');
+					showToast(m('prefs.saveFailed', { error: consentErr.message }), 'error');
 					return;
 				}
 				if (stampedAt) healthDataConsentAt = stampedAt as string;
@@ -460,7 +460,7 @@
 			showToast(m('prefs.demographicsSavedToast'), 'success');
 			setTimeout(() => (demographicsSaved = false), 2000);
 		} catch (e) {
-			showToast(`Save failed: ${(e as Error).message}`, 'error');
+			showToast(m('prefs.saveFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			savingDemographics = false;
 		}
@@ -901,8 +901,8 @@
 						consent.set(enabled ? 'accepted' : 'rejected');
 						showToast(
 							enabled
-								? 'Error reporting enabled.'
-								: 'Error reporting disabled. Reload to apply.',
+								? m('prefs.telemetryEnabledToast')
+								: m('prefs.telemetryDisabledToast'),
 							'success',
 						);
 					}}
