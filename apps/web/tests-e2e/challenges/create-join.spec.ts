@@ -57,4 +57,34 @@ test.describe('/challenges — create + join', () => {
 		// joined challenge) shows.
 		await expect(page.getByRole('button', { name: /^Leave$/ })).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('create a vert (elevation) challenge', async ({ page }) => {
+		const title = `e2e-vert ${Date.now()}`;
+
+		await page.goto('/challenges');
+		await expect(page.getByRole('heading', { level: 1, name: /Challenges/ })).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByRole('button', { name: /Create challenge/ }).click();
+		const modal = page.locator('.modal', { hasText: /Create challenge/ });
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+
+		await modal.getByLabel(/Title/).fill(title);
+		await modal.getByLabel(/Metric/).selectOption({ label: 'Elevation' });
+		await modal.getByLabel(/Goal/).fill('1000');
+		await modal.getByRole('button', { name: /Create challenge/ }).click();
+
+		await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible({
+			timeout: 10_000
+		});
+
+		const url = new URL(page.url());
+		const id = url.pathname.split('/').pop()!;
+		created.push(id);
+
+		// The goal renders through formatElevation (km pref → "m"), proving the
+		// vert metric flows create → leaderboard display.
+		await expect(page.getByText(/1,?000\s?m/).first()).toBeVisible({ timeout: 10_000 });
+	});
 });

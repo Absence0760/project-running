@@ -4248,6 +4248,7 @@ export const messages = {
 	"challenges.endLabel": "Fin",
 	"challenges.metricDistance": "Distancia",
 	"challenges.metricDuration": "Tiempo",
+	"challenges.metricVert": "Desnivel",
 	"challenges.metricActivityCount": "Actividades",
 	"challenges.metricStreak": "Días activos",
 	"challenges.scopeIndividual": "Individual",

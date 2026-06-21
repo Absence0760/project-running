@@ -4244,6 +4244,7 @@ export const messages = {
 	"challenges.endLabel": "終了",
 	"challenges.metricDistance": "距離",
 	"challenges.metricDuration": "時間",
+	"challenges.metricVert": "獲得標高",
 	"challenges.metricActivityCount": "アクティビティ数",
 	"challenges.metricStreak": "活動日数",
 	"challenges.scopeIndividual": "個人",

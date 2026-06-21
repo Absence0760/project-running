@@ -4247,6 +4247,7 @@ export const messages = {
 	"challenges.endLabel": "Fim",
 	"challenges.metricDistance": "Distância",
 	"challenges.metricDuration": "Tempo",
+	"challenges.metricVert": "Elevação",
 	"challenges.metricActivityCount": "Atividades",
 	"challenges.metricStreak": "Dias ativos",
 	"challenges.scopeIndividual": "Individual",
