@@ -1672,6 +1672,7 @@ export type Database = {
           reps: number | null
           rpe: number | null
           set_index: number
+          set_type: string
           weight_kg: number | null
           workout_id: string
         }
@@ -1683,6 +1684,7 @@ export type Database = {
           reps?: number | null
           rpe?: number | null
           set_index: number
+          set_type?: string
           weight_kg?: number | null
           workout_id: string
         }
@@ -1694,6 +1696,7 @@ export type Database = {
           reps?: number | null
           rpe?: number | null
           set_index?: number
+          set_type?: string
           weight_kg?: number | null
           workout_id?: string
         }
