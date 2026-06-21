@@ -72,6 +72,16 @@ void main() {
     expect(b.remaining, 0);
   });
 
+  test('macroBudget: a negative .5 tie rounds half toward +∞ (TS↔Dart parity)', () {
+    // remaining = round(target - consumed) = round(2000 - 2000.5) = round(-0.5).
+    // JS Math.round(-0.5) === 0; this twin must agree, so both sides report 0
+    // rather than Dart's default .round() of -1. Latent today (real inputs are
+    // integers) but reachable via fractional calls.
+    final b = macroBudget(2000.5, 2000, MacroKind.calories);
+    expect(b.remaining, 0);
+    expect(b.over, 1); // round(consumed - target) = round(0.5) = 1
+  });
+
   test('macroIsCeiling: calories + fat are ceilings, protein + carbs goals', () {
     const expected = <MacroKind, bool>{
       MacroKind.calories: true,

@@ -21,6 +21,11 @@ import 'nutrition_targets.dart';
 
 enum MacroKind { calories, protein, carbs, fat }
 
+/// Rounds half toward positive infinity, matching JS `Math.round` — so the
+/// budget agrees with the canonical web twin on negative .5 ties
+/// (`Math.round(-0.5) == 0`, where Dart's `.round()` gives -1).
+int _roundHalfUp(num value) => (value + 0.5).floor();
+
 /// Whether overshooting a macro is a warning. Calories + fat are ceilings
 /// (over = warning); protein + carbs are goals to reach (over = fine).
 const macroIsCeiling = <MacroKind, bool>{
@@ -60,8 +65,8 @@ MacroBudget macroBudget(num consumed, num? target, MacroKind kind) {
   if (target == null || target <= 0) {
     return const MacroBudget(remaining: null, over: 0, exceeded: false, reached: false);
   }
-  final remaining = (target - consumed).round();
-  final over = (consumed - target).round();
+  final remaining = _roundHalfUp(target - consumed);
+  final over = _roundHalfUp(consumed - target);
   final isCeiling = macroIsCeiling[kind]!;
   // `exceeded` keys off the rounded `over`, not raw consumed > target, so a
   // sub-0.5 overage that rounds to 0 never renders the broken "0 over" chip.
