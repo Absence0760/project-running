@@ -48,6 +48,14 @@ class NotificationStore {
 		this.unreadCount = Math.max(0, this.unreadCount - by);
 	}
 
+	/// Optimistic "all read" — zeroes the badge but keeps the Realtime
+	/// channel live so a notification arriving after a mark-all still
+	/// bumps the badge. Distinct from `clear()`, which is the logout-only
+	/// teardown that also drops the subscription.
+	markAllRead() {
+		this.unreadCount = 0;
+	}
+
 	/// Subscribe to live changes on this user's notification rows. INSERT
 	/// (always unread on creation) bumps the badge immediately; UPDATE /
 	/// DELETE (read or dismissed, possibly from another tab) re-read the

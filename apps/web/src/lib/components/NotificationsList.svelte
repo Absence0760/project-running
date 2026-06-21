@@ -52,7 +52,7 @@
 	async function handleMarkAll() {
 		try {
 			await markAllNotificationsRead();
-			notificationStore.clear();
+			notificationStore.markAllRead();
 			items = items.map((x) => ({
 				...x,
 				row: { ...x.row, read_at: x.row.read_at ?? new Date().toISOString() },
