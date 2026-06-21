@@ -25,6 +25,7 @@ import 'local_gear_store.dart';
 import 'local_gym_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
+import 'offline_sync_store.dart';
 import 'preferences.dart';
 import 'push_messaging_bridge.dart';
 import 'race_controller.dart';
@@ -413,6 +414,18 @@ void main() async {
         settingsSync?.onSignedOut().catchError((Object e) {
           debugPrint('Settings sync on signedOut failed: $e');
         });
+        // Clear the per-row offline stores so a DIFFERENT user signing in on
+        // the same device can't read the prior user's gym/food/gear rows, and
+        // — worse — so an unsynced pendingCreate row from the prior user can't
+        // be pushed into the new user's account on the next drain. These
+        // stores aren't user-namespaced on disk (decisions §73/§122 deferred
+        // the `created_by_user_id` tag), so sign-out wipes them outright,
+        // mirroring the settings cache's drop-on-sign-out (§72).
+        for (final s in <OfflineSyncStore>[gearStore, gymStore, foodStore]) {
+          s.clear().catchError((Object e) {
+            debugPrint('Offline store clear on signedOut failed: $e');
+          });
+        }
       }
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);

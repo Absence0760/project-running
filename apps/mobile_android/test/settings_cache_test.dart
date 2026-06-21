@@ -87,6 +87,22 @@ void main() {
         reason: 'dropUser must not touch other users\' rows.');
   });
 
+  test('dropUser does not sweep a sibling whose id is a prefix', () async {
+    final sp = await SharedPreferences.getInstance();
+    final cache = SharedPrefsSettingsCache(sp);
+    await cache.writeUniversal('u1', {'a': 1});
+    await cache.writeUniversal('u12', {'a': 12});
+    await cache.writeDevice('u1', 'd1', {'k': 'v'});
+    await cache.writeDevice('u12', 'd1', {'k': 'w'});
+    await cache.dropUser('u1');
+    expect(cache.readUniversal('u1'), isNull);
+    expect(cache.readDevice('u1', 'd1'), isNull);
+    expect(cache.readUniversal('u12'), {'a': 12},
+        reason: 'u12 is not u1; its universal bag must survive.');
+    expect(cache.readDevice('u12', 'd1'), {'k': 'w'},
+        reason: 'u12 device bag must survive dropUser(u1).');
+  });
+
   test('corrupt JSON in storage is dropped silently (returns null/empty)',
       () async {
     SharedPreferences.setMockInitialValues({
