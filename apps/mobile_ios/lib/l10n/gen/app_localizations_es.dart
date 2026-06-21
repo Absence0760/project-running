@@ -3116,6 +3116,16 @@ class AppLocalizationsEs extends AppLocalizations {
       'Graba o importa carreras con rutas de GPS y se iluminarán aquí.';
 
   @override
+  String get runHeatmapErrorTitle => 'No se pudo cargar tu mapa de calor';
+
+  @override
+  String get runHeatmapErrorBody =>
+      'Algo salió mal al cargar tus carreras. Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
+  String get runHeatmapRetry => 'Reintentar';
+
+  @override
   String get runHeatmapLegendTitle => 'Tu mapa de calor';
 
   @override

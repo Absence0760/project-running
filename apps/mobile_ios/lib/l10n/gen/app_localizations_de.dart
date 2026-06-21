@@ -3127,6 +3127,17 @@ class AppLocalizationsDe extends AppLocalizations {
       'Zeichne Läufe mit GPS-Strecken auf oder importiere sie – dann leuchten sie hier auf.';
 
   @override
+  String get runHeatmapErrorTitle =>
+      'Deine Heatmap konnte nicht geladen werden';
+
+  @override
+  String get runHeatmapErrorBody =>
+      'Beim Laden deiner Läufe ist etwas schiefgelaufen. Prüfe deine Verbindung und versuche es erneut.';
+
+  @override
+  String get runHeatmapRetry => 'Erneut versuchen';
+
+  @override
   String get runHeatmapLegendTitle => 'Deine Heatmap';
 
   @override

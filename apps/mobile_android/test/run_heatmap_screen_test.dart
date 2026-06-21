@@ -97,4 +97,36 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.runHeatmapEmptyTitle), findsOneWidget);
   });
+
+  testWidgets('a failed runs fetch shows a retryable error, not the empty state',
+      (tester) async {
+    // A thrown fetch means we never learned whether the runner has mapped
+    // runs — the screen must surface a distinct error + retry, NOT the
+    // "No mapped runs yet" empty state (which would tell an active runner
+    // they've never run anywhere). Retry recovers.
+    var fail = true;
+    await _pump(
+      tester,
+      fetchRunsFn: () async {
+        if (fail) {
+          fail = false;
+          throw Exception('simulated failure');
+        }
+        return [_run('a', trackUrl: 'u/a.json.gz')];
+      },
+      fetchTrackFn: (_) async => _track(),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.runHeatmapErrorTitle), findsOneWidget);
+    expect(find.text(l10n.runHeatmapEmptyTitle), findsNothing);
+
+    // Retry — the second fetch succeeds, so the error clears and the legend
+    // renders (never stuck on the error).
+    await tester.tap(find.text(l10n.runHeatmapRetry));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text(l10n.runHeatmapErrorTitle), findsNothing);
+    expect(find.text(l10n.runHeatmapLegendSummaryOne(1)), findsOneWidget);
+  });
 }

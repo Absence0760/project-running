@@ -3092,6 +3092,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Record or import runs with GPS tracks and they\'ll light up here.';
 
   @override
+  String get runHeatmapErrorTitle => 'Couldn\'t load your heatmap';
+
+  @override
+  String get runHeatmapErrorBody =>
+      'Something went wrong loading your runs. Check your connection and try again.';
+
+  @override
+  String get runHeatmapRetry => 'Try again';
+
+  @override
   String get runHeatmapLegendTitle => 'Your heatmap';
 
   @override

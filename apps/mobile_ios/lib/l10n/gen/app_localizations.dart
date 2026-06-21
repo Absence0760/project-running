@@ -5246,6 +5246,24 @@ abstract class AppLocalizations {
   /// **'Record or import runs with GPS tracks and they\'ll light up here.'**
   String get runHeatmapEmptyBody;
 
+  /// Error-state title on the personal run-track heatmap when the runs fetch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your heatmap'**
+  String get runHeatmapErrorTitle;
+
+  /// Error-state body on the personal run-track heatmap when the runs fetch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong loading your runs. Check your connection and try again.'**
+  String get runHeatmapErrorBody;
+
+  /// Retry button on the personal run-track heatmap error state
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get runHeatmapRetry;
+
   /// Legend title on the personal run-track heatmap
   ///
   /// In en, this message translates to:

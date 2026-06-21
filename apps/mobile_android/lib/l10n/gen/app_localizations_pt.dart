@@ -3117,6 +3117,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
 
   @override
+  String get runHeatmapErrorTitle =>
+      'Não foi possível carregar seu mapa de calor';
+
+  @override
+  String get runHeatmapErrorBody =>
+      'Algo deu errado ao carregar suas corridas. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get runHeatmapRetry => 'Tentar novamente';
+
+  @override
   String get runHeatmapLegendTitle => 'Seu mapa de calor';
 
   @override
@@ -13882,6 +13893,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runHeatmapEmptyBody =>
       'Grave ou importe corridas com trajetos de GPS e elas vão aparecer aqui.';
+
+  @override
+  String get runHeatmapErrorTitle =>
+      'Não foi possível carregar seu mapa de calor';
+
+  @override
+  String get runHeatmapErrorBody =>
+      'Algo deu errado ao carregar suas corridas. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get runHeatmapRetry => 'Tentar novamente';
 
   @override
   String get runHeatmapLegendTitle => 'Seu mapa de calor';

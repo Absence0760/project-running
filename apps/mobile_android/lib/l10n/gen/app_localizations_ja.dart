@@ -2927,6 +2927,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runHeatmapEmptyBody => 'GPSトラック付きのランを記録またはインポートすると、ここに表示されます。';
 
   @override
+  String get runHeatmapErrorTitle => 'ヒートマップを読み込めませんでした';
+
+  @override
+  String get runHeatmapErrorBody => 'ランの読み込み中に問題が発生しました。接続を確認してもう一度お試しください。';
+
+  @override
+  String get runHeatmapRetry => '再試行';
+
+  @override
   String get runHeatmapLegendTitle => 'あなたのヒートマップ';
 
   @override
