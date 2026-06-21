@@ -4281,6 +4281,24 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get planNewReplaceActiveTitle => 'アクティブなプランを置き換えますか？';
+
+  @override
+  String planNewReplaceActiveNamed(String name) {
+    return 'すでにアクティブなプランがあります:「$name」。新しいプランを作成すると、現在のプランは完了としてマークされます（「プランの管理」から引き続き確認できます）。続行しますか？';
+  }
+
+  @override
+  String get planNewReplaceActiveUnnamed =>
+      'すでにアクティブなプランがあります。新しいプランを作成すると、現在のプランは完了としてマークされます。続行しますか？';
+
+  @override
+  String get planNewReplaceActiveConfirm => 'プランを置き換える';
+
+  @override
+  String get planNewReplaceActiveKeep => '現在のプランを保持';
+
+  @override
   String get planNewStarterC25k => 'カウチ・トゥ・5K（初心者ウォークラン）';
 
   @override

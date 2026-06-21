@@ -6169,6 +6169,31 @@
       }
     }
   },
+  "planNewReplaceActiveTitle": "Replace your active plan?",
+  "@planNewReplaceActiveTitle": {
+    "description": "Title of the confirm dialog shown before a new plan retires the current active one"
+  },
+  "planNewReplaceActiveNamed": "You already have an active plan: \"{name}\". Creating a new plan will mark the current one as completed (you can still find it under Manage plans). Continue?",
+  "@planNewReplaceActiveNamed": {
+    "description": "Body of the replace-active-plan confirm dialog when the existing plan has a name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewReplaceActiveUnnamed": "You already have an active plan. Creating a new plan will mark the current one as completed. Continue?",
+  "@planNewReplaceActiveUnnamed": {
+    "description": "Body of the replace-active-plan confirm dialog when the existing plan name is unknown"
+  },
+  "planNewReplaceActiveConfirm": "Replace plan",
+  "@planNewReplaceActiveConfirm": {
+    "description": "Confirm button of the replace-active-plan dialog"
+  },
+  "planNewReplaceActiveKeep": "Keep current",
+  "@planNewReplaceActiveKeep": {
+    "description": "Cancel button of the replace-active-plan dialog"
+  },
   "planNewStarterC25k": "Couch to 5K (beginner walk-run)",
   "@planNewStarterC25k": {
     "description": "Built-in starter plan name"
