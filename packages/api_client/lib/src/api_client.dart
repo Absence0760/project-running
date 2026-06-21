@@ -5171,6 +5171,8 @@ class ApiClient {
           GymSetRow.colReps: sets[i].reps,
           GymSetRow.colWeightKg: sets[i].weightKg,
           GymSetRow.colRpe: sets[i].rpe,
+          // NOT NULL column — fall back to the working default (20270224_001).
+          GymSetRow.colSetType: sets[i].setType ?? 'working',
           GymSetRow.colDurationS: sets[i].durationS,
           GymSetRow.colExerciseId: sets[i].exerciseId,
         },
@@ -6345,6 +6347,9 @@ typedef GymSetInput = ({
   int? reps,
   double? weightKg,
   double? rpe,
+  // Role this set played (warmup/working/dropset/amrap/failure/backoff);
+  // null defaults to 'working' at write time (migration 20270224_001).
+  String? setType,
   int? durationS,
   // Optional link to a public.exercises catalogue entry (migration
   // 20270222_001). null for a free-text set — the default offline path.

@@ -170,6 +170,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               reps: s.reps,
               weightKg: null,
               rpe: null,
+              setType: 'working',
               durationS: s.durationS,
               exerciseId: null,
             ),

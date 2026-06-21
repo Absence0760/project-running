@@ -9,6 +9,7 @@ class GymSet {
     this.reps,
     this.weightKg,
     this.rpe,
+    this.setType = 'working',
     this.durationS,
     this.setIndex,
   });
@@ -17,6 +18,11 @@ class GymSet {
   final int? reps;
   final double? weightKg;
   final double? rpe;
+
+  /// Role this set played (warmup/working/dropset/amrap/failure/backoff);
+  /// defaults to 'working'. Raw string mirroring the DB CHECK union — the
+  /// gym_routine_sets.set_type vocabulary (migration 20270224_001).
+  final String setType;
 
   /// Optional hold/interval time in seconds for timed work (planks, holds);
   /// null for rep/load-only sets (migration 20261231_001).
@@ -31,6 +37,7 @@ class GymSet {
         reps: (row[GymSetRow.colReps] as num?)?.toInt(),
         weightKg: (row[GymSetRow.colWeightKg] as num?)?.toDouble(),
         rpe: (row[GymSetRow.colRpe] as num?)?.toDouble(),
+        setType: (row[GymSetRow.colSetType] as String?) ?? 'working',
         durationS: (row[GymSetRow.colDurationS] as num?)?.toInt(),
         setIndex: (row[GymSetRow.colSetIndex] as num?)?.toInt(),
       );

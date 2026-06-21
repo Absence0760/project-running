@@ -235,6 +235,44 @@ void main() {
     }
   });
 
+  testWidgets('set_type defaults to working and a chosen type persists',
+      (tester) async {
+    // Migration 20270224_001: each logged set carries a set_type. The composer
+    // defaults a set to 'working'; picking 'warmup' from the dropdown persists.
+    final f = await _store('settype_');
+    try {
+      await tester.pumpWidget(_opener(f.store));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Leg day');
+      await tester.enterText(fields.at(1), 'Squat');
+      await tester.enterText(fields.at(2), '5');
+      await tester.enterText(fields.at(3), '40');
+
+      // Open the first set's type dropdown and pick Warm-up.
+      await tester.tap(find.byKey(const Key('gym-set-type-0-0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Warm-up').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Save workout'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(f.store.workouts, hasLength(1));
+      final sets = f.store.workouts.first.sets;
+      expect(sets, hasLength(1));
+      expect(sets.first['set_type'], 'warmup');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('editing pre-fills the duration from the stored workout',
       (tester) async {
     final f = await _store('edit_dur_');

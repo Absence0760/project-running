@@ -336,6 +336,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
           reps: (s['reps'] as num?)?.toInt(),
           weightKg: (s['weight_kg'] as num?)?.toDouble(),
           rpe: (s['rpe'] as num?)?.toDouble(),
+          setType: (s['set_type'] as String?) ?? 'working',
           durationS: (s['duration_s'] as num?)?.toInt(),
           exerciseId: s['exercise_id'] as String?,
         ),
@@ -512,6 +513,27 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       return repWeight.isEmpty ? dur : '$repWeight · $dur';
     }
     return repWeight;
+  }
+
+  /// A chip label for a non-default logged set role; null for a plain working
+  /// set so the common case stays uncluttered (mirrors web's setTypeChip).
+  String? _setTypeChip(Map<String, dynamic> s, AppLocalizations l10n) {
+    final t = (s['set_type'] as String?) ?? 'working';
+    if (t == 'working') return null;
+    switch (t) {
+      case 'warmup':
+        return l10n.gymRoutineSetTypeWarmup;
+      case 'dropset':
+        return l10n.gymRoutineSetTypeDropset;
+      case 'amrap':
+        return l10n.gymRoutineSetTypeAmrap;
+      case 'failure':
+        return l10n.gymRoutineSetTypeFailure;
+      case 'backoff':
+        return l10n.gymRoutineSetTypeBackoff;
+      default:
+        return null;
+    }
   }
 
   String _prLabel(PrKind kind, AppLocalizations l10n) {
@@ -786,6 +808,22 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
+                    if (_setTypeChip(ref.set, l10n) != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _setTypeChip(ref.set, l10n)!,
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     if (ref.set['rpe'] != null)
                       Text(
                         '${l10n.gymRpe} ${_numStr(ref.set['rpe'] as num)}',
