@@ -1142,6 +1142,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDiscardA11yHint => 'Descarta la grabación actual sin guardarla';
 
   @override
+  String get runStopA11yLabel => 'Detener y guardar la carrera';
+
+  @override
+  String get runStopA11yHint => 'Finaliza la grabación y guarda la carrera';
+
+  @override
   String get runResumeA11yLabel => 'Reanudar carrera';
 
   @override

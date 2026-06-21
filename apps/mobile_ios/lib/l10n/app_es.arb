@@ -328,6 +328,8 @@
   "runDone": "Listo",
   "runDiscardA11yLabel": "Descartar carrera",
   "runDiscardA11yHint": "Descarta la grabación actual sin guardarla",
+  "runStopA11yLabel": "Detener y guardar la carrera",
+  "runStopA11yHint": "Finaliza la grabación y guarda la carrera",
   "runResumeA11yLabel": "Reanudar carrera",
   "runPauseA11yLabel": "Pausar carrera",
   "runResumeA11yHint": "Reanuda la grabación en pausa",

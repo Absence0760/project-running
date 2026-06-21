@@ -328,6 +328,8 @@
   "runDone": "完了",
   "runDiscardA11yLabel": "ランを破棄",
   "runDiscardA11yHint": "現在の記録を保存せずに破棄します",
+  "runStopA11yLabel": "ランを停止して保存",
+  "runStopA11yHint": "記録を終了してランを保存します",
   "runResumeA11yLabel": "ランを再開",
   "runPauseA11yLabel": "ランを一時停止",
   "runResumeA11yHint": "一時停止した記録を再開します",

@@ -2075,6 +2075,18 @@ abstract class AppLocalizations {
   /// **'Throws away the current recording without saving'**
   String get runDiscardA11yHint;
 
+  /// Screen-reader label for the hold-to-stop control on the recording overlay
+  ///
+  /// In en, this message translates to:
+  /// **'Stop and save run'**
+  String get runStopA11yLabel;
+
+  /// Screen-reader hint for the stop-and-save control
+  ///
+  /// In en, this message translates to:
+  /// **'Ends the recording and saves the run'**
+  String get runStopA11yHint;
+
   /// Screen-reader label for the pause/resume control when paused
   ///
   /// In en, this message translates to:

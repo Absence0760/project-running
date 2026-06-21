@@ -328,6 +328,8 @@
   "runDone": "Terminé",
   "runDiscardA11yLabel": "Abandonner la course",
   "runDiscardA11yHint": "Supprime l'enregistrement en cours sans l'enregistrer",
+  "runStopA11yLabel": "Arrêter et enregistrer la course",
+  "runStopA11yHint": "Termine l'enregistrement et enregistre la course",
   "runResumeA11yLabel": "Reprendre la course",
   "runPauseA11yLabel": "Mettre en pause",
   "runResumeA11yHint": "Reprend l'enregistrement en pause",
