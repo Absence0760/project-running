@@ -164,6 +164,17 @@ func (w *Worker) handleStravaEvent(ctx context.Context, job *Job) error {
 
 	info, err := w.Backend.InsertStravaRun(ctx, userID, act)
 	if err != nil {
+		// A concurrent backfill (strava-import EF) can insert the same
+		// activity between our dedupe check and this insert, colliding on the
+		// per-user external_id unique index (23505 → PostgREST 409). That's a
+		// benign duplicate — the activity is imported, just by the other
+		// writer — so ack done rather than flip the job to permanent-failed.
+		var hErr *HTTPError
+		if errors.As(err, &hErr) && hErr.StatusCode == 409 && strings.Contains(hErr.Body, "23505") {
+			w.Log.Info("strava_event: insert raced a concurrent import (23505); treating as already imported",
+				"activity_id", p.ObjectID, "user_id", userID)
+			return nil
+		}
 		return fmt.Errorf("strava_event: insert run: %w", err)
 	}
 
