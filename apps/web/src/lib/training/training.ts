@@ -683,11 +683,15 @@ function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 	// to Wednesday — 72h after the Sunday long run instead of 48h — and
 	// the second to Friday, keeping ~48h between the two hard sessions.
 	// Remaining active days are easy.
-	const rest = 1; // Mon
+	// Monday is the rest day — UNLESS the runner asked to run all 7 days, in
+	// which case there is no rest day (rest = -1, a dow no day matches) and
+	// Monday falls through to an easy run. Both wizards offer up to 7 d/wk; a
+	// hardwired Monday rest silently capped a 7-day plan at 6 active days.
+	const rest = w.daysPerWeek >= 7 ? -1 : 1; // Mon, or none at 7 d/wk
 	const longRun = 0; // Sun (weekday 0)
 	const qualityA = w.masters ? 3 : 2; // Wed for masters, else Tue
 	const qualityB = w.masters ? 5 : 4; // Fri for masters, else Thu
-	const daysUsed = new Set<number>([longRun, rest]);
+	const daysUsed = new Set<number>(rest >= 0 ? [longRun, rest] : [longRun]);
 	// Persona-hunt Intermediate #4: a 3-day plan used to be all
 	// long-run + easy with zero quality work across every phase — i.e.
 	// not a training plan, just a mileage log. A 3-day intermediate

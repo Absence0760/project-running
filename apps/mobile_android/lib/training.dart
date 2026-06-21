@@ -696,7 +696,12 @@ List<GeneratedWorkout> _generateWeek({
   // Same allocation as web: Mon rest, Sun long, Tue qualityA, Thu qualityB.
   // Masters (Older #30) push the first quality day to Wed (72h after the
   // Sunday long run) and the second to Fri, keeping ~48h between hards.
-  const restDow = 1, longDow = 0;
+  // Monday is the rest day — UNLESS the runner asked to run all 7 days, in
+  // which case there is no rest day (restDow = -1, a dow no day matches) and
+  // Monday falls through to an easy run. Both wizards offer up to 7 d/wk; a
+  // hardwired Monday rest silently capped a 7-day plan at 6 active days.
+  final restDow = daysPerWeek >= 7 ? -1 : 1;
+  const longDow = 0;
   final qaDow = masters ? 3 : 2; // Wed for masters, else Tue
   final qbDow = masters ? 5 : 4; // Fri for masters, else Thu
   final workouts = <GeneratedWorkout>[];
@@ -711,7 +716,7 @@ List<GeneratedWorkout> _generateWeek({
   final qualityKm = (quality.a?.targetDistanceM ?? 0) / 1000 +
       (quality.b?.targetDistanceM ?? 0) / 1000;
   final remaining = max(0.0, weeklyKm - longKm - qualityKm);
-  final daysUsed = <int>{longDow, restDow};
+  final daysUsed = restDow >= 0 ? <int>{longDow, restDow} : <int>{longDow};
   // Persona-hunt Intermediate #4: a 3-day plan used to be all
   // long-run + easy with zero quality across every phase. Drop the
   // gate from >=4 to >=3 so 3-day plans get one tempo/interval per

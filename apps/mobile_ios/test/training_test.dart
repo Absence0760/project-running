@@ -367,6 +367,39 @@ void main() {
       expect(active.any((w) => w.kind == WorkoutKind.long), isTrue);
     });
 
+    test('7-day plan runs all 7 days (no hardcoded Monday rest)', () {
+      // Both wizards offer 3–7 days/week. Monday was hardwired as a rest day,
+      // so a runner who picked 7 silently got a 6-day plan — the requested 7th
+      // day vanished. A 7-day plan must have zero rest days; 6 keeps exactly 1.
+      final seven = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceHalf,
+        startDate: DateTime(2026, 5, 3),
+        daysPerWeek: 7,
+        recent5kSec: 22 * 60,
+        weeks: 12,
+      ));
+      for (final week in seven.weeks) {
+        final active =
+            week.workouts.where((w) => w.kind != WorkoutKind.rest).length;
+        final rest =
+            week.workouts.where((w) => w.kind == WorkoutKind.rest).length;
+        expect(active, 7, reason: '7-day week ${week.weekIndex} active=$active');
+        expect(rest, 0, reason: '7-day week ${week.weekIndex} rest=$rest');
+      }
+      final six = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceHalf,
+        startDate: DateTime(2026, 5, 3),
+        daysPerWeek: 6,
+        recent5kSec: 22 * 60,
+        weeks: 12,
+      ));
+      for (final week in six.weeks) {
+        final active =
+            week.workouts.where((w) => w.kind != WorkoutKind.rest).length;
+        expect(active, 6, reason: '6-day week ${week.weekIndex} active=$active');
+      }
+    });
+
     // Persona-hunt Intermediate #4: 3-day plans used to be all
     // long-run + easy with no quality work — basically a mileage
     // log, not a training plan. Pin the post-fix behaviour.
