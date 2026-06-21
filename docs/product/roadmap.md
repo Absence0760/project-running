@@ -382,7 +382,7 @@ Not Phase 4 work — documented so future-us doesn't re-litigate scope when the 
 
 - ~~Exercise database (FK from `gym_sets.exercise_id` instead of free text), with a starter set of common compounds + isolations + cardio.~~ **Shipped web + mobile (2026-06-20, migration `20270222_001`, additive).** A seeded `exercises` catalogue (~43 globals) + owner customs, with a **nullable** `gym_sets.exercise_id` FK *alongside* the existing free-text `exercise_name` (no destructive migration; PR keying unchanged; offline path intact). Composer autocomplete suggests catalogue entries; DSAR exports owner customs only. See [decisions.md § 176](../architecture/decisions.md).
 - Workout templates — saved routines users adopt from a library or build themselves (mirror of training-plan templates).
-- RPE / set-type metadata (warmup / working / dropset / failure).
+- ~~RPE / set-type metadata (warmup / working / dropset / failure).~~ **Shipped web + mobile (2026-06-20, migration `20270224_001`).** RPE was already a column on `gym_sets` (since the Phase 4 foundation `20261204_001`); this added `gym_sets.set_type` as a NOT NULL, default-`working`, CHECK-constrained column reusing the `gym_routine_sets.set_type` vocabulary verbatim (warmup / working / dropset / amrap / failure / backoff). Composer surfaces a per-set type picker (web `GymEditor` select + mobile `gym_compose_sheet` dropdown); detail screens chip non-working roles. DSAR exports ride the existing `gym_sets(*)` wildcard. See [decisions.md § 178](../architecture/decisions.md).
 
 **Gym — heavy (full programming):**
 

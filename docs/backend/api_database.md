@@ -1301,7 +1301,7 @@ These tables ship in the live schema but don't have a full column-by-column bloc
 | Table | Migration | Purpose / column summary |
 |---|---|---|
 | `gym_workouts` | `20261204_001` | Phase-4 gym session header. `id, user_id, title, started_at, duration_s, notes, is_public, external_id, last_modified_at, created_at`. |
-| `gym_sets` | `20261204_001` | One row per logged set, child of `gym_workouts`. `id, workout_id, set_index, exercise_name, reps, weight_kg, rpe` (`duration_s` added later for timed holds — instructor_business.md M2). Weights canonical kg. |
+| `gym_sets` | `20261204_001` | One row per logged set, child of `gym_workouts`. `id, workout_id, set_index, exercise_name, reps, weight_kg, rpe` (`duration_s` added later for timed holds — instructor_business.md M2; `exercise_id` nullable catalogue FK — `20270222_001`; `set_type` NOT NULL default `working`, CHECK over the routine vocabulary warmup/working/dropset/amrap/failure/backoff — `20270224_001`, decisions §178). Weights canonical kg. |
 | `food_log` | `20261204_001` | Phase-4 nutrition entries. `id, user_id, logged_at, item_name, meal_slot ('breakfast'/'lunch'/'dinner'/'snack'), calories, protein_g, carbs_g, fat_g, is_public, external_id, last_modified_at, created_at`. |
 | `gear` | `20260827_001` | Shoes / bikes for wear tracking. `id, owner_id, kind ('shoe'/'bike'), name, brand, model, purchased_at, retired_at, target_distance_m, notes, created_at, updated_at`. |
 | `run_gear` | `20260827_001` | Many-to-many run↔gear link. `run_id, gear_id, created_at`, PK `(run_id, gear_id)`. |
