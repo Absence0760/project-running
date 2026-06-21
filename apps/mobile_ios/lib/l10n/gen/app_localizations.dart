@@ -15180,6 +15180,18 @@ abstract class AppLocalizations {
   /// **'Retry search'**
   String get nutritionSearchRetry;
 
+  /// Source label on a food-search result that came from the Open Food Facts database. A brand name; not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Food Facts'**
+  String get nutritionSourceOff;
+
+  /// Source label on a food-search result that came from USDA FoodData Central. A brand name; not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'USDA'**
+  String get nutritionSourceUsda;
+
   /// Label/tooltip for the camera barcode-scan action in the nutrition log composer.
   ///
   /// In en, this message translates to:

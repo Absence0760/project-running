@@ -11870,6 +11870,14 @@
   "nutritionNoResults": "No matches. Try another term or enter it manually below.",
   "nutritionSearchFailed": "Search failed. Check your connection, then retry or enter it manually below.",
   "nutritionSearchRetry": "Retry search",
+  "nutritionSourceOff": "Open Food Facts",
+  "@nutritionSourceOff": {
+    "description": "Source label on a food-search result that came from the Open Food Facts database. A brand name; not translated."
+  },
+  "nutritionSourceUsda": "USDA",
+  "@nutritionSourceUsda": {
+    "description": "Source label on a food-search result that came from USDA FoodData Central. A brand name; not translated."
+  },
   "nutritionScanBarcode": "Scan barcode",
   "@nutritionScanBarcode": {
     "description": "Label/tooltip for the camera barcode-scan action in the nutrition log composer."
