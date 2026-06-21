@@ -99,12 +99,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
   final LocalMealTemplateStore _templateStore = LocalMealTemplateStore();
   bool _loggingTemplateId = false;
   String? _loggingId;
+  bool _savingMeal = false;
 
   /// Owned offline-first cache for saved recipes (sibling of `_templateStore`).
   /// Where a template logs each item, a recipe logs ONE summed entry.
   final LocalRecipeStore _recipeStore = LocalRecipeStore();
   bool _loggingRecipe = false;
   String? _loggingRecipeId;
+  bool _savingRecipe = false;
 
   /// Today's run + gym active minutes — feeds the hydration goal's
   /// sweat-replacement add (runs/gym without a duration contribute nothing).
@@ -286,6 +288,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
   /// `templateFromEntries` parity helper (default slot derived when the day's
   /// entries agree). The name is collected in an AlertDialog.
   Future<void> _saveAsMeal() async {
+    if (_savingMeal) return;
     final l10n = AppLocalizations.of(context);
     final today = _todayEntries;
     if (today.isEmpty) return;
@@ -316,6 +319,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ),
     );
     if (name == null) return;
+    if (_savingMeal) return;
+    setState(() => _savingMeal = true);
     final draft = templateFromEntries(
       name,
       [
@@ -356,6 +361,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
       if (mounted) {
         showTopBanner(context, l10n.nutritionTemplateSaveFailed(e.toString()));
       }
+    } finally {
+      if (mounted) setState(() => _savingMeal = false);
     }
   }
 
@@ -502,6 +509,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
   /// Promote today's logged entries into a named recipe. The name + servings
   /// are collected in an AlertDialog; the ingredients come from `recipeFromEntries`.
   Future<void> _saveAsRecipe() async {
+    if (_savingRecipe) return;
     final l10n = AppLocalizations.of(context);
     final today = _todayEntries;
     if (today.isEmpty) return;
@@ -552,6 +560,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ),
     );
     if (result == null) return;
+    if (_savingRecipe) return;
+    setState(() => _savingRecipe = true);
     final draft = recipeFromEntries(
       result.name,
       [
@@ -592,6 +602,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
       if (mounted) {
         showTopBanner(context, l10n.nutritionRecipeSaveFailed(e.toString()));
       }
+    } finally {
+      if (mounted) setState(() => _savingRecipe = false);
     }
   }
 
@@ -755,13 +767,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
             IconButton(
               tooltip: l10n.nutritionSaveAsMeal,
               icon: const Icon(Icons.bookmark_add_outlined),
-              onPressed: _refreshing ? null : _saveAsMeal,
+              onPressed: (_refreshing || _savingMeal) ? null : _saveAsMeal,
             ),
           if (today.isNotEmpty)
             IconButton(
               tooltip: l10n.nutritionSaveAsRecipe,
               icon: const Icon(Icons.menu_book_outlined),
-              onPressed: _refreshing ? null : _saveAsRecipe,
+              onPressed: (_refreshing || _savingRecipe) ? null : _saveAsRecipe,
             ),
           IconButton(
             tooltip: l10n.nutritionLogFood,
