@@ -7,7 +7,7 @@
 /// offline-optimistic client estimate computed from local stores can't drift
 /// from the server board.
 
-export type ChallengeMetric = 'distance' | 'duration' | 'activity_count' | 'streak_days';
+export type ChallengeMetric = 'distance' | 'duration' | 'vert' | 'activity_count' | 'streak_days';
 
 /** Fraction of the goal reached, clamped to 0..1. Null goal (pure-ranking
  * board) → null: there is no bar to fill. */
@@ -57,7 +57,12 @@ export function progressParts(
  * of streak_days is resolved by the caller over a day-set, not per activity).
  * Returns 0 when the activity type doesn't match the filter. */
 export function metricFromActivity(
-	summary: { distance_m?: number | string | null; duration_s?: number | string | null; activity_type?: string | null },
+	summary: {
+		distance_m?: number | string | null;
+		duration_s?: number | string | null;
+		elevation_gain_m?: number | string | null;
+		activity_type?: string | null;
+	},
 	metric: ChallengeMetric,
 	activityTypeFilter: string | null,
 ): number {
@@ -69,6 +74,8 @@ export function metricFromActivity(
 			return numberOf(summary.distance_m);
 		case 'duration':
 			return numberOf(summary.duration_s);
+		case 'vert':
+			return numberOf(summary.elevation_gain_m);
 		case 'activity_count':
 			return 1;
 		case 'streak_days':

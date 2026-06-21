@@ -3372,6 +3372,7 @@ export type Database = {
           created_at: string | null
           distance_m: number
           duration_s: number
+          elevation_gain_m: number | null
           event_id: string | null
           external_id: string | null
           hr_series_url: string | null
@@ -3392,6 +3393,7 @@ export type Database = {
           created_at?: string | null
           distance_m: number
           duration_s: number
+          elevation_gain_m?: number | null
           event_id?: string | null
           external_id?: string | null
           hr_series_url?: string | null
@@ -3412,6 +3414,7 @@ export type Database = {
           created_at?: string | null
           distance_m?: number
           duration_s?: number
+          elevation_gain_m?: number | null
           event_id?: string | null
           external_id?: string | null
           hr_series_url?: string | null
@@ -4218,6 +4221,7 @@ export type Database = {
           created_at: string | null
           distance_m: number | null
           duration_s: number | null
+          elevation_gain_m: number | null
           event_id: string | null
           has_track: boolean | null
           id: string | null
@@ -4235,6 +4239,7 @@ export type Database = {
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
+          elevation_gain_m?: number | null
           event_id?: never
           has_track?: never
           id?: string | null
@@ -4252,6 +4257,7 @@ export type Database = {
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
+          elevation_gain_m?: number | null
           event_id?: never
           has_track?: never
           id?: string | null

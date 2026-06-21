@@ -30,6 +30,8 @@
 				return m('challenges.metricDistance');
 			case 'duration':
 				return m('challenges.metricDuration');
+			case 'vert':
+				return m('challenges.metricVert');
 			case 'activity_count':
 				return m('challenges.metricActivityCount');
 			case 'streak_days':

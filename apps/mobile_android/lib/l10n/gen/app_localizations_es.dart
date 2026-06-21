@@ -10116,6 +10116,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get challengesMetricDuration => 'Tiempo';
 
   @override
+  String get challengesMetricVert => 'Desnivel';
+
+  @override
   String get challengesMetricActivityCount => 'Actividades';
 
   @override

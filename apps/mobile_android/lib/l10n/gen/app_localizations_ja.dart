@@ -9630,6 +9630,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get challengesMetricDuration => '時間';
 
   @override
+  String get challengesMetricVert => '獲得標高';
+
+  @override
   String get challengesMetricActivityCount => 'アクティビティ数';
 
   @override

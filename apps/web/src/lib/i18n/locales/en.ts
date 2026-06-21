@@ -4270,6 +4270,7 @@ export const en = {
 	"challenges.endLabel": "Ends",
 	"challenges.metricDistance": "Distance",
 	"challenges.metricDuration": "Time",
+	"challenges.metricVert": "Elevation",
 	"challenges.metricActivityCount": "Activities",
 	"challenges.metricStreak": "Active days",
 	"challenges.scopeIndividual": "Individual",

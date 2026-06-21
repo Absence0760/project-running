@@ -29,6 +29,7 @@ create table runs (
   activity_type text not null default 'run' -- run|walk|hike|cycle|stroller (CHECK). Promoted from metadata in 20261207_001 (F3)
                 check (activity_type in ('run','walk','hike','cycle','stroller')),
   is_dnf        boolean not null default false, -- did-not-finish; PR engine excludes these. Promoted from metadata in 20261207_001 (F3)
+  elevation_gain_m numeric,                 -- total ascent (metres). Nullable; backfilled from metadata.elevation_m in 20270302_001 (ADR §186), summed by the vert challenge metric, projected into activities.summary + public_runs. Writers populate both this + metadata.elevation_m.
   external_id   text unique,                -- deduplication key
   metadata      jsonb,                      -- source-specific extra fields (avg_bpm, steps, elevation_m, provider ids, …)
   track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz

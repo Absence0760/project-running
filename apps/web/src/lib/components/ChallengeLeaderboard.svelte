@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
-	import { formatDistance } from '$lib/format/units.svelte';
+	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
 	import { formatDuration } from '$lib/format/time';
 	import type { ChallengeLeaderboardRow, ChallengeMetric, ChallengeScope } from '$lib/types';
 
@@ -26,6 +26,8 @@
 				return formatDistance(v);
 			case 'duration':
 				return formatDuration(Math.round(v));
+			case 'vert':
+				return formatElevation(v);
 			case 'streak_days':
 				return m('challenges.unitDays', { n: Math.round(v) });
 			case 'activity_count':

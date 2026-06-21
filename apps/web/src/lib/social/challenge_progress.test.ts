@@ -50,6 +50,12 @@ test('metricFromActivity duration reads duration_s', () => {
 	assert.equal(metricFromActivity({ duration_s: 1800 }, 'duration', null), 1800);
 });
 
+test('metricFromActivity vert reads elevation_gain_m (number or string, missing → 0)', () => {
+	assert.equal(metricFromActivity({ elevation_gain_m: 640 }, 'vert', null), 640);
+	assert.equal(metricFromActivity({ elevation_gain_m: '640' }, 'vert', null), 640);
+	assert.equal(metricFromActivity({}, 'vert', null), 0);
+});
+
 test('metricFromActivity count + streak each contribute 1', () => {
 	assert.equal(metricFromActivity({}, 'activity_count', null), 1);
 	assert.equal(metricFromActivity({}, 'streak_days', null), 1);

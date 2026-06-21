@@ -10112,6 +10112,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get challengesMetricDuration => 'Tempo';
 
   @override
+  String get challengesMetricVert => 'Elevação';
+
+  @override
   String get challengesMetricActivityCount => 'Atividades';
 
   @override
@@ -20757,6 +20760,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesMetricDuration => 'Tempo';
+
+  @override
+  String get challengesMetricVert => 'Elevação';
 
   @override
   String get challengesMetricActivityCount => 'Atividades';

@@ -2898,6 +2898,7 @@
   "challengesDelete": "削除",
   "challengesMetricDistance": "距離",
   "challengesMetricDuration": "時間",
+  "challengesMetricVert": "獲得標高",
   "challengesMetricActivityCount": "アクティビティ数",
   "challengesMetricStreak": "活動日数",
   "challengesGoalProgress": "{goal} 中 {value}",
