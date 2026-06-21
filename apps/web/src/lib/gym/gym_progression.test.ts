@@ -192,6 +192,55 @@ test('null weights (bodyweight) -> reps-only suggestion, never a weight', () => 
 	assert.equal(out.reason, 'increase_reps');
 });
 
+test('linear bodyweight success raises the rep target, never re-prescribes the same count', () => {
+	// Regression: a maxed bodyweight linear set used to return the UNCHANGED reps
+	// while labelling it "increase_reps" — telling the user to do more reps while
+	// prescribing the identical count (the bug double_progression / five_by_five
+	// already fixed for their bodyweight paths). Single rep target -> bump it.
+	const single = nextPrescription(
+		input({
+			scheme: 'linear',
+			lastSets: [s(10, null), s(10, null)],
+			targetRepsMin: 10,
+			targetRepsMax: null,
+		}),
+	);
+	assert.equal(single.suggestedWeightKg, null);
+	assert.equal(single.reason, 'increase_reps');
+	assert.equal(single.suggestedRepsMin, 11);
+	assert.equal(single.suggestedRepsMax, null);
+
+	// Rep range -> raise the top of the range, keep the floor.
+	const range = nextPrescription(
+		input({
+			scheme: 'linear',
+			lastSets: [s(8, null), s(8, null)],
+			targetRepsMin: 6,
+			targetRepsMax: 8,
+		}),
+	);
+	assert.equal(range.suggestedWeightKg, null);
+	assert.equal(range.reason, 'increase_reps');
+	assert.equal(range.suggestedRepsMin, 6);
+	assert.equal(range.suggestedRepsMax, 9);
+});
+
+test('rpe_autoreg bodyweight below target raises the rep target, never re-prescribes the same count', () => {
+	const out = nextPrescription(
+		input({
+			scheme: 'rpe_autoreg',
+			lastSets: [s(8, null, 6), s(8, null, 6.5)],
+			targetRepsMin: 8,
+			targetRepsMax: null,
+			params: { targetRpe: 8 },
+		}),
+	);
+	assert.equal(out.suggestedWeightKg, null);
+	assert.equal(out.reason, 'increase_reps');
+	assert.equal(out.suggestedRepsMin, 9);
+	assert.equal(out.suggestedRepsMax, null);
+});
+
 test('double_progression bodyweight at top of range raises the rep ceiling, never reduces it', () => {
 	// Regression: a maxed bodyweight range used to collapse to repsMin (12 → 8)
 	// while reporting "increase_reps" — a reduction mislabelled as progress. With

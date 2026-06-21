@@ -128,13 +128,25 @@ ProgressionSuggestion nextPrescription(ProgressionInput input) {
         final allHit =
             completed.every((s) => (_numericOrNull(s.reps) ?? 0) >= topReps);
         if (allHit) {
+          if (weight != null) {
+            return ProgressionSuggestion(
+              suggestedWeightKg: _safeAdd(weight, step),
+              suggestedRepsMin: repsMin,
+              suggestedRepsMax: repsMax,
+              reason: ProgressionReason.increaseWeight,
+            );
+          }
+          // Bodyweight: no load to add, so genuinely progress by raising the rep
+          // target — returning the unchanged reps labelled "increase_reps" told
+          // the user to do more while prescribing the same count (the same bug
+          // the doubleProgression / fiveByFive bodyweight paths fixed). Raise the
+          // top of the range, or the single value when there's no range.
           return ProgressionSuggestion(
-            suggestedWeightKg: weight != null ? _safeAdd(weight, step) : null,
-            suggestedRepsMin: repsMin,
-            suggestedRepsMax: repsMax,
-            reason: weight != null
-                ? ProgressionReason.increaseWeight
-                : ProgressionReason.increaseReps,
+            suggestedWeightKg: null,
+            suggestedRepsMin:
+                repsMin == null ? null : repsMin + (repsMax == null ? 1 : 0),
+            suggestedRepsMax: repsMax == null ? null : repsMax + 1,
+            reason: ProgressionReason.increaseReps,
           );
         }
         return ProgressionSuggestion(
@@ -273,13 +285,22 @@ ProgressionSuggestion nextPrescription(ProgressionInput input) {
           );
         }
         if (achieved < targetRpe) {
+          if (weight != null) {
+            return ProgressionSuggestion(
+              suggestedWeightKg: _safeAdd(weight, step),
+              suggestedRepsMin: repsMin,
+              suggestedRepsMax: repsMax,
+              reason: ProgressionReason.increaseWeight,
+            );
+          }
+          // Bodyweight: no load to add — raise the rep target rather than
+          // re-prescribing the same count under an "increase_reps" label.
           return ProgressionSuggestion(
-            suggestedWeightKg: weight != null ? _safeAdd(weight, step) : null,
-            suggestedRepsMin: repsMin,
-            suggestedRepsMax: repsMax,
-            reason: weight != null
-                ? ProgressionReason.increaseWeight
-                : ProgressionReason.increaseReps,
+            suggestedWeightKg: null,
+            suggestedRepsMin:
+                repsMin == null ? null : repsMin + (repsMax == null ? 1 : 0),
+            suggestedRepsMax: repsMax == null ? null : repsMax + 1,
+            reason: ProgressionReason.increaseReps,
           );
         }
         return ProgressionSuggestion(
