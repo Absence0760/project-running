@@ -2804,6 +2804,10 @@
   "@runDetailMatchFailed": {
     "description": "Map-match status pill: snap failed, raw track shown instead"
   },
+  "runDetailMatchOffline": "Offline — showing raw track, will retry",
+  "@runDetailMatchOffline": {
+    "description": "Map-match status pill: backend unreachable, raw track shown and matching retries on reconnect"
+  },
   "runDetailMatchMatched": "Snapped",
   "@runDetailMatchMatched": {
     "description": "Map-match status pill: track was snapped to roads"

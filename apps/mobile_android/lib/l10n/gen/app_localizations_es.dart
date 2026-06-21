@@ -2084,6 +2084,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ajuste fallido — mostrando el trazado sin procesar';
 
   @override
+  String get runDetailMatchOffline =>
+      'Sin conexión — mostrando el trazado sin procesar, se reintentará';
+
+  @override
   String get runDetailMatchMatched => 'Ajustada';
 
   @override

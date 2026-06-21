@@ -1986,6 +1986,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailMatchFailed => 'スナップに失敗 — 生のトラックを表示中';
 
   @override
+  String get runDetailMatchOffline => 'オフライン — 生のトラックを表示中、再接続時に再試行します';
+
+  @override
   String get runDetailMatchMatched => 'スナップ済み';
 
   @override

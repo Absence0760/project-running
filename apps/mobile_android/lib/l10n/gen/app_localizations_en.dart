@@ -2064,6 +2064,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailMatchFailed => 'Snap failed — showing raw track';
 
   @override
+  String get runDetailMatchOffline => 'Offline — showing raw track, will retry';
+
+  @override
   String get runDetailMatchMatched => 'Snapped';
 
   @override

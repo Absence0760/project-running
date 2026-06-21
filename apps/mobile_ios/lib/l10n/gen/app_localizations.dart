@@ -3581,6 +3581,12 @@ abstract class AppLocalizations {
   /// **'Snap failed — showing raw track'**
   String get runDetailMatchFailed;
 
+  /// Map-match status pill: backend unreachable, raw track shown and matching retries on reconnect
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing raw track, will retry'**
+  String get runDetailMatchOffline;
+
   /// Map-match status pill: track was snapped to roads
   ///
   /// In en, this message translates to:

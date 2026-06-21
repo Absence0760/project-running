@@ -54,5 +54,21 @@ void main() {
         isTrue,
       );
     });
+
+    test('falls back to raw when a matched row could not download its gz '
+        '(offline)', () {
+      const offlineMatched = RunMatchInfo(
+        status: MatchStatus.matched,
+        track: null,
+        trackUnreachable: true,
+      );
+      expect(
+        identical(
+          displayedRunTrack(rawTrack, offlineMatched, showRaw: false),
+          rawTrack,
+        ),
+        isTrue,
+      );
+    });
   });
 }

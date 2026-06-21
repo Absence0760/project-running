@@ -579,6 +579,7 @@
   "runDetailMatchPending": "Ajustando a las calles…",
   "runDetailMatchSkipped": "Sin ajustar (muy pocos puntos)",
   "runDetailMatchFailed": "Ajuste fallido — mostrando el trazado sin procesar",
+  "runDetailMatchOffline": "Sin conexión — mostrando el trazado sin procesar, se reintentará",
   "runDetailMatchMatched": "Ajustada",
   "runDetailRematchQueueing": "Encolando…",
   "runDetailRematch": "Reajustar",

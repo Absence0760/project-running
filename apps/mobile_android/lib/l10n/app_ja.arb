@@ -579,6 +579,7 @@
   "runDetailMatchPending": "道路にスナップ中…",
   "runDetailMatchSkipped": "スナップなし（ポイントが少なすぎます）",
   "runDetailMatchFailed": "スナップに失敗 — 生のトラックを表示中",
+  "runDetailMatchOffline": "オフライン — 生のトラックを表示中、再接続時に再試行します",
   "runDetailMatchMatched": "スナップ済み",
   "runDetailRematchQueueing": "キューに追加中…",
   "runDetailRematch": "再マッチ",
