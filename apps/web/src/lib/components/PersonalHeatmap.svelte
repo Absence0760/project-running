@@ -40,6 +40,7 @@
 	let trackCount = $state(0);
 	let totalWithTracks = $state(0);
 	let empty = $state(false);
+	let errored = $state(false);
 	// MapTiler logs the requester IP per tile fetch, so we never
 	// instantiate maplibregl before the user has accepted the cookie
 	// banner — including on this authenticated surface (audit/gdpr May
@@ -77,6 +78,8 @@
 
 	async function build() {
 		loading = true;
+		empty = false;
+		errored = false;
 		try {
 			const runs = await fetchRuns();
 			const paths = runs
@@ -116,7 +119,11 @@
 			}
 		} catch (e) {
 			console.error('personal heatmap build failed', e);
-			empty = trackCount === 0;
+			// A thrown build means we never learned whether the runner has
+			// mapped runs — surface a retryable error, NOT the "no runs yet"
+			// empty state (which would tell an active runner they've never
+			// run anywhere). If some tracks already rendered, keep them.
+			if (trackCount === 0) errored = true;
 		} finally {
 			loading = false;
 		}
@@ -313,6 +320,15 @@
 			{:else}
 				{m('personalHeatmap.loading')}
 			{/if}
+		</div>
+	{:else if errored}
+		<div class="heat-empty" data-testid="personal-heatmap-error">
+			<span class="material-symbols">cloud_off</span>
+			<strong>{m('personalHeatmap.errorTitle')}</strong>
+			<p>{m('personalHeatmap.errorBody')}</p>
+			<button type="button" class="btn btn-primary" onclick={() => void build()}>
+				{m('personalHeatmap.retry')}
+			</button>
 		</div>
 	{:else if empty}
 		<div class="heat-empty" data-testid="personal-heatmap-empty">
