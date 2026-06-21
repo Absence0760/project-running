@@ -130,6 +130,9 @@
 	let showResultPicker = $state(false);
 	let runOptions = $state<RecentRunOption[]>([]);
 	let submitting = $state(false);
+	// In-flight key for the per-row organiser/claim actions (approve / unverify /
+	// claim decision / "this is me"), so a double-tap can't fire the write twice.
+	let resultActionBusy = $state<string | null>(null);
 	let raceSession = $state<RaceSessionRow | null>(null);
 	let raceBusy = $state(false);
 	let nowTick = $state(Date.now());
@@ -444,22 +447,30 @@
 	let pendingClaims = $state<EventResultClaimWithUser[]>([]);
 
 	async function claimResult(resultId: string) {
+		if (resultActionBusy) return;
+		resultActionBusy = `claim:${resultId}`;
 		try {
 			await requestEventResultClaim(resultId);
 			showToast(m('clubEvent.claimSubmitted'), 'success');
 			await reloadInstance();
 		} catch (err) {
 			showToast(err instanceof Error ? err.message : m('clubEvent.claimSubmitFailed'), 'error');
+		} finally {
+			resultActionBusy = null;
 		}
 	}
 
 	async function decideClaim(claimId: string, approve: boolean) {
+		if (resultActionBusy) return;
+		resultActionBusy = `decide:${claimId}`;
 		try {
 			await decideEventResultClaim(claimId, approve);
 			showToast(approve ? m('clubEvent.claimApproved') : m('clubEvent.claimRejected'), 'success');
 			await reloadInstance();
 		} catch (err) {
 			showToast(err instanceof Error ? err.message : m('clubEvent.claimUpdateFailed'), 'error');
+		} finally {
+			resultActionBusy = null;
 		}
 	}
 
@@ -586,12 +597,15 @@
 	}
 
 	async function handleApprove(userId: string, approve: boolean) {
-		if (!event || !activeInstance) return;
+		if (!event || !activeInstance || resultActionBusy) return;
+		resultActionBusy = `approve:${userId}`;
 		try {
 			await approveEventResult(event.id, activeInstance, userId, approve);
 			await reloadInstance();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : m('clubEvent.approvalFailed');
+		} finally {
+			resultActionBusy = null;
 		}
 	}
 
@@ -599,11 +613,15 @@
 	// user-id-keyed approve RPC, so approve them by row id instead (persona
 	// round-5 event-organizer).
 	async function handleApproveById(resultId: string, approve: boolean) {
+		if (resultActionBusy) return;
+		resultActionBusy = `approveById:${resultId}`;
 		try {
 			await approveEventResultById(resultId, approve);
 			await reloadInstance();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : m('clubEvent.approvalFailed');
+		} finally {
+			resultActionBusy = null;
 		}
 	}
 
@@ -1796,19 +1814,19 @@
 								</button>
 							{/if}
 							{#if isRaceDirector && r.user_id !== null && !r.organiser_approved}
-								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id!, true)}>{m('clubEvent.approve')}</button>
+								<button type="button" class="btn-link approve" disabled={resultActionBusy !== null} onclick={() => handleApprove(r.user_id!, true)}>{m('clubEvent.approve')}</button>
 							{:else if isRaceDirector && r.user_id !== null && r.organiser_approved && r.user_id !== myUserId}
-								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id!, false)}>{m('clubEvent.unverify')}</button>
+								<button type="button" class="btn-link reject" disabled={resultActionBusy !== null} onclick={() => handleApprove(r.user_id!, false)}>{m('clubEvent.unverify')}</button>
 							{:else if isRaceDirector && r.user_id === null && !r.organiser_approved}
-								<button type="button" class="btn-link approve" onclick={() => handleApproveById(r.id, true)}>{m('clubEvent.approve')}</button>
+								<button type="button" class="btn-link approve" disabled={resultActionBusy !== null} onclick={() => handleApproveById(r.id, true)}>{m('clubEvent.approve')}</button>
 							{:else if isRaceDirector && r.user_id === null && r.organiser_approved}
-								<button type="button" class="btn-link reject" onclick={() => handleApproveById(r.id, false)}>{m('clubEvent.unverify')}</button>
+								<button type="button" class="btn-link reject" disabled={resultActionBusy !== null} onclick={() => handleApproveById(r.id, false)}>{m('clubEvent.unverify')}</button>
 							{/if}
 							{#if myUserId && r.user_id === null && !hasMyResult}
 								{#if myClaims.get(r.id) === 'pending'}
 									<span class="claim-pending">{m('clubEvent.claimPending')}</span>
 								{:else}
-									<button type="button" class="btn-link claim" onclick={() => claimResult(r.id)}>{m('clubEvent.thisIsMe')}</button>
+									<button type="button" class="btn-link claim" disabled={resultActionBusy !== null} onclick={() => claimResult(r.id)}>{m('clubEvent.thisIsMe')}</button>
 								{/if}
 							{/if}
 						</li>
@@ -1827,8 +1845,8 @@
 									<strong>{c.claimant_name ?? m('clubEvent.runnerFallback')}</strong> {m('clubEvent.claimsBib', { bib: c.bib ?? '—' })}
 									{#if c.finisher_name}<span class="muted">({c.finisher_name})</span>{/if}
 								</span>
-								<button type="button" class="btn-link approve" onclick={() => decideClaim(c.id, true)}>{m('clubEvent.approve')}</button>
-								<button type="button" class="btn-link reject" onclick={() => decideClaim(c.id, false)}>{m('clubEvent.reject')}</button>
+								<button type="button" class="btn-link approve" disabled={resultActionBusy !== null} onclick={() => decideClaim(c.id, true)}>{m('clubEvent.approve')}</button>
+								<button type="button" class="btn-link reject" disabled={resultActionBusy !== null} onclick={() => decideClaim(c.id, false)}>{m('clubEvent.reject')}</button>
 							</li>
 						{/each}
 					</ul>

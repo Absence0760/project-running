@@ -142,4 +142,42 @@ test.describe('/clubs/[slug]/events/[id] — bib-only approval', () => {
 		expect(data?.organiser_approved).toBe(true);
 		expect(data?.organiser_approved_by).toBe(USER_A.id);
 	});
+
+	// Double-submit guard: the Approve button must disable itself while the
+	// approval write is in flight so a rapid double-tap can't fire the PATCH
+	// twice (it had no inflight gate, unlike the RSVP / attendance buttons).
+	test('Approve button disables while the write is in flight', async ({ page }) => {
+		// Hold the bib-only approval PATCH open so we can observe the disabled
+		// state before it resolves.
+		let release: () => void = () => {};
+		const gate = new Promise<void>((r) => (release = r));
+		await page.route('**/rest/v1/event_results**', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				await gate;
+			}
+			await route.continue();
+		});
+
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByText('Alice Anon')).toBeVisible({ timeout: 10_000 });
+
+		const row = page.locator('li.result', { hasText: 'Alice Anon' });
+		const approve = row.getByRole('button', { name: 'Approve' });
+		await approve.click();
+
+		// While the PATCH is gated, the button is disabled — a second tap is a no-op.
+		await expect(approve).toBeDisabled();
+
+		release();
+		await expect(row.getByText('PENDING')).toHaveCount(0, { timeout: 10_000 });
+
+		// Exactly one approval landed (no double write).
+		const { data } = await getAdminClient()
+			.from('event_results')
+			.select('organiser_approved, organiser_approved_by')
+			.eq('id', resultId)
+			.single();
+		expect(data?.organiser_approved).toBe(true);
+		expect(data?.organiser_approved_by).toBe(USER_A.id);
+	});
 });
