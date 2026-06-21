@@ -310,6 +310,7 @@ parkrun can change their HTML structure without notice. This scraper will silent
 - Store the raw HTML in Supabase Storage on each import (for debugging)
 - Alert if imported count drops to zero unexpectedly
 - Build graceful degradation into the UI — show "parkrun sync unavailable" rather than an error
+- The importer skips any scraped row that doesn't yield BOTH a valid finish time and a valid calendar date (`isUsableParkrunResult` in `parkrun-import/lib.ts`). This drops sub-header / footer rows and `--:--` assisted/unknown times, so one junk row can neither fail the whole batch on an unparseable `started_at` nor import a corrupt 5000 m / 0 s run.
 
 ### Finding athlete numbers
 
