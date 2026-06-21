@@ -64,6 +64,24 @@ void main() {
     expect(cells.first.weight, 1);
   });
 
+  test(
+      'quantises a negative coordinate on a grid half-boundary toward +Infinity (cross-platform parity)',
+      () {
+    // lng/lat = -0.5 * gridDeg sits exactly on a grid half-boundary. The
+    // quantiser must round half toward +Infinity (gx = 0 → cell centre 0),
+    // matching JS Math.round on the web twin — NOT Dart's raw .round() (which
+    // rounds half away from zero to gx = -1). A drift here shifts the cell by
+    // one grid step (~33 m) for any Americas / west-of-Greenwich track and the
+    // web + mobile heatmaps disagree.
+    const g = kDefaultGridDeg;
+    final cells = buildHeatCells([
+      [const HeatLatLng(-0.5 * g, -0.5 * g)],
+    ]);
+    expect(cells.length, 1);
+    expect(cells.first.lat, 0);
+    expect(cells.first.lng, 0);
+  });
+
   test('empty / all-invalid input yields no cells and null bounds', () {
     expect(buildHeatCells([]), isEmpty);
     expect(buildHeatCells([[]]), isEmpty);

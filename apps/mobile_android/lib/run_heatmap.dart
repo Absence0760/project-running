@@ -53,8 +53,13 @@ List<HeatCell> buildHeatCells(
   for (final track in tracks) {
     for (final p in track) {
       if (!_isFinitePoint(p)) continue;
-      final gx = (p.lng / gridDeg).round();
-      final gy = (p.lat / gridDeg).round();
+      // Round-half-toward-+Infinity to match JS `Math.round` exactly: Dart's
+      // `.round()` rounds half AWAY from zero, so a negative coordinate landing
+      // on a grid half-boundary (the Americas / west of Greenwich) would
+      // quantise to a different cell than the web twin. `(x+0.5).floor()`
+      // reproduces `Math.round` for every sign.
+      final gx = (p.lng / gridDeg + 0.5).floor();
+      final gy = (p.lat / gridDeg + 0.5).floor();
       final key = '$gx:$gy';
       counts[key] = (counts[key] ?? 0) + 1;
     }
