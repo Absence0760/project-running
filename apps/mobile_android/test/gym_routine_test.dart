@@ -99,6 +99,18 @@ void main() {
     expect(blocks[0].sets[0].rpe, '8');
   });
 
+  test('prefillFromRoutine: whole-number RPE drops the trailing .0, half-step keeps it', () {
+    final routine = PlannedRoutine(title: 'P', exercises: [
+      PlannedExercise(exerciseName: 'Deadlift', position: 0, sets: [
+        PlannedSet(setIndex: 0, targetRepsMin: 5, targetWeightKg: 100, targetRpe: 8.0),
+        PlannedSet(setIndex: 1, targetRepsMin: 5, targetWeightKg: 100, targetRpe: 7.5),
+      ]),
+    ]);
+    final blocks = prefillFromRoutine(routine);
+    expect(blocks[0].sets[0].rpe, '8');
+    expect(blocks[0].sets[1].rpe, '7.5');
+  });
+
   test('prefillFromRoutine: rep range prefills the min', () {
     final routine = PlannedRoutine(title: 'P', exercises: [
       PlannedExercise(exerciseName: 'DB Press', position: 0, sets: [
