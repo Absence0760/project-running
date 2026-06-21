@@ -2898,6 +2898,7 @@
   "challengesDelete": "Eliminar",
   "challengesMetricDistance": "Distância",
   "challengesMetricDuration": "Tempo",
+  "challengesMetricVert": "Elevação",
   "challengesMetricActivityCount": "Atividades",
   "challengesMetricStreak": "Dias ativos",
   "challengesGoalProgress": "{value} de {goal}",

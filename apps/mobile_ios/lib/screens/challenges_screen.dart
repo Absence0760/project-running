@@ -8,6 +8,8 @@ String challengeMetricLabel(AppLocalizations l10n, String metric) {
   switch (metric) {
     case 'duration':
       return l10n.challengesMetricDuration;
+    case 'vert':
+      return l10n.challengesMetricVert;
     case 'activity_count':
       return l10n.challengesMetricActivityCount;
     case 'streak_days':

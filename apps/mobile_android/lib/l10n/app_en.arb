@@ -13122,6 +13122,10 @@
   "@challengesMetricDuration": {
     "description": "Duration metric label"
   },
+  "challengesMetricVert": "Elevation",
+  "@challengesMetricVert": {
+    "description": "Elevation-gain metric label"
+  },
   "challengesMetricActivityCount": "Activities",
   "@challengesMetricActivityCount": {
     "description": "Activity-count metric label"

@@ -10134,6 +10134,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get challengesMetricDuration => 'Temps';
 
   @override
+  String get challengesMetricVert => 'Dénivelé';
+
+  @override
   String get challengesMetricActivityCount => 'Activités';
 
   @override

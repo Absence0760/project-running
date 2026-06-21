@@ -13,6 +13,8 @@ String challengeValueLabel(AppLocalizations l10n, String metric, num value) {
       final h = total ~/ 3600;
       final m = (total % 3600) ~/ 60;
       return h > 0 ? '${h}h ${m}m' : '${m}m';
+    case 'vert':
+      return formatElevationForPref(value.toDouble());
     case 'streak_days':
       return l10n.challengesUnitDays(value.round());
     case 'activity_count':

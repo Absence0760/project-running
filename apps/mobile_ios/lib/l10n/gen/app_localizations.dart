@@ -16854,6 +16854,12 @@ abstract class AppLocalizations {
   /// **'Time'**
   String get challengesMetricDuration;
 
+  /// Elevation-gain metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation'**
+  String get challengesMetricVert;
+
   /// Activity-count metric label
   ///
   /// In en, this message translates to:
