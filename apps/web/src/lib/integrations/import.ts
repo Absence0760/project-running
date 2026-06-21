@@ -311,6 +311,18 @@ function parseGeoJson(text: string): ImportedRoute[] {
 		const out: TrackPoint[] = [];
 		for (const c of coords) {
 			if (!Array.isArray(c) || c.length < 2) continue;
+			// Validate lng/lat are finite numbers before storing. A
+			// non-conformant export (string or null coordinates) otherwise
+			// wrote a string into a TrackPoint's lng/lat, poisoning the
+			// haversine sum into NaN distance. Skip the point instead,
+			// matching the GPX `validLatLon` discipline and the Dart twin.
+			if (
+				typeof c[0] !== 'number' ||
+				typeof c[1] !== 'number' ||
+				!Number.isFinite(c[0]) ||
+				!Number.isFinite(c[1])
+			)
+				continue;
 			const ele = typeof c[2] === 'number' && Number.isFinite(c[2]) ? c[2] : undefined;
 			out.push({ lng: c[0], lat: c[1], ele });
 		}
