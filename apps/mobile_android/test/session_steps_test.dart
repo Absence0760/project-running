@@ -280,4 +280,32 @@ void main() {
     expect(out.adherencePct, 0.5);
     expect(out.verdict, SessionVerdict.partial);
   });
+
+  test('adherence: more completed results than steps clamps to 1.0', () {
+    final steps = [_step(itemId: 'a'), _step(itemId: 'b')];
+    final results = [
+      _result(itemId: 'a'),
+      _result(itemId: 'a'),
+      _result(itemId: 'b'),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.totalSteps, 2);
+    expect(out.completedSteps, 2);
+    expect(out.adherencePct, 1.0);
+    expect(out.verdict, SessionVerdict.completed);
+  });
+
+  test('adherence: results with itemIds not matching any step are ignored', () {
+    final steps = [_step(itemId: 'a'), _step(itemId: 'b')];
+    final results = [
+      _result(itemId: 'a'),
+      _result(itemId: 'ghost'),
+      _result(itemId: 'phantom'),
+    ];
+    final out = computeSessionAdherence(steps, results);
+    expect(out.totalSteps, 2);
+    expect(out.completedSteps, 1);
+    expect(out.adherencePct, 0.5);
+    expect(out.verdict, SessionVerdict.partial);
+  });
 }
