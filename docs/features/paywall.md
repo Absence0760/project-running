@@ -28,7 +28,12 @@ What the Pro tier changes:
   shape at the higher ceiling. The production AWS Lambda hardcodes
   `bypassPaywallEnabled: false`, so a caller that POSTs directly to
   `/api/coach` from devtools still gets a 429 once they exceed their
-  tier's cap with `{ error: 'daily_limit', tier, limit }`.
+  tier's cap with `{ error: 'daily_limit', tier, limit }`. The gate is
+  fail-closed: the `increment_coach_usage` RPC result is resolved through
+  the pure `resolveUsageCount(data, error)` helper in `coach/limits.ts`,
+  which denies (handler returns a transient 503) on an RPC error or a
+  non-finite/negative count rather than defaulting the count to 0 — so an
+  unenforceable cap never streams an unmetered provider call.
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
   longer / more thorough answers, and up to 75 runs of context per

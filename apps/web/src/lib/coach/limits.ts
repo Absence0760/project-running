@@ -57,6 +57,26 @@ export function validateRunsLimit(
 	return { ok: true };
 }
 
+/// Resolve the `increment_coach_usage` RPC result into the post-
+/// increment count, fail-CLOSED. The daily cap is the entire paywall
+/// for the coach, so an RPC error or a non-numeric `data` must DENY
+/// (the handler returns 503) rather than be treated as `usedToday = 0`
+/// — defaulting to 0 would sail past the `usedToday > dailyLimit` gate
+/// and stream an unmetered provider call to a free (or over-cap Pro)
+/// caller. `increment_coach_usage` returns the count AFTER the bump, so
+/// any finite non-negative integer is a valid enforce signal; anything
+/// else is denied.
+export function resolveUsageCount(
+	data: unknown,
+	error: unknown,
+): { ok: true; usedToday: number } | { ok: false } {
+	if (error) return { ok: false };
+	if (typeof data !== 'number' || !Number.isFinite(data) || data < 0) {
+		return { ok: false };
+	}
+	return { ok: true, usedToday: data };
+}
+
 /// Pre-stream JSON error response shape. Re-used by every guard
 /// branch in the handler (auth missing, body invalid, daily-limit
 /// hit, provider call failed). Caller passes through `extra` for

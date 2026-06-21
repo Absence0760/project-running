@@ -11,6 +11,7 @@ import {
 	parseAuthHeader,
 	personalityAddendum,
 	rateLimitHeaders,
+	resolveUsageCount,
 	validateCoachMessages,
 	validateRunsLimit,
 } from './limits';
@@ -298,4 +299,38 @@ test('validateRunsLimit — rejects booleans (a true would coerce to 1 otherwise
 test('validateRunsLimit — caps absurdly large numbers', () => {
 	assert.equal(validateRunsLimit(1e308).ok, false);
 	assert.equal(validateRunsLimit(2_000_000).ok, false);
+});
+
+// ─────────────── resolveUsageCount (fail-closed paywall) ───────────────
+
+test('resolveUsageCount — a finite non-negative count enforces (the gate runs)', () => {
+	assert.deepEqual(resolveUsageCount(1, null), { ok: true, usedToday: 1 });
+	assert.deepEqual(resolveUsageCount(0, null), { ok: true, usedToday: 0 });
+	assert.deepEqual(resolveUsageCount(11, null), { ok: true, usedToday: 11 });
+});
+
+test('resolveUsageCount — an RPC error DENIES, never defaults to 0', () => {
+	// Regression: the handler used to drop the `error` and default
+	// `usedToday` to 0 on a failed increment, which passed the
+	// `usedToday > dailyLimit` gate and streamed an UNMETERED provider
+	// call. The cap is the whole paywall — an unenforceable cap must
+	// fail closed (handler → 503), not fail open.
+	assert.deepEqual(resolveUsageCount(null, { message: 'rpc boom' }), { ok: false });
+	assert.deepEqual(resolveUsageCount(5, new Error('still errored')), { ok: false });
+});
+
+test('resolveUsageCount — a non-numeric / undefined / null data DENIES', () => {
+	for (const bad of [undefined, null, 'NaN', {}, [], true, false]) {
+		assert.deepEqual(
+			resolveUsageCount(bad, null),
+			{ ok: false },
+			`expected deny for ${JSON.stringify(bad)}`,
+		);
+	}
+});
+
+test('resolveUsageCount — NaN / Infinity / negative data DENIES (no false enforce)', () => {
+	assert.deepEqual(resolveUsageCount(NaN, null), { ok: false });
+	assert.deepEqual(resolveUsageCount(Infinity, null), { ok: false });
+	assert.deepEqual(resolveUsageCount(-1, null), { ok: false });
 });
