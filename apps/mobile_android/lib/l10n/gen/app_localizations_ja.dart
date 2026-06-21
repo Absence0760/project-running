@@ -10161,4 +10161,50 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get badgesPlan10Desc => '10のトレーニングプランを完了';
+
+  @override
+  String get racePredictorTitle => 'レースタイム予測';
+
+  @override
+  String racePredictorAnchoredOn(String distance, String time) {
+    return '$timeでの$distanceの走りに基づく';
+  }
+
+  @override
+  String get racePredictorColDistance => '距離';
+
+  @override
+  String get racePredictorColTime => 'タイム';
+
+  @override
+  String get racePredictorColPace => 'ペース';
+
+  @override
+  String get racePredictorColConfidence => '信頼度';
+
+  @override
+  String get racePredictorConfidenceHigh => '高';
+
+  @override
+  String get racePredictorConfidenceModerate => '中';
+
+  @override
+  String get racePredictorConfidenceLow => '低';
+
+  @override
+  String get racePredictorConfReasonSimilar => 'この距離に近い最近の走りに基づいています。';
+
+  @override
+  String get racePredictorConfReasonExtrapolated =>
+      '大きな距離差で外挿しています。おおよその目安としてください。';
+
+  @override
+  String get racePredictorConfReasonStale => '数週間前の走りを基準にしています。';
+
+  @override
+  String get racePredictorConfReasonLimited => '最近のデータが限られています。';
+
+  @override
+  String get racePredictorFootnote =>
+      '最近のベストな走りからリーゲルの換算式で算出し、新しさで重み付けしています。近い距離ほど信頼できます。';
 }

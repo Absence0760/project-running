@@ -13885,5 +13885,69 @@
   "badgesPlan10Desc": "Completed 10 training plans",
   "@badgesPlan10Desc": {
     "description": "Badge description"
+  },
+  "racePredictorTitle": "Race-time predictor",
+  "@racePredictorTitle": {
+    "description": "Title of the dashboard race-time predictor card"
+  },
+  "racePredictorAnchoredOn": "From your {distance} effort in {time}",
+  "@racePredictorAnchoredOn": {
+    "description": "Anchor line naming the effort the ladder is projected from",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "racePredictorColDistance": "Distance",
+  "@racePredictorColDistance": {
+    "description": "Race predictor table column header for distance"
+  },
+  "racePredictorColTime": "Time",
+  "@racePredictorColTime": {
+    "description": "Race predictor table column header for predicted time"
+  },
+  "racePredictorColPace": "Pace",
+  "@racePredictorColPace": {
+    "description": "Race predictor table column header for pace"
+  },
+  "racePredictorColConfidence": "Confidence",
+  "@racePredictorColConfidence": {
+    "description": "Race predictor table column header for the confidence chip"
+  },
+  "racePredictorConfidenceHigh": "High",
+  "@racePredictorConfidenceHigh": {
+    "description": "Race predictor confidence chip label, high"
+  },
+  "racePredictorConfidenceModerate": "Moderate",
+  "@racePredictorConfidenceModerate": {
+    "description": "Race predictor confidence chip label, moderate"
+  },
+  "racePredictorConfidenceLow": "Low",
+  "@racePredictorConfidenceLow": {
+    "description": "Race predictor confidence chip label, low"
+  },
+  "racePredictorConfReasonSimilar": "Based on recent efforts close to this distance.",
+  "@racePredictorConfReasonSimilar": {
+    "description": "Race predictor confidence reason tooltip, similar distance"
+  },
+  "racePredictorConfReasonExtrapolated": "Extrapolated across a large distance gap — treat as a ballpark.",
+  "@racePredictorConfReasonExtrapolated": {
+    "description": "Race predictor confidence reason tooltip, extrapolated"
+  },
+  "racePredictorConfReasonStale": "Anchored to an effort that's a few weeks old.",
+  "@racePredictorConfReasonStale": {
+    "description": "Race predictor confidence reason tooltip, stale effort"
+  },
+  "racePredictorConfReasonLimited": "Based on limited recent data.",
+  "@racePredictorConfReasonLimited": {
+    "description": "Race predictor confidence reason tooltip, limited data"
+  },
+  "racePredictorFootnote": "Riegel equivalence from your best recent effort, recency-weighted. Closer distances are more reliable.",
+  "@racePredictorFootnote": {
+    "description": "Race predictor explanatory footnote"
   }
 }

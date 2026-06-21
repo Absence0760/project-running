@@ -10667,4 +10667,53 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get badgesPlan10Desc => '10 Trainingspläne abgeschlossen';
+
+  @override
+  String get racePredictorTitle => 'Wettkampfzeit-Prognose';
+
+  @override
+  String racePredictorAnchoredOn(String distance, String time) {
+    return 'Aus deinem $distance-Lauf in $time';
+  }
+
+  @override
+  String get racePredictorColDistance => 'Distanz';
+
+  @override
+  String get racePredictorColTime => 'Zeit';
+
+  @override
+  String get racePredictorColPace => 'Tempo';
+
+  @override
+  String get racePredictorColConfidence => 'Verlässlichkeit';
+
+  @override
+  String get racePredictorConfidenceHigh => 'Hoch';
+
+  @override
+  String get racePredictorConfidenceModerate => 'Mittel';
+
+  @override
+  String get racePredictorConfidenceLow => 'Niedrig';
+
+  @override
+  String get racePredictorConfReasonSimilar =>
+      'Basiert auf aktuellen Läufen nahe dieser Distanz.';
+
+  @override
+  String get racePredictorConfReasonExtrapolated =>
+      'Über eine große Distanzlücke hochgerechnet — als grober Richtwert zu verstehen.';
+
+  @override
+  String get racePredictorConfReasonStale =>
+      'Verankert an einem Lauf, der einige Wochen alt ist.';
+
+  @override
+  String get racePredictorConfReasonLimited =>
+      'Basiert auf wenigen aktuellen Daten.';
+
+  @override
+  String get racePredictorFootnote =>
+      'Riegel-Äquivalenz aus deinem besten aktuellen Lauf, aktualitätsgewichtet. Näher liegende Distanzen sind verlässlicher.';
 }

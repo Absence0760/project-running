@@ -17849,6 +17849,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Completed 10 training plans'**
   String get badgesPlan10Desc;
+
+  /// Title of the dashboard race-time predictor card
+  ///
+  /// In en, this message translates to:
+  /// **'Race-time predictor'**
+  String get racePredictorTitle;
+
+  /// Anchor line naming the effort the ladder is projected from
+  ///
+  /// In en, this message translates to:
+  /// **'From your {distance} effort in {time}'**
+  String racePredictorAnchoredOn(String distance, String time);
+
+  /// Race predictor table column header for distance
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get racePredictorColDistance;
+
+  /// Race predictor table column header for predicted time
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get racePredictorColTime;
+
+  /// Race predictor table column header for pace
+  ///
+  /// In en, this message translates to:
+  /// **'Pace'**
+  String get racePredictorColPace;
+
+  /// Race predictor table column header for the confidence chip
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence'**
+  String get racePredictorColConfidence;
+
+  /// Race predictor confidence chip label, high
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get racePredictorConfidenceHigh;
+
+  /// Race predictor confidence chip label, moderate
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate'**
+  String get racePredictorConfidenceModerate;
+
+  /// Race predictor confidence chip label, low
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get racePredictorConfidenceLow;
+
+  /// Race predictor confidence reason tooltip, similar distance
+  ///
+  /// In en, this message translates to:
+  /// **'Based on recent efforts close to this distance.'**
+  String get racePredictorConfReasonSimilar;
+
+  /// Race predictor confidence reason tooltip, extrapolated
+  ///
+  /// In en, this message translates to:
+  /// **'Extrapolated across a large distance gap — treat as a ballpark.'**
+  String get racePredictorConfReasonExtrapolated;
+
+  /// Race predictor confidence reason tooltip, stale effort
+  ///
+  /// In en, this message translates to:
+  /// **'Anchored to an effort that\'s a few weeks old.'**
+  String get racePredictorConfReasonStale;
+
+  /// Race predictor confidence reason tooltip, limited data
+  ///
+  /// In en, this message translates to:
+  /// **'Based on limited recent data.'**
+  String get racePredictorConfReasonLimited;
+
+  /// Race predictor explanatory footnote
+  ///
+  /// In en, this message translates to:
+  /// **'Riegel equivalence from your best recent effort, recency-weighted. Closer distances are more reliable.'**
+  String get racePredictorFootnote;
 }
 
 class _AppLocalizationsDelegate

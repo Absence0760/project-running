@@ -3063,5 +3063,19 @@
   "badgesPlan3Label": "トリプル完走",
   "badgesPlan3Desc": "3つのトレーニングプランを完了",
   "badgesPlan10Label": "プランの達人",
-  "badgesPlan10Desc": "10のトレーニングプランを完了"
+  "badgesPlan10Desc": "10のトレーニングプランを完了",
+  "racePredictorTitle": "レースタイム予測",
+  "racePredictorAnchoredOn": "{time}での{distance}の走りに基づく",
+  "racePredictorColDistance": "距離",
+  "racePredictorColTime": "タイム",
+  "racePredictorColPace": "ペース",
+  "racePredictorColConfidence": "信頼度",
+  "racePredictorConfidenceHigh": "高",
+  "racePredictorConfidenceModerate": "中",
+  "racePredictorConfidenceLow": "低",
+  "racePredictorConfReasonSimilar": "この距離に近い最近の走りに基づいています。",
+  "racePredictorConfReasonExtrapolated": "大きな距離差で外挿しています。おおよその目安としてください。",
+  "racePredictorConfReasonStale": "数週間前の走りを基準にしています。",
+  "racePredictorConfReasonLimited": "最近のデータが限られています。",
+  "racePredictorFootnote": "最近のベストな走りからリーゲルの換算式で算出し、新しさで重み付けしています。近い距離ほど信頼できます。"
 }

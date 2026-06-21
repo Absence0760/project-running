@@ -3063,5 +3063,19 @@
   "badgesPlan3Label": "Dreifachabschluss",
   "badgesPlan3Desc": "3 Trainingspläne abgeschlossen",
   "badgesPlan10Label": "Plan-Veteran",
-  "badgesPlan10Desc": "10 Trainingspläne abgeschlossen"
+  "badgesPlan10Desc": "10 Trainingspläne abgeschlossen",
+  "racePredictorTitle": "Wettkampfzeit-Prognose",
+  "racePredictorAnchoredOn": "Aus deinem {distance}-Lauf in {time}",
+  "racePredictorColDistance": "Distanz",
+  "racePredictorColTime": "Zeit",
+  "racePredictorColPace": "Tempo",
+  "racePredictorColConfidence": "Verlässlichkeit",
+  "racePredictorConfidenceHigh": "Hoch",
+  "racePredictorConfidenceModerate": "Mittel",
+  "racePredictorConfidenceLow": "Niedrig",
+  "racePredictorConfReasonSimilar": "Basiert auf aktuellen Läufen nahe dieser Distanz.",
+  "racePredictorConfReasonExtrapolated": "Über eine große Distanzlücke hochgerechnet — als grober Richtwert zu verstehen.",
+  "racePredictorConfReasonStale": "Verankert an einem Lauf, der einige Wochen alt ist.",
+  "racePredictorConfReasonLimited": "Basiert auf wenigen aktuellen Daten.",
+  "racePredictorFootnote": "Riegel-Äquivalenz aus deinem besten aktuellen Lauf, aktualitätsgewichtet. Näher liegende Distanzen sind verlässlicher."
 }

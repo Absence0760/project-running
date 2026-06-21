@@ -19,6 +19,7 @@ import '../streaks.dart';
 import '../training_load.dart';
 import '../training_service.dart';
 import '../widgets/fitness_card.dart';
+import '../widgets/race_predictor_card.dart';
 import '../widgets/gym_summary_card.dart';
 import '../widgets/notification_bell.dart';
 import '../run_intensity.dart';
@@ -777,6 +778,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     now: now,
                     hrPrefs: _hrPrefs(),
                     loadSeries: loadSeries),
+                RacePredictorCard(runs: runs, now: now),
                 ReadinessCard(
                     runs: runs,
                     now: now,
