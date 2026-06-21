@@ -2455,26 +2455,41 @@ class ApiClient {
 
   // ───────────────────── Kudos on runs ─────────────────────
 
-  /// One-tap kudos on a run. Composite-PK enforcement makes this
-  /// idempotent — a second tap is a no-op rather than a duplicate.
-  Future<void> giveKudos(String runId) async {
+  /// One-tap kudos on a run. The composite PK makes this idempotent —
+  /// a duplicate (kudos already given from another tab / session) is a
+  /// 23505 no-op, not a duplicate row. Returns `true` only when a NEW
+  /// row landed, so the optimistic UI applies the `+1` solely on a real
+  /// change — a stale local `viewerHasKudos: false` must not bump the
+  /// count above the server's, nor roll the heart back on a 23505.
+  Future<bool> giveKudos(String runId) async {
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) throw Exception('Not authenticated');
-    await _client.from(RunKudosRow.table).insert({
-      RunKudosRow.colUserId: viewerId,
-      RunKudosRow.colRunId: runId,
-    });
+    try {
+      await _client.from(RunKudosRow.table).insert({
+        RunKudosRow.colUserId: viewerId,
+        RunKudosRow.colRunId: runId,
+      });
+      return true;
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return false;
+      rethrow;
+    }
   }
 
-  /// Rescind kudos previously given on a run.
-  Future<void> rescindKudos(String runId) async {
+  /// Rescind kudos previously given on a run. Returns `true` when a row
+  /// was actually deleted, `false` when there was nothing to remove —
+  /// mirror of [giveKudos] so the optimistic `-1` only fires on a real
+  /// delete.
+  Future<bool> rescindKudos(String runId) async {
     final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return;
-    await _client
+    if (viewerId == null) return false;
+    final deleted = await _client
         .from(RunKudosRow.table)
         .delete()
         .eq(RunKudosRow.colUserId, viewerId)
-        .eq(RunKudosRow.colRunId, runId);
+        .eq(RunKudosRow.colRunId, runId)
+        .select(RunKudosRow.colUserId);
+    return deleted.isNotEmpty;
   }
 
   /// Per-run engagement summary (kudos count, comment count, whether

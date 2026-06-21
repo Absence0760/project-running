@@ -665,10 +665,19 @@ class _EngagementFooterState extends State<_EngagementFooter> {
       );
     });
     try {
-      if (prev.viewerHasKudos) {
-        await widget.api.rescindKudos(widget.runId);
-      } else {
-        await widget.api.giveKudos(widget.runId);
+      final changed = prev.viewerHasKudos
+          ? await widget.api.rescindKudos(widget.runId)
+          : await widget.api.giveKudos(widget.runId);
+      // A no-op (the server already matched the new state — kudos given
+      // / removed from another tab against a stale local flag) means the
+      // optimistic +/-1 was wrong: the flag is right but the count drifted.
+      // Undo the count delta while keeping the corrected flag.
+      if (!changed && mounted) {
+        setState(() => _eng = EngagementSummary(
+              kudosCount: prev.kudosCount,
+              viewerHasKudos: !prev.viewerHasKudos,
+              commentCount: prev.commentCount,
+            ));
       }
     } catch (e) {
       if (!mounted) return;

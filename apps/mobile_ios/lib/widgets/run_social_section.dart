@@ -118,10 +118,18 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       );
     });
     try {
-      if (before.viewerHasKudos) {
-        await widget.api.rescindKudos(widget.runId);
-      } else {
-        await widget.api.giveKudos(widget.runId);
+      final changed = before.viewerHasKudos
+          ? await widget.api.rescindKudos(widget.runId)
+          : await widget.api.giveKudos(widget.runId);
+      // A no-op (the server already matched the new state from another
+      // tab against a stale local flag) means the optimistic +/-1 drifted
+      // the count. Undo the delta while keeping the corrected flag.
+      if (!changed && mounted) {
+        setState(() => _eng = EngagementSummary(
+              kudosCount: before.kudosCount,
+              viewerHasKudos: !before.viewerHasKudos,
+              commentCount: before.commentCount,
+            ));
       }
     } catch (e) {
       if (!mounted) return;
