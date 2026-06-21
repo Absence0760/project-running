@@ -66,9 +66,9 @@ url = "env(SSO_MOCK_OIDC_URL)"
 #
 # The other functions (strava-import, parkrun-import, export-data,
 # delete-account, clip-public-track, events-connect-onboard,
-# events-checkout) all need a Supabase JWT (anon for clip-public-track,
-# user-scoped for the rest) and are correct on the default
-# verify_jwt = true.
+# events-checkout, events-cancel) all need a Supabase JWT (anon for
+# clip-public-track, user-scoped for the rest) and are correct on the
+# default verify_jwt = true.
 
 [functions.strava-webhook]
 verify_jwt = false

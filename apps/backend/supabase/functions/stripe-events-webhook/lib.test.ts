@@ -138,16 +138,34 @@ Deno.test('orderStatusTransition — paid + completed -> null (no double-grant)'
   assertStrictEquals(orderStatusTransition('paid', 'checkout.session.completed'), null);
 });
 
+Deno.test('orderStatusTransition — paid + charge.refunded -> refunded (P2 refund coupling)', () => {
+  assertStrictEquals(orderStatusTransition('paid', 'charge.refunded'), 'refunded');
+});
+
+Deno.test('orderStatusTransition — a refunded order is immovable on a replayed refund (no double-release)', () => {
+  // The refund idempotency backbone: a replayed charge.refunded finds the
+  // order already refunded and gets null, so it can't double-release a seat.
+  assertStrictEquals(orderStatusTransition('refunded', 'charge.refunded'), null);
+});
+
+Deno.test('orderStatusTransition — pending does not refund (no charge to reverse)', () => {
+  assertStrictEquals(orderStatusTransition('pending', 'charge.refunded'), null);
+});
+
 Deno.test('orderStatusTransition — terminal source states never transition', () => {
-  for (const s of ['paid', 'refunded', 'partially_refunded', 'failed', 'canceled']) {
+  for (const s of ['refunded', 'partially_refunded', 'failed', 'canceled']) {
     assertStrictEquals(orderStatusTransition(s, 'checkout.session.completed'), null);
     assertStrictEquals(orderStatusTransition(s, 'checkout.session.expired'), null);
+    assertStrictEquals(orderStatusTransition(s, 'charge.refunded'), null);
   }
+  // paid is terminal for the SESSION events, but the refund arm moves it.
+  assertStrictEquals(orderStatusTransition('paid', 'checkout.session.completed'), null);
+  assertStrictEquals(orderStatusTransition('paid', 'checkout.session.expired'), null);
 });
 
 Deno.test('orderStatusTransition — unknown event type -> null', () => {
-  assertStrictEquals(orderStatusTransition('pending', 'charge.refunded'), null);
   assertStrictEquals(orderStatusTransition('pending', 'account.updated'), null);
+  assertStrictEquals(orderStatusTransition('paid', 'account.updated'), null);
   assertStrictEquals(orderStatusTransition('pending', ''), null);
 });
 

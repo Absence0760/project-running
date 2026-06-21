@@ -43,6 +43,7 @@
 		fetchEventPricing,
 		startEventCheckout,
 		fetchMyOrder,
+		cancelEventOrder,
 		type EventResultWithUser,
 		type RecentRunOption,
 		type RaceSessionRow,
@@ -66,7 +67,7 @@
 	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { formatPrice } from '$lib/format/format_price';
-	import { registrationOpen } from '$lib/social/paid_registration';
+	import { registrationOpen, resolveRefundEligibility } from '$lib/social/paid_registration';
 	import { env } from '$env/dynamic/public';
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl, geoUri } from '$lib/routes/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
@@ -82,7 +83,8 @@
 		Route,
 		RsvpStatus,
 		EventAttendance,
-		EventPricing
+		EventPricing,
+		EventOrder
 	} from '$lib/types';
 
 	let slug = $derived($page.params.slug as string);
@@ -150,6 +152,13 @@
 	// 'confirmed' once the order/attendee row materialises, 'slow' if the
 	// poll budget elapses (degrade to "refresh shortly", never a false fail).
 	let paymentState = $state<'idle' | 'processing' | 'confirmed' | 'slow'>('idle');
+	// The signed-in buyer's own order for the active instance (P2 self-cancel).
+	// Loaded alongside the instance so the "Cancel registration" affordance can
+	// reflect a refund that's already been initiated (refund_initiated_at set
+	// but the charge.refunded webhook not yet landed).
+	let myOrder = $state<EventOrder | null>(null);
+	let cancellingRegistration = $state(false);
+	let showCancelRegistration = $state(false);
 
 	/** The instance the user is currently RSVPing to. For one-off events this
 	 * stays equal to `event.starts_at`; for recurring events, the user can
@@ -357,6 +366,24 @@
 		);
 	});
 
+	// A refund the buyer already initiated but Stripe's charge.refunded webhook
+	// hasn't confirmed yet (the order is still `paid` with refund_initiated_at
+	// stamped). Drives the "Refund in progress" badge so the buyer isn't shown
+	// a live Cancel button during the async gap.
+	let refundPending = $derived(
+		myOrder != null && myOrder.status === 'paid' && myOrder.refund_initiated_at != null
+	);
+
+	// Whether a self-cancel of the current paid slot would refund the buyer,
+	// per the event's refund_policy and the time remaining. Pure mirror of the
+	// EF's server-side gate — used only to pick the confirm copy; the EF still
+	// decides authoritatively.
+	let cancelWouldRefund = $derived.by(() => {
+		if (!pricing || !activeInstance || myOrder?.status !== 'paid') return false;
+		return resolveRefundEligibility(pricing.refund_policy, new Date(nowTick), activeInstance)
+			.eligible;
+	});
+
 	async function load() {
 		loading = true;
 		const prevInstance = activeInstance;
@@ -399,6 +426,10 @@
 		raceSession = res[4];
 		eventPhotos = res[5];
 		pricing = await fetchEventPricing(event.id, activeInstance);
+		// The buyer's own order for this instance, so the registered-state
+		// surface can offer Cancel + reflect an in-flight refund (P2). Only
+		// meaningful on a priced event with a signed-in viewer.
+		myOrder = pricing && myUserId ? await fetchMyOrder(event.id, activeInstance) : null;
 		// Bib-result claims (persona #43): the viewer's own claim state for
 		// the pending-row affordance, and the organiser's adjudication queue.
 		myClaims = myUserId
@@ -1096,6 +1127,40 @@
 		await load();
 	}
 
+	/// Buyer self-cancel of their own registration (P2). The events-cancel EF
+	/// initiates the refund (paid) or releases the reservation (pending); the
+	/// stripe-events webhook flips the status + frees the seat asynchronously,
+	/// so we stamp the optimistic refund-pending state by reloading and let the
+	/// webhook reconcile the terminal status.
+	async function confirmCancelRegistration() {
+		if (!event || !activeInstance || cancellingRegistration) return;
+		cancellingRegistration = true;
+		try {
+			const { action } = await cancelEventOrder(event.id, activeInstance);
+			showCancelRegistration = false;
+			showToast(
+				action === 'refund_initiated'
+					? m('clubEvent.refundInitiated')
+					: m('clubEvent.reservationReleased'),
+				'success'
+			);
+			await load();
+		} catch (e: unknown) {
+			const code = e instanceof Error ? e.message : '';
+			const key =
+				code === 'policy_no_refund'
+					? 'clubEvent.cancelPolicyNoRefund'
+					: code === 'no_cancelable_order'
+						? 'clubEvent.cancelNoOrder'
+						: code === 'stripe_refund_failed'
+							? 'clubEvent.cancelRefundFailed'
+							: 'clubEvent.cancelRegistrationFailed';
+			showToast(m(key), 'error');
+		} finally {
+			cancellingRegistration = false;
+		}
+	}
+
 	function handleDeleteEvent() {
 		if (!event) return;
 		showDeleteEventConfirm = true;
@@ -1394,6 +1459,22 @@
 								<span class="material-symbols" aria-hidden="true">check_circle</span>
 								{m('clubEvent.registered')}
 							</div>
+							{#if refundPending}
+								<p class="register-status processing" role="status">
+									<span class="material-symbols" aria-hidden="true">hourglass_top</span>
+									{m('clubEvent.refundPending')}
+								</p>
+							{:else}
+								<button
+									type="button"
+									class="btn btn-secondary register-cancel"
+									onclick={() => (showCancelRegistration = true)}
+									disabled={cancellingRegistration}
+									data-testid="cancel-registration"
+								>
+									{m('clubEvent.cancelRegistration')}
+								</button>
+							{/if}
 						{:else if regState === 'sold_out'}
 							<div class="register-status closed" role="status">
 								<span class="material-symbols" aria-hidden="true">block</span>
@@ -2039,6 +2120,22 @@
 />
 
 <ConfirmDialog
+	open={showCancelRegistration}
+	title={m('clubEvent.cancelRegistrationTitle')}
+	message={myOrder?.status === 'pending'
+		? m('clubEvent.cancelRegistrationPending')
+		: cancelWouldRefund
+			? m('clubEvent.cancelRegistrationRefundable', { price: priceFormatted })
+			: m('clubEvent.cancelRegistrationNoRefund', { price: priceFormatted })}
+	confirmLabel={m('clubEvent.cancelRegistrationConfirm')}
+	cancelLabel={m('clubEvent.keepRegistration')}
+	onconfirm={confirmCancelRegistration}
+	oncancel={() => (showCancelRegistration = false)}
+	danger
+	data-testid="cancel-registration-dialog"
+/>
+
+<ConfirmDialog
 	open={showDeleteEventConfirm}
 	title={m('clubEvent.deleteEvent')}
 	message={`${m('clubEvent.deleteEventMessage', { title: event?.title ?? '' })}${event?.recurrence_freq ? ` ${m('clubEvent.deleteEventAllOccurrences')}` : ''}`}
@@ -2480,6 +2577,11 @@
 	.register-cta {
 		width: 100%;
 		justify-content: center;
+	}
+	.register-cancel {
+		width: 100%;
+		justify-content: center;
+		font-size: 0.85rem;
 	}
 	.register-status {
 		display: flex;

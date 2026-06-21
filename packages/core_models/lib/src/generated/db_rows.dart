@@ -1071,6 +1071,7 @@ class EventOrderRow {
   static const String colPaidAt = 'paid_at';
   static const String colRefundedAt = 'refunded_at';
   static const String colReservedUntil = 'reserved_until';
+  static const String colRefundInitiatedAt = 'refund_initiated_at';
 
   final String id;
   final String eventId;
@@ -1087,6 +1088,7 @@ class EventOrderRow {
   final DateTime? paidAt;
   final DateTime? refundedAt;
   final DateTime? reservedUntil;
+  final DateTime? refundInitiatedAt;
 
   const EventOrderRow({
     required this.id,
@@ -1104,6 +1106,7 @@ class EventOrderRow {
     this.paidAt,
     this.refundedAt,
     this.reservedUntil,
+    this.refundInitiatedAt,
   });
 
   factory EventOrderRow.fromJson(Map<String, dynamic> json) => EventOrderRow(
@@ -1122,6 +1125,7 @@ class EventOrderRow {
     paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
     refundedAt: json['refunded_at'] == null ? null : DateTime.parse(json['refunded_at'] as String),
     reservedUntil: json['reserved_until'] == null ? null : DateTime.parse(json['reserved_until'] as String),
+    refundInitiatedAt: json['refund_initiated_at'] == null ? null : DateTime.parse(json['refund_initiated_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1140,6 +1144,7 @@ class EventOrderRow {
     colPaidAt: paidAt?.toIso8601String(),
     colRefundedAt: refundedAt?.toIso8601String(),
     colReservedUntil: reservedUntil?.toIso8601String(),
+    colRefundInitiatedAt: refundInitiatedAt?.toIso8601String(),
   };
 }
 
