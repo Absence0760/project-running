@@ -11,6 +11,7 @@
 		connectIntegration,
 		disconnectIntegration,
 		isRunSignUpConfigured,
+		isChronoTrackConfigured,
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import {
@@ -57,6 +58,10 @@
 	// probe it once so the card can show the unavailable explainer fail-closed.
 	let runSignUpAvailable = $state(false);
 
+	// ChronoTrack race-results import runs through the same EF behind its own
+	// CHRONOTRACK_* credential gate; probe it once for the same fail-closed card.
+	let chronoTrackAvailable = $state(false);
+
 	async function refreshIntegrations() {
 		const saved = await fetchIntegrations();
 		for (const ui of integrations) {
@@ -101,6 +106,12 @@
 			runSignUpAvailable = await isRunSignUpConfigured();
 		} catch {
 			runSignUpAvailable = false;
+		}
+
+		try {
+			chronoTrackAvailable = await isChronoTrackConfigured();
+		} catch {
+			chronoTrackAvailable = false;
 		}
 
 		pageLoading = false;
@@ -458,6 +469,25 @@
 				{/if}
 			</div>
 		</section>
+
+		<section class="card runsignup-card" data-testid="chronotrack-card">
+			<div class="integration-icon" data-provider="chronotrack" aria-hidden="true">
+				<span class="material-symbols">timer</span>
+			</div>
+			<div class="runsignup-body">
+				<h2>{m('integrations.chronotrack')}</h2>
+				<p class="card-sub">{m('integrations.chronotrackConnect')}</p>
+				{#if chronoTrackAvailable}
+					<a class="btn btn-connect" href="/races" data-testid="chronotrack-open">
+						{m('integrations.chronotrackOpen')}
+					</a>
+				{:else}
+					<p class="runsignup-unavailable" data-testid="chronotrack-unavailable" role="status">
+						{m('integrations.chronotrackUnavailable')}
+					</p>
+				{/if}
+			</div>
+		</section>
 	{/if}
 </div>
 
@@ -643,6 +673,10 @@
 	.integration-icon[data-provider="runsignup"] {
 		background: rgba(217, 142, 207, 0.14);
 		color: #b85aad;
+	}
+	.integration-icon[data-provider="chronotrack"] {
+		background: rgba(56, 142, 142, 0.14);
+		color: #2f7e7e;
 	}
 
 	.runsignup-card {

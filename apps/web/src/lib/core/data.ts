@@ -1843,9 +1843,11 @@ export async function updateRaceListing(
 }
 
 export interface ImportRaceResultInput {
-	provider: 'runsignup' | 'paste';
+	provider: 'runsignup' | 'chronotrack' | 'paste';
 	listingId: string;
 	runSignUpUserId?: string;
+	/// ChronoTrack: filter the event's results to one bib.
+	bib?: string;
 	/// When set, enrich THIS existing run in place (the auto-match seam) instead
 	/// of inserting a new race run.
 	matchRunId?: string;
@@ -1866,9 +1868,10 @@ export interface ImportRaceResultOutcome {
 	enriched: number;
 }
 
-/// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` when the provider
-/// key is unconfigured server-side (503), so the UI can show the explainer
-/// rather than a generic failure.
+/// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` (RunSignUp) or
+/// `CHRONOTRACK_UNAVAILABLE` (ChronoTrack) when the provider's credentials are
+/// unconfigured server-side (503), so the UI can show the explainer rather than
+/// a generic failure.
 export async function importRaceResult(
 	input: ImportRaceResultInput
 ): Promise<ImportRaceResultOutcome> {
@@ -1877,12 +1880,17 @@ export async function importRaceResult(
 			provider: input.provider,
 			listingId: input.listingId,
 			runSignUpUserId: input.runSignUpUserId,
+			bib: input.bib,
 			matchRunId: input.matchRunId,
 			result: input.result
 		}
 	});
 	if (error) {
-		if (await isProviderNotConfigured(error)) throw new Error('RUNSIGNUP_UNAVAILABLE');
+		if (await isProviderNotConfigured(error)) {
+			throw new Error(
+				input.provider === 'chronotrack' ? 'CHRONOTRACK_UNAVAILABLE' : 'RUNSIGNUP_UNAVAILABLE'
+			);
+		}
 		throw error;
 	}
 	return data as ImportRaceResultOutcome;
@@ -1893,6 +1901,18 @@ export async function importRaceResult(
 /// disable the RunSignUp card with an explainer.
 export async function isRunSignUpConfigured(): Promise<boolean> {
 	const { error } = await supabase.functions.invoke('race-listings-sync', { body: {} });
+	if (!error) return true;
+	return !(await isProviderNotConfigured(error));
+}
+
+/// Probe whether the ChronoTrack leg is configured server-side. Returns false
+/// on a 503 provider_not_configured, true otherwise — drives the disabled
+/// ChronoTrack card + explainer. Uses the race-results-import probe mode (no
+/// listing needed), mirroring the RunSignUp probe shape.
+export async function isChronoTrackConfigured(): Promise<boolean> {
+	const { error } = await supabase.functions.invoke('race-results-import', {
+		body: { provider: 'chronotrack', probe: true }
+	});
 	if (!error) return true;
 	return !(await isProviderNotConfigured(error));
 }

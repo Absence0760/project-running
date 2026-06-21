@@ -2895,6 +2895,11 @@ export const en = {
 	"integrations.runsignupOpen": "Open the race calendar",
 	"integrations.runsignupUnavailable":
 		"RunSignUp import isn't available yet. parkrun and manual paste still work.",
+	"integrations.chronotrack": "ChronoTrack",
+	"integrations.chronotrackConnect": "Import race results from ChronoTrack-timed events.",
+	"integrations.chronotrackOpen": "Open the race calendar",
+	"integrations.chronotrackUnavailable":
+		"ChronoTrack import isn't available yet. parkrun and manual paste still work.",
 	"socialHub.panelLabel": "{section} panel",
 	"socialPeople.searchFailed": "Search failed: {error}",
 	"socialPeople.followFailed": "Could not update follow: {error}",
