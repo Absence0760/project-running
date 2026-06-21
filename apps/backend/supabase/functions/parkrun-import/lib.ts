@@ -29,6 +29,14 @@ export function parseParkrunDate(d: string): string {
 
 export function parseParkrunTime(time: string): number {
 	const parts = time.split(':').map(Number);
+	// Guard every part: a parkrun cell can carry a dash placeholder
+	// ("--:--" for an unknown/assisted time) or other non-numeric text,
+	// and Number('--') is NaN. Without this guard "--:--" produced a NaN
+	// duration_s, which serialises to JSON null and breaks the NOT NULL
+	// runs.duration_s insert — failing the whole batch and silently
+	// importing nothing for that athlete. Mirrors the sibling
+	// parseClockToSeconds guard in race-results-import/lib.ts.
+	if (parts.some((n) => !Number.isFinite(n) || n < 0)) return 0;
 	if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
 	if (parts.length === 2) return parts[0] * 60 + parts[1];
 	return 0;
