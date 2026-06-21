@@ -52,6 +52,20 @@ test('clamps a single cells weight at MAX_CELL_WEIGHT', () => {
 	assert.equal(cells[0].weight, MAX_CELL_WEIGHT);
 });
 
+test('quantises a negative coordinate on a grid half-boundary toward +Infinity (cross-platform parity)', () => {
+	// lng/lat = -0.5 * gridDeg sits exactly on a grid half-boundary. The
+	// quantiser must round half toward +Infinity (gx = 0 → cell centre 0),
+	// matching JS Math.round AND the Dart twin's (x+0.5).floor() — NOT Dart's
+	// raw .round() (which rounds half away from zero to gx = -1). A drift here
+	// shifts the cell by one grid step (~33 m) for any Americas / west-of-
+	// Greenwich track and the web + mobile heatmaps disagree.
+	const g = DEFAULT_GRID_DEG;
+	const cells = buildHeatCells([[{ lat: -0.5 * g, lng: -0.5 * g }]]);
+	assert.equal(cells.length, 1);
+	assert.equal(cells[0].lat, 0);
+	assert.equal(cells[0].lng, 0);
+});
+
 test('drops invalid / out-of-range points', () => {
 	const cells = buildHeatCells([
 		[
