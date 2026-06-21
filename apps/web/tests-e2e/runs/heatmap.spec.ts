@@ -131,6 +131,49 @@ test.describe('/runs/heatmap — signed-in seed user', () => {
 	});
 });
 
+test.describe('/runs/heatmap — load failure', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('a failed runs fetch shows a retryable error, NOT the empty state', async ({ page }) => {
+		// A network/server failure loading the runs must surface a distinct
+		// error + retry — not the "No mapped runs yet" empty state, which
+		// would tell an active runner they've never run anywhere. Pins the
+		// errored-vs-empty split in PersonalHeatmap.build().
+		let failNext = true;
+		await page.route('**/rest/v1/runs**', async (route) => {
+			if (route.request().method() === 'GET' && failNext) {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/runs/heatmap');
+		await expect(page.getByTestId('personal-heatmap-map')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('personal-heatmap-loading')).toHaveCount(0, {
+			timeout: 20_000
+		});
+		// Error state, not empty.
+		await expect(page.getByTestId('personal-heatmap-error')).toBeVisible();
+		await expect(page.getByTestId('personal-heatmap-empty')).toHaveCount(0);
+
+		// Retry recovers — the second runs fetch is allowed through, so the
+		// load resolves to legend or empty (never stuck on the error).
+		await page.getByRole('button', { name: 'Try again' }).click();
+		await expect(page.getByTestId('personal-heatmap-error')).toHaveCount(0, {
+			timeout: 20_000
+		});
+		await expect(
+			page.getByTestId('personal-heatmap-legend').or(page.getByTestId('personal-heatmap-empty'))
+		).toBeVisible();
+	});
+});
+
 test.describe('/runs/heatmap — signed-in, consent NOT accepted', () => {
 	// The persisted USER_A storageState bakes accepted consent; clear it
 	// before each navigation so we exercise the not-yet-consented path.

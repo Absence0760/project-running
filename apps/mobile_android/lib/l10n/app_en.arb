@@ -4191,6 +4191,18 @@
   "@runHeatmapEmptyBody": {
     "description": "Empty-state body on the personal run-track heatmap"
   },
+  "runHeatmapErrorTitle": "Couldn't load your heatmap",
+  "@runHeatmapErrorTitle": {
+    "description": "Error-state title on the personal run-track heatmap when the runs fetch fails"
+  },
+  "runHeatmapErrorBody": "Something went wrong loading your runs. Check your connection and try again.",
+  "@runHeatmapErrorBody": {
+    "description": "Error-state body on the personal run-track heatmap when the runs fetch fails"
+  },
+  "runHeatmapRetry": "Try again",
+  "@runHeatmapRetry": {
+    "description": "Retry button on the personal run-track heatmap error state"
+  },
   "runHeatmapLegendTitle": "Your heatmap",
   "@runHeatmapLegendTitle": {
     "description": "Legend title on the personal run-track heatmap"

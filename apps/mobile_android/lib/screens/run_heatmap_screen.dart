@@ -72,6 +72,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
 
   bool _loading = true;
   bool _empty = false;
+  bool _errored = false;
   int _trackCount = 0;
   int _totalWithTracks = 0;
   bool _mapReady = false;
@@ -128,7 +129,13 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
   }
 
   Future<void> _build() async {
-    if (mounted) setState(() => _loading = true);
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _empty = false;
+        _errored = false;
+      });
+    }
     try {
       final runs = await _fetchRuns();
       final paths = <String>[];
@@ -166,7 +173,11 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
       _fitToBounds();
     } catch (e) {
       debugPrint('personal heatmap build failed: $e');
-      if (mounted) setState(() => _empty = _trackCount == 0);
+      // A thrown build means we never learned whether the runner has mapped
+      // runs — surface a retryable error, NOT the "no runs yet" empty state
+      // (which would tell an active runner they've never run anywhere). If
+      // some tracks already rendered, keep them.
+      if (mounted && _trackCount == 0) setState(() => _errored = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -301,6 +312,34 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
                             : l10n.runHeatmapLoading,
                         style: theme.textTheme.bodySmall,
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_errored)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_off,
+                        size: 48, color: theme.colorScheme.outline),
+                    const SizedBox(height: 8),
+                    Text(l10n.runHeatmapErrorTitle,
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.runHeatmapErrorBody,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => unawaited(_build()),
+                      child: Text(l10n.runHeatmapRetry),
                     ),
                   ],
                 ),
