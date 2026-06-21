@@ -371,7 +371,6 @@
             "npm:@iconify-json/material-symbols@1.2.78",
             "npm:@playwright/test@^1.60.0",
             "npm:@resvg/resvg-js@^2.6.2",
-            "npm:@revenuecat/purchases-js@^1.42.4",
             "npm:@sentry/sveltekit@^10.57.0",
             "npm:@supabase/ssr@0.12",
             "npm:@supabase/supabase-js@^2.107.0",
