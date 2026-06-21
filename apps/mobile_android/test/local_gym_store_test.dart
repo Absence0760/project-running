@@ -834,4 +834,49 @@ void main() {
           reason: 'markSynced persists via asSynced → persist → index flush');
     });
   });
+
+  group('clear (sign-out wipe)', () {
+    test('wipes in-memory rows + every on-disk file + the index', () async {
+      await store.createLocal(
+          title: 'Synced', startedAt: DateTime.utc(2026, 6, 1));
+      await store.syncWithServer(_FakeGymApi());
+      await store.createLocal(
+          title: 'Pending', startedAt: DateTime.utc(2026, 6, 2));
+      expect(store.workouts, hasLength(2));
+      expect(dir.listSync().whereType<File>(), isNotEmpty);
+
+      await store.clear();
+
+      expect(store.workouts, isEmpty);
+      expect(store.rowsById, isEmpty);
+      expect(dir.listSync().whereType<File>(), isEmpty,
+          reason: 'no .json files (rows or index) left for the next user');
+    });
+
+    test(
+        'a wiped pendingCreate is not pushed under the next user on the next '
+        'drain', () async {
+      final priorUser = await store.createLocal(
+          title: 'Prior user workout', startedAt: DateTime.utc(2026, 6, 1));
+      expect(store.byId(priorUser.id)!.syncState, GymSyncState.pendingCreate);
+
+      await store.clear();
+
+      final api = _FakeGymApi();
+      final drained = await store.syncWithServer(api);
+      expect(drained, 0);
+      expect(api.calls, isEmpty,
+          reason: 'the prior user\'s pendingCreate must not reach the API');
+    });
+
+    test('a fresh store over the cleared dir loads empty', () async {
+      await store.createLocal(
+          title: 'Gone', startedAt: DateTime.utc(2026, 6, 1));
+      await store.clear();
+
+      final fresh = LocalGymStore();
+      await fresh.init(overrideDirectory: dir);
+      expect(fresh.workouts, isEmpty);
+    });
+  });
 }

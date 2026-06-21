@@ -487,6 +487,34 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   @visibleForTesting
   int rewriteAtomicWrites = 0;
 
+  /// Wipe this store's in-memory state AND its on-disk files. Called on
+  /// sign-out so a different user signing in on the same device can't read
+  /// (or re-sync under their own account) the prior user's rows — including
+  /// unsynced `pendingCreate` rows, which `replaceFromServer` would otherwise
+  /// preserve and `syncWithServer` would push into the new account. The
+  /// per-user scoping the settings cache gets via keyed entries (decisions
+  /// §72) isn't available here — these stores aren't user-namespaced on disk —
+  /// so sign-out clears them outright. Idempotent; tolerates a per-file delete
+  /// failure so one undeletable file can't strand the rest still on disk.
+  Future<void> clear() async {
+    rowsById.clear();
+    _summaries.clear();
+    _writtenJson.clear();
+    _indexDirty = false;
+    final d = dir;
+    if (d != null && d.existsSync()) {
+      for (final entity in d.listSync()) {
+        if (entity is! File || !entity.path.endsWith('.json')) continue;
+        try {
+          entity.deleteSync();
+        } catch (e) {
+          debugPrint('$debugLabel: clear failed to delete ${entity.path}: $e');
+        }
+      }
+    }
+    notifyListeners();
+  }
+
   @visibleForTesting
   void debugClear() {
     rowsById.clear();
