@@ -3560,6 +3560,8 @@ export const messages = {
 	"nutrition.noResults": "一致する項目がありません。別の語で検索するか、下から手動で入力してください。",
 	"nutrition.searchFailed": "検索に失敗しました。接続を確認して再試行するか、下から手動で入力してください。",
 	"nutrition.searchRetry": "検索を再試行",
+	"nutrition.source_off": "Open Food Facts",
+	"nutrition.source_usda": "USDA",
 	"nutrition.mealSlot": "食事区分",
 	"nutrition.manualEntry": "手動で入力",
 	"nutrition.itemName": "名称",

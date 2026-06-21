@@ -1,9 +1,15 @@
 <script lang="ts">
-	import { searchFoods, scalePortion, type FoodSearchResult } from '$lib/nutrition/food_search';
+	import { searchFoodSources, scalePortion, type FoodSearchResult } from '$lib/nutrition/food_search';
 	import { createFoodEntry } from '$lib/core/data';
 	import { MEAL_SLOTS, type MealSlot } from '$lib/nutrition/nutrition_totals';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { env } from '$env/dynamic/public';
+
+	// Fail-closed USDA gate: with PUBLIC_USDA_FDC_API_KEY unset the USDA source
+	// is simply not queried — Open Food Facts still works, no error, no broken
+	// UI. Read via $env/dynamic/public so an unconfigured build doesn't 500.
+	const usdaApiKey = env.PUBLIC_USDA_FDC_API_KEY ?? '';
 
 	interface Props {
 		oncreated: () => void;
@@ -51,7 +57,7 @@
 		searching = true;
 		searchFailed = false;
 		try {
-			results = await searchFoods(q);
+			results = await searchFoodSources(q, { usdaApiKey });
 		} catch {
 			// Distinguish a failed search from a genuinely empty one so the
 			// user sees a retry affordance, not a misleading "no matches".
@@ -83,7 +89,7 @@
 				protein_g: portionMacros.proteinG,
 				carbs_g: portionMacros.carbsG,
 				fat_g: portionMacros.fatG,
-				external_id: `off:${picked.code}`,
+				external_id: `${picked.source}:${picked.code}`,
 			});
 			showToast(m('nutrition.added'), 'success');
 			oncreated();
@@ -184,7 +190,10 @@
 						<button type="button" class="result" onclick={() => pick(r)}>
 							<span class="result-main">
 								<span class="result-name">{r.name}</span>
-								{#if r.brand}<span class="brand">{r.brand}</span>{/if}
+								<span class="result-meta">
+									{#if r.brand}<span class="brand">{r.brand}</span>{/if}
+									<span class="source-tag source-{r.source}">{m(`nutrition.source_${r.source}`)}</span>
+								</span>
 							</span>
 							<span class="result-kcal">{Math.round(r.per100g.calories)}<span class="result-kcal-unit"> kcal / 100 g</span></span>
 							<span class="material-symbols result-chevron" aria-hidden="true">chevron_right</span>
@@ -304,7 +313,20 @@
 	}
 	.result-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
 	.result-name { font-size: 0.95rem; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-	.brand { color: var(--color-text-secondary); font-size: 0.8rem; }
+	.result-meta { display: flex; align-items: center; gap: var(--space-xs); min-width: 0; }
+	.brand { color: var(--color-text-secondary); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.source-tag {
+		flex-shrink: 0;
+		font-size: 0.65rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		padding: 1px 6px;
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-tertiary);
+	}
+	.source-usda { background: var(--color-primary-light); color: var(--color-primary); }
 	.result-kcal {
 		font-size: 0.95rem;
 		font-weight: 600;

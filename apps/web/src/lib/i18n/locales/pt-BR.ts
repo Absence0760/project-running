@@ -3563,6 +3563,8 @@ export const messages = {
 	"nutrition.noResults": "Sem resultados. Tente outro termo ou insira manualmente abaixo.",
 	"nutrition.searchFailed": "A busca falhou. Verifique sua conexão e tente novamente ou insira manualmente abaixo.",
 	"nutrition.searchRetry": "Tentar busca novamente",
+	"nutrition.source_off": "Open Food Facts",
+	"nutrition.source_usda": "USDA",
 	"nutrition.mealSlot": "Refeição",
 	"nutrition.manualEntry": "Inserir manualmente",
 	"nutrition.itemName": "Nome do item",
