@@ -118,6 +118,17 @@ Deno.test('mapRunSignUpResult drops non-positive places', () => {
   assertEquals(run!.metadata.age_group_place, undefined);
 });
 
+Deno.test('mapRunSignUpResult returns null when the listing has no distance', () => {
+  // runs.distance_m is NOT NULL — a null/zero distance from a listing with no
+  // stored distance can't become a valid run. Dropping it here keeps the
+  // batch insert from 23502'ing on the null and silently importing nothing.
+  assertEquals(mapRunSignUpResult({ chip_time: '20:00' }, { ...OPTS, distanceM: null }), null);
+  assertEquals(mapRunSignUpResult({ chip_time: '20:00' }, { ...OPTS, distanceM: 0 }), null);
+  // Other providers + the paste path delegate here, so they inherit the guard.
+  assertEquals(parseRaceResultRow({ chip_time: '20:00' }, { ...OPTS, distanceM: null }), null);
+  assertEquals(mapUltraSignUpResult({ formattime: '20:00' }, { ...OPTS, distanceM: null }), null);
+});
+
 Deno.test('parseRaceResultRow maps a pasted result with the same shape/id', () => {
   const run = parseRaceResultRow(
     { bib: '77', chip_time: '0:55:10', gun_time: '0:55:40', overall_place: 9, age_group: 'F40-44' },

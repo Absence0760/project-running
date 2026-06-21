@@ -143,3 +143,22 @@ Deno.test('parseParkrunTime — MM:SS parses to seconds', () => {
 Deno.test('parseParkrunTime — invalid input returns 0', () => {
 	assertEquals(parseParkrunTime('nope'), 0);
 });
+
+Deno.test('parseParkrunTime — dash placeholder returns 0, not NaN', () => {
+	// parkrun renders "--:--" (or "--:--:--") for an unknown / assisted
+	// time. Number('--') is NaN; the unguarded map produced a NaN
+	// duration_s that serialised to JSON null and broke the NOT NULL
+	// insert. Must be a clean 0 (treated as "no usable time").
+	assertEquals(parseParkrunTime('--:--'), 0);
+	assertEquals(parseParkrunTime('--:--:--'), 0);
+	assertEquals(Number.isNaN(parseParkrunTime('--:--')), false);
+});
+
+Deno.test('parseParkrunTime — non-numeric part returns 0', () => {
+	assertEquals(parseParkrunTime('18:ab'), 0); // ['18','ab'] → [18, NaN]
+	assertEquals(parseParkrunTime('ab:30'), 0);
+});
+
+Deno.test('parseParkrunTime — negative part is rejected', () => {
+	assertEquals(parseParkrunTime('-1:00'), 0);
+});
