@@ -59,3 +59,28 @@ test('buildRoute — real climb between two known elevations still counts', asyn
 	]));
 	assert.equal(routes[0].elevation_m, 50, 'only the +50 climb counts, the -30 descent is ignored');
 });
+
+function rawGeojsonFile(coords: unknown[]): File {
+	const body = JSON.stringify({
+		type: 'Feature',
+		properties: { name: 'Bad coords' },
+		geometry: { type: 'LineString', coordinates: coords },
+	});
+	return new File([body], 'route.geojson');
+}
+
+test('GeoJSON import — skips non-numeric lng/lat, no NaN distance', async () => {
+	// A non-conformant export with string / null coordinates used to write
+	// the string straight into the TrackPoint, poisoning the haversine sum
+	// into NaN distance. The bad points must be skipped, not stored.
+	const routes = await parseRouteFile(
+		rawGeojsonFile([['1.5', '2.5'], [null, 2.5], [0, 0], [0, 0.001]]),
+	);
+	assert.equal(routes.length, 1);
+	assert.equal(routes[0].waypoints.length, 2);
+	assert.equal(routes[0].waypoints[0].lng, 0);
+	assert.equal(routes[0].waypoints[1].lng, 0);
+	assert.equal(routes[0].waypoints[1].lat, 0.001);
+	assert.ok(Number.isFinite(routes[0].distance_m), 'distance must be a finite number');
+	assert.ok(routes[0].distance_m > 0);
+});
