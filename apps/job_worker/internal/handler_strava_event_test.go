@@ -234,6 +234,47 @@ func TestStravaEvent_RateLimitDefersAndRollsBackDedupe(t *testing.T) {
 	}
 }
 
+// A backfill (strava-import EF) inserting the SAME activity between this
+// handler's dedupe check and its own insert hits the per-user external_id
+// unique index, surfacing a 23505 (409). That is a benign duplicate — the
+// activity is now imported by the other writer — and MUST finish done, not
+// flip the job to permanent-failed. Mirrors the docs' "ON CONFLICT DO NOTHING,
+// first writer wins, duplicates silently ignored" contract.
+func TestStravaEvent_DuplicateInsertRaceFinishesDone(t *testing.T) {
+	be := newFakeBackend()
+	be.integrationByAthlete[200] = "user-A"
+	be.tokensByUser["user-A"] = TokenPair{AccessToken: "at-A", RefreshToken: "rt-A"}
+	st := &fakeStrava{
+		byActivity: map[int64]StravaActivityResult{
+			100: {Status: StravaFetchOK, Activity: &StravaActivity{
+				ID: 100, Name: "Morning Run", Distance: 5000, MovingTime: 1500,
+				StartDate: "2026-05-11T10:00:00Z", Type: "Run", SportType: "Run",
+			}},
+		},
+	}
+	// The concurrent backfill won the race: the runs insert collides on the
+	// per-user external_id unique index. PostgREST surfaces 23505 as a 409.
+	be.insertStravaRunErr = &HTTPError{
+		StatusCode: 409,
+		Body:       `{"code":"23505","message":"duplicate key value violates unique constraint \"runs_external_id_user\""}`,
+	}
+	be.jobs = []*Job{{
+		ID: 1, Kind: "strava_event",
+		Payload: stravaEventPayload(t, StravaEventPayload{
+			ObjectType: "activity", AspectType: "create",
+			ObjectID: 100, OwnerID: 200, EventTime: time.Now().Unix(),
+		}),
+	}}
+	w := newStravaWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.finished) != 1 || be.finished[0].Status != "done" {
+		t.Fatalf("a duplicate-key insert race must finish done (benign duplicate); got %v", be.finished)
+	}
+}
+
 func TestStravaEvent_NoStravaClientFailsPermanent(t *testing.T) {
 	be := newFakeBackend()
 	be.jobs = []*Job{{

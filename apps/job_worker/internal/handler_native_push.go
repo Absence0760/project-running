@@ -83,6 +83,13 @@ func (w *Worker) handleNativePush(ctx context.Context, job *Job) error {
 	msg := renderNativeMessage(*n, w.AppBaseURL, localeFromPrefs(prefs))
 
 	var transient *HTTPError
+	// deliverable tracks whether any device sat on a configured-platform
+	// transport. When every token is on an unconfigured platform we leave the
+	// row pending (no stamp) so a later credentialed deploy can deliver it —
+	// matching the nil-sender posture. But an unconfigured device must NOT
+	// abort delivery to a configured one in the same list, so we skip-and-
+	// continue rather than returning early.
+	deliverable := false
 	for _, tok := range tokens {
 		status, sendErr := w.NativePush.Send(ctx, nativepush.DeviceToken{
 			Platform: tok.Platform,
@@ -91,36 +98,40 @@ func (w *Worker) handleNativePush(ctx context.Context, job *Job) error {
 		switch {
 		case errors.Is(sendErr, nativepush.ErrPlatformNotConfigured):
 			// That platform's transport isn't wired (e.g. APNs keys unset but
-			// an iOS token is registered). Skip this device — the credential
-			// gate is per-platform. Don't fail the job; the row may still get
-			// delivered to the device on a later, fully-credentialed deploy,
-			// so do NOT mark this device handled here — but the row-level
-			// stamp below is intentionally still applied once any send path
-			// runs. To keep the per-platform backlog deliverable, treat an
-			// unconfigured platform like the nil-sender branch: leave pending.
-			w.Log.Info("native_push: platform not configured; leaving row pending", "platform", tok.Platform)
-			return nil
+			// an iOS token is registered). Skip just this device — the
+			// credential gate is per-platform — and keep delivering to the
+			// rest of the list. This device's leg may still be delivered on a
+			// later, fully-credentialed deploy IF no other device on this row
+			// got it; that "all unconfigured" case is the only one that leaves
+			// the row pending (see the deliverable gate below).
+			w.Log.Info("native_push: platform not configured; skipping device", "platform", tok.Platform)
+			continue
 		case sendErr != nil:
 			// Transport failure (DNS, dial, reset) — retry the whole job.
+			deliverable = true
 			w.Log.Warn("native_push: transport error", "platform", tok.Platform, "err", sendErr)
 			transient = &HTTPError{StatusCode: http.StatusServiceUnavailable, Body: sendErr.Error()}
 		case nativepush.IsDeadToken(status):
 			// The token is dead (app uninstalled / token rotated). Prune it so
 			// it stops being retried for every future notification.
 			// Best-effort — a failed prune isn't worth failing the job over.
+			deliverable = true
 			w.Log.Info("native_push: pruning dead token", "platform", tok.Platform, "status", status)
 			if err := w.Backend.ClearDeviceToken(ctx, tok.Token); err != nil {
 				w.Log.Warn("native_push: prune failed", "platform", tok.Platform, "err", err)
 			}
 		case nativepush.IsTransient(status):
 			// Push service throttling or down — retry the whole job.
+			deliverable = true
 			w.Log.Warn("native_push: transient push-service status", "platform", tok.Platform, "status", status)
 			transient = &HTTPError{StatusCode: status}
 		case status >= 200 && status < 300:
+			deliverable = true
 			w.Log.Info("native_push: sent", "kind", n.Kind, "platform", tok.Platform, "status", status)
 		default:
 			// Other 4xx (400 bad payload, 403 bad auth) — permanent for this
 			// token. Drop it from this send; don't fail the job.
+			deliverable = true
 			w.Log.Warn("native_push: permanent push-service status; dropping", "platform", tok.Platform, "status", status)
 		}
 	}
@@ -129,6 +140,13 @@ func (w *Worker) handleNativePush(ctx context.Context, job *Job) error {
 		// At least one delivery should be retried. Don't stamp — the next
 		// attempt re-sends (Tag coalesces on the device).
 		return transient
+	}
+	if !deliverable {
+		// Every device was on an unconfigured platform. Leave the row pending
+		// (no stamp) so a later credentialed deploy can deliver it — the
+		// nil-sender posture, applied per-row.
+		w.Log.Info("native_push: no configured platform for any device; leaving row pending", "user_id", n.UserID)
+		return nil
 	}
 	if err := w.Backend.MarkNotificationNativePushed(ctx, n.ID); err != nil {
 		return fmt.Errorf("mark sent: %w", err)
