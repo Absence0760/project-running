@@ -55,7 +55,7 @@ export interface RunSignUpResult {
 export interface MappedRaceRun {
   started_at: string;
   duration_s: number;
-  distance_m: number | null;
+  distance_m: number;
   source: 'race';
   activity_type: 'run';
   is_public: boolean;
@@ -68,8 +68,11 @@ export interface MappedRaceRun {
  * Map one RunSignUp finisher onto a runs row for `userId`. `raceName` +
  * `raceDate` + `distanceM` come from the race_listings row being imported;
  * `chip_time` is authoritative for duration_s, falling back to clock (gun)
- * time when chip is absent. Returns null when there is no usable time at all
- * (a DNS/DNF row with no result is not a run).
+ * time when chip is absent. Returns null when the result can't become a valid
+ * runs row: no usable time (a DNS/DNF row with no result is not a run), or a
+ * null `distanceM` — `runs.distance_m` is NOT NULL, so a listing with no
+ * stored distance would otherwise produce a row that fails the batch insert
+ * (23502) and silently imports nothing for the whole race.
  */
 export function mapRunSignUpResult(
   r: RunSignUpResult,
@@ -86,6 +89,11 @@ export function mapRunSignUpResult(
   const gun = capField(r.clock_time);
   const durationS = parseClockToSeconds(chip || gun);
   if (durationS <= 0) return null;
+  // runs.distance_m is NOT NULL. A listing with no stored distance can't yield
+  // a valid run; drop the result rather than emit a row that 23502s the batch.
+  if (opts.distanceM == null || !Number.isFinite(opts.distanceM) || opts.distanceM <= 0) {
+    return null;
+  }
 
   const bib = capField(r.bib_num);
   const startedAt = `${opts.raceDate}T10:00:00Z`;
