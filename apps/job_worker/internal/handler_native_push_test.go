@@ -233,6 +233,60 @@ func TestNativePush_PlatformNotConfiguredLeavesRowPending(t *testing.T) {
 	}
 }
 
+// A user with one configured-platform device and one unconfigured-platform
+// device must still receive the push on the configured device. The
+// unconfigured leg is skipped, not allowed to abort delivery to the rest of
+// the list — and the row is stamped because a configured send went through.
+// Regression guard: ordering the unconfigured token first must not strand the
+// configured one.
+func TestNativePush_MixedPlatformSendsConfiguredSkipsUnconfigured(t *testing.T) {
+	for _, order := range []struct {
+		name   string
+		tokens []DeviceTokenRow
+	}{
+		{"unconfigured_first", []DeviceTokenRow{iosToken("tok-ios"), androidToken("tok-android")}},
+		{"configured_first", []DeviceTokenRow{androidToken("tok-android"), iosToken("tok-ios")}},
+	} {
+		t.Run(order.name, func(t *testing.T) {
+			be := seededNativeBackend(eventReminderRow(), nil, order.tokens...)
+			sender := &fakeNativePushSender{platformErr: map[string]bool{"ios": true}}
+			w := newNativePushTestWorker(be, sender)
+
+			if err := w.handleNativePush(context.Background(), nativePushJob("n1")); err != nil {
+				t.Fatalf("handler: %v", err)
+			}
+			var sentAndroid bool
+			for _, tok := range sender.sent {
+				if tok.Platform == "android" {
+					sentAndroid = true
+				}
+			}
+			if !sentAndroid {
+				t.Fatalf("the configured android device must receive the push, sent=%v", sender.sent)
+			}
+			if len(be.markedNativePushed) != 1 {
+				t.Errorf("a configured send went through, so the row must be stamped, got %v", be.markedNativePushed)
+			}
+		})
+	}
+}
+
+// When EVERY device is on an unconfigured platform, the row stays pending (no
+// stamp) so a later credentialed deploy can deliver it — matching the
+// nil-sender posture.
+func TestNativePush_AllUnconfiguredLeavesRowPending(t *testing.T) {
+	be := seededNativeBackend(eventReminderRow(), nil, iosToken("tok-ios-1"), iosToken("tok-ios-2"))
+	sender := &fakeNativePushSender{platformErr: map[string]bool{"ios": true}}
+	w := newNativePushTestWorker(be, sender)
+
+	if err := w.handleNativePush(context.Background(), nativePushJob("n1")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(be.markedNativePushed) != 0 {
+		t.Errorf("all-unconfigured must NOT stamp — row stays pending, got %v", be.markedNativePushed)
+	}
+}
+
 func TestNativePush_DeadTokenPrunedAndHandled(t *testing.T) {
 	be := seededNativeBackend(eventReminderRow(), nil, androidToken("tok-dead"), androidToken("tok-live"))
 	sender := &fakeNativePushSender{statuses: []int{404, 200}} // first UNREGISTERED, second ok
