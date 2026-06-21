@@ -369,6 +369,43 @@ void main() {
       expect(r.waypoints, hasLength(2));
       expect(r.waypoints[1].lng, 0.002);
     });
+
+    test('skips coordinates with non-numeric lng/lat instead of crashing', () {
+      final geojson = {
+        'geometry': {
+          'coordinates': [
+            ['1.5', '2.5'],
+            [null, 2.5],
+            [0.0, 0.0],
+            [0.001, 0.0],
+          ],
+        },
+      };
+
+      final r = RouteParser.fromGeoJson(geojson);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.waypoints[0].lng, 0.0);
+      expect(r.waypoints[1].lng, 0.001);
+      expect(r.distanceMetres, closeTo(_equatorOneThousandthDeg, 0.01));
+    });
+
+    test('drops a non-numeric elevation but keeps the point', () {
+      final geojson = {
+        'geometry': {
+          'coordinates': [
+            [0.0, 0.0, '100'],
+            [0.001, 0.0, 110],
+          ],
+        },
+      };
+
+      final r = RouteParser.fromGeoJson(geojson);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.waypoints[0].elevationMetres, isNull);
+      expect(r.waypoints[1].elevationMetres, 110.0);
+    });
   });
 
   group('FitParser', () {

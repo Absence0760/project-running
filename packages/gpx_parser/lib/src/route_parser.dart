@@ -137,10 +137,20 @@ class RouteParser {
     final points = <Waypoint>[];
     for (final c in coords) {
       if (c is List && c.length >= 2) {
-        final lng = (c[0] as num).toDouble();
-        final lat = (c[1] as num).toDouble();
-        final ele = c.length >= 3 ? (c[2] as num).toDouble() : null;
-        points.add(Waypoint(lat: lat, lng: lng, elevationMetres: ele));
+        // GeoJSON from hand-edits or non-conformant exporters can carry
+        // string / null coordinate elements. A blind `as num` cast threw
+        // and aborted the entire import on the first bad point; skip the
+        // point instead, matching the GPX/KML paths and the web twin.
+        final lngRaw = c[0];
+        final latRaw = c[1];
+        if (lngRaw is! num || latRaw is! num) continue;
+        final eleRaw = c.length >= 3 ? c[2] : null;
+        final ele = eleRaw is num ? eleRaw.toDouble() : null;
+        points.add(Waypoint(
+          lat: latRaw.toDouble(),
+          lng: lngRaw.toDouble(),
+          elevationMetres: ele,
+        ));
       }
     }
 
