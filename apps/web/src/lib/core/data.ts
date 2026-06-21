@@ -5148,27 +5148,42 @@ export async function fetchKudosForRun(runId: string): Promise<RunKudosSummary> 
 	};
 }
 
-export async function giveKudos(runId: string): Promise<void> {
+/// Returns `true` when a NEW kudos row was inserted, `false` when the
+/// viewer already had kudos (a 23505 no-op). The caller drives the
+/// optimistic `+1` only on a real change — a stale local
+/// `viewer_has_kudos: false` (kudos already given from another tab /
+/// session) must not bump the count, or the displayed total drifts
+/// above the server's.
+export async function giveKudos(runId: string): Promise<boolean> {
 	const { data: sessionData } = await supabase.auth.getSession();
 	const userId = sessionData.session?.user?.id;
 	if (!userId) throw new Error('Not signed in');
 	const { error } = await supabase
 		.from(TABLES.run_kudos)
 		.insert({ user_id: userId, run_id: runId });
-	// Treat duplicate as no-op.
-	if (error && error.code !== '23505') throw error;
+	if (error) {
+		if (error.code === '23505') return false;
+		throw error;
+	}
+	return true;
 }
 
-export async function rescindKudos(runId: string): Promise<void> {
+/// Returns `true` when a kudos row was actually deleted, `false` when
+/// there was nothing to remove (already rescinded). Mirror of
+/// `giveKudos` — the caller applies the optimistic `-1` only on a real
+/// delete so a stale local flag can't push the count below the server's.
+export async function rescindKudos(runId: string): Promise<boolean> {
 	const { data: sessionData } = await supabase.auth.getSession();
 	const userId = sessionData.session?.user?.id;
 	if (!userId) throw new Error('Not signed in');
-	const { error } = await supabase
+	const { data, error } = await supabase
 		.from(TABLES.run_kudos)
 		.delete()
 		.eq('run_id', runId)
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.select('user_id');
 	if (error) throw error;
+	return (data ?? []).length > 0;
 }
 
 /// Comments on a run, sorted oldest-first. Author profiles are joined

@@ -312,17 +312,17 @@
 		kudosBusy = new Set([...kudosBusy, runId]);
 		try {
 			if (current.viewer_has_kudos) {
-				await rescindKudos(runId);
+				const removed = await rescindKudos(runId);
 				feedEngagement = new Map(feedEngagement).set(runId, {
 					...current,
-					kudos_count: Math.max(current.kudos_count - 1, 0),
+					kudos_count: removed ? Math.max(current.kudos_count - 1, 0) : current.kudos_count,
 					viewer_has_kudos: false,
 				});
 			} else {
-				await giveKudos(runId);
+				const added = await giveKudos(runId);
 				feedEngagement = new Map(feedEngagement).set(runId, {
 					...current,
-					kudos_count: current.kudos_count + 1,
+					kudos_count: added ? current.kudos_count + 1 : current.kudos_count,
 					viewer_has_kudos: true,
 				});
 			}
