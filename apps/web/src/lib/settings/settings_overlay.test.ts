@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { effective, type LoadedSettings } from './settings_overlay';
+import { effective, effectivePreferredUnit, type LoadedSettings } from './settings_overlay';
 
 const empty: LoadedSettings = { universal: {}, device: {} };
 
@@ -69,4 +69,43 @@ test('effective — generic type parameter is a viewer hint, no runtime cast', (
 	const s: LoadedSettings = { universal: { preferred_unit: 'mi' }, device: {} };
 	const out = effective<number>(s, 'preferred_unit');
 	assert.equal(out, 'mi' as unknown as number);
+});
+
+test('effectivePreferredUnit — device override beats the universal bag AND the column', () => {
+	// The bug this pins: a per-device override set on /settings/devices was
+	// silently dead because the app-wide setUnit was fed only from the
+	// profile column. The device value must win.
+	const s: LoadedSettings = {
+		universal: { preferred_unit: 'km' },
+		device: { preferred_unit: 'mi' },
+	};
+	assert.equal(effectivePreferredUnit(s, 'km'), 'mi');
+});
+
+test('effectivePreferredUnit — universal bag beats the column when no device override', () => {
+	const s: LoadedSettings = { universal: { preferred_unit: 'mi' }, device: {} };
+	assert.equal(effectivePreferredUnit(s, 'km'), 'mi');
+});
+
+test('effectivePreferredUnit — falls back to the profile column when both bags are empty', () => {
+	assert.equal(effectivePreferredUnit(empty, 'mi'), 'mi');
+	assert.equal(effectivePreferredUnit(empty, 'km'), 'km');
+});
+
+test('effectivePreferredUnit — defaults to km when nothing is set anywhere', () => {
+	assert.equal(effectivePreferredUnit(empty), 'km');
+	assert.equal(effectivePreferredUnit(empty, null), 'km');
+});
+
+test('effectivePreferredUnit — any non-mi value normalises to km (matches setUnit)', () => {
+	const garbage: LoadedSettings = { universal: { preferred_unit: 'furlongs' }, device: {} };
+	assert.equal(effectivePreferredUnit(garbage, 'mi'), 'km');
+});
+
+test('effectivePreferredUnit — a null device value falls through to the universal mi', () => {
+	const s: LoadedSettings = {
+		universal: { preferred_unit: 'mi' },
+		device: { preferred_unit: null },
+	};
+	assert.equal(effectivePreferredUnit(s, 'km'), 'mi');
 });

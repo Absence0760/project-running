@@ -24,3 +24,20 @@ export function effective<T>(
 	if (fromUniversal !== undefined && fromUniversal !== null) return fromUniversal as T;
 	return fallback;
 }
+
+/// Resolve the effective distance unit for the app-wide `setUnit` signal.
+///
+/// `preferred_unit` is a UD-scope key — a device override (set on
+/// `/settings/devices`) beats the universal bag, which beats the legacy
+/// `user_profiles.preferred_unit` column. The auth store can only see the
+/// profile column, so feeding `setUnit` from it alone makes a per-device
+/// override silently dead (a browser set to 'mi' still renders km). This
+/// folds the bags on top of the column. Anything other than the literal
+/// 'mi' resolves to 'km' — the same normalisation `setUnit` applies.
+export function effectivePreferredUnit(
+	settings: LoadedSettings,
+	columnFallback?: string | null,
+): 'km' | 'mi' {
+	const resolved = effective<string>(settings, 'preferred_unit', columnFallback ?? undefined);
+	return resolved === 'mi' ? 'mi' : 'km';
+}

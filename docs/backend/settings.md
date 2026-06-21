@@ -53,7 +53,7 @@ make it `U`. A pref that only makes sense on one physical device is `D`.
 
 | Key | Type | Scope | Default | Description |
 |---|---|---|---|---|
-| `preferred_unit` | `'km' \| 'mi'` | UD | `km` | Distance unit for all displays. Mirrors `profiles.preferred_unit` today; migrate away from the column in a follow-up. |
+| `preferred_unit` | `'km' \| 'mi'` | UD | `km` | Distance unit for all displays. Mirrors `profiles.preferred_unit` today; migrate away from the column in a follow-up. **As a UD key, a per-device override (set on `/settings/devices`) wins over the universal bag, which wins over the profile column.** The web app-wide `setUnit` signal is seeded from the profile column by the auth store, then **re-resolved through the full device→universal→column overlay** in the root `+layout.svelte` (`effectivePreferredUnit` in `settings_overlay.ts`) — otherwise a per-device `mi` override would be silently dead (column-only) and the browser would render km. |
 | `default_activity_type` | `'run' \| 'walk' \| 'hike' \| 'cycle'` | UD | `run` | Pre-selected activity on the watch/phone start screen. |
 | `hr_zones` | `{ z1: int, z2: int, z3: int, z4: int, z5: int }` | U | — | HR zone upper bounds in bpm. Used by training plan pace derivation + post-run zone split. |
 | `resting_hr_bpm` | `int` | U | — | Resting heart rate. Feeds VDOT estimate if a recent race isn't available. |
