@@ -10311,6 +10311,55 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get badgesPlan10Desc => 'Concluiu 10 planos de treino';
+
+  @override
+  String get racePredictorTitle => 'Previsão de tempo de prova';
+
+  @override
+  String racePredictorAnchoredOn(String distance, String time) {
+    return 'A partir do seu esforço de $distance em $time';
+  }
+
+  @override
+  String get racePredictorColDistance => 'Distância';
+
+  @override
+  String get racePredictorColTime => 'Tempo';
+
+  @override
+  String get racePredictorColPace => 'Ritmo';
+
+  @override
+  String get racePredictorColConfidence => 'Confiança';
+
+  @override
+  String get racePredictorConfidenceHigh => 'Alta';
+
+  @override
+  String get racePredictorConfidenceModerate => 'Média';
+
+  @override
+  String get racePredictorConfidenceLow => 'Baixa';
+
+  @override
+  String get racePredictorConfReasonSimilar =>
+      'Baseado em esforços recentes próximos a esta distância.';
+
+  @override
+  String get racePredictorConfReasonExtrapolated =>
+      'Extrapolado por uma grande diferença de distância — trate como uma estimativa.';
+
+  @override
+  String get racePredictorConfReasonStale =>
+      'Ancorado em um esforço de algumas semanas atrás.';
+
+  @override
+  String get racePredictorConfReasonLimited =>
+      'Baseado em dados recentes limitados.';
+
+  @override
+  String get racePredictorFootnote =>
+      'Equivalência de Riegel a partir do seu melhor esforço recente, ponderada pela recência. Distâncias mais próximas são mais confiáveis.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -20619,4 +20668,53 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get badgesPlan10Desc => 'Concluiu 10 planos de treino';
+
+  @override
+  String get racePredictorTitle => 'Previsão de tempo de prova';
+
+  @override
+  String racePredictorAnchoredOn(String distance, String time) {
+    return 'A partir do seu esforço de $distance em $time';
+  }
+
+  @override
+  String get racePredictorColDistance => 'Distância';
+
+  @override
+  String get racePredictorColTime => 'Tempo';
+
+  @override
+  String get racePredictorColPace => 'Ritmo';
+
+  @override
+  String get racePredictorColConfidence => 'Confiança';
+
+  @override
+  String get racePredictorConfidenceHigh => 'Alta';
+
+  @override
+  String get racePredictorConfidenceModerate => 'Média';
+
+  @override
+  String get racePredictorConfidenceLow => 'Baixa';
+
+  @override
+  String get racePredictorConfReasonSimilar =>
+      'Baseado em esforços recentes próximos a esta distância.';
+
+  @override
+  String get racePredictorConfReasonExtrapolated =>
+      'Extrapolado por uma grande diferença de distância — trate como uma estimativa.';
+
+  @override
+  String get racePredictorConfReasonStale =>
+      'Ancorado em um esforço de algumas semanas atrás.';
+
+  @override
+  String get racePredictorConfReasonLimited =>
+      'Baseado em dados recentes limitados.';
+
+  @override
+  String get racePredictorFootnote =>
+      'Equivalência de Riegel a partir do seu melhor esforço recente, ponderada pela recência. Distâncias mais próximas são mais confiáveis.';
 }

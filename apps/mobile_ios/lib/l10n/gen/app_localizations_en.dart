@@ -10209,4 +10209,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get badgesPlan10Desc => 'Completed 10 training plans';
+
+  @override
+  String get racePredictorTitle => 'Race-time predictor';
+
+  @override
+  String racePredictorAnchoredOn(String distance, String time) {
+    return 'From your $distance effort in $time';
+  }
+
+  @override
+  String get racePredictorColDistance => 'Distance';
+
+  @override
+  String get racePredictorColTime => 'Time';
+
+  @override
+  String get racePredictorColPace => 'Pace';
+
+  @override
+  String get racePredictorColConfidence => 'Confidence';
+
+  @override
+  String get racePredictorConfidenceHigh => 'High';
+
+  @override
+  String get racePredictorConfidenceModerate => 'Moderate';
+
+  @override
+  String get racePredictorConfidenceLow => 'Low';
+
+  @override
+  String get racePredictorConfReasonSimilar =>
+      'Based on recent efforts close to this distance.';
+
+  @override
+  String get racePredictorConfReasonExtrapolated =>
+      'Extrapolated across a large distance gap — treat as a ballpark.';
+
+  @override
+  String get racePredictorConfReasonStale =>
+      'Anchored to an effort that\'s a few weeks old.';
+
+  @override
+  String get racePredictorConfReasonLimited => 'Based on limited recent data.';
+
+  @override
+  String get racePredictorFootnote =>
+      'Riegel equivalence from your best recent effort, recency-weighted. Closer distances are more reliable.';
 }

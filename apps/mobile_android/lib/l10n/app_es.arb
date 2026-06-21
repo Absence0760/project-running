@@ -2963,5 +2963,19 @@
   "badgesPlan3Label": "Triple finalizador",
   "badgesPlan3Desc": "Completaste 3 planes de entrenamiento",
   "badgesPlan10Label": "Veterano de planes",
-  "badgesPlan10Desc": "Completaste 10 planes de entrenamiento"
+  "badgesPlan10Desc": "Completaste 10 planes de entrenamiento",
+  "racePredictorTitle": "Predictor de tiempo de carrera",
+  "racePredictorAnchoredOn": "A partir de tu esfuerzo en {distance} en {time}",
+  "racePredictorColDistance": "Distancia",
+  "racePredictorColTime": "Tiempo",
+  "racePredictorColPace": "Ritmo",
+  "racePredictorColConfidence": "Fiabilidad",
+  "racePredictorConfidenceHigh": "Alta",
+  "racePredictorConfidenceModerate": "Media",
+  "racePredictorConfidenceLow": "Baja",
+  "racePredictorConfReasonSimilar": "Basado en esfuerzos recientes cercanos a esta distancia.",
+  "racePredictorConfReasonExtrapolated": "Extrapolado sobre una gran diferencia de distancia — tómalo como una aproximación.",
+  "racePredictorConfReasonStale": "Anclado a un esfuerzo de hace unas semanas.",
+  "racePredictorConfReasonLimited": "Basado en datos recientes limitados.",
+  "racePredictorFootnote": "Equivalencia de Riegel a partir de tu mejor esfuerzo reciente, ponderada por recencia. Las distancias cercanas son más fiables."
 }

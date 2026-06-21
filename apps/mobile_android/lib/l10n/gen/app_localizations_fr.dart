@@ -10334,4 +10334,53 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get badgesPlan10Desc => 'Vous avez terminé 10 plans d\'entraînement';
+
+  @override
+  String get racePredictorTitle => 'Prédicteur de temps de course';
+
+  @override
+  String racePredictorAnchoredOn(String distance, String time) {
+    return 'D\'après votre effort sur $distance en $time';
+  }
+
+  @override
+  String get racePredictorColDistance => 'Distance';
+
+  @override
+  String get racePredictorColTime => 'Temps';
+
+  @override
+  String get racePredictorColPace => 'Allure';
+
+  @override
+  String get racePredictorColConfidence => 'Fiabilité';
+
+  @override
+  String get racePredictorConfidenceHigh => 'Élevée';
+
+  @override
+  String get racePredictorConfidenceModerate => 'Moyenne';
+
+  @override
+  String get racePredictorConfidenceLow => 'Faible';
+
+  @override
+  String get racePredictorConfReasonSimilar =>
+      'Basé sur des efforts récents proches de cette distance.';
+
+  @override
+  String get racePredictorConfReasonExtrapolated =>
+      'Extrapolé sur un grand écart de distance — à prendre comme une estimation.';
+
+  @override
+  String get racePredictorConfReasonStale =>
+      'Ancré sur un effort vieux de quelques semaines.';
+
+  @override
+  String get racePredictorConfReasonLimited =>
+      'Basé sur des données récentes limitées.';
+
+  @override
+  String get racePredictorFootnote =>
+      'Équivalence de Riegel à partir de votre meilleur effort récent, pondérée par la récence. Les distances proches sont plus fiables.';
 }
