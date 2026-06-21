@@ -34,9 +34,12 @@ test('store keeps markAllRead (no-unsubscribe) distinct from clear (logout teard
 		/clear\s*\(\s*\)\s*\{[^}]*unsubscribe\(\)/,
 		'clear() must still unsubscribe — it is the logout teardown',
 	);
-	// markAllRead() must NOT unsubscribe.
-	const markAll = store.slice(store.indexOf('markAllRead('));
-	const markAllBody = markAll.slice(0, markAll.indexOf('}') + 1);
+	// markAllRead() must NOT unsubscribe. Bound the slice to the next method's
+	// doc-comment marker (not the first `}`) so a future nested-brace refactor
+	// of markAllRead can't shrink the window and hide a buried unsubscribe().
+	const afterMarkAll = store.slice(store.indexOf('markAllRead('));
+	const nextMethod = afterMarkAll.indexOf('///', 1);
+	const markAllBody = afterMarkAll.slice(0, nextMethod > 0 ? nextMethod : afterMarkAll.length);
 	assert.doesNotMatch(
 		markAllBody,
 		/unsubscribe\(\)/,
