@@ -8445,6 +8445,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String gymDeleteFailed(Object error) {
+    return 'Não foi possível eliminar o treino: $error';
+  }
+
+  @override
   String get gymNotes => 'Notas';
 
   @override
@@ -9139,6 +9144,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String nutritionDeleteFailed(String error) {
+    return 'Não foi possível eliminar a entrada: $error';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Offline — as alterações serão sincronizadas ao reconectar';
 
@@ -9259,6 +9269,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String nutritionTemplateDeleteFailed(String error) {
+    return 'Não foi possível eliminar o modelo: $error';
+  }
+
+  @override
   String nutritionTemplateItems(int n) {
     return '$n itens';
   }
@@ -9318,6 +9333,11 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String nutritionRecipeLogFailed(String error) {
     return 'Não foi possível registar a receita: $error';
+  }
+
+  @override
+  String nutritionRecipeDeleteFailed(String error) {
+    return 'Não foi possível eliminar a receita: $error';
   }
 
   @override
@@ -19192,6 +19212,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String gymDeleteFailed(Object error) {
+    return 'Não foi possível excluir o treino: $error';
+  }
+
+  @override
   String get gymNotes => 'Notas';
 
   @override
@@ -19886,6 +19911,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String nutritionDeleteFailed(String error) {
+    return 'Não foi possível excluir a entrada: $error';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Offline — as alterações serão sincronizadas ao reconectar';
 
@@ -20006,6 +20036,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String nutritionTemplateDeleteFailed(String error) {
+    return 'Não foi possível excluir o modelo: $error';
+  }
+
+  @override
   String nutritionTemplateItems(int n) {
     return '$n itens';
   }
@@ -20065,6 +20100,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String nutritionRecipeLogFailed(String error) {
     return 'Não foi possível registrar a receita: $error';
+  }
+
+  @override
+  String nutritionRecipeDeleteFailed(String error) {
+    return 'Não foi possível excluir a receita: $error';
   }
 
   @override

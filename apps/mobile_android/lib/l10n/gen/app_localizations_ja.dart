@@ -8008,6 +8008,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String gymDeleteFailed(Object error) {
+    return 'ワークアウトを削除できませんでした: $error';
+  }
+
+  @override
   String get gymNotes => 'メモ';
 
   @override
@@ -8683,6 +8688,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String nutritionDeleteFailed(String error) {
+    return 'エントリーを削除できませんでした: $error';
+  }
+
+  @override
   String get nutritionOfflineQueued => 'オフライン — 再接続時に変更を同期します';
 
   @override
@@ -8795,6 +8805,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String nutritionTemplateDeleteFailed(String error) {
+    return 'テンプレートを削除できませんでした: $error';
+  }
+
+  @override
   String nutritionTemplateItems(int n) {
     return '$n 件';
   }
@@ -8854,6 +8869,11 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String nutritionRecipeLogFailed(String error) {
     return 'レシピを記録できませんでした：$error';
+  }
+
+  @override
+  String nutritionRecipeDeleteFailed(String error) {
+    return 'レシピを削除できませんでした: $error';
   }
 
   @override

@@ -11353,6 +11353,13 @@
       "error": {}
     }
   },
+  "gymDeleteFailed": "Couldn't delete the workout: {error}",
+  "@gymDeleteFailed": {
+    "description": "Banner when deleting a gym workout fails.",
+    "placeholders": {
+      "error": {}
+    }
+  },
   "gymNotes": "Notes",
   "gymKg": "kg",
   "gymReps": "Reps",
@@ -11899,6 +11906,8 @@
       }
     }
   },
+  "nutritionDeleteFailed": "Couldn’t delete the entry: {error}",
+  "@nutritionDeleteFailed": {"description":"Banner when deleting a logged food entry fails","placeholders":{"error":{"type":"String"}}},
   "nutritionOfflineQueued": "Offline — changes will sync when you reconnect",
   "nutritionOfflineCached": "Offline — showing saved entries",
   "nutritionLogTitle": "Log food",
@@ -11965,6 +11974,8 @@
   "@nutritionTemplateLogged": {"description":"Banner after logging a meal template: n items from the named template","placeholders":{"n":{"type":"int"},"name":{"type":"String"}}},
   "nutritionTemplateLogFailed": "Couldn’t log the template: {error}",
   "@nutritionTemplateLogFailed": {"description":"Banner when logging a meal template fails","placeholders":{"error":{"type":"String"}}},
+  "nutritionTemplateDeleteFailed": "Couldn’t delete the template: {error}",
+  "@nutritionTemplateDeleteFailed": {"description":"Banner when deleting a meal template fails","placeholders":{"error":{"type":"String"}}},
   "nutritionTemplateItems": "{n} items",
   "@nutritionTemplateItems": {"description":"Subtitle on a meal-template row: number of items","placeholders":{"n":{"type":"int"}}},
   "nutritionDeleteTemplate": "Delete",
@@ -11988,6 +11999,8 @@
   "@nutritionRecipeLogged": {"description":"Banner after logging a recipe: n servings of the named recipe","placeholders":{"n":{"type":"int"},"name":{"type":"String"}}},
   "nutritionRecipeLogFailed": "Couldn’t log the recipe: {error}",
   "@nutritionRecipeLogFailed": {"description":"Banner when logging a recipe fails","placeholders":{"error":{"type":"String"}}},
+  "nutritionRecipeDeleteFailed": "Couldn’t delete the recipe: {error}",
+  "@nutritionRecipeDeleteFailed": {"description":"Banner when deleting a recipe fails","placeholders":{"error":{"type":"String"}}},
   "nutritionRecipeMeta": "{n} ingredients · {servings} servings",
   "@nutritionRecipeMeta": {"description":"Subtitle on a recipe row: ingredient count + servings","placeholders":{"n":{"type":"int"},"servings":{"type":"num","format":"decimalPattern"}}},
   "nutritionDeleteRecipe": "Delete",

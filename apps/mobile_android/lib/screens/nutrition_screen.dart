@@ -448,8 +448,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ) ??
         false;
     if (!ok) return;
-    await _templateStore.deleteLocal(t.id);
-    await _maybeSyncTemplates();
+    try {
+      await _templateStore.deleteLocal(t.id);
+      await _maybeSyncTemplates();
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionTemplateDeleteFailed('$e'));
+      }
+    }
   }
 
   /// Best-effort: pull saved recipes (with their ingredients) and overlay the
@@ -687,8 +693,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ) ??
         false;
     if (!ok) return;
-    await _recipeStore.deleteLocal(r.id);
-    await _maybeSyncRecipes();
+    try {
+      await _recipeStore.deleteLocal(r.id);
+      await _maybeSyncRecipes();
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionRecipeDeleteFailed('$e'));
+      }
+    }
   }
 
   Future<void> _delete(FoodEntry e) async {
@@ -714,8 +726,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ) ??
         false;
     if (!ok) return;
-    await widget.store.deleteLocal(e.id);
-    await _maybeSync();
+    try {
+      await widget.store.deleteLocal(e.id);
+      await _maybeSync();
+    } catch (err) {
+      if (mounted) {
+        showTopBanner(context, l10n.nutritionDeleteFailed('$err'));
+      }
+    }
   }
 
   List<FoodEntry> get _todayEntries => [

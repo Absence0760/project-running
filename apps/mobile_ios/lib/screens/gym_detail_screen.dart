@@ -407,9 +407,15 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         ) ??
         false;
     if (!ok) return;
-    await widget.store.deleteLocal(w.id);
-    await _maybeSync();
-    if (mounted) Navigator.pop(context);
+    try {
+      await widget.store.deleteLocal(w.id);
+      await _maybeSync();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.gymDeleteFailed('$e'));
+      }
+    }
   }
 
   List<GymSetLike> _setsToLikes(StoredGymWorkout w) => [

@@ -13968,6 +13968,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t update visibility: {error}'**
   String gymVisibilityFailed(Object error);
 
+  /// Banner when deleting a gym workout fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete the workout: {error}'**
+  String gymDeleteFailed(Object error);
+
   /// No description provided for @gymNotes.
   ///
   /// In en, this message translates to:
@@ -15180,6 +15186,12 @@ abstract class AppLocalizations {
   /// **'{item} will be removed from today\'s log.'**
   String nutritionDeleteEntryMessage(String item);
 
+  /// Banner when deleting a logged food entry fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t delete the entry: {error}'**
+  String nutritionDeleteFailed(String error);
+
   /// No description provided for @nutritionOfflineQueued.
   ///
   /// In en, this message translates to:
@@ -15390,6 +15402,12 @@ abstract class AppLocalizations {
   /// **'Couldn’t log the template: {error}'**
   String nutritionTemplateLogFailed(String error);
 
+  /// Banner when deleting a meal template fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t delete the template: {error}'**
+  String nutritionTemplateDeleteFailed(String error);
+
   /// Subtitle on a meal-template row: number of items
   ///
   /// In en, this message translates to:
@@ -15491,6 +15509,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t log the recipe: {error}'**
   String nutritionRecipeLogFailed(String error);
+
+  /// Banner when deleting a recipe fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t delete the recipe: {error}'**
+  String nutritionRecipeDeleteFailed(String error);
 
   /// Subtitle on a recipe row: ingredient count + servings
   ///
