@@ -210,3 +210,31 @@ test('adherence: a skipped step counts toward total but not completed', () => {
 	assert.equal(out.adherencePct, 0.5);
 	assert.equal(out.verdict, 'partial');
 });
+
+test('adherence: more completed results than steps clamps to 1.0', () => {
+	const steps = [step({ itemId: 'a' }), step({ itemId: 'b' })];
+	const results = [
+		result({ itemId: 'a' }),
+		result({ itemId: 'a' }),
+		result({ itemId: 'b' })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.totalSteps, 2);
+	assert.equal(out.completedSteps, 2);
+	assert.equal(out.adherencePct, 1);
+	assert.equal(out.verdict, 'completed');
+});
+
+test('adherence: results with itemIds not matching any step are ignored', () => {
+	const steps = [step({ itemId: 'a' }), step({ itemId: 'b' })];
+	const results = [
+		result({ itemId: 'a' }),
+		result({ itemId: 'ghost' }),
+		result({ itemId: 'phantom' })
+	];
+	const out = computeSessionAdherence(steps, results);
+	assert.equal(out.totalSteps, 2);
+	assert.equal(out.completedSteps, 1);
+	assert.equal(out.adherencePct, 0.5);
+	assert.equal(out.verdict, 'partial');
+});

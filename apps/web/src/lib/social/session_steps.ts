@@ -149,8 +149,12 @@ export function computeSessionAdherence(
 	results: SessionStepResult[]
 ): SessionAdherence {
 	const totalSteps = steps.length;
-	const completedSteps = results.filter((r) => r.status === 'completed').length;
-	const adherencePct = totalSteps === 0 ? 0 : completedSteps / totalSteps;
+	const stepIds = new Set(steps.map((s) => s.itemId));
+	const completedSteps = Math.min(
+		results.filter((r) => r.status === 'completed' && stepIds.has(r.itemId)).length,
+		totalSteps
+	);
+	const adherencePct = totalSteps === 0 ? 0 : Math.min(1, completedSteps / totalSteps);
 
 	let verdict: SessionAdherence['verdict'];
 	if (completedSteps === 0) verdict = 'abandoned';

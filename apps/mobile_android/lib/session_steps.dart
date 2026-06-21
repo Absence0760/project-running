@@ -213,10 +213,15 @@ SessionAdherence computeSessionAdherence(
   List<SessionStepResult> results,
 ) {
   final totalSteps = steps.length;
-  final completedSteps = results
-      .where((r) => r.status == SessionStepStatus.completed)
+  final stepIds = steps.map((s) => s.itemId).toSet();
+  final completedRaw = results
+      .where(
+          (r) => r.status == SessionStepStatus.completed && stepIds.contains(r.itemId))
       .length;
-  final adherencePct = totalSteps == 0 ? 0.0 : completedSteps / totalSteps;
+  final completedSteps = completedRaw > totalSteps ? totalSteps : completedRaw;
+  final adherencePct = totalSteps == 0
+      ? 0.0
+      : (completedSteps / totalSteps).clamp(0.0, 1.0).toDouble();
 
   final SessionVerdict verdict;
   if (completedSteps == 0) {
