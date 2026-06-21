@@ -172,11 +172,27 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		await page.getByRole('radio', { name: /Miles/ }).click();
 		await page.getByRole('button', { name: 'Continue' }).click();
 
-		// Step 3 — goal
+		// Step 3 — goal. Every option renders its localized
+		// `onboarding.goal.<value>` label (not the raw i18n key) — guards
+		// the regression where the labels were hard-coded English in the
+		// helper and bypassed i18n. en labels here; the parity test pins
+		// the other five locales.
 		await expect(
 			page.getByRole('heading', { name: /main goal/i })
 		).toBeVisible();
-		await page.getByRole('radio', { name: /Run a 10K/i }).click();
+		for (const label of [
+			'Stay fit + healthy',
+			'Lose weight',
+			'Run a 5K',
+			'Run a 10K',
+			'Run a half marathon',
+			'Run a marathon',
+		]) {
+			await expect(
+				page.getByRole('radio', { name: label, exact: true })
+			).toBeVisible();
+		}
+		await page.getByRole('radio', { name: 'Run a 10K', exact: true }).click();
 		await page.getByRole('button', { name: 'Continue' }).click();
 
 		// Step 4 — about you (skip to keep the test focused). `exact`

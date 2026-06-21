@@ -36,14 +36,11 @@ export const PRIMARY_GOAL_VALUES = [
 
 export type PrimaryGoal = (typeof PRIMARY_GOAL_VALUES)[number];
 
-export const PRIMARY_GOAL_LABELS: Record<PrimaryGoal, string> = {
-	general_fitness: 'Stay fit + healthy',
-	weight_loss: 'Lose weight',
-	'5k': 'Run a 5K',
-	'10k': 'Run a 10K',
-	half_marathon: 'Run a half marathon',
-	marathon: 'Run a marathon',
-};
+/// Goal labels are NOT defined here — they resolve through the i18n keys
+/// `onboarding.goal.<value>` via `m()` at the call site, so the wizard's
+/// Goal step is localized (mobile's twin keeps them ARB-localized
+/// likewise). Hard-coding English label strings into this pure parity
+/// contract would re-introduce English-in-the-helper.
 
 /// Total wizard steps. Drives the progress-dot indicator + the
 /// per-step navigation math. Increment when adding a step (and add
