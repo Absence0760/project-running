@@ -298,7 +298,8 @@ export type GymProgressionScheme =
 	| 'five_by_five'
 	| 'percent_cycle'
 	| 'rpe_autoreg';
-// gym_routine_sets.set_type — set role within an exercise.
+// gym_routine_sets.set_type (planned) AND gym_sets.set_type (logged) — set role
+// within an exercise. One vocabulary, two CHECK-constrained columns.
 export type GymSetType = 'warmup' | 'working' | 'dropset' | 'amrap' | 'failure' | 'backoff';
 // exercises.category — catalogue muscle-group / category (migration 20270222_001).
 export type ExerciseCategory =

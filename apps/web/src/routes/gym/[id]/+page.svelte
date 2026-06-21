@@ -270,6 +270,13 @@
 				? t('gym.pr.volume')
 				: t('gym.pr.e1rm');
 	}
+	// Only surface a chip for non-default roles; a plain working set shows
+	// nothing so the common case stays uncluttered.
+	function setTypeChip(s: GymSet): string | null {
+		return s.set_type && s.set_type !== 'working'
+			? t(`gym.routine.setType.${s.set_type}`)
+			: null;
+	}
 	function setSummary(s: GymSet): string {
 		const parts: string[] = [];
 		if (s.reps != null) parts.push(`${s.reps}`);
@@ -534,7 +541,12 @@
 					{#each block.sets as s (s.id)}
 						<li>
 							<span class="set-n">{t('gym.setN', { n: s.set_index + 1 })}</span>
-							<span class="set-val">{setSummary(s) || '—'}</span>
+							<span class="set-val">
+								{setSummary(s) || '—'}
+								{#if setTypeChip(s)}
+									<span class="set-type-chip" data-testid="gym-set-type-chip">{setTypeChip(s)}</span>
+								{/if}
+							</span>
 							<span class="rpe">{s.rpe != null ? s.rpe : '—'}</span>
 						</li>
 					{/each}
@@ -798,6 +810,18 @@
 		font-variant-numeric: tabular-nums;
 		font-weight: 500;
 		color: var(--color-text);
+	}
+	.set-type-chip {
+		display: inline-block;
+		margin-inline-start: var(--space-xs);
+		padding: 0.05rem 0.4rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
+		font-size: 0.72rem;
+		font-weight: 600;
+		font-variant-numeric: normal;
+		vertical-align: middle;
 	}
 	.rpe {
 		font-size: 0.85rem;
