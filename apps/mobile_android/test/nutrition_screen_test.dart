@@ -4,6 +4,8 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
@@ -13,6 +15,18 @@ import '../lib/screens/nutrition_screen.dart';
 class _OfflineFakeApi extends ApiClient {
   @override
   String? get userId => null;
+}
+
+class _FakePathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
+  _FakePathProvider(this._tmp);
+  final Directory _tmp;
+  @override
+  Future<String?> getApplicationDocumentsPath() async => _tmp.path;
+  @override
+  Future<String?> getApplicationSupportPath() async => _tmp.path;
+  @override
+  Future<String?> getTemporaryPath() async => _tmp.path;
 }
 
 class _ThrowingDeleteFoodStore extends LocalFoodStore {
@@ -212,6 +226,56 @@ void main() {
       expect(find.text('1 × 250 ml'), findsOneWidget);
     } finally {
       f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  // Pins the in-flight double-submit guard on Save as meal: the AppBar
+  // action disables while the create is running, so a second tap during the
+  // write window can't fire a duplicate template.
+  testWidgets('Save as meal disables while saving (no double-submit)',
+      (tester) async {
+    final f = await _store('save_meal_');
+    final pp = Directory.systemTemp.createTempSync('nutrition_pp_');
+    PathProviderPlatform.instance = _FakePathProvider(pp);
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Save as meal'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'My breakfast');
+
+      // The whole save (createLocal file I/O after the confirm) is anchored to
+      // the zone the confirm fires in, so it must run under runAsync.
+      final confirm = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Save meal'),
+      );
+      await tester.runAsync(() async {
+        await tester.tap(confirm);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
+
+      // Saved exactly once: the template section shows the one row, and the
+      // save action is re-enabled (the guard released in `finally`).
+      expect(find.text('My breakfast'), findsOneWidget);
+      final saveBtn = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.bookmark_add_outlined),
+      );
+      expect(saveBtn.onPressed, isNotNull);
+
+      // Drain the showTopBanner auto-dismiss timer (mobile-test gotcha).
+      await tester.pump(const Duration(seconds: 5));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+      pp.deleteSync(recursive: true);
     }
   });
 }
