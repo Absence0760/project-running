@@ -127,6 +127,50 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     }
   }
 
+  /// Creating any plan auto-completes the runner's existing active plan
+  /// (the one-active-per-user partial unique index — see
+  /// `TrainingService.createPlan` / `clonePlanTemplate`). That retirement is
+  /// silent and feels irreversible — weeks of a current build get marked
+  /// `completed` with no warning. Mirror web's `PlanEditor` gate: before any
+  /// create path runs, if there's an active plan, confirm the swap and show
+  /// its name. Returns true to proceed, false to keep the current plan. A
+  /// best-effort overview fetch that fails (offline) proceeds rather than
+  /// blocking creation — the backend still enforces the invariant.
+  Future<bool> _confirmReplaceActivePlan() async {
+    String? activeName;
+    try {
+      final overview = await widget.training
+          .fetchActiveOverview()
+          .timeout(kBackendLoadTimeout);
+      if (overview == null) return true;
+      activeName = overview.plan.name;
+    } catch (_) {
+      return true;
+    }
+    if (!mounted) return false;
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.planNewReplaceActiveTitle),
+        content: Text(activeName != null
+            ? l10n.planNewReplaceActiveNamed(activeName)
+            : l10n.planNewReplaceActiveUnnamed),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.planNewReplaceActiveKeep),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.planNewReplaceActiveConfirm),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _pickTemplate() async {
     if (_templates.isEmpty || _cloning) return;
     final l10n = AppLocalizations.of(context);
@@ -136,6 +180,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       builder: (_) => _TemplatePicker(options: _templates),
     );
     if (picked == null || !mounted) return;
+    if (!await _confirmReplaceActivePlan() || !mounted) return;
     setState(() => _cloning = true);
     try {
       final newId = await widget.training
@@ -186,6 +231,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     if (picked == null || !mounted) return;
     final generated = instantiateStarter(picked.id, _startDate, age: _viewerAge);
     if (generated == null) return;
+    if (!await _confirmReplaceActivePlan() || !mounted) return;
     setState(() => _creatingStarter = true);
     try {
       final plan = await widget.training
@@ -255,6 +301,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     if (name.isEmpty || _busy) return;
     final preview = _preview();
     if (preview == null) return;
+    if (!await _confirmReplaceActivePlan() || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -323,6 +370,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               hintText: l10n.planNewNameHint,
             ),
             maxLength: 80,
+            // Re-evaluate the Create button's enabled state as the name is
+            // typed — without this the button (which gates on a non-empty
+            // name) only un-disables on the next unrelated rebuild.
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<GoalEvent>(

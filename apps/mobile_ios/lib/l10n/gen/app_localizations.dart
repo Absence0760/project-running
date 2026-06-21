@@ -7556,6 +7556,36 @@ abstract class AppLocalizations {
   /// **'Couldn\'t create that plan: {error}'**
   String planNewStarterCreateFailed(String error);
 
+  /// Title of the confirm dialog shown before a new plan retires the current active one
+  ///
+  /// In en, this message translates to:
+  /// **'Replace your active plan?'**
+  String get planNewReplaceActiveTitle;
+
+  /// Body of the replace-active-plan confirm dialog when the existing plan has a name
+  ///
+  /// In en, this message translates to:
+  /// **'You already have an active plan: \"{name}\". Creating a new plan will mark the current one as completed (you can still find it under Manage plans). Continue?'**
+  String planNewReplaceActiveNamed(String name);
+
+  /// Body of the replace-active-plan confirm dialog when the existing plan name is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'You already have an active plan. Creating a new plan will mark the current one as completed. Continue?'**
+  String get planNewReplaceActiveUnnamed;
+
+  /// Confirm button of the replace-active-plan dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Replace plan'**
+  String get planNewReplaceActiveConfirm;
+
+  /// Cancel button of the replace-active-plan dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Keep current'**
+  String get planNewReplaceActiveKeep;
+
   /// Built-in starter plan name
   ///
   /// In en, this message translates to:

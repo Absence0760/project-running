@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plan_new_screen.dart';
 import '../lib/social_service.dart';
+import '../lib/training.dart';
 import '../lib/training_service.dart';
 
 Future<void> _pump(WidgetTester tester) {
@@ -30,6 +31,71 @@ class _FakeTraining extends TrainingService {
   Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async =>
       templatesByClub[clubId] ?? const [];
 }
+
+/// Drives the replace-active-plan confirm gate: `fetchActiveOverview`
+/// returns a configurable existing active plan (or null), and `createPlan`
+/// records whether it was reached. The viewer-demographic fetches return
+/// quietly so no network is touched in the widget test.
+class _GateTraining extends TrainingService {
+  final ActivePlanOverview? activeOverview;
+  bool createCalled = false;
+  _GateTraining({this.activeOverview});
+
+  @override
+  Future<TrainingGender> fetchViewerGender() async => null;
+  @override
+  Future<int?> fetchViewerAge() async => null;
+  @override
+  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async =>
+      const [];
+  @override
+  Future<ActivePlanOverview?> fetchActiveOverview() async => activeOverview;
+
+  @override
+  Future<TrainingPlanRow> createPlan({
+    required String name,
+    required GoalEvent goalEvent,
+    required double goalDistanceM,
+    int? goalTimeSec,
+    int? recent5kSec,
+    required DateTime startDate,
+    required int daysPerWeek,
+    String? notes,
+    required GeneratedPlan generated,
+  }) async {
+    createCalled = true;
+    // Throw after recording the call so the screen's try/catch keeps us on
+    // the wizard (a real success navigates to PlanDetailScreen, which is
+    // Supabase-backed and unbuildable in a widget test). The test only
+    // asserts the gate reached createPlan.
+    throw Exception('test: skip navigation');
+  }
+}
+
+TrainingPlanRow _planRow(String id, String name) => TrainingPlanRow(
+      id: id,
+      userId: 'me-uuid',
+      name: name,
+      goalEvent: 'distance_half',
+      goalDistanceM: 21097.5,
+      startDate: DateTime(2026, 1, 4),
+      endDate: DateTime(2026, 3, 1),
+      daysPerWeek: 4,
+      status: 'active',
+      source: 'generated',
+      isTemplate: false,
+      isPublicTemplate: false,
+      createdAt: DateTime(2026, 1, 1),
+    );
+
+ActivePlanOverview _overview(String name) => ActivePlanOverview(
+      plan: _planRow('existing-plan', name),
+      weeks: const [],
+      workouts: const [],
+      todayWorkout: null,
+      completionPct: 0,
+      currentWeekIndex: 0,
+    );
 
 ClubView _club(String id, String name) => ClubView(
       row: ClubRow(shadowHidden: false, 
@@ -213,6 +279,79 @@ void main() {
       expect(find.text('Choose a template'), findsOneWidget);
       expect(find.text('Spring Half'), findsOneWidget);
       expect(find.text('Trail Club'), findsOneWidget);
+    });
+  });
+
+  group('PlanNewScreen — replace-active-plan confirm gate', () {
+    Future<void> pumpGate(WidgetTester tester, _GateTraining training) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(training: training),
+        ),
+      );
+      // initState fires the (overridden) viewer fetches — let them settle.
+      await tester.pump();
+    }
+
+    // Fills the name, scrolls the Create button into view, and taps it.
+    // The name TextField has no onChanged-driven rebuild, but
+    // scrollUntilVisible pumps frames as it scrolls so the button picks up
+    // the typed name and enables before the tap.
+    Future<void> tapCreate(WidgetTester tester) async {
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Plan name'), 'Autumn half');
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Create plan'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create plan'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'creating with an existing active plan shows the replace confirm',
+        (tester) async {
+      // Reason: createPlan silently auto-completes the current active plan —
+      // weeks of a build vanish with no warning unless we gate it.
+      final training = _GateTraining(activeOverview: _overview('Spring base'));
+      await pumpGate(tester, training);
+      await tapCreate(tester);
+      expect(find.text('Replace your active plan?'), findsOneWidget);
+      expect(find.textContaining('Spring base'), findsOneWidget);
+      expect(training.createCalled, isFalse);
+    });
+
+    testWidgets('Keep current dismisses the dialog without creating',
+        (tester) async {
+      final training = _GateTraining(activeOverview: _overview('Spring base'));
+      await pumpGate(tester, training);
+      await tapCreate(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Keep current'));
+      await tester.pumpAndSettle();
+      expect(find.text('Replace your active plan?'), findsNothing);
+      expect(training.createCalled, isFalse);
+    });
+
+    testWidgets('Replace plan proceeds to createPlan', (tester) async {
+      final training = _GateTraining(activeOverview: _overview('Spring base'));
+      await pumpGate(tester, training);
+      await tapCreate(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Replace plan'));
+      await tester.pumpAndSettle();
+      expect(training.createCalled, isTrue);
+    });
+
+    testWidgets('no active plan creates without a confirm dialog',
+        (tester) async {
+      final training = _GateTraining(activeOverview: null);
+      await pumpGate(tester, training);
+      await tapCreate(tester);
+      expect(find.text('Replace your active plan?'), findsNothing);
+      expect(training.createCalled, isTrue);
     });
   });
 }

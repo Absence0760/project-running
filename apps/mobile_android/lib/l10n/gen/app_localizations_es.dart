@@ -4541,6 +4541,24 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get planNewReplaceActiveTitle => '¿Reemplazar tu plan activo?';
+
+  @override
+  String planNewReplaceActiveNamed(String name) {
+    return 'Ya tienes un plan activo: \"$name\". Crear un plan nuevo marcará el actual como completado (podrás encontrarlo en Gestionar planes). ¿Continuar?';
+  }
+
+  @override
+  String get planNewReplaceActiveUnnamed =>
+      'Ya tienes un plan activo. Crear un plan nuevo marcará el actual como completado. ¿Continuar?';
+
+  @override
+  String get planNewReplaceActiveConfirm => 'Reemplazar plan';
+
+  @override
+  String get planNewReplaceActiveKeep => 'Mantener el actual';
+
+  @override
   String get planNewStarterC25k => 'Couch to 5K (principiante caminar-correr)';
 
   @override

@@ -4542,6 +4542,24 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planNewReplaceActiveTitle => 'Substituir seu plano ativo?';
+
+  @override
+  String planNewReplaceActiveNamed(String name) {
+    return 'Você já tem um plano ativo: \"$name\". Criar um novo plano marcará o atual como concluído (você ainda poderá encontrá-lo em Gerenciar planos). Continuar?';
+  }
+
+  @override
+  String get planNewReplaceActiveUnnamed =>
+      'Você já tem um plano ativo. Criar um novo plano marcará o atual como concluído. Continuar?';
+
+  @override
+  String get planNewReplaceActiveConfirm => 'Substituir plano';
+
+  @override
+  String get planNewReplaceActiveKeep => 'Manter o atual';
+
+  @override
   String get planNewStarterC25k => 'Couch to 5K (iniciante caminhada-corrida)';
 
   @override
@@ -15249,6 +15267,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planNewStarterCreateFailed(String error) {
     return 'Não foi possível criar esse plano: $error';
   }
+
+  @override
+  String get planNewReplaceActiveTitle => 'Substituir seu plano ativo?';
+
+  @override
+  String planNewReplaceActiveNamed(String name) {
+    return 'Você já tem um plano ativo: \"$name\". Criar um novo plano marcará o atual como concluído (você ainda poderá encontrá-lo em Gerenciar planos). Continuar?';
+  }
+
+  @override
+  String get planNewReplaceActiveUnnamed =>
+      'Você já tem um plano ativo. Criar um novo plano marcará o atual como concluído. Continuar?';
+
+  @override
+  String get planNewReplaceActiveConfirm => 'Substituir plano';
+
+  @override
+  String get planNewReplaceActiveKeep => 'Manter o atual';
 
   @override
   String get planNewStarterC25k => 'Couch to 5K (iniciante caminhada-corrida)';
