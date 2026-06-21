@@ -240,23 +240,26 @@ export async function publishRecap(
 	return data.id;
 }
 
-/// Fetch a published recap snapshot by its share id. Anon-readable (the id
-/// is the capability token; RLS allows SELECT by id). Used by the public
-/// share page; returns null when the id doesn't resolve (never published,
-/// or revoked).
+/// Fetch a published recap snapshot by its share id. Anon-readable via the
+/// public_recap_by_id RPC (the id is the capability token; the bare table is
+/// not enumerable — migration 20270305_001). Used by the public share page;
+/// returns null when the id doesn't resolve (never published, or revoked).
 export async function fetchPublicRecap(
 	id: string,
 ): Promise<{ periodKind: RecapPeriodKind; periodKey: string; snapshot: YearInRunningRecap } | null> {
 	const { data, error } = await supabase
-		.from(TABLES.public_recaps)
-		.select('period_kind, period_key, snapshot')
-		.eq('id', id)
+		.rpc('public_recap_by_id', { p_id: id })
 		.maybeSingle();
-	if (error || !data) return null;
+	const row = data as {
+		period_kind?: string | null;
+		period_key?: string | null;
+		snapshot?: unknown;
+	} | null;
+	if (error || !row?.period_kind || !row.period_key) return null;
 	return {
-		periodKind: data.period_kind as RecapPeriodKind,
-		periodKey: data.period_key,
-		snapshot: data.snapshot as unknown as YearInRunningRecap,
+		periodKind: row.period_kind as RecapPeriodKind,
+		periodKey: row.period_key,
+		snapshot: row.snapshot as unknown as YearInRunningRecap,
 	};
 }
 

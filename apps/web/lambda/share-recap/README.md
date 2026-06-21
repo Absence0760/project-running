@@ -37,6 +37,7 @@ dep, or install with `--cpu=arm64 --os=linux`).
 
 ## Env vars (set on the Lambda)
 
-- `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` — anon read of the
-  public-readable `public_recaps` row by id.
+- `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` — anon read of a recap
+  by id via the `public_recap_by_id` RPC (the bare table is not enumerable —
+  migration `20270305_001`).
 - `PUBLIC_SITE_URL` — og:url base (defaults to `https://threkir.com`).
