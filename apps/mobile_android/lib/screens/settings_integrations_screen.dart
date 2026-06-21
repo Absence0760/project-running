@@ -43,12 +43,14 @@ class _SettingsIntegrationsScreenState
   bool _stravaBusy = false;
   final RaceService _raceService = RaceService();
   bool _runSignUpAvailable = false;
+  bool _chronoTrackAvailable = false;
 
   @override
   void initState() {
     super.initState();
     _refreshIntegrations();
     _probeRunSignUp();
+    _probeChronoTrack();
   }
 
   Future<void> _probeRunSignUp() async {
@@ -57,6 +59,15 @@ class _SettingsIntegrationsScreenState
       if (mounted) setState(() => _runSignUpAvailable = ok);
     } catch (_) {
       if (mounted) setState(() => _runSignUpAvailable = false);
+    }
+  }
+
+  Future<void> _probeChronoTrack() async {
+    try {
+      final ok = await _raceService.isChronoTrackConfigured();
+      if (mounted) setState(() => _chronoTrackAvailable = ok);
+    } catch (_) {
+      if (mounted) setState(() => _chronoTrackAvailable = false);
     }
   }
 
@@ -378,6 +389,16 @@ class _SettingsIntegrationsScreenState
                 trailing:
                     _runSignUpAvailable ? const Icon(Icons.chevron_right) : null,
                 onTap: _runSignUpAvailable ? _openRaces : null,
+              ),
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: Text(l10n.integrationsChronotrack),
+                subtitle: Text(_chronoTrackAvailable
+                    ? l10n.integrationsChronotrackConnect
+                    : l10n.integrationsChronotrackUnavailable),
+                trailing:
+                    _chronoTrackAvailable ? const Icon(Icons.chevron_right) : null,
+                onTap: _chronoTrackAvailable ? _openRaces : null,
               ),
             ] else
               ListTile(

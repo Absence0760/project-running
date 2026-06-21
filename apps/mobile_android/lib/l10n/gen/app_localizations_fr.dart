@@ -10048,6 +10048,20 @@ class AppLocalizationsFr extends AppLocalizations {
       'L\'import RunSignUp n\'est pas encore disponible. parkrun et le collage manuel fonctionnent toujours.';
 
   @override
+  String get integrationsChronotrack => 'ChronoTrack';
+
+  @override
+  String get integrationsChronotrackConnect =>
+      'Importez les résultats des épreuves chronométrées par ChronoTrack.';
+
+  @override
+  String get integrationsChronotrackOpen => 'Ouvrir le calendrier des courses';
+
+  @override
+  String get integrationsChronotrackUnavailable =>
+      'L\'import ChronoTrack n\'est pas encore disponible. parkrun et le collage manuel fonctionnent toujours.';
+
+  @override
   String get routeConditionsTitle => 'Conditions';
 
   @override

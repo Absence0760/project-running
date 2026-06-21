@@ -16722,6 +16722,30 @@ abstract class AppLocalizations {
   /// **'RunSignUp import isn\'t available yet. parkrun and manual paste still work.'**
   String get integrationsRunsignupUnavailable;
 
+  /// ChronoTrack integration name
+  ///
+  /// In en, this message translates to:
+  /// **'ChronoTrack'**
+  String get integrationsChronotrack;
+
+  /// ChronoTrack integration description
+  ///
+  /// In en, this message translates to:
+  /// **'Import race results from ChronoTrack-timed events.'**
+  String get integrationsChronotrackConnect;
+
+  /// Action linking to the race calendar from the ChronoTrack tile
+  ///
+  /// In en, this message translates to:
+  /// **'Open the race calendar'**
+  String get integrationsChronotrackOpen;
+
+  /// Explainer when the ChronoTrack credentials are unconfigured
+  ///
+  /// In en, this message translates to:
+  /// **'ChronoTrack import isn\'t available yet. parkrun and manual paste still work.'**
+  String get integrationsChronotrackUnavailable;
+
   /// Header for the route condition-reports panel
   ///
   /// In en, this message translates to:

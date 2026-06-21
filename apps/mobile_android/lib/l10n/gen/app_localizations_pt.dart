@@ -10027,6 +10027,20 @@ class AppLocalizationsPt extends AppLocalizations {
       'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
 
   @override
+  String get integrationsChronotrack => 'ChronoTrack';
+
+  @override
+  String get integrationsChronotrackConnect =>
+      'Importa resultados de corridas de eventos cronometrados pelo ChronoTrack.';
+
+  @override
+  String get integrationsChronotrackOpen => 'Abrir o calendário de corridas';
+
+  @override
+  String get integrationsChronotrackUnavailable =>
+      'A importação do ChronoTrack ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
+
+  @override
   String get routeConditionsTitle => 'Condições';
 
   @override
@@ -20333,6 +20347,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get integrationsRunsignupUnavailable =>
       'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
+
+  @override
+  String get integrationsChronotrack => 'ChronoTrack';
+
+  @override
+  String get integrationsChronotrackConnect =>
+      'Importe resultados de corridas de eventos cronometrados pelo ChronoTrack.';
+
+  @override
+  String get integrationsChronotrackOpen => 'Abrir o calendário de corridas';
+
+  @override
+  String get integrationsChronotrackUnavailable =>
+      'A importação do ChronoTrack ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
 
   @override
   String get routeConditionsTitle => 'Condições';

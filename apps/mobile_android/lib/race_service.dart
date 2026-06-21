@@ -112,6 +112,12 @@ class RunSignUpUnavailable implements Exception {
   const RunSignUpUnavailable();
 }
 
+/// Thrown when the ChronoTrack leg is unconfigured server-side (503), so the UI
+/// can show the unavailable explainer rather than a generic failure.
+class ChronoTrackUnavailable implements Exception {
+  const ChronoTrackUnavailable();
+}
+
 /// All Supabase calls for the race calendar + results import (race_calendar.md).
 /// Mirrors the web `data.ts` race helpers; wire-level methods are exercisable
 /// against a real local Supabase via the `withClient` seam.
@@ -252,11 +258,13 @@ class RaceService extends ChangeNotifier {
     return searchRaceListings(from: day, to: day, limit: 20);
   }
 
-  /// Invoke `race-results-import`. Throws [RunSignUpUnavailable] on the 503
-  /// `provider_not_configured` so the UI can show the explainer.
+  /// Invoke `race-results-import`. Throws [RunSignUpUnavailable] or
+  /// [ChronoTrackUnavailable] on the 503 `provider_not_configured` so the UI
+  /// can show the explainer.
   Future<ImportRaceResultOutcome> importRaceResult({
-    required String provider, // 'runsignup' | 'paste'
+    required String provider, // 'runsignup' | 'chronotrack' | 'paste'
     required String listingId,
+    String? bib,
     String? matchRunId,
     PastedRaceResult? result,
   }) async {
@@ -264,6 +272,7 @@ class RaceService extends ChangeNotifier {
       final res = await _c.functions.invoke('race-results-import', body: {
         'provider': provider,
         'listingId': listingId,
+        if (bib != null) 'bib': bib,
         if (matchRunId != null) 'matchRunId': matchRunId,
         if (result != null) 'result': result.toJson(),
       });
@@ -275,6 +284,7 @@ class RaceService extends ChangeNotifier {
       );
     } on FunctionException catch (e) {
       if (e.status == 503 && _isProviderNotConfigured(e.details)) {
+        if (provider == 'chronotrack') throw const ChronoTrackUnavailable();
         throw const RunSignUpUnavailable();
       }
       rethrow;
@@ -287,6 +297,25 @@ class RaceService extends ChangeNotifier {
   Future<bool> isRunSignUpConfigured() async {
     try {
       await _c.functions.invoke('race-listings-sync', body: const {});
+      return true;
+    } on FunctionException catch (e) {
+      if (e.status == 503 && _isProviderNotConfigured(e.details)) return false;
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Probe whether the ChronoTrack leg is configured server-side. Returns false
+  /// on a 503 `provider_not_configured`, true otherwise — drives the disabled
+  /// ChronoTrack tile + explainer. Uses the `race-results-import` probe mode (no
+  /// listing needed), mirroring [isRunSignUpConfigured].
+  Future<bool> isChronoTrackConfigured() async {
+    try {
+      await _c.functions.invoke(
+        'race-results-import',
+        body: const {'provider': 'chronotrack', 'probe': true},
+      );
       return true;
     } on FunctionException catch (e) {
       if (e.status == 503 && _isProviderNotConfigured(e.details)) return false;
