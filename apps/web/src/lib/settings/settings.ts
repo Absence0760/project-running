@@ -1,5 +1,10 @@
 import { supabase } from '../core/supabase';
-import { effective, type LoadedSettings, type PrefsBag } from './settings_overlay';
+import {
+	effective,
+	effectivePreferredUnit,
+	type LoadedSettings,
+	type PrefsBag,
+} from './settings_overlay';
 import {
 	InMemoryPrefsCache,
 	LocalStoragePrefsCache,
@@ -24,7 +29,7 @@ import {
 /// `import { loadSettings, effective } from '$lib/settings/settings'` callers
 /// keep working unchanged.
 
-export { effective };
+export { effective, effectivePreferredUnit };
 export type { LoadedSettings, PrefsBag };
 
 const DEVICE_ID_KEY = 'run_app.device_id';
