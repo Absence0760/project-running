@@ -15,6 +15,13 @@ class _OfflineFakeApi extends ApiClient {
   String? get userId => null;
 }
 
+class _ThrowingDeleteFoodStore extends LocalFoodStore {
+  @override
+  Future<void> deleteLocal(String id) async {
+    throw StateError('disk full');
+  }
+}
+
 Future<({LocalFoodStore store, Directory dir})> _store(String tag) async {
   final dir = Directory.systemTemp.createTempSync('nutrition_screen_$tag');
   final store = LocalFoodStore();
@@ -130,6 +137,51 @@ void main() {
       expect(f.store.rows.length, 0);
     } finally {
       f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a failed entry delete surfaces an error banner', (tester) async {
+    final dir =
+        Directory.systemTemp.createTempSync('nutrition_screen_del_fail_');
+    final store = _ThrowingDeleteFoodStore();
+    await store.init(overrideDirectory: dir);
+    await tester.runAsync(() => store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(store));
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.byTooltip('Delete'));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Delete this entry?'), findsOneWidget);
+
+      final confirm = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Delete'),
+      );
+      await tester.runAsync(() async {
+        await tester.tap(confirm);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump();
+
+      // The delete threw; the entry is still listed and an error banner shows
+      // (rather than the failure being swallowed silently).
+      expect(find.text('Oats'), findsOneWidget);
+      expect(
+        find.textContaining("Couldn’t delete the entry"),
+        findsOneWidget,
+      );
+      // Drain the showTopBanner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 5));
+    } finally {
+      dir.deleteSync(recursive: true);
     }
   });
 

@@ -8442,6 +8442,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String gymDeleteFailed(Object error) {
+    return 'Impossible de supprimer la séance : $error';
+  }
+
+  @override
   String get gymNotes => 'Notes';
 
   @override
@@ -9136,6 +9141,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String nutritionDeleteFailed(String error) {
+    return 'Impossible de supprimer l’entrée : $error';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Hors ligne — les modifications se synchroniseront à la reconnexion';
 
@@ -9257,6 +9267,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String nutritionTemplateDeleteFailed(String error) {
+    return 'Impossible de supprimer le modèle : $error';
+  }
+
+  @override
   String nutritionTemplateItems(int n) {
     return '$n éléments';
   }
@@ -9316,6 +9331,11 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String nutritionRecipeLogFailed(String error) {
     return 'Impossible d’enregistrer la recette : $error';
+  }
+
+  @override
+  String nutritionRecipeDeleteFailed(String error) {
+    return 'Impossible de supprimer la recette : $error';
   }
 
   @override

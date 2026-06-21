@@ -8427,6 +8427,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String gymDeleteFailed(Object error) {
+    return 'No se pudo eliminar el entrenamiento: $error';
+  }
+
+  @override
   String get gymNotes => 'Notas';
 
   @override
@@ -9118,6 +9123,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String nutritionDeleteFailed(String error) {
+    return 'No se pudo eliminar la entrada: $error';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Sin conexión: los cambios se sincronizarán al reconectar';
 
@@ -9239,6 +9249,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String nutritionTemplateDeleteFailed(String error) {
+    return 'No se pudo eliminar la plantilla: $error';
+  }
+
+  @override
   String nutritionTemplateItems(int n) {
     return '$n elementos';
   }
@@ -9299,6 +9314,11 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String nutritionRecipeLogFailed(String error) {
     return 'No se pudo registrar la receta: $error';
+  }
+
+  @override
+  String nutritionRecipeDeleteFailed(String error) {
+    return 'No se pudo eliminar la receta: $error';
   }
 
   @override

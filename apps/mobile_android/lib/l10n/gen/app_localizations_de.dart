@@ -8428,6 +8428,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String gymDeleteFailed(Object error) {
+    return 'Workout konnte nicht gelöscht werden: $error';
+  }
+
+  @override
   String get gymNotes => 'Notizen';
 
   @override
@@ -9125,6 +9130,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String nutritionDeleteFailed(String error) {
+    return 'Eintrag konnte nicht gelöscht werden: $error';
+  }
+
+  @override
   String get nutritionOfflineQueued =>
       'Offline – Änderungen werden später synchronisiert';
 
@@ -9244,6 +9254,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String nutritionTemplateDeleteFailed(String error) {
+    return 'Vorlage konnte nicht gelöscht werden: $error';
+  }
+
+  @override
   String nutritionTemplateItems(int n) {
     return '$n Einträge';
   }
@@ -9303,6 +9318,11 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String nutritionRecipeLogFailed(String error) {
     return 'Rezept konnte nicht erfasst werden: $error';
+  }
+
+  @override
+  String nutritionRecipeDeleteFailed(String error) {
+    return 'Rezept konnte nicht gelöscht werden: $error';
   }
 
   @override

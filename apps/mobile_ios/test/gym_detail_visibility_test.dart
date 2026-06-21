@@ -34,6 +34,13 @@ class _CountingGymStore extends LocalGymStore {
   }
 }
 
+class _ThrowingDeleteGymStore extends LocalGymStore {
+  @override
+  Future<void> deleteLocal(String id) async {
+    throw StateError('disk full');
+  }
+}
+
 Future<({LocalGymStore store, Directory dir, String id})> _seed() async {
   final dir = Directory.systemTemp.createTempSync('gym_detail_vis');
   final store = LocalGymStore();
@@ -144,6 +151,55 @@ void main() {
     expect(find.textContaining('50'), findsWidgets);
     // And it reads as a gain (this session 60 kg > last 50 kg).
     expect(find.byIcon(Icons.trending_up), findsOneWidget);
+  });
+
+  testWidgets('a failed workout delete surfaces an error banner',
+      (tester) async {
+    late _ThrowingDeleteGymStore store;
+    late String id;
+    late Directory dir;
+    await tester.runAsync(() async {
+      final dirTmp = Directory.systemTemp.createTempSync('gym_detail_del_fail');
+      final s = _ThrowingDeleteGymStore();
+      await s.init(overrideDirectory: dirTmp);
+      final stored = await s.createLocal(
+        title: 'Push day',
+        startedAt: DateTime.now().toUtc(),
+        sets: const [
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null, setType: null, durationS: null, exerciseId: null),
+        ],
+      );
+      store = s;
+      id = stored.id;
+      dir = dirTmp;
+    });
+    addTearDown(() => dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_screen(store, id));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Delete'));
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Delete workout?'), findsOneWidget);
+
+    final confirm = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(TextButton, 'Delete'),
+    );
+    await tester.runAsync(() async {
+      await tester.tap(confirm);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+    await tester.pump();
+
+    // The delete threw; the detail screen stays open (no pop) and an error
+    // banner shows rather than the failure being swallowed silently.
+    expect(find.textContaining("Couldn't delete the workout"), findsOneWidget);
+    // Drain the showTopBanner auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('double-tapping the visibility toggle writes the store only once',
