@@ -364,7 +364,7 @@ Two paths today, both unblocked:
 
 ## Race results (RunSignUp + general scraping)
 
-> **Status: shipped (2026-06-20, migration `20270214_001`, race_calendar.md).** The race calendar (`race_listings`) + the `race-results-import` / `race-listings-sync` Edge Functions + the auto-match-on-record seam are live on web (`/races`, run-detail) and mobile (`RacesScreen`, run-detail). The **RunSignUp leg is prod-gated, fail-closed**: with `RUNSIGNUP_API_KEY`/`RUNSIGNUP_API_SECRET` unset (the dev/CI default) both EFs return `503 provider_not_configured` and the UI shows the unavailable explainer — provisioning the key on the deployed project is the only remaining go-live step (record it on the deploy checklist). **parkrun** stays the shipped scraper; **manual paste** is the durable non-API path for every other timing platform. Per-site scrapers (ChronoTrack / RaceResult / UltraSignup) remain scoped follow-ups — the URL-pattern table below is the reference for when one is built, not a description of shipped behaviour. See [decisions.md § 168](../architecture/decisions.md#168-race-results-live-on-the-runs-row-sourcerace-a-public-race_listings-calendar-is-its-own-table-and-auto-match-on-record-is-an-inform-tier-layered-resilience-wrapped-post-save-check).
+> **Status: shipped (2026-06-20, migration `20270214_001`, race_calendar.md).** The race calendar (`race_listings`) + the `race-results-import` / `race-listings-sync` Edge Functions + the auto-match-on-record seam are live on web (`/races`, run-detail) and mobile (`RacesScreen`, run-detail). The **RunSignUp leg is prod-gated, fail-closed**: with `RUNSIGNUP_API_KEY`/`RUNSIGNUP_API_SECRET` unset (the dev/CI default) both EFs return `503 provider_not_configured` and the UI shows the unavailable explainer — provisioning the key on the deployed project is the only remaining go-live step (record it on the deploy checklist). The **ChronoTrack leg is prod-gated, fail-closed** the same way: with `CHRONOTRACK_CLIENT_ID`/`CHRONOTRACK_USER_ID`/`CHRONOTRACK_PASSWORD` unset (the dev/CI default) the `chronotrack` import branch + the `provider:'chronotrack', probe:true` availability probe both return `503 provider_not_configured` and the Settings card shows the unavailable explainer — provisioning the three CTLive credentials is the only remaining go-live step. **parkrun** stays the shipped scraper; **manual paste** is the durable non-API path for every other timing platform. RaceResult / UltraSignup per-site scrapers remain scoped follow-ups — the URL-pattern table below is the reference for when one is built, not a description of shipped behaviour. See [decisions.md § 168](../architecture/decisions.md#168-race-results-live-on-the-runs-row-sourcerace-a-public-race_listings-calendar-is-its-own-table-and-auto-match-on-record-is-an-inform-tier-layered-resilience-wrapped-post-save-check) + [§ 178](../architecture/decisions.md).
 
 ### RunSignUp
 
@@ -380,6 +380,21 @@ GET https://runsignup.com/Rest/race/{race_id}/results/get-results
 Returns: finish time, gun time, chip time, age group place, overall place, splits.
 
 Users connect their RunSignUp account via OAuth, then you can query their race history automatically.
+
+### ChronoTrack
+
+ChronoTrack times many US majors and large road events and exposes the ChronoTrack Live (CTLive) REST API. The shipped importer calls the results endpoint server-side from `race-results-import/index.ts` behind the `provider:'chronotrack'` branch (credentials from the Edge-only `CHRONOTRACK_CLIENT_ID` / `CHRONOTRACK_USER_ID` / `CHRONOTRACK_PASSWORD` env), maps each finisher through `lib.ts` (`mapChronoTrackResult`, which delegates to the same `mapRunSignUpResult` shaping → an identical `source='race'` run with `external_id=race:{name}:{date}:{bib}` + the owner-only race metadata), and dedupes per-user on `external_id` exactly like the RunSignUp + paste paths. Until all three credentials are provisioned the leg is inert (`503 provider_not_configured`).
+
+```
+GET https://api.chronotrack.com/api/event/{event_id}/results
+  ?format=json
+  &client_id={CLIENT_ID}
+  &user_id={USER_ID}      ← CTLive account
+  &user_pass={PASSWORD}   ← CTLive account password
+  &bib={BIB}              ← optional: filter to one finisher
+```
+
+Returns: bib, net (chip) time, gun time, overall rank, division (age-group) rank, division label — mapped onto the same race metadata keys the other providers write. The listing's `provider_race_id` carries the ChronoTrack `event_id`. CTLive results are nested under `event_results[]` (the extractor tolerates a top-level `results[]` too) and capped at `MAX_RESULTS_ROWS`.
 
 ### General race results scraping
 
