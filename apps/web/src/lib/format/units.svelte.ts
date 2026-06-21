@@ -13,7 +13,7 @@
 import type { PreferredUnit } from '../types';
 import { currentLocale } from '../i18n/store.svelte';
 import { formatDecimal, formatInteger } from './number';
-import { paceMinutesSeconds } from './pace_format';
+import { paceMinutesSeconds, isMeaningfulPace } from './pace_format';
 import {
 	type WeightUnit,
 	parseWeightUnit,
@@ -99,7 +99,7 @@ export function formatDistance(metres: number): string {
 /// Pace label: "m:ss" with the appropriate per-unit suffix baked in
 /// ("/km" or "/mi") so templates don't have to append it separately.
 export function formatPace(seconds: number, metres: number): string {
-	if (metres === 0) return '--:--';
+	if (!isMeaningfulPace(seconds, metres)) return '--:--';
 	const perKm = seconds / (metres / 1000);
 	const perUnit = unit.value === 'mi' ? perKm * (METRES_PER_MILE / 1000) : perKm;
 	return `${paceMinutesSeconds(perUnit)} /${unit.value}`;
@@ -108,7 +108,7 @@ export function formatPace(seconds: number, metres: number): string {
 /// Variant for callers that want just the pace digits without a suffix
 /// (sparklines, axis ticks). Renders the same per-unit value.
 export function formatPaceNoSuffix(seconds: number, metres: number): string {
-	if (metres === 0) return '--:--';
+	if (!isMeaningfulPace(seconds, metres)) return '--:--';
 	const perKm = seconds / (metres / 1000);
 	const perUnit = unit.value === 'mi' ? perKm * (METRES_PER_MILE / 1000) : perKm;
 	return paceMinutesSeconds(perUnit);
@@ -129,7 +129,7 @@ export function distanceInPreferred(metres: number): { value: number; unit: 'km'
 /// guarantees the cell is non-empty (no metadata or settings
 /// required beyond what every run already carries).
 export function formatSpeed(seconds: number, metres: number): string {
-	if (seconds === 0 || metres === 0) return '--';
+	if (!isMeaningfulPace(seconds, metres)) return '--';
 	const loc = currentLocale();
 	const mPerSec = metres / seconds;
 	if (unit.value === 'mi') {
@@ -169,7 +169,7 @@ export function formatElevation(metres: number | null | undefined): string {
 /// canonical unit stored on `plan_workouts`); we convert to /mi when
 /// the user prefers miles.
 export function fmtPace(secPerKm: number | null | undefined): string {
-	if (!secPerKm) return '—';
+	if (secPerKm == null || secPerKm <= 0) return '—';
 	const sec = unit.value === 'mi' ? secPerKm * (METRES_PER_MILE / 1000) : secPerKm;
 	return `${paceMinutesSeconds(sec)}/${unit.value}`;
 }
