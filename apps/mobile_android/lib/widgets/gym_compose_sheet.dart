@@ -20,6 +20,35 @@ typedef GymCatalogueEntry = ({
   String? authorId,
 });
 
+/// The logged-set role vocabulary (DB CHECK union, migration 20270224_001),
+/// shared verbatim with the routine builder.
+const _gymSetTypes = <String>[
+  'warmup',
+  'working',
+  'dropset',
+  'amrap',
+  'failure',
+  'backoff',
+];
+
+String _gymSetTypeLabel(String s, AppLocalizations l10n) {
+  switch (s) {
+    case 'warmup':
+      return l10n.gymRoutineSetTypeWarmup;
+    case 'dropset':
+      return l10n.gymRoutineSetTypeDropset;
+    case 'amrap':
+      return l10n.gymRoutineSetTypeAmrap;
+    case 'failure':
+      return l10n.gymRoutineSetTypeFailure;
+    case 'backoff':
+      return l10n.gymRoutineSetTypeBackoff;
+    case 'working':
+    default:
+      return l10n.gymRoutineSetTypeWorking;
+  }
+}
+
 /// Open the gym-workout composer as a fullscreen dialog. Pass [existing] to
 /// edit a stored workout in place; omit for a new one. Pass [seedSets] /
 /// [seedTitle] to prefill a NEW log (still the create path) — the "Start
@@ -152,6 +181,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                     'reps': s.reps,
                     'weight_kg': s.weightKg,
                     'rpe': s.rpe,
+                    'set_type': s.setType,
                   },
               ]));
   }
@@ -179,6 +209,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
         weight: _numStr(display),
         rpe: _numStr(s['rpe'] as num?),
         duration: _numStr(s['duration_s'] as num?),
+        setType: (s['set_type'] as String?) ?? 'working',
       );
       final last = blocks.isEmpty ? null : blocks.last;
       if (last != null && last.name.text == name) {
@@ -257,6 +288,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           // Entry is in the user's display unit; store canonical kg.
           weightKg: WeightFormat.parseToKg(s.weight.text, activeWeightUnit),
           rpe: double.tryParse(s.rpe.text.trim()),
+          setType: s.setType,
           // duration_s is a non-negative integer column; clamp a stray negative.
           durationS: durationS == null ? null : (durationS < 0 ? 0 : durationS),
           exerciseId: exerciseId,
@@ -405,7 +437,32 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
             for (var si = 0; si < ex.sets.length; si++)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 44, bottom: 6),
+                      child: DropdownButtonFormField<String>(
+                        key: Key('gym-set-type-$i-$si'),
+                        initialValue: ex.sets[si].setType,
+                        isDense: true,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          labelText: l10n.gymRoutineSetType,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          border: const OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final t in _gymSetTypes)
+                            DropdownMenuItem(
+                                value: t, child: Text(_gymSetTypeLabel(t, l10n))),
+                        ],
+                        onChanged: (v) => setState(
+                            () => ex.sets[si].setType = v ?? ex.sets[si].setType),
+                      ),
+                    ),
+                    Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     SizedBox(
@@ -454,6 +511,8 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                       visualDensity: VisualDensity.compact,
                       onPressed: () => _removeSet(ex, si),
                     ),
+                  ],
+                ),
                   ],
                 ),
               ),
@@ -563,11 +622,17 @@ class _EditSet {
   final TextEditingController weight;
   final TextEditingController rpe;
   final TextEditingController duration;
+
+  /// Raw set_type string (DB CHECK union, migration 20270224_001); defaults to
+  /// 'working'. Held as a plain field — it's a dropdown, not a text input.
+  String setType;
+
   _EditSet(
       {String reps = '',
       String weight = '',
       String rpe = '',
-      String duration = ''})
+      String duration = '',
+      this.setType = 'working'})
       : reps = TextEditingController(text: reps),
         weight = TextEditingController(text: weight),
         rpe = TextEditingController(text: rpe),

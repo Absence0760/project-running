@@ -205,6 +205,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           // prefillFromRoutine carries canonical kg in weightKg.
           weightKg: s.weightKg?.toDouble(),
           rpe: s.rpe.isEmpty ? null : double.tryParse(s.rpe),
+          setType: 'working',
           durationS: null,
           exerciseId: null,
         ));

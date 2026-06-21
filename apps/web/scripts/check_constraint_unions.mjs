@@ -50,6 +50,7 @@ const PAIRS = [
 	{ tableColumn: 'gym_routine_exercises.modality', tsUnion: 'GymExerciseModality' },
 	{ tableColumn: 'gym_routine_exercises.progression', tsUnion: 'GymProgressionScheme' },
 	{ tableColumn: 'gym_routine_sets.set_type', tsUnion: 'GymSetType' },
+	{ tableColumn: 'gym_sets.set_type', tsUnion: 'GymSetType' },
 	{ tableColumn: 'exercises.category', tsUnion: 'ExerciseCategory' },
 	{ tableColumn: 'exercises.modality', tsUnion: 'GymExerciseModality' },
 	{ tableColumn: 'reports.target_kind', tsUnion: 'ReportTargetKind' },

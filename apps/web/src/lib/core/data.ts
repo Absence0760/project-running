@@ -7422,6 +7422,10 @@ export interface GymSet {
 	reps: number | null;
 	weight_kg: number | null;
 	rpe: number | null;
+	/// Role this set played (warmup / working / dropset / amrap / failure /
+	/// backoff); defaults to 'working' (migration 20270224_001). Shares the
+	/// gym_routine_sets.set_type vocabulary — GymSetType.
+	set_type: GymSetType;
 	/// Optional hold/interval time in seconds for timed work (planks, holds);
 	/// null for rep/load-only sets (migration 20270101_001).
 	duration_s: number | null;
@@ -7441,6 +7445,8 @@ export interface GymSetInput {
 	reps?: number | null;
 	weight_kg?: number | null;
 	rpe?: number | null;
+	/// Set role; omit to default to 'working' (migration 20270224_001).
+	set_type?: GymSetType | null;
 	duration_s?: number | null;
 	/// Optional catalogue link (migration 20270222_001). Omit / null for a
 	/// free-text set; the editor resolves it by matching the typed name against
@@ -7733,6 +7739,9 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 			reps: s.reps ?? null,
 			weight_kg: s.weight_kg ?? null,
 			rpe: s.rpe ?? null,
+			// NOT NULL column — coalesce to the working default so an omitted
+			// type never sends null (migration 20270224_001).
+			set_type: s.set_type ?? 'working',
 			duration_s: s.duration_s ?? null,
 			exercise_id: s.exercise_id ?? null,
 		}))

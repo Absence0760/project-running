@@ -6,7 +6,7 @@
 		type GymWorkoutWithSets,
 		type GymSetInput,
 	} from '$lib/core/data';
-	import type { Exercise } from '$lib/types';
+	import type { Exercise, GymSetType } from '$lib/types';
 	import { normaliseExerciseName } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -108,11 +108,16 @@
 		if (!createdCustoms.some((x) => x.id === e.id)) createdCustoms = [...createdCustoms, e];
 	}
 
-	type EditSet = { reps: string; weight: string; rpe: string; duration: string };
+	type EditSet = { reps: string; weight: string; rpe: string; duration: string; setType: GymSetType };
 	type EditExercise = { name: string; sets: EditSet[] };
 
+	const SET_TYPES: GymSetType[] = ['warmup', 'working', 'dropset', 'amrap', 'failure', 'backoff'];
+	function setTypeLabel(s: GymSetType): string {
+		return t(`gym.routine.setType.${s}`);
+	}
+
 	function emptySet(): EditSet {
-		return { reps: '', weight: '', rpe: '', duration: '' };
+		return { reps: '', weight: '', rpe: '', duration: '', setType: 'working' };
 	}
 
 	/// Reconstruct exercise blocks from a stored workout. Sets arrive in
@@ -134,6 +139,7 @@
 				weight: weightInputValue(s.weight_kg),
 				rpe: s.rpe == null ? '' : String(s.rpe),
 				duration: s.duration_s == null ? '' : String(s.duration_s),
+				setType: s.set_type ?? 'working',
 			};
 			if (last && last.name === s.exercise_name) last.sets.push(row);
 			else blocks.push({ name: s.exercise_name, sets: [row] });
@@ -197,6 +203,7 @@
 					// The field carries the user's chosen unit; persist canonical kg.
 					weight_kg: parseWeight(set.weight),
 					rpe: num(set.rpe),
+					set_type: set.setType,
 					duration_s: intSeconds(set.duration),
 					exercise_id: exerciseId,
 				});
@@ -283,6 +290,7 @@
 			<div class="set-grid">
 				<div class="set-head" aria-hidden="true">
 					<span class="set-label"></span>
+					<span class="section-label set-cap">{t('gym.routine.setType')}</span>
 					<span class="section-label set-cap">{t('gym.reps')}</span>
 					<span class="section-label set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
 					<span class="section-label set-cap">{t('gym.rpe')}</span>
@@ -292,6 +300,19 @@
 				{#each ex.sets as _set, si (si)}
 					<div class="set-row">
 						<span class="set-label">{t('gym.setN', { n: si + 1 })}</span>
+						<label class="set-field">
+							<span class="section-label set-cap-inline">{t('gym.routine.setType')}</span>
+							<select
+								class="set-type"
+								aria-label={t('gym.routine.setType')}
+								data-testid="gym-set-type"
+								bind:value={exercises[ei].sets[si].setType}
+							>
+								{#each SET_TYPES as st (st)}
+									<option value={st}>{setTypeLabel(st)}</option>
+								{/each}
+							</select>
+						</label>
 						<label class="set-field">
 							<span class="section-label set-cap-inline">{t('gym.reps')}</span>
 							<input
@@ -398,13 +419,18 @@
 	/* The shared layer supplies the field chrome; the set-grid spreadsheet
 	   needs a fixed control height + centred tabular numerals on top. */
 	.gym-editor input[type='text'],
-	.gym-editor input[type='number'] {
+	.gym-editor input[type='number'],
+	.gym-editor select.set-type {
 		height: 2.4rem;
 		transition: border-color var(--transition-fast);
 	}
 	.gym-editor input[type='number'] {
 		font-variant-numeric: tabular-nums;
 		text-align: center;
+	}
+	.gym-editor select.set-type {
+		width: 100%;
+		min-width: 0;
 	}
 
 	.exercise {
@@ -436,7 +462,7 @@
 	.set-head,
 	.set-row {
 		display: grid;
-		grid-template-columns: 3.5rem repeat(4, 1fr) 2rem;
+		grid-template-columns: 3.5rem 1.4fr repeat(4, 1fr) 2rem;
 		gap: var(--space-sm);
 		align-items: center;
 	}
@@ -535,6 +561,11 @@
 			background: var(--color-surface);
 		}
 		.set-label {
+			grid-column: 1 / -1;
+		}
+		/* The set-type picker spans the full width above the numeric fields so
+		   the dropdown stays legible on a phone. */
+		.set-row .set-field:first-of-type {
 			grid-column: 1 / -1;
 		}
 		.set-field {

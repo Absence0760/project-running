@@ -84,6 +84,7 @@ GymSetInput _set(String name,
       reps: reps,
       weightKg: kg,
       rpe: rpe,
+      setType: null,
       durationS: durationS,
       exerciseId: null,
     );
