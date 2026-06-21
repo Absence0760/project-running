@@ -499,11 +499,18 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 > week. **A food database is therefore pulled forward from the depth tier
 > into the first nutrition release — nutrition does not ship without it.**
 
-- **Search-driven logging via Open Food Facts** (free, no API key, open
-  data — `world.openfoodfacts.org`). Logging is **search → tap → adjust
-  portion**, not blank macro entry. A thin `food_search` helper queries
-  Open Food Facts, caches recent/frequent picks per user, and falls back
-  to manual entry only when nothing matches.
+- **Search-driven logging via two food sources** (shipped web + mobile,
+  2026-06-20). Open Food Facts (free, no API key, open data —
+  `world.openfoodfacts.org`) AND USDA FoodData Central
+  (`api.nal.usda.gov`, key-gated). Logging is **search → tap → adjust
+  portion**, not blank macro entry. The `food_search` helper's
+  `searchFoodSources` queries both in parallel (OFF first, deduped by
+  case-insensitive name+brand) and labels each result by source; the
+  composer falls back to manual entry only when nothing matches. USDA is
+  **fail-closed on its API key** (`PUBLIC_USDA_FDC_API_KEY` web /
+  `USDA_FDC_API_KEY` mobile dotenv): unset → USDA simply absent, OFF still
+  works. A partial-failure of one source degrades to the other. TS↔Dart
+  parity pair; see [decisions.md § 188](../architecture/decisions.md).
 - **Barcode scan** (mobile-only, camera — the one place mobile leads) is
   the fast path on top of the same Open Food Facts lookup; the data layer
   is shared with search. **Shipped (2026-06-20, mobile):** a Scan-barcode
@@ -548,10 +555,11 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   a 2×2 of small rings on narrow screens) for kcal / protein / carbs /
   fat against the user's targets. A glance answers "how much room left
   today?"
-- **`nutrition_log_sheet`** composer: **search Open Food Facts → tap a
-  result → confirm portion** (the macros autofill from the DB entry); an
-  optional meal slot (breakfast/lunch/dinner/snack); manual entry only as
-  the no-match fallback. Meal-slot grouping in the daily view.
+- **`nutrition_log_sheet`** composer: **search Open Food Facts + USDA → tap a
+  result → confirm portion** (the macros autofill from the DB entry, the row
+  labelled by source); an optional meal slot (breakfast/lunch/dinner/snack);
+  manual entry only as the no-match fallback. Meal-slot grouping in the daily
+  view.
 - **Targets** default from a Mifflin-St Jeor BMR × activity-level
   heuristic (`nutrition_targets.ts` / `.dart`, pure + tested, TS↔Dart
   parity pair), overridable in Settings → Preferences. BMR needs body
@@ -774,9 +782,13 @@ Data Safety disclosable). Plan:
   users with its data missing from export.
 - **Disclosure:** adding nutrition + body metrics changes the privacy
   posture — update the iOS Privacy Nutrition Label, Play Data Safety
-  form, and the sub-processor list (Open Food Facts becomes an outbound
-  hop). Gate the nutrition launch on those doc updates (`/audit/*` covers
-  the surfaces).
+  form, and the sub-processor list. Food search now has **two outbound
+  hops**: Open Food Facts (`world.openfoodfacts.org`) AND USDA FoodData
+  Central (`api.nal.usda.gov`, gated on the fail-closed
+  `PUBLIC_USDA_FDC_API_KEY` / `USDA_FDC_API_KEY`) — both receive the typed
+  search term. List both as sub-processors; the USDA key being unset is the
+  prod gate that keeps that flow dark until sign-off (decisions § 188). Gate
+  the nutrition launch on those doc updates (`/audit/*` covers the surfaces).
 
 ## `activities` view at scale
 
@@ -843,7 +855,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` — **shipped (G5)** (run summary already lived on the dashboard) |
 | History | `screens/runs_screen.dart` (the History tab — hosts the kind chips + unified timeline) + `widgets/activity_timeline_list.dart` + the pure `activity_timeline.dart` day-grouper, assembled from the local stores via `lib/local_activities.dart` (offline-first, not `fetchActivities`) — **shipped** |
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
-| Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart` (search + the v1.1 camera barcode-scan fast-path via `mobile_scanner`), `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts search + `lookupBarcode`/`parseOffProduct` product-by-barcode lookup, pluggable-fetcher seam like `routing.dart`) |
+| Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart` (search + the v1.1 camera barcode-scan fast-path via `mobile_scanner`), `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts + USDA search, source-merged + deduped via `searchFoodSources`, plus `lookupBarcode`/`parseOffProduct` OFF product-by-barcode lookup, pluggable-fetcher seam like `routing.dart`; TS↔Dart parity pair) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Consumers wired on both platforms**: web `web/src/lib/gym/lift_load.ts` and mobile `mobile_android/lib/lift_load.dart` (`liftsFromSetHistory`, pure + tested parity pair) feed each dashboard's load curve; `TrainingLoadChart` (web + mobile) shows the "gym sessions included" hint when `liftStress > 0` |
 | Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart` + the recent-lifts trend card (`widgets/recent_lifts_card.dart`); the **unified mobile History timeline is now shipped** (`runs_screen.dart` + `widgets/activity_timeline_list.dart`, assembled from the LOCAL stores via `lib/local_activities.dart` — offline-first, all modalities, not `fetchActivities`) |
