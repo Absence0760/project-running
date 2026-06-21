@@ -73,8 +73,14 @@ class SharedPrefsSettingsCache implements SettingsCache {
 
   @override
   Future<void> dropUser(String userId) async {
+    // The universal key is unanchored (`..._<userId>`), so it must match
+    // EXACTLY — a `startsWith` would sweep a sibling user whose id is a
+    // prefix (e.g. dropping `u1` would also clear `u12`). Device + pending
+    // keys carry a trailing `_<deviceId>`, so anchoring on the trailing
+    // underscore is enough. Mirrors web's LocalStoragePrefsCache (§79).
+    final universalKey = '$_kUniversal$userId';
     final keys = _prefs.getKeys().where((k) =>
-        k.startsWith('$_kUniversal$userId') ||
+        k == universalKey ||
         k.startsWith('$_kDevice${userId}_') ||
         k.startsWith('$_kPending${userId}_'));
     for (final k in keys) {
