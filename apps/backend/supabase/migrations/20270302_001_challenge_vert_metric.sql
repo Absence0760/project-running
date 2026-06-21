@@ -78,11 +78,8 @@ select
   w.started_at,
   jsonb_build_object(
     'title', w.title,
-    'set_count', (select count(*) from public.gym_sets s where s.workout_id = w.id),
-    'volume_kg', (
-      select coalesce(sum(coalesce(s.reps, 0) * coalesce(s.weight_kg, 0)), 0)
-      from public.gym_sets s where s.workout_id = w.id
-    )
+    'set_count', w.set_count,
+    'volume_kg', w.volume_kg
   ) as summary,
   w.is_public
 from public.gym_workouts w
