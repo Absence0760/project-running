@@ -25,6 +25,7 @@ import {
 	parseAuthHeader,
 	personalityAddendum,
 	rateLimitHeaders,
+	resolveUsageCount,
 	validateCoachMessages,
 	validateRunsLimit,
 } from './limits';
@@ -151,10 +152,24 @@ export async function handleCoach(
 		const { data: isPro } = await supabase.rpc('is_pro');
 		tier = isPro === true ? 'pro' : 'free';
 		const dailyLimit = TIER_LIMITS[tier].dailyLimit;
-		const { data: newCount } = await supabase.rpc('increment_coach_usage', {
+		const { data: newCount, error: incrErr } = await supabase.rpc('increment_coach_usage', {
 			p_user_id: authUser.id,
 		});
-		usedToday = typeof newCount === 'number' ? newCount : 0;
+		// Fail closed: the daily cap is the entire paywall for the coach.
+		// If the counter RPC errors (or returns a non-numeric), we can't
+		// enforce the cap — deny with a transient 503 rather than let
+		// `usedToday` default to 0, which would sail past the gate and
+		// stream an unmetered provider call to a free (or over-cap Pro)
+		// caller.
+		const usage = resolveUsageCount(newCount, incrErr);
+		if (!usage.ok) {
+			console.error('[coach] increment_coach_usage failed — denying to keep the cap enforced', {
+				tier,
+				error: incrErr?.message ?? `non-numeric count: ${typeof newCount}`,
+			});
+			return jsonError(503, 'coach usage check failed');
+		}
+		usedToday = usage.usedToday;
 		// `increment_coach_usage` returns the count AFTER incrementing.
 		// `usedToday > dailyLimit` means messages 1..N (= dailyLimit)
 		// all ran; the (N+1)th increment lands at `usedToday = N+1`,
