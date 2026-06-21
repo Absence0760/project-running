@@ -540,6 +540,32 @@ void main() {
           reason: 'distance resumes from the frozen pre-pause value');
     });
 
+    test(
+        'cumulative belt advance during a pause with NO sample is not '
+        'credited after resume', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1000); // baseline
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1300); // 300 m run
+      expect(r.debugReportedDistanceMetres, 300.0);
+      // Pause and resume without any sample landing during the pause — the
+      // belt reports infrequently, or the user pauses then resumes between
+      // two reports. The _paused-edge rebaseline in setTreadmillSample never
+      // fires, so the baseline must instead be dropped on resume.
+      r.pause();
+      r.resume();
+      // The belt kept counting during the pause; the first post-resume
+      // reading is higher than the pre-pause total.
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1600);
+      expect(r.debugReportedDistanceMetres, 300.0,
+          reason:
+              'the 300 m the belt advanced during the pause must not be '
+              'credited — the first post-resume sample re-anchors');
+      r.setTreadmillSample(3.0, totalDistanceMetres: 1700);
+      expect(r.debugReportedDistanceMetres, 400.0,
+          reason: 'distance resumes from the frozen pre-pause value');
+    });
+
     test('speed-only belt does not credit the pause gap after resume',
         () async {
       final r = RunRecorder()..debugPrepareWithoutStream();

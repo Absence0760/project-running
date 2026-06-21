@@ -205,6 +205,11 @@ class RunRecorder {
   double? _treadmillBaselineMetres;
   double _treadmillLastSpeedMps = 0;
   DateTime? _treadmillLastSampleAt;
+  // Armed by [pause] so a cumulative-distance belt advance during the pause is
+  // frozen out: a sample landing DURING the pause disarms it (the _paused
+  // branch rebases the baseline), otherwise the first post-resume sample
+  // re-anchors. See [pause] / [resume] / [setTreadmillSample].
+  bool _treadmillNeedsRebaseline = false;
 
   /// Plausibility ceiling for a treadmill belt speed (m/s) ≈ 43 km/h —
   /// faster than any human belt speed, so a reading at/above it is a sensor
@@ -566,6 +571,11 @@ class RunRecorder {
     if (!_recording || _paused) return;
     _paused = true;
     _stopwatch.stop();
+    // Arm the cumulative-distance re-anchor. If a belt sample lands DURING the
+    // pause it rebases the baseline itself and disarms this; if none does, the
+    // first post-resume sample re-anchors instead. Without one or the other,
+    // the belt advance during the pause leaks into the distance on resume.
+    _treadmillNeedsRebaseline = true;
   }
 
   /// Resume after a [pause].
@@ -579,10 +589,13 @@ class RunRecorder {
     // post-resume belt sample integrates dt back to a timestamp written
     // during/before the pause, crediting the paused gap as distance for any
     // pause shorter than the 30 s dtSec clamp (the GPS path is reset just
-    // above for the same reason; the totalDistanceMetres branch rebaselines
-    // on the _paused edge). Reset both so the next sample is a fresh anchor.
+    // above for the same reason). Reset both so the next sample is a fresh
+    // anchor.
     _treadmillLastSampleAt = null;
     _treadmillLastSpeedMps = 0;
+    // The cumulative-distance re-anchor was armed in pause(): if a sample
+    // landed during the pause it already disarmed it and rebased; if not, the
+    // flag is still set and the first post-resume sample re-anchors.
   }
 
   /// Update the latest heart-rate reading the recorder stamps onto new
@@ -620,9 +633,21 @@ class RunRecorder {
           // The belt keeps counting while the user is paused; rebase the
           // baseline so the paused advance is excluded and the accumulated
           // distance freezes (mirrors the GPS path's `if (_paused) return`
-          // and the speed branch's `!_paused` gate).
+          // and the speed branch's `!_paused` gate). This handles the
+          // re-anchor itself, so disarm the post-resume one.
           _treadmillBaselineMetres = totalDistanceMetres - _treadmillDistanceMetres;
+          _treadmillNeedsRebaseline = false;
         } else {
+          if (_treadmillNeedsRebaseline) {
+            // First sample after a resume where no sample landed during the
+            // pause: re-anchor at the current belt total but PRESERVE the
+            // accumulated distance, so the paused advance is dropped and the
+            // distance continues from the pre-pause value (same formula as the
+            // _paused branch above).
+            _treadmillBaselineMetres =
+                totalDistanceMetres - _treadmillDistanceMetres;
+            _treadmillNeedsRebaseline = false;
+          }
           _treadmillBaselineMetres ??= totalDistanceMetres;
           final delta = totalDistanceMetres - _treadmillBaselineMetres!;
           _treadmillDistanceMetres =
@@ -671,6 +696,7 @@ class RunRecorder {
     _treadmillBaselineMetres = null;
     _treadmillLastSpeedMps = 0;
     _treadmillLastSampleAt = null;
+    _treadmillNeedsRebaseline = false;
   }
 
   void _onPosition(Position pos) {
