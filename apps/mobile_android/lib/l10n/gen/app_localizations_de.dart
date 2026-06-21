@@ -2086,6 +2086,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Anpassung fehlgeschlagen – Rohaufzeichnung wird angezeigt';
 
   @override
+  String get runDetailMatchOffline =>
+      'Offline – Rohaufzeichnung wird angezeigt, erneuter Versuch folgt';
+
+  @override
   String get runDetailMatchMatched => 'Angepasst';
 
   @override

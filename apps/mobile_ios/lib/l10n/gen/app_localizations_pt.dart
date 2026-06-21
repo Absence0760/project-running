@@ -2080,6 +2080,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Falha no ajuste — exibindo o trajeto bruto';
 
   @override
+  String get runDetailMatchOffline =>
+      'Offline — exibindo o trajeto bruto, tentaremos novamente';
+
+  @override
   String get runDetailMatchMatched => 'Ajustada';
 
   @override
@@ -12783,6 +12787,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get runDetailMatchFailed =>
       'Falha no ajuste — exibindo o trajeto bruto';
+
+  @override
+  String get runDetailMatchOffline =>
+      'Offline — exibindo o trajeto bruto, tentaremos novamente';
 
   @override
   String get runDetailMatchMatched => 'Ajustada';

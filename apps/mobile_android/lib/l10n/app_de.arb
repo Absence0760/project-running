@@ -579,6 +579,7 @@
   "runDetailMatchPending": "Wird an Straßen angepasst…",
   "runDetailMatchSkipped": "Nicht angepasst (zu wenige Punkte)",
   "runDetailMatchFailed": "Anpassung fehlgeschlagen – Rohaufzeichnung wird angezeigt",
+  "runDetailMatchOffline": "Offline – Rohaufzeichnung wird angezeigt, erneuter Versuch folgt",
   "runDetailMatchMatched": "Angepasst",
   "runDetailRematchQueueing": "Wird eingereiht…",
   "runDetailRematch": "Neu abgleichen",

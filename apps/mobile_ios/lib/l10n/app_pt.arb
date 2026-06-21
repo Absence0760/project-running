@@ -579,6 +579,7 @@
   "runDetailMatchPending": "Ajustando às ruas…",
   "runDetailMatchSkipped": "Não ajustada (poucos pontos)",
   "runDetailMatchFailed": "Falha no ajuste — exibindo o trajeto bruto",
+  "runDetailMatchOffline": "Offline — exibindo o trajeto bruto, tentaremos novamente",
   "runDetailMatchMatched": "Ajustada",
   "runDetailRematchQueueing": "Adicionando à fila…",
   "runDetailRematch": "Reajustar",

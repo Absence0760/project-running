@@ -1169,11 +1169,14 @@ class ApiClient {
     final status = MatchStatus.fromName(row['status'] as String);
     final url = row['matched_track_url'] as String?;
     List<Waypoint>? track;
+    var trackUnreachable = false;
     if (status == MatchStatus.matched && url != null && url.isNotEmpty) {
       try {
         track = await _downloadTrack(url);
-      } catch (_) {
+      } catch (e) {
         track = null;
+        trackUnreachable = isMatchUnreachableError(e);
+        debugPrint('matched-track gz download failed for $runId: $e');
       }
     }
     return RunMatchInfo(
@@ -1184,6 +1187,7 @@ class ApiClient {
           ? null
           : DateTime.tryParse(row['matched_at'] as String),
       track: track,
+      trackUnreachable: trackUnreachable,
     );
   }
 

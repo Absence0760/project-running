@@ -2087,6 +2087,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Échec de l\'ajustement — trace brute affichée';
 
   @override
+  String get runDetailMatchOffline =>
+      'Hors ligne — trace brute affichée, nouvelle tentative à venir';
+
+  @override
   String get runDetailMatchMatched => 'Ajustée';
 
   @override

@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:api_client/api_client.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:core_models/core_models.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -113,6 +115,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// switches to it when present. A failure here cannot break the
   /// page.
   RunMatchInfo? _matchInfo;
+  /// The last map-match read couldn't reach the backend/network (the
+  /// PostgREST row query threw a transport error, or a `matched` row's
+  /// gz wouldn't download). The raw track still renders; the status pill
+  /// shows an honest "offline / will retry" rather than a hard error,
+  /// and a connectivity return re-fetches. Distinct from a terminal
+  /// `failed`/`skipped` server verdict.
+  bool _matchOffline = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   /// True while an owner-initiated re-match RPC is in flight. Drives
   /// the disabled state on the Re-match button so a rapid double-tap
   /// can't fire two redundant enqueues (the unique-index dedupe would
@@ -194,6 +204,21 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     _maybeFetchMatchedTrack();
     _maybeSuggestRoute();
     _loadViewerGender();
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
+  }
+
+  /// Retry the map-match read when connectivity returns, but only when
+  /// the current state is one a re-fetch could improve (offline-on-open,
+  /// still-pending, or a matched row whose gz we couldn't download).
+  /// Bounded + idempotent: a terminal/already-rendered run never re-hits
+  /// the backend, so a flapping connection can't spam the read.
+  void _onConnectivityChanged(List<ConnectivityResult> results) {
+    final online =
+        results.any((r) => r != ConnectivityResult.none) && results.isNotEmpty;
+    if (!online) return;
+    if (!shouldRetryMatchFetch(_matchInfo, offline: _matchOffline)) return;
+    _maybeFetchMatchedTrack();
   }
 
   Future<void> _loadViewerGender() async {
@@ -289,9 +314,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (api == null) return;
     try {
       final info = await api.fetchRunMatchedTrack(run.id);
-      if (mounted) setState(() => _matchInfo = info);
+      if (!mounted) return;
+      setState(() {
+        _matchInfo = info;
+        _matchOffline = info?.trackUnreachable ?? false;
+      });
     } catch (e) {
       debugPrint('matched-track fetch failed for ${run.id}: $e');
+      if (!mounted) return;
+      if (isMatchUnreachableError(e)) {
+        setState(() => _matchOffline = true);
+      }
     }
   }
 
@@ -322,6 +355,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _replayController?.dispose();
     _replayIndex.dispose();
     _social.dispose();
@@ -840,24 +874,31 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                             setState(() => _selectedSegment = null),
                       ),
                     ),
-                  if (_matchInfo != null &&
-                      _matchInfo!.status != MatchStatus.matched)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: _MatchStatusPill(
-                        status: _matchInfo!.status,
-                        // RLS on `run_matched_tracks` only returns the
-                        // row to the owner, so a non-null `_matchInfo`
-                        // already implies the viewer is the owner.
-                        // The RPC self-gates with 42501 anyway as a
-                        // defence in depth.
-                        onRematch: widget.apiClient == null
-                            ? null
-                            : _handleRematch,
-                        busy: _rematchBusy,
-                      ),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final kind = matchPillKind(_matchInfo,
+                          offline: _matchOffline);
+                      if (kind == MatchPillKind.hidden) {
+                        return const SizedBox.shrink();
+                      }
+                      return Positioned(
+                        top: 12,
+                        left: 12,
+                        child: _MatchStatusPill(
+                          kind: kind,
+                          // RLS on `run_matched_tracks` only returns the
+                          // row to the owner, so a non-null `_matchInfo`
+                          // already implies the viewer is the owner.
+                          // The RPC self-gates with 42501 anyway as a
+                          // defence in depth.
+                          onRematch: widget.apiClient == null
+                              ? null
+                              : _handleRematch,
+                          busy: _rematchBusy,
+                        ),
+                      );
+                    },
+                  ),
                   if (run.track.length >= 2)
                     Positioned(
                       bottom: 12,
@@ -2649,23 +2690,24 @@ class _RouteSuggestBanner extends StatelessWidget {
 }
 
 /// Small frosted-glass pill that surfaces the map-match status when
-/// it's anything other than `matched` (the silent default — the
-/// cleaner line speaks for itself). Mirrors the shape of the web's
+/// it's anything other than a clean `matched` (the silent default —
+/// the cleaner line speaks for itself). Mirrors the shape of the web's
 /// `.match-pill` on `/runs/[id]`.
 ///
-/// When [onRematch] is non-null and the status is `skipped` or
-/// `failed`, the pill exposes a small "Re-match" button — the same
-/// owner-only affordance the web has. Hidden for `pending` (the job
-/// is already in flight; another enqueue is a no-op via the dedupe
-/// unique index) and for `matched` (the pill itself doesn't render).
-/// While the callback's Future is in flight [busy] is true so the
-/// host can disable the action.
+/// When [onRematch] is non-null and the kind is `skipped` or `failed`,
+/// the pill exposes a small "Re-match" button — the same owner-only
+/// affordance the web has. Hidden for `pending` (the job is already in
+/// flight; another enqueue is a no-op via the dedupe unique index) and
+/// for `offline` (the backend is unreachable, so a re-match enqueue
+/// would fail — the read retries automatically when connectivity
+/// returns). While the callback's Future is in flight [busy] is true so
+/// the host can disable the action.
 class _MatchStatusPill extends StatelessWidget {
-  final MatchStatus status;
+  final MatchPillKind kind;
   final VoidCallback? onRematch;
   final bool busy;
   const _MatchStatusPill({
-    required this.status,
+    required this.kind,
     this.onRematch,
     this.busy = false,
   });
@@ -2673,14 +2715,15 @@ class _MatchStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (icon, label) = switch (status) {
-      MatchStatus.pending => (Icons.hourglass_top, l10n.runDetailMatchPending),
-      MatchStatus.skipped => (Icons.block, l10n.runDetailMatchSkipped),
-      MatchStatus.failed => (Icons.error_outline, l10n.runDetailMatchFailed),
-      MatchStatus.matched => (Icons.check_circle, l10n.runDetailMatchMatched),
+    final (icon, label) = switch (kind) {
+      MatchPillKind.pending => (Icons.hourglass_top, l10n.runDetailMatchPending),
+      MatchPillKind.offline => (Icons.cloud_off, l10n.runDetailMatchOffline),
+      MatchPillKind.skipped => (Icons.block, l10n.runDetailMatchSkipped),
+      MatchPillKind.failed => (Icons.error_outline, l10n.runDetailMatchFailed),
+      MatchPillKind.hidden => (Icons.check_circle, l10n.runDetailMatchMatched),
     };
-    final showRematch =
-        onRematch != null && status != MatchStatus.pending;
+    final showRematch = onRematch != null &&
+        (kind == MatchPillKind.skipped || kind == MatchPillKind.failed);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
