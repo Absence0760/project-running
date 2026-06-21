@@ -6,6 +6,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { checkSignUpGates } from '$lib/core/auth_gates';
+	import { safeReturnTo as resolveReturnTo } from '$lib/core/safe_redirect';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let error = $state('');
@@ -22,12 +23,13 @@
 	// or the explicit handler goto can fire. The previous version re-read
 	// $page.url.searchParams every call, but the $effect's goto mutates
 	// the URL to the return_to target on the same tick — caching once
-	// removes the race.
+	// removes the race. resolveReturnTo rejects off-origin targets
+	// (//evil.com, /\evil.com, absolute URLs) so the attacker-controllable
+	// query param can't turn /login into an open-redirect.
 	let returnToOnMount = $state<string>('/dashboard');
 	onMount(() => {
 		hydrated = true;
-		const raw = $page.url.searchParams.get('return_to');
-		returnToOnMount = raw && raw.startsWith('/') ? raw : '/dashboard';
+		returnToOnMount = resolveReturnTo($page.url.searchParams.get('return_to'));
 	});
 
 	function safeReturnTo(): string {

@@ -203,6 +203,23 @@ test.describe('anonymous walls', () => {
 		});
 	});
 
+	test('open-redirect: a //evil.com return_to is ignored, lands on /dashboard', async ({
+		page
+	}) => {
+		// `return_to` is attacker-controllable. A protocol-relative
+		// `//evil.com` starts with '/' (the old naive check passed it)
+		// but the browser resolves it to a different origin — an
+		// open-redirect that turns /login into a phishing hop.
+		// safeReturnTo() in lib/core/safe_redirect must reject it and
+		// fall back to /dashboard.
+		await page.goto('/login?return_to=//evil.com/phish');
+		await page.getByPlaceholder('Email address').fill(USER_A.email);
+		await page.getByPlaceholder('Password').fill(USER_A.password);
+		await page.getByRole('button', { name: 'Sign In' }).click();
+		// Must land same-origin on /dashboard, never navigate to evil.com.
+		await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15_000 });
+	});
+
 	test('anon /coach redirects to /login', async ({ page }) => {
 		await page.goto('/coach');
 		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
