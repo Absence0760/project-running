@@ -1104,6 +1104,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDiscardA11yHint => '現在の記録を保存せずに破棄します';
 
   @override
+  String get runStopA11yLabel => 'ランを停止して保存';
+
+  @override
+  String get runStopA11yHint => '記録を終了してランを保存します';
+
+  @override
   String get runResumeA11yLabel => 'ランを再開';
 
   @override

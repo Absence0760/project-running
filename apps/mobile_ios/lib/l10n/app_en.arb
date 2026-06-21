@@ -1534,6 +1534,14 @@
   "@runDiscardA11yHint": {
     "description": "Screen-reader hint for the discard-run control"
   },
+  "runStopA11yLabel": "Stop and save run",
+  "@runStopA11yLabel": {
+    "description": "Screen-reader label for the hold-to-stop control on the recording overlay"
+  },
+  "runStopA11yHint": "Ends the recording and saves the run",
+  "@runStopA11yHint": {
+    "description": "Screen-reader hint for the stop-and-save control"
+  },
   "runResumeA11yLabel": "Resume run",
   "@runResumeA11yLabel": {
     "description": "Screen-reader label for the pause/resume control when paused"

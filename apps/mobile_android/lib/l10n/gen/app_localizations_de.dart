@@ -1142,6 +1142,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Verwirft die aktuelle Aufzeichnung, ohne sie zu speichern';
 
   @override
+  String get runStopA11yLabel => 'Lauf beenden und speichern';
+
+  @override
+  String get runStopA11yHint =>
+      'Beendet die Aufzeichnung und speichert den Lauf';
+
+  @override
   String get runResumeA11yLabel => 'Lauf fortsetzen';
 
   @override

@@ -1145,6 +1145,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Supprime l\'enregistrement en cours sans l\'enregistrer';
 
   @override
+  String get runStopA11yLabel => 'Arrêter et enregistrer la course';
+
+  @override
+  String get runStopA11yHint =>
+      'Termine l\'enregistrement et enregistre la course';
+
+  @override
   String get runResumeA11yLabel => 'Reprendre la course';
 
   @override

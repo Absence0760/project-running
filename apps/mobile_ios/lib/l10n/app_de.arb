@@ -328,6 +328,8 @@
   "runDone": "Fertig",
   "runDiscardA11yLabel": "Lauf verwerfen",
   "runDiscardA11yHint": "Verwirft die aktuelle Aufzeichnung, ohne sie zu speichern",
+  "runStopA11yLabel": "Lauf beenden und speichern",
+  "runStopA11yHint": "Beendet die Aufzeichnung und speichert den Lauf",
   "runResumeA11yLabel": "Lauf fortsetzen",
   "runPauseA11yLabel": "Lauf pausieren",
   "runResumeA11yHint": "Setzt die pausierte Aufzeichnung fort",

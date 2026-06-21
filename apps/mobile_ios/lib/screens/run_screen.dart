@@ -3646,22 +3646,38 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
 
   @override
   Widget build(BuildContext context) {
-    // `behavior: HitTestBehavior.opaque` so the Listener claims any
-    // touch inside its 48–68 px square outright, instead of the default
-    // `deferToChild` which delegates to whichever child happens to be
-    // opaque at that pixel. The visible Container only claims hits
-    // within its painted circle, so a tap inside the square but
-    // outside the circle (corners + the ring overlay during a hold)
-    // would otherwise pass straight through to whatever sat behind
-    // — most visibly inside the AnimatedCrossFade-driven collapsed
-    // stats bar where the button is at the smaller 48 px size and
-    // the corner gap is proportionally bigger.
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: (_) => _onPointerDown(),
-      onPointerUp: (_) => _onPointerUpOrCancel(),
-      onPointerCancel: (_) => _onPointerUpOrCancel(),
-      child: SizedBox(
+    final l10n = AppLocalizations.of(context);
+    // The hold gesture is a sighted-user accidental-stop guard built on
+    // raw Listener pointer events — a screen-reader user navigates by
+    // element + double-tap-to-activate and can't perform a sustained
+    // hold, so without an explicit Semantics(onTap) the stop control is
+    // unreachable for them. The Semantics gives it a name + role and
+    // routes the activate gesture straight to onHoldComplete;
+    // ExcludeSemantics drops the bare Container/Icon below so the node
+    // has no competing child semantics.
+    return Semantics(
+      button: true,
+      enabled: true,
+      label: l10n.runStopA11yLabel,
+      hint: l10n.runStopA11yHint,
+      onTap: widget.onHoldComplete,
+      child: ExcludeSemantics(
+        // `behavior: HitTestBehavior.opaque` so the Listener claims any
+        // touch inside its 48–68 px square outright, instead of the default
+        // `deferToChild` which delegates to whichever child happens to be
+        // opaque at that pixel. The visible Container only claims hits
+        // within its painted circle, so a tap inside the square but
+        // outside the circle (corners + the ring overlay during a hold)
+        // would otherwise pass straight through to whatever sat behind
+        // — most visibly inside the AnimatedCrossFade-driven collapsed
+        // stats bar where the button is at the smaller 48 px size and
+        // the corner gap is proportionally bigger.
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => _onPointerDown(),
+          onPointerUp: (_) => _onPointerUpOrCancel(),
+          onPointerCancel: (_) => _onPointerUpOrCancel(),
+          child: SizedBox(
         width: widget.size,
         height: widget.size,
         child: Stack(
@@ -3698,6 +3714,8 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
                 ),
               ),
           ],
+        ),
+          ),
         ),
       ),
     );

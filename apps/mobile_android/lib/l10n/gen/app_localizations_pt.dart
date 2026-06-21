@@ -1142,6 +1142,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDiscardA11yHint => 'Descarta a gravação atual sem salvar';
 
   @override
+  String get runStopA11yLabel => 'Parar e salvar corrida';
+
+  @override
+  String get runStopA11yHint => 'Encerra a gravação e salva a corrida';
+
+  @override
   String get runResumeA11yLabel => 'Retomar corrida';
 
   @override
@@ -11864,6 +11870,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDiscardA11yHint => 'Descarta a gravação atual sem salvar';
+
+  @override
+  String get runStopA11yLabel => 'Parar e salvar corrida';
+
+  @override
+  String get runStopA11yHint => 'Encerra a gravação e salva a corrida';
 
   @override
   String get runResumeA11yLabel => 'Retomar corrida';

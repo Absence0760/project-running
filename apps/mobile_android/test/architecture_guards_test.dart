@@ -429,7 +429,7 @@ void main() {
       // Just regex the build() body for the Listener and its
       // behavior arg in one go.
       final m = RegExp(
-        r'return Listener\(\s*behavior:\s*HitTestBehavior\.opaque',
+        r'Listener\(\s*behavior:\s*HitTestBehavior\.opaque',
       ).firstMatch(source);
       expect(
         m,
@@ -2883,6 +2883,40 @@ void main() {
             'Expected at least three Semantics(button: true, label:) '
             'blocks for Discard / Pause / Lap. Found '
             '${semanticsBlocks.length}.',
+      );
+    });
+
+    test('_HoldToStopButton carries Semantics(button, label, onTap) '
+        '(audit/accessibility — the most important recording control)', () {
+      // Reason: the hold-to-stop button is the only way to end + save a
+      // run, but it was a bare Listener + Container + Icon(stop) — the
+      // same anti-pattern the May 2026 a11y pass fixed for Discard /
+      // Pause / Lap, missed here. A screen-reader user got no name /
+      // role, and the sustained-hold gesture is unperformable via
+      // double-tap-to-activate, so the control was unreachable in
+      // voice-only mode. The fix wraps it in Semantics(button: true,
+      // label:, hint:, onTap: widget.onHoldComplete) so the activate
+      // gesture routes straight to _stop. Pin all three so a refactor
+      // can't silently drop the accessible name or the onTap escape
+      // hatch.
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      final holdBtn = source.substring(
+        source.indexOf('class _HoldToStopButtonState'),
+      );
+      expect(
+        holdBtn,
+        contains('label: l10n.runStopA11yLabel'),
+        reason: '_HoldToStopButton must wrap its visible button in '
+            'Semantics(label: l10n.runStopA11yLabel) so TalkBack / '
+            'VoiceOver announce it.',
+      );
+      expect(
+        holdBtn,
+        contains('onTap: widget.onHoldComplete'),
+        reason: '_HoldToStopButton must give the Semantics node an '
+            'onTap that fires onHoldComplete — a screen-reader user '
+            'cannot perform the sustained hold gesture, so without '
+            'this the run can never be stopped in voice-only mode.',
       );
     });
 
