@@ -213,6 +213,15 @@ class _RunScreenState extends State<RunScreen> {
   // multiple recorders.
   bool _startRequested = false;
 
+  // Reentrancy guard on stop — _stop() awaits the recorder, the local save,
+  // and the cloud push, and never nulls _recorder. Without this, a second
+  // trigger (the lock-screen Stop action racing the on-screen hold-to-stop,
+  // or a cold-start Stop intent flushed after the run already finished) would
+  // re-run the whole stop path: a second runStore.save / clearInProgress and,
+  // worse, a duplicate cloud saveRun + race-result submission. Set on the
+  // first _stop, cleared on discard so the next run can stop cleanly.
+  bool _stopRequested = false;
+
   // Crash-safe incremental persistence. A partial Run is serialised every
   // [_incrementalSaveInterval] during a recording; the id is generated at
   // _begin() so the saved run has a stable identity across ticks and across
@@ -1804,7 +1813,10 @@ class _RunScreenState extends State<RunScreen> {
   }
 
   Future<void> _stop() async {
-    final raw = await _recorder!.stop();
+    final recorder = _recorder;
+    if (_stopRequested || recorder == null) return;
+    _stopRequested = true;
+    final raw = await recorder.stop();
     _snapshotSub?.cancel();
     _stepSub?.cancel();
     _incrementalSaveTimer?.cancel();
@@ -2087,6 +2099,7 @@ class _RunScreenState extends State<RunScreen> {
     _latestPedometerSteps = 0;
     _lastSnapshotAt = null;
     _startRequested = false;
+    _stopRequested = false;
     _runId = null;
     _runStartedAtWall = null;
     _pedometerRetries = 0;

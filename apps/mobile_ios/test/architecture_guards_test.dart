@@ -316,6 +316,45 @@ void main() {
       );
     });
 
+    test('_stop is guarded against re-entry before it awaits the recorder',
+        () {
+      // Reason: _stop() awaits the recorder, the local save, and the cloud
+      // push, and never nulls _recorder. A second trigger — the lock-screen
+      // Stop action racing the on-screen hold-to-stop, or a cold-start Stop
+      // intent flushed after the run already finished — would otherwise
+      // re-run the whole path: a duplicate runStore.save / clearInProgress,
+      // and worst of all a duplicate cloud saveRun + race-result submission.
+      // The guard (an early return on a _stopRequested flag) must sit BEFORE
+      // the `await ... .stop()` so the second caller bails before any await
+      // yields the event loop to it.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _stop\(\)\s*async\s*\{',
+      );
+      final guardIdx = body.indexOf('_stopRequested');
+      final stopAwaitIdx = body.indexOf('.stop()');
+      expect(guardIdx, greaterThan(-1),
+          reason: '_stop must consult a _stopRequested re-entrancy guard');
+      expect(stopAwaitIdx, greaterThan(-1),
+          reason: '_stop must await the recorder stop()');
+      expect(
+        guardIdx,
+        lessThan(stopAwaitIdx),
+        reason: 'The _stopRequested guard MUST appear before the awaited '
+            'recorder .stop() in _stop. A guard placed after the first '
+            'await lets a racing Stop (lock-screen vs hold-to-stop, or a '
+            'flushed cold-start intent) double-save + double-push the run.',
+      );
+      // The guard must also be reset on discard so the NEXT run can stop.
+      final discardBody = _extractMethodBody(source, r'void _discard\(\)\s*\{');
+      expect(
+        discardBody,
+        contains('_stopRequested = false'),
+        reason: '_discard must clear _stopRequested so a subsequent run is '
+            'stoppable; otherwise the second run can never be stopped.',
+      );
+    });
+
     test('_onPrefsChange skips rebuilds during recording', () {
       // Reason: runStore.notifyListeners() fires every 10s via
       // _saveInProgress. Without this gate, we'd get a full-screen
