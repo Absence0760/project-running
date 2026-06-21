@@ -3,7 +3,11 @@ import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
+  chronoTrackConfigured,
+  chronoTrackResultsUrl,
+  extractChronoTrackResults,
   extractRunSignUpResults,
+  mapChronoTrackResult,
   mapRunSignUpResult,
   parseRaceResultRow,
   runSignUpResultsUrl,
@@ -11,11 +15,13 @@ import {
 } from './lib.ts';
 
 interface RequestBody {
-  provider?: unknown; // 'runsignup' | 'paste'
+  provider?: unknown; // 'runsignup' | 'chronotrack' | 'paste'
   listingId?: unknown; // race_listings.id to import onto / link
   runSignUpUserId?: unknown; // runner's RunSignUp account id (optional filter)
+  bib?: unknown; // ChronoTrack: filter results to one bib
   result?: unknown; // paste-mode single result row
   matchRunId?: unknown; // when set, enrich THIS existing run instead of inserting
+  probe?: unknown; // when true, only report whether `provider` is configured
 }
 
 Deno.serve(withSentry('race-results-import', async (req: Request) => {
@@ -40,6 +46,17 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
 
   const body = (guarded.body ?? {}) as RequestBody;
   const provider = typeof body.provider === 'string' ? body.provider : '';
+
+  // Provider-availability probe: report fail-closed (503 provider_not_configured)
+  // when the named provider's credentials are unset, without needing a listing.
+  // The ChronoTrack Settings card uses this to disable itself with an explainer.
+  if (body.probe === true) {
+    if (provider === 'chronotrack' && !chronoTrackConfigured((n) => Deno.env.get(n))) {
+      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    }
+    return Response.json({ configured: true });
+  }
+
   const listingId = typeof body.listingId === 'string' ? body.listingId : '';
   if (!listingId) return Response.json({ error: 'listingId required' }, { status: 400 });
 
@@ -115,6 +132,43 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     }
     mapped = extractRunSignUpResults(payload)
       .map((r) => mapRunSignUpResult(r, mapOpts))
+      .filter((r): r is MappedRaceRun => r !== null);
+  } else if (provider === 'chronotrack') {
+    // Fail closed when the ChronoTrack Live credentials are unconfigured. The
+    // whole ChronoTrack leg is gated on its own CHRONOTRACK_* creds; until they
+    // are provisioned the EF is inert and the UI shows the unavailable explainer.
+    if (!chronoTrackConfigured((n) => Deno.env.get(n))) {
+      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    }
+    const clientId = Deno.env.get('CHRONOTRACK_CLIENT_ID')!;
+    const ctUserId = Deno.env.get('CHRONOTRACK_USER_ID')!;
+    const password = Deno.env.get('CHRONOTRACK_PASSWORD')!;
+    const eventId = (listing.provider_race_id as string | null) ?? '';
+    if (!eventId) {
+      return Response.json({ error: 'listing has no ChronoTrack event id' }, { status: 400 });
+    }
+    const url = chronoTrackResultsUrl({
+      eventId,
+      clientId,
+      userId: ctUserId,
+      password,
+      bib: typeof body.bib === 'string' ? body.bib : undefined,
+    });
+    const upstream = await fetch(url, {
+      headers: { 'User-Agent': Deno.env.get('RACE_IMPORT_USER_AGENT') || 'RunApp/1.0' },
+    });
+    if (!upstream.ok) {
+      // Fail loud on a non-2xx upstream rather than feeding an error page in.
+      return Response.json({ error: `chronotrack upstream ${upstream.status}` }, { status: 502 });
+    }
+    let payload: unknown;
+    try {
+      payload = await upstream.json();
+    } catch (_) {
+      return Response.json({ error: 'chronotrack upstream not JSON' }, { status: 502 });
+    }
+    mapped = extractChronoTrackResults(payload)
+      .map((r) => mapChronoTrackResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
   } else if (provider === 'paste') {
     if (!body.result || typeof body.result !== 'object') {

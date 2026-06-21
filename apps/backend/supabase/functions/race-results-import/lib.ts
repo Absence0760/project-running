@@ -1,13 +1,15 @@
 // Pure helpers for the race-results importer.
 //
-// Two import modes:
-//   - 'runsignup' — maps the RunSignUp REST get-results JSON onto runs rows.
-//   - 'paste'     — maps a single user-pasted result row (any timing site that
-//                   has no API) onto one runs row.
+// Import modes:
+//   - 'runsignup'   — maps the RunSignUp REST get-results JSON onto runs rows.
+//   - 'chronotrack' — maps the ChronoTrack Live (CTLive) results JSON onto runs
+//                     rows; gated fail-closed on its own CHRONOTRACK_* creds.
+//   - 'paste'       — maps a single user-pasted result row (any timing site that
+//                     has no API) onto one runs row.
 //
 // Everything here is network-free + side-effect-free so the mapping, the field
-// caps, and the external_id shape are unit-testable without a live API key (the
-// EF itself returns 503 when the key is unset — see index.ts).
+// caps, and the external_id shape are unit-testable without live credentials
+// (the EF itself returns 503 when a provider's creds are unset — see index.ts).
 
 export const MAX_FIELD_LEN = 200;
 export const MAX_RESULTS_ROWS = 2000;
@@ -160,6 +162,110 @@ function toPositiveInt(raw: unknown): number | null {
   const n = typeof raw === 'number' ? raw : Number(capField(raw));
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.floor(n);
+}
+
+/**
+ * Whether the ChronoTrack Live leg has all three credentials provisioned.
+ * Pure over a `(name) => value | undefined` getter so the fail-closed gate is
+ * unit-testable without a Deno.env or the EF's heavy supabase-js import.
+ */
+export function chronoTrackConfigured(
+  getEnv: (name: string) => string | undefined,
+): boolean {
+  return Boolean(
+    getEnv('CHRONOTRACK_CLIENT_ID') &&
+      getEnv('CHRONOTRACK_USER_ID') &&
+      getEnv('CHRONOTRACK_PASSWORD'),
+  );
+}
+
+/** A finisher row as the ChronoTrack Live API returns it (fields we consume). */
+export interface ChronoTrackResult {
+  results_bib?: unknown;
+  results_time?: unknown; // chip / net time
+  results_gun_time?: unknown; // gun time
+  results_rank?: unknown; // overall place
+  results_division_rank?: unknown; // age-group place
+  results_division?: unknown; // age group label
+}
+
+/**
+ * Map one ChronoTrack finisher onto a runs row for `userId`. Delegates to the
+ * shared `mapRunSignUpResult` shaping so the run row shape, the time fallback
+ * (chip → gun), the external_id, and the metadata keys are identical across
+ * providers — only the provider-specific field names differ here.
+ */
+export function mapChronoTrackResult(
+  r: ChronoTrackResult,
+  opts: {
+    userId: string;
+    listingId: string;
+    raceName: string;
+    raceDate: string;
+    distanceM: number | null;
+    isPublic: boolean;
+  },
+): MappedRaceRun | null {
+  return mapRunSignUpResult(
+    {
+      bib_num: r.results_bib,
+      chip_time: r.results_time,
+      clock_time: r.results_gun_time,
+      place: r.results_rank,
+      age_group_place: r.results_division_rank,
+      age_group: r.results_division,
+    },
+    opts,
+  );
+}
+
+/**
+ * Build the ChronoTrack Live get-results URL. Centralised so the credential
+ * handling (client_id + the user_id/user_pass basic-auth pair in the query
+ * string, format=json) lives in one place and the URL is testable. `eventId`
+ * is the ChronoTrack event id stored on the listing's `provider_race_id`.
+ */
+export function chronoTrackResultsUrl(opts: {
+  eventId: string;
+  clientId: string;
+  userId: string;
+  password: string;
+  bib?: string;
+}): string {
+  const u = new URL(
+    `https://api.chronotrack.com/api/event/${encodeURIComponent(opts.eventId)}/results`,
+  );
+  u.searchParams.set('format', 'json');
+  u.searchParams.set('client_id', opts.clientId);
+  u.searchParams.set('user_id', opts.userId);
+  u.searchParams.set('user_pass', opts.password);
+  if (opts.bib) u.searchParams.set('bib', opts.bib);
+  return u.toString();
+}
+
+/**
+ * Pull the flat finisher array out of the ChronoTrack Live results envelope,
+ * capped. CTLive nests rows under `event_results[]`; tolerate a top-level
+ * `results` too (the same defensive shape as the RunSignUp extractor).
+ */
+export function extractChronoTrackResults(payload: unknown): ChronoTrackResult[] {
+  const out: ChronoTrackResult[] = [];
+  if (!payload || typeof payload !== 'object') return out;
+  const obj = payload as Record<string, unknown>;
+  const rows = obj.event_results;
+  if (Array.isArray(rows)) {
+    for (const r of rows) {
+      out.push(r as ChronoTrackResult);
+      if (out.length >= MAX_RESULTS_ROWS) return out;
+    }
+  }
+  if (out.length === 0 && Array.isArray(obj.results)) {
+    for (const r of obj.results) {
+      out.push(r as ChronoTrackResult);
+      if (out.length >= MAX_RESULTS_ROWS) return out;
+    }
+  }
+  return out;
 }
 
 /**

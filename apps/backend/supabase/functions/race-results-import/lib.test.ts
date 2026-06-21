@@ -4,7 +4,11 @@ import {
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   capField,
+  chronoTrackConfigured,
+  chronoTrackResultsUrl,
+  extractChronoTrackResults,
   extractRunSignUpResults,
+  mapChronoTrackResult,
   mapRunSignUpResult,
   MAX_FIELD_LEN,
   MAX_RESULTS_ROWS,
@@ -154,4 +158,88 @@ Deno.test('extractRunSignUpResults tolerates a top-level results array + caps', 
   assertEquals(extractRunSignUpResults({}).length, 0);
   const big = { results: Array.from({ length: MAX_RESULTS_ROWS + 100 }, () => ({ bib_num: 'x' })) };
   assertEquals(extractRunSignUpResults(big).length, MAX_RESULTS_ROWS);
+});
+
+Deno.test('chronoTrackConfigured fails closed unless all three creds are set', () => {
+  const full: Record<string, string> = {
+    CHRONOTRACK_CLIENT_ID: 'cid',
+    CHRONOTRACK_USER_ID: 'uid',
+    CHRONOTRACK_PASSWORD: 'pw',
+  };
+  assert(chronoTrackConfigured((n) => full[n]));
+  // Any one missing → unconfigured (the dev/CI default is all-unset).
+  assertEquals(chronoTrackConfigured(() => undefined), false);
+  for (const drop of Object.keys(full)) {
+    const partial = { ...full, [drop]: '' };
+    assertEquals(chronoTrackConfigured((n) => partial[n]), false);
+  }
+});
+
+Deno.test('mapChronoTrackResult maps a ChronoTrack finisher onto a race run', () => {
+  const run = mapChronoTrackResult(
+    {
+      results_bib: '1234',
+      results_time: '1:47:23',
+      results_gun_time: '1:48:01',
+      results_rank: 142,
+      results_division_rank: 12,
+      results_division: 'M35-39',
+    },
+    OPTS,
+  );
+  assert(run !== null);
+  assertEquals(run!.source, 'race');
+  assertEquals(run!.distance_m, 21097);
+  assertEquals(run!.duration_s, 1 * 3600 + 47 * 60 + 23);
+  // Identical external_id + metadata shaping to the RunSignUp path (shared mapper).
+  assertEquals(run!.external_id, 'race:Richmond Half Marathon:2025-09-21:1234');
+  assertEquals(run!.metadata.race_name, 'Richmond Half Marathon');
+  assertEquals(run!.metadata.bib, '1234');
+  assertEquals(run!.metadata.chip_time, '1:47:23');
+  assertEquals(run!.metadata.gun_time, '1:48:01');
+  assertEquals(run!.metadata.overall_place, 142);
+  assertEquals(run!.metadata.age_group_place, 12);
+  assertEquals(run!.metadata.age_group, 'M35-39');
+});
+
+Deno.test('mapChronoTrackResult falls back to gun time + returns null with no time', () => {
+  const gun = mapChronoTrackResult({ results_bib: '5', results_gun_time: '0:30:00' }, OPTS);
+  assert(gun !== null);
+  assertEquals(gun!.duration_s, 30 * 60);
+  assertEquals(gun!.metadata.chip_time, undefined);
+  assertEquals(gun!.metadata.gun_time, '0:30:00');
+  assertEquals(mapChronoTrackResult({ results_bib: '9' }, OPTS), null);
+});
+
+Deno.test('chronoTrackResultsUrl includes creds/format and encodes the event id', () => {
+  const url = chronoTrackResultsUrl({
+    eventId: 'EVT 42',
+    clientId: 'CID',
+    userId: 'UID',
+    password: 'PASS',
+    bib: '77',
+  });
+  assert(url.startsWith('https://api.chronotrack.com/api/event/EVT%2042/results'));
+  assert(url.includes('format=json'));
+  assert(url.includes('client_id=CID'));
+  assert(url.includes('user_id=UID'));
+  assert(url.includes('user_pass=PASS'));
+  assert(url.includes('bib=77'));
+});
+
+Deno.test('extractChronoTrackResults reads event_results + tolerates results + caps', () => {
+  const nested = {
+    event_results: [
+      { results_bib: '1', results_time: '20:00' },
+      { results_bib: '2', results_time: '21:00' },
+    ],
+  };
+  assertEquals(extractChronoTrackResults(nested).length, 2);
+  assertEquals(extractChronoTrackResults({ results: [{ results_bib: 'a' }] }).length, 1);
+  assertEquals(extractChronoTrackResults(null).length, 0);
+  assertEquals(extractChronoTrackResults({}).length, 0);
+  const big = {
+    event_results: Array.from({ length: MAX_RESULTS_ROWS + 100 }, () => ({ results_bib: 'x' })),
+  };
+  assertEquals(extractChronoTrackResults(big).length, MAX_RESULTS_ROWS);
 });
