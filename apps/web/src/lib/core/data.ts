@@ -6772,6 +6772,8 @@ export interface NotificationRow {
 	event_id: string | null;
 	plan_id: string | null;
 	club_id: string | null;
+	achievement_id: string | null;
+	challenge_id: string | null;
 	read_at: string | null;
 	created_at: string;
 }

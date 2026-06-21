@@ -123,6 +123,7 @@
 				return r.actor_id ? `/u/${r.actor_id}` : null;
 			case 'event_rsvp':
 			case 'event_cancel':
+			case 'event_reminder':
 				return r.event_id && item.event_club_slug
 					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
 					: null;
@@ -135,6 +136,14 @@
 				return item.club_slug ? `/clubs/${item.club_slug}` : null;
 			case 'run_completed':
 				return r.run_id ? `/share/run/${r.run_id}` : null;
+			case 'achievement':
+				return r.achievement_id ? `/share/badge/${r.achievement_id}` : null;
+			case 'challenge_complete':
+				return r.challenge_id ? `/challenges/${r.challenge_id}` : null;
+			case 'content_hidden':
+				return null;
+			default:
+				return null;
 		}
 	}
 
@@ -160,6 +169,10 @@
 				return item.event_title
 					? m('notificationBell.eventCancelTitled', { title: item.event_title })
 					: m('notificationBell.eventCancel');
+			case 'event_reminder':
+				return item.event_title
+					? m('notificationBell.eventReminderTitled', { title: item.event_title })
+					: m('notificationBell.eventReminder');
 			case 'plan_update':
 				return m('notificationBell.planUpdate', { name });
 			case 'plan_assigned':
@@ -174,6 +187,14 @@
 				return item.run_distance_m
 					? m('notificationBell.runCompletedDist', { name, dist: fmtKm(item.run_distance_m) })
 					: m('notificationBell.runCompleted', { name });
+			case 'achievement':
+				return m('notificationBell.achievement');
+			case 'challenge_complete':
+				return m('notificationBell.challengeComplete');
+			case 'content_hidden':
+				return m('notificationBell.contentHidden');
+			default:
+				return m('notificationBell.generic');
 		}
 	}
 
