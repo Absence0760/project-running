@@ -87,6 +87,7 @@
 				return r.actor_id ? `/u/${r.actor_id}` : null;
 			case 'event_rsvp':
 			case 'event_cancel':
+			case 'event_reminder':
 				return r.event_id && item.event_club_slug
 					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
 					: null;
@@ -99,6 +100,14 @@
 				return item.club_slug ? `/clubs/${item.club_slug}` : null;
 			case 'run_completed':
 				return r.run_id ? `/share/run/${r.run_id}` : null;
+			case 'achievement':
+				return r.achievement_id ? `/share/badge/${r.achievement_id}` : null;
+			case 'challenge_complete':
+				return r.challenge_id ? `/challenges/${r.challenge_id}` : null;
+			case 'content_hidden':
+				return null;
+			default:
+				return null;
 		}
 	}
 
@@ -124,6 +133,10 @@
 				return item.event_title
 					? m('notificationsList.verbEventCancelTitled', { title: item.event_title })
 					: m('notificationsList.verbEventCancel');
+			case 'event_reminder':
+				return item.event_title
+					? m('notificationsList.verbEventReminderTitled', { title: item.event_title })
+					: m('notificationsList.verbEventReminder');
 			case 'plan_update':
 				return m('notificationsList.verbPlanUpdate', { name });
 			case 'plan_assigned':
@@ -138,6 +151,14 @@
 				return item.run_distance_m
 					? m('notificationsList.verbRunCompletedDist', { name, dist: fmtKm(item.run_distance_m) })
 					: m('notificationsList.verbRunCompleted', { name });
+			case 'achievement':
+				return m('notificationsList.verbAchievement');
+			case 'challenge_complete':
+				return m('notificationsList.verbChallengeComplete');
+			case 'content_hidden':
+				return m('notificationsList.verbContentHidden');
+			default:
+				return m('notificationsList.verbGeneric');
 		}
 	}
 
