@@ -94,4 +94,80 @@ test.describe('run_kudos — concurrent insert resilience', () => {
 			await deleteRun(runId);
 		}
 	});
+
+	/**
+	 * Pins the data-layer contract the optimistic kudos UI relies on
+	 * (giveKudos/rescindKudos in core/data.ts return whether the row
+	 * ACTUALLY changed). The drift bug: a stale local
+	 * `viewer_has_kudos: false` (kudos given from another tab) made
+	 * toggleKudos fire an insert that 23505s as a no-op, yet the UI
+	 * still bumped the count `+1` — the displayed total drifted one
+	 * above the server's. The fix keys the optimistic delta on the
+	 * real mutation outcome:
+	 *   - a duplicate INSERT lands no row (23505) → no `+1`,
+	 *   - a DELETE that matched nothing returns zero rows → no `-1`.
+	 */
+	test('duplicate insert is a no-op and delete reports rows actually removed', async () => {
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date('2026-04-30T08:00:00Z').toISOString(),
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: true,
+			metadata: { activity_type: 'run', title: 'kudos-noop test' }
+		});
+
+		try {
+			const alex = await getUserClient({
+				email: USER_B.email,
+				password: USER_B.password
+			});
+
+			// First kudos lands a row (giveKudos would return true).
+			const first = await alex.from('run_kudos').insert({ run_id: runId, user_id: USER_B.id });
+			expect(first.error, 'first kudos insert should succeed').toBeNull();
+
+			// Second insert (the stale-flag re-tap) is a 23505 no-op —
+			// giveKudos returns false, so the UI must NOT add a second `+1`.
+			const dup = await alex.from('run_kudos').insert({ run_id: runId, user_id: USER_B.id });
+			expect(dup.error?.code, 'duplicate kudos insert must 23505 (no new row)').toBe('23505');
+
+			const admin = getAdminClient();
+			const afterInsert = await admin
+				.from('run_kudos')
+				.select('*', { count: 'exact', head: true })
+				.eq('run_id', runId)
+				.eq('user_id', USER_B.id);
+			expect(afterInsert.count, 'still exactly one kudos row after the duplicate').toBe(1);
+
+			// Delete-with-select returns the rows it removed —
+			// rescindKudos reads `.length > 0` to drive the optimistic `-1`.
+			const del = await alex
+				.from('run_kudos')
+				.delete()
+				.eq('run_id', runId)
+				.eq('user_id', USER_B.id)
+				.select('user_id');
+			expect(del.error, 'delete should succeed').toBeNull();
+			expect(
+				(del.data ?? []).length,
+				'delete must report the one removed row so the UI applies the -1'
+			).toBe(1);
+
+			// A second delete matches nothing → zero rows → no `-1`.
+			const delAgain = await alex
+				.from('run_kudos')
+				.delete()
+				.eq('run_id', runId)
+				.eq('user_id', USER_B.id)
+				.select('user_id');
+			expect(delAgain.error).toBeNull();
+			expect(
+				(delAgain.data ?? []).length,
+				'a delete that matched nothing returns zero rows (rescindKudos → false)'
+			).toBe(0);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
 });

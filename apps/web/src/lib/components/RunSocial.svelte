@@ -54,11 +54,17 @@
 		kudosBusy = true;
 		try {
 			if (kudos.viewer_has_kudos) {
-				await rescindKudos(runId);
-				kudos = { count: Math.max(kudos.count - 1, 0), viewer_has_kudos: false };
+				const removed = await rescindKudos(runId);
+				kudos = {
+					count: removed ? Math.max(kudos.count - 1, 0) : kudos.count,
+					viewer_has_kudos: false,
+				};
 			} else {
-				await giveKudos(runId);
-				kudos = { count: kudos.count + 1, viewer_has_kudos: true };
+				const added = await giveKudos(runId);
+				kudos = {
+					count: added ? kudos.count + 1 : kudos.count,
+					viewer_has_kudos: true,
+				};
 			}
 		} catch (e) {
 			showToast(t('runSocial.kudosUpdateFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');

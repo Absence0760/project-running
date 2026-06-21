@@ -105,6 +105,8 @@ class _SocialApi extends ApiClient {
     this.throwOnGive = false,
     this.throwOnRescind = false,
     this.throwOnAdd = false,
+    this.giveReturnsNoOp = false,
+    this.rescindReturnsNoOp = false,
   });
 
   final String? viewer;
@@ -115,6 +117,10 @@ class _SocialApi extends ApiClient {
   final bool throwOnGive;
   final bool throwOnRescind;
   final bool throwOnAdd;
+  // Simulate the DB-level no-op the optimistic UI must reconcile: a
+  // duplicate insert (23505 → false) / a delete that matched nothing.
+  final bool giveReturnsNoOp;
+  final bool rescindReturnsNoOp;
 
   int giveCalls = 0;
   int rescindCalls = 0;
@@ -154,15 +160,17 @@ class _SocialApi extends ApiClient {
       {int limit = 200}) async => seedComments;
 
   @override
-  Future<void> giveKudos(String runId) async {
+  Future<bool> giveKudos(String runId) async {
     giveCalls++;
     if (throwOnGive) throw Exception('give-boom');
+    return !giveReturnsNoOp;
   }
 
   @override
-  Future<void> rescindKudos(String runId) async {
+  Future<bool> rescindKudos(String runId) async {
     rescindCalls++;
     if (throwOnRescind) throw Exception('rescind-boom');
+    return !rescindReturnsNoOp;
   }
 
   @override
@@ -292,6 +300,30 @@ void main() {
       expect(api.rescindCalls, 1);
       expect(api.giveCalls, 0);
       expect(find.text('4'), findsOneWidget);
+    });
+
+    testWidgets('a no-op give (already kudoed elsewhere) undoes the +1 drift',
+        (tester) async {
+      // The viewer kudoed this run from another tab, so the server
+      // already has the row, but this widget's local flag is stale
+      // (viewerHasKudos: false, count excludes their kudos). Tapping
+      // fires an insert that 23505s as a no-op → giveKudos returns
+      // false → the UI must NOT keep the optimistic +1.
+      final api = _SocialApi(
+        kudosCount: 2,
+        viewerHasKudos: false,
+        giveReturnsNoOp: true,
+      );
+      await _pumpApi(tester, api);
+      expect(find.text('2'), findsOneWidget);
+
+      await tester.tap(find.byType(TextButton).first);
+      await tester.pumpAndSettle();
+      expect(api.giveCalls, 1);
+      // Count reconciled back to 2 (no real change), flag stays kudoed —
+      // the optimistic +1 did NOT stick on a duplicate-insert no-op.
+      expect(find.text('3'), findsNothing);
+      expect(find.text('2'), findsOneWidget);
     });
 
     testWidgets('a failed give rolls back the optimistic bump + shows a banner',

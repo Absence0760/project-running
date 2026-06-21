@@ -126,13 +126,15 @@ class _FakeApi extends ApiClient {
       fetchEngagementSummaries(List<String> runIds) async => engagement;
 
   @override
-  Future<void> giveKudos(String runId) async {
+  Future<bool> giveKudos(String runId) async {
     giveCalls++;
+    return true;
   }
 
   @override
-  Future<void> rescindKudos(String runId) async {
+  Future<bool> rescindKudos(String runId) async {
     rescindCalls++;
+    return true;
   }
 
   @override
@@ -160,7 +162,7 @@ class _ThrowingApi extends _FakeApi {
 class _KudosFailApi extends _FakeApi {
   _KudosFailApi({super.entries, super.engagement});
   @override
-  Future<void> giveKudos(String runId) async {
+  Future<bool> giveKudos(String runId) async {
     giveCalls++;
     throw Exception('kudos down');
   }
