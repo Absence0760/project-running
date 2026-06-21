@@ -12,6 +12,7 @@
 		disconnectIntegration,
 		isRunSignUpConfigured,
 		isUltraSignUpConfigured,
+		isChronoTrackConfigured,
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import {
@@ -61,6 +62,9 @@
 	// UltraSignup (trail/ultra results) is the same fail-closed shape on its own
 	// server-side key; probe it independently so the card can show the explainer.
 	let ultraSignUpAvailable = $state(false);
+	// ChronoTrack race-results import runs through the same EF behind its own
+	// CHRONOTRACK_* credential gate; probe it once for the same fail-closed card.
+	let chronoTrackAvailable = $state(false);
 
 	async function refreshIntegrations() {
 		const saved = await fetchIntegrations();
@@ -112,6 +116,12 @@
 			ultraSignUpAvailable = await isUltraSignUpConfigured();
 		} catch {
 			ultraSignUpAvailable = false;
+		}
+
+		try {
+			chronoTrackAvailable = await isChronoTrackConfigured();
+		} catch {
+			chronoTrackAvailable = false;
 		}
 
 		pageLoading = false;
@@ -488,6 +498,25 @@
 				{/if}
 			</div>
 		</section>
+
+		<section class="card runsignup-card" data-testid="chronotrack-card">
+			<div class="integration-icon" data-provider="chronotrack" aria-hidden="true">
+				<span class="material-symbols">timer</span>
+			</div>
+			<div class="runsignup-body">
+				<h2>{m('integrations.chronotrack')}</h2>
+				<p class="card-sub">{m('integrations.chronotrackConnect')}</p>
+				{#if chronoTrackAvailable}
+					<a class="btn btn-connect" href="/races" data-testid="chronotrack-open">
+						{m('integrations.chronotrackOpen')}
+					</a>
+				{:else}
+					<p class="runsignup-unavailable" data-testid="chronotrack-unavailable" role="status">
+						{m('integrations.chronotrackUnavailable')}
+					</p>
+				{/if}
+			</div>
+		</section>
 	{/if}
 </div>
 
@@ -677,6 +706,11 @@
 	.integration-icon[data-provider="ultrasignup"] {
 		background: rgba(76, 145, 92, 0.14);
 		color: #3f7a4f;
+	}
+
+	.integration-icon[data-provider="chronotrack"] {
+		background: rgba(56, 142, 142, 0.14);
+		color: #2f7e7e;
 	}
 
 	.runsignup-card {

@@ -10387,6 +10387,20 @@ class AppLocalizationsDe extends AppLocalizations {
       'RunSignUp-Import ist noch nicht verfügbar. parkrun und manuelles Einfügen funktionieren weiterhin.';
 
   @override
+  String get integrationsChronotrack => 'ChronoTrack';
+
+  @override
+  String get integrationsChronotrackConnect =>
+      'Rennergebnisse von ChronoTrack-gemessenen Veranstaltungen importieren.';
+
+  @override
+  String get integrationsChronotrackOpen => 'Rennkalender öffnen';
+
+  @override
+  String get integrationsChronotrackUnavailable =>
+      'ChronoTrack-Import ist noch nicht verfügbar. parkrun und manuelles Einfügen funktionieren weiterhin.';
+
+  @override
   String get routeConditionsTitle => 'Bedingungen';
 
   @override

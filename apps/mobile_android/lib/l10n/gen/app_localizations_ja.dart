@@ -9888,6 +9888,20 @@ class AppLocalizationsJa extends AppLocalizations {
       'RunSignUpのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
 
   @override
+  String get integrationsChronotrack => 'ChronoTrack';
+
+  @override
+  String get integrationsChronotrackConnect =>
+      'ChronoTrackで計測されたイベントのレース結果をインポートします。';
+
+  @override
+  String get integrationsChronotrackOpen => 'レースカレンダーを開く';
+
+  @override
+  String get integrationsChronotrackUnavailable =>
+      'ChronoTrackのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
+
+  @override
   String get routeConditionsTitle => 'コンディション';
 
   @override

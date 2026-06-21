@@ -1527,8 +1527,10 @@ Imports an official race result onto a `source='race'` run, or enriches an exist
 **Flow:**
 1. Auth (`auth.getUser`) → 401; tiered rate limit; resolve the public `race_listings` row (name/date/distance) for the metadata stamp.
 2. `provider='runsignup'`: **fail closed** — if `RUNSIGNUP_API_KEY`/`_SECRET` are unset return `503 {error:'provider_not_configured'}`; else call the RunSignUp results endpoint, map each finisher to a run row (`source='race'`, `external_id=race:{name}:{date}:{bib}`, the owner-only race metadata). Fail-loud on a non-2xx upstream (502).
-3. `provider='paste'`: map the single pasted result row.
-4. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
+3. `provider='chronotrack'`: **fail closed** — if `CHRONOTRACK_CLIENT_ID`/`CHRONOTRACK_USER_ID`/`CHRONOTRACK_PASSWORD` are unset return `503 {error:'provider_not_configured'}`; else call the ChronoTrack Live results endpoint (event id = the listing's `provider_race_id`), map each finisher with the same shaping as RunSignUp. Fail-loud on a non-2xx upstream (502).
+4. `provider='paste'`: map the single pasted result row.
+5. `probe=true`: report provider availability without a listing — `503 provider_not_configured` when `provider='chronotrack'` is unconfigured, else `{configured:true}`. Drives the ChronoTrack Settings card.
+6. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
 
 **Response:** `{ "imported": 1, "skipped": 0, "enriched": 0 }` (the `matchRunId` path returns `enriched: 1`).
 
@@ -1536,7 +1538,7 @@ Imports an official race result onto a `source='race'` run, or enriches an exist
 
 Pulls upcoming RunSignUp races near a region into `race_listings` (v1 seam — the actual fetch+upsert is a scoped follow-up). **Fail closed**: returns `503 {error:'provider_not_configured'}` when `RUNSIGNUP_API_KEY`/`_SECRET` are unset; the web + mobile UIs probe it to decide whether to show the RunSignUp affordance or the unavailable explainer.
 
-**Env:** `RUNSIGNUP_API_KEY`, `RUNSIGNUP_API_SECRET` (both required for the RunSignUp legs — unset → 503), `RACE_IMPORT_USER_AGENT` (optional, defaults `RunApp/1.0`).
+**Env:** `RUNSIGNUP_API_KEY`, `RUNSIGNUP_API_SECRET` (both required for the RunSignUp legs — unset → 503), `CHRONOTRACK_CLIENT_ID`, `CHRONOTRACK_USER_ID`, `CHRONOTRACK_PASSWORD` (all three required for the ChronoTrack leg — any unset → 503), `RACE_IMPORT_USER_AGENT` (optional, defaults `RunApp/1.0`).
 
 ---
 

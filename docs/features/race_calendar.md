@@ -1,6 +1,6 @@
 # Race calendar + results import — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** Shipped 2026-06-20 (migration `20270214_001`). This page began as the implementation handoff plan; the calendar, the `race-results-import` / `race-listings-sync` Edge Functions, the auto-match-on-record seam, and manual paste are live on web + mobile. **Provider legs:** parkrun shipped; the **RunSignUp** leg is built fail-closed behind `RUNSIGNUP_API_KEY`/`_SECRET`; the **ChronoTrack** leg is built fail-closed behind `CHRONOTRACK_CLIENT_ID`/`CHRONOTRACK_USER_ID`/`CHRONOTRACK_PASSWORD` (both return `503 provider_not_configured` until provisioned, with a per-provider Settings card explainer). RaceResult / UltraSignup per-site scrapers stay scoped follow-ups. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 ## Goal & user value
 

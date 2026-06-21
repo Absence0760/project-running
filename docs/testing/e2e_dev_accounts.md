@@ -177,6 +177,12 @@ Two Strava accounts (one as the "user", one as a "buddy" to exercise the privacy
 
 **Status today:** the race-calendar + results-import feature is **shipped fail-closed** (migration `20270214_001`, race_calendar.md). With the key unset — the dev/CI default — `race-results-import` + `race-listings-sync` return `503 provider_not_configured` and the UI shows the unavailable explainer. The e2e suite covers exactly this gated state: `races/runsignup-gate.spec.ts` asserts the Settings card shows the explainer (no crash), and `races/race-calendar-discover.spec.ts` + `races/race-result-import-manual.spec.ts` cover the calendar discovery + **manual paste** import + auto-match-on-record paths, which need no RunSignUp key. The live RunSignUp pull is the only un-e2e'd leg; provisioning the key is a deploy-time checklist item, not a code blocker.
 
+### 12b. ChronoTrack Live (CTLive) credentials — for live race-results import
+
+**What's needed:** a ChronoTrack Live API account — `CHRONOTRACK_CLIENT_ID` + `CHRONOTRACK_USER_ID` + `CHRONOTRACK_PASSWORD` (all three required together), set as Edge-Function secrets on the deployed Supabase project (and in `apps/backend/.env.local` for local manual testing). Apply via ChronoTrack / CTLive partner/API access.
+
+**Status today:** the ChronoTrack leg is **shipped fail-closed** (2026-06-20) on the same `race-results-import` EF behind the `provider:'chronotrack'` branch. With the credentials unset — the dev/CI default — the import branch + the `probe:true` availability check return `503 provider_not_configured` and the Settings ChronoTrack card shows the unavailable explainer. `races/chronotrack-gate.spec.ts` asserts that gated state; the Deno `lib.test.ts` covers the CTLive mapping + the fail-closed `chronoTrackConfigured` gate. The live CTLive pull is the only un-e2e'd leg; provisioning the three credentials is a deploy-time checklist item, not a code blocker.
+
 ## Summary — what to create first
 
 If your goal is "get the e2e suite to cover everything", the **best ROI** is:
