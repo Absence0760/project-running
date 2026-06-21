@@ -5003,6 +5003,16 @@ export type Database = {
           id: string
         }[]
       }
+      public_recap_by_id: {
+        Args: { p_id: string }
+        Returns: {
+          id: string
+          period_key: string
+          period_kind: string
+          snapshot: Json
+          user_id: string
+        }[]
+      }
       public_run_counts: {
         Args: { p_user_ids: string[] }
         Returns: {

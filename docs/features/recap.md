@@ -65,10 +65,14 @@ fail-closed-private, revocable** public artifact:
   `(user_id, period_kind, period_key)`. `period_kind` is a narrow union — TS
   `RecapPeriodKind` + the CHECK stay in lockstep
   (`check_constraint_unions.mjs`).
-- **RLS:** owner full CRUD; **anyone may SELECT by id** (the uuid is the
-  capability token — that's what lets the share page + og:image render for a
-  non-owner / anon viewer). Cascade-deletes with the owner. Pinned by
-  `apps/backend/supabase/tests/public_recaps_rls_test.sql`.
+- **RLS:** owner full CRUD; the bare table is **not** anon/authenticated-readable
+  (no enumeration surface). A non-owner reads one recap **by id** through the
+  SECURITY DEFINER `public_recap_by_id(p_id)` RPC — the uuid is the capability
+  token, the way the share page + og:image render for a non-owner / anon viewer
+  (migration `20270305_001`, mirroring `public_profile_by_id`). The original
+  `using (true)` SELECT policy was dropped because it let anon paginate every
+  publisher's `user_id` + `snapshot` in bulk. Cascade-deletes with the owner.
+  Pinned by `apps/backend/supabase/tests/public_recaps_rls_test.sql`.
 - **Snapshot contents:** aggregate-only — totals / badges / monthly strip. **No
   GPS, no per-run rows**, mirroring `og_run_image.ts`'s no-polyline discipline.
 - **Publish:** `publishRecap(periodKind, periodKey, snapshot)` in `core/data.ts`

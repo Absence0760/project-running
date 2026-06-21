@@ -1,17 +1,19 @@
--- Pins migration 20270207_001 (public_recaps table + RLS).
+-- Pins migration 20270207_001 (public_recaps table) + 20270305_001
+-- (lookup-by-id hardening).
 --
 -- A published recap is the FAIL-CLOSED public-share artifact for the
--- Year-in-Running / "Wrapped" recap. RLS contract:
+-- Year-in-Running / "Wrapped" recap. Contract:
 --   1. Owner has full CRUD on their own rows (publish / re-publish / revoke).
---   2. The uuid id IS the capability token: anyone (authenticated OR anon) may
---      SELECT any row by id — that's what lets the share page + og:image
---      render for a non-owner viewer.
+--   2. The uuid id IS the capability token, BUT it is enforced as
+--      lookup-by-id through the SECURITY DEFINER `public_recap_by_id` RPC.
+--      The bare table is NOT anon/authenticated-readable — a non-owner
+--      cannot bulk-enumerate every publisher's user_id + snapshot.
 --   3. A non-owner CANNOT write (insert/update/delete) another user's recap.
 --   4. The (user_id, period_kind, period_key) unique key makes re-publishing a
 --      period an upsert, not a duplicate.
 --   5. Rows cascade-delete when the owner's auth.users row is deleted.
 begin;
-select plan(11);
+select plan(14);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -58,13 +60,27 @@ select throws_ok(
   'a second row for the same (user, kind, key) violates the unique key');
 
 -- ============================================================
--- 2 + 3. A stranger can READ by id but cannot WRITE another user's recap
+-- 2 + 3. A stranger CANNOT enumerate the table or write another user's recap
 -- ============================================================
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000e1","role":"authenticated"}';
 
+-- The bare table is no longer SELECT-able by a non-owner: the
+-- `public_recaps_public_read` policy was dropped, so a stranger's
+-- direct-table read of the owner's row returns zero (RLS-filtered).
 select is(
   (select count(*)::int from public_recaps where id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
-  1, 'a stranger CAN read the owner''s recap by id (the share link)');
+  0, 'a stranger CANNOT read the owner''s recap off the bare table');
+
+-- A bulk enumeration query (no id filter) also returns zero — no
+-- publisher harvest surface.
+select is(
+  (select count(*)::int from public_recaps),
+  0, 'a stranger CANNOT bulk-enumerate published recaps');
+
+-- The capability-token path is the RPC, which returns the row by id.
+select is(
+  (select count(*)::int from public_recap_by_id('aaaaaaaa-0000-0000-0000-0000000000f1')),
+  1, 'a stranger CAN read the owner''s recap via public_recap_by_id (the share link)');
 
 select throws_ok(
   $$ insert into public_recaps (user_id, period_kind, period_key, snapshot)
@@ -73,24 +89,28 @@ select throws_ok(
   null,
   'a stranger cannot publish a recap owned by someone else');
 
--- Update/delete against the owner's row are RLS-filtered to zero rows.
+-- Update against the owner's row is RLS-filtered to zero rows.
 select lives_ok(
   $$ update public_recaps set snapshot = '{"hijacked":true}'::jsonb
        where id = 'aaaaaaaa-0000-0000-0000-0000000000f1' $$,
   'a stranger''s update runs but is RLS-filtered');
 select is(
-  (select snapshot->>'hijacked' from public_recaps where id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
+  (select snapshot->>'hijacked' from public_recap_by_id('aaaaaaaa-0000-0000-0000-0000000000f1')),
   null, 'the stranger''s update matched no writable row (snapshot unchanged)');
 
 -- ============================================================
--- anon (the actual share-page audience)
+-- anon (the actual share-page audience) — RPC only, no table read
 -- ============================================================
 set local role anon;
 set local "request.jwt.claims" = '{"role":"anon"}';
 
 select is(
-  (select count(*)::int from public_recaps where id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
-  1, 'anon reads the published recap by id (the unfurl path)');
+  (select count(*)::int from public_recaps),
+  0, 'anon CANNOT enumerate the bare table');
+
+select is(
+  (select count(*)::int from public_recap_by_id('aaaaaaaa-0000-0000-0000-0000000000f1')),
+  1, 'anon reads the published recap via the RPC (the unfurl path)');
 
 reset role;
 

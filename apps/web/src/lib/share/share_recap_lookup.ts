@@ -5,8 +5,9 @@
 ///   - apps/web/lambda/share-recap/src/index.ts (production Lambda that owns
 ///     /recap/share/* and /og/recap/*.png).
 ///
-/// The recap snapshot is anon-readable by id (the uuid is the capability
-/// token; public_recaps RLS allows SELECT by id). Returns a tagged shape so
+/// The recap snapshot is anon-readable by id via the public_recap_by_id RPC
+/// (the uuid is the capability token; the bare public_recaps table is not
+/// enumerable — migration 20270305_001). Returns a tagged shape so
 /// the missing-vs-present case is explicit at the call site without a
 /// try/catch on every consumer. Only aggregate, non-track numbers are read.
 
@@ -55,11 +56,16 @@ export async function lookupSharedRecap(
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
 		});
-		const { data: row } = await supabase
-			.from('public_recaps')
-			.select('id, user_id, period_kind, period_key, snapshot')
-			.eq('id', id)
+		const { data } = await supabase
+			.rpc('public_recap_by_id', { p_id: id })
 			.maybeSingle();
+		const row = data as {
+			id: string;
+			user_id: string | null;
+			period_kind: 'year' | 'month';
+			period_key: string;
+			snapshot: SharedRecapSnapshot | null;
+		} | null;
 		if (!row) return { recap: null };
 		let displayName: string | null = null;
 		if (row.user_id) {
