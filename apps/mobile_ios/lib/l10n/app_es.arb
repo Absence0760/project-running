@@ -2619,6 +2619,8 @@
   "nutritionNoResults": "Sin coincidencias. Prueba otro término o introdúcelo manualmente abajo.",
   "nutritionSearchFailed": "La búsqueda falló. Comprueba tu conexión y vuelve a intentarlo o introdúcelo manualmente abajo.",
   "nutritionSearchRetry": "Reintentar búsqueda",
+  "nutritionSourceOff": "Open Food Facts",
+  "nutritionSourceUsda": "USDA",
   "nutritionScanBarcode": "Escanear código de barras",
   "nutritionScanHint": "Apunta la cámara a un código de barras de producto",
   "nutritionScanLookingUp": "Buscando…",

@@ -8680,6 +8680,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionSearchRetry => '検索を再試行';
 
   @override
+  String get nutritionSourceOff => 'Open Food Facts';
+
+  @override
+  String get nutritionSourceUsda => 'USDA';
+
+  @override
   String get nutritionScanBarcode => 'バーコードをスキャン';
 
   @override

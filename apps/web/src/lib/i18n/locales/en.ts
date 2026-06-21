@@ -3575,6 +3575,8 @@ export const en = {
 	"nutrition.noResults": "No matches. Try another term or enter it manually below.",
 	"nutrition.searchFailed": "Search failed. Check your connection, then retry or enter it manually below.",
 	"nutrition.searchRetry": "Retry search",
+	"nutrition.source_off": "Open Food Facts",
+	"nutrition.source_usda": "USDA",
 	"nutrition.mealSlot": "Meal",
 	"nutrition.manualEntry": "Enter manually",
 	"nutrition.itemName": "Item name",

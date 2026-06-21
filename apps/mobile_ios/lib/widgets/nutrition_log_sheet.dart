@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -32,21 +33,33 @@ Future<bool?> showNutritionLogSheet({
 /// Returns a raw scanned barcode string, or null if the scan was cancelled.
 typedef BarcodeScanner = Future<String?> Function(BuildContext context);
 
+/// Read the USDA FoodData Central key from the env bundle, fail-closed: an
+/// unconfigured build (or a test that never loaded dotenv) yields '' so the
+/// USDA source is simply not queried — Open Food Facts still works.
+String _usdaKeyFromEnv() {
+  if (!dotenv.isInitialized) return '';
+  return dotenv.env['USDA_FDC_API_KEY'] ?? '';
+}
+
 class NutritionLogSheet extends StatefulWidget {
   final LocalFoodStore store;
 
-  /// Test seam — inject a canned Open Food Facts fetcher.
+  /// Test seam — inject a canned food-source fetcher.
   final FoodFetcher? fetcher;
 
   /// Test seam — inject the camera-scan source so the lookup-on-scan path is
   /// drivable without a real camera. Defaults to the live [MobileScanner]
   /// screen at the call site.
   final BarcodeScanner? scanner;
+
+  /// Test seam — override the USDA key (defaults to the env-bundle value).
+  final String? usdaApiKey;
   const NutritionLogSheet({
     super.key,
     required this.store,
     this.fetcher,
     this.scanner,
+    this.usdaApiKey,
   });
 
   @override
@@ -105,7 +118,11 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
       _searchFailed = false;
     });
     try {
-      final res = await searchFoods(q, fetcher: widget.fetcher);
+      final res = await searchFoodSources(
+        q,
+        fetcher: widget.fetcher,
+        usdaApiKey: widget.usdaApiKey ?? _usdaKeyFromEnv(),
+      );
       if (!mounted) return;
       setState(() {
         _results = res;
@@ -310,6 +327,7 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
                 child: ListTile(
                   title: Text(r.brand == null ? r.name : '${r.name} · ${r.brand}'),
                   subtitle: Text('${r.calories100g.round()} kcal / 100 g'),
+                  trailing: _SourceTag(source: r.source, l10n: l10n),
                   onTap: _saving ? null : () => _pick(r),
                 ),
               ))
@@ -382,6 +400,38 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
         'dinner' => l10n.nutritionSlotDinner,
         _ => l10n.nutritionSlotSnack,
       };
+}
+
+class _SourceTag extends StatelessWidget {
+  final FoodSource source;
+  final AppLocalizations l10n;
+  const _SourceTag({required this.source, required this.l10n});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isUsda = source == FoodSource.usda;
+    final label =
+        isUsda ? l10n.nutritionSourceUsda : l10n.nutritionSourceOff;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isUsda
+            ? scheme.primaryContainer
+            : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: isUsda
+                  ? scheme.onPrimaryContainer
+                  : scheme.onSurfaceVariant,
+            ),
+      ),
+    );
+  }
 }
 
 class _PortionDialog extends StatefulWidget {

@@ -9138,6 +9138,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionSearchRetry => 'Tentar busca novamente';
 
   @override
+  String get nutritionSourceOff => 'Open Food Facts';
+
+  @override
+  String get nutritionSourceUsda => 'USDA';
+
+  @override
   String get nutritionScanBarcode => 'Escanear código de barras';
 
   @override
@@ -19786,6 +19792,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionSearchRetry => 'Tentar busca novamente';
+
+  @override
+  String get nutritionSourceOff => 'Open Food Facts';
+
+  @override
+  String get nutritionSourceUsda => 'USDA';
 
   @override
   String get nutritionScanBarcode => 'Escanear código de barras';

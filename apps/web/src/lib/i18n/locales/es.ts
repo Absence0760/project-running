@@ -3564,6 +3564,8 @@ export const messages = {
 	"nutrition.noResults": "Sin coincidencias. Prueba otro término o introdúcelo manualmente abajo.",
 	"nutrition.searchFailed": "La búsqueda falló. Comprueba tu conexión y vuelve a intentarlo o introdúcelo manualmente abajo.",
 	"nutrition.searchRetry": "Reintentar búsqueda",
+	"nutrition.source_off": "Open Food Facts",
+	"nutrition.source_usda": "USDA",
 	"nutrition.mealSlot": "Comida",
 	"nutrition.manualEntry": "Introducir manualmente",
 	"nutrition.itemName": "Nombre del alimento",

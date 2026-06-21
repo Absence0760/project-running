@@ -30,6 +30,36 @@ const _sample = {
   ],
 };
 
+const _usdaSample = {
+  'foods': [
+    {
+      'fdcId': 555,
+      'description': 'Oats, raw',
+      'brandName': 'Generic',
+      'foodNutrients': [
+        {'nutrientNumber': '208', 'value': 389},
+        {'nutrientNumber': '203', 'value': 16.9},
+        {'nutrientNumber': '205', 'value': 66.3},
+        {'nutrientNumber': '204', 'value': 6.9},
+      ],
+    },
+    {
+      'fdcId': 666,
+      'description': 'Mystery Powder',
+      'foodNutrients': [
+        {'nutrientNumber': '203', 'value': 5},
+      ],
+    },
+    {
+      'fdcId': 777,
+      'description': '   ',
+      'foodNutrients': [
+        {'nutrientNumber': '208', 'value': 100},
+      ],
+    },
+  ],
+};
+
 void main() {
   test('parseOffSearch maps products and drops unloggable ones', () {
     final out = parseOffSearch(_sample);
@@ -39,6 +69,7 @@ void main() {
     expect(out[0].brand, 'Quaker'); // first brand only
     expect(out[0].calories100g, 389);
     expect(out[0].protein100g, 16.9);
+    expect(out[0].source, FoodSource.off);
   });
 
   test('parseOffSearch tolerates string-typed nutriment numbers', () {
@@ -217,5 +248,191 @@ void main() {
       }),
       throwsA(isA<Exception>()),
     );
+  });
+
+  test('parseUsdaSearch maps foods and drops unloggable ones', () {
+    final out = parseUsdaSearch(_usdaSample);
+    expect(out.length, 1);
+    expect(out[0].code, '555'); // numeric fdcId stringified
+    expect(out[0].source, FoodSource.usda);
+    expect(out[0].name, 'Oats, raw');
+    expect(out[0].brand, 'Generic');
+    expect(out[0].calories100g, 389);
+    expect(out[0].protein100g, 16.9);
+    expect(out[0].carbs100g, 66.3);
+    expect(out[0].fat100g, 6.9);
+  });
+
+  test('parseUsdaSearch tolerates the nested nutrient shape + string fdcId + brandOwner fallback',
+      () {
+    final out = parseUsdaSearch({
+      'foods': [
+        {
+          'fdcId': 'abc',
+          'description': 'Nested Food',
+          'brandOwner': 'Acme',
+          'foodNutrients': [
+            {
+              'nutrient': {'number': '208'},
+              'amount': 250,
+            },
+            {
+              'nutrient': {'number': '203'},
+              'amount': 10,
+            },
+          ],
+        },
+      ],
+    });
+    expect(out[0].code, 'abc');
+    expect(out[0].brand, 'Acme');
+    expect(out[0].calories100g, 250);
+    expect(out[0].protein100g, 10);
+  });
+
+  test('parseUsdaSearch ignores a non-208 energy nutrient (never mixes kJ in)',
+      () {
+    final out = parseUsdaSearch({
+      'foods': [
+        {
+          'fdcId': 1,
+          'description': 'KJ Only',
+          // 268 = Energy in kJ; without a 208 row this food is unloggable
+          'foodNutrients': [
+            {'nutrientNumber': '268', 'value': 1600},
+          ],
+        },
+      ],
+    });
+    expect(out, isEmpty);
+  });
+
+  test('parseUsdaSearch returns [] on malformed input', () {
+    expect(parseUsdaSearch(null), isEmpty);
+    expect(parseUsdaSearch(const {}), isEmpty);
+    expect(parseUsdaSearch(const {'foods': 'nope'}), isEmpty);
+  });
+
+  test('searchUsda short-circuits to [] when the API key is blank (fail-closed gate)',
+      () async {
+    var called = false;
+    Future<String> fetcher(Uri u) async {
+      called = true;
+      return '{}';
+    }
+
+    expect(await searchUsda('oats', '', fetcher: fetcher), isEmpty);
+    expect(await searchUsda('oats', '   ', fetcher: fetcher), isEmpty);
+    expect(called, false);
+  });
+
+  test('searchUsda parses a successful response + sends the key as a query param',
+      () async {
+    final out = await searchUsda('oats', 'SECRET', fetcher: (u) async {
+      expect(u.queryParameters['query'], 'oats');
+      expect(u.queryParameters['api_key'], 'SECRET');
+      return jsonEncode(_usdaSample);
+    });
+    expect(out.length, 1);
+    expect(out[0].source, FoodSource.usda);
+  });
+
+  test('searchUsda rethrows a fetch failure', () async {
+    expect(
+      () => searchUsda('oats', 'SECRET', fetcher: (u) async {
+        throw Exception('forbidden');
+      }),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('searchFoodSources queries OFF only when no USDA key is set', () async {
+    final urls = <Uri>[];
+    final out = await searchFoodSources('oats', fetcher: (u) async {
+      urls.add(u);
+      return jsonEncode(_sample);
+    });
+    expect(urls.length, 1);
+    expect(urls[0].toString(), contains('openfoodfacts'));
+    expect(out.length, 1);
+    expect(out[0].source, FoodSource.off);
+  });
+
+  test('searchFoodSources merges both sources, OFF first, when a USDA key is set',
+      () async {
+    final out = await searchFoodSources(
+      'oats',
+      usdaApiKey: 'SECRET',
+      fetcher: (u) async => u.toString().contains('usda')
+          ? jsonEncode(_usdaSample)
+          : jsonEncode(_sample),
+    );
+    expect(out.length, 2);
+    expect(out[0].source, FoodSource.off); // OFF listed first
+    expect(out[1].source, FoodSource.usda);
+  });
+
+  test('searchFoodSources degrades to the healthy source when one fails',
+      () async {
+    final out = await searchFoodSources(
+      'oats',
+      usdaApiKey: 'SECRET',
+      fetcher: (u) async {
+        if (u.toString().contains('usda')) return jsonEncode(_usdaSample);
+        throw Exception('OFF down');
+      },
+    );
+    expect(out.length, 1);
+    expect(out[0].source, FoodSource.usda); // OFF failure didn't suppress USDA
+  });
+
+  test('searchFoodSources throws only when every configured source fails',
+      () async {
+    expect(
+      () => searchFoodSources(
+        'oats',
+        usdaApiKey: 'SECRET',
+        fetcher: (u) async => throw Exception('all down'),
+      ),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('dedupeFoods drops case-insensitive name+brand dupes, keeping the first',
+      () {
+    const off = FoodSearchResult(
+      code: '1',
+      source: FoodSource.off,
+      name: 'Rolled Oats',
+      brand: 'Quaker',
+      calories100g: 389,
+      protein100g: 16,
+      carbs100g: 66,
+      fat100g: 7,
+    );
+    const usdaDupe = FoodSearchResult(
+      code: '2',
+      source: FoodSource.usda,
+      name: 'rolled oats',
+      brand: 'quaker',
+      calories100g: 380,
+      protein100g: 15,
+      carbs100g: 65,
+      fat100g: 6,
+    );
+    const distinct = FoodSearchResult(
+      code: '3',
+      source: FoodSource.usda,
+      name: 'Steel Cut Oats',
+      brand: 'quaker',
+      calories100g: 380,
+      protein100g: 15,
+      carbs100g: 65,
+      fat100g: 6,
+    );
+    final out = dedupeFoods([off, usdaDupe, distinct]);
+    expect(out.length, 2);
+    expect(out[0].code, '1'); // OFF kept (first wins)
+    expect(out[1].code, '3');
   });
 }

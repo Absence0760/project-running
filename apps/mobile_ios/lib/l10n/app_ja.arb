@@ -2619,6 +2619,8 @@
   "nutritionNoResults": "一致する項目がありません。別の語で検索するか、下から手動で入力してください。",
   "nutritionSearchFailed": "検索に失敗しました。接続を確認して再試行するか、下から手動で入力してください。",
   "nutritionSearchRetry": "検索を再試行",
+  "nutritionSourceOff": "Open Food Facts",
+  "nutritionSourceUsda": "USDA",
   "nutritionScanBarcode": "バーコードをスキャン",
   "nutritionScanHint": "カメラを商品のバーコードに向けてください",
   "nutritionScanLookingUp": "検索中…",

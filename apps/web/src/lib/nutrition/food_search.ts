@@ -1,14 +1,18 @@
 /**
- * Open Food Facts food search for nutrition logging.
+ * Food search for nutrition logging — two sources behind one shape.
  *
  * Logging is search → tap → confirm portion, never blank macro entry
  * (multi_modal.md § Nutrition). Open Food Facts is free, open-data, and
- * needs no API key (`world.openfoodfacts.org`).
+ * needs no API key (`world.openfoodfacts.org`) — it also backs the camera
+ * barcode fast-path (`lookupBarcode`). USDA FoodData Central is a second
+ * source (`api.nal.usda.gov`) and DOES require an API key — it is gated
+ * fail-closed: with no key the USDA source is simply absent (OFF still
+ * works), no error, no broken UI.
  *
  * The HTTP call is isolated behind an injectable `fetcher` (the seam, like
  * `routing.ts`) so the parse + portion-scaling logic is unit-testable
  * without network. The Dart twin (`food_search.dart`, G8) mirrors the parse
- * + scale behaviour.
+ * + scale behaviour for both sources.
  */
 
 export interface FoodMacros {
@@ -18,13 +22,20 @@ export interface FoodMacros {
 	fatG: number;
 }
 
+/// Which database a result came from. Drives the source label in the
+/// composer and the `<source>:<code>` external_id namespace on logged
+/// entries (`off:` / `usda:`).
+export type FoodSource = 'off' | 'usda';
+
 export interface FoodSearchResult {
-	/// Open Food Facts barcode — stable id, used for the `off:<code>`
-	/// external_id namespace on logged entries.
+	/// Stable id within its source — an Open Food Facts barcode (`off`) or a
+	/// USDA FDC id (`usda`). Combined with `source` it forms the
+	/// `<source>:<code>` external_id namespace on logged entries.
 	code: string;
+	source: FoodSource;
 	name: string;
 	brand: string | null;
-	/// Macros per 100 g (Open Food Facts' canonical basis).
+	/// Macros per 100 g (both sources' canonical basis).
 	per100g: FoodMacros;
 }
 
@@ -32,6 +43,7 @@ export type Fetcher = (url: string) => Promise<Response>;
 
 const SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
 const PRODUCT_URL = 'https://world.openfoodfacts.org/api/v2/product';
+const USDA_SEARCH_URL = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 
 /// Keep only the digits of a scanned EAN/UPC. A barcode scanner can hand back
 /// a trailing newline or a symbology label; Open Food Facts keys products by
@@ -76,6 +88,7 @@ export function parseOffSearch(json: unknown): FoodSearchResult[] {
 		const brandRaw = typeof prod.brands === 'string' ? prod.brands.split(',')[0].trim() : '';
 		out.push({
 			code,
+			source: 'off',
 			name,
 			brand: brandRaw || null,
 			per100g: {
@@ -108,6 +121,7 @@ export function parseOffProduct(json: unknown): FoodSearchResult | null {
 	const brandRaw = typeof p.brands === 'string' ? p.brands.split(',')[0].trim() : '';
 	return {
 		code,
+		source: 'off',
 		name,
 		brand: brandRaw || null,
 		per100g: {
@@ -170,4 +184,143 @@ export async function lookupBarcode(
 	const res = await fetcher(`${PRODUCT_URL}/${code}.json?${params.toString()}`);
 	if (!res.ok) throw new Error(`Open Food Facts product lookup failed: ${res.status}`);
 	return parseOffProduct(await res.json());
+}
+
+/// USDA FDC nutrient numbers (`nutrientNumber`, the stable identifier) for the
+/// four macros we log. Energy in kcal is 208 on legacy/SR-Legacy/Survey rows;
+/// some rows additionally carry 957 (Energy, Atwater general). We key only on
+/// 208 to match Open Food Facts' kcal basis and never mix kJ in.
+const USDA_ENERGY_KCAL = '208';
+const USDA_PROTEIN = '203';
+const USDA_CARBS = '205';
+const USDA_FAT = '204';
+
+function usdaNutrient(nutrients: unknown, nutrientNumber: string): number | null {
+	if (!Array.isArray(nutrients)) return null;
+	for (const item of nutrients) {
+		const fn = item as Record<string, unknown>;
+		// The /v1/foods/search shape flattens the nutrient onto the array item
+		// (`nutrientNumber` + `value`), unlike /v1/food/{id} which nests under
+		// `nutrient`. Read the flat shape; fall back to the nested one defensively.
+		const numberRaw =
+			fn.nutrientNumber ?? (fn.nutrient as Record<string, unknown> | undefined)?.number;
+		const number = typeof numberRaw === 'string' ? numberRaw : String(numberRaw ?? '');
+		if (number !== nutrientNumber) continue;
+		const value = fn.value ?? fn.amount;
+		const n = num(value);
+		if (n != null) return n;
+	}
+	return null;
+}
+
+/// Map a raw USDA FoodData Central `/v1/foods/search` response into our result
+/// shape. Pure. Drops foods with no description or no calorie figure (the same
+/// unloggable-noise filter Open Food Facts gets), so a USDA row slots into the
+/// identical confirm-portion flow. USDA macros are already per 100 g.
+export function parseUsdaSearch(json: unknown): FoodSearchResult[] {
+	const foods = (json as { foods?: unknown[] } | null)?.foods;
+	if (!Array.isArray(foods)) return [];
+	const out: FoodSearchResult[] = [];
+	for (const f of foods) {
+		const food = f as Record<string, unknown>;
+		const name = typeof food.description === 'string' ? food.description.trim() : '';
+		const fdcId = food.fdcId;
+		const code = typeof fdcId === 'number' ? String(fdcId) : typeof fdcId === 'string' ? fdcId : '';
+		const calories = usdaNutrient(food.foodNutrients, USDA_ENERGY_KCAL);
+		if (!name || !code || calories == null) continue;
+		const brandRaw =
+			typeof food.brandName === 'string'
+				? food.brandName.trim()
+				: typeof food.brandOwner === 'string'
+					? food.brandOwner.trim()
+					: '';
+		out.push({
+			code,
+			source: 'usda',
+			name,
+			brand: brandRaw || null,
+			per100g: {
+				calories,
+				proteinG: usdaNutrient(food.foodNutrients, USDA_PROTEIN) ?? 0,
+				carbsG: usdaNutrient(food.foodNutrients, USDA_CARBS) ?? 0,
+				fatG: usdaNutrient(food.foodNutrients, USDA_FAT) ?? 0,
+			},
+		});
+	}
+	return out;
+}
+
+/// Search USDA FoodData Central. Returns [] for a blank query OR a blank API
+/// key (the fail-closed gate — no key means no USDA source, never an error).
+/// Otherwise THROWS on a network / non-2xx / parse failure, mirroring
+/// `searchFoods`, so the merge caller can tell a failed source apart from an
+/// empty one. The key travels as a query param per the FDC API contract.
+export async function searchUsda(
+	query: string,
+	apiKey: string,
+	fetcher: Fetcher = (u) => fetch(u),
+	limit = 20,
+): Promise<FoodSearchResult[]> {
+	const q = query.trim();
+	if (!q || !apiKey.trim()) return [];
+	const params = new URLSearchParams({
+		query: q,
+		pageSize: String(limit),
+		api_key: apiKey.trim(),
+	});
+	const res = await fetcher(`${USDA_SEARCH_URL}?${params.toString()}`);
+	if (!res.ok) throw new Error(`USDA FoodData Central search failed: ${res.status}`);
+	return parseUsdaSearch(await res.json());
+}
+
+/// Merge results from Open Food Facts and (when a key is provided) USDA into
+/// one labelled, deduped list. Each source is queried in parallel; a failure
+/// or absence of one source NEVER suppresses the other — a thrown OFF search
+/// with a healthy USDA search still returns the USDA rows, and vice versa.
+/// Only when BOTH configured sources fail does this throw, so the caller's
+/// retry-vs-empty distinction still holds.
+///
+/// `usdaApiKey` empty/unset → USDA is simply not queried (the fail-closed
+/// gate). Dedupe is by case-insensitive name+brand, keeping the first
+/// occurrence; OFF is listed first so a barcoded branded product wins over the
+/// looser USDA generic of the same name.
+export async function searchFoodSources(
+	query: string,
+	opts: { fetcher?: Fetcher; usdaApiKey?: string; limit?: number } = {},
+): Promise<FoodSearchResult[]> {
+	const q = query.trim();
+	if (!q) return [];
+	const fetcher = opts.fetcher ?? ((u) => fetch(u));
+	const limit = opts.limit ?? 20;
+	const usdaKey = (opts.usdaApiKey ?? '').trim();
+
+	const sources: Promise<FoodSearchResult[]>[] = [searchFoods(q, fetcher, limit)];
+	if (usdaKey) sources.push(searchUsda(q, usdaKey, fetcher, limit));
+
+	const settled = await Promise.allSettled(sources);
+	const fulfilled = settled.filter((s) => s.status === 'fulfilled');
+	// Every configured source failed → surface the failure (retry, not a
+	// misleading empty). A partial failure degrades to the healthy source.
+	if (fulfilled.length === 0) {
+		const first = settled[0] as PromiseRejectedResult;
+		throw first.reason instanceof Error ? first.reason : new Error('Food search failed');
+	}
+
+	const merged: FoodSearchResult[] = [];
+	for (const s of fulfilled) merged.push(...(s as PromiseFulfilledResult<FoodSearchResult[]>).value);
+	return dedupeFoods(merged);
+}
+
+/// Drop duplicate foods by case-insensitive name+brand, keeping the first
+/// occurrence (so the source order passed in decides the winner). Pure.
+export function dedupeFoods(results: FoodSearchResult[]): FoodSearchResult[] {
+	const seen = new Set<string>();
+	const out: FoodSearchResult[] = [];
+	for (const r of results) {
+		const key = `${r.name.trim().toLowerCase()} ${(r.brand ?? '').trim().toLowerCase()}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push(r);
+	}
+	return out;
 }

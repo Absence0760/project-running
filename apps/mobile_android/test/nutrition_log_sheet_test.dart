@@ -37,6 +37,7 @@ Widget _host(
   LocalFoodStore store, {
   FoodFetcher? fetcher,
   BarcodeScanner? scanner,
+  String? usdaApiKey,
 }) =>
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -46,9 +47,22 @@ Widget _host(
           store: store,
           fetcher: fetcher,
           scanner: scanner,
+          usdaApiKey: usdaApiKey,
         ),
       ),
     );
+
+const _usdaSample = {
+  'foods': [
+    {
+      'fdcId': 555,
+      'description': 'Oats, raw',
+      'foodNutrients': [
+        {'nutrientNumber': '208', 'value': 379},
+      ],
+    },
+  ],
+};
 
 const _sample = {
   'products': [
@@ -254,6 +268,33 @@ void main() {
       expect(find.textContaining('No product found'), findsNothing);
       expect(find.textContaining('Scan failed'), findsNothing);
       expect(f.store.rows, isEmpty);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('with a USDA key set, results are labelled by source (OFF + USDA)',
+      (tester) async {
+    final f = await _store('source_');
+    try {
+      await tester.pumpWidget(_host(
+        f.store,
+        usdaApiKey: 'SECRET',
+        fetcher: (u) async => u.toString().contains('usda')
+            ? jsonEncode(_usdaSample)
+            : jsonEncode(_sample),
+      ));
+      await tester.pump();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Search for a food'), 'oats');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.text('Rolled Oats'), findsOneWidget);
+      expect(find.text('Oats, raw'), findsOneWidget);
+      expect(find.text('Open Food Facts'), findsOneWidget);
+      expect(find.text('USDA'), findsOneWidget);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

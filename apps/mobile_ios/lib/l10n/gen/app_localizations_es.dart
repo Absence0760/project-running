@@ -9142,6 +9142,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nutritionSearchRetry => 'Reintentar búsqueda';
 
   @override
+  String get nutritionSourceOff => 'Open Food Facts';
+
+  @override
+  String get nutritionSourceUsda => 'USDA';
+
+  @override
   String get nutritionScanBarcode => 'Escanear código de barras';
 
   @override

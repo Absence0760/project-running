@@ -2,13 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+	dedupeFoods,
 	lookupBarcode,
 	normaliseBarcode,
 	parseOffProduct,
 	parseOffSearch,
+	parseUsdaSearch,
 	scalePortion,
+	searchFoodSources,
 	searchFoods,
+	searchUsda,
 	type Fetcher,
+	type FoodSearchResult,
 } from './food_search';
 
 const sample = {
@@ -47,6 +52,7 @@ test('parseOffSearch maps products and drops unloggable ones', () => {
 	assert.equal(out[0].brand, 'Quaker'); // first brand only
 	assert.equal(out[0].per100g.calories, 389);
 	assert.equal(out[0].per100g.proteinG, 16.9);
+	assert.equal(out[0].source, 'off');
 });
 
 test('parseOffSearch tolerates string-typed nutriment numbers', () => {
@@ -195,4 +201,175 @@ test('lookupBarcode returns null on a genuine no-match (status 0)', async () => 
 test('lookupBarcode throws on a non-OK response (failure is distinct from no-match)', async () => {
 	const bad: Fetcher = async () => new Response('', { status: 500 });
 	await assert.rejects(() => lookupBarcode('737628064502', bad));
+});
+
+const usdaSample = {
+	foods: [
+		{
+			fdcId: 555,
+			description: 'Oats, raw',
+			brandName: 'Generic',
+			foodNutrients: [
+				{ nutrientNumber: '208', value: 389 },
+				{ nutrientNumber: '203', value: 16.9 },
+				{ nutrientNumber: '205', value: 66.3 },
+				{ nutrientNumber: '204', value: 6.9 },
+			],
+		},
+		{
+			// no energy figure → dropped (unloggable noise, like OFF)
+			fdcId: 666,
+			description: 'Mystery Powder',
+			foodNutrients: [{ nutrientNumber: '203', value: 5 }],
+		},
+		{
+			// no description → dropped
+			fdcId: 777,
+			description: '   ',
+			foodNutrients: [{ nutrientNumber: '208', value: 100 }],
+		},
+	],
+};
+
+test('parseUsdaSearch maps foods and drops unloggable ones', () => {
+	const out = parseUsdaSearch(usdaSample);
+	assert.equal(out.length, 1);
+	assert.equal(out[0].code, '555'); // numeric fdcId stringified
+	assert.equal(out[0].source, 'usda');
+	assert.equal(out[0].name, 'Oats, raw');
+	assert.equal(out[0].brand, 'Generic');
+	assert.equal(out[0].per100g.calories, 389);
+	assert.equal(out[0].per100g.proteinG, 16.9);
+	assert.equal(out[0].per100g.carbsG, 66.3);
+	assert.equal(out[0].per100g.fatG, 6.9);
+});
+
+test('parseUsdaSearch tolerates the nested nutrient shape + string fdcId + brandOwner fallback', () => {
+	const out = parseUsdaSearch({
+		foods: [
+			{
+				fdcId: 'abc',
+				description: 'Nested Food',
+				brandOwner: 'Acme',
+				foodNutrients: [
+					{ nutrient: { number: '208' }, amount: 250 },
+					{ nutrient: { number: '203' }, amount: 10 },
+				],
+			},
+		],
+	});
+	assert.equal(out[0].code, 'abc');
+	assert.equal(out[0].brand, 'Acme');
+	assert.equal(out[0].per100g.calories, 250);
+	assert.equal(out[0].per100g.proteinG, 10);
+});
+
+test('parseUsdaSearch ignores a non-208 energy nutrient (never mixes kJ in)', () => {
+	const out = parseUsdaSearch({
+		foods: [
+			{
+				fdcId: 1,
+				description: 'KJ Only',
+				// 268 = Energy in kJ; without a 208 row this food is unloggable
+				foodNutrients: [{ nutrientNumber: '268', value: 1600 }],
+			},
+		],
+	});
+	assert.deepEqual(out, []);
+});
+
+test('parseUsdaSearch returns [] on malformed input', () => {
+	assert.deepEqual(parseUsdaSearch(null), []);
+	assert.deepEqual(parseUsdaSearch({}), []);
+	assert.deepEqual(parseUsdaSearch({ foods: 'nope' }), []);
+});
+
+test('searchUsda short-circuits to [] when the API key is blank (fail-closed gate)', async () => {
+	let called = false;
+	const fetcher: Fetcher = async () => {
+		called = true;
+		return new Response('{}');
+	};
+	assert.deepEqual(await searchUsda('oats', '', fetcher), []);
+	assert.deepEqual(await searchUsda('oats', '   ', fetcher), []);
+	assert.equal(called, false);
+});
+
+test('searchUsda parses a successful response + sends the key as a query param', async () => {
+	const fetcher: Fetcher = async (url) => {
+		assert.ok(url.includes('query=oats'));
+		assert.ok(url.includes('api_key=SECRET'));
+		return new Response(JSON.stringify(usdaSample), { status: 200 });
+	};
+	const out = await searchUsda('oats', 'SECRET', fetcher);
+	assert.equal(out.length, 1);
+	assert.equal(out[0].source, 'usda');
+});
+
+test('searchUsda throws on a non-OK response', async () => {
+	const bad: Fetcher = async () => new Response('', { status: 403 });
+	await assert.rejects(() => searchUsda('oats', 'SECRET', bad));
+});
+
+test('searchFoodSources queries OFF only when no USDA key is set', async () => {
+	const urls: string[] = [];
+	const fetcher: Fetcher = async (url) => {
+		urls.push(url);
+		return new Response(JSON.stringify(sample), { status: 200 });
+	};
+	const out = await searchFoodSources('oats', { fetcher });
+	assert.equal(urls.length, 1);
+	assert.ok(urls[0].includes('openfoodfacts'));
+	assert.equal(out.length, 1);
+	assert.equal(out[0].source, 'off');
+});
+
+test('searchFoodSources merges both sources, OFF first, when a USDA key is set', async () => {
+	const fetcher: Fetcher = async (url) =>
+		url.includes('usda')
+			? new Response(JSON.stringify(usdaSample), { status: 200 })
+			: new Response(JSON.stringify(sample), { status: 200 });
+	const out = await searchFoodSources('oats', { fetcher, usdaApiKey: 'SECRET' });
+	assert.equal(out.length, 2);
+	assert.equal(out[0].source, 'off'); // OFF listed first
+	assert.equal(out[1].source, 'usda');
+});
+
+test('searchFoodSources degrades to the healthy source when one fails', async () => {
+	const fetcher: Fetcher = async (url) => {
+		if (url.includes('usda')) return new Response(JSON.stringify(usdaSample), { status: 200 });
+		throw new Error('OFF down');
+	};
+	const out = await searchFoodSources('oats', { fetcher, usdaApiKey: 'SECRET' });
+	assert.equal(out.length, 1);
+	assert.equal(out[0].source, 'usda'); // OFF failure didn't suppress USDA
+});
+
+test('searchFoodSources throws only when every configured source fails', async () => {
+	const fetcher: Fetcher = async () => {
+		throw new Error('all down');
+	};
+	await assert.rejects(() => searchFoodSources('oats', { fetcher, usdaApiKey: 'SECRET' }), /all down/);
+});
+
+test('dedupeFoods drops case-insensitive name+brand dupes, keeping the first', () => {
+	const off: FoodSearchResult = {
+		code: '1',
+		source: 'off',
+		name: 'Rolled Oats',
+		brand: 'Quaker',
+		per100g: { calories: 389, proteinG: 16, carbsG: 66, fatG: 7 },
+	};
+	const usdaDupe: FoodSearchResult = {
+		code: '2',
+		source: 'usda',
+		name: 'rolled oats',
+		brand: 'quaker',
+		per100g: { calories: 380, proteinG: 15, carbsG: 65, fatG: 6 },
+	};
+	const distinct: FoodSearchResult = { ...usdaDupe, code: '3', name: 'Steel Cut Oats' };
+	const out = dedupeFoods([off, usdaDupe, distinct]);
+	assert.equal(out.length, 2);
+	assert.equal(out[0].code, '1'); // OFF kept (first wins)
+	assert.equal(out[1].code, '3');
 });
