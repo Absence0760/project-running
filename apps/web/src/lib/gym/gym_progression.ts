@@ -103,11 +103,24 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 			}
 			const allHit = completed.every((s) => (numericOrNull(s.reps) ?? 0) >= topReps);
 			if (allHit) {
+				if (weight != null) {
+					return {
+						suggestedWeightKg: safeAdd(weight, step),
+						suggestedRepsMin: repsMin,
+						suggestedRepsMax: repsMax,
+						reason: 'increase_weight',
+					};
+				}
+				// Bodyweight: no load to add, so genuinely progress by raising the rep
+				// target — returning the unchanged reps labelled "increase_reps" told
+				// the user to do more while prescribing the same count (the same bug the
+				// double_progression / five_by_five bodyweight paths fixed). Raise the
+				// top of the range, or the single value when there's no range.
 				return {
-					suggestedWeightKg: weight != null ? safeAdd(weight, step) : null,
-					suggestedRepsMin: repsMin,
-					suggestedRepsMax: repsMax,
-					reason: weight != null ? 'increase_weight' : 'increase_reps',
+					suggestedWeightKg: null,
+					suggestedRepsMin: repsMin == null ? null : repsMin + (repsMax == null ? 1 : 0),
+					suggestedRepsMax: repsMax == null ? null : repsMax + 1,
+					reason: 'increase_reps',
 				};
 			}
 			return { suggestedWeightKg: weight, suggestedRepsMin: repsMin, suggestedRepsMax: repsMax, reason: 'hold' };
@@ -219,11 +232,21 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 				return { suggestedWeightKg: weight, suggestedRepsMin: repsMin, suggestedRepsMax: repsMax, reason: 'hold' };
 			}
 			if (achieved < targetRpe) {
+				if (weight != null) {
+					return {
+						suggestedWeightKg: safeAdd(weight, step),
+						suggestedRepsMin: repsMin,
+						suggestedRepsMax: repsMax,
+						reason: 'increase_weight',
+					};
+				}
+				// Bodyweight: no load to add — raise the rep target rather than
+				// re-prescribing the same count under an "increase_reps" label.
 				return {
-					suggestedWeightKg: weight != null ? safeAdd(weight, step) : null,
-					suggestedRepsMin: repsMin,
-					suggestedRepsMax: repsMax,
-					reason: weight != null ? 'increase_weight' : 'increase_reps',
+					suggestedWeightKg: null,
+					suggestedRepsMin: repsMin == null ? null : repsMin + (repsMax == null ? 1 : 0),
+					suggestedRepsMax: repsMax == null ? null : repsMax + 1,
+					reason: 'increase_reps',
 				};
 			}
 			return { suggestedWeightKg: weight, suggestedRepsMin: repsMin, suggestedRepsMax: repsMax, reason: 'hold' };

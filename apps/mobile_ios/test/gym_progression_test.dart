@@ -164,6 +164,46 @@ void main() {
     expect(out.reason, ProgressionReason.increaseReps);
   });
 
+  test('linear bodyweight success raises the rep target, never re-prescribes the same count', () {
+    // Regression: a maxed bodyweight linear set used to return the UNCHANGED reps
+    // while labelling it increaseReps — mirrors the web twin's pinning test.
+    final single = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [s(10, null), s(10, null)],
+      targetRepsMin: 10,
+      targetRepsMax: null,
+    ));
+    expect(single.suggestedWeightKg, isNull);
+    expect(single.reason, ProgressionReason.increaseReps);
+    expect(single.suggestedRepsMin, 11);
+    expect(single.suggestedRepsMax, isNull);
+
+    final range = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [s(8, null), s(8, null)],
+      targetRepsMin: 6,
+      targetRepsMax: 8,
+    ));
+    expect(range.suggestedWeightKg, isNull);
+    expect(range.reason, ProgressionReason.increaseReps);
+    expect(range.suggestedRepsMin, 6);
+    expect(range.suggestedRepsMax, 9);
+  });
+
+  test('rpe_autoreg bodyweight below target raises the rep target, never re-prescribes the same count', () {
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.rpeAutoreg,
+      lastSets: [s(8, null, 6), s(8, null, 6.5)],
+      targetRepsMin: 8,
+      targetRepsMax: null,
+      params: const {'targetRpe': 8},
+    ));
+    expect(out.suggestedWeightKg, isNull);
+    expect(out.reason, ProgressionReason.increaseReps);
+    expect(out.suggestedRepsMin, 9);
+    expect(out.suggestedRepsMax, isNull);
+  });
+
   test('double_progression bodyweight at top of range raises the rep ceiling, never reduces it', () {
     // Regression: a maxed bodyweight range used to collapse to repsMin (12 → 8)
     // while reporting increaseReps — a reduction mislabelled as progress.
