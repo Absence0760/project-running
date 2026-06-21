@@ -16,7 +16,6 @@
 	import {
 		ONBOARDING_TOTAL_STEPS,
 		PRIMARY_GOAL_KEY,
-		PRIMARY_GOAL_LABELS,
 		PRIMARY_GOAL_VALUES,
 		type PrimaryGoal,
 	} from '$lib/settings/onboarding';
@@ -347,7 +346,7 @@
 							aria-checked={primaryGoal === v}
 							onclick={() => (primaryGoal = v)}
 						>
-							{PRIMARY_GOAL_LABELS[v]}
+							{m(`onboarding.goal.${v}`)}
 						</button>
 					{/each}
 				</div>

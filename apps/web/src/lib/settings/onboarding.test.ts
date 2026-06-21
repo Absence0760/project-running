@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import {
 	ONBOARDING_TOTAL_STEPS,
 	PRIMARY_GOAL_KEY,
-	PRIMARY_GOAL_LABELS,
 	PRIMARY_GOAL_VALUES,
 } from './onboarding';
+import { en } from '../i18n/locales/en';
 
 test('PRIMARY_GOAL_KEY is the universal-prefs bag key the wizard writes', () => {
 	// Hard-coded by name across the wizard, the Settings nudge, and
@@ -16,19 +16,18 @@ test('PRIMARY_GOAL_KEY is the universal-prefs bag key the wizard writes', () => 
 	assert.equal(PRIMARY_GOAL_KEY, 'primary_goal');
 });
 
-test('PRIMARY_GOAL_VALUES covers the fixed enum and every value has a label', () => {
+test('every PRIMARY_GOAL_VALUE has a non-empty onboarding.goal i18n label', () => {
+	// Labels are localized (key `onboarding.goal.<value>`), not held as
+	// English strings in the helper. The wizard renders `m(...)` for
+	// each value, so a value without a matching key would render the raw
+	// key fallback. Pin the en catalogue (the canonical superset that
+	// messages_parity.test.ts forces every other locale to mirror).
+	const labels = en as Record<string, string>;
 	for (const v of PRIMARY_GOAL_VALUES) {
+		const key = `onboarding.goal.${v}`;
 		assert.ok(
-			PRIMARY_GOAL_LABELS[v],
-			`PRIMARY_GOAL_VALUES contains "${v}" but PRIMARY_GOAL_LABELS has no label`,
-		);
-	}
-	// Reverse direction — the label map can't drift past the enum
-	// (a stale label without a value would render nowhere).
-	for (const k of Object.keys(PRIMARY_GOAL_LABELS)) {
-		assert.ok(
-			(PRIMARY_GOAL_VALUES as readonly string[]).includes(k),
-			`PRIMARY_GOAL_LABELS has "${k}" but PRIMARY_GOAL_VALUES does not`,
+			labels[key] && labels[key].trim().length > 0,
+			`PRIMARY_GOAL_VALUES contains "${v}" but en has no "${key}" label`,
 		);
 	}
 });
