@@ -263,6 +263,15 @@ class _MutableExercise {
   });
 }
 
+// `targetRpe` is a `double?`, so a whole-number RPE stringifies as "8.0" via
+// the default interpolation; web's `String(s.targetRpe)` yields "8". Drop the
+// trailing ".0" so the prefill output matches the web twin.
+String _rpeString(num? rpe) {
+  if (rpe == null) return '';
+  if (rpe == rpe.truncate()) return '${rpe.truncate()}';
+  return '$rpe';
+}
+
 /// Expand a saved routine's planned targets into editable composer blocks.
 /// Exercises are ordered by `position`, sets by `setIndex` (defensively
 /// sorted). Each planned set's target reps (range min, or the single value)
@@ -282,7 +291,7 @@ List<PrefillExercise> prefillFromRoutine(PlannedRoutine routine) {
               .map((s) => PrefillSet(
                     reps: s.targetRepsMin == null ? '' : '${s.targetRepsMin}',
                     weightKg: s.targetWeightKg,
-                    rpe: s.targetRpe == null ? '' : '${s.targetRpe}',
+                    rpe: _rpeString(s.targetRpe),
                   ))
               .toList(),
     ));

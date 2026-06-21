@@ -132,6 +132,25 @@ test('prefillFromRoutine: orders by position and setIndex, fills targets', () =>
 	assert.equal(blocks[0].sets[0].rpe, '8');
 });
 
+test('prefillFromRoutine: whole-number RPE drops the trailing .0, half-step keeps it', () => {
+	const routine: PlannedRoutine = {
+		title: 'P',
+		exercises: [
+			{
+				exerciseName: 'Deadlift',
+				position: 0,
+				sets: [
+					{ setIndex: 0, targetRepsMin: 5, targetRepsMax: null, targetWeightKg: 100, targetRpe: 8.0 },
+					{ setIndex: 1, targetRepsMin: 5, targetRepsMax: null, targetWeightKg: 100, targetRpe: 7.5 },
+				],
+			},
+		],
+	};
+	const blocks = prefillFromRoutine(routine);
+	assert.equal(blocks[0].sets[0].rpe, '8');
+	assert.equal(blocks[0].sets[1].rpe, '7.5');
+});
+
 test('prefillFromRoutine: rep range prefills the min', () => {
 	const routine: PlannedRoutine = {
 		title: 'P',
