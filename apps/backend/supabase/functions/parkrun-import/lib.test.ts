@@ -4,6 +4,7 @@ import {
 	MAX_PARKRUN_HTML_BYTES,
 	MAX_PARKRUN_ROWS,
 	capParkrunField,
+	isUsableParkrunResult,
 	parseParkrunDate,
 	parseParkrunTime,
 	readBodyTextWithCap,
@@ -161,4 +162,34 @@ Deno.test('parseParkrunTime — non-numeric part returns 0', () => {
 
 Deno.test('parseParkrunTime — negative part is rejected', () => {
 	assertEquals(parseParkrunTime('-1:00'), 0);
+});
+
+// ──────────────────────────────────────────────────────────────────
+// isUsableParkrunResult — skip non-result rows so one junk row can't
+// (a) fail the WHOLE batch on an unparseable started_at, or
+// (b) import a corrupt 5000 m / 0 s run.
+
+Deno.test('isUsableParkrunResult — a real result is usable', () => {
+	assertEquals(isUsableParkrunResult('18:30', '15/04/2026'), true);
+	assertEquals(isUsableParkrunResult('00:18:30', '15/04/2026'), true);
+});
+
+Deno.test('isUsableParkrunResult — assisted/unknown time ("--:--") is rejected', () => {
+	// Pre-fix this imported a 5000 m / 0 s run, poisoning pace + age-grade.
+	assertEquals(isUsableParkrunResult('--:--', '15/04/2026'), false);
+	assertEquals(isUsableParkrunResult('--:--:--', '15/04/2026'), false);
+});
+
+Deno.test('isUsableParkrunResult — blank / non-date row is rejected', () => {
+	// Pre-fix a blank date made parseParkrunDate emit
+	// "undefined-undefined-T10:00:00Z", which is written into the
+	// timestamptz started_at column and fails the whole batch INSERT.
+	assertEquals(isUsableParkrunResult('18:30', ''), false);
+	assertEquals(isUsableParkrunResult('18:30', 'Total events'), false);
+});
+
+Deno.test('isUsableParkrunResult — a usable date does not throw on parse', () => {
+	// Defence: a header row that happens to carry a numeric-looking but
+	// invalid date must still be rejected, not crash.
+	assertEquals(isUsableParkrunResult('18:30', '99/99/9999'), false);
 });

@@ -6,6 +6,7 @@ import { withSentry } from '../_shared/sentry.ts';
 import {
   MAX_PARKRUN_ROWS,
   capParkrunField,
+  isUsableParkrunResult,
   parseParkrunDate,
   parseParkrunTime,
   readBodyTextWithCap,
@@ -113,6 +114,12 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
     const date = capParkrunField($(cells[1]).text());
     const time = capParkrunField($(cells[3]).text());
     const ageGrade = capParkrunField($(cells[5]).text());
+
+    // Skip non-result rows (sub-headers, footers, "--:--" assisted/unknown
+    // times). Without this, a blank date produces an unparseable timestamp
+    // that fails the whole batch INSERT, and an unknown time imports a
+    // corrupt 5000 m / 0 s run. Only rows with a real time + date become runs.
+    if (!isUsableParkrunResult(time, date)) return;
 
     runs.push({
       id: crypto.randomUUID(),

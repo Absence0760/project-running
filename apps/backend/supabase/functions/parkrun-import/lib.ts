@@ -42,6 +42,28 @@ export function parseParkrunTime(time: string): number {
 	return 0;
 }
 
+/// Is a scraped (time, date) cell pair a real, importable parkrun result?
+///
+/// The `<table tbody tr>` selector also matches rows that are NOT a result:
+/// a sub-header / footer / spacer row can carry ≥6 `<td>`s yet hold no
+/// usable date or time. Two concrete failure modes this guards against:
+///
+///   1. A blank / non-date `date` cell makes `parseParkrunDate` emit
+///      `"undefined-undefined-...T10:00:00Z"`, which `Date.parse` rejects.
+///      That string would be written into the `timestamptz` `started_at`
+///      column, erroring the INSERT and failing the WHOLE batch — so one
+///      junk row silently imported nothing for the athlete.
+///   2. An unknown / assisted time ("--:--") yields `parseParkrunTime` 0.
+///      Importing a 5000 m / 0 s run corrupts pace, age-grade, and any
+///      VDOT / predictor read off the parkrun source.
+///
+/// Skipping such rows is the durable fix: only a row that yields both a
+/// valid finish time AND a valid calendar date becomes a run.
+export function isUsableParkrunResult(time: string, date: string): boolean {
+	if (parseParkrunTime(time) <= 0) return false;
+	return Number.isFinite(Date.parse(parseParkrunDate(date)));
+}
+
 // ──────────────────────────────────────────────────────────────────
 // Input-cap helpers for the parkrun scraper.
 //
