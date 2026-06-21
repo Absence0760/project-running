@@ -484,6 +484,36 @@ test('generatePlan: stated weekly volume equals the sum of emitted workout dista
 	}
 });
 
+test('generatePlan: a 7-day plan runs all 7 days (no hardcoded Monday rest)', () => {
+	// Both wizards offer 3–7 days/week. Monday was hardwired as a rest day, so
+	// a runner who picked 7 silently got a 6-day plan — the requested 7th day
+	// vanished. A 7-day plan must have zero rest days; 6 days keeps exactly one.
+	const seven = generatePlan({
+		goalEvent: 'distance_half',
+		startDate: '2026-05-03',
+		daysPerWeek: 7,
+		recent5kSec: 22 * 60,
+		weeks: 12
+	});
+	for (const week of seven.weeks) {
+		const active = week.workouts.filter((w) => w.kind !== 'rest').length;
+		const rest = week.workouts.filter((w) => w.kind === 'rest').length;
+		assert.equal(active, 7, `7-day week ${week.week_index} has ${active} active days`);
+		assert.equal(rest, 0, `7-day week ${week.week_index} has ${rest} rest days`);
+	}
+	const six = generatePlan({
+		goalEvent: 'distance_half',
+		startDate: '2026-05-03',
+		daysPerWeek: 6,
+		recent5kSec: 22 * 60,
+		weeks: 12
+	});
+	for (const week of six.weeks) {
+		const active = week.workouts.filter((w) => w.kind !== 'rest').length;
+		assert.equal(active, 6, `6-day week ${week.week_index} has ${active} active days`);
+	}
+});
+
 test('GOAL_DISTANCES_M: half marathon is within 1m of 21.0975km', () => {
 	assert.equal(GOAL_DISTANCES_M.distance_half, 21097.5);
 });
