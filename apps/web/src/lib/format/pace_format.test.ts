@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { paceMinutesSeconds, paceParts } from './pace_format';
+import { paceMinutesSeconds, paceParts, isMeaningfulPace } from './pace_format';
 
 test('formats whole and exact paces', () => {
 	assert.equal(paceMinutesSeconds(330), '5:30');
@@ -25,6 +25,22 @@ test('never emits a ":60" seconds field for a fractional input', () => {
 test('rounds to the nearest whole second', () => {
 	assert.equal(paceMinutesSeconds(330.4), '5:30');
 	assert.equal(paceMinutesSeconds(330.5), '5:31');
+});
+
+test('isMeaningfulPace gates non-physical duration/distance', () => {
+	// Both strictly positive + finite is the only meaningful case.
+	assert.equal(isMeaningfulPace(300, 1000), true);
+	// Zero or negative duration — a corrupt / manually-edited row. Web's
+	// formatPace used to render these as "0:00 /km" / "-5:00 /km" while the
+	// Dart UnitFormat.pace returned the "--:--" sentinel (the parity drift).
+	assert.equal(isMeaningfulPace(0, 1000), false);
+	assert.equal(isMeaningfulPace(-300, 1000), false);
+	// Zero or negative distance.
+	assert.equal(isMeaningfulPace(300, 0), false);
+	assert.equal(isMeaningfulPace(300, -1000), false);
+	// Non-finite inputs never produce a pace string.
+	assert.equal(isMeaningfulPace(NaN, 1000), false);
+	assert.equal(isMeaningfulPace(300, Infinity), false);
 });
 
 test('paceParts keeps seconds in 0-59 after rollover', () => {

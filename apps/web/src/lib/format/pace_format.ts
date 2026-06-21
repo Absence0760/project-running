@@ -24,3 +24,13 @@ export function paceMinutesSeconds(secPerUnit: number): string {
 	const { minutes, seconds } = paceParts(secPerUnit);
 	return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
+
+/// A pace/speed value is only meaningful when both inputs are finite and
+/// strictly positive. A zero or negative duration/distance (a corrupt or
+/// manually-edited row) otherwise renders a malformed `0:00`, `-5:00`, or
+/// `-12.0 km/h` instead of a sentinel. Mirrors the `<= 0` guard the Dart
+/// twin `UnitFormat.pace` / `UnitFormat.speed` already apply, so the same
+/// non-physical input shows the em-dash sentinel on both platforms.
+export function isMeaningfulPace(seconds: number, metres: number): boolean {
+	return Number.isFinite(seconds) && Number.isFinite(metres) && seconds > 0 && metres > 0;
+}
