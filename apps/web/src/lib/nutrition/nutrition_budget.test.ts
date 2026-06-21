@@ -77,6 +77,16 @@ test('macroBudget: a sub-0.5 overage rounds to on-target, not "0 over"', () => {
 	assert.equal(b.remaining, 0);
 });
 
+test('macroBudget: a negative .5 tie rounds half toward +∞ (TS↔Dart parity)', () => {
+	// remaining = round(target - consumed) = round(2000 - 2000.5) = round(-0.5).
+	// JS Math.round(-0.5) === 0; the Dart twin must agree, so both sides report 0
+	// rather than -1. Latent today (real inputs are integers) but reachable via
+	// fractional calls.
+	const b = macroBudget(2000.5, 2000, 'calories');
+	assert.equal(b.remaining, 0);
+	assert.equal(b.over, 1); // round(consumed - target) = round(0.5) = 1
+});
+
 test('MACRO_IS_CEILING: calories + fat are ceilings, protein + carbs goals', () => {
 	const expected: Record<MacroKind, boolean> = {
 		calories: true,
