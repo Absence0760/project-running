@@ -2,11 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/i18n/store.svelte';
 	import { supabase } from '$lib/core/supabase';
-	import {
-		SIGNUP_GATE_ERROR_ADULT,
-		SIGNUP_GATE_ERROR_TERMS,
-		checkSignUpGates,
-	} from '$lib/core/auth_gates';
+	import { checkSignUpGates } from '$lib/core/auth_gates';
 
 	// Post-OAuth fallback gate. Reached from /auth/callback when the
 	// user's user_profiles row is missing `age_confirmed_at` or
@@ -30,7 +26,7 @@
 		error = '';
 		const gate = checkSignUpGates(true, confirmAdult, acceptTerms);
 		if (!gate.ok) {
-			error = gate.error;
+			error = gate.reason === 'adult' ? m('login.gateAdult') : m('login.gateTerms');
 			return;
 		}
 		loading = true;
@@ -86,14 +82,7 @@
 		</form>
 
 		<p class="fine">
-			{m('confirmAge.finePrefix')} {m('confirmAge.fineRequiredValues', {
-				adult: SIGNUP_GATE_ERROR_ADULT
-					.replace('Please confirm you are ', '')
-					.replace(' to continue.', ''),
-				terms: SIGNUP_GATE_ERROR_TERMS
-					.replace('Please accept the ', '')
-					.replace(' to continue.', ''),
-			})}
+			{m('confirmAge.finePrefix')} {m('confirmAge.fineRequiredValues')}
 		</p>
 	</main>
 </div>
