@@ -1281,6 +1281,7 @@ export const en = {
 	"settingsDevices.paceMinPerMi": "Minutes per mile",
 	"settingsDevices.pushEnabledToast": "Notifications enabled on this device.",
 	"settingsDevices.pushEnableFailedToast": "Could not enable notifications: {message}",
+	"settingsDevices.pushDisableFailedToast": "Could not disable notifications: {message}",
 	"settingsDevices.pushDisabledToast": "Notifications disabled on this device.",
 	"settingsDevices.renameFailedToast": "Rename failed: {message}",
 	"settingsDevices.clearOverrideFailedToast": "Couldn't clear the override: {message}",

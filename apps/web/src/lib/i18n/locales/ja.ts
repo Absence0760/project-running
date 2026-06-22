@@ -1268,6 +1268,7 @@ export const messages = {
 	"settingsDevices.paceMinPerMi": "分/マイル",
 	"settingsDevices.pushEnabledToast": "このデバイスで通知を有効にしました。",
 	"settingsDevices.pushEnableFailedToast": "通知を有効にできませんでした：{message}",
+	"settingsDevices.pushDisableFailedToast": "通知を無効にできませんでした：{message}",
 	"settingsDevices.pushDisabledToast": "このデバイスで通知を無効にしました。",
 	"settingsDevices.renameFailedToast": "名前の変更に失敗しました：{message}",
 	"settingsDevices.clearOverrideFailedToast": "上書き設定を解除できませんでした：{message}",

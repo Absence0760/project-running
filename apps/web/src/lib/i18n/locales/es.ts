@@ -1272,6 +1272,7 @@ export const messages = {
 	"settingsDevices.paceMinPerMi": "Minutos por milla",
 	"settingsDevices.pushEnabledToast": "Notificaciones activadas en este dispositivo.",
 	"settingsDevices.pushEnableFailedToast": "No se pudieron activar las notificaciones: {message}",
+	"settingsDevices.pushDisableFailedToast": "No se pudieron desactivar las notificaciones: {message}",
 	"settingsDevices.pushDisabledToast": "Notificaciones desactivadas en este dispositivo.",
 	"settingsDevices.renameFailedToast": "Error al renombrar: {message}",
 	"settingsDevices.clearOverrideFailedToast": "No se pudo borrar la anulación: {message}",
