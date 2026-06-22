@@ -648,4 +648,60 @@ test.describe('/runs/[id]', () => {
 			page.getByRole('link', { name: 'Back to your runs' })
 		).toBeVisible();
 	});
+
+	test('share button is in-flight-guarded so a double-tap makes the run public only once', async ({
+		page,
+		context
+	}) => {
+		// proceedShare had no busy guard: a fast second tap (or a second
+		// tap once the run is already public) fired makeRunPublic again.
+		// The button now disables while the flip is in flight. Hold the
+		// PATCH open to widen the window and count how many leave.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		let patchCount = 0;
+		await page.route('**/rest/v1/runs?id=eq.*', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				patchCount += 1;
+				await new Promise((r) => setTimeout(r, 1200));
+			}
+			await route.continue();
+		});
+
+		try {
+			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+			await page.goto(`/runs/${planted}`);
+
+			const shareBtn = page.locator('button[title="Share link"]');
+			await expect(shareBtn).toBeVisible({ timeout: 10_000 });
+			await shareBtn.click();
+
+			// Confirm the consent dialog — this kicks the held PATCH.
+			const dialog = page.locator('[data-testid="share-confirm-dialog"]');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.locator('button', { hasText: /Make public/ }).click();
+
+			// While the flip is in flight the button is disabled, so a
+			// second tap cannot queue a duplicate makeRunPublic.
+			await expect(shareBtn).toBeDisabled();
+
+			// Let it settle (the success toast means proceedShare resolved
+			// and cleared the busy flag — the button's title then flips to
+			// "Copy share link", so re-find it by the share glyph), then
+			// assert exactly one PATCH was issued.
+			await expect(page.locator('.toast', { hasText: /Share link copied/ }))
+				.toBeVisible({ timeout: 10_000 });
+			await expect(
+				page.locator('button:has(.material-symbols:text-is("share"))')
+			).toBeEnabled();
+			expect(patchCount).toBe(1);
+		} finally {
+			await deleteRun(planted);
+		}
+	});
 });

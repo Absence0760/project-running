@@ -2077,6 +2077,8 @@ export const en = {
 	"liveEvent.finished": "Finished",
 	"liveEvent.pending": "Pending",
 	"liveEvent.didNotFinish": "Did not finish",
+	"liveEvent.statusDnf": "DNF",
+	"liveEvent.statusDns": "DNS",
 	"liveEvent.statusPreRaceLabel": "Pre-race",
 	"liveEvent.statusPreRaceSub": "Organiser hasn’t armed the race timer yet.",
 	"liveEvent.statusArmedLabel": "Armed",

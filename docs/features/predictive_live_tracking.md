@@ -34,7 +34,11 @@ over-claiming when the position is stale** (the personas' core complaint).
   `20270121_001`), the dot renders as an approximate hollow amber ring + an
   "Approximate / last seen near here" badge on both clients so a SAR watcher
   reads it as a ~1 km cell, not a precise fix — distinct from, and orthogonal
-  to, the staleness badge.
+  to, the staleness badge. The multi-runner event leaderboard
+  (`/live/event/[id]/[instance]/+page.svelte`) consumes the same `freshnessFor`
+  per row: each on-course runner shows an "Updated N ago" readout and flips to a
+  DELAYED badge + stale row once past the window, so a lost-signal runner is
+  never shown as fresh-current on the board either.
 - **Route + cutoffs:** `fetchRouteMarkers` (RPC `route_markers_for_viewer`,
   already anon-readable on public routes) + `roadbook.ts` cutoff parsing
   (`parseCutoff`, the `cutoff` leg shape).

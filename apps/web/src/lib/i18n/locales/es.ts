@@ -2068,6 +2068,8 @@ export const messages = {
 	"liveEvent.finished": "Finalizado",
 	"liveEvent.pending": "Pendiente",
 	"liveEvent.didNotFinish": "No finalizó",
+	"liveEvent.statusDnf": "DNF",
+	"liveEvent.statusDns": "DNS",
 	"liveEvent.statusPreRaceLabel": "Antes de la carrera",
 	"liveEvent.statusPreRaceSub": "El organizador aún no ha activado el cronómetro de la carrera.",
 	"liveEvent.statusArmedLabel": "Listo",
