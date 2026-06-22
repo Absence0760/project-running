@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -56,8 +58,25 @@ class _ThrowingRouteStore extends LocalRouteStore {
       throw Exception('boom');
 }
 
+/// Signed-in fake whose `makeRunPublic` blocks on a completer the test
+/// controls, so the in-flight share window stays open long enough to
+/// assert the share button disabled + count the calls.
+class _SlowShareApi extends ApiClient {
+  final Completer<void> gate = Completer<void>();
+  int calls = 0;
+
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<void> makeRunPublic(String runId) async {
+    calls += 1;
+    await gate.future;
+  }
+}
+
 Future<void> _pump(WidgetTester tester, Run run,
-    {double? bodyWeightKg, LocalRouteStore? routeStore}) async {
+    {double? bodyWeightKg, LocalRouteStore? routeStore, ApiClient? apiClient}) async {
   SharedPreferences.setMockInitialValues(
     bodyWeightKg != null ? {'body_weight_kg': bodyWeightKg} : {},
   );
@@ -77,6 +96,7 @@ Future<void> _pump(WidgetTester tester, Run run,
         runStore: runStore,
         routeStore: routeStore ?? LocalRouteStore(),
         preferences: prefs,
+        apiClient: apiClient,
       ),
     ),
   );
@@ -123,6 +143,54 @@ void main() {
       // Share is behind an overflow menu (Icons.more_vert or similar).
       // The screen uses an edit icon + more actions. Check the edit icon:
       expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    });
+
+    testWidgets('share button is in-flight-guarded against a double-tap',
+        (tester) async {
+      final run = _run(title: 'Morning Tempo');
+      final api = _SlowShareApi();
+      await _pump(tester, run, apiClient: api);
+
+      final shareFinder = find.widgetWithIcon(IconButton, Icons.share_outlined);
+      expect(shareFinder, findsOneWidget);
+
+      // Tap Share → confirm the make-public dialog. The store/network
+      // I/O must run inside runAsync so the awaited makeRunPublic
+      // continuation runs in the tap's zone.
+      await tester.runAsync(() async {
+        await tester.tap(shareFinder);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Make public'),
+        ));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      });
+
+      // makeRunPublic is now blocked on the gate → _sharing is true →
+      // the share IconButton is disabled (onPressed == null) so a second
+      // tap can't fire a duplicate makeRunPublic.
+      final disabled = tester.widget<IconButton>(shareFinder);
+      expect(disabled.onPressed, isNull);
+
+      // A second tap while disabled is a no-op — still exactly one call.
+      await tester.runAsync(() async {
+        await tester.tap(shareFinder, warnIfMissed: false);
+        await tester.pump();
+      });
+      expect(api.calls, 1);
+
+      // Release the gate and replace the tree so the share sheet doesn't
+      // open into the small test viewport (its layout overflows there —
+      // unrelated to the guard under test). gate.complete() lets the
+      // awaited makeRunPublic settle cleanly.
+      api.gate.complete();
+      await tester.runAsync(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
     });
 
     testWidgets('save-as-route shows an error banner when the store throws',

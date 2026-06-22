@@ -112,6 +112,7 @@
 	let showReportRun = $state(false);
 	let shareConfirmIntersectsZone = $state(false);
 	let shareConfirmHasZones = $state(false);
+	let shareBusy = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
 	// HR-zone fallback inputs, read from the universal settings bag on
 	// mount. Used only when explicit `hr_zones` is unset (Older #8).
@@ -484,7 +485,7 @@
 	}
 
 	async function handleShare() {
-		if (!run || !auth.user) return;
+		if (!run || !auth.user || shareBusy) return;
 		// Skip the prompt when the run is already public — Share becomes
 		// a re-copy-link in that case.
 		if (run.is_public) {
@@ -520,7 +521,8 @@
 	}
 
 	async function proceedShare() {
-		if (!run) return;
+		if (!run || shareBusy) return;
+		shareBusy = true;
 		showShareConfirm = false;
 		try {
 			await makeRunPublic(run.id);
@@ -533,6 +535,8 @@
 			showToast(m('runDetail.shareLinkCopied'), 'success');
 		} catch (e) {
 			showToast(m('runDetail.shareFailed', { error: String(e) }), 'error');
+		} finally {
+			shareBusy = false;
 		}
 	}
 
@@ -1253,6 +1257,7 @@
 							aria-label={run.is_public ? m('runDetail.copyShareLink') : m('runDetail.makePublicCopyLink')}
 							title={run.is_public ? m('runDetail.copyShareLink') : m('runDetail.shareLink')}
 							onclick={handleShare}
+							disabled={shareBusy}
 						>
 							<span class="material-symbols">share</span>
 						</button>

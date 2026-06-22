@@ -135,6 +135,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// passes; same conservative thresholds as the web version.
   RouteMatchCandidate? _suggestedRoute;
   bool _linkingRoute = false;
+  bool _sharing = false;
 
   /// Linked-cursor index — fed by `_ElevationChart.onHoverIdx`,
   /// consumed by `LiveRunMap.hoverIdx`. Null when the chart pointer
@@ -750,7 +751,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: l10n.runDetailShareTooltip,
-            onPressed: _shareRun,
+            onPressed: _sharing ? null : _shareRun,
           ),
           PopupMenuButton<String>(
             tooltip: l10n.runDetailMoreTooltip,
@@ -2050,27 +2051,38 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// The mobile Run model doesn't surface is_public so we always prompt;
   /// makeRunPublic is idempotent so a re-share through the dialog is fine.
   Future<void> _shareRun() async {
-    final api = widget.apiClient;
-    if (api != null && api.userId != null) {
-      final ok = await _confirmMakePublic();
-      if (!ok) return;
-      try {
-        await api.makeRunPublic(run.id);
-      } catch (e) {
-        debugPrint('makeRunPublic failed: $e');
-        if (!mounted) return;
-        showTopBanner(
-            context, AppLocalizations.of(context).runDetailMakePublicFailed(e.toString()));
-        return;
+    if (_sharing) return;
+    _sharing = true;
+    setState(() {});
+    try {
+      final api = widget.apiClient;
+      if (api != null && api.userId != null) {
+        final ok = await _confirmMakePublic();
+        if (!ok) return;
+        try {
+          await api.makeRunPublic(run.id);
+        } catch (e) {
+          debugPrint('makeRunPublic failed: $e');
+          if (!mounted) return;
+          showTopBanner(
+              context, AppLocalizations.of(context).runDetailMakePublicFailed(e.toString()));
+          return;
+        }
+      }
+      if (!mounted) return;
+      await showRunShareSheet(
+        context,
+        run: run,
+        preferences: widget.preferences,
+        title: _title,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sharing = false);
+      } else {
+        _sharing = false;
       }
     }
-    if (!mounted) return;
-    await showRunShareSheet(
-      context,
-      run: run,
-      preferences: widget.preferences,
-      title: _title,
-    );
   }
 
   /// Returns true when the user confirms making this run public. The
