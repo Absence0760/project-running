@@ -94,7 +94,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
-        locationManager.allowsBackgroundLocationUpdates = true
+        // allowsBackgroundLocationUpdates is set in start(), not here:
+        // CoreLocation traps (CLClientIsBackgroundable) if it's enabled before
+        // the app is actually running a backgroundable session, which crashes
+        // the app the instant WorkoutManager is constructed (e.g. the XCTest
+        // host launch). Enable it only when we begin background updates.
     }
 
     // MARK: - Controls
@@ -123,6 +127,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         checkpointStore = store
 
         locationManager.requestWhenInUseAuthorization()
+        locationManager.allowsBackgroundLocationUpdates = true
         locationManager.startUpdatingLocation()
         healthKit.startWorkout()
 
