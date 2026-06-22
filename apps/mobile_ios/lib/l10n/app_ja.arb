@@ -1051,6 +1051,8 @@
   "clubDetailPendingRequests": "保留中のリクエスト ({count})",
   "clubDetailUserShort": "ユーザー {id}…",
   "clubDetailDeny": "拒否",
+  "clubDetailDenyTitle": "参加リクエストを却下",
+  "clubDetailDenyMessage": "このクラブへの参加リクエストを却下しますか？このユーザーは追加されません。",
   "clubDetailApprove": "承認",
   "clubDetailMemberCountLine": "メンバー{count}人。",
   "clubDetailRouteSaved": "「{name}」を保存しました",

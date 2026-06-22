@@ -3856,6 +3856,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubDetailDeny => 'Ablehnen';
 
   @override
+  String get clubDetailDenyTitle => 'Beitrittsanfrage ablehnen';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Diese Beitrittsanfrage zum Club ablehnen? Die Person wird nicht hinzugefügt.';
+
+  @override
   String get clubDetailApprove => 'Genehmigen';
 
   @override

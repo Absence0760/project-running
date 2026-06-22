@@ -1051,6 +1051,8 @@
   "clubDetailPendingRequests": "Solicitações pendentes ({count})",
   "clubDetailUserShort": "Usuário {id}…",
   "clubDetailDeny": "Recusar",
+  "clubDetailDenyTitle": "Recusar pedido de adesão",
+  "clubDetailDenyMessage": "Recusar este pedido para entrar no clube? A pessoa não será adicionada.",
   "clubDetailApprove": "Aprovar",
   "clubDetailMemberCountLine": "{count, plural, one{{count} membro.} other{{count} membros.}}",
   "clubDetailRouteSaved": "\"{name}\" salva",

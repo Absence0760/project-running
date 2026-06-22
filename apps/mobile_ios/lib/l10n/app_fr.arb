@@ -1051,6 +1051,8 @@
   "clubDetailPendingRequests": "Demandes en attente ({count})",
   "clubDetailUserShort": "Utilisateur {id}…",
   "clubDetailDeny": "Refuser",
+  "clubDetailDenyTitle": "Refuser la demande d'adhésion",
+  "clubDetailDenyMessage": "Refuser cette demande d'adhésion au club ? La personne ne sera pas ajoutée.",
   "clubDetailApprove": "Approuver",
   "clubDetailMemberCountLine": "{count, plural, one{{count} membre.} other{{count} membres.}}",
   "clubDetailRouteSaved": "« {name} » enregistré",

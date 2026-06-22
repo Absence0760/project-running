@@ -3844,6 +3844,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get clubDetailDeny => 'Rechazar';
 
   @override
+  String get clubDetailDenyTitle => 'Rechazar solicitud de ingreso';
+
+  @override
+  String get clubDetailDenyMessage =>
+      '¿Rechazar esta solicitud para unirse al club? No se añadirá a la persona.';
+
+  @override
   String get clubDetailApprove => 'Aprobar';
 
   @override

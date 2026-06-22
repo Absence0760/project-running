@@ -6422,6 +6422,18 @@ abstract class AppLocalizations {
   /// **'Deny'**
   String get clubDetailDeny;
 
+  /// Title of the deny-join-request confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Reject join request'**
+  String get clubDetailDenyTitle;
+
+  /// Body of the deny-join-request confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Reject this request to join the club? They will not be added.'**
+  String get clubDetailDenyMessage;
+
   /// Button to approve a join request
   ///
   /// In en, this message translates to:

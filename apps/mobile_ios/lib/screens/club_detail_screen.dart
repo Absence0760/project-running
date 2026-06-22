@@ -1064,6 +1064,27 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   Future<void> _deny(String userId) async {
     final c = _club;
     if (c == null || _pendingBusy.contains(userId)) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.of(context).clubDetailDenyTitle),
+        content: Text(AppLocalizations.of(context).clubDetailDenyMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppLocalizations.of(context).clubDetailCancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppLocalizations.of(context).clubDetailDeny),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (!mounted || _pendingBusy.contains(userId)) return;
     setState(() => _pendingBusy.add(userId));
     try {
       await widget.social.denyJoinRequest(

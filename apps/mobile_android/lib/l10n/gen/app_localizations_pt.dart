@@ -3849,6 +3849,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailDeny => 'Recusar';
 
   @override
+  String get clubDetailDenyTitle => 'Recusar pedido de adesão';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Recusar este pedido para entrar no clube? A pessoa não será adicionada.';
+
+  @override
   String get clubDetailApprove => 'Aprovar';
 
   @override
@@ -14625,6 +14632,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clubDetailDeny => 'Recusar';
+
+  @override
+  String get clubDetailDenyTitle => 'Recusar pedido de adesão';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Recusar este pedido para entrar no clube? A pessoa não será adicionada.';
 
   @override
   String get clubDetailApprove => 'Aprovar';
