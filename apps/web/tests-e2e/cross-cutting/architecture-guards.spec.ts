@@ -40,6 +40,10 @@ const ALLOW_LIST = new Set<string>([
 	// owner-gated fetch. Auth race exists but doesn't change the
 	// data shape.
 	'src/routes/u/[id]/+page.svelte',
+	// Public fundraiser page — onMount fetches by public id only
+	// (fetchFundraiserById / totals / feed); ownership is a reactive
+	// $derived off auth.user that self-corrects when auth resolves.
+	'src/routes/fundraisers/[id]/+page.svelte',
 	// Wrappers that delegate everything to a child component — the
 	// child handles its own auth gating.
 	'src/routes/runs/new/+page.svelte',
