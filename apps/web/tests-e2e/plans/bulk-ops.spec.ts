@@ -39,6 +39,10 @@ test.describe('/plans/[id] bulk ops', () => {
 
 			await page.locator('.shift-control input').fill('7');
 			await page.getByRole('button', { name: 'Shift dates' }).click();
+			await page
+				.locator('[data-testid="bulk-confirm-dialog"]')
+				.getByRole('button', { name: 'Apply' })
+				.click();
 
 			const expectedTempo = iso(new Date(Date.parse(tempoDate) + 7 * dayMs));
 			await expect
@@ -69,6 +73,10 @@ test.describe('/plans/[id] bulk ops', () => {
 			await expect(page.getByRole('heading', { level: 1, name: 'e2e recovery' })).toBeVisible({ timeout: 10_000 });
 
 			await page.getByRole('button', { name: /Make recovery week/ }).first().click();
+			await page
+				.locator('[data-testid="bulk-confirm-dialog"]')
+				.getByRole('button', { name: 'Apply' })
+				.click();
 
 			// Volume scaled to 60%.
 			await expect

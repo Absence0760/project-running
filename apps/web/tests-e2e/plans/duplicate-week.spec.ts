@@ -51,6 +51,10 @@ test.describe('/plans/[id] duplicate week', () => {
 			// Duplicate the first week (the page renders one Duplicate button
 			// per week; the first belongs to week 0).
 			await page.getByRole('button', { name: 'Duplicate week' }).first().click();
+			await page
+				.locator('[data-testid="bulk-confirm-dialog"]')
+				.getByRole('button', { name: 'Apply' })
+				.click();
 
 			// Plan grows to three weeks, densely indexed 0..2.
 			await expect
