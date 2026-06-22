@@ -324,7 +324,7 @@
 		color: var(--color-text-muted, #667);
 	}
 	.age {
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 	.delete-btn {
 		background: none;

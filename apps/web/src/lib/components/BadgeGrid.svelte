@@ -147,7 +147,7 @@
 	.badge-private-flag {
 		position: absolute;
 		top: var(--space-xs);
-		right: var(--space-xs);
+		inset-inline-end: var(--space-xs);
 		font-size: 0.625rem;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;

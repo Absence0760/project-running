@@ -1978,7 +1978,7 @@ export interface RaceResultForRun {
 
 export async function fetchRaceResultForRun(runId: string): Promise<RaceResultForRun | null> {
 	const { data, error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('metadata, race_listing_id')
 		.eq('id', runId)
 		.maybeSingle();
@@ -2011,7 +2011,7 @@ export async function fetchRaceResultForRun(runId: string): Promise<RaceResultFo
 /// pure raceMatchScore (integrations/race_match.ts), applied by the caller.
 export async function findRaceMatchCandidates(runId: string): Promise<RaceListingResult[]> {
 	const { data: run, error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('started_at, track_url')
 		.eq('id', runId)
 		.maybeSingle();

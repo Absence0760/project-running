@@ -170,6 +170,10 @@
 	.search input:focus {
 		outline: none;
 	}
+	.search input:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
 	.filter {
 		display: flex;
 		flex-direction: column;
@@ -199,7 +203,7 @@
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
 		cursor: pointer;
-		text-align: left;
+		text-align: start;
 		color: inherit;
 		transition: border-color var(--transition-fast);
 	}

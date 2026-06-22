@@ -650,7 +650,7 @@
 		border-radius: var(--radius-pill, 999px);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-left: 3px solid var(--tier-color, var(--color-border));
+		border-inline-start: 3px solid var(--tier-color, var(--color-border));
 		font-size: 0.8125rem;
 		color: var(--color-text);
 		text-decoration: none;

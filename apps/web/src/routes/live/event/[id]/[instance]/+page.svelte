@@ -951,7 +951,7 @@
 	.stale-badge {
 		font-weight: 800;
 		letter-spacing: 0.05em;
-		margin-right: 0.3rem;
+		margin-inline-end: 0.3rem;
 	}
 	.runner.stale {
 		border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);

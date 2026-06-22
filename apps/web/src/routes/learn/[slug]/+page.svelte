@@ -218,7 +218,7 @@
 	.prose :global(ul),
 	.prose :global(ol) {
 		margin: 0 0 var(--space-md);
-		padding-left: 1.4rem;
+		padding-inline-start: 1.4rem;
 	}
 
 	.prose :global(li) {

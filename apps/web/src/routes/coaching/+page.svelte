@@ -618,7 +618,7 @@
 		font-size: 0.9rem;
 	}
 	.roster-table th {
-		text-align: left;
+		text-align: start;
 		padding: 0;
 		border-bottom: 1px solid var(--color-border);
 	}

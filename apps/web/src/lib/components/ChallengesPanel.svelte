@@ -92,7 +92,7 @@
 	.rank {
 		position: absolute;
 		top: var(--space-sm);
-		right: var(--space-md);
+		inset-inline-end: var(--space-md);
 		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text-muted, #6b7280);

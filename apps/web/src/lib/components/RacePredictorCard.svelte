@@ -88,7 +88,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.ladder th {
-		text-align: left;
+		text-align: start;
 		font-size: 0.72rem;
 		font-weight: 700;
 		text-transform: uppercase;
