@@ -123,6 +123,12 @@ async function cleanupAll(): Promise<void> {
 
 test.describe('fundraising — non-charge UI (owner, USER_A)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+	// The fundraiser open trigger requires a charges-enabled payout account
+	// (migration 20270213_001). Plant one for the owner before each test; the
+	// gated-on-payouts test deletes it again to exercise the gate.
+	test.beforeEach(async () => {
+		cleanups.push(await enablePayouts(USER_A.id));
+	});
 	test.afterEach(cleanupAll);
 
 	test('owner sees the create CTA on their own run, gated on payouts', async ({ page }) => {
@@ -229,6 +235,11 @@ test.describe('fundraising — non-charge UI (owner, USER_A)', () => {
 
 test.describe('fundraising — anchor-visibility RLS (non-owner, USER_B)', () => {
 	test.use({ storageState: USER_B.storageStatePath });
+	// USER_A owns the planted fundraiser, so USER_A needs the charges-enabled
+	// payout account even though the page is viewed as USER_B.
+	test.beforeEach(async () => {
+		cleanups.push(await enablePayouts(USER_A.id));
+	});
 	test.afterEach(cleanupAll);
 
 	test('a fundraiser on a PRIVATE run is not reachable by a non-owner (fail-closed)', async ({
