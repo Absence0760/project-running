@@ -164,7 +164,12 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
   }
 
   Future<void> _putBag(String key, String value) async {
-    await widget.settingsSync?.updateUniversal(<String, dynamic>{key: value});
+    try {
+      await widget.settingsSync?.updateUniversal(<String, dynamic>{key: value});
+    } catch (e) {
+      if (mounted) _snack(AppLocalizations.of(context).bodyMetricsPrefSaveFailed(e.toString()));
+      return;
+    }
     if (mounted) setState(() {});
   }
 

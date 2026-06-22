@@ -600,6 +600,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String bodyMetricsPrefSaveFailed(String error) {
+    return 'Não foi possível salvar: $error';
+  }
+
+  @override
   String get safetyTitle => 'Contatos de segurança';
 
   @override
@@ -11403,6 +11408,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String bodyMetricsSaveFailed(String error) {
     return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String bodyMetricsPrefSaveFailed(String error) {
+    return 'Não foi possível salvar: $error';
   }
 
   @override

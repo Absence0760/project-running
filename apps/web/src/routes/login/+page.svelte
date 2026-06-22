@@ -5,9 +5,13 @@
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
-	import { checkSignUpGates } from '$lib/core/auth_gates';
+	import { checkSignUpGates, type SignUpGateReason } from '$lib/core/auth_gates';
 	import { safeReturnTo as resolveReturnTo } from '$lib/core/safe_redirect';
 	import { m } from '$lib/i18n/store.svelte';
+
+	function gateMessage(reason: SignUpGateReason): string {
+		return reason === 'adult' ? m('login.gateAdult') : m('login.gateTerms');
+	}
 
 	let error = $state('');
 	let info = $state('');
@@ -53,7 +57,7 @@
 		// false.
 		const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
 		if (!gate.ok) {
-			error = gate.error;
+			error = gateMessage(gate.reason);
 			return;
 		}
 		// Stash the consent timestamps so /auth/callback can stamp
@@ -105,11 +109,11 @@
 					redirectTo
 				});
 				if (resetError) throw resetError;
-				info = "If that email is registered, we've sent a password reset link.";
+				info = m('login.resetEmailSent');
 				email = '';
 			} else if (isSignUp) {
 				const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
-				if (!gate.ok) throw new Error(gate.error);
+				if (!gate.ok) throw new Error(gateMessage(gate.reason));
 				const stamp = new Date().toISOString();
 				const { error: signUpError } = await supabase.auth.signUp({
 					email,
@@ -321,17 +325,17 @@
 
 			{#if !isSignUp}
 				<p class="terms">
-					By signing in, you agree to our
-					<a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
-					and
-					<a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+					{m('login.termsPrefix')}
+					<a href="/terms" target="_blank" rel="noopener noreferrer">{m('legal.termsOfService')}</a>
+					{m('login.termsBetween')}
+					<a href="/privacy" target="_blank" rel="noopener noreferrer">{m('legal.privacyPolicy')}</a>{m('login.termsSuffix')}
 				</p>
 			{/if}
 		</div>
 
 		{#if !isReset}
 			<p class="form-pane-foot">
-				Free forever &middot; Add Pro to unlock club perks, the coach, and bulk imports.
+				{m('login.formFoot')}
 			</p>
 		{/if}
 	</main>

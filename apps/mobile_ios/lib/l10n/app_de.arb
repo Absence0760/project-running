@@ -161,6 +161,7 @@
   "bodyMetricsWithdrawConfirm": "Widerrufen & löschen",
   "bodyMetricsSaved": "Gespeichert",
   "bodyMetricsSaveFailed": "Speichern fehlgeschlagen: {error}",
+  "bodyMetricsPrefSaveFailed": "Speichern nicht möglich: {error}",
   "safetyTitle": "Sicherheitskontakte",
   "safetyTileSubtitle": "E-Mail an eine Vertrauensperson, wenn du einen Lauf beendest",
   "safetyIntro": "Ein Sicherheitskontakt erhält eine E-Mail, wenn du einen Lauf beendest — auch einen privaten — damit jemand, dem du vertraust, weiß, dass du sicher zurück bist.",

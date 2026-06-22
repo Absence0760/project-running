@@ -82,6 +82,28 @@ test.describe('Signup age gate + ToS acceptance', () => {
 		await expect(privacyLink).toHaveAttribute('target', '_blank');
 	});
 
+	test('OAuth sign-up with un-ticked boxes surfaces the localized gate error', async ({
+		page
+	}) => {
+		// The gate now returns a stable reason code; the page resolves it
+		// through m('login.gateAdult') / m('login.gateTerms') instead of a
+		// hard-coded English string. Clicking "Continue with Google" in
+		// sign-up mode without ticking the boxes must show the adult-gate
+		// copy inline (the first failing gate) and NOT start an OAuth
+		// redirect. Pins that the i18n indirection is wired up.
+		await page.goto('/login?signup=1');
+		await expect(
+			page.getByRole('heading', { name: 'Create an account' })
+		).toBeVisible({ timeout: 5_000 });
+		await page.waitForLoadState('networkidle');
+
+		await page.getByRole('button', { name: 'Continue with Google' }).click();
+
+		await expect(page.getByText(/16 or older to continue/)).toBeVisible();
+		// Still on /login — the gate short-circuited before any redirect.
+		await expect(page).toHaveURL(/\/login/);
+	});
+
 	test('Toggling between sign-in and sign-up shows/hides the consent boxes', async ({
 		page
 	}) => {

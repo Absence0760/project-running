@@ -15,14 +15,14 @@
 /// the gates always apply there; on web the screen is shared and
 /// the gate has to be conditional on `isSignUp`.
 
+/// A stable, locale-independent reason a sign-up gate failed. The
+/// caller resolves it to a localized message via `m('login.gateAdult')`
+/// / `m('login.gateTerms')` so the error isn't hard-coded English.
+export type SignUpGateReason = 'adult' | 'terms';
+
 export type SignUpGateResult =
 	| { ok: true }
-	| { ok: false; error: string };
-
-export const SIGNUP_GATE_ERROR_ADULT =
-	'Please confirm you are 16 or older to continue.';
-export const SIGNUP_GATE_ERROR_TERMS =
-	'Please accept the Terms of Service and Privacy Policy to continue.';
+	| { ok: false; reason: SignUpGateReason };
 
 /// Pure pre-flight check before any account-creation path (email +
 /// password, Google OAuth, future Apple OAuth). When `isSignUp` is
@@ -34,7 +34,7 @@ export function checkSignUpGates(
 	acceptTerms: boolean,
 ): SignUpGateResult {
 	if (!isSignUp) return { ok: true };
-	if (!confirmAdult) return { ok: false, error: SIGNUP_GATE_ERROR_ADULT };
-	if (!acceptTerms) return { ok: false, error: SIGNUP_GATE_ERROR_TERMS };
+	if (!confirmAdult) return { ok: false, reason: 'adult' };
+	if (!acceptTerms) return { ok: false, reason: 'terms' };
 	return { ok: true };
 }

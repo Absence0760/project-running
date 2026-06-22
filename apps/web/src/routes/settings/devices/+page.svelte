@@ -81,6 +81,8 @@
 			await refreshPushState();
 			await refreshCurrentDeviceRow();
 			showToast(m('settingsDevices.pushDisabledToast'), 'success');
+		} catch (e) {
+			showToast(m('settingsDevices.pushDisableFailedToast', { message: (e as Error).message }), 'error');
 		} finally {
 			pushBusy = false;
 		}

@@ -7,6 +7,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/settings_body_metrics_screen.dart';
+import '../lib/settings_sync.dart';
+
+/// A settings-sync whose universal-bag write always fails — drives the
+/// _putBag error-surfacing path for the activity / goal pickers.
+class _ThrowingSync extends SettingsSyncService {
+  _ThrowingSync(Preferences prefs) : super(preferences: prefs);
+
+  @override
+  Future<void> updateUniversal(Map<String, dynamic> changes) async {
+    throw Exception('boom');
+  }
+}
 
 /// Fake with prior consent + a saved weight so the withdrawal path has
 /// something to erase. Records the destructive calls.
@@ -87,6 +99,36 @@ void main() {
       expect(find.text('Mostly sitting (desk job)'), findsOneWidget);
       expect(find.text('Lightly active (light daily movement)'), findsOneWidget);
       expect(find.text('Extremely active (hard physical labour)'), findsOneWidget);
+    });
+
+    testWidgets('a failed activity-pref save surfaces an error banner',
+        (tester) async {
+      final prefs = await _prefs();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsBodyMetricsScreen(
+            api: null,
+            settingsSync: _ThrowingSync(prefs),
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Activity level'));
+      await tester.pumpAndSettle();
+      // Pick a different level — the _putBag write throws, so the screen
+      // must show the failure banner rather than silently swallowing it.
+      await tester.runAsync(
+          () => tester.tap(find.text('Mostly sitting (desk job)')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Could not save'), findsOneWidget);
+
+      // Drain the showTopBanner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 

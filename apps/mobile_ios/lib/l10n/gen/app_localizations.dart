@@ -1073,6 +1073,12 @@ abstract class AppLocalizations {
   /// **'Save failed: {error}'**
   String bodyMetricsSaveFailed(String error);
 
+  /// Error toast when saving the activity-level / goal nutrition pref fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save: {error}'**
+  String bodyMetricsPrefSaveFailed(String error);
+
   /// Title of the safety-contacts settings screen
   ///
   /// In en, this message translates to:

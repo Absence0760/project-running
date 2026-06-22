@@ -161,6 +161,7 @@
   "bodyMetricsWithdrawConfirm": "Retirer et effacer",
   "bodyMetricsSaved": "Enregistré",
   "bodyMetricsSaveFailed": "Échec de l'enregistrement : {error}",
+  "bodyMetricsPrefSaveFailed": "Impossible d'enregistrer : {error}",
   "safetyTitle": "Contacts de sécurité",
   "safetyTileSubtitle": "Envoyez un e-mail à une personne de confiance à la fin d'une course",
   "safetyIntro": "Un contact de sécurité reçoit un e-mail lorsque vous terminez une course — même privée — pour qu'une personne de confiance sache que vous êtes bien rentré.",

@@ -601,6 +601,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String bodyMetricsPrefSaveFailed(String error) {
+    return 'Speichern nicht möglich: $error';
+  }
+
+  @override
   String get safetyTitle => 'Sicherheitskontakte';
 
   @override
