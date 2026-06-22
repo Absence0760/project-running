@@ -7528,21 +7528,29 @@ export interface GymSetWithDate {
 	duration_s: number | null;
 }
 
-/// Recent gym workouts for the signed-in user, newest first.
-export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
+/// Recent gym workouts for the signed-in user, newest first. Surfaces the
+/// error so the /gym list can show a "couldn't load — retry" state instead of
+/// the empty "log your first workout" card (a real failure otherwise reads as a
+/// brand-new lifter whose history vanished). Mirrors the
+/// `fetchExerciseRecordsWithError` convention.
+export async function fetchGymWorkoutsWithError(
+	limit = 50,
+): Promise<{ workouts: GymWorkout[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { workouts: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.gym_workouts)
 		.select('*')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
 		.limit(limit);
-	if (error) {
-		console.error('fetchGymWorkouts failed', error);
-		return [];
-	}
-	return (data ?? []) as GymWorkout[];
+	if (error) return { workouts: [], error: error.message };
+	return { workouts: (data ?? []) as GymWorkout[], error: null };
+}
+
+/// Recent gym workouts for the signed-in user, newest first.
+export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
+	return (await fetchGymWorkoutsWithError(limit)).workouts;
 }
 
 /// A single workout plus its sets in set_index order. Returns null when the
@@ -7578,11 +7586,11 @@ export async function fetchGymWorkoutWithSets(
 /// badges on /gym + /gym/[id]) pass nothing and read the full set; all-time
 /// per-exercise bests go through fetchExerciseRecords (server-aggregated)
 /// instead. perf-hunt follow-up 2026-06-10.
-export async function fetchGymSetHistory(opts?: {
+export async function fetchGymSetHistoryWithError(opts?: {
 	sinceDays?: number;
-}): Promise<GymSetWithDate[]> {
+}): Promise<{ sets: GymSetWithDate[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { sets: [], error: null };
 	let query = supabase
 		.from(TABLES.gym_sets)
 		.select('workout_id, exercise_name, reps, weight_kg, rpe, duration_s, gym_workouts!inner(started_at, user_id)')
@@ -7592,11 +7600,8 @@ export async function fetchGymSetHistory(opts?: {
 		query = query.gte('gym_workouts.started_at', since);
 	}
 	const { data, error } = await query;
-	if (error) {
-		console.error('fetchGymSetHistory failed', error);
-		return [];
-	}
-	return ((data ?? []) as unknown[]).map((row) => {
+	if (error) return { sets: [], error: error.message };
+	const sets = ((data ?? []) as unknown[]).map((row) => {
 		const r = row as {
 			workout_id: string;
 			exercise_name: string;
@@ -7617,6 +7622,13 @@ export async function fetchGymSetHistory(opts?: {
 			duration_s: r.duration_s,
 		};
 	});
+	return { sets, error: null };
+}
+
+export async function fetchGymSetHistory(opts?: {
+	sinceDays?: number;
+}): Promise<GymSetWithDate[]> {
+	return (await fetchGymSetHistoryWithError(opts)).sets;
 }
 
 /// One per-exercise all-time strength record (heaviest set, best volume, best
@@ -8181,11 +8193,17 @@ export interface FoodEntryInput {
 }
 
 /// Food entries whose `started_at` falls in the half-open window
-/// [fromIso, toIso). Used for the daily nutrition view + ring totals.
-/// Owner-scoped by RLS.
-export async function fetchFoodLog(fromIso: string, toIso: string): Promise<FoodEntry[]> {
+/// [fromIso, toIso). Surfaces the error so the daily nutrition view + the
+/// per-meal-slot detail can show a "couldn't load — retry" state instead of an
+/// empty day (a real failure otherwise reads as "nothing logged", inviting the
+/// user to re-log meals they already have). Mirrors the
+/// `fetchExerciseRecordsWithError` convention.
+export async function fetchFoodLogWithError(
+	fromIso: string,
+	toIso: string,
+): Promise<{ entries: FoodEntry[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { entries: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.food_log)
 		.select('*')
@@ -8193,11 +8211,15 @@ export async function fetchFoodLog(fromIso: string, toIso: string): Promise<Food
 		.gte('started_at', fromIso)
 		.lt('started_at', toIso)
 		.order('started_at', { ascending: true });
-	if (error) {
-		console.error('fetchFoodLog failed', error);
-		return [];
-	}
-	return (data ?? []) as FoodEntry[];
+	if (error) return { entries: [], error: error.message };
+	return { entries: (data ?? []) as FoodEntry[], error: null };
+}
+
+/// Food entries whose `started_at` falls in the half-open window
+/// [fromIso, toIso). Used for the daily nutrition view + ring totals.
+/// Owner-scoped by RLS.
+export async function fetchFoodLog(fromIso: string, toIso: string): Promise<FoodEntry[]> {
+	return (await fetchFoodLogWithError(fromIso, toIso)).entries;
 }
 
 export async function createFoodEntry(input: FoodEntryInput): Promise<FoodEntry> {

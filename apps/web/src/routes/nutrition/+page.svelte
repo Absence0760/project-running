@@ -4,6 +4,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import {
 		fetchFoodLog,
+		fetchFoodLogWithError,
 		fetchLatestWeightKg,
 		fetchRuns,
 		fetchGymWorkouts,
@@ -50,6 +51,7 @@
 	import FoodLogEditor from '$lib/components/FoodLogEditor.svelte';
 
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let showLog = $state(false);
 	let confirmDeleteEntry = $state<FoodEntry | null>(null);
 	let deletingEntry = $state(false);
@@ -121,11 +123,22 @@
 
 	async function load() {
 		if (!auth.user) return;
+		loading = true;
+		loadError = null;
 		try {
 			const now = new Date();
 			const todayStart = dayStartIso(now);
 			const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-			entries = await fetchFoodLog(todayStart, tomorrow.toISOString());
+			// The food-log read is the primary surface: distinguish a real fetch
+			// failure from a genuinely empty day so a transient error doesn't show
+			// "nothing logged" and invite re-logging meals the user already has.
+			const todayFood = await fetchFoodLogWithError(todayStart, tomorrow.toISOString());
+			if (todayFood.error) {
+				loadError = todayFood.error;
+				loading = false;
+				return;
+			}
+			entries = todayFood.entries;
 
 			// Targets: assemble body metrics + activity/goal prefs, plus today's
 			// runs + gym sessions for the dynamic-TDEE "base + exercise" goal.
@@ -409,6 +422,15 @@
 			<div class="skel skel-rings"></div>
 			<div class="skel skel-row"></div>
 			<div class="skel skel-block"></div>
+		</div>
+	{:else if loadError}
+		<div class="load-error-banner" role="alert" data-testid="nutrition-load-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('nutrition.loadFailed')}</strong>
+				<span class="load-error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" type="button" onclick={() => void load()}>{m('nutrition.retry')}</button>
 		</div>
 	{:else}
 		<section class="card-elevated rings-card" data-testid="macro-rings">
@@ -1169,6 +1191,30 @@
 	.icon-btn .material-symbols { font-size: 1.15rem; }
 	.icon-btn:hover { background: var(--color-danger-light); color: var(--color-danger); }
 
+	.load-error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.load-error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.load-error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.load-error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
+	}
 	.empty {
 		text-align: center;
 		display: flex;

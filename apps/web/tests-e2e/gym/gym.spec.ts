@@ -90,6 +90,37 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		expect(afterDelete?.length ?? 0).toBe(0);
 	});
 
+	test('a failed workout-list load shows an error + retry, and retry recovers', async ({
+		page,
+	}) => {
+		// A transient fetch failure must not masquerade as the empty "log your
+		// first workout" card — an existing lifter would think their history
+		// vanished. fetchGymWorkoutsWithError surfaces the error; the page shows a
+		// retry banner instead. Fail the first gym_workouts read, then fall back.
+		let failNext = true;
+		await page.route('**/rest/v1/gym_workouts**', async (route) => {
+			if (failNext && route.request().method() === 'GET') {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/gym');
+		// Error state, not an empty card masquerading as "no workouts".
+		await expect(page.locator('.error-banner')).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.empty-card')).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Retry' }).click();
+		// Retry re-fetches (now unblocked) → the real empty-or-list state renders.
+		await expect(page.locator('.error-banner')).toHaveCount(0, { timeout: 10_000 });
+	});
+
 	test('Gym → Sessions link surfaces when the user has a session plan', async ({ page }) => {
 		// Session plans are otherwise undiscoverable from the main nav — the Gym
 		// header surfaces a Sessions link, self-hiding on session-plan presence

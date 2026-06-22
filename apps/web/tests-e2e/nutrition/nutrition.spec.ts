@@ -133,6 +133,37 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await expect(page.getByTestId('search-failed')).toHaveCount(0);
 	});
 
+	test('a failed food-log load shows an error + retry, not a misleading empty day', async ({
+		page,
+	}) => {
+		// A transient food_log fetch failure must not render the empty "no food
+		// logged" state — the user would think their meals vanished and re-log
+		// them. fetchFoodLogWithError surfaces the error; the page shows a retry
+		// banner. Fail the first food_log read, then fall back.
+		let failNext = true;
+		await page.route('**/rest/v1/food_log**', async (route) => {
+			if (failNext && route.request().method() === 'GET') {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/nutrition');
+		const banner = page.getByTestId('nutrition-load-error');
+		await expect(banner).toBeVisible({ timeout: 10_000 });
+		// Not the empty rings state masquerading as "nothing logged".
+		await expect(page.getByTestId('macro-rings-empty')).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Retry' }).click();
+		await expect(banner).toHaveCount(0, { timeout: 10_000 });
+	});
+
 	test('water tracker shows a daily goal + remaining, and flips to reached', async ({ page }) => {
 		await page.goto('/nutrition');
 
