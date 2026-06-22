@@ -23,7 +23,7 @@
 		"@sveltejs/kit": "2.65.1",
 		"@sveltejs/vite-plugin-svelte": "7.1.2",
 		"@types/aws-lambda": "8.10.162",
-		"@types/node": "^25.9.3",
+		"@types/node": "^26.0.0",
 		"esbuild": "0.28.1",
 		"mdsvex": "^0.12.7",
 		"normalize.css": "8.0.1",
