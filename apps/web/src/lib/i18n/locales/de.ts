@@ -3621,6 +3621,8 @@ export const messages = {
 	"nutrition.deleteTemplateFailed": "Vorlage konnte nicht gelöscht werden: {error}",
 	"nutrition.templatesLoadFailed": "Deine Mahlzeitvorlagen konnten nicht geladen werden.",
 	"nutrition.templatesRetry": "Erneut versuchen",
+	"nutrition.loadFailed": "Dein Ernährungstagebuch konnte nicht geladen werden.",
+	"nutrition.retry": "Erneut versuchen",
 	"nutrition.recipes": "Rezepte",
 	"nutrition.saveAsRecipe": "Als Rezept speichern",
 	"nutrition.saveAsRecipeTitle": "Heutige Mahlzeiten als Rezept speichern",

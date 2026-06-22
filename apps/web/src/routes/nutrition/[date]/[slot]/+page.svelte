@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchFoodLog, type FoodEntry } from '$lib/core/data';
+	import { fetchFoodLogWithError, type FoodEntry } from '$lib/core/data';
 	import { sumMacros, MEAL_SLOTS, type MealSlot } from '$lib/nutrition/nutrition_totals';
 	import {
 		entriesForSlotOnDay,
@@ -17,6 +17,7 @@
 	let validSlot = $derived(MEAL_SLOTS.includes(slot));
 
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let allEntries = $state<FoodEntry[]>([]);
 
 	const slotEntries = $derived(entriesForSlotOnDay(allEntries, date, slot));
@@ -26,9 +27,10 @@
 
 	async function load() {
 		loading = true;
-		// fetchFoodLog returns [] when there's no signed-in user, so the fetch
-		// must wait for the session to hydrate — otherwise onMount races auth
-		// readiness and the page renders an empty (0-kcal) slot. Mirrors the
+		loadError = null;
+		// fetchFoodLogWithError returns [] when there's no signed-in user, so the
+		// fetch must wait for the session to hydrate — otherwise onMount races
+		// auth readiness and the page renders an empty (0-kcal) slot. Mirrors the
 		// daily /nutrition page's auth.ready() gate.
 		await auth.ready();
 		if (!auth.user) {
@@ -43,7 +45,11 @@
 		// come from a single fetch.
 		const windowStart = new Date(start);
 		windowStart.setDate(windowStart.getDate() - 6);
-		allEntries = await fetchFoodLog(windowStart.toISOString(), end.toISOString());
+		// Surface a real fetch failure as a retry banner — otherwise a 0-kcal slot
+		// is indistinguishable from a genuinely empty meal.
+		const res = await fetchFoodLogWithError(windowStart.toISOString(), end.toISOString());
+		loadError = res.error;
+		allEntries = res.entries;
 		loading = false;
 	}
 
@@ -72,6 +78,15 @@
 
 		{#if loading}
 			<p class="empty">{m('nutrition.loading')}</p>
+		{:else if loadError}
+			<div class="load-error-banner" role="alert" data-testid="meal-load-error">
+				<span class="material-symbols" aria-hidden="true">error</span>
+				<div>
+					<strong>{m('nutrition.loadFailed')}</strong>
+					<span class="load-error-detail">{loadError}</span>
+				</div>
+				<button class="btn btn-outline" type="button" onclick={() => void load()}>{m('nutrition.retry')}</button>
+			</div>
 		{:else}
 			<section class="card-elevated macro-card" data-testid="meal-macros">
 				<div class="macro-total">
@@ -252,5 +267,29 @@
 	}
 	.empty {
 		color: var(--color-text-secondary);
+	}
+	.load-error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.load-error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.load-error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.load-error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 </style>

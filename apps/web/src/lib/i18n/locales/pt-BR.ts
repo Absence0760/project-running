@@ -3620,6 +3620,8 @@ export const messages = {
 	"nutrition.deleteTemplateFailed": "Não foi possível excluir o modelo: {error}",
 	"nutrition.templatesLoadFailed": "Não foi possível carregar seus modelos de refeição.",
 	"nutrition.templatesRetry": "Tentar novamente",
+	"nutrition.loadFailed": "Não foi possível carregar seu diário alimentar.",
+	"nutrition.retry": "Tentar novamente",
 	"nutrition.recipes": "Receitas",
 	"nutrition.saveAsRecipe": "Salvar como receita",
 	"nutrition.saveAsRecipeTitle": "Salvar as refeições de hoje como receita",

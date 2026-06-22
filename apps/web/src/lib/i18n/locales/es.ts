@@ -3621,6 +3621,8 @@ export const messages = {
 	"nutrition.deleteTemplateFailed": "No se pudo eliminar la plantilla: {error}",
 	"nutrition.templatesLoadFailed": "No se pudieron cargar tus plantillas de comida.",
 	"nutrition.templatesRetry": "Reintentar",
+	"nutrition.loadFailed": "No se pudo cargar tu registro de comidas.",
+	"nutrition.retry": "Reintentar",
 	"nutrition.recipes": "Recetas",
 	"nutrition.saveAsRecipe": "Guardar como receta",
 	"nutrition.saveAsRecipeTitle": "Guardar las comidas de hoy como receta",

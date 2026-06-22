@@ -3617,6 +3617,8 @@ export const messages = {
 	"nutrition.deleteTemplateFailed": "テンプレートを削除できませんでした: {error}",
 	"nutrition.templatesLoadFailed": "食事テンプレートを読み込めませんでした。",
 	"nutrition.templatesRetry": "再試行",
+	"nutrition.loadFailed": "食事記録を読み込めませんでした。",
+	"nutrition.retry": "再試行",
 	"nutrition.recipes": "レシピ",
 	"nutrition.saveAsRecipe": "レシピとして保存",
 	"nutrition.saveAsRecipeTitle": "今日の食事をレシピとして保存",

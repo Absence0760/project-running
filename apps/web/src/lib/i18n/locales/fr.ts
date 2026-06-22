@@ -3621,6 +3621,8 @@ export const messages = {
 	"nutrition.deleteTemplateFailed": "Impossible de supprimer le modèle : {error}",
 	"nutrition.templatesLoadFailed": "Impossible de charger tes modèles de repas.",
 	"nutrition.templatesRetry": "Réessayer",
+	"nutrition.loadFailed": "Impossible de charger votre journal alimentaire.",
+	"nutrition.retry": "Réessayer",
 	"nutrition.recipes": "Recettes",
 	"nutrition.saveAsRecipe": "Enregistrer comme recette",
 	"nutrition.saveAsRecipeTitle": "Enregistrer les repas du jour comme recette",

@@ -128,6 +128,37 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 		await expect(page.getByTestId('meal-trend').locator('.trend-col')).toHaveCount(7);
 	});
 
+	test('a failed load shows an error + retry, not a misleading 0-kcal slot', async ({ page }) => {
+		// A transient food_log fetch failure must not render the 0-kcal macro card
+		// + "no items" empty state — that is indistinguishable from a genuinely
+		// empty meal. fetchFoodLogWithError surfaces the error; the page shows a
+		// retry banner. Fail the first food_log read, then fall back.
+		const today = new Date();
+		let failNext = true;
+		await page.route('**/rest/v1/food_log**', async (route) => {
+			if (failNext && route.request().method() === 'GET') {
+				failNext = false;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated failure' }),
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto(`/nutrition/${isoDate(today)}/breakfast`);
+		const banner = page.getByTestId('meal-load-error');
+		await expect(banner).toBeVisible({ timeout: 10_000 });
+		// Not the macro card masquerading as an empty meal.
+		await expect(page.getByTestId('meal-macros')).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Retry' }).click();
+		await expect(banner).toHaveCount(0, { timeout: 10_000 });
+		await expect(page.getByTestId('meal-macros')).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('an unknown slot renders the invalid-slot guard, not a crash', async ({ page }) => {
 		const today = new Date();
 		await page.goto(`/nutrition/${isoDate(today)}/brunch`);

@@ -8168,11 +8168,17 @@ export interface FoodEntryInput {
 }
 
 /// Food entries whose `started_at` falls in the half-open window
-/// [fromIso, toIso). Used for the daily nutrition view + ring totals.
-/// Owner-scoped by RLS.
-export async function fetchFoodLog(fromIso: string, toIso: string): Promise<FoodEntry[]> {
+/// [fromIso, toIso). Surfaces the error so the daily nutrition view + the
+/// per-meal-slot detail can show a "couldn't load — retry" state instead of an
+/// empty day (a real failure otherwise reads as "nothing logged", inviting the
+/// user to re-log meals they already have). Mirrors the
+/// `fetchExerciseRecordsWithError` convention.
+export async function fetchFoodLogWithError(
+	fromIso: string,
+	toIso: string,
+): Promise<{ entries: FoodEntry[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { entries: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.food_log)
 		.select('*')
@@ -8180,11 +8186,15 @@ export async function fetchFoodLog(fromIso: string, toIso: string): Promise<Food
 		.gte('started_at', fromIso)
 		.lt('started_at', toIso)
 		.order('started_at', { ascending: true });
-	if (error) {
-		console.error('fetchFoodLog failed', error);
-		return [];
-	}
-	return (data ?? []) as FoodEntry[];
+	if (error) return { entries: [], error: error.message };
+	return { entries: (data ?? []) as FoodEntry[], error: null };
+}
+
+/// Food entries whose `started_at` falls in the half-open window
+/// [fromIso, toIso). Used for the daily nutrition view + ring totals.
+/// Owner-scoped by RLS.
+export async function fetchFoodLog(fromIso: string, toIso: string): Promise<FoodEntry[]> {
+	return (await fetchFoodLogWithError(fromIso, toIso)).entries;
 }
 
 export async function createFoodEntry(input: FoodEntryInput): Promise<FoodEntry> {

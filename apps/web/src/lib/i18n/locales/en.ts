@@ -3633,6 +3633,8 @@ export const en = {
 	"nutrition.deleteTemplateFailed": "Couldn't delete the template: {error}",
 	"nutrition.templatesLoadFailed": "Couldn't load your meal templates.",
 	"nutrition.templatesRetry": "Retry",
+	"nutrition.loadFailed": "Couldn't load your food log.",
+	"nutrition.retry": "Retry",
 	"nutrition.recipes": "Recipes",
 	"nutrition.saveAsRecipe": "Save as recipe",
 	"nutrition.saveAsRecipeTitle": "Save today's meals as a recipe",
