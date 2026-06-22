@@ -38,7 +38,23 @@ export async function repurposeTodayWorkout(
 		.limit(1);
 	const original = rows?.[0] as Record<string, unknown> | undefined;
 	if (!original) {
-		throw new Error('no plan workout scheduled for today to repurpose');
+		// The seed plan's dates are fixed, so once real time marches past its
+		// end_date no row covers today. There's then no one-per-day collision to
+		// dodge — insert a workout for today and remove it on undo.
+		if (weekIds.length === 0) throw new Error('seed plan has no weeks to insert into');
+		const { data: ins, error: insErr } = await admin
+			.from('plan_workouts')
+			.insert({ week_id: weekIds[0], scheduled_date: today, ...fields })
+			.select('id')
+			.single();
+		if (insErr || !ins) throw new Error(`could not insert today workout: ${insErr?.message}`);
+		const insertedId = (ins as { id: string }).id;
+		return {
+			workoutId: insertedId,
+			undo: async () => {
+				await admin.from('plan_workouts').delete().eq('id', insertedId);
+			}
+		};
 	}
 	const workoutId = original.id as string;
 	const { error } = await admin.from('plan_workouts').update(fields).eq('id', workoutId);
