@@ -4,7 +4,7 @@
 	import { hashHue } from '$lib/format/avatar';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { browseClubs, fetchMyClubs, searchClubs } from '$lib/core/data';
+	import { browseClubsWithError, fetchMyClubsWithError, searchClubsWithError } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -17,10 +17,13 @@
 	let search = $state('');
 	let browseResults = $state<ClubWithMeta[]>([]);
 	let myClubs = $state<ClubWithMeta[]>([]);
+	let browseError = $state<string | null>(null);
+	let mineError = $state<string | null>(null);
 	let browseGen = $state(0);
 	let mineGen = $state(0);
 
 	let visible = $derived(subtab === 'browse' ? browseResults : myClubs);
+	let loadError = $derived(subtab === 'browse' ? browseError : mineError);
 
 	async function loadBrowse() {
 		loading = true;
@@ -30,19 +33,21 @@
 		// and falls back to plain ILIKE when the geocode doesn't
 		// resolve. Empty / blank query → plain "most recent 60".
 		const result = search.trim()
-			? await searchClubs(search)
-			: await browseClubs();
+			? await searchClubsWithError(search)
+			: await browseClubsWithError();
 		if (gen !== browseGen) return;
-		browseResults = result;
+		browseResults = result.clubs;
+		browseError = result.error;
 		loading = false;
 	}
 
 	async function loadMine() {
 		loading = true;
 		const gen = ++mineGen;
-		const result = await fetchMyClubs();
+		const result = await fetchMyClubsWithError();
 		if (gen !== mineGen) return;
-		myClubs = result;
+		myClubs = result.clubs;
+		mineError = result.error;
 		loading = false;
 	}
 
@@ -153,6 +158,22 @@
 			{/each}
 		</div>
 		<p class="sr-only" role="status">{m('socialClubs.loadingClubs')}</p>
+	{:else if loadError}
+		<div class="empty-card" role="alert">
+			<span class="material-symbols empty-icon" aria-hidden="true">cloud_off</span>
+			<h3>{m('socialClubs.loadErrorTitle')}</h3>
+			<p class="empty-text">{m('socialClubs.loadErrorText')}</p>
+			<div class="empty-actions">
+				<button
+					class="btn btn-primary"
+					type="button"
+					onclick={() => (subtab === 'browse' ? loadBrowse() : loadMine())}
+				>
+					<span class="material-symbols" aria-hidden="true">refresh</span>
+					{m('socialClubs.retry')}
+				</button>
+			</div>
+		</div>
 	{:else if visible.length === 0}
 		<div class="empty-card">
 			{#if subtab === 'mine'}

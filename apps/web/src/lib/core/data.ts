@@ -1609,15 +1609,21 @@ function slugify(name: string): string {
 }
 
 /** Browse public clubs. Most recently created first. */
-export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
+export async function browseClubsWithError(
+	search?: string
+): Promise<{ clubs: ClubWithMeta[]; error: string | null }> {
 	let query = supabase.from('clubs').select(CLUB_SELECT_COLS).eq('is_public', true);
 	if (search && search.trim()) {
 		const term = search.trim();
 		query = query.or(`name.ilike.%${term}%,location_label.ilike.%${term}%`);
 	}
-	const { data } = await query.order('created_at', { ascending: false }).limit(60);
-	if (!data) return [];
-	return enrichClubs(data);
+	const { data, error } = await query.order('created_at', { ascending: false }).limit(60);
+	if (error) return { clubs: [], error: error.message };
+	return { clubs: data ? await enrichClubs(data) : [], error: null };
+}
+
+export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
+	return (await browseClubsWithError(search)).clubs;
 }
 
 /// Region-aware club search. Tries to geocode the query first
@@ -1626,9 +1632,11 @@ export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
 /// label path `browseClubs` uses when geocoding doesn't resolve
 /// (short query, MapTiler offline, no key, etc.). See
 /// [migration 20260905_001] for the RPC.
-export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
+export async function searchClubsWithError(
+	query: string
+): Promise<{ clubs: ClubWithMeta[]; error: string | null }> {
 	const term = query.trim();
-	if (!term) return browseClubs();
+	if (!term) return browseClubsWithError();
 
 	// Geocode in the background while we kick off the RPC. The RPC's
 	// text-only path doesn't need the geocode, so we can race the two
@@ -1647,7 +1655,7 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 	});
 	if (error) {
 		console.warn('search_clubs RPC failed, falling back to ILIKE-only', error);
-		return browseClubs(term);
+		return browseClubsWithError(term);
 	}
 	// The RPC returns `setof clubs` — strip the columns the client
 	// shape doesn't include (location_point, invite_token).
@@ -1672,7 +1680,11 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
-	return enrichClubs(rows);
+	return { clubs: await enrichClubs(rows), error: null };
+}
+
+export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
+	return (await searchClubsWithError(query)).clubs;
 }
 
 export type EventWeekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
@@ -2017,7 +2029,10 @@ export async function findRaceMatchCandidates(runId: string): Promise<RaceListin
 }
 
 /** Clubs the current user belongs to (owner or member). */
-export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
+export async function fetchMyClubsWithError(): Promise<{
+	clubs: ClubWithMeta[];
+	error: string | null;
+}> {
 	// Fall back to the session when the JS auth store hasn't hydrated yet —
 	// on a fresh page load (bookmark, refresh, hard nav to /plans/new) the
 	// store's user can still be null while a valid session sits in storage.
@@ -2027,15 +2042,19 @@ export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 		const { data: { session } } = await supabase.auth.getSession();
 		userId = session?.user?.id;
 	}
-	if (!userId) return [];
-	const { data } = await supabase
+	if (!userId) return { clubs: [], error: null };
+	const { data, error } = await supabase
 		.from(TABLES.club_members)
 		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})`)
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
-	if (!data) return [];
-	const clubs = data.map((row: any) => row.clubs).filter(Boolean);
-	return enrichClubs(clubs);
+	if (error) return { clubs: [], error: error.message };
+	const clubs = (data ?? []).map((row: any) => row.clubs).filter(Boolean);
+	return { clubs: await enrichClubs(clubs), error: null };
+}
+
+export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
+	return (await fetchMyClubsWithError()).clubs;
 }
 
 export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null> {
