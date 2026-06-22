@@ -36,7 +36,9 @@ kotlin {
 
 android {
     namespace = "com.runapp.watchwear"
-    compileSdk = 36
+    // androidx.lifecycle:*-compose 2.11.0 requires compileSdk 37 (AGP 9.2.1
+    // + Gradle 9.6 support it). targetSdk stays 35.
+    compileSdk = 37
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
