@@ -256,8 +256,10 @@ struct ActiveRunComplication: Widget {
 
 // MARK: - Pure formatters
 // Mirrors apps/watch_wear/.../tiles/ActiveRunTileService.kt so the two
-// platforms render identical strings. Pure functions; the test target
-// can pin them without booting WidgetKit.
+// platforms render identical strings. This Widget Extension target can't
+// link RunFormat.swift, so it carries this copy; WatchApp/RunFormat.swift
+// holds a byte-identical copy that ComplicationFormatterTests pins. Keep
+// the two in lockstep.
 
 func formatElapsed(_ seconds: Int) -> String {
     let s = max(seconds, 0)

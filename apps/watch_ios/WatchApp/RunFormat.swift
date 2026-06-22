@@ -59,3 +59,56 @@ enum RunFormat {
         return String(format: "%d:%02d %@", minutes, seconds, suffix)
     }
 }
+
+// MARK: - Complication formatters
+// The active-run complication (`Complications/ActiveRunComplication.swift`)
+// carries a byte-identical copy of these three pure functions because it
+// builds in a separate Widget Extension target that can't link this file.
+// That copy is the source of truth for the widget; this copy lives in the
+// WatchApp target so `ComplicationFormatterTests` can pin the contract
+// without booting WidgetKit. Keep the two in lockstep.
+
+func formatElapsed(_ seconds: Int) -> String {
+    let s = max(seconds, 0)
+    let h = s / 3600
+    let m = (s % 3600) / 60
+    let sec = s % 60
+    if h > 0 {
+        return String(format: "%d:%02d:%02d", h, m, sec)
+    }
+    return String(format: "%02d:%02d", m, sec)
+}
+
+func formatDistanceKm(_ meters: Double) -> String {
+    let miles = UserDefaults.standard.string(forKey: "preferred_unit") == "mi"
+    let metresPerMile = 1609.344
+    let value = miles ? meters / metresPerMile : meters / 1000.0
+    let digits = value >= 10.0 ? 1 : 2
+
+    let number = NumberFormatter()
+    number.locale = Locale.current
+    number.numberStyle = .decimal
+    number.minimumFractionDigits = digits
+    number.maximumFractionDigits = digits
+    number.usesGroupingSeparator = false
+    let numberStr = number.string(from: NSNumber(value: value)) ?? "\(value)"
+
+    let measurement = MeasurementFormatter()
+    measurement.locale = Locale.current
+    measurement.unitOptions = .providedUnit
+    let unitStr = measurement.string(from: miles ? UnitLength.miles : UnitLength.kilometers)
+    return "\(numberStr) \(unitStr)"
+}
+
+func formatPaceSecPerKm(_ secPerKm: Double?) -> String {
+    let miles = UserDefaults.standard.string(forKey: "preferred_unit") == "mi"
+    guard let p = secPerKm, p.isFinite, p > 0 else {
+        return miles ? "—:—/mi" : "—:—/km"
+    }
+    let metresPerMile = 1609.344
+    let perUnit = miles ? p * (metresPerMile / 1000.0) : p
+    let total = Int(perUnit.rounded())
+    let m = total / 60
+    let s = total % 60
+    return String(format: "%d:%02d%@", m, s, miles ? "/mi" : "/km")
+}
