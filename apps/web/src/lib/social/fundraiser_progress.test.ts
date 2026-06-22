@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fundraiserProgress } from './fundraiser_progress.ts';
+import { fundraiserProgress } from './fundraiser_progress';
 
 test('zero raised is starting, empty bar, full remaining', () => {
 	const p = fundraiserProgress(0, 100000);

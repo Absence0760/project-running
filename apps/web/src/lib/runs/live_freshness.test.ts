@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshnessFor, LIVE_STALE_AFTER_MS } from './live_freshness.ts';
+import { freshnessFor, LIVE_STALE_AFTER_MS } from './live_freshness';
 
 const NOW = 1_700_000_000_000;
 

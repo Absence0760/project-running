@@ -23,6 +23,7 @@
 	import { requestAiDescription } from '$lib/routes/route_describe_client';
 	import { env } from '$env/dynamic/public';
 	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -171,7 +172,7 @@
 		const parts = describeRoute(input);
 		// L1 baseline: render the localised templated sentence immediately.
 		genDescription = localisedTemplate(parts, input.name, {
-			t: m,
+			t: (key, params) => m(key as MessageKey, params),
 			formatDistance,
 		});
 		genSource = 'template';

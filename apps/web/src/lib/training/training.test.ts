@@ -613,10 +613,11 @@ test("isWorkoutSkipped is independent of completion flags", () => {
 	// The write layer keeps skip and done mutually exclusive, but the read
 	// helper only inspects skipped_at — a row that somehow carried both
 	// still reads as skipped here (defensive: the predicate is single-axis).
-	assert.equal(
-		isWorkoutSkipped({ skipped_at: "2026-06-13T10:00:00.000Z", completed_run_id: "run-1" }),
-		true
-	);
+	// Bind to a variable so the extra completed_run_id field is allowed past
+	// the object-literal excess-property check while the predicate stays
+	// typed to its single-axis { skipped_at } contract.
+	const bothFlags = { skipped_at: "2026-06-13T10:00:00.000Z", completed_run_id: "run-1" };
+	assert.equal(isWorkoutSkipped(bothFlags), true);
 });
 
 // ─────────────────────── masters age-band calibration (#30) ───────────────────────
