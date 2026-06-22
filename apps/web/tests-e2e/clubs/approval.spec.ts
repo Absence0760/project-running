@@ -48,7 +48,31 @@ test.describe('/clubs/[slug] — approval flow', () => {
 		}
 	});
 
-	test('admin rejects the pending request → row drops out of the panel without joining', async ({
+	test('cancelling the reject confirm keeps the pending request in the panel', async ({ page }) => {
+		await page.goto('/clubs/tempo-tuesday');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'UVA Tempo Tuesday' })
+		).toBeVisible({ timeout: 10_000 });
+
+		const pendingPanel = page.locator('section.admin-card', {
+			hasText: /Pending requests/
+		});
+		await expect(pendingPanel).toBeVisible({ timeout: 10_000 });
+		await expect(pendingPanel).toContainText('Pending requests (1)');
+
+		// Tapping Reject now opens a confirm dialog instead of firing
+		// the destructive RPC on a single click.
+		await pendingPanel.getByRole('button', { name: 'Reject' }).click();
+		const dialog = page.locator('.modal', { hasText: 'Reject join request' });
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(dialog).toHaveCount(0);
+		// Request is untouched.
+		await expect(pendingPanel).toContainText('Pending requests (1)');
+	});
+
+	test('confirming the reject dialog drops the row out of the panel without joining', async ({
 		page
 	}) => {
 		// rejectMember calls the same RPC as approve but with the
@@ -66,6 +90,11 @@ test.describe('/clubs/[slug] — approval flow', () => {
 		await expect(pendingPanel).toContainText('Pending requests (1)');
 
 		await pendingPanel.getByRole('button', { name: 'Reject' }).click();
+		// Confirm in the dialog (scoped — the row also has a Reject button).
+		const dialog = page.locator('.modal', { hasText: 'Reject join request' });
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+		await dialog.getByRole('button', { name: 'Reject' }).click();
+
 		// Panel disappears (no pending rows left).
 		await expect(pendingPanel).toHaveCount(0, { timeout: 10_000 });
 

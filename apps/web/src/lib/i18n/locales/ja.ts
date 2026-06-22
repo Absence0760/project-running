@@ -1594,6 +1594,8 @@ export const messages = {
 	"clubHome.requestedRelative": "リクエスト {time}",
 	"clubHome.approve": "承認",
 	"clubHome.reject": "却下",
+	"clubHome.rejectRequestTitle": "参加リクエストを却下",
+	"clubHome.rejectRequestMessage": "{name} さんの {club} への参加リクエストを却下しますか？",
 	"clubHome.tablistLabel": "クラブのセクション",
 	"clubHome.tabFeed": "フィード",
 	"clubHome.tabEvents": "イベント",

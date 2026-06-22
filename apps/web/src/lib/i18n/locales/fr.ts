@@ -1598,6 +1598,8 @@ export const messages = {
 	"clubHome.requestedRelative": "Demandé {time}",
 	"clubHome.approve": "Approuver",
 	"clubHome.reject": "Refuser",
+	"clubHome.rejectRequestTitle": "Refuser la demande d'adhésion",
+	"clubHome.rejectRequestMessage": "Refuser la demande d'adhésion de {name} au club {club} ?",
 	"clubHome.tablistLabel": "Sections du club",
 	"clubHome.tabFeed": "Fil",
 	"clubHome.tabEvents": "Événements",

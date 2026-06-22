@@ -1607,6 +1607,8 @@ export const en = {
 	"clubHome.requestedRelative": "Requested {time}",
 	"clubHome.approve": "Approve",
 	"clubHome.reject": "Reject",
+	"clubHome.rejectRequestTitle": "Reject join request",
+	"clubHome.rejectRequestMessage": "Reject {name}'s request to join {club}?",
 	"clubHome.tablistLabel": "Club sections",
 	"clubHome.tabFeed": "Feed",
 	"clubHome.tabEvents": "Events",
