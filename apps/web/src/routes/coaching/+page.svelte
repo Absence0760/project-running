@@ -217,6 +217,9 @@
 			} else if (a.kind === 'remove') {
 				await endCoachLink(a.link.id);
 				athletes = athletes.filter((x) => x.id !== a.link.id);
+				// The roster summary table is backed by separate state — drop the
+				// athlete there too, or its row (and athlete link) lingers.
+				roster = roster.filter((r) => r.athlete_id !== a.link.user_id);
 			} else {
 				await endCoachLink(a.link.id);
 				coaches = coaches.filter((c) => c.id !== a.link.id);
