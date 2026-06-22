@@ -341,7 +341,7 @@ See [decisions.md §36](../architecture/decisions.md#36-photos-on-runs-own-table
 
 | Scenario | Steps | Pass |
 |---|---|---|
-| Spectator (web) | Open `/live/event/[id]/[instance]` while a race is running | Realtime map updates every few seconds with each runner's position from `race_pings`. |
+| Spectator (web) | Open `/live/event/[id]/[instance]` while a race is running | Realtime map updates every few seconds with each runner's position from `race_pings`. Each on-course row shows an "Updated N ago" readout; a runner whose last ping ages past the stale window flips to a DELAYED badge + amber row (mirrors `/live/[id]` freshness — a lost-signal runner is never shown fresh). DNF/DNS result rows render a localized status label, not the raw DB enum. |
 | Race mode start | Race director on `/clubs/[slug]/events/[id]` → Start race | `race_sessions.status` transitions `armed → running`; pings start flowing from connected watches. |
 | Race mode finish | Director or auto-finalize | `running → finished`; `event_results` rows are created for finishers; `recompute_event_ranks` orders them. |
 | Cleanup | Wait or trigger | `cleanup-stale-live-run-pings` cron purges `race_pings` older than the configured window. |
