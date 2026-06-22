@@ -410,6 +410,28 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Future<void> _duplicateWeek(TrainingPlanRow plan, PlanWeekRow week) async {
     if (_bulkBusy) return;
     final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final dl10n = AppLocalizations.of(ctx);
+        return AlertDialog(
+          title: Text(dl10n.planDetailDuplicateConfirmTitle),
+          content: Text(
+              dl10n.planDetailDuplicateConfirmMessage(week.weekIndex + 1)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(dl10n.plansCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(dl10n.planDetailDuplicateConfirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
     setState(() => _bulkBusy = true);
     try {
       await widget.training
