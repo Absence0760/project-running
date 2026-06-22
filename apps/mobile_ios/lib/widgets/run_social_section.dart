@@ -358,16 +358,22 @@ class _KudosPill extends StatelessWidget {
     final accent = viewerHas
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
-    return TextButton.icon(
-      onPressed: disabled ? null : onTap,
-      icon: Icon(
-        viewerHas ? Icons.favorite : Icons.favorite_border,
-        size: 18,
-        color: accent,
-      ),
-      label: Text(
-        '$count',
-        style: theme.textTheme.bodyMedium?.copyWith(color: accent),
+    return Semantics(
+      button: true,
+      label: viewerHas
+          ? AppLocalizations.of(context).kudosRemoveLabel
+          : AppLocalizations.of(context).kudosGiveLabel,
+      child: TextButton.icon(
+        onPressed: disabled ? null : onTap,
+        icon: Icon(
+          viewerHas ? Icons.favorite : Icons.favorite_border,
+          size: 18,
+          color: accent,
+        ),
+        label: Text(
+          '$count',
+          style: theme.textTheme.bodyMedium?.copyWith(color: accent),
+        ),
       ),
     );
   }

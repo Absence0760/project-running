@@ -6913,6 +6913,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runSocialCancel => 'Cancelar';
 
   @override
+  String get kudosGiveLabel => 'Dar kudos';
+
+  @override
+  String get kudosRemoveLabel => 'Remover kudos';
+
+  @override
+  String get kudosViewCommentsLabel => 'Ver comentários';
+
+  @override
   String runSocialKudosError(String error) {
     return 'Não foi possível atualizar os kudos: $error';
   }
@@ -17696,6 +17705,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runSocialCancel => 'Cancelar';
+
+  @override
+  String get kudosGiveLabel => 'Dar kudos';
+
+  @override
+  String get kudosRemoveLabel => 'Remover kudos';
+
+  @override
+  String get kudosViewCommentsLabel => 'Ver comentários';
 
   @override
   String runSocialKudosError(String error) {

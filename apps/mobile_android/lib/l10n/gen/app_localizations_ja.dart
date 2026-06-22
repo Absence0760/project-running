@@ -6535,6 +6535,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runSocialCancel => 'キャンセル';
 
   @override
+  String get kudosGiveLabel => '称賛する';
+
+  @override
+  String get kudosRemoveLabel => '称賛を取り消す';
+
+  @override
+  String get kudosViewCommentsLabel => 'コメントを表示';
+
+  @override
   String runSocialKudosError(String error) {
     return '称賛を更新できませんでした: $error';
   }

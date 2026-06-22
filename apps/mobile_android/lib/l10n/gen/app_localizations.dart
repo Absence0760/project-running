@@ -11394,6 +11394,24 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get runSocialCancel;
 
+  /// Accessibility label for the kudos button when the viewer has not given kudos
+  ///
+  /// In en, this message translates to:
+  /// **'Give kudos'**
+  String get kudosGiveLabel;
+
+  /// Accessibility label for the kudos button when the viewer has already given kudos
+  ///
+  /// In en, this message translates to:
+  /// **'Remove kudos'**
+  String get kudosRemoveLabel;
+
+  /// Accessibility label for the comment-count button on a feed card
+  ///
+  /// In en, this message translates to:
+  /// **'View comments'**
+  String get kudosViewCommentsLabel;
+
   /// Banner when toggling kudos fails
   ///
   /// In en, this message translates to:

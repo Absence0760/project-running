@@ -6916,6 +6916,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runSocialCancel => 'Cancelar';
 
   @override
+  String get kudosGiveLabel => 'Dar kudos';
+
+  @override
+  String get kudosRemoveLabel => 'Quitar kudos';
+
+  @override
+  String get kudosViewCommentsLabel => 'Ver comentarios';
+
+  @override
   String runSocialKudosError(String error) {
     return 'No se pudieron actualizar los kudos: $error';
   }

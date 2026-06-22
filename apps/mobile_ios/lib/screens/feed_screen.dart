@@ -696,32 +696,42 @@ class _EngagementFooterState extends State<_EngagementFooter> {
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
       child: Row(
         children: [
-          TextButton.icon(
-            onPressed: _busy ? null : _toggle,
-            icon: Icon(
-              _eng.viewerHasKudos
-                  ? Icons.favorite
-                  : Icons.favorite_border,
-              color: _eng.viewerHasKudos
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant,
-              size: 18,
-            ),
-            label: Text(
-              '${_eng.kudosCount}',
-              style: theme.textTheme.bodyMedium,
+          Semantics(
+            button: true,
+            label: _eng.viewerHasKudos
+                ? AppLocalizations.of(context).kudosRemoveLabel
+                : AppLocalizations.of(context).kudosGiveLabel,
+            child: TextButton.icon(
+              onPressed: _busy ? null : _toggle,
+              icon: Icon(
+                _eng.viewerHasKudos
+                    ? Icons.favorite
+                    : Icons.favorite_border,
+                color: _eng.viewerHasKudos
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+                size: 18,
+              ),
+              label: Text(
+                '${_eng.kudosCount}',
+                style: theme.textTheme.bodyMedium,
+              ),
             ),
           ),
-          TextButton.icon(
-            onPressed: widget.onCommentTap,
-            icon: Icon(
-              Icons.chat_bubble_outline,
-              size: 18,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            label: Text(
-              '${_eng.commentCount}',
-              style: theme.textTheme.bodyMedium,
+          Semantics(
+            button: true,
+            label: AppLocalizations.of(context).kudosViewCommentsLabel,
+            child: TextButton.icon(
+              onPressed: widget.onCommentTap,
+              icon: Icon(
+                Icons.chat_bubble_outline,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              label: Text(
+                '${_eng.commentCount}',
+                style: theme.textTheme.bodyMedium,
+              ),
             ),
           ),
         ],
