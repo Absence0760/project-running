@@ -12,10 +12,16 @@
 		fetchGearWearLogs,
 		addGearWearLog,
 		deleteGearWearLog,
+		fetchMyGearRotations,
+		createGearRotation,
+		renameGearRotation,
+		deleteGearRotation,
+		setGearRotationMembers,
 		type GearKind,
 		type GearWithDistance,
 		type GearWearArea,
 		type GearWearLog,
+		type GearRotationWithMembers,
 	} from '$lib/core/data';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { gearWear } from '$lib/gear/gear_wear';
