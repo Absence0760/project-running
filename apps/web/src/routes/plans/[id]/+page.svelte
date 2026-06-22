@@ -34,6 +34,7 @@
 		import.meta.env.PUBLIC_ADAPTIVE_FITNESS_GATE === '1' ||
 		import.meta.env.PUBLIC_ADAPTIVE_FITNESS_GATE === 'true';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import CurrentWeekStrip from '$lib/components/CurrentWeekStrip.svelte';
@@ -186,6 +187,23 @@
 	// ─── Bulk editor ops (owner-only) ───
 	let shiftDays = $state(7);
 	let bulkBusy = $state(false);
+	// These three ops rewrite or re-date a chunk of the plan and can't be
+	// cleanly undone, so each routes through a ConfirmDialog before running.
+	let bulkConfirm = $state<
+		| { kind: 'shift' }
+		| { kind: 'recovery'; week: PlanWeek }
+		| { kind: 'duplicate'; week: PlanWeek }
+		| null
+	>(null);
+
+	function runBulkConfirm(): void {
+		const c = bulkConfirm;
+		bulkConfirm = null;
+		if (!c) return;
+		if (c.kind === 'shift') void shiftPlan();
+		else if (c.kind === 'recovery') void markWeekRecovery(c.week);
+		else void duplicateWeek(c.week);
+	}
 
 	/// Move every workout + the plan's start/end by ±N days (race moved,
 	/// runner started a week late, …). Orchestrated client-side: one
@@ -1118,7 +1136,7 @@
 					<button
 						type="button"
 						class="btn btn-outline btn-sm"
-						onclick={shiftPlan}
+						onclick={() => (bulkConfirm = { kind: 'shift' })}
 						disabled={bulkBusy || !shiftDays}
 					>
 						{m('planDetail.shiftApply')}
@@ -1203,7 +1221,7 @@
 								<button
 									type="button"
 									class="week-recovery-btn"
-									onclick={() => markWeekRecovery(w)}
+									onclick={() => (bulkConfirm = { kind: 'recovery', week: w })}
 									disabled={bulkBusy}
 									title={m('planDetail.markRecovery')}
 								>
@@ -1215,7 +1233,7 @@
 								<button
 									type="button"
 									class="week-recovery-btn"
-									onclick={() => duplicateWeek(w)}
+									onclick={() => (bulkConfirm = { kind: 'duplicate', week: w })}
 									disabled={bulkBusy}
 									title={m('planDetail.duplicateWeek')}
 								>
@@ -1297,6 +1315,28 @@
 		}}
 	/>
 {/if}
+
+<ConfirmDialog
+	open={bulkConfirm !== null}
+	danger
+	data-testid="bulk-confirm-dialog"
+	title={bulkConfirm?.kind === 'shift'
+		? m('planDetail.shiftConfirmTitle')
+		: bulkConfirm?.kind === 'recovery'
+			? m('planDetail.recoveryConfirmTitle')
+			: m('planDetail.duplicateConfirmTitle')}
+	message={bulkConfirm?.kind === 'shift'
+		? m('planDetail.shiftConfirmMessage', { n: Math.abs(shiftDays) })
+		: bulkConfirm?.kind === 'recovery'
+			? m('planDetail.recoveryConfirmMessage', { n: bulkConfirm.week.week_index + 1 })
+			: bulkConfirm?.kind === 'duplicate'
+				? m('planDetail.duplicateConfirmMessage', { n: bulkConfirm.week.week_index + 1 })
+				: ''}
+	confirmLabel={m('planDetail.bulkConfirm')}
+	cancelLabel={m('planDetail.replanCancel')}
+	onconfirm={runBulkConfirm}
+	oncancel={() => (bulkConfirm = null)}
+/>
 
 <style>
 	.page {
