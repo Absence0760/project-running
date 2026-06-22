@@ -81,7 +81,7 @@ test.describe('Workout-runner surfaces (web)', () => {
 			// plan_workouts_one_per_day constraint. Repurpose today's existing
 			// workout into an Easy in place and restore it after.
 			const today = new Date().toISOString().slice(0, 10);
-			const { workoutId: plantedId, undo } = await repurposeTodayWorkout({
+			const { undo } = await repurposeTodayWorkout({
 				kind: 'easy',
 				target_distance_m: 6000,
 				target_pace_sec_per_km: 330,

@@ -121,8 +121,12 @@ const front = http.createServer((req, res) => {
 
 await new Promise((resolve) => front.listen(PORT, '0.0.0.0', resolve));
 
+// Strip CR/LF so an env-supplied sub/email can't forge extra log lines.
+const safeLog = (v) => String(v).replace(/[\r\n]/g, '');
 // eslint-disable-next-line no-console
-console.log(`mock-oidc: listening on 0.0.0.0:${PORT} (sub=${identity.sub} email=${identity.email})`);
+console.log(
+	`mock-oidc: listening on 0.0.0.0:${PORT} (sub=${safeLog(identity.sub)} email=${safeLog(identity.email)})`
+);
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
 	process.on(sig, () => {

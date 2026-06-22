@@ -66,7 +66,6 @@ test.describe('plan progress journey', () => {
 	const seededRunIds: string[] = [];
 
 	test.afterEach(async () => {
-		const admin = getAdminClient();
 		for (const id of seededRunIds.splice(0)) {
 			await deleteRun(id).catch(() => {});
 		}

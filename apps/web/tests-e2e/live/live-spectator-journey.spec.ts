@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { deleteRun, insertLivePings, insertRun } from '../fixtures/simulate';
-import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { USER_A } from '../fixtures/users';
 
 /**
  * Live-tracking journey — the full life of ONE live broadcast threaded

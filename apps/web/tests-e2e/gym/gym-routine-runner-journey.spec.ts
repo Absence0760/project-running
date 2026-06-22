@@ -54,8 +54,6 @@ test.describe('gym routine runner journey — author → guided run → adherenc
 		// it but carries no scheme (so only the main lift gets a next-target chip).
 		const mainLift = `E2E Squat ${stamp}`;
 		const accessory = `E2E Lunge ${stamp}`;
-		const mainKey = mainLift.trim().toLowerCase();
-		const accessoryKey = accessory.trim().toLowerCase();
 
 		let routineId: string | null = null;
 		const workoutIds: string[] = [];

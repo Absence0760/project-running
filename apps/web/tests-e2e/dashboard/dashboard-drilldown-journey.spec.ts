@@ -122,7 +122,6 @@ test.describe('dashboard drilldown journey', () => {
 	const OLDER_RUN = { distance_m: 14_000, duration_s: 5_040 }; // ~40 d ago, longest
 
 	const weekDistance = WEEK_RUNS.reduce((s, r) => s + r.distance_m, 0); // 25_000
-	const weekDuration = WEEK_RUNS.reduce((s, r) => s + r.duration_s, 0); // 8_100
 	const weekCount = WEEK_RUNS.length; // 3
 	const allCount = WEEK_RUNS.length + 1; // 4
 	const longestAllMetres = OLDER_RUN.distance_m; // 14_000
