@@ -2064,6 +2064,8 @@ export const messages = {
 	"liveEvent.finished": "完走",
 	"liveEvent.pending": "保留中",
 	"liveEvent.didNotFinish": "未完走",
+	"liveEvent.statusDnf": "途中棄権",
+	"liveEvent.statusDns": "不出走",
 	"liveEvent.statusPreRaceLabel": "レース前",
 	"liveEvent.statusPreRaceSub": "主催者はまだレースタイマーを準備していません。",
 	"liveEvent.statusArmedLabel": "準備完了",

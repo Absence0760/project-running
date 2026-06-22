@@ -155,6 +155,122 @@ test.describe('/live/event/[id]/[instance]', () => {
 			await deleteRaceState(eventId, startsAt);
 		}
 	});
+
+	// A runner whose last ping aged past the stale window (signal loss in a
+	// backcountry race) must read DELAYED + "Updated N min ago", never a
+	// fresh-looking row — the staleness-honesty contract mirrored from
+	// /live/[id].
+	test('a runner whose last ping is old is flagged DELAYED on the leaderboard', async ({
+		page
+	}) => {
+		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+		const eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title: `e2e live-event stale ${Date.now()}`,
+			starts_at: startsAt
+		});
+
+		try {
+			await insertRaceSession({
+				event_id: eventId,
+				instance_start: startsAt,
+				status: 'running',
+				started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+				started_by: USER_A.id
+			});
+
+			const staleAt = new Date(Date.now() - 12 * 60 * 1000).toISOString();
+			const freshAt = new Date(Date.now() - 5 * 1000).toISOString();
+			await insertRacePings({
+				event_id: eventId,
+				instance_start: startsAt,
+				runners: [
+					{
+						user_id: USER_C_PRO.id,
+						points: [
+							{
+								lat: OUT_OF_ZONE_LAT + 0.001,
+								lng: OUT_OF_ZONE_LNG + 0.001,
+								distance_m: 5_200,
+								elapsed_s: 580,
+								at: freshAt
+							}
+						]
+					},
+					{
+						user_id: USER_B.id,
+						points: [
+							{
+								lat: OUT_OF_ZONE_LAT,
+								lng: OUT_OF_ZONE_LNG,
+								distance_m: 3_500,
+								elapsed_s: 600,
+								at: staleAt
+							}
+						]
+					}
+				]
+			});
+
+			await page.goto(`/live/event/${eventId}/${encodeURIComponent(startsAt)}`);
+
+			const runners = page.locator('.leaderboard .runner');
+			await expect(runners).toHaveCount(2, { timeout: 10_000 });
+
+			// The leader's ping is fresh -> no stale class, no DELAYED badge.
+			await expect(runners.nth(0)).not.toHaveClass(/stale/);
+			await expect(runners.nth(0).locator('.stale-badge')).toHaveCount(0);
+
+			// The back-of-pack runner's ping is 12 min old -> stale row +
+			// DELAYED badge + an honest "Updated N min ago" readout.
+			await expect(runners.nth(1)).toHaveClass(/stale/);
+			await expect(runners.nth(1).locator('.stale-badge')).toContainText('DELAYED');
+			await expect(runners.nth(1).locator('.freshness')).toContainText(/Updated \d+ min ago/);
+		} finally {
+			await deleteRaceState(eventId, startsAt);
+		}
+	});
+
+	// The per-row DNF/DNS status renders a localized label, not the raw DB
+	// enum uppercased.
+	test('a DNF result row shows a localized status label', async ({ page }) => {
+		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+		const eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title: `e2e live-event dnf ${Date.now()}`,
+			starts_at: startsAt
+		});
+
+		try {
+			await insertRaceSession({
+				event_id: eventId,
+				instance_start: startsAt,
+				status: 'finished',
+				started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+				finished_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+				started_by: USER_A.id
+			});
+			await getAdminClient().from('event_results').insert({
+				id: crypto.randomUUID(),
+				event_id: eventId,
+				instance_start: startsAt,
+				user_id: USER_A.id,
+				duration_s: 0,
+				distance_m: 0,
+				finisher_status: 'dnf'
+			});
+
+			await page.goto(`/live/event/${eventId}/${encodeURIComponent(startsAt)}`);
+
+			const dnfRow = page.locator('.results .runner.dnf-row');
+			await expect(dnfRow).toHaveCount(1, { timeout: 10_000 });
+			await expect(dnfRow.locator('.dnf')).toHaveText('DNF');
+		} finally {
+			await deleteRaceState(eventId, startsAt);
+		}
+	});
 });
 
 // CRITICAL privacy: the event live-leaderboard is anon-accessible and the

@@ -24,6 +24,7 @@
 	import { formatDistance, fmtPace } from '$lib/format/units.svelte';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
+	import { freshnessFor, type Freshness } from '$lib/runs/live_freshness';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let eventId = $derived($page.params.id as string);
@@ -281,7 +282,11 @@
 
 	let tickTimer: ReturnType<typeof setInterval> | null = null;
 	$effect(() => {
-		if (race?.status === 'running') {
+		// Tick while the race is running OR while any runner is still on
+		// course, so each row's freshness ("updated N ago" / stale badge)
+		// keeps recomputing — a runner who lost signal must transition to
+		// stale even if the organiser hasn't formally flipped the race state.
+		if (race?.status === 'running' || pings.length > 0) {
 			tickTimer = setInterval(() => (nowTick = Date.now()), 1000);
 			return () => {
 				if (tickTimer) clearInterval(tickTimer);
@@ -312,6 +317,36 @@
 	function paceSecPerKm(p: RacePingRow): number | null {
 		if (!p.distance_m || p.distance_m < 50 || !p.elapsed_s || p.elapsed_s < 10) return null;
 		return p.elapsed_s / (p.distance_m / 1000);
+	}
+
+	function freshnessFor_(p: RacePingRow): Freshness {
+		return freshnessFor(new Date(p.at).getTime(), nowTick);
+	}
+
+	function freshnessText(f: Freshness): string {
+		switch (f.bucket) {
+			case 'now':
+				return m('live.updatedNow');
+			case 'seconds':
+				return m('live.updatedSeconds', { n: f.value });
+			case 'minutes':
+				return m('live.updatedMinutes', { n: f.value });
+			case 'hours':
+				return m('live.updatedHours', { n: f.value });
+			case 'days':
+				return m('live.updatedDays', { n: f.value });
+		}
+	}
+
+	function statusLabel(status: string): string {
+		switch (status) {
+			case 'dnf':
+				return m('liveEvent.statusDnf');
+			case 'dns':
+				return m('liveEvent.statusDns');
+			default:
+				return status.toUpperCase();
+		}
 	}
 
 
@@ -541,12 +576,19 @@
 				{:else}
 					<ol class="runners">
 						{#each pings as p, i (p.user_id)}
-							<li class="runner">
+							{@const fresh = freshnessFor_(p)}
+							<li class="runner" class:stale={fresh.stale}>
 								<span class="pos">{i + 1}</span>
 								<span class="avatar" style="background: {tintFor(p.user_id)}; color: {colorFor(p.user_id)};">
 									{initialsFor(p.user_id)}
 								</span>
-								<span class="name">{nameFor(p.user_id)}</span>
+								<span class="name">
+									{nameFor(p.user_id)}
+									<span class="freshness" class:stale={fresh.stale}>
+										{#if fresh.stale}<span class="stale-badge">{m('live.badgeStale')}</span>{/if}
+										{freshnessText(fresh)}
+									</span>
+								</span>
 								<span class="dist">{formatDistance(p.distance_m ?? 0)}</span>
 								<span class="pace">{fmtPace(paceSecPerKm(p))}</span>
 								<span class="elapsed">{formatDuration(p.elapsed_s ?? 0)}</span>
@@ -628,7 +670,7 @@
 									{initialsFor(keyOf(r))}
 								</span>
 								<span class="name">{nameFor(keyOf(r))}</span>
-								<span class="dnf">{r.finisher_status.toUpperCase()}</span>
+								<span class="dnf">{statusLabel(r.finisher_status)}</span>
 							</li>
 						{/each}
 					</ol>
@@ -890,9 +932,30 @@
 	}
 	.name {
 		font-weight: 600;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.freshness {
+		display: block;
+		font-weight: 500;
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.freshness.stale {
+		color: var(--color-warning);
+	}
+	.stale-badge {
+		font-weight: 800;
+		letter-spacing: 0.05em;
+		margin-right: 0.3rem;
+	}
+	.runner.stale {
+		border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+		background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-secondary));
 	}
 	.dist,
 	.pace,
