@@ -26,6 +26,7 @@
 	let wid = $derived($page.params.wid as string);
 	let workout = $state<PlanWorkout | null>(null);
 	let loading = $state(true);
+	let loadError = $state(false);
 	let showUnlinkConfirm = $state(false);
 
 	let showRelink = $state(false);
@@ -49,7 +50,10 @@
 
 	async function load() {
 		loading = true;
-		workout = await fetchWorkout(wid);
+		loadError = false;
+		const res = await fetchWorkout(wid);
+		workout = res.workout;
+		loadError = res.error !== null;
 		loading = false;
 	}
 
@@ -209,6 +213,23 @@
 		</div>
 	</div>
 	<p class="sr-only" role="status">{t('workoutDetail.loadingWorkoutEllipsis')}</p>
+{:else if loadError}
+	<div class="page">
+		<a class="back" href="/plans/{planId}">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{t('workoutDetail.backToPlan')}
+		</a>
+		<div class="empty-card">
+			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<h2>{t('workoutDetail.loadFailedTitle')}</h2>
+			<p class="empty-text">
+				{t('workoutDetail.loadFailedText')}
+			</p>
+			<div class="empty-actions">
+				<button type="button" class="btn btn-primary" onclick={load}>{t('workoutDetail.retry')}</button>
+			</div>
+		</div>
+	</div>
 {:else if !workout}
 	<div class="page">
 		<a class="back" href="/plans/{planId}">
