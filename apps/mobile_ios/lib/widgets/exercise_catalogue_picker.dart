@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'gym_compose_sheet.dart';
+import 'top_banner.dart';
 
 /// Browse / search / filter the exercise catalogue (migration 20270222_001,
 /// decisions §176) and pick an entry. Flutter twin of web
@@ -130,9 +131,7 @@ class _ExerciseCataloguePickerScreenState
     if (!mounted) return;
     setState(() => _creating = false);
     if (made == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.gymCatalogueCreateFailed)),
-      );
+      showTopBanner(context, l10n.gymCatalogueCreateFailed);
       return;
     }
     final entry = (
