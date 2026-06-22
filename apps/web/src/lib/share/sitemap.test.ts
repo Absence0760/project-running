@@ -251,12 +251,12 @@ test('learnEntries — emits the hub, each category, and each guide', () => {
 		],
 		['getting-started', 'gear'],
 	);
-	const locs = entries.map((e) => e.loc);
-	assert.ok(locs.includes('https://threkir.com/learn'));
-	assert.ok(locs.includes('https://threkir.com/learn/category/getting-started'));
-	assert.ok(locs.includes('https://threkir.com/learn/category/gear'));
-	assert.ok(locs.includes('https://threkir.com/learn/road-running-101'));
-	assert.ok(locs.includes('https://threkir.com/learn/couch-to-5k'));
+	const locs = new Set(entries.map((e) => e.loc));
+	assert.ok(locs.has('https://threkir.com/learn'));
+	assert.ok(locs.has('https://threkir.com/learn/category/getting-started'));
+	assert.ok(locs.has('https://threkir.com/learn/category/gear'));
+	assert.ok(locs.has('https://threkir.com/learn/road-running-101'));
+	assert.ok(locs.has('https://threkir.com/learn/couch-to-5k'));
 });
 
 test('learnEntries — hub/category/guide carry the documented priorities + lastmod', () => {
