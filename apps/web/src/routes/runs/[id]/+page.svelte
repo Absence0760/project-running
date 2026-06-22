@@ -174,7 +174,7 @@
 		];
 		if (typeof planWorkoutId === 'string') {
 			try {
-				linkedWorkout = await fetchWorkout(planWorkoutId);
+				linkedWorkout = (await fetchWorkout(planWorkoutId)).workout;
 			} catch (_) {
 				/* silent — review section just hides the workout-name row */
 			}

@@ -7850,6 +7850,24 @@ abstract class AppLocalizations {
   /// **'Week {n} duplicated'**
   String planDetailDuplicateWeekDone(int n);
 
+  /// Plan-detail duplicate-week confirm dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate this week?'**
+  String get planDetailDuplicateConfirmTitle;
+
+  /// Plan-detail duplicate-week confirm dialog body
+  ///
+  /// In en, this message translates to:
+  /// **'This inserts a copy of week {n} and pushes every later week and your race date back by 7 days.'**
+  String planDetailDuplicateConfirmMessage(int n);
+
+  /// Plan-detail duplicate-week confirm button
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get planDetailDuplicateConfirm;
+
   /// Plan-detail adherence/replan/duplicate
   ///
   /// In en, this message translates to:

@@ -4687,6 +4687,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planDetailDuplicateConfirmTitle => 'Duplicate this week?';
+
+  @override
+  String planDetailDuplicateConfirmMessage(int n) {
+    return 'This inserts a copy of week $n and pushes every later week and your race date back by 7 days.';
+  }
+
+  @override
+  String get planDetailDuplicateConfirm => 'Duplicate';
+
+  @override
   String planDetailBulkFailed(String error) {
     return 'Couldn\'t update the plan: $error';
   }

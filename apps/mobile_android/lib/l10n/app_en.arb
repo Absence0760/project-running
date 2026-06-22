@@ -6392,6 +6392,23 @@
       }
     }
   },
+  "planDetailDuplicateConfirmTitle": "Duplicate this week?",
+  "@planDetailDuplicateConfirmTitle": {
+    "description": "Plan-detail duplicate-week confirm dialog title"
+  },
+  "planDetailDuplicateConfirmMessage": "This inserts a copy of week {n} and pushes every later week and your race date back by 7 days.",
+  "@planDetailDuplicateConfirmMessage": {
+    "description": "Plan-detail duplicate-week confirm dialog body",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "planDetailDuplicateConfirm": "Duplicate",
+  "@planDetailDuplicateConfirm": {
+    "description": "Plan-detail duplicate-week confirm button"
+  },
   "planDetailBulkFailed": "Couldn't update the plan: {error}",
   "@planDetailBulkFailed": {
     "description": "Plan-detail adherence/replan/duplicate",

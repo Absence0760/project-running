@@ -4730,6 +4730,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planDetailDuplicateConfirmTitle => 'Duplicar esta semana?';
+
+  @override
+  String planDetailDuplicateConfirmMessage(int n) {
+    return 'Isso insere uma cópia da semana $n e empurra cada semana seguinte e a data da sua prova em 7 dias.';
+  }
+
+  @override
+  String get planDetailDuplicateConfirm => 'Duplicar';
+
+  @override
   String planDetailBulkFailed(String error) {
     return 'Não foi possível atualizar o plano: $error';
   }
@@ -15522,6 +15533,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planDetailDuplicateWeekDone(int n) {
     return 'Semana $n duplicada';
   }
+
+  @override
+  String get planDetailDuplicateConfirmTitle => 'Duplicar esta semana?';
+
+  @override
+  String planDetailDuplicateConfirmMessage(int n) {
+    return 'Isso insere uma cópia da semana $n e empurra cada semana seguinte e a data da sua prova em 7 dias.';
+  }
+
+  @override
+  String get planDetailDuplicateConfirm => 'Duplicar';
 
   @override
   String planDetailBulkFailed(String error) {

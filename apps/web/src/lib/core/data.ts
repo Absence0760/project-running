@@ -4003,13 +4003,19 @@ export async function fetchPlan(id: string): Promise<{
 	};
 }
 
-export async function fetchWorkout(id: string): Promise<PlanWorkout | null> {
-	const { data } = await supabase
+export async function fetchWorkout(
+	id: string
+): Promise<{ workout: PlanWorkout | null; error: string | null }> {
+	// Thread the query error so the detail page can show a "couldn't load —
+	// retry" state instead of the not-found page (a transient error otherwise
+	// reads as a deleted workout when the row just comes back null), mirroring
+	// fetchPlan above.
+	const { data, error } = await supabase
 		.from('plan_workouts')
 		.select('*')
 		.eq('id', id)
 		.maybeSingle();
-	return (data as PlanWorkout | null) ?? null;
+	return { workout: (data as PlanWorkout | null) ?? null, error: error?.message ?? null };
 }
 
 export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | null> {

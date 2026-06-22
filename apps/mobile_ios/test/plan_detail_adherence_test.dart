@@ -228,7 +228,8 @@ void main() {
   });
 
   group('PlanDetailScreen — duplicate week', () {
-    testWidgets('owner duplicate action calls the RPC', (tester) async {
+    testWidgets('owner duplicate action confirms then calls the RPC',
+        (tester) async {
       final start = _mondayThisWeek();
       final training = _FakeTraining(
         _plan(start),
@@ -243,12 +244,43 @@ void main() {
           scrollable: find.byType(Scrollable).first);
       expect(dup, findsOneWidget);
       await tester.tap(dup);
+      await tester.pumpAndSettle();
+      // The dialog gates the destructive RPC — nothing fired yet.
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(training.duplicated, isEmpty);
+
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Duplicate')));
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       });
       await tester.pump();
       expect(training.duplicated, contains('plan-1:0'));
       await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('cancelling the duplicate confirm is a no-op', (tester) async {
+      final start = _mondayThisWeek();
+      final training = _FakeTraining(
+        _plan(start),
+        [_week('w0', 0, 'build', 40000)],
+        [_wo('wo0', 'w0', start.add(const Duration(days: 1)), 'easy', 8000)],
+      );
+      final social = _FakeSocial(const []);
+      await _pump(tester, training: training, social: social);
+
+      final dup = find.byTooltip('Duplicate week');
+      await tester.scrollUntilVisible(dup, 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.tap(dup);
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextButton, 'Cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(training.duplicated, isEmpty);
     });
 
     testWidgets('non-owner sees no duplicate action', (tester) async {

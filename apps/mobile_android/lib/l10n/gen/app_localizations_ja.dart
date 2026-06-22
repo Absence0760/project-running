@@ -4453,6 +4453,17 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get planDetailDuplicateConfirmTitle => 'この週を複製しますか？';
+
+  @override
+  String planDetailDuplicateConfirmMessage(int n) {
+    return '第$n週のコピーを挿入し、以降のすべての週とレース日を7日後ろにずらします。';
+  }
+
+  @override
+  String get planDetailDuplicateConfirm => '複製';
+
+  @override
   String planDetailBulkFailed(String error) {
     return 'プランを更新できませんでした: $error';
   }
