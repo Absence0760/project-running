@@ -596,6 +596,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String bodyMetricsPrefSaveFailed(String error) {
+    return 'Could not save: $error';
+  }
+
+  @override
   String get safetyTitle => 'Safety contacts';
 
   @override

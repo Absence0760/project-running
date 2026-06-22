@@ -161,6 +161,7 @@
   "bodyMetricsWithdrawConfirm": "Retirar y borrar",
   "bodyMetricsSaved": "Guardado",
   "bodyMetricsSaveFailed": "Error al guardar: {error}",
+  "bodyMetricsPrefSaveFailed": "No se pudo guardar: {error}",
   "safetyTitle": "Contactos de seguridad",
   "safetyTileSubtitle": "Avisa por correo a un contacto de confianza al terminar una carrera",
   "safetyIntro": "Un contacto de seguridad recibe un correo cuando terminas una carrera —incluso una privada— para que alguien de confianza sepa que volviste a salvo.",

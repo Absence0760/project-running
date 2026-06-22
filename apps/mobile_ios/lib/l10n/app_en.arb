@@ -833,6 +833,15 @@
       }
     }
   },
+  "bodyMetricsPrefSaveFailed": "Could not save: {error}",
+  "@bodyMetricsPrefSaveFailed": {
+    "description": "Error toast when saving the activity-level / goal nutrition pref fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "safetyTitle": "Safety contacts",
   "@safetyTitle": {
     "description": "Title of the safety-contacts settings screen"

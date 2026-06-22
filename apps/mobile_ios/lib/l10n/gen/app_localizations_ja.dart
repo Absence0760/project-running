@@ -582,6 +582,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String bodyMetricsPrefSaveFailed(String error) {
+    return '保存できませんでした: $error';
+  }
+
+  @override
   String get safetyTitle => '緊急連絡先';
 
   @override

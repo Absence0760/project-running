@@ -161,6 +161,7 @@
   "bodyMetricsWithdrawConfirm": "撤回して削除",
   "bodyMetricsSaved": "保存しました",
   "bodyMetricsSaveFailed": "保存に失敗しました: {error}",
+  "bodyMetricsPrefSaveFailed": "保存できませんでした: {error}",
   "safetyTitle": "緊急連絡先",
   "safetyTileSubtitle": "ランを終えたら信頼できる連絡先にメール",
   "safetyIntro": "緊急連絡先には、あなたがランを終えたとき（非公開のランでも）メールが届きます。信頼できる人が、あなたが無事に戻ったことを知れます。",
