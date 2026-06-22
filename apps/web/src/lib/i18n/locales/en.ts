@@ -3695,6 +3695,7 @@ export const en = {
 	"gym.detail.lastTime": "Last time {date}",
 	"gym.empty.title": "No gym workouts yet",
 	"gym.empty.body": "Log a lift to track it here and feed your training load.",
+	"gym.loadError": "Couldn't load your workouts.",
 	"gym.created": "Workout logged",
 	"gym.updated": "Workout updated",
 	"gym.deleted": "Workout deleted",

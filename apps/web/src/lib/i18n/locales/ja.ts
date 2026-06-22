@@ -3679,6 +3679,7 @@ export const messages = {
 	"gym.detail.lastTime": "前回 {date}",
 	"gym.empty.title": "まだジムのワークアウトがありません",
 	"gym.empty.body": "トレーニングを記録すると、ここに表示され、トレーニング負荷に反映されます。",
+	"gym.loadError": "トレーニングを読み込めませんでした。",
 	"gym.created": "ワークアウトを記録しました",
 	"gym.updated": "ワークアウトを更新しました",
 	"gym.deleted": "ワークアウトを削除しました",

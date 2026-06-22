@@ -7503,21 +7503,29 @@ export interface GymSetWithDate {
 	duration_s: number | null;
 }
 
-/// Recent gym workouts for the signed-in user, newest first.
-export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
+/// Recent gym workouts for the signed-in user, newest first. Surfaces the
+/// error so the /gym list can show a "couldn't load — retry" state instead of
+/// the empty "log your first workout" card (a real failure otherwise reads as a
+/// brand-new lifter whose history vanished). Mirrors the
+/// `fetchExerciseRecordsWithError` convention.
+export async function fetchGymWorkoutsWithError(
+	limit = 50,
+): Promise<{ workouts: GymWorkout[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { workouts: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.gym_workouts)
 		.select('*')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
 		.limit(limit);
-	if (error) {
-		console.error('fetchGymWorkouts failed', error);
-		return [];
-	}
-	return (data ?? []) as GymWorkout[];
+	if (error) return { workouts: [], error: error.message };
+	return { workouts: (data ?? []) as GymWorkout[], error: null };
+}
+
+/// Recent gym workouts for the signed-in user, newest first.
+export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
+	return (await fetchGymWorkoutsWithError(limit)).workouts;
 }
 
 /// A single workout plus its sets in set_index order. Returns null when the
@@ -7553,11 +7561,11 @@ export async function fetchGymWorkoutWithSets(
 /// badges on /gym + /gym/[id]) pass nothing and read the full set; all-time
 /// per-exercise bests go through fetchExerciseRecords (server-aggregated)
 /// instead. perf-hunt follow-up 2026-06-10.
-export async function fetchGymSetHistory(opts?: {
+export async function fetchGymSetHistoryWithError(opts?: {
 	sinceDays?: number;
-}): Promise<GymSetWithDate[]> {
+}): Promise<{ sets: GymSetWithDate[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { sets: [], error: null };
 	let query = supabase
 		.from(TABLES.gym_sets)
 		.select('workout_id, exercise_name, reps, weight_kg, rpe, duration_s, gym_workouts!inner(started_at, user_id)')
@@ -7567,11 +7575,8 @@ export async function fetchGymSetHistory(opts?: {
 		query = query.gte('gym_workouts.started_at', since);
 	}
 	const { data, error } = await query;
-	if (error) {
-		console.error('fetchGymSetHistory failed', error);
-		return [];
-	}
-	return ((data ?? []) as unknown[]).map((row) => {
+	if (error) return { sets: [], error: error.message };
+	const sets = ((data ?? []) as unknown[]).map((row) => {
 		const r = row as {
 			workout_id: string;
 			exercise_name: string;
@@ -7592,6 +7597,13 @@ export async function fetchGymSetHistory(opts?: {
 			duration_s: r.duration_s,
 		};
 	});
+	return { sets, error: null };
+}
+
+export async function fetchGymSetHistory(opts?: {
+	sinceDays?: number;
+}): Promise<GymSetWithDate[]> {
+	return (await fetchGymSetHistoryWithError(opts)).sets;
 }
 
 /// One per-exercise all-time strength record (heaviest set, best volume, best

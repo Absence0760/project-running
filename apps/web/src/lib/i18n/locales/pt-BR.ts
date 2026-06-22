@@ -3682,6 +3682,7 @@ export const messages = {
 	"gym.detail.lastTime": "Última vez {date}",
 	"gym.empty.title": "Nenhum treino de academia ainda",
 	"gym.empty.body": "Registre um treino para acompanhá-lo aqui e alimentar sua carga de treino.",
+	"gym.loadError": "Não foi possível carregar seus treinos.",
 	"gym.created": "Treino registrado",
 	"gym.updated": "Treino atualizado",
 	"gym.deleted": "Treino excluído",

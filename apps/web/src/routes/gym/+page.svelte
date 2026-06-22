@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
-		fetchGymWorkouts,
-		fetchGymSetHistory,
+		fetchGymWorkoutsWithError,
+		fetchGymSetHistoryWithError,
 		fetchSessionPlans,
 		fetchExerciseCatalogue,
 		type GymWorkout,
@@ -25,17 +25,24 @@
 	// workouts), so this self-hides on its own data presence, not workouts.length.
 	let sessionPlanCount = $state(0);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let showCreate = $state(false);
 
 	async function load() {
+		loading = true;
+		loadError = null;
 		const [w, h, plans, cat] = await Promise.all([
-			fetchGymWorkouts(100),
-			fetchGymSetHistory(),
+			fetchGymWorkoutsWithError(100),
+			fetchGymSetHistoryWithError(),
 			fetchSessionPlans(),
 			fetchExerciseCatalogue(),
 		]);
-		workouts = w;
-		history = h;
+		// Surface a real load failure as a retry banner rather than the empty
+		// "log your first workout" card — otherwise a transient fetch error reads
+		// as a brand-new lifter whose history vanished.
+		loadError = w.error ?? h.error;
+		workouts = w.workouts;
+		history = h.sets;
 		sessionPlanCount = plans.length;
 		catalogue = cat;
 		loading = false;
@@ -43,7 +50,10 @@
 
 	onMount(async () => {
 		await auth.ready();
-		if (!auth.user) return;
+		if (!auth.user) {
+			loading = false;
+			return;
+		}
 		await load();
 	});
 
@@ -166,6 +176,15 @@
 			{/each}
 		</ul>
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{t('gym.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{t('gym.routine.retry')}</button>
+		</div>
 	{:else if workouts.length === 0}
 		<div class="card-elevated empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">fitness_center</span>
@@ -442,6 +461,31 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 
 	/* On a phone the per-stat stack would crowd the title; drop the

@@ -3683,6 +3683,7 @@ export const messages = {
 	"gym.detail.lastTime": "Dernière fois {date}",
 	"gym.empty.title": "Aucune séance de muscu",
 	"gym.empty.body": "Enregistrez une séance pour la suivre ici et alimenter votre charge d'entraînement.",
+	"gym.loadError": "Impossible de charger vos séances.",
 	"gym.created": "Séance enregistrée",
 	"gym.updated": "Séance mise à jour",
 	"gym.deleted": "Séance supprimée",
