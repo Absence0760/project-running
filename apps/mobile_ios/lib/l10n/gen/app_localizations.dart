@@ -6422,6 +6422,18 @@ abstract class AppLocalizations {
   /// **'Deny'**
   String get clubDetailDeny;
 
+  /// Title of the deny-join-request confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Reject join request'**
+  String get clubDetailDenyTitle;
+
+  /// Body of the deny-join-request confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Reject this request to join the club? They will not be added.'**
+  String get clubDetailDenyMessage;
+
   /// Button to approve a join request
   ///
   /// In en, this message translates to:
@@ -11381,6 +11393,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get runSocialCancel;
+
+  /// Accessibility label for the kudos button when the viewer has not given kudos
+  ///
+  /// In en, this message translates to:
+  /// **'Give kudos'**
+  String get kudosGiveLabel;
+
+  /// Accessibility label for the kudos button when the viewer has already given kudos
+  ///
+  /// In en, this message translates to:
+  /// **'Remove kudos'**
+  String get kudosRemoveLabel;
+
+  /// Accessibility label for the comment-count button on a feed card
+  ///
+  /// In en, this message translates to:
+  /// **'View comments'**
+  String get kudosViewCommentsLabel;
 
   /// Banner when toggling kudos fails
   ///

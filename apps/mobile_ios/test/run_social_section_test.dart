@@ -290,6 +290,23 @@ void main() {
       expect(find.text('3'), findsOneWidget);
     });
 
+    testWidgets('kudos pill carries an accessibility label for its state',
+        (tester) async {
+      final api = _SocialApi(kudosCount: 2, viewerHasKudos: false);
+      await _pumpApi(tester, api);
+      // Not-yet-kudoed → "give" label.
+      expect(find.bySemanticsLabel('Give kudos'), findsOneWidget);
+      expect(find.bySemanticsLabel('Remove kudos'), findsNothing);
+    });
+
+    testWidgets('kudoed pill exposes the remove-kudos accessibility label',
+        (tester) async {
+      final api = _SocialApi(kudosCount: 5, viewerHasKudos: true);
+      await _pumpApi(tester, api);
+      expect(find.bySemanticsLabel('Remove kudos'), findsOneWidget);
+      expect(find.bySemanticsLabel('Give kudos'), findsNothing);
+    });
+
     testWidgets('un-kudos calls rescindKudos and decrements', (tester) async {
       final api = _SocialApi(kudosCount: 5, viewerHasKudos: true);
       await _pumpApi(tester, api);

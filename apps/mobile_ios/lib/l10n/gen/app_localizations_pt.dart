@@ -3849,6 +3849,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailDeny => 'Recusar';
 
   @override
+  String get clubDetailDenyTitle => 'Recusar pedido de adesão';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Recusar este pedido para entrar no clube? A pessoa não será adicionada.';
+
+  @override
   String get clubDetailApprove => 'Aprovar';
 
   @override
@@ -6904,6 +6911,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runSocialCancel => 'Cancelar';
+
+  @override
+  String get kudosGiveLabel => 'Dar kudos';
+
+  @override
+  String get kudosRemoveLabel => 'Remover kudos';
+
+  @override
+  String get kudosViewCommentsLabel => 'Ver comentários';
 
   @override
   String runSocialKudosError(String error) {
@@ -14627,6 +14643,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get clubDetailDeny => 'Recusar';
 
   @override
+  String get clubDetailDenyTitle => 'Recusar pedido de adesão';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Recusar este pedido para entrar no clube? A pessoa não será adicionada.';
+
+  @override
   String get clubDetailApprove => 'Aprovar';
 
   @override
@@ -17682,6 +17705,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runSocialCancel => 'Cancelar';
+
+  @override
+  String get kudosGiveLabel => 'Dar kudos';
+
+  @override
+  String get kudosRemoveLabel => 'Remover kudos';
+
+  @override
+  String get kudosViewCommentsLabel => 'Ver comentários';
 
   @override
   String runSocialKudosError(String error) {

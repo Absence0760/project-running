@@ -3613,6 +3613,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailDeny => '拒否';
 
   @override
+  String get clubDetailDenyTitle => '参加リクエストを却下';
+
+  @override
+  String get clubDetailDenyMessage => 'このクラブへの参加リクエストを却下しますか？このユーザーは追加されません。';
+
+  @override
   String get clubDetailApprove => '承認';
 
   @override
@@ -6527,6 +6533,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runSocialCancel => 'キャンセル';
+
+  @override
+  String get kudosGiveLabel => '称賛する';
+
+  @override
+  String get kudosRemoveLabel => '称賛を取り消す';
+
+  @override
+  String get kudosViewCommentsLabel => 'コメントを表示';
 
   @override
   String runSocialKudosError(String error) {

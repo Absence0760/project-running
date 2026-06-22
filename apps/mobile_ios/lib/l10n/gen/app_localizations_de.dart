@@ -3856,6 +3856,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubDetailDeny => 'Ablehnen';
 
   @override
+  String get clubDetailDenyTitle => 'Beitrittsanfrage ablehnen';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Diese Beitrittsanfrage zum Club ablehnen? Die Person wird nicht hinzugefügt.';
+
+  @override
   String get clubDetailApprove => 'Genehmigen';
 
   @override
@@ -6915,6 +6922,15 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runSocialCancel => 'Abbrechen';
+
+  @override
+  String get kudosGiveLabel => 'Kudos geben';
+
+  @override
+  String get kudosRemoveLabel => 'Kudos entfernen';
+
+  @override
+  String get kudosViewCommentsLabel => 'Kommentare anzeigen';
 
   @override
   String runSocialKudosError(String error) {

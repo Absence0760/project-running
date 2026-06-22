@@ -3815,6 +3815,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubDetailDeny => 'Deny';
 
   @override
+  String get clubDetailDenyTitle => 'Reject join request';
+
+  @override
+  String get clubDetailDenyMessage =>
+      'Reject this request to join the club? They will not be added.';
+
+  @override
   String get clubDetailApprove => 'Approve';
 
   @override
@@ -6835,6 +6842,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runSocialCancel => 'Cancel';
+
+  @override
+  String get kudosGiveLabel => 'Give kudos';
+
+  @override
+  String get kudosRemoveLabel => 'Remove kudos';
+
+  @override
+  String get kudosViewCommentsLabel => 'View comments';
 
   @override
   String runSocialKudosError(String error) {

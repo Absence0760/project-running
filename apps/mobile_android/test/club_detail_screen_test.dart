@@ -141,6 +141,40 @@ class _PendingSocial extends SocialService {
       Supabase.instance.client.channel('test-$clubId');
 }
 
+/// Admin club with one pending request that records deny calls so the
+/// deny-confirm dialog flow can be asserted.
+class _DenySocial extends SocialService {
+  int denyCalls = 0;
+
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _adminClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [
+        ClubMemberRow(
+          clubId: 'club-1',
+          userId: 'pendinguser-0001',
+          role: 'member',
+          status: 'pending',
+        ),
+      ];
+  @override
+  Future<void> denyJoinRequest({
+    required String clubId,
+    required String userId,
+  }) async {
+    denyCalls++;
+  }
+
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
 /// Member club with one top-level post and a gated createPost so the
 /// in-flight window stays open while the test taps Send a second time.
 class _ReplySocial extends SocialService {
@@ -229,6 +263,7 @@ GymRoutineRow _routine(String id, String title, int count) => GymRoutineRow(
       title: title,
       periodisation: 'none',
       exerciseCount: count,
+      isPublicTemplate: false,
       lastModifiedAt: DateTime.utc(2026, 5, 1),
       createdAt: DateTime.utc(2026, 5, 1),
     );
@@ -358,6 +393,84 @@ void main() {
       social.approveGate.complete();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
+    });
+  });
+
+  group('ClubDetailScreen — deny join request confirm', () {
+    Future<_DenySocial> openMembers(WidgetTester tester) async {
+      final social = _DenySocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: social,
+            training: _FakeTraining(),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Members'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      return social;
+    }
+
+    testWidgets('tapping Deny opens a confirm dialog instead of denying',
+        (tester) async {
+      final social = await openMembers(tester);
+      final denyBtn = find.widgetWithText(TextButton, 'Deny');
+      expect(denyBtn, findsOneWidget);
+      await tester.ensureVisible(denyBtn);
+      await tester.pump();
+      await tester.tap(denyBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Reject join request'), findsOneWidget);
+      expect(social.denyCalls, 0);
+    });
+
+    testWidgets('cancelling the dialog does not deny', (tester) async {
+      final social = await openMembers(tester);
+      final denyBtn = find.widgetWithText(TextButton, 'Deny');
+      expect(denyBtn, findsOneWidget);
+      await tester.ensureVisible(denyBtn);
+      await tester.pump();
+      await tester.tap(denyBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Cancel'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(social.denyCalls, 0);
+    });
+
+    testWidgets('confirming the dialog denies once', (tester) async {
+      final social = await openMembers(tester);
+      final denyBtn = find.widgetWithText(TextButton, 'Deny');
+      expect(denyBtn, findsOneWidget);
+      await tester.ensureVisible(denyBtn);
+      await tester.pump();
+      await tester.tap(denyBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.runAsync(() async {
+        await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Deny'),
+        ));
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(social.denyCalls, 1);
     });
   });
 

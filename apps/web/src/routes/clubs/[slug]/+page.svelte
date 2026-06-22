@@ -133,6 +133,9 @@
 	/** When non-null, the user_id of the member the admin is about to
 	 *  remove. Drives the kick ConfirmDialog. */
 	let removingMemberId = $state<string | null>(null);
+	/** When non-null, the user_id of the pending join request the admin is
+	 *  about to reject. Drives the reject ConfirmDialog. */
+	let rejectingMemberId = $state<string | null>(null);
 
 	/** Thread state. Key is parent post id. */
 	let expandedThreads = $state<Record<string, ClubPostWithAuthor[] | null>>({});
@@ -514,8 +517,10 @@
 		}
 	}
 
-	async function reject(userId: string) {
-		if (!club || pendingBusy.has(userId)) return;
+	async function confirmReject() {
+		const userId = rejectingMemberId;
+		rejectingMemberId = null;
+		if (!club || !userId || pendingBusy.has(userId)) return;
 		pendingBusy = new Set(pendingBusy).add(userId);
 		try {
 			await rejectMember(club.id, userId);
@@ -926,7 +931,7 @@
 								<span class="when">{tr('clubHome.requestedRelative', { time: fmtRelative(p.joined_at ?? new Date().toISOString()) })}</span>
 							</div>
 							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)} disabled={pendingBusy.has(p.user_id)}>{tr('clubHome.approve')}</button>
-							<button class="btn-ghost" onclick={() => reject(p.user_id)} disabled={pendingBusy.has(p.user_id)}>{tr('clubHome.reject')}</button>
+							<button class="btn-ghost" onclick={() => (rejectingMemberId = p.user_id)} disabled={pendingBusy.has(p.user_id)}>{tr('clubHome.reject')}</button>
 						</div>
 					{/each}
 				</div>
@@ -1598,6 +1603,19 @@
 	confirmLabel={tr('clubHome.remove')}
 	onconfirm={confirmRemoveMember}
 	oncancel={() => (removingMemberId = null)}
+	danger
+/>
+
+<ConfirmDialog
+	open={rejectingMemberId !== null}
+	title={tr('clubHome.rejectRequestTitle')}
+	message={tr('clubHome.rejectRequestMessage', {
+		name: pending.find((p) => p.user_id === rejectingMemberId)?.display_name ?? tr('clubHome.thisMember'),
+		club: club?.name ?? tr('clubHome.theClub')
+	})}
+	confirmLabel={tr('clubHome.reject')}
+	onconfirm={confirmReject}
+	oncancel={() => (rejectingMemberId = null)}
 	danger
 />
 

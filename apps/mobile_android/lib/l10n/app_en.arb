@@ -5211,6 +5211,14 @@
   "@clubDetailDeny": {
     "description": "Button to deny a join request"
   },
+  "clubDetailDenyTitle": "Reject join request",
+  "@clubDetailDenyTitle": {
+    "description": "Title of the deny-join-request confirmation dialog"
+  },
+  "clubDetailDenyMessage": "Reject this request to join the club? They will not be added.",
+  "@clubDetailDenyMessage": {
+    "description": "Body of the deny-join-request confirmation dialog"
+  },
   "clubDetailApprove": "Approve",
   "@clubDetailApprove": {
     "description": "Button to approve a join request"
@@ -9215,6 +9223,18 @@
   "runSocialCancel": "Cancel",
   "@runSocialCancel": {
     "description": "Button to cancel a reply"
+  },
+  "kudosGiveLabel": "Give kudos",
+  "@kudosGiveLabel": {
+    "description": "Accessibility label for the kudos button when the viewer has not given kudos"
+  },
+  "kudosRemoveLabel": "Remove kudos",
+  "@kudosRemoveLabel": {
+    "description": "Accessibility label for the kudos button when the viewer has already given kudos"
+  },
+  "kudosViewCommentsLabel": "View comments",
+  "@kudosViewCommentsLabel": {
+    "description": "Accessibility label for the comment-count button on a feed card"
   },
   "runSocialKudosError": "Could not update kudos: {error}",
   "@runSocialKudosError": {

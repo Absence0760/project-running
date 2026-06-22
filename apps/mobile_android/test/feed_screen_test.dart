@@ -236,6 +236,26 @@ void main() {
       expect(find.text('3'), findsOneWidget);
       // viewerHasKudos → filled heart.
       expect(find.byIcon(Icons.favorite), findsOneWidget);
+      // Icon-only kudos / comment buttons carry accessibility labels.
+      expect(find.bySemanticsLabel('Remove kudos'), findsOneWidget);
+      expect(find.bySemanticsLabel('View comments'), findsOneWidget);
+    });
+
+    testWidgets('a not-yet-kudoed card exposes the give-kudos label',
+        (tester) async {
+      await _pump(
+        tester,
+        _FakeApi(
+          entries: [_runEntry()],
+          followees: [_profileRow('u-1', 'Alex Runner')],
+          engagement: {
+            'run-1': (kudosCount: 0, viewerHasKudos: false, commentCount: 0),
+          },
+        ),
+      );
+      await _settle(tester);
+      expect(find.bySemanticsLabel('Give kudos'), findsOneWidget);
+      expect(find.bySemanticsLabel('Remove kudos'), findsNothing);
     });
 
     testWidgets('signed-out viewer still loads the feed but skips fetchFollowing',
