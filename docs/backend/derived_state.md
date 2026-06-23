@@ -117,6 +117,31 @@ retention cron referenced in a comment that was never created.
 
 ---
 
+## `challenges.participant_count`
+
+- **What it caches:** how many participants a challenge has (rows in
+  `challenge_participants` for that challenge). Lets the ranked Browse feed
+  (`browse_public_challenges`) score + paginate without aggregating participants
+  at read time (`20270308_001`).
+- **Authoritative recompute:** `count(*) from challenge_participants where
+  challenge_id = <challenge>`.
+- **Maintained by:** `sync_challenge_participant_count()` (AFTER INSERT/DELETE on
+  `challenge_participants`), SECURITY DEFINER — a runner joining a challenge they
+  don't own has no UPDATE grant on the `challenges` row (the update RLS policy is
+  creator/club-admin only), so the recompute must bypass it. Recompute-from-`count(*)`
+  (not ±1) is self-healing — the cache can't drift.
+- **Known drift (accepted):** the column is writable by the challenge's
+  creator/club-admin via the normal `challenges` UPDATE policy (no column lock).
+  The client never writes it (`createChallenge`/`updateChallenge` omit it) and the
+  next join/leave recomputes from source, so a hand-forged value self-heals and
+  only ever skews the ranking of the forger's own public challenge.
+- **Manual rebuild:** `update challenges c set participant_count = (select count(*)
+  from challenge_participants p where p.challenge_id = c.id);`
+- **Pinned by:** `challenge_browse_test.sql` (asserts cache == count(*) on insert +
+  decrement on delete).
+
+---
+
 ## Adding a new derived cache
 
 When you add a trigger-maintained denormalised column or a derived table:
