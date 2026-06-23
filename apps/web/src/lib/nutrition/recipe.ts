@@ -26,6 +26,7 @@ export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 /// macros). The minimal shape the promotion reads.
 export interface RecipeSourceEntry {
 	item_name: string;
+	meal_slot?: MealSlot | null;
 	calories?: number | null;
 	protein_g?: number | null;
 	carbs_g?: number | null;
@@ -109,6 +110,20 @@ function isSlot(v: unknown): v is MealSlot {
 	return typeof v === 'string' && (SLOTS as readonly string[]).includes(v);
 }
 
+/// The recipe's default meal slot: the agreed slot when every source entry
+/// that has one agrees, else null (a mixed-slot set has no single default).
+/// An entry with no slot doesn't veto agreement. Mirrors meal_template.ts.
+function commonSlot(entries: RecipeSourceEntry[]): MealSlot | null {
+	let found: MealSlot | null = null;
+	for (const e of entries) {
+		const s = isSlot(e.meal_slot) ? e.meal_slot : null;
+		if (s == null) continue;
+		if (found == null) found = s;
+		else if (found !== s) return null;
+	}
+	return found;
+}
+
 function numericOrNull(v: unknown): number | null {
 	if (typeof v === 'number' && Number.isFinite(v)) return v;
 	if (typeof v === 'string') {
@@ -164,7 +179,7 @@ export function recipeFromEntries(
 	return {
 		name: finalName,
 		servings: 1,
-		mealSlot: null,
+		mealSlot: commonSlot(entries),
 		ingredientCount: ingredients.length,
 		ingredients,
 	};

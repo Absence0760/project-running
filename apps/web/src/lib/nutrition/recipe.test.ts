@@ -65,6 +65,35 @@ test('recipeFromEntries falls back to default name when blank', () => {
 	assert.equal(recipeFromEntries(undefined, [entry('Egg')]).name, 'Recipe');
 });
 
+test('recipeFromEntries derives the common meal slot, else null', () => {
+	// All-agree → that slot.
+	assert.equal(
+		recipeFromEntries('Chilli', [
+			entry('Beans', { meal_slot: 'dinner' }),
+			entry('Rice', { meal_slot: 'dinner' }),
+		]).mealSlot,
+		'dinner',
+	);
+	// A slotless entry doesn't veto agreement.
+	assert.equal(
+		recipeFromEntries('Chilli', [
+			entry('Beans', { meal_slot: 'dinner' }),
+			entry('Rice'),
+		]).mealSlot,
+		'dinner',
+	);
+	// Mixed slots → no single default.
+	assert.equal(
+		recipeFromEntries('Mix', [
+			entry('Eggs', { meal_slot: 'breakfast' }),
+			entry('Rice', { meal_slot: 'dinner' }),
+		]).mealSlot,
+		null,
+	);
+	// No slots at all → null.
+	assert.equal(recipeFromEntries('Plain', [entry('Oats')]).mealSlot, null);
+});
+
 test('recipeFromEntries honours a custom fallback name', () => {
 	assert.equal(recipeFromEntries('', [entry('Egg')], 'Chilli').name, 'Chilli');
 });

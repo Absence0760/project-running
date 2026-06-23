@@ -24,6 +24,23 @@ bool _isSlot(Object? v) => v is String && _slots.contains(v);
 
 String? _slotOrNull(Object? v) => _isSlot(v) ? v as String : null;
 
+/// The recipe's default meal slot: the agreed slot when every source entry
+/// that has one agrees, else null (a mixed-slot set has no single default).
+/// An entry with no slot doesn't veto agreement. Mirrors meal_template.dart.
+String? _commonSlot(List<RecipeSourceEntry> entries) {
+  String? found;
+  for (final e in entries) {
+    final s = _slotOrNull(e.mealSlot);
+    if (s == null) continue;
+    if (found == null) {
+      found = s;
+    } else if (found != s) {
+      return null;
+    }
+  }
+  return found;
+}
+
 double? _numericOrNull(Object? v) {
   if (v is num) {
     final d = v.toDouble();
@@ -57,6 +74,7 @@ double _round1(double n) => (n * 10).round() / 10;
 class RecipeSourceEntry {
   const RecipeSourceEntry({
     required this.itemName,
+    this.mealSlot,
     this.calories,
     this.proteinG,
     this.carbsG,
@@ -65,6 +83,7 @@ class RecipeSourceEntry {
   });
 
   final String itemName;
+  final String? mealSlot;
   final double? calories;
   final double? proteinG;
   final double? carbsG;
@@ -226,7 +245,7 @@ RecipeDraft recipeFromEntries(
   return RecipeDraft(
     name: finalName,
     servings: 1,
-    mealSlot: null,
+    mealSlot: _commonSlot(entries),
     ingredientCount: ingredients.length,
     ingredients: ingredients,
   );

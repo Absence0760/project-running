@@ -4,6 +4,7 @@ import '../lib/recipe.dart';
 
 RecipeSourceEntry entry(
   String itemName, {
+  String? mealSlot,
   double? calories,
   double? proteinG,
   double? carbsG,
@@ -12,6 +13,7 @@ RecipeSourceEntry entry(
 }) =>
     RecipeSourceEntry(
       itemName: itemName,
+      mealSlot: mealSlot,
       calories: calories,
       proteinG: proteinG,
       carbsG: carbsG,
@@ -82,6 +84,34 @@ void main() {
     expect(recipeFromEntries('', [entry('Egg')]).name, 'Recipe');
     expect(recipeFromEntries('   ', [entry('Egg')]).name, 'Recipe');
     expect(recipeFromEntries(null, [entry('Egg')]).name, 'Recipe');
+  });
+
+  test('recipeFromEntries derives the common meal slot, else null', () {
+    expect(
+      recipeFromEntries('Chilli', [
+        entry('Beans', mealSlot: 'dinner'),
+        entry('Rice', mealSlot: 'dinner'),
+      ]).mealSlot,
+      'dinner',
+    );
+    // A slotless entry doesn't veto agreement.
+    expect(
+      recipeFromEntries('Chilli', [
+        entry('Beans', mealSlot: 'dinner'),
+        entry('Rice'),
+      ]).mealSlot,
+      'dinner',
+    );
+    // Mixed slots → no single default.
+    expect(
+      recipeFromEntries('Mix', [
+        entry('Eggs', mealSlot: 'breakfast'),
+        entry('Rice', mealSlot: 'dinner'),
+      ]).mealSlot,
+      isNull,
+    );
+    // No slots at all → null.
+    expect(recipeFromEntries('Plain', [entry('Oats')]).mealSlot, isNull);
   });
 
   test('recipeFromEntries honours a custom fallback name', () {
