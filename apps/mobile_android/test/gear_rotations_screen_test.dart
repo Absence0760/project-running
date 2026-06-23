@@ -124,10 +124,17 @@ void main() {
   testWidgets('editing members calls setGearRotationMembers with the toggled set',
       (tester) async {
     final f = await _setup('members');
-    // Two gear rows in the store; the rotation starts with g1 only.
-    await f.store.createLocal(kind: 'shoe', name: 'Pegasus');
-    await f.store.createLocal(kind: 'shoe', name: 'Ghost');
-    final ids = f.store.rows.map((r) => r['id'] as String).toList();
+    // Two gear rows in the store; the rotation starts with g1 only. The
+    // createLocal writes hit the real disk via writeJsonAtomic — they MUST run
+    // inside tester.runAsync. Awaiting real dart:io I/O directly in the
+    // testWidgets body deadlocks the FakeAsync zone (the fake clock never pumps
+    // the real I/O event queue), wedging the whole file with no timeout escape.
+    late List<String> ids;
+    await tester.runAsync(() async {
+      await f.store.createLocal(kind: 'shoe', name: 'Pegasus');
+      await f.store.createLocal(kind: 'shoe', name: 'Ghost');
+      ids = f.store.rows.map((r) => r['id'] as String).toList();
+    });
     final api = _RotApi(seed: [_rot(id: 'r1', gearIds: [ids.first])]);
     try {
       await _pump(tester, _app(api, f.store));
@@ -143,8 +150,11 @@ void main() {
       await tester.tap(find.text('Ghost'));
       await tester.pump();
       await tester.tap(find.text('Done'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      // Done → setGearRotationMembers → Navigator.pop dismisses the sheet, then
+      // _editMembers awaits load(). Drain the dismiss animation + the fake-api
+      // microtasks on the fake clock with bounded pumps.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
       expect(api.lastSetRotationId, 'r1');
       expect(api.lastSetMembers, isNotNull);
@@ -168,8 +178,10 @@ void main() {
       // Confirm dialog.
       expect(find.text('Delete rotation?'), findsOneWidget);
       await tester.tap(find.widgetWithText(TextButton, 'Delete'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      // Pop the confirm dialog, then drain _delete's deleteGearRotation +
+      // load() microtasks on the fake clock with bounded pumps.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
       expect(api.deleteCalls, 1);
     } finally {
