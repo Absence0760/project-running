@@ -119,6 +119,11 @@ test.describe('i18n language picker (settings → preferences)', () => {
 
 		await page.goto('/settings/preferences');
 		await page.locator('[data-testid="language-select"]').selectOption('de');
+		// setLocale is async (it loads the locale chunk before writing the
+		// choice to localStorage + flipping <html lang>). Wait for that to
+		// land before navigating, otherwise the goto races the persist and
+		// the run page re-initialises in English.
+		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
 		await page.goto(runUrl);
 		// German month name proves the date helper picked up the locale.
 		await expect(page.getByText(/Mai 2026/).first()).toBeVisible();
