@@ -140,10 +140,27 @@ apply_stack "Stack 4/4: envs/preview (S3 + CloudFront + Lambda + KMS)" "infra/en
 
 step "Post-apply"
 if [[ $PLAN_ONLY -eq 0 ]]; then
-	log "Resolve sops placeholders against the new KMS keys:"
-	dim "  bin/sops-init.sh preview"
-	log ""
-	log "Verify the preview is healthy:"
-	dim "  bin/preview-status.sh preview"
+	# Detect whether the coach secret is already wired. If the env's
+	# secrets file exists in the estate repo, the operator has already
+	# done phase 2 and this was just a re-apply — point them at the
+	# health check. Otherwise walk them through wiring the secret.
+	infra_secrets_dir="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
+	secrets_file="$infra_secrets_dir/running/preview.sops.yaml"
+	if [[ -f "$secrets_file" ]]; then
+		ok "Secrets file present ($secrets_file) — the Lambda has the coach key."
+		log "Verify the env is healthy (coach should answer 401, not 503):"
+		dim "  bin/preview-status.sh preview"
+	else
+		warn "No coach secret wired yet — the Lambda is up but /api/coach returns 503."
+		log "Phase 2 — wire the secret (it lives in the PRIVATE ../infra-secrets repo, never here):"
+		if [[ ! -d "$infra_secrets_dir" ]]; then
+			dim "  git clone git@github.com:Absence0760/infra-secrets.git ../infra-secrets   # clone the estate repo first"
+		fi
+		dim "  bin/sops-init.sh preview                                   # wire KMS ARN + seed running/preview.sops.yaml"
+		dim "  echo -n \"sk-ant-…\" | bin/secret-set.sh preview ANTHROPIC_API_KEY   # real key via stdin"
+		dim "  (cd $infra_secrets_dir && git commit -am 'running: preview secrets')  # commit in the PRIVATE repo"
+		dim "  bin/deploy-preview.sh                                       # re-run: idempotent, wires the secret into the Lambda"
+		dim "  bin/preview-status.sh preview                              # confirm coach now answers 401, not 503"
+	fi
 fi
 ok "Done"

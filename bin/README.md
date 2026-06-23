@@ -6,14 +6,23 @@ All scripts source `bin/lib/common.sh` for the color helpers + `need_cmd` / `nee
 
 ## First deploy (or rebuild)
 
-| When | Run |
-|---|---|
-| Before any `terraform apply` | `bin/aws-preflight.sh` |
-| Standing up the preview env from zero | `bin/deploy-preview.sh` |
-| After Phase 2d to wire sops to the new KMS keys | `bin/sops-init.sh preview` |
-| To put a real Anthropic key into Lambda | `bin/secret-set.sh preview ANTHROPIC_API_KEY sk-ant-…` then `cd infra/envs/preview && terraform apply` |
-| To verify preview is healthy after deploy | `bin/preview-status.sh preview` |
-| If the entire AWS stack needs rebuilding | `bin/disaster-recovery.sh` |
+The deploy is **two-phase by design** — the env stack creates the KMS key, then
+secrets are encrypted against it (in the PRIVATE `../infra-secrets` repo), then
+the stack is re-applied so the Lambda gets them. Run the rows top-to-bottom:
+
+| # | When | Run |
+|---|---|---|
+| 0 | Prod secrets live in the private estate repo — clone it once as a sibling | `git clone git@github.com:Absence0760/infra-secrets.git ../infra-secrets` |
+| 1 | Before any `terraform apply` | `bin/aws-preflight.sh` |
+| 2 | Stand up the env (S3 + CloudFront + Lambda + KMS) — Lambda comes up *without* the coach key on this first pass (coach → 503, expected) | `bin/deploy-preview.sh` |
+| 3 | Wire the new env KMS ARN into `../infra-secrets/.sops.yaml` + seed `running/preview.sops.yaml` | `bin/sops-init.sh preview` |
+| 4 | Put the real Anthropic key in (value via **stdin**, never argv — keeps it out of shell history) | `echo -n "sk-ant-…" \| bin/secret-set.sh preview ANTHROPIC_API_KEY` (or `--prompt`) |
+| 5 | Commit the encrypted file in the private repo | `(cd ../infra-secrets && git commit -am 'running: preview secrets')` |
+| 6 | Re-apply so the Lambda picks up the secret (now coach → 401, not 503) | `bin/deploy-preview.sh` (idempotent — only the Lambda env changes) |
+| 7 | Verify the env is healthy | `bin/preview-status.sh preview` |
+| — | If the entire AWS stack needs rebuilding | `bin/disaster-recovery.sh` |
+
+Prod is the same sequence with `prod` substituted (apply via `cd infra/envs/prod && terraform apply` — there's no `deploy-prod.sh`; the chained stacks already exist after preview, so prod is just the one env stack). Full manual walkthrough: [`infra/README.md` § First-time deploy](../infra/README.md).
 
 ## Day-to-day
 
