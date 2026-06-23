@@ -115,6 +115,14 @@ export interface FetchRunsOptions {
 	limit?: number;
 	/** Skip this many rows before the page (for paged loads). */
 	offset?: number;
+	/**
+	 * Re-throw a hard fetch error instead of degrading to `[]`. Default off:
+	 * most callers want a resilient empty list. The personal heatmap opts in
+	 * so it can tell "fetch failed" (retryable error) apart from "no runs yet"
+	 * (empty state) — returning `[]` on a 500 would tell an active runner
+	 * they've never run anywhere.
+	 */
+	throwOnError?: boolean;
 }
 
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
@@ -135,7 +143,10 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	if (opts?.limit != null) {
 		const from = opts.offset ?? 0;
 		const { data, error } = await build().range(from, from + opts.limit - 1);
-		if (error || !data) return [];
+		if (error || !data) {
+			if (opts?.throwOnError && error) throw error;
+			return [];
+		}
 		rows = data;
 	} else {
 		// No explicit limit means "every run". PostgREST caps an unbounded
@@ -149,7 +160,10 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 		rows = [];
 		for (let from = 0; from < SAFETY_MAX; from += PAGE) {
 			const { data, error } = await build().range(from, from + PAGE - 1);
-			if (error || !data) break;
+			if (error || !data) {
+				if (opts?.throwOnError && error) throw error;
+				break;
+			}
 			rows.push(...data);
 			if (data.length < PAGE) break;
 		}
@@ -1950,7 +1964,10 @@ export async function isChronoTrackConfigured(): Promise<boolean> {
 
 async function isProviderNotConfigured(error: unknown): Promise<boolean> {
 	const ctx = (error as { context?: Response })?.context;
-	if (ctx && typeof ctx.status === 'number') {
+	if (ctx && typeof ctx.status === 'number' && ctx.status > 0) {
+		// A readable HTTP status came back: the provider is configured iff the
+		// status is not the fail-closed 503 provider_not_configured signal. A
+		// 401/429/5xx (transient) leaves the card in its configured state.
 		if (ctx.status !== 503) return false;
 		try {
 			const body = await ctx.clone().json();
@@ -1960,7 +1977,14 @@ async function isProviderNotConfigured(error: unknown): Promise<boolean> {
 		}
 	}
 	const msg = (error as { message?: string })?.message ?? '';
-	return msg.includes('provider_not_configured') || msg.includes('503');
+	if (msg.includes('provider_not_configured') || msg.includes('503')) return true;
+	// No readable HTTP status — a FunctionsFetchError (network / CORS) or a
+	// status-0 opaque response. supabase-js surfaces the gated 503 this way
+	// when the cross-origin error response isn't readable by the browser, so
+	// the probe could not CONFIRM the provider is live. Honour the feature's
+	// fail-closed default (the missing-credential rule) and report unavailable
+	// rather than fail open and offer an action that 503s.
+	return true;
 }
 
 /// The matched-race view for a run: the run's owner-only race metadata + its

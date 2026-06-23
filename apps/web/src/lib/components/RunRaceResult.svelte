@@ -87,6 +87,13 @@
 
 	async function confirmMatch(provider: 'runsignup' | 'paste') {
 		if (!candidate) return;
+		// A paste-only candidate (manual listing, no provider auto-pull) has no
+		// server pull to attempt — open the paste form so the owner can enter
+		// their time, rather than POSTing an empty result the EF rejects (400).
+		if (provider === 'paste' && !pasting) {
+			pasting = true;
+			return;
+		}
 		busy = true;
 		try {
 			await importRaceResult({

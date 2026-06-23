@@ -18,8 +18,26 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
+	import { formatDuration } from '$lib/format/time';
+	import type { ChallengeMetric } from '$lib/types';
 
 	const id = $derived($page.params.id ?? '');
+
+	function formatGoal(metric: ChallengeMetric, v: number): string {
+		switch (metric) {
+			case 'distance':
+				return formatDistance(v);
+			case 'duration':
+				return formatDuration(Math.round(v));
+			case 'vert':
+				return formatElevation(v);
+			case 'streak_days':
+				return m('challenges.unitDays', { n: Math.round(v) });
+			case 'activity_count':
+				return m('challenges.unitActivities', { n: Math.round(v) });
+		}
+	}
 
 	let challenge = $state<ChallengeWithMeta | null>(null);
 	let notFound = $state(false);
@@ -130,6 +148,11 @@
 		<header class="hero">
 			<h1>{challenge.title}</h1>
 			<p class="window">{windowLabel(challenge)}</p>
+			{#if challenge.goal_value != null}
+				<p class="goal">
+					{m('challenges.goalLabel')}: {formatGoal(challenge.metric, challenge.goal_value)}
+				</p>
+			{/if}
 			{#if challenge.description}
 				<p class="desc">{challenge.description}</p>
 			{/if}
@@ -227,6 +250,10 @@
 	.window {
 		color: var(--color-text-muted, #6b7280);
 		font-size: 0.875rem;
+		margin: 0 0 var(--space-sm);
+	}
+	.goal {
+		font-weight: 600;
 		margin: 0 0 var(--space-sm);
 	}
 	.desc {

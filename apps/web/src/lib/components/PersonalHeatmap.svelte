@@ -81,7 +81,7 @@
 		empty = false;
 		errored = false;
 		try {
-			const runs = await fetchRuns();
+			const runs = await fetchRuns({ throwOnError: true });
 			const paths = runs
 				.map((r) => (r as { track_url?: string | null }).track_url)
 				.filter((p): p is string => typeof p === 'string' && p.length > 0)
