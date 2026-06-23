@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
-import { deleteRun, insertLivePings, insertRun } from '../fixtures/simulate';
+import { deleteRun, insertLivePings, insertRun, setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -239,11 +239,22 @@ test.describe('/live/[id] — finished-run 2-minute boundary (anon)', () => {
 test.describe('/live/[id] — mile-preference viewer sees miles (signed-in)', () => {
 	// The headline distance honours the viewer's preferred_unit. An
 	// anon viewer always reads km (no profile), so the mi path is only
-	// reachable for a signed-in user whose profile says 'mi'. Flip
-	// USER_A's profile to mi for this block and restore after.
+	// reachable for a signed-in user whose profile says 'mi'.
+	//
+	// A real mi-preference user has the choice written at BOTH layers —
+	// pickDistanceUnit on /settings/preferences dual-writes the universal
+	// user_settings bag AND the legacy user_profiles column. The app
+	// resolves the effective unit via effectivePreferredUnit, which reads
+	// the universal bag FIRST (device → universal → column). The seed
+	// pins runner's universal preferred_unit to 'km', so flipping only
+	// the column leaves the universal 'km' winning and the live page
+	// renders km — the auth-store setUnit('mi') from the column is
+	// clobbered by the layout overlay applied on web startup (ff7ac686).
+	// Stamp both layers so the test reflects a real mi user.
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeAll(async () => {
+		await setUserSetting(USER_A.id, 'preferred_unit', 'mi');
 		await getAdminClient()
 			.from('user_profiles')
 			.update({ preferred_unit: 'mi' })
@@ -251,6 +262,7 @@ test.describe('/live/[id] — mile-preference viewer sees miles (signed-in)', ()
 	});
 
 	test.afterAll(async () => {
+		await setUserSetting(USER_A.id, 'preferred_unit', 'km');
 		await getAdminClient()
 			.from('user_profiles')
 			.update({ preferred_unit: 'km' })
