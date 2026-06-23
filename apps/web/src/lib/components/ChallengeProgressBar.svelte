@@ -35,7 +35,10 @@
 		{#if goal !== null}
 			<span class="value">{m('challenges.goalProgress', { value: fmt(value), goal: fmt(goal) })}</span>
 			{#if complete}
-				<span class="complete">{m('challenges.progressComplete')}</span>
+				<span class="complete">
+					<span class="material-symbols" aria-hidden="true">check_circle</span>
+					{m('challenges.progressComplete')}
+				</span>
 			{/if}
 		{:else}
 			<span class="value">{fmt(value)}</span>
@@ -72,23 +75,31 @@
 		font-weight: 600;
 	}
 	.complete {
-		color: var(--color-success, #16a34a);
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		color: var(--color-success);
 		font-weight: 600;
+	}
+	.complete .material-symbols {
+		width: 1.1em;
+		height: 1.1em;
+		font-size: 1.05em;
 	}
 	.track {
 		height: 0.5rem;
 		border-radius: 999px;
-		background: var(--color-border, #e5e7eb);
+		background: var(--color-bg-tertiary);
 		overflow: hidden;
 	}
 	.fill {
 		height: 100%;
-		background: var(--color-accent, #2563eb);
+		background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
 		border-radius: 999px;
 		transition: width 0.4s ease;
 	}
 	.fill.complete {
-		background: var(--color-success, #16a34a);
+		background: var(--color-success);
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.fill {

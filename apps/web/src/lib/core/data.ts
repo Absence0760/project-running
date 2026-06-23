@@ -9650,6 +9650,38 @@ export async function fetchChallenges(
 	return opts.mine ? enriched.filter((c) => c.joined) : enriched;
 }
 
+/**
+ * Ranked, paginated, searchable Browse feed of public challenges the caller has
+ * NOT joined. Server-side `browse_public_challenges` orders by popularity
+ * (size + recent join velocity), suppresses dead boards, and excludes joined /
+ * ended ones — so this never pulls the whole table to sort client-side.
+ */
+export async function browsePublicChallenges(
+	opts: { search?: string | null; limit?: number; offset?: number } = {}
+): Promise<ChallengeWithMeta[]> {
+	const { data, error } = await supabase.rpc('browse_public_challenges', {
+		p_search: opts.search?.trim() || null,
+		p_limit: opts.limit ?? 24,
+		p_offset: opts.offset ?? 0
+	});
+	if (error) throw error;
+	type BrowseRow = {
+		metric: string;
+		scope: string;
+		activity_type: string | null;
+		participant_count: number;
+		[k: string]: unknown;
+	};
+	return ((data ?? []) as BrowseRow[]).map((r) => ({
+		...challengeFromRow(r),
+		participant_count: r.participant_count ?? 0,
+		my_value: null,
+		my_rank: null,
+		joined: false,
+		completed_at: null
+	}));
+}
+
 export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta | null> {
 	const userId = auth.user?.id;
 	const { data, error } = await supabase

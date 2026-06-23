@@ -47,7 +47,9 @@
 	<ol class="board" aria-label={m('challenges.leaderboard')}>
 		{#each rows as row (byTeam ? row.team_club_id : row.user_id)}
 			<li class="row" class:me={!byTeam && meId && row.user_id === meId}>
-				<span class="rank">{m('challenges.leaderboardRank', { rank: row.rank })}</span>
+				<span class="rank" class:medal={row.rank <= 3} data-rank={row.rank}>
+					{m('challenges.leaderboardRank', { rank: row.rank })}
+				</span>
 				<span class="name">{nameFor(row)}</span>
 				<span class="val">{fmt(row.value)}</span>
 			</li>
@@ -66,21 +68,42 @@
 	}
 	.row {
 		display: grid;
-		grid-template-columns: 2.5rem 1fr auto;
+		grid-template-columns: 2.75rem 1fr auto;
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		border-radius: var(--radius-md, 0.5rem);
-		background: var(--color-surface-2, #f9fafb);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-secondary);
+		border: 1px solid transparent;
 	}
 	.row.me {
-		background: var(--color-accent-soft, #eff6ff);
+		background: var(--color-primary-light);
+		border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
 		font-weight: 600;
 	}
 	.rank {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.25rem;
+		padding: 0.1rem 0.4rem;
+		border-radius: 999px;
 		font-variant-numeric: tabular-nums;
-		color: var(--color-text-muted, #6b7280);
-		font-weight: 600;
+		color: var(--color-text-secondary);
+		font-weight: 700;
+		font-size: 0.85rem;
+	}
+	.rank.medal {
+		color: #3a2e0a;
+	}
+	.rank.medal[data-rank='1'] {
+		background: linear-gradient(135deg, #f6d671, #d4a017);
+	}
+	.rank.medal[data-rank='2'] {
+		background: linear-gradient(135deg, #e4e7eb, #b4bcc4);
+	}
+	.rank.medal[data-rank='3'] {
+		background: linear-gradient(135deg, #e6b27e, #c08043);
 	}
 	.name {
 		overflow: hidden;
@@ -92,7 +115,7 @@
 		font-weight: 600;
 	}
 	.empty {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-size: 0.875rem;
 	}
 </style>

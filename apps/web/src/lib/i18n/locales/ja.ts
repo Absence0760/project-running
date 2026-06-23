@@ -4292,7 +4292,6 @@ export const messages = {
 	"badges.plan10.desc": "トレーニングプランを10完了",
 	// Challenges & competitions
 	"challenges.title": "チャレンジ",
-	"challenges.kicker": "競争",
 	"challenges.tagline": "期限付きの目標とランキング。",
 	"challenges.myChallenges": "参加中のチャレンジ",
 	"challenges.browse": "さがす",
@@ -4351,6 +4350,9 @@ export const messages = {
 	"challenges.unitDays": "{n} 日",
 	"challenges.unitActivities": "{n}",
 	"challenges.backToList": "チャレンジ一覧へ戻る",
+	"challenges.back": "戻る",
+	"challenges.searchPlaceholder": "チャレンジを検索",
+	"challenges.loadMore": "もっと見る",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "タイトル",
 	"fundraiser.charityName": "慈善団体",

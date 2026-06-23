@@ -4296,7 +4296,6 @@ export const messages = {
 	"badges.plan10.desc": "Completaste 10 planes de entrenamiento",
 	// Challenges & competitions
 	"challenges.title": "Desafíos",
-	"challenges.kicker": "Compite",
 	"challenges.tagline": "Metas con plazo y clasificaciones.",
 	"challenges.myChallenges": "Mis desafíos",
 	"challenges.browse": "Explorar",
@@ -4355,6 +4354,9 @@ export const messages = {
 	"challenges.unitDays": "{n} días",
 	"challenges.unitActivities": "{n}",
 	"challenges.backToList": "Volver a los desafíos",
+	"challenges.back": "Atrás",
+	"challenges.searchPlaceholder": "Buscar desafíos",
+	"challenges.loadMore": "Cargar más",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "Título",
 	"fundraiser.charityName": "Organización benéfica",

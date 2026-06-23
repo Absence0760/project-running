@@ -4315,7 +4315,6 @@ export const en = {
 	"badges.plan10.desc": "Completed 10 training plans",
 	// Challenges & competitions
 	"challenges.title": "Challenges",
-	"challenges.kicker": "Compete",
 	"challenges.tagline": "Time-boxed goals and leaderboards.",
 	"challenges.myChallenges": "My challenges",
 	"challenges.browse": "Browse",
@@ -4374,6 +4373,9 @@ export const en = {
 	"challenges.unitDays": "{n} days",
 	"challenges.unitActivities": "{n}",
 	"challenges.backToList": "Back to challenges",
+	"challenges.back": "Back",
+	"challenges.searchPlaceholder": "Search challenges",
+	"challenges.loadMore": "Load more",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "Title",
 	"fundraiser.charityName": "Charity",

@@ -138,7 +138,10 @@
 </svelte:head>
 
 <div class="page">
-	<a class="back" href="/challenges">{m('challenges.backToList')}</a>
+	<a class="back" href="/challenges">
+		<span class="material-symbols" aria-hidden="true">arrow_back</span>
+		{m('challenges.backToList')}
+	</a>
 
 	{#if notFound}
 		<p class="muted">{m('challenges.notFound')}</p>
@@ -147,12 +150,18 @@
 	{:else}
 		<header class="hero">
 			<h1>{challenge.title}</h1>
-			<p class="window">{windowLabel(challenge)}</p>
-			{#if challenge.goal_value != null}
-				<p class="goal">
-					{m('challenges.goalLabel')}: {formatGoal(challenge.metric, challenge.goal_value)}
-				</p>
-			{/if}
+			<div class="hero-chips">
+				<span class="window-chip">
+					<span class="material-symbols" aria-hidden="true">schedule</span>
+					{windowLabel(challenge)}
+				</span>
+				{#if challenge.goal_value != null}
+					<span class="goal-chip">
+						<span class="material-symbols" aria-hidden="true">flag</span>
+						{formatGoal(challenge.metric, challenge.goal_value)}
+					</span>
+				{/if}
+			</div>
 			{#if challenge.description}
 				<p class="desc">{challenge.description}</p>
 			{/if}
@@ -166,7 +175,10 @@
 					goal={challenge.goal_value}
 				/>
 				{#if challenge.completed_at}
-					<span class="badge-earned">{m('challenges.badgeEarned')}</span>
+					<span class="badge-earned">
+						<span class="material-symbols" aria-hidden="true">military_tech</span>
+						{m('challenges.badgeEarned')}
+					</span>
 				{/if}
 			</section>
 		{/if}
@@ -238,26 +250,61 @@
 />
 
 <style>
+	.page {
+		padding: var(--space-xl) var(--space-2xl);
+	}
 	.back {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.1rem;
 		margin-bottom: var(--space-md);
 		font-size: 0.875rem;
-		color: var(--color-accent, #2563eb);
+		font-weight: 600;
+		color: var(--color-primary);
+		text-decoration: none;
+	}
+	.back .material-symbols {
+		font-size: 1.1rem;
+	}
+	.back:hover {
+		text-decoration: underline;
 	}
 	.hero h1 {
-		margin: 0 0 var(--space-2xs);
-	}
-	.window {
-		color: var(--color-text-muted, #6b7280);
-		font-size: 0.875rem;
 		margin: 0 0 var(--space-sm);
 	}
-	.goal {
+	.hero-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-sm);
+	}
+	.window-chip,
+	.goal-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		font-size: 0.85rem;
 		font-weight: 600;
-		margin: 0 0 var(--space-sm);
+	}
+	.window-chip {
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
+	}
+	.goal-chip {
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+	}
+	.window-chip .material-symbols,
+	.goal-chip .material-symbols {
+		font-size: 1rem;
+		width: 1rem;
+		height: 1rem;
 	}
 	.desc {
 		margin: 0 0 var(--space-md);
+		color: var(--color-text-secondary);
 	}
 	.my-progress {
 		padding: var(--space-lg);
@@ -267,13 +314,21 @@
 		gap: var(--space-sm);
 	}
 	.badge-earned {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
 		align-self: flex-start;
 		font-size: 0.8rem;
 		padding: 0.15rem 0.6rem;
 		border-radius: 999px;
-		background: var(--color-success-soft, #dcfce7);
-		color: var(--color-success, #16a34a);
+		background: var(--color-success-light);
+		color: var(--color-success);
 		font-weight: 600;
+	}
+	.badge-earned .material-symbols {
+		font-size: 1rem;
+		width: 1rem;
+		height: 1rem;
 	}
 	.cta-row {
 		display: flex;
@@ -289,6 +344,6 @@
 		margin: 0 0 var(--space-md);
 	}
 	.muted {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 </style>
