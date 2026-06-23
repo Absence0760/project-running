@@ -141,8 +141,9 @@ locals {
 #     not call Decrypt directly without going through a delegated
 #     principal.
 #   - Lets the Lambda execution role call Decrypt at cold-start
-#     (sops in the deployment env decrypts secrets.enc.yaml into the
-#     Lambda environment).
+#     (sops in the deployment env decrypts the env's secrets file —
+#     ../infra-secrets/running/<env>.sops.yaml — into the Lambda
+#     environment).
 #   - Lets the GitHub OIDC deploy role call Decrypt at terraform-apply
 #     time so `data.sops_file` resolves the encrypted .yaml.
 data "aws_iam_policy_document" "kms_secrets" {
@@ -188,10 +189,15 @@ data "aws_iam_policy_document" "kms_secrets" {
         var.kms_decrypt_principal_arn,
       ])
     }
+    # Decrypt path ONLY. The Lambda decrypts the sops env at cold-start and the
+    # deploy role decrypts via `data.sops_file` at terraform-apply — neither ever
+    # ENCRYPTS, so kms:GenerateDataKey is deliberately omitted (audit/infra M1,
+    # least-privilege). Encryption (sops --encrypt / --set / updatekeys, in
+    # sops-init / secret-set / key-rotate) is a LOCAL operator action run under
+    # the operator's own admin/SSO principal, not these roles.
     actions = [
       "kms:Decrypt",
       "kms:DescribeKey",
-      "kms:GenerateDataKey",
     ]
     resources = ["*"]
   }
@@ -204,8 +210,9 @@ resource "aws_kms_key" "secrets" {
   policy                  = data.aws_iam_policy_document.kms_secrets.json
   tags                    = var.tags
 
-  # Losing this key during a careless `terraform destroy` makes every
-  # secrets.enc.yaml for the env permanently undecryptable. The
+  # Losing this key during a careless `terraform destroy` makes the env's
+  # secrets file (../infra-secrets/running/<env>.sops.yaml) permanently
+  # undecryptable. The
   # 30-day deletion window doesn't help when Terraform is the thing
   # initiating the destroy — prevent_destroy forces a manual
   # `terraform state rm` step before deletion.
@@ -387,13 +394,14 @@ resource "aws_lambda_function" "coach" {
   # function-code`. We don't want Terraform to fight CI by reverting
   # to var.lambda_zip_path — once the function exists, code changes
   # are CI's job, infra changes (env vars, role, alarms, distribution)
-  # are Terraform's job. Same for the bumped version that CI publishes.
+  # are Terraform's job. Only filename + source_code_hash are ignored:
+  # `version`/`qualified_arn` are provider-computed (ignoring them is a
+  # no-op Terraform now warns on), and the published version is tracked
+  # by the alias below, which CI repoints via update-alias.
   lifecycle {
     ignore_changes = [
       filename,
       source_code_hash,
-      qualified_arn,
-      version,
     ]
   }
 
@@ -529,8 +537,6 @@ resource "aws_lambda_function" "share_run" {
     ignore_changes = [
       filename,
       source_code_hash,
-      qualified_arn,
-      version,
     ]
   }
 
@@ -655,8 +661,6 @@ resource "aws_lambda_function" "share_route" {
     ignore_changes = [
       filename,
       source_code_hash,
-      qualified_arn,
-      version,
     ]
   }
 
@@ -775,8 +779,6 @@ resource "aws_lambda_function" "share_recap" {
     ignore_changes = [
       filename,
       source_code_hash,
-      qualified_arn,
-      version,
     ]
   }
 
@@ -897,8 +899,6 @@ resource "aws_lambda_function" "share_badge" {
     ignore_changes = [
       filename,
       source_code_hash,
-      qualified_arn,
-      version,
     ]
   }
 
@@ -1015,8 +1015,6 @@ resource "aws_lambda_function" "generate_route" {
     ignore_changes = [
       filename,
       source_code_hash,
-      qualified_arn,
-      version,
     ]
   }
 

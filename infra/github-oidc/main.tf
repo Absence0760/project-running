@@ -138,6 +138,7 @@ resource "aws_iam_role_policy" "deploy_prod" {
         ]
         Resource = [
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-coach*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-generate-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-run*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-recap*",
@@ -205,6 +206,7 @@ resource "aws_iam_role_policy" "deploy_preview" {
         ]
         Resource = [
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-coach*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-generate-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-run*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-recap*",
