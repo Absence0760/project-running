@@ -123,6 +123,29 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   });
 
+  testWidgets('a failed report surfaces a banner and keeps the composer open',
+      (tester) async {
+    final api = _ConditionsApi(throwOnAdd: true);
+    await tester.pumpWidget(_host(RouteConditions(
+      api: api,
+      routeId: 'route-1',
+      routeOwnerId: 'owner-9',
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Report condition'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Report condition'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    expect(find.text('Could not report condition'), findsOneWidget);
+    // The composer stays open for a retry — its Submit button is still mounted.
+    expect(find.widgetWithText(FilledButton, 'Report condition'), findsOneWidget);
+    // Drain showTopBanner's auto-dismiss timer before teardown.
+    await tester.pump(const Duration(seconds: 6));
+  });
+
   testWidgets('read-only view (canReport false) hides the composer affordance',
       (tester) async {
     final api = _ConditionsApi();

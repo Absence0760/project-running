@@ -343,6 +343,30 @@ void main() {
       expect(find.text('2'), findsOneWidget);
     });
 
+    testWidgets('a no-op rescind (already un-kudoed elsewhere) undoes the -1 drift',
+        (tester) async {
+      // Symmetric to the no-op give: the viewer un-kudoed this run from
+      // another tab, so the server row is already gone, but this widget's
+      // local flag is stale (viewerHasKudos: true). Tapping fires a delete
+      // that matches nothing → rescindKudos returns false → the UI must NOT
+      // keep the optimistic -1.
+      final api = _SocialApi(
+        kudosCount: 5,
+        viewerHasKudos: true,
+        rescindReturnsNoOp: true,
+      );
+      await _pumpApi(tester, api);
+      expect(find.text('5'), findsOneWidget);
+
+      await tester.tap(find.byType(TextButton).first);
+      await tester.pumpAndSettle();
+      expect(api.rescindCalls, 1);
+      // Count reconciled back to 5 (no real change) — the optimistic -1 did
+      // NOT stick on a delete that matched nothing.
+      expect(find.text('4'), findsNothing);
+      expect(find.text('5'), findsOneWidget);
+    });
+
     testWidgets('a failed give rolls back the optimistic bump + shows a banner',
         (tester) async {
       final api = _SocialApi(

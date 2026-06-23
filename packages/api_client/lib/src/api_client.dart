@@ -5182,7 +5182,7 @@ class ApiClient {
           })
           .select()
           .single();
-      return ExerciseRow.fromJson(row as Map<String, dynamic>);
+      return ExerciseRow.fromJson(row);
     } catch (_) {
       return null;
     }

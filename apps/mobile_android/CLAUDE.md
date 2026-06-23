@@ -243,13 +243,13 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 
 ## Dart analyzer policy — treat `info` as noise
 
-`dart analyze` on this package reports ~480 issues. **Every remaining entry is `info`-level** — the package is clean of `warning`/`error` as of this pass. The noise buckets (top categories from `dart analyze | grep -oE ' - [a-z_]+$' | sort | uniq -c | sort -rn`):
+`dart analyze` on this package reports ~2100 issues. **Every remaining entry is `info`-level** — the package is clean of `warning`/`error` as of this pass. The noise buckets (top categories from `dart analyze | grep -oE ' - [a-z_]+$' | sort | uniq -c | sort -rn`):
 
 - `always_use_package_imports` (~220) and `avoid_relative_lib_imports` (~140) — these two interact with [decisions.md § 39](../../docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase): tests use relative imports so the same file resolves on both targets. Not being fixed.
 - `deprecated_member_use` (~46) — mostly `withOpacity` → `withValues` and `share_plus` v13 (`Share.shareXFiles` → `SharePlus.instance.share`). Deferred until we do a theme/deps pass.
 - `unnecessary_underscores` / `use_null_aware_elements` / `prefer_single_quotes` / `use_build_context_synchronously` — small stragglers.
 
-**Do not waste a turn on these.** Only act on `info` if your change touched that specific file. **Do act on any new `warning`/`error`** — the bar is "zero warnings", so a fresh one is a regression your change introduced. The CI `test-packages` job runs `melos exec -- dart analyze`; the exit code is ignored for this package (per roadmap intent, not per CI config — verify before relying on this).
+**Do not waste a turn on these.** Only act on `info` if your change touched that specific file. **Do act on any new `warning`/`error`** — the bar is "zero warnings", so a fresh one is a regression your change introduced. The CI "Test Flutter packages" job runs `melos exec -- dart analyze` and **its exit code is enforced** — `dart analyze` exits non-zero on any `warning`/`error` (info-level is not fatal), so a single fresh `warning` anywhere in the melos-analyzed packages (incl. `test/`) reds the job. This bit us once (run 28033171233): three `unused_element_parameter` warnings on never-exercised test-fake params + one `unnecessary_cast` sat red on `main` for days because an earlier note here wrongly claimed the exit code was ignored. It is not — fix the warning at the root.
 
 ## Tests
 

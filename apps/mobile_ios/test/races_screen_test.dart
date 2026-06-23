@@ -34,10 +34,11 @@ class _FakeRaceService extends RaceService {
   Future<bool> isRunSignUpConfigured() async => runSignUpAvailable;
 }
 
-RaceListingView _listing(String id, String name, {int? distanceM, bool verified = true}) =>
+RaceListingView _listing(String id, String name,
+        {int? distanceM, bool verified = true, String provider = 'manual'}) =>
     RaceListingView(
       id: id,
-      provider: 'manual',
+      provider: provider,
       providerRaceId: null,
       name: name,
       raceDate: '2027-09-12',
@@ -80,5 +81,56 @@ void main() {
     await tester.pumpWidget(_app(service));
     await tester.pump();
     expect(find.text('Unverified'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a runsignup listing offers the pull-import button when RunSignUp is configured',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [_listing('r3', 'RSU Race', provider: 'runsignup')],
+      runSignUpAvailable: true,
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Import my result'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining("RunSignUp import isn't available yet"),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+      'a runsignup listing shows the unavailable note when RunSignUp is not configured',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [_listing('r4', 'RSU Race', provider: 'runsignup')],
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Import my result'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.textContaining("RunSignUp import isn't available yet"),
+      findsOneWidget,
+    );
   });
 }
