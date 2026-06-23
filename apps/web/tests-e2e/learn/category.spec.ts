@@ -23,7 +23,7 @@ test.describe('/learn/category', () => {
 		const res = await page.goto('/learn/category/not-a-real-category');
 		// adapter-static serves the SPA shell (200) then the client
 		// resolves to the SvelteKit error page; assert the error UI shows.
-		await expect(page.getByText(/404|not found/i)).toBeVisible();
+		await expect(page.getByText(/404|not found/i).first()).toBeVisible();
 		// A prerendered category would 200; the absence of a baked page
 		// for an unknown id is the guard.
 		expect(res?.status() ?? 200).toBeGreaterThanOrEqual(200);

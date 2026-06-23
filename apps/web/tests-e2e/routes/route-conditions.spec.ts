@@ -121,8 +121,9 @@ test.describe('/routes/[id] — condition reports (owner)', () => {
 		const rows = page.locator('.conditions-list .condition');
 		await expect(rows).toHaveCount(1);
 		await rows.first().getByRole('button', { name: 'Delete' }).click();
-		// ConfirmDialog → confirm.
-		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		// ConfirmDialog → confirm. Scope to the dialog so the row's own Delete
+		// button (still in the DOM) doesn't make the locator strict-violate.
+		await page.locator('.modal').getByRole('button', { name: 'Delete', exact: true }).click();
 
 		await expect(page.getByText('No condition reports yet.', { exact: false })).toBeVisible();
 	});
