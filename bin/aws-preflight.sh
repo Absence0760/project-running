@@ -97,14 +97,19 @@ else
 	git status --porcelain infra/ | sed 's/^/      /'
 fi
 
-step ".sops.yaml"
-sops_config="$REPO_ROOT/infra/.sops.yaml"
-if grep -qE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$sops_config" 2>/dev/null; then
-	warn ".sops.yaml has unresolved placeholder ARNs:"
-	grep -nE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$sops_config" | sed 's/^/      /'
+step "estate secrets (.sops.yaml)"
+# Prod secrets live in the PRIVATE estate repo ../infra-secrets, not here.
+infra_secrets_dir="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
+sops_config="$infra_secrets_dir/.sops.yaml"
+if [[ ! -f "$sops_config" ]]; then
+	warn "estate secrets repo not found at $infra_secrets_dir"
+	dim "Clone Absence0760/infra-secrets as a sibling, or set INFRA_SECRETS_DIR."
+elif grep -qE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$sops_config" 2>/dev/null; then
+	warn "estate .sops.yaml has unresolved running/* placeholder ARNs:"
+	grep -nE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$sops_config" | sed 's/^/      /'
 	dim "Run bin/sops-init.sh after applying envs/<env>/."
 else
-	ok ".sops.yaml has all KMS ARNs resolved"
+	ok "estate .sops.yaml has the running/* KMS ARNs resolved"
 fi
 
 step "Verdict"

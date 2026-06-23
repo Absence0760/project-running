@@ -8,10 +8,11 @@
 #   - `infra/bootstrap` has been applied (S3 state bucket — locking is
 #     S3-native via `use_lockfile = true`, so no DDB table is needed)
 #   - `infra/dns` has been applied (hosted zone + ACM cert)
-#   - The `secrets.enc.yaml` file in this directory does NOT exist yet
-#     on the very first apply. The KMS key is created here, then the
-#     user encrypts a secrets file against it, then re-applies. See
-#     the README at `infra/README.md` for the full first-deploy flow.
+#   - The prod secrets file does NOT exist yet on the very first apply.
+#     The KMS key is created here, then the operator encrypts a secrets
+#     file against it IN THE PRIVATE ESTATE REPO (../infra-secrets, NOT
+#     this public repo), then re-applies. See `infra/README.md` for the
+#     full first-deploy flow.
 
 provider "aws" {
   region = var.aws_region
@@ -47,7 +48,14 @@ data "terraform_remote_state" "github_oidc" {
 }
 
 locals {
-  secrets_path = "${path.module}/secrets.enc.yaml"
+  # Production secrets live in the PRIVATE estate repo Absence0760/infra-secrets
+  # (../infra-secrets), one subdir per project — NOT in this PUBLIC repo. The
+  # ciphertext is encrypted with this env's KMS key (created below) and consumed
+  # in-memory by the sops_file data source at apply time. The default assumes the
+  # estate repo is cloned as a sibling of this one; override `secrets_file`
+  # (TF_VAR_secrets_file) if your clone lives elsewhere. See infra/README.md and
+  # decisions.md §53.
+  secrets_path = var.secrets_file != "" ? var.secrets_file : "${path.module}/../../../../infra-secrets/running/prod.sops.yaml"
 }
 
 module "web" {
@@ -103,9 +111,9 @@ module "web" {
   # (noisy demo traffic).
   lambda_throttle_alarm_threshold = 1
 
-  # Null on first apply (file doesn't exist yet). The user encrypts a
-  # secrets file against the KMS key created here, then re-applies and
-  # the Lambda gets the real env vars.
+  # Null on first apply (the external secrets file doesn't exist yet). The
+  # operator encrypts ../infra-secrets/running/prod.sops.yaml against the KMS key
+  # created here, then re-applies and the Lambda gets the real env vars.
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 

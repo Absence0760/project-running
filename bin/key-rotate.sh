@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# key-rotate.sh — re-encrypt an env's secrets.enc.yaml under the
-# current KMS key.
+# key-rotate.sh — re-encrypt an env's secrets file under the current
+# KMS key. The encrypted file lives in the PRIVATE estate repo
+# (../infra-secrets/running/<env>.sops.yaml), NOT this public repo.
 #
 # Use case: you've changed the KMS key (via terraform — destroyed +
-# recreated, or moved to a different key in `.sops.yaml`), and the
-# encrypted file still has the OLD key in its sops metadata. sops
-# auto-decrypts against whatever key it was encrypted with, so the
-# file keeps WORKING — but the next operator with access only to the
-# new key can't decrypt it. This script reads the file with the old
-# key, re-encrypts under the new key recorded in `.sops.yaml`.
+# recreated, or moved to a different key in the estate `.sops.yaml`),
+# and the encrypted file still has the OLD key in its sops metadata.
+# sops auto-decrypts against whatever key it was encrypted with, so
+# the file keeps WORKING — but the next operator with access only to
+# the new key can't decrypt it. This script reads the file with the
+# old key, re-encrypts under the new key recorded in the estate
+# `.sops.yaml`. Remember to commit the re-encrypted file in the
+# private estate repo afterward.
 #
 # Note on AWS-native KMS rotation: enabling automatic key rotation
 # (`aws kms enable-key-rotation`) does NOT require this script —
@@ -44,11 +47,13 @@ need_cmd sops
 need_cmd grep
 need_aws_auth
 
-SECRETS_FILE="$REPO_ROOT/infra/envs/$ENV_NAME/secrets.enc.yaml"
-SOPS_CONFIG="$REPO_ROOT/infra/.sops.yaml"
+# Secrets live in the PRIVATE estate repo, not this public one.
+INFRA_SECRETS_DIR="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
+SECRETS_FILE="$INFRA_SECRETS_DIR/running/$ENV_NAME.sops.yaml"
+SOPS_CONFIG="$INFRA_SECRETS_DIR/.sops.yaml"
 
 if [[ ! -f "$SECRETS_FILE" ]]; then
-	fatal "$SECRETS_FILE missing — nothing to rotate"
+	fatal "$SECRETS_FILE missing — nothing to rotate (estate repo at $INFRA_SECRETS_DIR; set INFRA_SECRETS_DIR if elsewhere)"
 fi
 
 step "Current sops metadata for $ENV_NAME"
@@ -100,6 +105,9 @@ if sops -d "$SECRETS_FILE" >/dev/null 2>&1; then
 else
 	fatal "Re-encrypted file does NOT decrypt — rotation may have left it inconsistent. Investigate before re-applying terraform."
 fi
+
+step "Commit the re-encrypted file (PRIVATE estate repo)"
+dim "  (cd $INFRA_SECRETS_DIR && git commit -am 'running: rotate $ENV_NAME key')"
 
 step "Push to Lambda"
 log "The Lambda still has env vars from the old apply. Re-apply to push:"

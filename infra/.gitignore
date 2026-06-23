@@ -11,3 +11,20 @@ crash.*.log
 # keep them out of git. The tfvars.example files are committed as
 # templates.
 envs/*/terraform.tfvars
+
+# FAIL-SAFE: this repo is PUBLIC. Production sops ciphertext must NEVER be
+# committed here — it lives in the private estate repo Absence0760/infra-secrets
+# (cloned at ../infra-secrets), one subdir per project. Even encrypted, a sops
+# file in public history leaks KMS-ARN metadata + the exact secret key names, and
+# is the mistake the docs explicitly warn against. These patterns guarantee an
+# operator running an old/local flow can't accidentally `git add` ciphertext.
+secrets.enc.yaml
+envs/*/secrets.enc.yaml
+**/secrets.enc.yaml
+# Decrypted scratch (sops decrypts to memory; guard the common accidental names).
+*.dec
+*.dec.*
+*.decrypted
+*.decrypted.*
+*.plain
+*.plain.*

@@ -33,7 +33,7 @@ Each stack has its own remote state in the bucket created by `bootstrap`. State 
 > ```bash
 > bin/aws-preflight.sh                                 # confirm tooling + AWS auth
 > bin/deploy-preview.sh                                # apply bootstrap → dns → oidc → preview, idempotent
-> bin/sops-init.sh preview                             # resolve KMS placeholders + seed secrets.enc.yaml
+> bin/sops-init.sh preview                             # wire KMS ARN into ../infra-secrets + seed running/preview.sops.yaml
 > bin/secret-set.sh preview ANTHROPIC_API_KEY < ~/key  # write the real Anthropic key (stdin, never argv)
 > cd infra/envs/preview && terraform apply             # push the new env var to Lambda
 > bin/preview-status.sh preview                        # health check
@@ -61,6 +61,7 @@ Working from zero — no AWS account, no domain, no AWS CLI:
 - Terraform ≥ 1.13 (`dnf install terraform`)
 - AWS CLI v2 (already installed per workstation conventions)
 - sops (already installed; uses age locally + AWS KMS for shared)
+- The PRIVATE estate secrets repo cloned as a sibling of this repo: `git clone git@github.com:Absence0760/infra-secrets.git ../infra-secrets`. Production sops ciphertext lives there (under `running/`), never in this public repo. Set `INFRA_SECRETS_DIR` / `TF_VAR_secrets_file` if your clone lives elsewhere.
 
 **0.4 — AWS CLI SSO.**
 
@@ -141,28 +142,41 @@ terraform apply
 
 The first apply creates the KMS key, S3 bucket, CloudFront distribution, and Lambda **with a placeholder zip and no `ANTHROPIC_API_KEY`** (because the secrets file doesn't exist yet). The coach endpoint will return 503 — that's expected. Static site already works.
 
-Now encrypt the secrets file against the env's KMS key. **Stop and verify the substitution worked** before running `sops --encrypt` — if `REPLACE_*` survived (sed mismatched the file path on macOS BSD-sed, or `terraform output` returned empty), sops will fall back to whatever default backend is in your local config and silently encrypt against the wrong key:
+> **Secrets live in the PRIVATE estate repo, NOT here.** This repo is PUBLIC.
+> Production sops ciphertext is committed to `Absence0760/infra-secrets` (cloned
+> as a sibling at `../infra-secrets`), under `running/<env>.sops.yaml` — never
+> under `infra/` (a sops file in public history leaks KMS-ARN metadata + secret
+> key names; `infra/.gitignore` blocks it as a fail-safe). The Terraform
+> `sops_file` data source reads the external path via the `secrets_file` var
+> (default `../infra-secrets/running/<env>.sops.yaml`); set `TF_VAR_secrets_file`
+> if your estate clone lives elsewhere. See [decisions.md §53](../docs/architecture/decisions.md) and `infra/.sops.yaml`.
+
+The scripted path does the rest (`bin/sops-init.sh` wires the env's KMS ARN into the estate `.sops.yaml` and seeds the encrypted file; `bin/secret-set.sh` writes a key). The equivalent manual steps for preview:
 
 ```bash
-ARN=$(terraform output -raw kms_key_arn)
-sed -i "s|REPLACE_PREVIEW_KMS_ARN|$ARN|" ../../.sops.yaml
-grep -q 'REPLACE_' ../../.sops.yaml && { echo 'ERROR: .sops.yaml still has placeholder ARNs'; exit 1; }
+ARN=$(terraform output -raw kms_key_arn)                       # from infra/envs/preview
+cd ../../../../infra-secrets                                   # the private estate repo
+sed -i "s|KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER|$ARN|" .sops.yaml
+grep -q 'KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the preview placeholder'; exit 1; }
+mkdir -p running
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
 echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies
 echo 'SENTRY_DSN: ...' >> /tmp/coach.yaml      # optional
-sops --encrypt /tmp/coach.yaml > secrets.enc.yaml
+sops --encrypt /tmp/coach.yaml > running/preview.sops.yaml
 shred -u /tmp/coach.yaml
+git add running/preview.sops.yaml .sops.yaml && git commit -m 'running: preview secrets'   # commit in the PRIVATE repo
 ```
 
-Re-apply to wire the secrets into the Lambda:
+Re-apply (back in `infra/envs/preview`) to wire the secrets into the Lambda:
 
 ```bash
+cd -    # back to infra/envs/preview
 terraform apply
 ```
 
 ### 5. Prod env
 
-Same flow, in `envs/prod/`:
+Same flow, in `envs/prod/` (ciphertext → `../infra-secrets/running/prod.sops.yaml`):
 
 ```bash
 cd ../prod
@@ -171,12 +185,15 @@ $EDITOR terraform.tfvars
 terraform init
 terraform apply
 ARN=$(terraform output -raw kms_key_arn)
-sed -i "s|REPLACE_PROD_KMS_ARN|$ARN|" ../../.sops.yaml
-grep -q 'REPLACE_' ../../.sops.yaml && { echo 'ERROR: .sops.yaml still has placeholder ARNs'; exit 1; }
-echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
-echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
-sops --encrypt /tmp/coach.yaml > secrets.enc.yaml
-shred -u /tmp/coach.yaml
+( cd ../../../../infra-secrets
+  sed -i "s|KMS_RUNNING_PROD_ARN_PLACEHOLDER|$ARN|" .sops.yaml
+  grep -q 'KMS_RUNNING_PROD_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the prod placeholder'; exit 1; }
+  mkdir -p running
+  echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
+  echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
+  sops --encrypt /tmp/coach.yaml > running/prod.sops.yaml
+  shred -u /tmp/coach.yaml
+  git add running/prod.sops.yaml .sops.yaml && git commit -m 'running: prod secrets' )
 terraform apply
 ```
 
@@ -192,22 +209,23 @@ Once green: visit `preview.<your-apex>` (or `<your-apex>` for prod) and confirm 
 
 ## Rotation
 
-Edit a secret in place:
+Edit a secret in place (the encrypted file lives in the PRIVATE estate repo):
 
 ```bash
-cd infra/envs/prod
-sops secrets.enc.yaml                            # opens $EDITOR with decrypted YAML
-terraform apply                                  # pushes new value to Lambda
+sops ../infra-secrets/running/prod.sops.yaml      # opens $EDITOR with decrypted YAML
+( cd ../infra-secrets && git commit -am 'running: rotate prod secret' )   # commit in the private repo
+cd infra/envs/prod && terraform apply             # pushes new value to Lambda
 ```
 
-Or non-interactively for one specific key (no shell history leak — value comes via stdin / `--from-file`):
+Or non-interactively for one specific key (no shell history leak — value comes via stdin / `--from-file`; `bin/secret-set.sh` writes to `../infra-secrets/running/<env>.sops.yaml`):
 
 ```bash
 echo -n "$NEW_VALUE" | bin/secret-set.sh prod ANTHROPIC_API_KEY
+( cd ../infra-secrets && git commit -am 'running: rotate ANTHROPIC_API_KEY' )
 cd infra/envs/prod && terraform apply
 ```
 
-If you ever change the *KMS key itself* (destroyed + recreated, or moved in `.sops.yaml`), the existing encrypted file still decrypts under the OLD key in its metadata. Re-encrypt under the new key with [`bin/key-rotate.sh`](../bin/README.md). For *AWS-native key material* rotation (`aws kms enable-key-rotation`) no re-encrypt is needed — sops sees the same key alias.
+If you ever change the *KMS key itself* (destroyed + recreated, or moved in the estate `.sops.yaml`), the existing encrypted file still decrypts under the OLD key in its metadata. Re-encrypt under the new key with [`bin/key-rotate.sh`](../bin/README.md). For *AWS-native key material* rotation (`aws kms enable-key-rotation`) no re-encrypt is needed — sops sees the same key alias.
 
 The Lambda's environment variables update in-place; in-flight requests finish on the old config, new requests pick up the new value within ~10 s.
 
@@ -217,7 +235,7 @@ Remote state in `s3://runonward-tfstate/`. Locking is S3-native via `use_lockfil
 
 ## Disaster recovery
 
-If the AWS account itself is gone, see [`apps/web/deployment.md` § Disaster recovery](../apps/web/deployment.md#disaster-recovery) for the rebuild procedure. Important nuance: KMS keys can't be cross-account-recovered, so the existing `secrets.enc.yaml` files are unrecoverable in that scenario — re-issue the secrets fresh and re-encrypt against the new env's KMS key.
+If the AWS account itself is gone, see [`apps/web/deployment.md` § Disaster recovery](../apps/web/deployment.md#disaster-recovery) for the rebuild procedure. Important nuance: KMS keys can't be cross-account-recovered, so the existing `../infra-secrets/running/*.sops.yaml` ciphertext is unrecoverable in that scenario (the plaintext is gone with the key) — re-issue the secrets fresh and re-encrypt against the new env's KMS key. The private estate repo is the backup of record for the *encrypted* blobs, but it cannot rescue you from a lost KMS key.
 
 For an interactive rebuild walkthrough that probes which phases are already done and resumes mid-flow, run [`bin/disaster-recovery.sh`](../bin/README.md) (or `bin/disaster-recovery.sh --status` for a read-only state check).
 

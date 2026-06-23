@@ -59,15 +59,17 @@ probe_phase_done() {
 			;;
 		3b)
 			# Three conditions for "Phase 3b done":
-			#   (1) the secrets file exists,
-			#   (2) .sops.yaml has no unresolved KMS placeholders, and
+			#   (1) the secrets file exists (in the PRIVATE estate repo),
+			#   (2) the estate .sops.yaml has no unresolved running/* KMS
+			#       placeholders, and
 			#   (3) the secrets file decrypts AND its contents are not
 			#       just the seed placeholder ("replace-me").
 			# (3) catches the false-positive where sops-init ran but
 			# the operator never edited in real values.
-			local secrets_file="$REPO_ROOT/infra/envs/preview/secrets.enc.yaml"
+			local infra_secrets_dir="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
+			local secrets_file="$infra_secrets_dir/running/preview.sops.yaml"
 			[[ -f "$secrets_file" ]] || return 1
-			grep -qE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$REPO_ROOT/infra/.sops.yaml" && return 1
+			grep -qE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$infra_secrets_dir/.sops.yaml" && return 1
 			# Decrypt + check for the seed placeholder.
 			local decrypted
 			decrypted="$(sops --decrypt "$secrets_file" 2>/dev/null || true)"
@@ -250,15 +252,15 @@ if probe_phase_done 3b; then
 	ok "Phase 3b (sops Lambda secrets) already complete — skipping"
 else
 	step "Phase 3b — sops-encrypt Lambda runtime secrets"
-	log "Resolves the placeholder KMS ARN(s) in infra/.sops.yaml,"
-	log "seeds an encrypted secrets.enc.yaml, and reapplies preview"
-	log "so the Lambda picks up the env vars."
+	log "Resolves the running/preview KMS ARN in the estate ../infra-secrets/.sops.yaml,"
+	log "seeds an encrypted ../infra-secrets/running/preview.sops.yaml, and reapplies"
+	log "preview so the Lambda picks up the env vars."
 	if confirm "Run bin/sops-init.sh preview?"; then
 		"$REPO_ROOT/bin/sops-init.sh" preview
 	fi
 	log ""
-	log "Now edit the secrets file and put the real Anthropic key in:"
-	dim "  sops infra/envs/preview/secrets.enc.yaml"
+	log "Now edit the secrets file (in the PRIVATE estate repo) and put the real Anthropic key in:"
+	dim "  sops ${INFRA_SECRETS_DIR:-../infra-secrets}/running/preview.sops.yaml"
 	read -rp "Press Enter once you've added the real Anthropic API key. " _
 	log "Re-applying preview so Lambda picks up the new env vars:"
 	(

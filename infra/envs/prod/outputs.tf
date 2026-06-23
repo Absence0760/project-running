@@ -27,7 +27,7 @@ output "generate_route_lambda_alias" {
 }
 
 output "kms_key_arn" {
-  description = "Use this in `infra/.sops.yaml` (REPLACE_PROD_KMS_ARN) to encrypt secrets.enc.yaml."
+  description = "Put this in the estate repo's ../infra-secrets/.sops.yaml (running/prod rule) to encrypt running/prod.sops.yaml. `bin/sops-init.sh prod` wires it automatically."
   value       = module.web.kms_key_arn
 }
 

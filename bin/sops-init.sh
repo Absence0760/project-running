@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 #
-# sops-init.sh — resolves the placeholder KMS ARNs in `infra/.sops.yaml`
-# after `terraform apply` on the per-env web-stack creates the keys, and
-# (optionally) seeds an empty `secrets.enc.yaml` for any env that
-# doesn't have one yet.
+# sops-init.sh — resolves the placeholder KMS ARNs in the PRIVATE estate repo's
+# `../infra-secrets/.sops.yaml` after `terraform apply` on the per-env web-stack
+# creates the keys, and (optionally) seeds an empty `running/<env>.sops.yaml`
+# there for any env that doesn't have one yet.
+#
+# Production secrets live in ../infra-secrets (Absence0760/infra-secrets), NOT in
+# this PUBLIC repo (one subdir per project; this project = `running`). Set
+# INFRA_SECRETS_DIR to override the default sibling-clone location.
 #
 # This script does NOT create KMS keys — that's done by
 # `infra/modules/web-stack` on `terraform apply`. The script's only
 # job is to bridge the gap between "terraform created the keys" and
 # "sops can use them" — i.e., copy the ARNs from terraform outputs
-# into `.sops.yaml`.
+# into the estate `.sops.yaml`.
 #
 # Idempotent: re-running detects already-resolved placeholders and
 # already-seeded files, prints a "nothing to do" status, and exits 0.
@@ -36,7 +40,12 @@ set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-SOPS_CONFIG="$REPO_ROOT/infra/.sops.yaml"
+# Production secrets live in the PRIVATE estate repo (Absence0760/infra-secrets),
+# NOT this public repo — one subdir per project (this project = `running`).
+# Default to a sibling clone; override INFRA_SECRETS_DIR if yours is elsewhere.
+INFRA_SECRETS_DIR="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
+PROJECT_SLUG="running"
+SOPS_CONFIG="$INFRA_SECRETS_DIR/.sops.yaml"
 
 cd "$REPO_ROOT"
 
@@ -71,20 +80,23 @@ done
 need_aws_auth
 ok "AWS auth OK ($(aws sts get-caller-identity --query Arn --output text))"
 
+if [[ ! -d "$INFRA_SECRETS_DIR" ]]; then
+	fatal "Estate secrets repo not found at $INFRA_SECRETS_DIR — clone Absence0760/infra-secrets as a sibling of this repo, or set INFRA_SECRETS_DIR."
+fi
 if [[ ! -f "$SOPS_CONFIG" ]]; then
-	fatal "$SOPS_CONFIG missing — restore from git"
+	fatal "$SOPS_CONFIG missing — is $INFRA_SECRETS_DIR a checkout of the infra-secrets repo?"
 fi
 
 # ----------------------------------------------------------------------------
-# Per-env: read ARN from terraform output, sed-replace into .sops.yaml,
-# optionally seed secrets.enc.yaml.
+# Per-env: read ARN from terraform output, sed-replace into the estate
+# .sops.yaml, optionally seed running/<env>.sops.yaml.
 # ----------------------------------------------------------------------------
 
 placeholder_for() {
-	# Map env name → placeholder token used in infra/.sops.yaml.
+	# Map env name → placeholder token used in the estate ../infra-secrets/.sops.yaml.
 	case "$1" in
-		preview) echo "REPLACE_PREVIEW_KMS_ARN" ;;
-		prod)    echo "REPLACE_PROD_KMS_ARN" ;;
+		preview) echo "KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER" ;;
+		prod)    echo "KMS_RUNNING_PROD_ARN_PLACEHOLDER" ;;
 	esac
 }
 
@@ -96,7 +108,7 @@ for env in "${ENVS[@]}"; do
 	step "Bootstrapping env: $env"
 	env_dir="$(env_dir_for "$env")"
 	placeholder="$(placeholder_for "$env")"
-	secrets_file="$env_dir/secrets.enc.yaml"
+	secrets_file="$INFRA_SECRETS_DIR/$PROJECT_SLUG/$env.sops.yaml"
 
 	# Read the KMS arn from terraform output. Fail loudly if the env
 	# hasn't been applied yet — we deliberately don't try to apply on
@@ -125,13 +137,14 @@ for env in "${ENVS[@]}"; do
 	if grep -qF "$placeholder" "$SOPS_CONFIG"; then
 		# Use a non-/ delimiter because the ARN contains slashes.
 		sed -i "s|$placeholder|$arn|" "$SOPS_CONFIG"
-		ok "Replaced $placeholder in infra/.sops.yaml"
+		ok "Replaced $placeholder in $SOPS_CONFIG"
 	else
-		ok "$placeholder already resolved in infra/.sops.yaml — skipping"
+		ok "$placeholder already resolved in $SOPS_CONFIG — skipping"
 	fi
 
 	# Seed the secrets file if missing. Empty-but-encrypted is fine:
 	# operators edit it with `sops $secrets_file` to add real values.
+	mkdir -p "$INFRA_SECRETS_DIR/$PROJECT_SLUG"
 	if [[ -f "$secrets_file" ]]; then
 		ok "$secrets_file already exists — leaving it alone"
 	else
@@ -157,19 +170,20 @@ done
 # Final sanity check + next steps
 # ----------------------------------------------------------------------------
 
-step "Verifying .sops.yaml is fully resolved"
-if grep -qE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$SOPS_CONFIG"; then
-	warn ".sops.yaml still has placeholder ARNs — some envs aren't applied yet:"
-	grep -nE 'REPLACE_(PROD|PREVIEW)_KMS_ARN' "$SOPS_CONFIG" >&2
+step "Verifying the estate .sops.yaml is fully resolved for this project"
+if grep -qE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$SOPS_CONFIG"; then
+	warn "$SOPS_CONFIG still has running/* placeholder ARNs — some envs aren't applied yet:"
+	grep -nE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$SOPS_CONFIG" >&2
 	warn "Apply the missing env(s) and re-run this script."
 	exit 0
 fi
-ok "All placeholders resolved"
+ok "All running/* placeholders resolved"
 
-step "Next steps"
-log "Edit secrets:    sops infra/envs/<env>/secrets.enc.yaml"
+step "Next steps (commit the encrypted file in the PRIVATE estate repo, never here)"
+log "Edit secrets:    sops $INFRA_SECRETS_DIR/$PROJECT_SLUG/<env>.sops.yaml"
 log "Re-apply env:    cd infra/envs/<env> && terraform apply"
-log "Verify decrypt:  sops --decrypt infra/envs/<env>/secrets.enc.yaml"
+log "Verify decrypt:  sops --decrypt $INFRA_SECRETS_DIR/$PROJECT_SLUG/<env>.sops.yaml"
+log "Commit secrets:  (cd $INFRA_SECRETS_DIR && git add $PROJECT_SLUG && git commit)"
 log ""
 log "On every key rotation:"
-log "  sops updatekeys infra/envs/<env>/secrets.enc.yaml"
+log "  sops updatekeys $INFRA_SECRETS_DIR/$PROJECT_SLUG/<env>.sops.yaml"

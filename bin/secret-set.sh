@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# secret-set.sh — set or update a single key in an env's
-# secrets.enc.yaml without opening the editor.
+# secret-set.sh — set or update a single key in an env's encrypted secrets
+# file (../infra-secrets/running/<env>.sops.yaml, in the PRIVATE estate repo)
+# without opening the editor.
 #
 # This wraps `sops --set` so you can script secret rotations or one-
 # off changes without launching $EDITOR. Re-encrypt happens
@@ -36,6 +37,11 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+
+# Secrets live in the PRIVATE estate repo ../infra-secrets/running/, NOT this
+# public repo. Override INFRA_SECRETS_DIR if your clone isn't a sibling.
+INFRA_SECRETS_DIR="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
+PROJECT_SLUG="running"
 
 usage() {
 	cat >&2 <<EOF
@@ -89,7 +95,7 @@ done
 need_cmd sops
 need_cmd jq
 
-SECRETS_FILE="$REPO_ROOT/infra/envs/$ENV_NAME/secrets.enc.yaml"
+SECRETS_FILE="$INFRA_SECRETS_DIR/$PROJECT_SLUG/$ENV_NAME.sops.yaml"
 
 # Validate input source BEFORE we hit AWS — a piped-empty stdin or
 # missing --from-file path should error fast with the real reason,
@@ -132,9 +138,11 @@ fi
 # sops --set expects a JSON-encoded string. jq -Rn handles quotes,
 # backslashes, and newlines safely — never interpolate raw $VALUE.
 JSON_VALUE="$(jq -Rn --arg v "$VALUE" '$v')"
-sops --config "$REPO_ROOT/infra/.sops.yaml" --set "[\"$KEY\"] $JSON_VALUE" "$SECRETS_FILE"
+sops --config "$INFRA_SECRETS_DIR/.sops.yaml" --set "[\"$KEY\"] $JSON_VALUE" "$SECRETS_FILE"
 
 ok "Set $KEY in $SECRETS_FILE"
 log ""
+log "Commit the encrypted file in the PRIVATE estate repo (never in this one):"
+dim "  (cd $INFRA_SECRETS_DIR && git add $PROJECT_SLUG/$ENV_NAME.sops.yaml && git commit -m 'running: rotate $KEY')"
 log "Push to the Lambda:"
 dim "  cd infra/envs/$ENV_NAME && terraform apply"

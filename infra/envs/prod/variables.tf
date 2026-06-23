@@ -21,9 +21,15 @@ variable "public_supabase_anon_key" {
 }
 
 variable "extra_lambda_env" {
-  description = "Optional extras like COACH_PROVIDER, OPENAI_BASE_URL."
+  description = "Optional NON-SECRET extras like COACH_PROVIDER, OPENAI_BASE_URL. Surfaced into the Lambda env unencrypted and visible in `terraform plan` — never route a real secret through here; put secrets in the sops file (var.secrets_file) instead."
   type        = map(string)
   default     = {}
+}
+
+variable "secrets_file" {
+  description = "Path to this env's sops-encrypted secrets file. Defaults to ../infra-secrets/running/prod.sops.yaml — the PRIVATE estate repo (Absence0760/infra-secrets) cloned as a sibling of this repo. NEVER point this inside this public repo (ciphertext in public history leaks KMS-ARN metadata + secret key names). Empty string = use the default path."
+  type        = string
+  default     = ""
 }
 
 variable "graphhopper_url" {

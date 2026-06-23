@@ -1,30 +1,24 @@
-# sops-encrypted file routing.
+# sops routing for this repo — DELIBERATELY RULE-LESS.
 #
-# Each per-env `secrets.enc.yaml` is encrypted with that env's KMS key.
-# The KMS key is created by `modules/web-stack` on `terraform apply`
-# for the env.
+# This repo is PUBLIC. Production secrets are NOT encrypted or stored here —
+# they live in the PRIVATE estate repo Absence0760/infra-secrets (cloned as a
+# sibling at ../infra-secrets), one subdir per project:
 #
-# First-time setup for an env (after `terraform apply` has created
-# the KMS key): run `bin/sops-init.sh [preview|prod|both]`. The script
-# is idempotent; the manual steps below are equivalent and useful if
-# you want to understand what it's doing:
+#     ../infra-secrets/running/prod.sops.yaml
+#     ../infra-secrets/running/preview.sops.yaml
 #
-#   ARN=$(cd infra/envs/prod && terraform output -raw kms_key_arn)
-#   sed -i "s|REPLACE_PROD_KMS_ARN|$ARN|" infra/.sops.yaml
-#   echo "ANTHROPIC_API_KEY: replace-me" > /tmp/coach.yaml
-#   sops --encrypt /tmp/coach.yaml > infra/envs/prod/secrets.enc.yaml
+# The creation rules + KMS ARNs for those files live in
+# ../infra-secrets/.sops.yaml. `bin/sops-init.sh <env>` wires this project's
+# per-env KMS ARN (from `terraform output kms_key_arn`) into that estate config
+# and seeds the encrypted file; `bin/secret-set.sh <env> <KEY>` edits it. The
+# Terraform `sops_file` data source in infra/envs/<env>/main.tf reads the
+# external path (the `secrets_file` var, default
+# ../infra-secrets/running/<env>.sops.yaml).
 #
-# Rotation: edit the file in place with `sops infra/envs/prod/secrets.enc.yaml`,
-# save, then `terraform apply` to push the new value to the Lambda.
+# This file intentionally declares NO creation_rules so that running
+# `sops --encrypt` anywhere under infra/ FAILS CLOSED ("no matching creation
+# rules found") instead of silently producing ciphertext that could be committed
+# to public history. infra/.gitignore blocks any `secrets.enc.yaml` as a second
+# fail-safe.
 #
-# The two creation_rules below are placeholders — fill the ARNs in
-# (or move them to ~/.config/sops/runonward.sops.yaml if you'd rather
-# keep ARNs out of the repo). The rules don't affect *decryption* — that
-# uses whatever KMS key the file was encrypted with — only what `sops`
-# defaults to when you run `sops --encrypt` on a fresh file.
-
-creation_rules:
-  - path_regex: envs/prod/secrets\.enc\.yaml$
-    kms: REPLACE_PROD_KMS_ARN
-  - path_regex: envs/preview/secrets\.enc\.yaml$
-    kms: REPLACE_PREVIEW_KMS_ARN
+# See infra/README.md (Secrets) and decisions.md §53.
