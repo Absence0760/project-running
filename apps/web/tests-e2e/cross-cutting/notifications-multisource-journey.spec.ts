@@ -148,11 +148,19 @@ test.describe('notifications multi-source journey — four triggers → one inbo
 
 		try {
 			await test.step('recipient owns a fresh public run', async () => {
+				// Keep this run UNDER the 5 km single-run distance-badge threshold
+				// (achievements migration 20270208_001 → bronze distance_single =
+				// 5000 m). An 8 km run awards the recipient a bronze distance badge
+				// on insert, and notify_achievement_earned then lands a FIFTH
+				// 'achievement' row in their inbox — breaking the exact-four-kinds
+				// assertion below. The distance is irrelevant to the four social
+				// triggers under test, so a sub-5 km run keeps the inbox to exactly
+				// the kudos/comment/follow/event_rsvp set.
 				runId = await insertRun({
 					user_id: recipient.id,
 					started_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-					distance_m: 8_000,
-					duration_s: 2_400,
+					distance_m: 4_000,
+					duration_s: 1_200,
 					is_public: true,
 					metadata: { activity_type: 'run', title: `E2E multisource ${Date.now()}` }
 				});

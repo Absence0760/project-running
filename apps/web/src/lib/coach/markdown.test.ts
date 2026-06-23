@@ -30,3 +30,22 @@ test('renderCoachMarkdown strips an event-handler attribute', () => {
 	const out = renderCoachMarkdown('<img src="x" onerror="alert(1)">');
 	assert.ok(!/onerror/i.test(out), 'inline event handler is removed');
 });
+
+// Multibyte + punctuation that lives in real LLM replies must survive the
+// marked → DOMPurify round-trip verbatim. This pins the same invariant the
+// `SSE: special characters` Playwright e2e checks, but at the cheap unit
+// layer so a "works for ASCII, drops on multibyte" regression in marked or
+// the sanitiser fails here first. Mirrors the e2e's STR exactly.
+test('renderCoachMarkdown preserves emoji, accents, em-dash and curly quotes verbatim', () => {
+	const STR = 'Pace: `5:30/km` — try “easy effort” 😅 (café tempo)';
+	const out = renderCoachMarkdown(STR);
+	assert.ok(out.includes('😅'), 'emoji survives');
+	assert.ok(out.includes('café'), 'accented character survives');
+	assert.ok(out.includes('—'), 'em-dash survives');
+	assert.ok(out.includes('“easy effort”'), 'curly quotes survive');
+	assert.ok(out.includes('<code>5:30/km</code>'), 'backtick span becomes a code element');
+	// The e2e asserts the bubble textContent matches /😅.*café/ — guard the
+	// same ordering at the HTML level (emoji precedes café, nothing between
+	// drops out).
+	assert.match(out, /😅[\s\S]*café/u, 'emoji precedes café with content intact');
+});
