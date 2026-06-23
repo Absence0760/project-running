@@ -212,6 +212,7 @@ class ChallengeRow {
   static const String colEndsAt = 'ends_at';
   static const String colIsPublic = 'is_public';
   static const String colCreatedAt = 'created_at';
+  static const String colParticipantCount = 'participant_count';
 
   final String id;
   final String creatorId;
@@ -226,6 +227,7 @@ class ChallengeRow {
   final DateTime endsAt;
   final bool isPublic;
   final DateTime createdAt;
+  final int participantCount;
 
   const ChallengeRow({
     required this.id,
@@ -241,6 +243,7 @@ class ChallengeRow {
     required this.endsAt,
     required this.isPublic,
     required this.createdAt,
+    required this.participantCount,
   });
 
   factory ChallengeRow.fromJson(Map<String, dynamic> json) => ChallengeRow(
@@ -257,6 +260,7 @@ class ChallengeRow {
     endsAt: DateTime.parse(json['ends_at'] as String),
     isPublic: (json['is_public'] as bool?) ?? false,
     createdAt: DateTime.parse(json['created_at'] as String),
+    participantCount: (json['participant_count'] as num).toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -273,6 +277,7 @@ class ChallengeRow {
     colEndsAt: endsAt.toIso8601String(),
     colIsPublic: isPublic,
     colCreatedAt: createdAt.toIso8601String(),
+    colParticipantCount: participantCount,
   };
 }
 

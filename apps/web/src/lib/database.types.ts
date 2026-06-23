@@ -234,6 +234,7 @@ export type Database = {
           id: string
           is_public: boolean
           metric: string
+          participant_count: number
           scope: string
           starts_at: string
           title: string
@@ -249,6 +250,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           metric: string
+          participant_count?: number
           scope: string
           starts_at: string
           title: string
@@ -264,6 +266,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           metric?: string
+          participant_count?: number
           scope?: string
           starts_at?: string
           title?: string
@@ -4414,6 +4417,25 @@ export type Database = {
       block_user: {
         Args: { p_reason?: string; p_target: string }
         Returns: undefined
+      }
+      browse_public_challenges: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          activity_type: string
+          club_id: string
+          created_at: string
+          creator_id: string
+          description: string
+          ends_at: string
+          goal_value: number
+          id: string
+          is_public: boolean
+          metric: string
+          participant_count: number
+          scope: string
+          starts_at: string
+          title: string
+        }[]
       }
       challenge_leaderboard: {
         Args: { p_by_team?: boolean; p_challenge_id: string }

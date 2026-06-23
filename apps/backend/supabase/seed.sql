@@ -2856,3 +2856,47 @@ INSERT INTO challenge_participants (challenge_id, user_id)
 VALUES
   ('f0000001-0000-0000-0000-000000000001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
   ('f0000002-0000-0000-0000-000000000002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+
+-- Public challenges the seed user has NOT joined, created + populated by the
+-- community users (Alex Chen, Morgan Lee). These fill the /challenges Browse
+-- section and exercise every metric chip (distance / duration / vert /
+-- activity_count / streak_days). now()-relative windows keep them live on reset;
+-- the seed user can Join any of them.
+INSERT INTO challenges (id, creator_id, club_id, title, description, metric, scope, goal_value, starts_at, ends_at, is_public)
+VALUES
+  ('f0000003-0000-0000-0000-000000000003',
+   'b2c3d4e5-f6a7-8901-bcde-f23456789012', null,
+   'Spring 50 km', 'Bank 50 km of running before the window closes — solo board, everyone welcome.',
+   'distance', 'individual', 50000,
+   now() - interval '3 days', now() + interval '18 days', true),
+  ('f0000004-0000-0000-0000-000000000004',
+   'c3d4e5f6-a7b8-9012-cdef-345678901234', null,
+   'June vert 2,000 m', 'Climb 2,000 m of elevation this month. Hills, trails, treadmill incline — it all counts.',
+   'vert', 'individual', 2000,
+   now() - interval '6 days', now() + interval '15 days', true),
+  ('f0000005-0000-0000-0000-000000000005',
+   'b2c3d4e5-f6a7-8901-bcde-f23456789012', null,
+   '10 runs in 30 days', 'Consistency over distance — log ten activities before the clock runs out.',
+   'activity_count', 'individual', 10,
+   now() - interval '4 days', now() + interval '26 days', true),
+  ('f0000006-0000-0000-0000-000000000006',
+   'c3d4e5f6-a7b8-9012-cdef-345678901234', null,
+   'Five hours on feet', 'A time-on-feet challenge — accumulate five hours of moving time.',
+   'duration', 'individual', 18000,
+   now() - interval '2 days', now() + interval '12 days', true),
+  ('f0000007-0000-0000-0000-000000000007',
+   'b2c3d4e5-f6a7-8901-bcde-f23456789012', null,
+   '7-day run streak', 'Run at least once a day for seven straight days. Miss a day and the streak resets.',
+   'streak_days', 'individual', 7,
+   now() - interval '1 day', now() + interval '13 days', true);
+
+INSERT INTO challenge_participants (challenge_id, user_id)
+VALUES
+  ('f0000003-0000-0000-0000-000000000003', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
+  ('f0000003-0000-0000-0000-000000000003', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
+  ('f0000004-0000-0000-0000-000000000004', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
+  ('f0000004-0000-0000-0000-000000000004', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
+  ('f0000005-0000-0000-0000-000000000005', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
+  ('f0000006-0000-0000-0000-000000000006', 'c3d4e5f6-a7b8-9012-cdef-345678901234'),
+  ('f0000006-0000-0000-0000-000000000006', 'b2c3d4e5-f6a7-8901-bcde-f23456789012'),
+  ('f0000007-0000-0000-0000-000000000007', 'b2c3d4e5-f6a7-8901-bcde-f23456789012');
