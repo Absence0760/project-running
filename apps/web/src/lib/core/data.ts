@@ -1965,16 +1965,22 @@ export async function isChronoTrackConfigured(): Promise<boolean> {
 async function isProviderNotConfigured(error: unknown): Promise<boolean> {
 	const ctx = (error as { context?: Response })?.context;
 	if (ctx && typeof ctx.status === 'number' && ctx.status > 0) {
-		// A readable HTTP status came back: the provider is configured iff the
-		// status is not the fail-closed 503 provider_not_configured signal. A
-		// 401/429/5xx (transient) leaves the card in its configured state.
-		if (ctx.status !== 503) return false;
-		try {
-			const body = await ctx.clone().json();
-			return (body as { error?: string })?.error === 'provider_not_configured';
-		} catch {
-			return true;
+		if (ctx.status === 503) {
+			try {
+				const body = await ctx.clone().json();
+				return (body as { error?: string })?.error === 'provider_not_configured';
+			} catch {
+				return true;
+			}
 		}
+		// The probe never confirmed the provider is live: a 429 (the EF's own
+		// per-user rate limit — several probes per page/test exceed the free
+		// tier) or a 5xx didn't reach (or get past) the credential gate. Honour
+		// the fail-closed default and report unavailable rather than offer an
+		// action that will 503/429. A readable client error (other 4xx) means
+		// the function DID run past the gate, so the provider is configured.
+		if (ctx.status === 429 || ctx.status >= 500) return true;
+		return false;
 	}
 	const msg = (error as { message?: string })?.message ?? '';
 	if (msg.includes('provider_not_configured') || msg.includes('503')) return true;
