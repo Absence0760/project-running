@@ -4,6 +4,64 @@ import { getAdminClient } from './local-supabase';
 export const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
 
 /**
+ * The fixed date the seed authors the plan against (`seed.sql` ~line 848).
+ * The seed slides the whole plan onto a now()-relative window via a uniform
+ * day offset; this is the origin those literal seed dates are measured from.
+ */
+const SEED_PLAN_START = '2026-03-29';
+
+function utcMs(iso: string): number {
+	const [y, m, d] = iso.split('-').map(Number);
+	return Date.UTC(y, m - 1, d);
+}
+
+function daysBetween(aIso: string, bIso: string): number {
+	return Math.round((utcMs(aIso) - utcMs(bIso)) / 86_400_000);
+}
+
+function addDaysIso(iso: string, days: number): string {
+	const [y, m, d] = iso.split('-').map(Number);
+	return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * Resolve a date expressed in the plan's fixed "seed coordinates" (e.g.
+ * `'2026-04-07'`, the literal date written in seed.sql) to the live
+ * scheduled_date after the seed's now()-relative shift. Reads the plan's
+ * current `start_date` and re-applies the same offset the seed used, so the
+ * many `findWorkoutByDate('2026-04-..')` call sites and calendar month
+ * assertions keep working without hard-coding any wall-clock date.
+ */
+export async function seedDateToLive(seedDate: string): Promise<string> {
+	const offset = await seedShiftOffsetDays();
+	return addDaysIso(seedDate, offset);
+}
+
+/** The uniform day offset the seed applied to slide the plan onto now(). */
+export async function seedShiftOffsetDays(): Promise<number> {
+	const admin = getAdminClient();
+	const { data } = await admin
+		.from('training_plans')
+		.select('start_date')
+		.eq('id', SYDNEY_HALF_PLAN_ID)
+		.maybeSingle();
+	const liveStart = (data as { start_date: string } | null)?.start_date;
+	if (!liveStart) throw new Error('seed plan has no start_date');
+	return daysBetween(liveStart, SEED_PLAN_START);
+}
+
+/** "MMMM YYYY" label (matching the calendar head) for a seed-coordinate date. */
+export async function liveMonthLabel(seedDate: string): Promise<string> {
+	const liveIso = await seedDateToLive(seedDate);
+	const [y, m] = liveIso.split('-').map(Number);
+	return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-US', {
+		month: 'long',
+		year: 'numeric',
+		timeZone: 'UTC'
+	});
+}
+
+/**
  * Make the plan's TODAY workout a non-rest, matchable workout IN PLACE.
  *
  * The seed plan's dates are now()-relative, so on days it lands a rest day on

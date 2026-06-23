@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
-import { repurposeTodayWorkout } from '../fixtures/plan-today';
+import { repurposeTodayWorkout, seedDateToLive } from '../fixtures/plan-today';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -38,8 +38,12 @@ import { USER_A } from '../fixtures/users';
 
 const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
 
+// `date` is a fixed SEED-coordinate date (the literal value written in
+// seed.sql, e.g. '2026-04-07'); the seed slides the plan onto a now()-
+// relative window, so resolve it to the live scheduled_date first.
 async function findWorkoutByDate(date: string): Promise<{ id: string; kind: string }> {
 	const admin = getAdminClient();
+	const liveDate = await seedDateToLive(date);
 	const { data: weeks } = await admin
 		.from('plan_weeks')
 		.select('id')
@@ -49,9 +53,9 @@ async function findWorkoutByDate(date: string): Promise<{ id: string; kind: stri
 		.from('plan_workouts')
 		.select('id, kind')
 		.in('week_id', weekIds)
-		.eq('scheduled_date', date)
+		.eq('scheduled_date', liveDate)
 		.maybeSingle();
-	if (!row) throw new Error(`no plan_workouts row for date ${date}`);
+	if (!row) throw new Error(`no plan_workouts row for date ${date} (live ${liveDate})`);
 	return row as { id: string; kind: string };
 }
 

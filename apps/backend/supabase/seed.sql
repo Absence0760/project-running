@@ -954,6 +954,42 @@ SET completed_run_id = (
     completed_at = now()
 WHERE pw.scheduled_date = '2026-04-05' AND pw.kind = 'long';
 
+-- Slide the whole Richmond Half plan onto a now()-relative window so the
+-- single active plan always covers TODAY with a FUTURE race, on every
+-- reset, no matter the wall-clock date. The plan is authored against fixed
+-- 2026 dates (start 2026-03-29 .. race 2026-06-20, 83 days) because every
+-- workout row, calendar assertion, and `findWorkoutByDate(...)` lookup
+-- reads those literal "seed coordinates"; this block applies ONE uniform
+-- day offset to the plan window + every plan_workouts.scheduled_date so the
+-- seed authoring stays readable while the live data is anchored to now.
+--
+-- Anchor: today maps to the seeded week-2 Wednesday (day 17 of 83) — a real
+-- non-rest 'easy' workout — so the dashboard plan-hero + /plans current-week
+-- strip + today-card all light up, progress is mid-plan (0 < pct < 100), and
+-- the race is ~66 days out. The offset is exposed to the e2e suite by simply
+-- reading training_plans.start_date back (see findWorkoutByDate / the seed-
+-- date helpers in tests-e2e): seed_date + (start_date - '2026-03-29') is the
+-- live scheduled_date for any row.
+--
+-- Runs AFTER the two completed_run_id linkage UPDATEs above so those FKs are
+-- already set; a pure date shift never touches them.
+DO $$
+DECLARE
+  v_offset int := (current_date - 17) - DATE '2026-03-29';
+BEGIN
+  UPDATE training_plans
+  SET start_date = start_date + v_offset,
+      end_date   = end_date   + v_offset
+  WHERE id = 'a1a1eada-aaaa-0000-0000-000000000001';
+
+  UPDATE plan_workouts pw
+  SET scheduled_date = pw.scheduled_date + v_offset
+  WHERE pw.week_id IN (
+    SELECT id FROM plan_weeks
+    WHERE plan_id = 'a1a1eada-aaaa-0000-0000-000000000001'
+  );
+END $$;
+
 -- ─────────────────────────────────────────────────────────────────────
 -- 11. Social-feed seeding for runner@test.com
 --

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { liveMonthLabel, seedDateToLive } from '../fixtures/plan-today';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -32,8 +33,55 @@ import { USER_A } from '../fixtures/users';
  */
 
 const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';
-const PLAN_START = '2026-03-29';
-const PLAN_END = '2026-06-20';
+
+// The seed slides the plan onto a now()-relative window, so the live
+// start/end (and therefore the calendar's first/last month labels) move on
+// every reset. Resolve them from the seed-coordinate dates the plan is
+// authored against — '2026-03-29' (start) and '2026-06-20' (race) — instead
+// of hard-coding the 2026 calendar months. The first plan month carries the
+// week-0 completed long run; the seed week-1/2 workouts (the tempo, the
+// interval, the MP run) live in the SECOND plan month.
+let PLAN_START = '2026-03-29';
+let PLAN_END = '2026-06-20';
+// `MMMM YYYY` labels matching `.cal-head h3`, computed live in beforeAll.
+let FIRST_MONTH_LABEL: string;
+let SECOND_MONTH_LABEL: string;
+let GAP_MONTH_LABEL: string;
+let LAST_MONTH_LABEL: string;
+
+test.beforeAll(async () => {
+	PLAN_START = await seedDateToLive('2026-03-29');
+	PLAN_END = await seedDateToLive('2026-06-20');
+	FIRST_MONTH_LABEL = await liveMonthLabel('2026-03-29');
+	// The tempo/interval/MP workouts are in the seed's April (week 1/2).
+	SECOND_MONTH_LABEL = await liveMonthLabel('2026-04-07');
+	// Seed weeks 5-10 (the placeholder gap) have no workouts; mid-gap day.
+	GAP_MONTH_LABEL = await liveMonthLabel('2026-05-20');
+	LAST_MONTH_LABEL = await liveMonthLabel('2026-06-20');
+});
+
+/**
+ * Walk the calendar to the month whose `.cal-head h3` reads exactly
+ * `label`, direction-agnostic: rewind to the first plan month (Prev until
+ * disabled), then step Next until the head matches. The plan window's months
+ * move with the seed's now()-relative shift, so callers pass a live label
+ * (FIRST/SECOND/LAST_MONTH_LABEL) rather than a hard-coded 2026 month.
+ */
+async function walkToMonth(page: import('@playwright/test').Page, label: string) {
+	const head = page.locator('.cal-head h3');
+	const prev = page.locator('.cal .nav[aria-label="Previous month"]');
+	const next = page.locator('.cal .nav[aria-label="Next month"]');
+	for (let i = 0; i < 24; i++) {
+		if ((await prev.getAttribute('disabled')) !== null) break;
+		await prev.click();
+	}
+	for (let i = 0; i < 24; i++) {
+		if (((await head.textContent()) ?? '').trim() === label) return;
+		if ((await next.getAttribute('disabled')) !== null) break;
+		await next.click();
+	}
+	await expect(head).toHaveText(label);
+}
 
 test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
@@ -88,16 +136,17 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		page
 	}) => {
 		// PlanCalendar opens on the *current* month if today is inside
-		// the plan, else the plan's first month. Today (2026-05-XX) is
-		// inside the plan, so we step back to the first month and pin
-		// Prev disabled there. Mirror for Next at the last month.
+		// the plan, else the plan's first month. The seed anchors today
+		// mid-plan, so we step back to the first month and pin Prev
+		// disabled there. Mirror for Next at the last month. The first/
+		// last month labels are live (seed shifts the plan onto now()).
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
 		const prev = page.locator('.cal .nav[aria-label="Previous month"]');
 		const next = page.locator('.cal .nav[aria-label="Next month"]');
 
-		// Walk back until prev disables. The plan starts in March, so
+		// Walk back until prev disables. The plan spans ~3-4 months, so
 		// at most 12 clicks. Guarded against runaway loops.
 		for (let i = 0; i < 24; i++) {
 			const disabled = await prev.getAttribute('disabled');
@@ -105,7 +154,7 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 			await prev.click();
 		}
 		await expect(prev).toBeDisabled();
-		await expect(page.locator('.cal-head h3')).toHaveText(/March 2026/);
+		await expect(page.locator('.cal-head h3')).toHaveText(FIRST_MONTH_LABEL);
 
 		// Walk forward to the last month + pin Next disabled.
 		for (let i = 0; i < 24; i++) {
@@ -114,7 +163,7 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 			await next.click();
 		}
 		await expect(next).toBeDisabled();
-		await expect(page.locator('.cal-head h3')).toHaveText(/June 2026/);
+		await expect(page.locator('.cal-head h3')).toHaveText(LAST_MONTH_LABEL);
 	});
 
 	test('Today cell carries .today (primary border + shadow)', async ({ page }) => {
@@ -132,24 +181,16 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 	test('A seeded workout cell renders kind pill + distance + kind-colour border-left', async ({
 		page
 	}) => {
-		// Walk to April 2026 (week 1 with the tempo workout 2026-04-07
-		// — kind='tempo', target_distance_m=10000, structure present).
-		// The .has-workout class is set only when a plan_workouts row
-		// matches the cell's iso date. The kind-colour border-left is
-		// inlined as `--kind` style; we read it back to confirm the
-		// component dispatched the per-kind colour.
+		// Walk to the seed's April (week 1, with the tempo workout
+		// 2026-04-07 — kind='tempo', target_distance_m=10000, structure
+		// present). The .has-workout class is set only when a
+		// plan_workouts row matches the cell's iso date. The kind-colour
+		// border-left is inlined as `--kind` style; we read it back to
+		// confirm the component dispatched the per-kind colour.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
-		// Navigate to April 2026.
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/April 2026/.test(text)) break;
-			const direction = /March|February|January/.test(text) ? 'Next' : 'Previous';
-			await page.locator(`.cal .nav[aria-label="${direction} month"]`).click();
-		}
-		await expect(head).toHaveText(/April 2026/);
+		await walkToMonth(page, SECOND_MONTH_LABEL);
 
 		const cells = page.locator('.cal .cell.has-workout');
 		expect(await cells.count()).toBeGreaterThan(0);
@@ -177,17 +218,12 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		// `completed_run_id` (matched to the 2026-03-29 long run row).
 		// PlanCalendar's `isWorkoutCompleted` returns true for either
 		// `manually_completed = true` OR a non-null completed_run_id.
-		// Walk to March 2026 + assert at least one .done cell.
+		// Walk to the plan's first month (where 2026-03-29 lands after
+		// the seed shift) + assert at least one .done cell.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/March 2026/.test(text)) break;
-			await page.locator('.cal .nav[aria-label="Previous month"]').click();
-		}
-		await expect(head).toHaveText(/March 2026/);
+		await walkToMonth(page, FIRST_MONTH_LABEL);
 
 		const doneCells = page.locator('.cal .cell.has-workout.done');
 		expect(await doneCells.count()).toBeGreaterThanOrEqual(1);
@@ -205,15 +241,8 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
-		// Walk to April so a workout-bearing cell is guaranteed.
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/April 2026/.test(text)) break;
-			const direction = /^(March|February|January)/.test(text)
-				? 'Next' : 'Previous';
-			await page.locator(`.cal .nav[aria-label="${direction} month"]`).click();
-		}
+		// Walk to the seed's April so a workout-bearing cell is guaranteed.
+		await walkToMonth(page, SECOND_MONTH_LABEL);
 
 		// Capture URL before the click — we expect the modal to open,
 		// not a navigation.
@@ -233,23 +262,17 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		// width with leading/trailing days from the adjacent months.
 		// Cells whose iso date falls outside [start_date, end_date]
 		// get .out-plan (background:transparent + border-color:
-		// transparent in the component CSS). Walk to March 2026 where
-		// the plan starts mid-month — Mar 1-28 are leading-edge .out-
-		// plan cells.
+		// transparent in the component CSS). Walk to the plan's first
+		// month: the plan starts on a Sunday, so in a Monday-first grid
+		// the Mon-Sat of that starting week are leading-edge .out-plan
+		// cells regardless of which calendar month the shift lands on.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/March 2026/.test(text)) break;
-			await page.locator('.cal .nav[aria-label="Previous month"]').click();
-		}
-		await expect(head).toHaveText(/March 2026/);
+		await walkToMonth(page, FIRST_MONTH_LABEL);
 
-		// At least one out-plan cell — the start_date is 2026-03-29 so
-		// every cell from Mar 1 (or earlier from the leading-edge pad)
-		// through Mar 28 is out-of-plan.
+		// At least one out-plan cell — the start day is a Sunday so the
+		// rest of its week (and any earlier leading-edge pad) is out-of-plan.
 		expect(await page.locator('.cal .cell.out-plan').count())
 			.toBeGreaterThanOrEqual(1);
 	});
@@ -264,14 +287,7 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/April 2026/.test(text)) break;
-			const direction = /^(March|February|January)/.test(text)
-				? 'Next' : 'Previous';
-			await page.locator(`.cal .nav[aria-label="${direction} month"]`).click();
-		}
+		await walkToMonth(page, SECOND_MONTH_LABEL);
 
 		// A rest cell has the rest kind pill but no .dist sibling.
 		const restCells = page.locator(
@@ -286,25 +302,16 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 	test('Calendar gracefully renders months with NO workouts (placeholder gap)', async ({
 		page
 	}) => {
-		// Weeks 5-10 in the seed (May 3 - Jun 13) have no plan_workouts
-		// rows. The PlanCalendar must still render a month for that
-		// window with cells, even though every cell is a plain .cell
-		// (no .has-workout). Today (2026-05-XX) lands inside this gap;
-		// the calendar opens on the current month and must not collapse.
+		// Seed weeks 5-10 (seed-dates May 3 - Jun 13) have no plan_workouts
+		// rows. The PlanCalendar must still render a month for that window
+		// with cells, even though every cell is a plain .cell (no
+		// .has-workout). Walk to the live month the seed's mid-gap day maps
+		// to after the now()-relative shift; the calendar must not collapse.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 
-		// Navigate to May 2026.
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/May 2026/.test(text)) break;
-			const direction = /^(March|February|January|April)/.test(text)
-				? 'Next' : 'Previous';
-			await page.locator(`.cal .nav[aria-label="${direction} month"]`).click();
-		}
-		await expect(head).toHaveText(/May 2026/);
-		// The 31-day month plus pads should still render >= 28 cells.
+		await walkToMonth(page, GAP_MONTH_LABEL);
+		// The month plus pads should still render >= 28 cells.
 		const cells = page.locator('.cal .grid .cell');
 		expect(await cells.count()).toBeGreaterThanOrEqual(28);
 		// A few has-workout cells exist for May 1+2 (which are in
@@ -341,17 +348,10 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		await modal.getByRole('button', { name: 'Mark as done' }).click();
 		await expect(modal).toHaveCount(0);
 
-		// Navigate the calendar to April 2026 — the calendar opens on
-		// the current month (May 2026) so the Apr 7 Tempo cell isn't
-		// in view until we step back.
-		const head = page.locator('.cal-head h3');
-		for (let i = 0; i < 24; i++) {
-			const text = (await head.textContent()) ?? '';
-			if (/April 2026/.test(text)) break;
-			const direction = /^(March|February|January)/.test(text)
-				? 'Next' : 'Previous';
-			await page.locator(`.cal .nav[aria-label="${direction} month"]`).click();
-		}
+		// Navigate the calendar to the seed's April — the calendar opens
+		// on the current month so the Tempo cell isn't in view until we
+		// walk to its month.
+		await walkToMonth(page, SECOND_MONTH_LABEL);
 
 		// load() re-fetched; the Apr 7 Tempo cell in the calendar now
 		// carries .done. Locate by kind pill so the assertion targets
@@ -401,9 +401,10 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 	}) => {
 		// Sanity check: the visible plan window in PlanCalendar's
 		// `months` array should run from PLAN_START's month to
-		// PLAN_END's month. A regression that off-by-one'd the bounds
-		// would silently drop the race week. Walk to the last month
-		// and confirm it's June 2026 (the goal-race month).
+		// PLAN_END's month (both live after the seed's now()-relative
+		// shift). A regression that off-by-one'd the bounds would
+		// silently drop the race week. Walk to the last month and confirm
+		// it's the goal-race month.
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
 

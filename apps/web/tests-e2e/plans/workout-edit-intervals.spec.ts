@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { seedDateToLive } from '../fixtures/plan-today';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -58,7 +59,7 @@ test.describe('Workout structured-interval edit (web)', () => {
 			.from('plan_workouts')
 			.select('id, structure')
 			.in('week_id', weekIds)
-			.eq('scheduled_date', '2026-04-14')
+			.eq('scheduled_date', await seedDateToLive('2026-04-14'))
 			.maybeSingle();
 		expect(wo).not.toBeNull();
 		const workoutId = (wo as { id: string }).id;
@@ -164,7 +165,7 @@ test.describe('Workout structured-interval edit (web)', () => {
 			.from('plan_workouts')
 			.select('id, kind, structure, target_distance_m, scheduled_date')
 			.in('week_id', weekIds)
-			.eq('scheduled_date', '2026-04-14')
+			.eq('scheduled_date', await seedDateToLive('2026-04-14'))
 			.maybeSingle();
 		expect(wo).not.toBeNull();
 		const workoutId = (wo as { id: string }).id;

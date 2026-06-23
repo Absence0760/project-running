@@ -12,9 +12,10 @@ import { USER_A } from '../fixtures/users';
  * workouts in that week bucket (the same list the week card counts), so
  * the strip and the week card never disagree.
  *
- * The seed's "Sydney Half 2026" plan (id a1a1eada-…) runs
- * 2026-03-29 → 2026-06-20; today (2026-05-XX) lands inside the plan, so
- * the strip mounts with a current week.
+ * The seed slides its "Sydney Half 2026" plan (id a1a1eada-…) onto a
+ * now()-relative window so today always lands inside the plan (anchored
+ * mid-plan, on a seeded workout week), so the strip mounts with a current
+ * week on every reset regardless of the wall-clock date.
  */
 
 const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';

@@ -163,10 +163,10 @@ test.describe('/plans', () => {
 		// plus a progress bar with aria-valuemin / max / now. This pins
 		// (a) the calendar-week math doesn't regress to NaN, (b) the
 		// progressbar role is reachable to screen readers, and (c) the
-		// `card-active` accent applies. The seeded Richmond Half plan runs
-		// 12 weeks ending 2026-06-20 with start 2026-03-29 — today
-		// 2026-05-16 falls inside that window, so the progressbar should
-		// have a non-zero, non-100 aria-valuenow.
+		// `card-active` accent applies. The seed slides the Richmond Half
+		// plan (12 weeks) onto a now()-relative window anchored mid-plan,
+		// so today always falls inside that window and the progressbar has
+		// a non-zero, non-100 aria-valuenow on every reset.
 		await page.goto('/plans');
 
 		const card = page.locator('.card', { hasText: 'Richmond Half 2026' });
