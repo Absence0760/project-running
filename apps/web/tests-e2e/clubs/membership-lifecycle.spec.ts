@@ -200,6 +200,9 @@ test.describe('/clubs/[slug] — request-policy membership lifecycle', () => {
 			});
 			await expect(morganRow).toBeVisible({ timeout: 10_000 });
 			await morganRow.getByRole('button', { name: 'Reject' }).click();
+			// The row button opens a ConfirmDialog; the reject only fires on
+			// confirm. Scope to the dialog so the row's Reject doesn't clash.
+			await owner.locator('.modal').getByRole('button', { name: 'Reject' }).click();
 			await expect(
 				pendingPanel.locator('.pending-row', { hasText: 'Morgan' })
 			).toHaveCount(0, { timeout: 10_000 });
