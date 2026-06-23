@@ -253,6 +253,17 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # The Gradle wrapper is capped at the version AGP 8.13.0 tolerates.
+      # Gradle 9.6.0 broke AGP 8.13's AndroidProblemReporterProvider at
+      # config time (the APK smoke build failed, run 28027750381), and
+      # this group auto-merges minor/patch — so an unpinned wrapper bump
+      # silently lands a broken toolchain on main. Hold it at 9.5.x;
+      # lift this when the agp-and-kotlin group moves AGP to a version
+      # that supports a newer Gradle (keep gradle-wrapper.properties in
+      # lockstep with whatever ceiling that AGP documents).
+      - dependency-name: "gradle-wrapper"
+        versions: [">= 9.6"]
 
   # ---------------------------------------------------------------------------
   # terraform — infra stacks
