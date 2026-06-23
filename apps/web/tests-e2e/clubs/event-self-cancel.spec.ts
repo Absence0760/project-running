@@ -68,22 +68,36 @@ async function seatBuyer(
 	refundInitiated = false
 ): Promise<() => Promise<void>> {
 	const admin = getAdminClient();
-	await admin.from('event_orders').insert({
+	const { data: order, error: orderErr } = await admin
+		.from('event_orders')
+		.insert({
+			event_id: eventId,
+			instance_start: instanceStart,
+			buyer_user_id: buyerId,
+			host_user_id: hostId,
+			stripe_payment_intent_id: `pi_e2e_${eventId.slice(0, 8)}`,
+			amount_cents: 2200,
+			currency: 'usd',
+			platform_fee_cents: 110,
+			status: 'paid',
+			paid_at: new Date().toISOString(),
+			refund_initiated_at: refundInitiated ? new Date().toISOString() : null
+		})
+		.select('id')
+		.single();
+	if (orderErr || !order) throw new Error(`seatBuyer order insert failed: ${orderErr?.message}`);
+	// instance_start is NOT NULL + part of the event_attendees PK; order_id is
+	// required by the enforce_paid_order_for_priced_event trigger for a 'going'
+	// seat on a priced event (20261229_001). Omit either and the row is
+	// rejected, so the page never reaches regState === 'already_registered'.
+	const { error: attErr } = await admin.from('event_attendees').upsert({
 		event_id: eventId,
+		user_id: buyerId,
 		instance_start: instanceStart,
-		buyer_user_id: buyerId,
-		host_user_id: hostId,
-		stripe_payment_intent_id: `pi_e2e_${eventId.slice(0, 8)}`,
-		amount_cents: 2200,
-		currency: 'usd',
-		platform_fee_cents: 110,
-		status: 'paid',
-		paid_at: new Date().toISOString(),
-		refund_initiated_at: refundInitiated ? new Date().toISOString() : null
+		status: 'going',
+		order_id: (order as { id: string }).id
 	});
-	await admin
-		.from('event_attendees')
-		.upsert({ event_id: eventId, user_id: buyerId, status: 'going' });
+	if (attErr) throw new Error(`seatBuyer attendee upsert failed: ${attErr.message}`);
 	return async () => {
 		await admin.from('event_orders').delete().eq('event_id', eventId);
 		await admin
