@@ -22,7 +22,7 @@ the stack is re-applied so the Lambda gets them. Run the rows top-to-bottom:
 | 7 | Verify the env is healthy | `bin/preview-status.sh preview` |
 | — | If the entire AWS stack needs rebuilding | `bin/disaster-recovery.sh` |
 
-Prod is the same sequence with `prod` substituted (apply via `cd infra/envs/prod && terraform apply` — there's no `deploy-prod.sh`; the chained stacks already exist after preview, so prod is just the one env stack). Full manual walkthrough: [`infra/README.md` § First-time deploy](../infra/README.md).
+**Prod is the same sequence** — swap `preview` → `prod` and run **`bin/deploy-prod.sh`** in place of `deploy-preview.sh`. Both are thin wrappers over `bin/deploy-env.sh <env>`; the shared bootstrap / dns / github-oidc stacks already exist after the preview deploy, so a prod run shows no changes on them and only applies `infra/envs/prod`. The deploy script itself prints the exact phase-2 commands (clone-estate / sops-init / secret-set / re-run / status) for whichever env you're on. Full manual walkthrough: [`infra/README.md` § First-time deploy](../infra/README.md).
 
 ## Day-to-day
 

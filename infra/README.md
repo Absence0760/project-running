@@ -176,6 +176,11 @@ terraform apply
 
 ### 5. Prod env
 
+> **Scripted path:** `bin/deploy-prod.sh` runs the same orchestrated chain as
+> `deploy-preview.sh` (idempotent — the shared bootstrap / dns / github-oidc
+> stacks no-op, only `infra/envs/prod` applies) and prints the exact phase-2
+> secret-wiring commands. The manual steps below are the equivalent.
+
 Same flow, in `envs/prod/` (ciphertext → `../infra-secrets/running/prod.sops.yaml`):
 
 ```bash
