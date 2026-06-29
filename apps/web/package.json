@@ -17,28 +17,28 @@
 		"test:e2e:sso": "playwright test --config=tests-e2e/playwright.sso.config.ts"
 	},
 	"devDependencies": {
-		"@iconify-json/material-symbols": "1.2.79",
-		"@playwright/test": "^1.61.0",
+		"@iconify-json/material-symbols": "1.2.81",
+		"@playwright/test": "^1.61.1",
 		"@sveltejs/adapter-static": "3.0.10",
-		"@sveltejs/kit": "2.66.0",
+		"@sveltejs/kit": "2.68.0",
 		"@sveltejs/vite-plugin-svelte": "7.1.2",
 		"@types/aws-lambda": "8.10.162",
-		"@types/node": "^26.0.0",
+		"@types/node": "^26.0.1",
 		"esbuild": "0.28.1",
 		"mdsvex": "^0.12.7",
 		"normalize.css": "8.0.1",
 		"oauth2-mock-server": "9.0.0",
 		"svelte": "5.56.4",
-		"svelte-check": "4.6.0",
+		"svelte-check": "4.7.1",
 		"typescript": "6.0.3",
 		"unplugin-icons": "23.0.1",
 		"vite": "8.1.0"
 	},
 	"type": "module",
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.105.0",
+		"@anthropic-ai/sdk": "^0.106.0",
 		"@resvg/resvg-js": "^2.6.2",
-		"@sentry/sveltekit": "^10.59.0",
+		"@sentry/sveltekit": "^10.62.0",
 		"@supabase/ssr": "^0.12.0",
 		"@supabase/supabase-js": "^2.108.2",
 		"@zip.js/zip.js": "^2.7.45",
@@ -48,6 +48,6 @@
 		"jszip": "^3.10.1",
 		"maplibre-gl": "^5.24.0",
 		"marked": "^18.0.5",
-		"material-symbols": "^0.45.2"
+		"material-symbols": "^0.45.4"
 	}
 }
