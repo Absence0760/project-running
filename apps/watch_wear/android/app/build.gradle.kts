@@ -206,7 +206,7 @@ dependencies {
     implementation("com.google.guava:guava:33.6.0-android")
 
     // Location
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.android.gms:play-services-location:21.4.0")
 
     // Wearable Data Layer — receives Supabase session handoff from the paired phone.
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
@@ -233,5 +233,5 @@ dependencies {
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:8.44.1")
+    implementation("io.sentry:sentry-android:8.46.0")
 }
