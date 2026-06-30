@@ -26,6 +26,23 @@ import assert from 'node:assert/strict';
 import { handleCoach } from './handler';
 import type { CoachConfig } from './types';
 
+/// Run `fn` with console.error captured, returning every line emitted.
+/// Used to assert the bypass-paywall alarm log without a real Supabase
+/// (the tagged line fires in the pre-Supabase branch of handleCoach).
+async function captureConsoleError(fn: () => Promise<unknown>): Promise<string[]> {
+	const lines: string[] = [];
+	const original = console.error;
+	console.error = (...args: unknown[]) => {
+		lines.push(args.map((a) => String(a)).join(' '));
+	};
+	try {
+		await fn();
+	} finally {
+		console.error = original;
+	}
+	return lines;
+}
+
 /// A minimal valid config for the Anthropic happy path. Each test
 /// shallow-overrides the field it's exercising.
 function baseConfig(): CoachConfig {
@@ -137,6 +154,41 @@ test('401 wire message is the static "not authenticated" string', async () => {
 	// And nothing else interesting — no internal identifiers, no
 	// JWT-shape oracles.
 	assert.doesNotMatch(String(body.error), /eyJ|jwt|token/i);
+});
+
+// ──────────── bypass-paywall alarm log (CloudWatch metric filter) ───
+
+test('bypassPaywallEnabled=true emits the bypass_paywall_active alarm log line', async () => {
+	// Reason: the prod CloudWatch metric-filter alarm `coach-bypass-
+	// paywall-active` (alarms.tf) keys on this exact tagged line — a
+	// single hit in production fires PagerDuty because it means the
+	// daily-cap + cost gates are off (a billing emergency). The line is
+	// emitted in the pre-Supabase branch, so a no-auth call (which 401s
+	// before any Supabase client is built) still exercises it. Pin the
+	// tag so a copy-edit can't silently break the alarm's trigger string.
+	// The metric filter (alarms.tf) matches the literal "[coach]
+	// bypass_paywall_active", so pin the prefix too — dropping it would
+	// leave the alarm armed but never firing.
+	const lines = await captureConsoleError(() =>
+		handleCoach(null, { messages: [] }, { ...baseConfig(), bypassPaywallEnabled: true }),
+	);
+	assert.ok(
+		lines.some((l) => l.includes('[coach] bypass_paywall_active')),
+		`expected a "[coach] bypass_paywall_active" log line, got: ${JSON.stringify(lines)}`,
+	);
+});
+
+test('bypassPaywallEnabled=false does NOT emit the bypass_paywall_active line', async () => {
+	// The alarm must only fire when the bypass is genuinely on — the
+	// off path (the production default) must stay silent, or the alarm
+	// would page on every normal request.
+	const lines = await captureConsoleError(() =>
+		handleCoach(null, { messages: [] }, { ...baseConfig(), bypassPaywallEnabled: false }),
+	);
+	assert.ok(
+		!lines.some((l) => l.includes('bypass_paywall_active')),
+		`bypass-off must not log the alarm tag, got: ${JSON.stringify(lines)}`,
+	);
 });
 
 // ──────────────────────── 400 (body shape) ────────────────────────
