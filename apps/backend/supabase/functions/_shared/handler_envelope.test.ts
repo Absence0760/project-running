@@ -1,18 +1,19 @@
-// HTTP-level handler-envelope tests for the three webhook / cron
+// HTTP-level handler-envelope tests for the four webhook / cron
 // functions that bypass the platform's `verify_jwt` gate
-// (`config.toml` pins `verify_jwt = false` for these three because
-// they authenticate themselves another way). These tests close the
+// (`config.toml` pins `verify_jwt = false` for these four —
+// refresh-tokens, strava-webhook, revenuecat-webhook, stripe-events-
+// webhook — because they authenticate themselves another way). These tests close the
 // "Edge Function HTTP envelope" gap from docs/testing/testing.md — the pure
 // helpers in `_shared/webhook_security.ts` + `revenuecat-webhook/lib.ts`
 // are already covered (~33 deno tests); this file pins the WIRE-LEVEL
 // auth-rejection behaviour of the handlers that compose those helpers
 // with `serve()` + `createClient()`.
 //
-// Why only the three webhook functions: the five JWT-gated functions
+// Why only these webhook functions: the five JWT-gated functions
 // (clip-public-track, delete-account, export-data, parkrun-import,
 // strava-import) are 401'd at the platform gateway before the
 // handler runs, so the handler-body auth surface there is degenerate
-// — the platform's `verify_jwt = true` config IS the test. The three
+// — the platform's `verify_jwt = true` config IS the test. The four
 // here are the ones where the handler does its own auth, which is
 // where bugs would actually surface.
 //
@@ -289,6 +290,32 @@ async function postRcEvent(
   const res = await fetch(endpoint('revenuecat-webhook'), {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-revenuecat-hmac': sig },
+    body,
+  });
+  const json = await res.json().catch(() => null);
+  return { status: res.status, json };
+}
+
+// Must match the .env.local block the CI boot step writes (mirrored into
+// the integration step's env so the signature the function host verifies
+// against matches).
+const STRIPE_EVENTS_SECRET =
+  Deno.env.get('STRIPE_EVENTS_WEBHOOK_SECRET') ?? 'ci-stripe-events-secret';
+
+// POST a Stripe event with a valid `Stripe-Signature` header. Stripe
+// signs the literal `${t}.${rawBody}` (see verifyStripeSignature); the
+// timestamp is recomputed per call so a replay (same event.id, fresh
+// signature) still passes the freshness gate and exercises the
+// event-id dedupe rather than the replay-window reject.
+async function postStripeEvent(
+  event: Record<string, unknown>,
+): Promise<{ status: number; json: { account_synced?: unknown; skipped?: unknown } | null }> {
+  const body = JSON.stringify(event);
+  const t = Math.floor(Date.now() / 1000);
+  const v1 = await hmacHex(STRIPE_EVENTS_SECRET, `${t}.${body}`);
+  const res = await fetch(endpoint('stripe-events-webhook'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'stripe-signature': `t=${t},v1=${v1}` },
     body,
   });
   const json = await res.json().catch(() => null);
@@ -605,9 +632,10 @@ Deno.test({
         headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({ id: userId, subscription_tier: 'free' }),
       });
-      if (profRes.status >= 300) {
-        await profRes.body?.cancel();
-        throw new Error(`failed to plant user_profiles row: ${profRes.status}`);
+      const profStatus = profRes.status;
+      await profRes.body?.cancel();
+      if (profStatus >= 300) {
+        throw new Error(`failed to plant user_profiles row: ${profStatus}`);
       }
 
       // (a) INITIAL_PURCHASE → pro, and the write must land in the row.
@@ -688,6 +716,115 @@ Deno.test({
       }
       // Deleting the auth user cascades the user_profiles row (the FK is
       // on delete cascade per migration 20260728_001).
+      await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
+    }
+  },
+});
+
+// ── stripe-events-webhook: account.updated SIDE EFFECT + dedupe ────
+// handleAccountUpdated is the ONLY path that flips a host to charges-
+// enabled, and it had no coverage of any kind. The pure lib tests cover
+// the signature verifier + CAS; this proves the account.updated handler
+// actually mirrors the capability flags into instructor_payout_accounts
+// and that a replayed delivery is deduped (not re-applied).
+
+Deno.test({
+  name: 'stripe-events-webhook: account.updated mirrors capability flags ' +
+    'into instructor_payout_accounts + dedupes a replay',
+  ignore: SKIP_DB,
+  fn: async () => {
+    const email = `stripe-host-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    const createRes = await svc('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'testtest-stripe-1', email_confirm: true }),
+    });
+    const created = await createRes.json().catch(() => null);
+    const userId = created?.id as string | undefined;
+    if (!userId) {
+      throw new Error(
+        `failed to create ephemeral host: ${createRes.status} ${JSON.stringify(created)}`,
+      );
+    }
+
+    const acctId = `acct_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const eventId = `evt_acct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      // Plant the payout account in the pre-onboarding state the
+      // events-connect-onboard EF leaves it in (charges disabled until
+      // Stripe says otherwise via exactly this event).
+      const plant = await svc('/rest/v1/instructor_payout_accounts', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          user_id: userId,
+          stripe_connect_account_id: acctId,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+        }),
+      });
+      const plantStatus = plant.status;
+      await plant.body?.cancel();
+      if (plantStatus >= 300) {
+        throw new Error(`failed to plant instructor_payout_accounts: ${plantStatus}`);
+      }
+
+      const readAcct = async (): Promise<Record<string, unknown> | null> => {
+        const r = await svc(
+          `/rest/v1/instructor_payout_accounts?stripe_connect_account_id=eq.${acctId}` +
+            `&select=charges_enabled,payouts_enabled,details_submitted,onboarded_at`,
+        );
+        const rows = await r.json().catch(() => []);
+        return Array.isArray(rows) && rows[0] ? rows[0] : null;
+      };
+
+      const accountEvent = {
+        id: eventId,
+        type: 'account.updated',
+        data: {
+          object: {
+            id: acctId,
+            charges_enabled: true,
+            payouts_enabled: true,
+            details_submitted: true,
+          },
+        },
+      };
+
+      // (a) The capability flags must land + onboarded_at must stamp
+      // (details_submitted=true).
+      let r = await postStripeEvent(accountEvent);
+      if (r.status !== 200 || r.json?.account_synced !== true) {
+        throw new Error(
+          `(a) expected 200 account_synced=true, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      const after = await readAcct();
+      if (
+        after?.charges_enabled !== true ||
+        after?.payouts_enabled !== true ||
+        after?.details_submitted !== true ||
+        after?.onboarded_at == null
+      ) {
+        throw new Error(
+          `(a) instructor_payout_accounts not mirrored: ${JSON.stringify(after)}`,
+        );
+      }
+
+      // (b) Replay the same event id (fresh signature, valid freshness)
+      // → 23505 dedupe → skipped, never re-applied.
+      r = await postStripeEvent(accountEvent);
+      if (r.status !== 200 || r.json?.skipped !== 'duplicate_event') {
+        throw new Error(
+          `(b) expected 200 skipped=duplicate_event, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+    } finally {
+      await svc(
+        `/rest/v1/webhook_events?provider=eq.stripe&event_id=eq.${eventId}`,
+        { method: 'DELETE' },
+      ).then((x) => x.body?.cancel());
       await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
         .then((x) => x.body?.cancel());
     }

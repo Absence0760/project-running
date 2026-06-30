@@ -650,6 +650,7 @@ jobs:
           REVENUECAT_WEBHOOK_SECRET=ci-revenuecat-secret
           CRON_SECRET=ci-cron-secret
           STRAVA_ALLOWED_REDIRECTS=http://localhost:7777/settings/integrations
+          STRIPE_EVENTS_WEBHOOK_SECRET=ci-stripe-events-secret
           SENTRY_DSN=
           APP_RELEASE=ci
           ENV
@@ -698,8 +699,10 @@ jobs:
           REVENUECAT_WEBHOOK_SECRET: ci-revenuecat-secret
           STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
           STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
+          STRIPE_EVENTS_WEBHOOK_SECRET: ci-stripe-events-secret
           # Service-role key (exported to $GITHUB_ENV in the boot step)
-          # unlocks the revenuecat-webhook user_profiles tier-flip test.
+          # unlocks the revenuecat-webhook + stripe-events-webhook
+          # side-effect tests (plant a fixture, read the written row).
           SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           deno test --no-check --allow-net --allow-env \
