@@ -170,7 +170,7 @@ stripe trigger account.updated              # mirror charges_enabled / payouts_e
 
 ### 4. What is UNVERIFIED locally without operator keys
 
-The pure helpers (signature verify, idempotency CAS, fee math, capacity decision, sales window) are covered by `deno test` and run in CI. The **live end-to-end** — real Connect Express onboarding, a real destination-charge Checkout round-trip with `4242 4242 4242 4242`, and a real signed `account.updated` flipping `charges_enabled` — needs operator-supplied `sk_test_` / `ca_` / `whsec_` keys and is **not** exercisable in CI. Run it manually with the steps above before relying on the charge path.
+The pure helpers (signature verify, idempotency CAS, fee math, capacity decision, sales window) are covered by `deno test` and run in CI. The webhook's **DB side effect** is also CI-covered for `account.updated`: `_shared/handler_envelope.test.ts` signs an `account.updated` with a self-signed `ci-*` secret and asserts the capability flags (`charges_enabled` / `payouts_enabled` / `details_submitted` + `onboarded_at`) mirror into `instructor_payout_accounts`, plus a deduped replay. What that does **not** prove — and still needs operator-supplied `sk_test_` / `ca_` / `whsec_` keys, **not** exercisable in CI — is a **genuine Stripe-originated delivery** (a real `Stripe-Signature` from Stripe's servers, not our own HMAC) and the **live destination-charge Checkout round-trip** with `4242 4242 4242 4242` (real Connect Express onboarding → real `checkout.session.completed` seating an attendee). Run that manually with the steps above before relying on the charge path.
 
 ## Bypass paywall entirely (dev only)
 
