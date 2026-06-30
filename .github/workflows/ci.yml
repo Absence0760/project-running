@@ -678,6 +678,16 @@ jobs:
             cat functions-serve.log || true
             exit 1
           fi
+          # Expose the local stack's service-role key so the
+          # revenuecat-webhook tier-flip test can plant an ephemeral
+          # user + read the written user_profiles row back. Without it
+          # that test skips (SKIP_DB) and only the wire-level gates run.
+          svc_key=$(supabase status -o env | sed -n 's/^SERVICE_ROLE_KEY="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p')
+          if [ -z "$svc_key" ]; then
+            echo "::error::could not read SERVICE_ROLE_KEY from supabase status"
+            exit 1
+          fi
+          echo "SUPABASE_SERVICE_ROLE_KEY=$svc_key" >> "$GITHUB_ENV"
       - name: Run handler-envelope integration tests
         working-directory: apps/backend
         env:
@@ -688,6 +698,9 @@ jobs:
           REVENUECAT_WEBHOOK_SECRET: ci-revenuecat-secret
           STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
           STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
+          # Service-role key (exported to $GITHUB_ENV in the boot step)
+          # unlocks the revenuecat-webhook user_profiles tier-flip test.
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           deno test --no-check --allow-net --allow-env \
             supabase/functions/_shared/handler_envelope.test.ts

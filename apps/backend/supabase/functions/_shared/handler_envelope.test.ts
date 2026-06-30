@@ -257,6 +257,44 @@ const STRAVA_WEBHOOK_SECRET =
 const STRAVA_VERIFY_TOKEN =
   Deno.env.get('STRAVA_VERIFY_TOKEN') ?? 'ci-strava-verify-token-32-chars-ok';
 
+// The revenuecat-webhook tier-flip test plants an ephemeral user +
+// reads the written user_profiles row back, so it needs a service-role
+// key on top of SUPABASE_TEST_URL. Gated separately so the wire-level
+// tests above still run when only the webhook secret is configured.
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const SKIP_DB = SKIP || SERVICE_ROLE_KEY.length === 0;
+
+// Service-role REST/auth-admin fetch — bypasses RLS + the
+// lock_subscription_columns trigger (which the webhook itself bypasses
+// via its own service-role client), so the test can plant the fixture
+// and observe the column the handler writes.
+function svc(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${TEST_URL.replace(/\/$/, '')}${path}`, {
+    ...init,
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'content-type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
+// POST a RevenueCat event with a valid HMAC over the serialized body.
+async function postRcEvent(
+  ev: Record<string, unknown>,
+): Promise<{ status: number; json: { new_tier?: unknown; skipped?: unknown } | null }> {
+  const body = JSON.stringify({ event: ev });
+  const sig = await hmacHex(REVENUECAT_SECRET, body);
+  const res = await fetch(endpoint('revenuecat-webhook'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-revenuecat-hmac': sig },
+    body,
+  });
+  const json = await res.json().catch(() => null);
+  return { status: res.status, json };
+}
+
 // HMAC-SHA256 hex of `body` keyed by `secret`. Matches the EF's
 // `hmacHex` in _shared/webhook_security.ts.
 async function hmacHex(secret: string, body: string): Promise<string> {
@@ -503,6 +541,155 @@ Deno.test({
       throw new Error(
         `expected error: missing_object_id_or_owner_id, got ${JSON.stringify(json)}`,
       );
+    }
+  },
+});
+
+// ── revenuecat-webhook: the SIDE EFFECT, not just the envelope ─────
+// The tests above prove the auth/freshness/anon gates. This one proves
+// the part the pure `lib.test.ts` mappers can't: that the decided tier
+// actually reaches `user_profiles`, that a replayed delivery is deduped
+// (not double-applied), that EXPIRATION downgrades, and that a
+// PRODUCT_CHANGE reads the WRITTEN current tier back so a lifetime
+// holder isn't downgraded. Drives an ephemeral user end-to-end so the
+// seed user's tier is never mutated.
+
+Deno.test({
+  name: 'revenuecat-webhook: writes user_profiles — pro → dedupe → free → ' +
+    'lifetime → lifetime-protected PRODUCT_CHANGE',
+  ignore: SKIP_DB,
+  fn: async () => {
+    // GoTrue admin create. No auth.users→user_profiles trigger exists
+    // (the row is normally created by confirm_age_and_terms()), so the
+    // handler's `.update().eq('id', userId)` would silently match zero
+    // rows without an explicit plant — defeating the whole assertion.
+    const email = `rc-webhook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    const createRes = await svc('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'testtest-rc-123', email_confirm: true }),
+    });
+    const created = await createRes.json().catch(() => null);
+    const userId = created?.id as string | undefined;
+    if (!userId) {
+      throw new Error(
+        `failed to create ephemeral user: ${createRes.status} ${JSON.stringify(created)}`,
+      );
+    }
+
+    const eventIds: string[] = [];
+    const mkEvent = (type: string, productId: string | null): Record<string, unknown> => {
+      const id = `evt_int_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      eventIds.push(id);
+      const ev: Record<string, unknown> = {
+        id,
+        type,
+        event_timestamp_ms: Date.now(),
+        app_user_id: userId,
+      };
+      if (productId !== null) ev.product_id = productId;
+      return ev;
+    };
+    const readTier = async (): Promise<string | null> => {
+      const r = await svc(
+        `/rest/v1/user_profiles?id=eq.${userId}&select=subscription_tier`,
+      );
+      const rows = await r.json().catch(() => []);
+      return Array.isArray(rows) && rows[0]
+        ? (rows[0].subscription_tier ?? null)
+        : null;
+    };
+
+    try {
+      const profRes = await svc('/rest/v1/user_profiles', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ id: userId, subscription_tier: 'free' }),
+      });
+      if (profRes.status >= 300) {
+        await profRes.body?.cancel();
+        throw new Error(`failed to plant user_profiles row: ${profRes.status}`);
+      }
+
+      // (a) INITIAL_PURCHASE → pro, and the write must land in the row.
+      const initial = mkEvent('INITIAL_PURCHASE', 'pro_monthly');
+      let r = await postRcEvent(initial);
+      if (r.status !== 200 || r.json?.new_tier !== 'pro') {
+        throw new Error(
+          `(a) expected 200 new_tier=pro, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      if (await readTier() !== 'pro') {
+        throw new Error('(a) user_profiles.subscription_tier did not flip to pro');
+      }
+
+      // (b) Replay the SAME delivery — identical body → identical event
+      // id → 23505 → skipped, and the tier must NOT move again.
+      const initialBody = JSON.stringify({ event: initial });
+      const initialSig = await hmacHex(REVENUECAT_SECRET, initialBody);
+      const replay = await fetch(endpoint('revenuecat-webhook'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-revenuecat-hmac': initialSig },
+        body: initialBody,
+      });
+      const replayJson = await replay.json().catch(() => null);
+      if (replay.status !== 200 || replayJson?.skipped !== 'duplicate_event') {
+        throw new Error(
+          `(b) expected 200 skipped=duplicate_event, got ${replay.status} ${JSON.stringify(replayJson)}`,
+        );
+      }
+      if (await readTier() !== 'pro') {
+        throw new Error('(b) a deduped replay must not re-apply the tier');
+      }
+
+      // (c) EXPIRATION on a non-lifetime tier → downgrade to free.
+      r = await postRcEvent(mkEvent('EXPIRATION', 'pro_monthly'));
+      if (r.status !== 200 || r.json?.new_tier !== 'free') {
+        throw new Error(
+          `(c) expected new_tier=free, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      if (await readTier() !== 'free') {
+        throw new Error('(c) user_profiles did not downgrade to free on EXPIRATION');
+      }
+
+      // (d) INITIAL_PURCHASE of a lifetime product → lifetime.
+      r = await postRcEvent(mkEvent('INITIAL_PURCHASE', 'pro_lifetime'));
+      if (r.status !== 200 || r.json?.new_tier !== 'lifetime') {
+        throw new Error(
+          `(d) expected new_tier=lifetime, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      if (await readTier() !== 'lifetime') {
+        throw new Error('(d) user_profiles did not become lifetime');
+      }
+
+      // (e) A PRODUCT_CHANGE to a non-lifetime product must NOT knock a
+      // lifetime holder down — the handler looks up the CURRENT tier
+      // (written in (d)) so the mapper returns null and the patch is a
+      // no-op. This is the one path that proves the read-back, not just
+      // the write.
+      r = await postRcEvent(mkEvent('PRODUCT_CHANGE', 'pro_monthly'));
+      if (r.status !== 200 || r.json?.new_tier != null) {
+        throw new Error(
+          `(e) expected new_tier=null (lifetime protected), got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      if (await readTier() !== 'lifetime') {
+        throw new Error('(e) lifetime holder was wrongly downgraded by PRODUCT_CHANGE');
+      }
+    } finally {
+      // webhook_events is keyed (provider, event_id) — drop ours so a
+      // re-run stays clean (the 30-day prune would eventually too).
+      for (const id of eventIds) {
+        await svc(
+          `/rest/v1/webhook_events?provider=eq.revenuecat&event_id=eq.${id}`,
+          { method: 'DELETE' },
+        ).then((x) => x.body?.cancel());
+      }
+      // Deleting the auth user cascades the user_profiles row (the FK is
+      // on delete cascade per migration 20260728_001).
+      await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
     }
   },
 });
