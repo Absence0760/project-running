@@ -191,18 +191,25 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
             children: [
               Row(
                 children: [
-                  Text(
-                    dateText,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          dateText,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (s.isWeightPr) _prBadge(theme, l10n.gymPrWeight),
+                        if (s.isEst1RmPr) _prBadge(theme, l10n.gymPrE1rm),
+                      ],
                     ),
                   ),
-                  if (s.isEst1RmPr) ...[
-                    const SizedBox(width: 8),
-                    _prBadge(theme, l10n),
-                  ],
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text(
                     _topSetLine(s),
                     style: theme.textTheme.bodyMedium
@@ -244,14 +251,14 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
     );
   }
 
-  Widget _prBadge(ThemeData theme, AppLocalizations l10n) => Container(
+  Widget _prBadge(ThemeData theme, String label) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: theme.colorScheme.primary,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          l10n.gymPrBadge,
+          label,
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onPrimary,
             fontWeight: FontWeight.w700,

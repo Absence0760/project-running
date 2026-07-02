@@ -122,15 +122,16 @@ void main() {
     expect(find.byIcon(Icons.trending_up), findsOneWidget);
     expect(find.textContaining('since first session'), findsOneWidget);
 
-    // Each session is climbing, so every one set a new e1RM PR at the time →
-    // three PR badges, one per row.
-    expect(find.text('PR'), findsNWidgets(3));
+    // Each session is climbing, so every one raised the heaviest weight →
+    // a "Heaviest" PR badge per row. ('Heaviest' is unique to the badge — the
+    // per-session metric label + headline use the e1RM label instead.)
+    expect(find.text('Heaviest'), findsNWidgets(3));
   });
 
   testWidgets('a plateau (no improvement) shows no up-trend and only the first PR',
       (tester) async {
-    // Identical sessions → only the first sets a PR, and the since-first delta
-    // is flat, never an up-trend.
+    // Identical sessions → only the first sets a heaviest-weight PR, and the
+    // since-first delta is flat, never an up-trend.
     final seeded = await _seed(tester, [
       (
         title: 'A',
@@ -151,8 +152,8 @@ void main() {
     expect(find.text('2 sessions'), findsOneWidget);
     expect(find.byIcon(Icons.trending_up), findsNothing);
     expect(find.byIcon(Icons.trending_flat), findsOneWidget);
-    // Only the earliest session is a new-e1RM PR.
-    expect(find.text('PR'), findsOneWidget);
+    // Only the earliest session raised the heaviest weight → one badge.
+    expect(find.text('Heaviest'), findsOneWidget);
   });
 
   testWidgets('tapping a session row opens that workout detail', (tester) async {

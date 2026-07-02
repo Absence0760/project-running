@@ -46,6 +46,12 @@ export interface ExerciseSession {
 	volumeKg: number;
 	/// Weighted sets of this exercise logged in the session.
 	setCount: number;
+	/// True when this session's heaviest set strictly beat every earlier
+	/// session's — a new heaviest-weight PR at the time. Judged on the same
+	/// single-set metric the records surface calls "Heaviest", so the badges
+	/// agree. Distinct from an e1RM PR: a heavier single at low reps can beat
+	/// the weight best without beating a prior high-rep e1RM.
+	isWeightPr: boolean;
 	/// True when this session's best e1RM strictly beat every earlier session's
 	/// — i.e. it set a new estimated-1RM PR at the time.
 	isEst1RmPr: boolean;
@@ -133,11 +139,16 @@ export function exerciseProgress(
 		return a.workoutId.localeCompare(b.workoutId);
 	});
 
-	let runningBest = -Infinity;
+	let runningBestE1rm = -Infinity;
+	let runningBestWeight = -Infinity;
 	const sessions: ExerciseSession[] = ordered.map((g) => {
 		const e1rm = g.bestEst1RmKg;
-		const isPr = e1rm != null && e1rm > runningBest;
-		if (e1rm != null && e1rm > runningBest) runningBest = e1rm;
+		const isEst1RmPr = e1rm != null && e1rm > runningBestE1rm;
+		if (isEst1RmPr) runningBestE1rm = e1rm as number;
+		// A qualifying session always has a positive topWeightKg, so the first
+		// one clears -Infinity — the "no prior best ⇒ PR" rule workoutPrs uses.
+		const isWeightPr = g.topWeightKg > runningBestWeight;
+		if (isWeightPr) runningBestWeight = g.topWeightKg;
 		return {
 			workoutId: g.workoutId,
 			startedAt: g.startedAt,
@@ -146,7 +157,8 @@ export function exerciseProgress(
 			bestEst1RmKg: e1rm == null ? null : round1(e1rm),
 			volumeKg: Math.round(g.volumeKg),
 			setCount: g.setCount,
-			isEst1RmPr: isPr,
+			isWeightPr,
+			isEst1RmPr,
 		};
 	});
 

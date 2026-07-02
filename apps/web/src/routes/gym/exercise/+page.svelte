@@ -147,10 +147,16 @@
 					<a class="row-link" href="/gym/{s.workoutId}">
 						<div class="row-top">
 							<span class="row-date">{formatDate(s.startedAt)}</span>
+							{#if s.isWeightPr}
+								<span class="pr-badge">
+									<span class="material-symbols" aria-hidden="true">trophy</span>
+									{t('gym.pr.weight')}
+								</span>
+							{/if}
 							{#if s.isEst1RmPr}
 								<span class="pr-badge">
 									<span class="material-symbols" aria-hidden="true">trophy</span>
-									{t('gym.pr.badge')}
+									{t('gym.pr.e1rm')}
 								</span>
 							{/if}
 							<span class="row-top-set">{topSetLine(s)}</span>
@@ -272,7 +278,8 @@
 	.row-top {
 		display: flex;
 		align-items: center;
-		gap: var(--space-sm);
+		flex-wrap: wrap;
+		gap: var(--space-2xs) var(--space-sm);
 	}
 	.row-date {
 		font-size: 0.85rem;
