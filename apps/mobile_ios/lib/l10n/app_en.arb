@@ -9345,14 +9345,17 @@
   "@runPhotosDeleteConfirm": {
     "description": "Confirm button in the delete-photo dialog"
   },
-  "runPhotosPickerError": "Could not open picker: {error}",
-  "@runPhotosPickerError": {
-    "description": "Banner when the image picker can't be opened",
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
+  "runPhotosPermissionDenied": "Photo access is needed to add a photo. You can allow it in Settings.",
+  "@runPhotosPermissionDenied": {
+    "description": "Banner when the OS denies photo-library access for adding a run photo"
+  },
+  "runPhotosOpenSettings": "Open settings",
+  "@runPhotosOpenSettings": {
+    "description": "Action label that opens the app's system settings to grant photo access"
+  },
+  "runPhotosPickerFailed": "Could not open the photo picker. Please try again.",
+  "@runPhotosPickerFailed": {
+    "description": "Generic banner when the image picker can't be opened"
   },
   "runPhotosUploadError": "Upload failed: {error}",
   "@runPhotosUploadError": {

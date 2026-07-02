@@ -7016,9 +7016,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runPhotosDeleteConfirm => 'Supprimer';
 
   @override
-  String runPhotosPickerError(String error) {
-    return 'Impossible d\'ouvrir le sélecteur : $error';
-  }
+  String get runPhotosPermissionDenied =>
+      'L\'accès aux photos est nécessaire pour ajouter une photo. Vous pouvez l\'autoriser dans les Réglages.';
+
+  @override
+  String get runPhotosOpenSettings => 'Ouvrir les réglages';
+
+  @override
+  String get runPhotosPickerFailed =>
+      'Impossible d\'ouvrir le sélecteur de photos. Veuillez réessayer.';
 
   @override
   String runPhotosUploadError(String error) {

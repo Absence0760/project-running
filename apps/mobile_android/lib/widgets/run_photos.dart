@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -47,11 +49,17 @@ class RunPhotos extends StatefulWidget {
   final String runId;
   final String runOwnerId;
 
+  /// Test seam — inject the gallery-pick source so the picker's error
+  /// paths (permission denial, generic failure) are drivable without a
+  /// real photo picker. Defaults to the live [ImagePicker] gallery pick.
+  final Future<XFile?> Function()? pickImageOverride;
+
   const RunPhotos({
     super.key,
     required this.api,
     required this.runId,
     required this.runOwnerId,
+    this.pickImageOverride,
   });
 
   @override
@@ -185,11 +193,12 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
 
   Future<void> _pickPhoto() async {
     try {
-      final f = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 2048,
-      );
+      final f = await (widget.pickImageOverride ??
+          () => _picker.pickImage(
+                source: ImageSource.gallery,
+                imageQuality: 85,
+                maxWidth: 2048,
+              ))();
       if (f == null) return;
       setState(() {
         _pending = f;
@@ -197,8 +206,23 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
       });
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(
-          context, AppLocalizations.of(context).runPhotosPickerError('$e'));
+      final l10n = AppLocalizations.of(context);
+      // The picker throws a permission-denied PlatformException when the
+      // OS photo-library grant is missing — surface friendly copy + a
+      // one-tap route into app settings (mirrors the notification-hint +
+      // barcode-scan siblings). Any other failure gets a generic friendly
+      // message; never dump the raw exception ('$e') into the banner.
+      if (e is PlatformException && e.code == 'photo_access_denied') {
+        showTopBanner(
+          context,
+          l10n.runPhotosPermissionDenied,
+          actionLabel: l10n.runPhotosOpenSettings,
+          onAction: () => openAppSettings(),
+          duration: const Duration(seconds: 6),
+        );
+      } else {
+        showTopBanner(context, l10n.runPhotosPickerFailed);
+      }
     }
   }
 

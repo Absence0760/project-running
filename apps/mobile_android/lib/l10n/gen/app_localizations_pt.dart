@@ -6997,9 +6997,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runPhotosDeleteConfirm => 'Excluir';
 
   @override
-  String runPhotosPickerError(String error) {
-    return 'Não foi possível abrir o seletor: $error';
-  }
+  String get runPhotosPermissionDenied =>
+      'É necessário acesso às fotos para adicionar uma foto. Você pode permitir nas Configurações.';
+
+  @override
+  String get runPhotosOpenSettings => 'Abrir configurações';
+
+  @override
+  String get runPhotosPickerFailed =>
+      'Não foi possível abrir o seletor de fotos. Tente novamente.';
 
   @override
   String runPhotosUploadError(String error) {
@@ -17833,9 +17839,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get runPhotosDeleteConfirm => 'Excluir';
 
   @override
-  String runPhotosPickerError(String error) {
-    return 'Não foi possível abrir o seletor: $error';
-  }
+  String get runPhotosPermissionDenied =>
+      'É necessário acesso às fotos para adicionar uma foto. Você pode permitir nas Configurações.';
+
+  @override
+  String get runPhotosOpenSettings => 'Abrir configurações';
+
+  @override
+  String get runPhotosPickerFailed =>
+      'Não foi possível abrir o seletor de fotos. Tente novamente.';
 
   @override
   String runPhotosUploadError(String error) {

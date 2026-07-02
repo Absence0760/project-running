@@ -7008,9 +7008,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runPhotosDeleteConfirm => 'Löschen';
 
   @override
-  String runPhotosPickerError(String error) {
-    return 'Auswahl konnte nicht geöffnet werden: $error';
-  }
+  String get runPhotosPermissionDenied =>
+      'Zum Hinzufügen eines Fotos wird Fotozugriff benötigt. Du kannst ihn in den Einstellungen erlauben.';
+
+  @override
+  String get runPhotosOpenSettings => 'Einstellungen öffnen';
+
+  @override
+  String get runPhotosPickerFailed =>
+      'Die Fotoauswahl konnte nicht geöffnet werden. Bitte versuche es erneut.';
 
   @override
   String runPhotosUploadError(String error) {

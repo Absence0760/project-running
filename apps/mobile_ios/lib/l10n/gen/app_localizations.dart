@@ -11538,11 +11538,23 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get runPhotosDeleteConfirm;
 
-  /// Banner when the image picker can't be opened
+  /// Banner when the OS denies photo-library access for adding a run photo
   ///
   /// In en, this message translates to:
-  /// **'Could not open picker: {error}'**
-  String runPhotosPickerError(String error);
+  /// **'Photo access is needed to add a photo. You can allow it in Settings.'**
+  String get runPhotosPermissionDenied;
+
+  /// Action label that opens the app's system settings to grant photo access
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get runPhotosOpenSettings;
+
+  /// Generic banner when the image picker can't be opened
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the photo picker. Please try again.'**
+  String get runPhotosPickerFailed;
 
   /// Banner when a photo upload fails
   ///
