@@ -3886,6 +3886,10 @@ export const en = {
 	"gym.routine.nextTarget.repClimb": "rep climb {from}→{to}",
 
 	// Safety contacts (settings/safety + safety/confirm)
+	"safety.kicker": "Safety",
+	"safety.emptyHint": "Add someone you trust — a partner, friend, or family member. They'll get a heads-up email after every run, so no one has to wonder whether you made it home.",
+	"safety.loading": "Loading your safety contacts…",
+	"safety.removeFailed": "Could not remove contact: {error}",
 	"safety.navTab": "Safety",
 	"safety.title": "Safety contacts",
 	"safety.intro": "A safety contact is emailed when you finish a run — even a private one — so someone you trust knows you got back safely.",

@@ -3873,6 +3873,10 @@ export const messages = {
 	"gym.routine.nextTarget.repClimb": "montée de répétitions {from}→{to}",
 
 	// Safety contacts (settings/safety + safety/confirm)
+	"safety.kicker": "Sécurité",
+	"safety.emptyHint": "Ajoutez une personne de confiance — partenaire, ami ou membre de la famille. Elle recevra un e-mail après chaque course, pour que personne n'ait à se demander si vous êtes bien rentré.",
+	"safety.loading": "Chargement de vos contacts de sécurité…",
+	"safety.removeFailed": "Impossible de supprimer le contact : {error}",
 	"safety.navTab": "Sécurité",
 	"safety.title": "Contacts de sécurité",
 	"safety.intro": "Un contact de sécurité reçoit un e-mail lorsque vous terminez une course — même privée — pour qu'une personne de confiance sache que vous êtes bien rentré.",

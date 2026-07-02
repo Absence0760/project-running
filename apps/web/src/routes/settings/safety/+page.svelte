@@ -68,7 +68,7 @@
 			await reload();
 			showToast(m('safety.removedToast'), 'info');
 		} catch (e) {
-			showToast(m('safety.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+			showToast(m('safety.removeFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			confirmingRemove = null;
 		}
@@ -107,76 +107,108 @@
 	<title>{m('safety.title')}</title>
 </svelte:head>
 
-<section class="safety">
-	<h1>{m('safety.title')}</h1>
-	<p class="intro">{m('safety.intro')}</p>
+<div class="page">
+	<header class="page-head">
+		<p class="kicker">{m('safety.kicker')}</p>
+		<h1>{m('safety.title')}</h1>
+		<p class="tagline">{m('safety.intro')}</p>
+	</header>
 
-	<form
-		class="add-row"
-		onsubmit={(e) => {
-			e.preventDefault();
-			handleAdd();
-		}}
-	>
-		<label class="field">
-			<span>{m('safety.addLabel')}</span>
-			<input
-				type="email"
-				bind:value={email}
-				placeholder="partner@example.com"
-				autocomplete="email"
-				data-testid="safety-email-input"
-			/>
-		</label>
-		<button type="submit" class="btn-primary" disabled={adding} data-testid="safety-add-button">
-			{adding ? m('safety.adding') : m('safety.addButton')}
-		</button>
-	</form>
+	<section class="card">
+		<form
+			class="add-row"
+			onsubmit={(e) => {
+				e.preventDefault();
+				handleAdd();
+			}}
+		>
+			<label class="field">
+				<span class="label-text">{m('safety.addLabel')}</span>
+				<input
+					type="email"
+					bind:value={email}
+					placeholder="partner@example.com"
+					autocomplete="email"
+					data-testid="safety-email-input"
+				/>
+			</label>
+			<button type="submit" class="btn-primary" disabled={adding} data-testid="safety-add-button">
+				{#if adding}
+					<span class="material-symbols spin" aria-hidden="true">progress_activity</span>
+					{m('safety.adding')}
+				{:else}
+					<span class="material-symbols" aria-hidden="true">person_add</span>
+					{m('safety.addButton')}
+				{/if}
+			</button>
+		</form>
 
-	{#if loading}
-		<p class="muted">…</p>
-	{:else}
-		<ul class="contact-list" data-testid="safety-contact-list">
-			{#each contacts as c (c.id)}
-				<li class="contact" data-testid="safety-contact">
-					<div class="who">
-						<span class="email">{c.contact_email}</span>
-						<span class="status" class:confirmed={c.confirmed_at}>
-							{c.confirmed_at ? m('safety.statusConfirmed') : m('safety.statusPending')}
-						</span>
-					</div>
-					<button class="btn-text danger" onclick={() => (confirmingRemove = c)}>
-						{m('safety.remove')}
-					</button>
-				</li>
-			{:else}
-				<li class="muted empty">{m('safety.empty')}</li>
-			{/each}
-		</ul>
-	{/if}
+		{#if loading}
+			<div class="skel-list" aria-hidden="true">
+				<span class="skel skel-row"></span>
+				<span class="skel skel-row"></span>
+			</div>
+			<p class="sr-only" role="status">{m('safety.loading')}</p>
+		{:else}
+			<ul class="contact-list" data-testid="safety-contact-list">
+				{#each contacts as c (c.id)}
+					<li class="contact" data-testid="safety-contact">
+						<div class="who">
+							<span class="email">{c.contact_email}</span>
+							<span class="badge" class:confirmed={c.confirmed_at} class:pending={!c.confirmed_at}>
+								<span class="material-symbols" aria-hidden="true">
+									{c.confirmed_at ? 'check_circle' : 'schedule'}
+								</span>
+								{c.confirmed_at ? m('safety.statusConfirmed') : m('safety.statusPending')}
+							</span>
+						</div>
+						<button
+							class="btn-danger btn-sm"
+							onclick={() => (confirmingRemove = c)}
+							aria-label={m('safety.remove')}
+						>
+							<span class="material-symbols" aria-hidden="true">delete</span>
+							{m('safety.remove')}
+						</button>
+					</li>
+				{:else}
+					<li class="empty-state" data-testid="safety-empty">
+						<span class="material-symbols" aria-hidden="true">shield_person</span>
+						<p class="empty-title">{m('safety.empty')}</p>
+						<p class="empty-hint">{m('safety.emptyHint')}</p>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
 
 	{#if pending.length > 0}
-		<div class="incoming" data-testid="safety-incoming">
-			<h2>{m('safety.incomingTitle')}</h2>
-			<p class="intro">{m('safety.incomingIntro')}</p>
+		<section class="card incoming" data-testid="safety-incoming">
+			<header class="section-head">
+				<h2>{m('safety.incomingTitle')}</h2>
+				<p class="tagline">{m('safety.incomingIntro')}</p>
+			</header>
 			<ul class="contact-list">
 				{#each pending as req (req.id)}
 					<li class="contact">
-						<span class="who">{m('safety.incomingFrom', { name: req.owner_name || m('safety.unknownRunner') })}</span>
+						<span class="who">
+							<span class="material-symbols req-icon" aria-hidden="true">person</span>
+							{m('safety.incomingFrom', { name: req.owner_name || m('safety.unknownRunner') })}
+						</span>
 						<span class="actions">
-							<button class="btn-primary sm" onclick={() => handleConfirm(req)} disabled={respondingId !== null} data-testid="safety-confirm-request">
+							<button class="btn-primary btn-sm" onclick={() => handleConfirm(req)} disabled={respondingId !== null} data-testid="safety-confirm-request">
 								{m('safety.confirm')}
 							</button>
-							<button class="btn-text" onclick={() => handleDecline(req)} disabled={respondingId !== null}>
+							<button class="btn-outline btn-sm" onclick={() => handleDecline(req)} disabled={respondingId !== null}>
 								{m('safety.decline')}
 							</button>
 						</span>
 					</li>
 				{/each}
 			</ul>
-		</div>
+		</section>
 	{/if}
-</section>
+</div>
 
 <ConfirmDialog
 	open={confirmingRemove !== null}
@@ -191,118 +223,187 @@
 />
 
 <style>
-	.safety {
-		max-width: 640px;
+	.page { padding: var(--space-xl) var(--space-2xl); max-width: 48rem; }
+	.page-head { margin-bottom: var(--space-xl); }
+	.kicker {
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs);
 	}
-	h1 {
-		margin: 0 0 0.5rem;
-	}
-	h2 {
-		margin: 0 0 0.5rem;
-		font-size: 1.1rem;
-	}
-	.intro {
-		color: var(--color-text-muted, #6b7280);
-		margin: 0 0 1.25rem;
+	h1 { margin: 0 0 var(--space-sm); font-size: 1.6rem; }
+	.tagline {
+		color: var(--color-text-secondary);
+		margin: 0;
 		line-height: 1.5;
+		max-width: 40rem;
 	}
+	.card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		margin-bottom: var(--space-xl);
+	}
+
 	.add-row {
 		display: flex;
 		align-items: flex-end;
-		gap: 0.75rem;
-		margin-bottom: 1.5rem;
+		gap: var(--space-md);
+		padding-bottom: var(--space-lg);
+		margin-bottom: var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
 	}
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: var(--space-2xs);
 		flex: 1;
+		min-width: 0;
 	}
-	.field span {
-		font-size: 0.85rem;
-		color: var(--color-text-muted, #6b7280);
+	.label-text {
+		font-size: 0.82rem;
+		font-weight: 500;
+		color: var(--color-text-secondary);
 	}
-	input {
-		padding: 0.55rem 0.7rem;
-		border: 1px solid var(--color-border, #d1d5db);
-		border-radius: 8px;
-		font-size: 0.95rem;
+	.add-row input {
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.9rem;
+		background: var(--color-bg);
 	}
+
 	.contact-list {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-sm);
 	}
 	.contact {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.7rem 0.85rem;
-		border: 1px solid var(--color-border, #e5e7eb);
-		border-radius: 10px;
+		gap: var(--space-md);
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-tertiary);
 	}
 	.who {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: var(--space-2xs);
 		min-width: 0;
 	}
 	.email {
 		font-weight: 600;
 		overflow-wrap: anywhere;
 	}
-	.status {
-		font-size: 0.8rem;
-		color: var(--color-text-muted, #9ca3af);
+	.badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		align-self: flex-start;
+		font-size: 0.75rem;
+		font-weight: 600;
+		padding: 0.15rem 0.5rem;
+		border-radius: var(--radius-full, 999px);
+		line-height: 1.4;
 	}
-	.status.confirmed {
-		color: var(--color-primary, #2c5f6e);
+	.badge .material-symbols { font-size: 0.95rem; }
+	.badge.confirmed {
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+	.badge.pending {
+		color: var(--color-warning, #92600a);
+		background: color-mix(in srgb, var(--color-warning, #d99a2b) 15%, transparent);
 	}
 	.actions {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-sm);
 		flex-shrink: 0;
 	}
-	.incoming {
-		margin-top: 2rem;
-		padding-top: 1.25rem;
-		border-top: 1px solid var(--color-border, #e5e7eb);
+
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: var(--space-2xs);
+		padding: var(--space-xl) var(--space-md);
+		color: var(--color-text-secondary);
 	}
-	.empty {
-		padding: 0.7rem 0;
+	.empty-state .material-symbols {
+		font-size: 2.25rem;
+		color: var(--color-text-tertiary);
+		margin-bottom: var(--space-2xs);
 	}
-	.btn-primary {
-		background: var(--color-primary, #2c5f6e);
-		color: #fff;
-		border: none;
-		border-radius: 8px;
-		padding: 0.55rem 1rem;
-		font-weight: 600;
-		cursor: pointer;
+	.empty-title { margin: 0; font-weight: 600; color: var(--color-text); }
+	.empty-hint { margin: 0; font-size: 0.86rem; line-height: 1.5; max-width: 30rem; }
+
+	.section-head { margin-bottom: var(--space-md); }
+	.section-head h2 { margin: 0 0 var(--space-2xs); font-size: 1.05rem; }
+	.incoming .who {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-sm);
 	}
-	.btn-primary.sm {
-		padding: 0.4rem 0.8rem;
-		font-size: 0.85rem;
+	.req-icon {
+		font-size: 1.3rem;
+		color: var(--color-text-tertiary);
+		flex-shrink: 0;
 	}
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: default;
+
+	.skel-list { display: flex; flex-direction: column; gap: var(--space-sm); }
+	.skel {
+		display: block;
+		background: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 25%,
+			var(--color-border) 50%,
+			var(--color-bg-tertiary) 75%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.4s ease-in-out infinite;
+		border-radius: var(--radius-md);
 	}
-	.btn-text {
-		background: none;
-		border: none;
-		color: var(--color-text-muted, #6b7280);
-		cursor: pointer;
-		font-size: 0.9rem;
+	.skel-row { height: 3.25rem; }
+	@keyframes shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
 	}
-	.btn-text.danger {
-		color: var(--color-danger, #b91c1c);
+
+	.material-symbols {
+		font-family: 'Material Symbols Outlined', system-ui;
+		font-weight: normal;
+		font-style: normal;
+		display: inline-block;
+		line-height: 1;
 	}
-	.muted {
-		color: var(--color-text-muted, #9ca3af);
+	.spin { animation: spin 0.9s linear infinite; }
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+		.spin { animation: none; }
 	}
 </style>

@@ -3869,6 +3869,10 @@ export const messages = {
 	"gym.routine.nextTarget.repClimb": "回数アップ {from}→{to}",
 
 	// Safety contacts (settings/safety + safety/confirm)
+	"safety.kicker": "安全",
+	"safety.emptyHint": "信頼できる人（パートナー・友人・家族）を追加しましょう。ランのたびにその人へ通知メールが届くので、あなたが無事に帰宅したかを誰も心配せずにすみます。",
+	"safety.loading": "安全連絡先を読み込んでいます…",
+	"safety.removeFailed": "連絡先を削除できませんでした: {error}",
 	"safety.navTab": "セーフティ",
 	"safety.title": "緊急連絡先",
 	"safety.intro": "緊急連絡先には、あなたがランを終えたとき（非公開のランでも）メールが届きます。信頼できる人が、あなたが無事に戻ったことを知れます。",
