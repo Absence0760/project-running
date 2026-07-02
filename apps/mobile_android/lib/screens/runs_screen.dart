@@ -1041,7 +1041,18 @@ class _RunsScreenState extends State<RunsScreen> {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(_activeRangeLabel(l10n)),
+                // Custom ranges render as a two-date span ("Dec 15, 2023 –
+                // Jan 20, 2024"), which — alongside up to six AppBar actions
+                // on a narrow phone — overruns the title slot and trips a
+                // RenderFlex overflow. Ellipsize the range label so the count
+                // chip stays visible instead.
+                Flexible(
+                  child: Text(
+                    _activeRangeLabel(l10n),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   l10n.historyCount(visibleCount),
