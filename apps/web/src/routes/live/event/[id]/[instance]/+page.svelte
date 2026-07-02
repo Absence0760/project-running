@@ -210,8 +210,10 @@
 		// Privacy-zone trust contract: pings are rendered verbatim. The
 		// broadcaster's privacy zones are NOT fetched here. The single
 		// line of defence is the `race_pings_drop_in_zone` BEFORE-INSERT
-		// trigger from migration 20260704_001. Mirrors the trust
-		// contract in /live/[id].
+		// trigger (migration 20260704_001, carve-out 20270309_001) — an
+		// in-zone ping never carries a precise point, only a coarsened
+		// `coarse = true` last-seen cell. Mirrors the trust contract in
+		// /live/[id].
 		channel = supabase
 			.channel(`live-event-${eventId}-${instance}`)
 			.on(
@@ -386,8 +388,8 @@
 	let mapConsented = $state(false);
 	let didFitBounds = false;
 
-	function buildPositionsGeoJSON(): GeoJSON.FeatureCollection<GeoJSON.Point, { user_id: string; color: string; label: string }> {
-		const features: GeoJSON.Feature<GeoJSON.Point, { user_id: string; color: string; label: string }>[] = [];
+	function buildPositionsGeoJSON(): GeoJSON.FeatureCollection<GeoJSON.Point, { user_id: string; color: string; label: string; coarse: boolean }> {
+		const features: GeoJSON.Feature<GeoJSON.Point, { user_id: string; color: string; label: string; coarse: boolean }>[] = [];
 		pings.forEach((p, i) => {
 			features.push({
 				type: 'Feature',
@@ -395,7 +397,11 @@
 				properties: {
 					user_id: p.user_id,
 					color: colorFor(p.user_id),
-					label: String(i + 1)
+					label: String(i + 1),
+					// Privacy-zone last-seen carve-out (migration 20270309_001): a
+					// coarsened ~1 km in-zone fix. Rendered as a hollow amber ring so
+					// a watcher reads it as approximate, never a precise position.
+					coarse: p.coarse === true
 				}
 			});
 		});
@@ -440,9 +446,12 @@
 			type: 'circle',
 			source: 'runner-positions',
 			paint: {
-				'circle-radius': 13,
-				'circle-color': ['get', 'color'],
-				'circle-opacity': 0.25
+				// A coarse last-seen fix gets a wider amber halo so it reads as an
+				// approximate ~1 km cell, deliberately distinct from the tight
+				// per-runner-coloured halo of a precise live position.
+				'circle-radius': ['case', ['get', 'coarse'], 20, 13],
+				'circle-color': ['case', ['get', 'coarse'], '#E6A96B', ['get', 'color']],
+				'circle-opacity': ['case', ['get', 'coarse'], 0.22, 0.25]
 			}
 		});
 
@@ -451,10 +460,12 @@
 			type: 'circle',
 			source: 'runner-positions',
 			paint: {
-				'circle-radius': 7,
-				'circle-color': ['get', 'color'],
-				'circle-stroke-color': prefersDark ? '#0f172a' : '#ffffff',
-				'circle-stroke-width': 2
+				// Coarse: a hollow amber ring (transparent fill, amber stroke);
+				// precise: a solid runner-coloured dot.
+				'circle-radius': ['case', ['get', 'coarse'], 9, 7],
+				'circle-color': ['case', ['get', 'coarse'], 'rgba(0,0,0,0)', ['get', 'color']],
+				'circle-stroke-color': ['case', ['get', 'coarse'], '#E6A96B', prefersDark ? '#0f172a' : '#ffffff'],
+				'circle-stroke-width': ['case', ['get', 'coarse'], 3, 2]
 			}
 		});
 
@@ -577,16 +588,26 @@
 					<ol class="runners">
 						{#each pings as p, i (p.user_id)}
 							{@const fresh = freshnessFor_(p)}
-							<li class="runner" class:stale={fresh.stale}>
+							<li class="runner" class:stale={fresh.stale} class:coarse={p.coarse}>
 								<span class="pos">{i + 1}</span>
 								<span class="avatar" style="background: {tintFor(p.user_id)}; color: {colorFor(p.user_id)};">
 									{initialsFor(p.user_id)}
 								</span>
 								<span class="name">
 									{nameFor(p.user_id)}
-									<span class="freshness" class:stale={fresh.stale}>
-										{#if fresh.stale}<span class="stale-badge">{m('live.badgeStale')}</span>{/if}
-										{freshnessText(fresh)}
+									{#if p.coarse}
+										<span class="approx-tag" data-testid="coarse-badge">
+											<span class="material-symbols" aria-hidden="true">location_searching</span>
+											{m('live.approximateBadge')}
+										</span>
+									{/if}
+									<span class="freshness" class:stale={fresh.stale} class:coarse={p.coarse}>
+										{#if p.coarse}
+											{m('live.approximateSub')}
+										{:else}
+											{#if fresh.stale}<span class="stale-badge">{m('live.badgeStale')}</span>{/if}
+											{freshnessText(fresh)}
+										{/if}
 									</span>
 								</span>
 								<span class="dist">{formatDistance(p.distance_m ?? 0)}</span>
@@ -956,6 +977,35 @@
 	.runner.stale {
 		border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
 		background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-secondary));
+	}
+	.runner.coarse {
+		border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+		background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-secondary));
+	}
+	.freshness.coarse {
+		color: var(--color-warning);
+	}
+	/* Coarse last-seen badge: an amber chip on the leaderboard row so a
+	 * spectator reads the runner's position as an approximate ~1 km cell,
+	 * not a precise live fix. Matches the /live/[id] solo approx-badge. */
+	.approx-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		margin-inline-start: 0.35rem;
+		padding: 0.05rem 0.4rem;
+		border-radius: 9999px;
+		font-size: 0.62rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		vertical-align: middle;
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning);
+		border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+	}
+	.approx-tag .material-symbols {
+		font-size: 0.85rem;
 	}
 	.dist,
 	.pace,

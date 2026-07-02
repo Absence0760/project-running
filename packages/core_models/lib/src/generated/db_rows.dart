@@ -3078,6 +3078,7 @@ class RacePingRow {
   static const String colDistanceM = 'distance_m';
   static const String colElapsedS = 'elapsed_s';
   static const String colBpm = 'bpm';
+  static const String colCoarse = 'coarse';
 
   final dynamic id;
   final String eventId;
@@ -3089,6 +3090,7 @@ class RacePingRow {
   final double? distanceM;
   final int? elapsedS;
   final int? bpm;
+  final bool coarse;
 
   const RacePingRow({
     required this.id,
@@ -3101,6 +3103,7 @@ class RacePingRow {
     this.distanceM,
     this.elapsedS,
     this.bpm,
+    required this.coarse,
   });
 
   factory RacePingRow.fromJson(Map<String, dynamic> json) => RacePingRow(
@@ -3114,6 +3117,7 @@ class RacePingRow {
     distanceM: (json['distance_m'] as num?)?.toDouble(),
     elapsedS: (json['elapsed_s'] as num?)?.toInt(),
     bpm: (json['bpm'] as num?)?.toInt(),
+    coarse: (json['coarse'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3127,6 +3131,7 @@ class RacePingRow {
     colDistanceM: distanceM,
     colElapsedS: elapsedS,
     colBpm: bpm,
+    colCoarse: coarse,
   };
 }
 

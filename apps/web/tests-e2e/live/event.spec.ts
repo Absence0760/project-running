@@ -232,6 +232,72 @@ test.describe('/live/event/[id]/[instance]', () => {
 		}
 	});
 
+	// The privacy-zone last-seen carve-out (migration 20270309_001): an
+	// in-zone race ping is retained coarsened + flagged `coarse=true`
+	// rather than dropped. The leaderboard row must label it as an
+	// approximate "last seen near here" cell, never a precise position —
+	// the event-live counterpart of the /live/[id] coarse-badge pin.
+	test('a coarse last-seen ping renders the approximate badge + approximate sub-line on the leaderboard', async ({
+		page
+	}) => {
+		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+		const eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title: `e2e live-event coarse ${Date.now()}`,
+			starts_at: startsAt
+		});
+
+		try {
+			await insertRaceSession({
+				event_id: eventId,
+				instance_start: startsAt,
+				status: 'running',
+				started_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+				started_by: USER_A.id
+			});
+
+			await insertRacePings({
+				event_id: eventId,
+				instance_start: startsAt,
+				runners: [
+					{
+						user_id: USER_B.id,
+						points: [
+							{
+								lat: OUT_OF_ZONE_LAT,
+								lng: OUT_OF_ZONE_LNG,
+								distance_m: 3_500,
+								elapsed_s: 600,
+								at: new Date(Date.now() - 5 * 1000).toISOString(),
+								coarse: true
+							}
+						]
+					}
+				]
+			});
+
+			await page.goto(`/live/event/${eventId}/${encodeURIComponent(startsAt)}`);
+
+			const runners = page.locator('.leaderboard .runner');
+			await expect(runners).toHaveCount(1, { timeout: 10_000 });
+
+			// The coarse row carries the amber approximate chip + the
+			// "approximate — last seen near a privacy zone" sub-line, and the
+			// row itself is flagged coarse (not the plain freshness readout).
+			await expect(runners.nth(0)).toHaveClass(/coarse/);
+			await expect(runners.nth(0).getByTestId('coarse-badge')).toBeVisible();
+			await expect(runners.nth(0).getByTestId('coarse-badge')).toContainText(
+				/approximate/i
+			);
+			await expect(runners.nth(0).locator('.freshness')).toContainText(
+				/Approximate/i
+			);
+		} finally {
+			await deleteRaceState(eventId, startsAt);
+		}
+	});
+
 	// The per-row DNF/DNS status renders a localized label, not the raw DB
 	// enum uppercased.
 	test('a DNF result row shows a localized status label', async ({ page }) => {

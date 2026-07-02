@@ -1,5 +1,6 @@
 -- Pin the `race_pings_drop_in_zone` BEFORE-INSERT trigger from
--- migration 20260704_001_clip_race_pings_to_privacy_zones.sql.
+-- migration 20260704_001_clip_race_pings_to_privacy_zones.sql, as
+-- amended by 20270309_001_race_pings_coarse_carveout.sql.
 --
 -- The race spectator surfaces (`apps/web/src/routes/live/event/[id]/[instance]/+page.svelte`
 -- + the mobile `race_controller.dart` ping client) render `race_pings`
@@ -11,18 +12,28 @@
 -- it, those coordinates start streaming over the leaderboard /
 -- spectator feed.
 --
+-- The privacy-vs-safety carve-out (20270309_001): an in-zone ping is no
+-- longer dropped outright. The precise lat/lng is never stored, but the
+-- SINGLE most-recent in-zone ping per runner-per-race-instance is
+-- RETAINED coarsened to a ~2-dp (~1.1 km) grid and flagged
+-- `coarse = true`, so a runner who collapses inside their own zone still
+-- leaves a last-seen cell on the leaderboard for a race director / SAR
+-- without broadcasting their exact home point.
+--
 -- This file pins:
 --   1. The trigger exists with the expected name + table + timing.
 --   2. The function is SECURITY DEFINER (it has to cross the
 --      user_settings RLS gate to read the broadcaster's zones).
---   3. Behaviour: with a zone configured, an in-zone ping is dropped;
---      an out-of-zone ping is stored.
+--   3. Behaviour (carve-out): an in-zone ping never stores its precise
+--      coordinates, but a single coarse `coarse = true` last-seen point
+--      is retained and advances to the newest in-zone stop; an
+--      out-of-zone ping is stored precise + uncoarsened.
 --   4. Behaviour: a user without zones has every ping stored
 --      (no-op fast-path).
 
 begin;
 
-select plan(7);
+select plan(9);
 
 -- 1. Trigger exists at the expected name + table.
 select has_trigger(
@@ -87,21 +98,49 @@ values (
   )
 );
 
--- 4. In-zone ping is silently dropped.
+-- 4a. In-zone ping: the PRECISE coordinates are never stored. The ping
+--     lands at (47.3707, 8.5409) — ~103 m from the zone centre (47.37,
+--     8.54), inside the 150 m radius — and the carve-out coarsens it
+--     before insert, so the exact point must not survive on the feed.
 insert into race_pings (event_id, instance_start, user_id, at, lat, lng)
 values ('44444444-4444-4444-4444-444444444402',
         '2026-07-04 10:00:00+00',
         '00000000-0000-0000-0000-0000000eee02',
-        now(), 47.37, 8.54);
+        now(), 47.3707, 8.5409);
 select results_eq(
   $$ select count(*)::int from race_pings
      where user_id = '00000000-0000-0000-0000-0000000eee02'
-       and lat = 47.37 and lng = 8.54 $$,
+       and lat = 47.3707 and lng = 8.5409 $$,
   $$ values (0) $$,
-  'in-zone race ping is silently dropped (spectator feed sees nothing)'
+  'in-zone race ping never stores its precise coordinates (spectator feed sees no exact point)'
 );
 
--- 5. Out-of-zone ping is stored.
+-- 4b. A single coarse last-seen IS retained, rounded to ~2-dp (47.37,
+--     8.54) and flagged coarse = true — the safety last-seen cell.
+select results_eq(
+  $$ select count(*)::int from race_pings
+     where user_id = '00000000-0000-0000-0000-0000000eee02'
+       and coarse = true and lat = 47.37 and lng = 8.54 $$,
+  $$ values (1) $$,
+  'in-zone race ping retained as a single coarse (~2-dp) last-seen point'
+);
+
+-- 4c. A second in-zone ping advances the last-seen point but does NOT
+--     accumulate — at most one coarse row per runner-per-race-instance.
+insert into race_pings (event_id, instance_start, user_id, at, lat, lng)
+values ('44444444-4444-4444-4444-444444444402',
+        '2026-07-04 10:00:00+00',
+        '00000000-0000-0000-0000-0000000eee02',
+        now(), 47.3694, 8.5413);
+select results_eq(
+  $$ select count(*)::int from race_pings
+     where user_id = '00000000-0000-0000-0000-0000000eee02'
+       and coarse = true $$,
+  $$ values (1) $$,
+  'a later in-zone race ping replaces the prior coarse last-seen (at most one per runner)'
+);
+
+-- 5. Out-of-zone ping is stored precise + uncoarsened.
 insert into race_pings (event_id, instance_start, user_id, at, lat, lng)
 values ('44444444-4444-4444-4444-444444444402',
         '2026-07-04 10:00:00+00',
@@ -110,9 +149,9 @@ values ('44444444-4444-4444-4444-444444444402',
 select results_eq(
   $$ select count(*)::int from race_pings
      where user_id = '00000000-0000-0000-0000-0000000eee02'
-       and lng = 8.5550 $$,
+       and lng = 8.5550 and coarse = false $$,
   $$ values (1) $$,
-  'out-of-zone race ping is stored normally'
+  'out-of-zone race ping is stored normally (precise, not coarsened)'
 );
 
 -- ── Admin (no privacy zone) ──

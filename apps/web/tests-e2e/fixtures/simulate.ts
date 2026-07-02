@@ -501,6 +501,7 @@ export async function insertRacePings(opts: {
 			distance_m?: number;
 			elapsed_s?: number;
 			at?: string;
+			coarse?: boolean;
 		}>;
 	}>;
 }): Promise<void> {
@@ -508,7 +509,10 @@ export async function insertRacePings(opts: {
 	// service-role to bypass the running-state RLS insert check, but the
 	// race_pings_drop_in_zone BEFORE-INSERT trigger still fires — keep
 	// test points clear of any seeded privacy zones (runner has a 200 m
-	// zone around Melbourne CBD).
+	// zone around Melbourne CBD). `coarse: true` on an out-of-zone point
+	// survives the trigger's pass-through branch (it never resets the
+	// flag), so it stands in for the privacy-zone last-seen carve-out
+	// (migration 20270309_001) without needing a live zone fixture.
 	const baseAt = Date.now();
 	const rows: Array<Record<string, unknown>> = [];
 	for (const r of opts.runners) {
@@ -523,7 +527,8 @@ export async function insertRacePings(opts: {
 				lat: p.lat,
 				lng: p.lng,
 				distance_m: p.distance_m ?? null,
-				elapsed_s: p.elapsed_s ?? null
+				elapsed_s: p.elapsed_s ?? null,
+				coarse: p.coarse ?? false
 			});
 		});
 	}

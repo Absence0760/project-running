@@ -38,7 +38,16 @@ over-claiming when the position is stale** (the personas' core complaint).
   (`/live/event/[id]/[instance]/+page.svelte`) consumes the same `freshnessFor`
   per row: each on-course runner shows an "Updated N ago" readout and flips to a
   DELAYED badge + stale row once past the window, so a lost-signal runner is
-  never shown as fresh-current on the board either.
+  never shown as fresh-current on the board either. The same `coarse=true`
+  last-seen carve-out was extended to `race_pings` (migration `20270309_001`):
+  an in-zone race ping is retained coarsened + flagged rather than dropped, and
+  the event leaderboard renders the coarse row with the same amber
+  "Approximate / last seen near here" chip + a hollow amber map marker (the
+  MapLibre circle layers switch to a wider warning halo + a transparent-fill
+  amber ring via a data-driven `['case', ['get', 'coarse'], …]`). Web-only —
+  there is no mobile event-live spectator surface reading `race_pings`
+  (`race_controller.dart` only broadcasts), so the mobile coarse rendering
+  stays scoped to the solo `/live/[id]` twin.
 - **Route + cutoffs:** `fetchRouteMarkers` (RPC `route_markers_for_viewer`,
   already anon-readable on public routes) + `roadbook.ts` cutoff parsing
   (`parseCutoff`, the `cutoff` leg shape).

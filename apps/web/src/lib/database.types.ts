@@ -2608,6 +2608,7 @@ export type Database = {
         Row: {
           at: string
           bpm: number | null
+          coarse: boolean
           distance_m: number | null
           elapsed_s: number | null
           event_id: string
@@ -2620,6 +2621,7 @@ export type Database = {
         Insert: {
           at?: string
           bpm?: number | null
+          coarse?: boolean
           distance_m?: number | null
           elapsed_s?: number | null
           event_id: string
@@ -2632,6 +2634,7 @@ export type Database = {
         Update: {
           at?: string
           bpm?: number | null
+          coarse?: boolean
           distance_m?: number | null
           elapsed_s?: number | null
           event_id?: string
@@ -4906,6 +4909,7 @@ export type Database = {
         Returns: {
           at: string
           bpm: number | null
+          coarse: boolean
           distance_m: number | null
           elapsed_s: number | null
           event_id: string

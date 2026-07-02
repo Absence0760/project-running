@@ -3475,6 +3475,7 @@ export interface RacePingRow {
 	distance_m: number | null;
 	elapsed_s: number | null;
 	bpm: number | null;
+	coarse: boolean;
 }
 
 /// Recent pings for a race instance, newest first. The spectator page
