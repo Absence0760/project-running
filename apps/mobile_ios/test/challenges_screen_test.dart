@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/challenges_screen.dart';
 import '../lib/social_service.dart';
+import '../lib/widgets/error_state.dart';
 
 class _FakeSocial extends SocialService {
   final List<ChallengeView> _challenges;
@@ -11,6 +12,12 @@ class _FakeSocial extends SocialService {
 
   @override
   Future<List<ChallengeView>> fetchChallenges() async => _challenges;
+}
+
+class _ThrowingSocial extends SocialService {
+  @override
+  Future<List<ChallengeView>> fetchChallenges() async =>
+      throw Exception('backend down');
 }
 
 ChallengeView _ch({
@@ -69,5 +76,30 @@ void main() {
     // My challenges section shows its empty copy; the public one still lists.
     expect(find.text('No challenges yet.'), findsOneWidget);
     expect(find.text('Public 50k'), findsOneWidget);
+    expect(find.byType(ErrorState), findsNothing);
+  });
+
+  testWidgets('renders ErrorState with Retry when the fetch throws', (tester) async {
+    await tester.pumpWidget(_app(_ThrowingSocial()));
+    await tester.pump();
+
+    expect(find.byType(ErrorState), findsOneWidget);
+    expect(find.text("Couldn't load challenges."), findsOneWidget);
+    // The friendly no-data sections are NOT shown on failure.
+    expect(find.text('My challenges'), findsNothing);
+    expect(find.text('Browse'), findsNothing);
+    // The shared retry affordance is present.
+    expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+  });
+
+  testWidgets('renders the friendly empty state (not ErrorState) when the fetch returns no rows',
+      (tester) async {
+    await tester.pumpWidget(_app(_FakeSocial(const [])));
+    await tester.pump();
+
+    expect(find.byType(ErrorState), findsNothing);
+    expect(find.text('My challenges'), findsOneWidget);
+    expect(find.text('Browse'), findsOneWidget);
+    expect(find.text('No challenges yet.'), findsOneWidget);
   });
 }

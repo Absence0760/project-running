@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
+import '../widgets/error_state.dart';
 import 'challenge_detail_screen.dart';
 
 String challengeMetricLabel(AppLocalizations l10n, String metric) {
@@ -70,19 +71,18 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final all = _all;
-    final body = all == null
-        ? const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-        : RefreshIndicator(
+    final Widget body;
+    if (all == null) {
+      body = const Center(
+          child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+    } else if (_failed) {
+      body = ErrorState(message: l10n.challengesLoadFailed, onRetry: _load);
+    } else {
+      body = RefreshIndicator(
             onRefresh: _load,
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                if (_failed)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(l10n.challengesLoadFailed,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ),
                 _section(
                   context,
                   l10n.challengesMyChallenges,
@@ -99,6 +99,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               ],
             ),
           );
+    }
     if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.challengesTitle)),
