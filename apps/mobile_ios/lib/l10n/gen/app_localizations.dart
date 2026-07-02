@@ -17040,6 +17040,30 @@ abstract class AppLocalizations {
   /// **'Complete'**
   String get challengesProgressComplete;
 
+  /// On-pace verdict: ahead of the even-pace line
+  ///
+  /// In en, this message translates to:
+  /// **'Ahead of pace'**
+  String get challengesPaceAhead;
+
+  /// On-pace verdict: on track to finish
+  ///
+  /// In en, this message translates to:
+  /// **'On pace to finish'**
+  String get challengesPaceOnTrack;
+
+  /// On-pace verdict: behind the even-pace line
+  ///
+  /// In en, this message translates to:
+  /// **'Behind pace'**
+  String get challengesPaceBehind;
+
+  /// Daily rate still needed to finish a behind-pace challenge
+  ///
+  /// In en, this message translates to:
+  /// **'{rate} per day to finish'**
+  String challengesPaceNeedPerDay(String rate);
+
   /// Days-left label
   ///
   /// In en, this message translates to:

@@ -13266,6 +13266,25 @@
   "@challengesProgressComplete": {
     "description": "Goal-met label"
   },
+  "challengesPaceAhead": "Ahead of pace",
+  "@challengesPaceAhead": {
+    "description": "On-pace verdict: ahead of the even-pace line"
+  },
+  "challengesPaceOnTrack": "On pace to finish",
+  "@challengesPaceOnTrack": {
+    "description": "On-pace verdict: on track to finish"
+  },
+  "challengesPaceBehind": "Behind pace",
+  "@challengesPaceBehind": {
+    "description": "On-pace verdict: behind the even-pace line"
+  },
+  "challengesPaceNeedPerDay": "{rate} per day to finish",
+  "@challengesPaceNeedPerDay": {
+    "description": "Daily rate still needed to finish a behind-pace challenge",
+    "placeholders": {
+      "rate": { "type": "String" }
+    }
+  },
   "challengesEndsIn": "Ends in {n} days",
   "@challengesEndsIn": {
     "description": "Days-left label",

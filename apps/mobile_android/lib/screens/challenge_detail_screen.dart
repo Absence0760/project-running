@@ -216,12 +216,51 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
             child: LinearProgressIndicator(value: frac, minHeight: 8),
           ),
         ],
+        if (!complete) _paceHint(context, c, value),
         if (c.completedAt != null) ...[
           const SizedBox(height: 8),
           Text(l10n.challengesBadgeEarned,
               style: TextStyle(color: Theme.of(context).colorScheme.primary)),
         ],
       ],
+    );
+  }
+
+  Widget _paceHint(BuildContext context, ChallengeView c, num value) {
+    if (c.goalValue == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final p = challengePace(
+      value,
+      c.goalValue,
+      c.startsAt.millisecondsSinceEpoch,
+      c.endsAt.millisecondsSinceEpoch,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+    if (p.status != ChallengePaceStatus.active || p.verdict == null) {
+      return const SizedBox.shrink();
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final (label, color) = switch (p.verdict!) {
+      PaceVerdict.ahead => (l10n.challengesPaceAhead, scheme.tertiary),
+      PaceVerdict.behind => (l10n.challengesPaceBehind, scheme.error),
+      PaceVerdict.onTrack => (l10n.challengesPaceOnTrack, scheme.primary),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          if (p.verdict == PaceVerdict.behind && p.requiredPerDay != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              l10n.challengesPaceNeedPerDay(
+                challengeValueLabel(l10n, c.metric, p.requiredPerDay!),
+              ),
+              style: TextStyle(color: Theme.of(context).hintColor),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

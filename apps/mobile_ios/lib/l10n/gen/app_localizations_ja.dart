@@ -9740,6 +9740,20 @@ class AppLocalizationsJa extends AppLocalizations {
   String get challengesProgressComplete => '達成';
 
   @override
+  String get challengesPaceAhead => 'ペースを上回っています';
+
+  @override
+  String get challengesPaceOnTrack => '目標達成ペースです';
+
+  @override
+  String get challengesPaceBehind => 'ペースを下回っています';
+
+  @override
+  String challengesPaceNeedPerDay(String rate) {
+    return '達成まで1日あたり$rate';
+  }
+
+  @override
   String challengesEndsIn(int n) {
     return 'あと $n 日で終了';
   }

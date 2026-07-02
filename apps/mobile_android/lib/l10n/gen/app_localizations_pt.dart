@@ -10226,6 +10226,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get challengesProgressComplete => 'Concluído';
 
   @override
+  String get challengesPaceAhead => 'Adiantado no ritmo';
+
+  @override
+  String get challengesPaceOnTrack => 'No ritmo para concluir';
+
+  @override
+  String get challengesPaceBehind => 'Atrasado no ritmo';
+
+  @override
+  String challengesPaceNeedPerDay(String rate) {
+    return '$rate por dia para concluir';
+  }
+
+  @override
   String challengesEndsIn(int n) {
     return 'Termina em $n dias';
   }
@@ -21034,6 +21048,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesProgressComplete => 'Concluído';
+
+  @override
+  String get challengesPaceAhead => 'Adiantado no ritmo';
+
+  @override
+  String get challengesPaceOnTrack => 'No ritmo para concluir';
+
+  @override
+  String get challengesPaceBehind => 'Atrasado no ritmo';
+
+  @override
+  String challengesPaceNeedPerDay(String rate) {
+    return '$rate por dia para concluir';
+  }
 
   @override
   String challengesEndsIn(int n) {
