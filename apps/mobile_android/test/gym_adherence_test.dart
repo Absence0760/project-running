@@ -195,6 +195,38 @@ void main() {
     expect(r.sets[1].status, SetAdherenceStatus.partial);
   });
 
+  test(
+    'weighted-duration set: duration met, weight unlogged -> hit (duration is primary when weight is not recorded)',
+    () {
+      // A set carrying BOTH a weight and a duration target, logged with the
+      // duration met but the weight left blank, must grade on duration — not
+      // auto-miss on the unlogged weight. (Regression: the weight gate used to
+      // fire on `weightKg == null`.)
+      final r = computeRoutineAdherence(
+        [planned('weighted-plank', 0, null, 10, 60)],
+        [actual('weighted-plank', 0, null, null, 75)],
+      );
+      expect(r.sets[0].status, SetAdherenceStatus.hit);
+      expect(r.completedCount, 1);
+      expect(r.verdict, RoutineVerdict.completed);
+    },
+  );
+
+  test(
+    'weighted-duration set: weight logged but short still misses (a recorded weight stays primary)',
+    () {
+      // When the weight IS recorded and falls below 80%, the set misses
+      // regardless of the duration — duration is only the primary axis while
+      // the weight is unrecorded.
+      final r = computeRoutineAdherence(
+        [planned('weighted-plank', 0, null, 100, 60)],
+        [actual('weighted-plank', 0, null, 50, 75)],
+      );
+      expect(r.sets[0].status, SetAdherenceStatus.missed);
+      expect(r.completedCount, 0);
+    },
+  );
+
   test('deltas signed correctly', () {
     final r = computeRoutineAdherence(
       [planned('bench', 0, 5, 80), planned('bench', 1, 8, 100)],

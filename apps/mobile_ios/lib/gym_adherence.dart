@@ -108,11 +108,15 @@ String _refKey(String exerciseKey, int setIndex) => '$exerciseKey $setIndex';
 /// session roll-up. A planned set is `hit` when the actual reps reach 80% of the
 /// rep floor AND (no weight target, or the actual weight reaches 80% of it); a
 /// duration target is hit at 80% of the target. A set with reps logged but below
-/// the floor is `partial`; one whose weight fell short, or that was never logged,
-/// is `missed`. `amrap`/`failure` sets count as `hit` whenever any reps (or
-/// duration) were logged. `warmup` sets are excluded from the denominator
-/// entirely (skipping a warmup never marks a session partial). A logged set with
-/// no matching plan entry is `extra` and is excluded from `plannedCount`.
+/// the floor is `partial`; a weight-target set whose logged weight fell short is
+/// `missed`, as is a weight-only set with no logged weight. When a set carries
+/// BOTH a weight and a duration target, duration is the primary axis while the
+/// weight isn't recorded — an unlogged weight is graded on duration instead of
+/// auto-missing; a weight that IS logged and falls short still misses.
+/// `amrap`/`failure` sets count as `hit` whenever any reps (or duration) were
+/// logged. `warmup` sets are excluded from the denominator entirely (skipping a
+/// warmup never marks a session partial). A logged set with no matching plan
+/// entry is `extra` and is excluded from `plannedCount`.
 RoutineAdherence computeRoutineAdherence(
   List<PlannedSetRef> planned,
   List<ActualSetRef> actual,
@@ -153,8 +157,9 @@ RoutineAdherence computeRoutineAdherence(
           : SetAdherenceStatus.missed;
     } else if (p.targetWeightKg != null &&
         p.targetWeightKg! > 0 &&
-        (a.weightKg == null ||
-            a.weightKg! < p.targetWeightKg! * _axisHitFraction)) {
+        ((a.weightKg != null &&
+                a.weightKg! < p.targetWeightKg! * _axisHitFraction) ||
+            (a.weightKg == null && p.targetDurationS == null))) {
       status = SetAdherenceStatus.missed;
     } else if (p.targetRepsMin != null) {
       status =
