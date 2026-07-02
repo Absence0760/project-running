@@ -290,6 +290,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   kind: x.kind,
                   targetDistanceM: x.targetDistanceM,
                   completed: _isWorkoutCompleted(x),
+                  skipped: _isWorkoutSkipped(x),
                   isPast: toIsoDate(x.scheduledDate).compareTo(today) < 0,
                 ))
             .toList(),

@@ -1,6 +1,12 @@
 <script lang="ts">
 	import type { PlanWorkout, PlanWeek } from '$lib/types';
-	import { addDays, isWorkoutCompleted, parseISO, formatISO } from '$lib/training/training';
+	import {
+		addDays,
+		isWorkoutCompleted,
+		isWorkoutSkipped,
+		parseISO,
+		formatISO
+	} from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -78,7 +84,9 @@
 	});
 
 	let doneCount = $derived(weekWorkouts.filter(isWorkoutCompleted).length);
-	let activeCount = $derived(weekWorkouts.filter((w) => w.kind !== 'rest').length);
+	let activeCount = $derived(
+		weekWorkouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length
+	);
 </script>
 
 {#if currentWeek}

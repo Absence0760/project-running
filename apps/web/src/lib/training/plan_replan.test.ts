@@ -12,9 +12,9 @@ function wo(
 	scheduledDate: string,
 	kind: string,
 	targetDistanceM: number | null,
-	{ completed = false, isPast = false } = {},
+	{ completed = false, skipped = false, isPast = false } = {},
 ) {
-	return { id, scheduledDate, kind, targetDistanceM, completed, isPast };
+	return { id, scheduledDate, kind, targetDistanceM, completed, skipped, isPast };
 }
 
 test('replanRemaining: an on-track plan proposes no changes', () => {
@@ -307,6 +307,71 @@ test('replanRemaining: a missed long run in the TAPER is skipped, never made up'
 	// Missed long in the taper → no make-up; race week untouched; past frozen.
 	assert.equal(r.onTrack, true);
 	assert.equal(r.changes.length, 0);
+});
+
+test('replanRemaining: an explicitly SKIPPED long run is never made up', () => {
+	// The runner deliberately dropped this build-phase long run via the
+	// workout-detail Skip button (skipped_at stamped → skipped: true). It's off
+	// the books, so even though it is the largest miss, it must not drive a
+	// make-up of the next long run.
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 44_000,
+			actualMetres: 18_000,
+			isComplete: true,
+			workouts: [wo('skipped', '2026-06-01', 'long', 30_000, { skipped: true, isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 46_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-08', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-05' });
+	// No make-up proposed for the deliberately-skipped run.
+	assert.equal(r.changes.some((c) => c.reason === 'make_up_long'), false);
+	assert.equal(r.onTrack, true);
+	assert.equal(r.changes.length, 0);
+});
+
+test('replanRemaining: a skipped long is excluded but a genuine miss still makes up', () => {
+	// The largest miss (35 km) was explicitly skipped; only the 23 km genuine
+	// miss is eligible, so the next long lands on 23 km — proving skip is
+	// filtered out of the make-up max exactly like a taper miss.
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('genuine-miss', '2026-06-01', 'long', 23_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 48_000,
+			actualMetres: 12_000,
+			isComplete: true,
+			workouts: [wo('skipped', '2026-06-08', 'long', 35_000, { skipped: true, isPast: true })],
+		},
+		{
+			weekIndex: 2,
+			phase: 'build',
+			plannedMetres: 42_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('next', '2026-06-15', 'long', 22_000)],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-12' });
+	const makeUp = r.changes.find((c) => c.workoutId === 'next');
+	assert.equal(makeUp?.toMetres, 23_000);
 });
 
 test('replanRemaining: cumulative over-running eases the next future week', () => {

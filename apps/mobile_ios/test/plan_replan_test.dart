@@ -7,6 +7,7 @@ ReplanWorkout _wo(
   String kind,
   double? targetDistanceM, {
   bool completed = false,
+  bool skipped = false,
   bool isPast = false,
 }) {
   return ReplanWorkout(
@@ -15,6 +16,7 @@ ReplanWorkout _wo(
     kind: kind,
     targetDistanceM: targetDistanceM,
     completed: completed,
+    skipped: skipped,
     isPast: isPast,
   );
 }
@@ -303,6 +305,69 @@ void main() {
     final r = replanRemaining(weeks: weeks, today: '2026-06-05');
     expect(r.onTrack, true);
     expect(r.changes.length, 0);
+  });
+
+  test('an explicitly SKIPPED long run is never made up', () {
+    final weeks = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 44000,
+        actualMetres: 18000,
+        isComplete: true,
+        workouts: [
+          _wo('skipped', '2026-06-01', 'long', 30000,
+              skipped: true, isPast: true)
+        ],
+      ),
+      ReplanWeek(
+        weekIndex: 1,
+        phase: 'build',
+        plannedMetres: 46000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [_wo('next', '2026-06-08', 'long', 22000)],
+      ),
+    ];
+    final r = replanRemaining(weeks: weeks, today: '2026-06-05');
+    expect(r.changes.any((c) => c.reason == ReplanReason.makeUpLong), false);
+    expect(r.onTrack, true);
+    expect(r.changes.length, 0);
+  });
+
+  test('a skipped long is excluded but a genuine miss still makes up', () {
+    final weeks = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 40000,
+        actualMetres: 20000,
+        isComplete: true,
+        workouts: [_wo('genuine-miss', '2026-06-01', 'long', 23000, isPast: true)],
+      ),
+      ReplanWeek(
+        weekIndex: 1,
+        phase: 'build',
+        plannedMetres: 48000,
+        actualMetres: 12000,
+        isComplete: true,
+        workouts: [
+          _wo('skipped', '2026-06-08', 'long', 35000,
+              skipped: true, isPast: true)
+        ],
+      ),
+      ReplanWeek(
+        weekIndex: 2,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [_wo('next', '2026-06-15', 'long', 22000)],
+      ),
+    ];
+    final r = replanRemaining(weeks: weeks, today: '2026-06-12');
+    final makeUp = r.changes.firstWhere((c) => c.workoutId == 'next');
+    expect(makeUp.toMetres, 23000);
   });
 
   test('cumulative over-running eases the next future week', () {

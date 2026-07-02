@@ -313,6 +313,7 @@
 					kind: x.kind,
 					targetDistanceM: x.target_distance_m,
 					completed: isWorkoutCompleted(x),
+					skipped: isWorkoutSkipped(x),
 					isPast: x.scheduled_date < today,
 				})),
 			};
@@ -606,7 +607,9 @@
 	});
 
 	let completed = $derived(workouts.filter(isWorkoutCompleted).length);
-	let totalActive = $derived(workouts.filter((w) => w.kind !== 'rest').length);
+	let totalActive = $derived(
+		workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length,
+	);
 	let pct = $derived(totalActive === 0 ? 0 : Math.round((completed / totalActive) * 100));
 
 	let currentWeek = $derived(
@@ -1195,7 +1198,7 @@
 			<h2 class="section-title">{m('planDetail.weekByWeek')}</h2>
 			{#each weeks as w (w.id)}
 				{@const weekWorkouts = workoutsByWeek.get(w.id) ?? []}
-				{@const weekActive = weekWorkouts.filter((x) => x.kind !== 'rest')}
+				{@const weekActive = weekWorkouts.filter((x) => x.kind !== 'rest' && !isWorkoutSkipped(x))}
 				{@const weekDone = weekWorkouts.filter(isWorkoutCompleted).length}
 				{@const isPast = w.week_index < (currentWeekIndex ?? -1)}
 				{@const isFuture = w.week_index > (currentWeekIndex ?? -1)}

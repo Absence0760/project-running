@@ -43,6 +43,9 @@ export interface ReplanWorkout {
 	kind: string;
 	targetDistanceM: number | null;
 	completed: boolean;
+	/// The runner explicitly dropped this workout (skipped_at stamped) — it's
+	/// off the books, so a make-up is never proposed for it.
+	skipped: boolean;
 	/// scheduledDate strictly before today.
 	isPast: boolean;
 }
@@ -114,7 +117,7 @@ export function replanRemaining(input: {
 	for (let i = 0; i < weeks.length; i++) {
 		const week = weeks[i];
 		for (const wo of week.workouts) {
-			if (wo.kind !== 'long' || !wo.isPast || wo.completed) continue;
+			if (wo.kind !== 'long' || !wo.isPast || wo.completed || wo.skipped) continue;
 			const advice = missedWorkoutAdvice({
 				kind: 'long',
 				isTaper: isTaper(week.phase),

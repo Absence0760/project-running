@@ -74,7 +74,9 @@ class CurrentWeekStrip extends StatelessWidget {
     ];
 
     final done = weekWorkouts.where(_isWorkoutCompleted).length;
-    final active = weekWorkouts.where((w) => w.kind != 'rest').length;
+    final active = weekWorkouts
+        .where((w) => w.kind != 'rest' && !isWorkoutSkipped(w.skippedAt))
+        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

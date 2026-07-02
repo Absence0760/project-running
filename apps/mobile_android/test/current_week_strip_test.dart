@@ -5,7 +5,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/current_week_strip.dart';
 
 PlanWorkoutRow _wo(String id, DateTime date, String kind, double? dist,
-        {bool done = false}) =>
+        {bool done = false, DateTime? skippedAt}) =>
     PlanWorkoutRow(
       id: id,
       weekId: 'wk1',
@@ -14,6 +14,7 @@ PlanWorkoutRow _wo(String id, DateTime date, String kind, double? dist,
       targetDistanceM: dist,
       completedRunId: done ? 'run-1' : null,
       manuallyCompleted: false,
+      skippedAt: skippedAt,
     );
 
 Future<void> _pump(
@@ -71,6 +72,24 @@ void main() {
     // 1 completed of 2 active (rest excluded), mirroring the week card.
     expect(find.text('1 / 2'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
+  });
+
+  testWidgets('a skipped workout is off the books — excluded from the active denominator',
+      (tester) async {
+    await _pump(
+      tester,
+      start: start,
+      weekIndex: 0,
+      workouts: [
+        _wo('a', DateTime(2024, 4, 2), 'long', 18000, done: true),
+        _wo('b', DateTime(2024, 4, 4), 'easy', 8000),
+        // Deliberately skipped — must NOT count toward the active total.
+        _wo('c', DateTime(2024, 4, 6), 'tempo', 10000,
+            skippedAt: DateTime(2024, 4, 6)),
+      ],
+    );
+    // 1 completed of 2 active (rest AND the skipped tempo both excluded).
+    expect(find.text('1 / 2'), findsOneWidget);
   });
 
   testWidgets('tapping a workout cell fires onSelect', (tester) async {

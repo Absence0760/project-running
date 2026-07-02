@@ -35,6 +35,10 @@ class ReplanWorkout {
   final double? targetDistanceM;
   final bool completed;
 
+  /// The runner explicitly dropped this workout (skipped_at stamped) — it's
+  /// off the books, so a make-up is never proposed for it.
+  final bool skipped;
+
   /// scheduledDate strictly before today.
   final bool isPast;
 
@@ -44,6 +48,7 @@ class ReplanWorkout {
     required this.kind,
     required this.targetDistanceM,
     required this.completed,
+    required this.skipped,
     required this.isPast,
   });
 }
@@ -140,7 +145,9 @@ ReplanResult replanRemaining({
   for (var i = 0; i < sorted.length; i++) {
     final week = sorted[i];
     for (final wo in week.workouts) {
-      if (wo.kind != 'long' || !wo.isPast || wo.completed) continue;
+      if (wo.kind != 'long' || !wo.isPast || wo.completed || wo.skipped) {
+        continue;
+      }
       final advice = missedWorkoutAdvice(MissedWorkoutInput(
         kind: 'long',
         isTaper: _isTaper(week.phase),

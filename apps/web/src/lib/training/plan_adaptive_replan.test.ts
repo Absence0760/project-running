@@ -8,9 +8,9 @@ function wo(
 	scheduledDate: string,
 	kind: string,
 	targetDistanceM: number | null,
-	{ completed = false, isPast = false } = {},
+	{ completed = false, skipped = false, isPast = false } = {},
 ) {
-	return { id, scheduledDate, kind, targetDistanceM, completed, isPast };
+	return { id, scheduledDate, kind, targetDistanceM, completed, skipped, isPast };
 }
 
 // A completed week with a given planned/actual volume. `under` = actual far

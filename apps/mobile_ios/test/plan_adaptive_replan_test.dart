@@ -8,6 +8,7 @@ ReplanWorkout _wo(
   String kind,
   double? targetDistanceM, {
   bool completed = false,
+  bool skipped = false,
   bool isPast = false,
 }) {
   return ReplanWorkout(
@@ -16,6 +17,7 @@ ReplanWorkout _wo(
     kind: kind,
     targetDistanceM: targetDistanceM,
     completed: completed,
+    skipped: skipped,
     isPast: isPast,
   );
 }
