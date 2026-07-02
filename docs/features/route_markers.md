@@ -78,7 +78,8 @@ cut-off chip renders identically on both platforms.
     the form) projects every placement + drag onto the nearest point of the
     course so a marker sticks to the line. The snap is render-only: `position_m`
     is still derived server-side from `routes.geom`. Pure projection in
-    `routes/route_snap.ts` (`snapToPolyline`, 10 unit tests); the perpendicular
+    `routes/route_snap.ts` (`snapToPolyline`, 10 unit tests) with a byte-identical
+    Dart twin `route_snap.dart` (10 mirror tests each); the perpendicular
     foot on the closest segment, not the nearest vertex.
   - **Drag to move** — saved pins render as draggable DOM markers (a coloured
     dot + label, `grab`/`grabbing` cursor). Dragging one persists the new
@@ -87,12 +88,16 @@ cut-off chip renders identically on both platforms.
     Non-owner viewers keep the lightweight static circle layer.
 - **Mobile** — `widgets/route_markers_panel.dart` on `route_detail_screen.dart`,
   same schedule list + owner editor sheet; `LiveRunMap` renders the pins +
-  tap-to-place. `api_client` exposes the marker CRUD. Snap-to-line + drag-to-move
-  are web-only so far (followups.md).
+  tap-to-place. `api_client` exposes the marker CRUD. The snap projection is now
+  ported (`route_snap.dart`, parity pair); wiring it into the tap placement +
+  the draggable-symbol affordance on `LiveRunMap` needs on-device maplibre work
+  and stays a followup (followups.md).
 - **Shared helper** — `route_markers.ts` ↔ `route_markers.dart` (parity pair):
   the kind catalogue (shared pin colour + i18n label key + which `meta` fields a
   kind carries), `sortMarkers` (schedule order), `parseCutoff`, and the
-  `AID_SERVICES` vocabulary. `route_snap.ts` is web-only (no Dart twin yet).
+  `AID_SERVICES` vocabulary. `route_snap.ts` ↔ `route_snap.dart` (parity pair):
+  `snapToPolyline` projects a point onto the nearest on-line foot + its
+  along-route distance preview, 10 mirror tests each.
 
 ## Consumers
 
