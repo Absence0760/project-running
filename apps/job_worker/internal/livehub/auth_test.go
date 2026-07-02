@@ -48,6 +48,23 @@ func (f *fakeRunMetaFetcher) RunMeta(_ context.Context, runID string) (*RunMeta,
 	return f.rows[runID], nil
 }
 
+// fakeBlockChecker returns a canned block verdict for unit-testing the
+// authorizer's block gate without booting Supabase.
+type fakeBlockChecker struct {
+	blocked map[[2]string]bool
+	calls   int
+	err     error
+}
+
+func (f *fakeBlockChecker) IsBlockedEitherWay(_ context.Context, a, b string) (bool, error) {
+	f.calls++
+	if f.err != nil {
+		return false, f.err
+	}
+	// Symmetric: match on either ordering, mirroring is_blocked_either_way.
+	return f.blocked[[2]string{a, b}] || f.blocked[[2]string{b, a}], nil
+}
+
 // reqWith builds an http.Request with the supplied Authorization
 // header. Used to feed JWTAuthorizer.Authorize directly without
 // going through the full HTTP stack.
@@ -149,6 +166,118 @@ func TestJWTAuthorizer_SubscribeNonOwnerDeniedOnPrivate(t *testing.T) {
 
 	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err == nil {
 		t.Fatal("non-owner subscribe to private run must be denied")
+	}
+}
+
+func TestJWTAuthorizer_BlockedViewerDeniedOnPublic(t *testing.T) {
+	// A public run is anon-viewable, but an AUTHENTICATED viewer whom the
+	// run owner has blocked (either direction) must be denied subscribe
+	// AND snapshot — the live GPS stream honours the same block predicate
+	// as every other social surface.
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "owner-A", IsPublic: true},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a.Blocks = &fakeBlockChecker{blocked: map[[2]string]bool{
+		{"owner-A", "viewer-B"}: true, // owner blocked viewer
+	}}
+	token := signTestToken(t, "viewer-B", 60)
+
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err == nil {
+		t.Fatal("blocked viewer must be denied subscribe to a public run")
+	}
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSnapshot); err == nil {
+		t.Fatal("blocked viewer must be denied snapshot of a public run")
+	}
+}
+
+func TestJWTAuthorizer_NormalViewerAllowedOnPublic(t *testing.T) {
+	// A logged-in viewer with no block relationship to the owner watches
+	// a public run freely — subscribe AND snapshot.
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "owner-A", IsPublic: true},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a.Blocks = &fakeBlockChecker{blocked: map[[2]string]bool{}}
+	token := signTestToken(t, "viewer-B", 60)
+
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err != nil {
+		t.Fatalf("unblocked viewer must be allowed subscribe to a public run: %v", err)
+	}
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSnapshot); err != nil {
+		t.Fatalf("unblocked viewer must be allowed snapshot of a public run: %v", err)
+	}
+}
+
+func TestJWTAuthorizer_AnonAllowedOnPublicSkipsBlockCheck(t *testing.T) {
+	// An anon viewer (no token) has no identity to block — a public run
+	// stays anon-viewable and the block checker is never consulted.
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "owner-A", IsPublic: true},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	bc := &fakeBlockChecker{blocked: map[[2]string]bool{}}
+	a.Blocks = bc
+
+	if err := a.Authorize(reqWith(""), "run-1", ActionSubscribe); err != nil {
+		t.Fatalf("anon subscribe to public run must be allowed: %v", err)
+	}
+	if bc.calls != 0 {
+		t.Fatalf("anon viewer must not trigger a block lookup; got %d calls", bc.calls)
+	}
+}
+
+func TestJWTAuthorizer_OwnerAllowedOnPublicSkipsBlockCheck(t *testing.T) {
+	// The owner watching their own public run never reaches the block
+	// check — is_blocked_either_way(x, x) is false, but we short-circuit.
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "owner-A", IsPublic: true},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	bc := &fakeBlockChecker{blocked: map[[2]string]bool{}}
+	a.Blocks = bc
+	token := signTestToken(t, "owner-A", 60)
+
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err != nil {
+		t.Fatalf("owner subscribe to own public run must be allowed: %v", err)
+	}
+	if bc.calls != 0 {
+		t.Fatalf("owner must not trigger a block lookup; got %d calls", bc.calls)
+	}
+}
+
+func TestJWTAuthorizer_BlockCheckErrorDenies(t *testing.T) {
+	// A Supabase error resolving block status must fail closed — deny.
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "owner-A", IsPublic: true},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f)
+	a.Blocks = &fakeBlockChecker{err: context.DeadlineExceeded}
+	token := signTestToken(t, "viewer-B", 60)
+
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err == nil {
+		t.Fatal("a block-status fetch error must deny (fail-closed)")
+	}
+}
+
+func TestJWTAuthorizer_NilBlockCheckerDeniesAuthedPublicViewer(t *testing.T) {
+	// If the block checker was never wired, an authenticated non-owner
+	// viewer of a public run is denied rather than silently reopening the
+	// leak. Anon viewers are unaffected (they never reach this path).
+	hub := NewHub()
+	f := &fakeRunMetaFetcher{rows: map[string]*RunMeta{
+		"run-1": {UserID: "owner-A", IsPublic: true},
+	}}
+	a := NewJWTAuthorizer(testJWTSecret, hub, f) // Blocks left nil
+	token := signTestToken(t, "viewer-B", 60)
+
+	if err := a.Authorize(reqWith("Bearer "+token), "run-1", ActionSubscribe); err == nil {
+		t.Fatal("authed non-owner viewer must be denied when block checker is unwired (fail-closed)")
 	}
 }
 

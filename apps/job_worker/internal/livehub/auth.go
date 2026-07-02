@@ -18,7 +18,14 @@ import (
 //     the run id. **No anon fall-through.**
 //   - GET  /v1/live/{run_id}/subscribe (WS) and /snapshot —
 //     anon is allowed when `runs.is_public=true`; otherwise a Bearer
-//     JWT is required and `sub` must equal `runs.user_id`.
+//     JWT is required and `sub` must equal `runs.user_id`. An
+//     AUTHENTICATED viewer whom the run owner has blocked (in either
+//     direction) is denied even on a public run — the live stream is
+//     a social surface and honours the same `is_blocked_either_way`
+//     predicate as kudos / comments / follows / segment boards / the
+//     profile page. An anon viewer carries no identity to block, so a
+//     public run stays anon-viewable (matching `public_profile_by_id`,
+//     which allows `auth.uid() IS NULL`).
 //
 // Supabase issues HS256 tokens signed with the project's
 // `SUPABASE_JWT_SECRET`. Verification + `sub` extraction is done
@@ -42,6 +49,15 @@ type JWTAuthorizer struct {
 	// variant can plug in here.
 	Hub     LivePubSub
 	Fetcher RunMetaFetcher
+
+	// Blocks resolves whether a spectator is blocked (either direction)
+	// relative to the run owner. Wired in main.go to a
+	// [SupabaseBlockChecker]. When nil the block gate on public-run
+	// subscribe/snapshot fails closed — an authenticated non-owner
+	// viewer is denied because block status can't be determined — so a
+	// misconfiguration can't silently reopen the leak. Anon viewers and
+	// the owner never reach the block check.
+	Blocks BlockChecker
 }
 
 // NewJWTAuthorizer is the wiring helper main.go uses. Returns nil
@@ -84,10 +100,37 @@ func (a *JWTAuthorizer) Authorize(r *http.Request, runID string, action AuthActi
 		return nil
 
 	case ActionSubscribe, ActionSnapshot:
-		// Public runs are readable anonymously. Skip the JWT check
-		// entirely in that case so a spectator can open the share
-		// URL without an account.
 		if meta.IsPublic {
+			// Public runs are readable anonymously — a spectator can open
+			// the share URL without an account. But an AUTHENTICATED
+			// viewer the owner has blocked (either direction) must not be
+			// able to watch the live GPS stream, matching every other
+			// social surface. A viewer with no verifiable identity is an
+			// anon spectator and carries no block relationship to check.
+			sub, err := a.extractSub(r)
+			if err != nil {
+				// No/invalid token → anon spectator of a public run. A
+				// public run is anon-viewable regardless, so this is not
+				// weaker than the prior behaviour; the block gate only
+				// bites a viewer who presents a valid identity, exactly
+				// as the SQL predicate only bites a non-null auth.uid().
+				return nil
+			}
+			if sub == meta.UserID {
+				// Owner watching their own public run.
+				return nil
+			}
+			if a.Blocks == nil {
+				// Fail-closed: block status can't be determined.
+				return errors.New("auth: block check unavailable")
+			}
+			blocked, err := a.Blocks.IsBlockedEitherWay(r.Context(), sub, meta.UserID)
+			if err != nil {
+				return errors.New("auth: block check failed")
+			}
+			if blocked {
+				return errors.New("auth: blocked by run owner")
+			}
 			return nil
 		}
 		// Private run → owner-only.

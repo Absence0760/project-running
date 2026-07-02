@@ -510,6 +510,17 @@ func main() {
 	}
 
 	authorizer := livehub.NewJWTAuthorizer(jwtSecretEnv, hub, runMetaFetcher)
+	if authorizer != nil {
+		// Block gate for the live stream: a spectator the runner has
+		// blocked (either direction) is denied subscribe/snapshot even on
+		// a public run — same `is_blocked_either_way` predicate the rest
+		// of the app enforces. Service-role read of `user_blocks`.
+		authorizer.Blocks = &livehub.SupabaseBlockChecker{
+			BaseURL:    baseURL,
+			ServiceKey: serviceKey,
+			HTTP:       client.HTTP,
+		}
+	}
 	hubSrv := &livehub.Server{
 		Hub:            hub,
 		Log:            logger.With("component", "livehub"),
