@@ -544,4 +544,28 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
   });
+
+  group('RunSocialSection — comment action tap targets (a11y >=48dp)', () {
+    testWidgets('inline Reply + Delete meet the 48dp minimum hit target',
+        (tester) async {
+      final api = _CommentApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: RunSocialSection(api: api, runId: 'fake-run-id'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final reply = find.widgetWithText(TextButton, 'Reply');
+      final del = find.widgetWithText(TextButton, 'Delete');
+      expect(reply, findsOneWidget);
+      expect(del, findsOneWidget);
+      expect(tester.getSize(reply).height, greaterThanOrEqualTo(48.0));
+      expect(tester.getSize(del).height, greaterThanOrEqualTo(48.0));
+    });
+  });
 }

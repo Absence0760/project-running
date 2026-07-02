@@ -439,9 +439,8 @@ class _CommentTile extends StatelessWidget {
                       TextButton(
                         onPressed: onReply,
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          visualDensity: VisualDensity.compact,
-                          minimumSize: const Size(0, 28),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(48, 48),
                         ),
                         child: Text(l10n.runSocialReply),
                       ),
@@ -449,9 +448,8 @@ class _CommentTile extends StatelessWidget {
                       TextButton(
                         onPressed: onDelete,
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          visualDensity: VisualDensity.compact,
-                          minimumSize: const Size(0, 28),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(48, 48),
                           foregroundColor: theme.colorScheme.error,
                         ),
                         child: Text(l10n.runSocialDelete),
