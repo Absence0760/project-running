@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchGymRoutinesWithError, type GymRoutineSummary } from '$lib/core/data';
 	import { formatDate } from '$lib/format/time';
+	import ActivityLoader from '$lib/components/ActivityLoader.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	let routines = $state<GymRoutineSummary[]>([]);
@@ -52,7 +53,7 @@
 	</header>
 
 	{#if loading}
-		<p class="sr-only" role="status">{t('shell.loading')}</p>
+		<div class="act-load"><ActivityLoader kind="train" size={76} label={t('shell.loading')} /></div>
 	{:else if loadError}
 		<div class="error-banner" role="alert">
 			<span class="material-symbols" aria-hidden="true">error</span>
@@ -94,6 +95,11 @@
 </div>
 
 <style>
+	.act-load {
+		display: flex;
+		justify-content: center;
+		padding: var(--space-2xl) 0;
+	}
 	.page {
 		padding: var(--page-padding-y) var(--page-padding-x);
 	}

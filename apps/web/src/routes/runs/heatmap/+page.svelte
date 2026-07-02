@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import PersonalHeatmap from '$lib/components/PersonalHeatmap.svelte';
+	import ActivityLoader from '$lib/components/ActivityLoader.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let ready = $state(false);
@@ -25,7 +26,7 @@
 	</header>
 
 	{#if !ready}
-		<p class="muted">{m('shell.loading')}</p>
+		<div class="act-load"><ActivityLoader kind="run" size={76} label={m('shell.loading')} /></div>
 	{:else if !auth.user}
 		<p class="muted">{m('runsHeatmap.signInPrompt')}</p>
 	{:else}
@@ -36,6 +37,11 @@
 </div>
 
 <style>
+	.act-load {
+		display: flex;
+		justify-content: center;
+		padding: var(--space-2xl) 0;
+	}
 	.page {
 		display: flex;
 		flex-direction: column;

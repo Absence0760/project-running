@@ -10,6 +10,7 @@
 		slotCalorieTrend,
 	} from '$lib/nutrition/meal_detail';
 	import { formatDateShort } from '$lib/format/time';
+	import ActivityLoader from '$lib/components/ActivityLoader.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let date = $derived($page.params.date as string);
@@ -77,7 +78,7 @@
 		</header>
 
 		{#if loading}
-			<p class="empty">{m('nutrition.loading')}</p>
+			<div class="act-load"><ActivityLoader kind="fuel" size={76} label={m('nutrition.loading')} /></div>
 		{:else if loadError}
 			<div class="load-error-banner" role="alert" data-testid="meal-load-error">
 				<span class="material-symbols" aria-hidden="true">error</span>
@@ -135,6 +136,11 @@
 </div>
 
 <style>
+	.act-load {
+		display: flex;
+		justify-content: center;
+		padding: var(--space-2xl) 0;
+	}
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
 		max-width: 48rem;
