@@ -1043,6 +1043,11 @@ class _RunScreenState extends State<RunScreen> {
     _currentBpm = null;
     _hrSub = widget.heartRate.stream.listen(
       (bpm) {
+        // Drop obviously bogus BLE readings before they reach the averaged
+        // samples that feed metadata.avg_bpm (→ TRIMP → CTL/ATL/TSB) — the
+        // same 30–230 bounds run_recorder + hr_zones apply, so one malformed
+        // packet can't skew weeks of training load or the live readout.
+        if (bpm < 30 || bpm > 230) return;
         _bpmSamples.add(bpm);
         // Stamp each new sample onto the recorder so the saved track
         // carries per-point BPM (and run_detail_screen's HR-zone
