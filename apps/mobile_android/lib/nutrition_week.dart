@@ -45,3 +45,41 @@ WeeklyIntakeSummary weeklyIntakeSummary(List<num> dailyCalories, num? targetCalo
     deltaPerDay: deltaPerDay,
   );
 }
+
+class WeeklyProteinSummary {
+  final int loggedDays;
+
+  /// Mean protein (g) across logged days (0 when nothing is logged).
+  final int avgProteinG;
+
+  /// Logged days whose protein reached or cleared the target — protein is a
+  /// floor, so hitting it is the win we count. Null when there's no target or
+  /// no logged day (hide the chip).
+  final int? daysMetGoal;
+
+  const WeeklyProteinSummary({
+    required this.loggedDays,
+    required this.avgProteinG,
+    required this.daysMetGoal,
+  });
+}
+
+/// Weekly protein consistency — how many of the last 7 logged days hit the
+/// protein target. A logged day is one with protein > 0, mirroring the
+/// intake-summary's own-metric convention; a day of food with genuinely zero
+/// protein (rare) is treated as unlogged for this stat rather than a miss.
+WeeklyProteinSummary weeklyProteinSummary(
+    List<num> dailyProteinG, num? targetProteinG) {
+  final logged = dailyProteinG.where((p) => p > 0).toList();
+  final loggedDays = logged.length;
+  final avgProteinG =
+      loggedDays > 0 ? (logged.reduce((s, p) => s + p) / loggedDays).round() : 0;
+  final daysMetGoal = targetProteinG != null && targetProteinG > 0 && loggedDays > 0
+      ? logged.where((p) => p >= targetProteinG).length
+      : null;
+  return WeeklyProteinSummary(
+    loggedDays: loggedDays,
+    avgProteinG: avgProteinG,
+    daysMetGoal: daysMetGoal,
+  );
+}
