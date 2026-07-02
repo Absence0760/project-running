@@ -9026,6 +9026,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymRoutineNextTargetHold => 'Manter — repetir este alvo';
 
   @override
+  String get gymRoutineNextTargetEstablishBaseline =>
+      'Estabelecer base — defina o peso inicial';
+
+  @override
   String get gymRoutineNextTargetDeload => 'Deload — reduzir a carga';
 
   @override
@@ -9922,6 +9926,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get routeMarkerTapToPlace =>
       'Toque no mapa para posicionar este marcador.';
+
+  @override
+  String get routeMarkerSnapToggle => 'Ajustar à linha do percurso';
 
   @override
   String get routeMarkerPlaced =>
@@ -19855,6 +19862,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get gymRoutineNextTargetHold => 'Manter — repetir este alvo';
 
   @override
+  String get gymRoutineNextTargetEstablishBaseline =>
+      'Estabelecer base — defina o peso inicial';
+
+  @override
   String get gymRoutineNextTargetDeload => 'Deload — reduzir a carga';
 
   @override
@@ -20751,6 +20762,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get routeMarkerTapToPlace =>
       'Toque no mapa para posicionar este marcador.';
+
+  @override
+  String get routeMarkerSnapToggle => 'Ajustar à linha do percurso';
 
   @override
   String get routeMarkerPlaced =>

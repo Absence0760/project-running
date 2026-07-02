@@ -9048,6 +9048,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymRoutineNextTargetHold => 'Maintenir — répéter cet objectif';
 
   @override
+  String get gymRoutineNextTargetEstablishBaseline =>
+      'Établir une base — définir le poids de départ';
+
+  @override
   String get gymRoutineNextTargetDeload => 'Deload — réduire la charge';
 
   @override
@@ -9946,6 +9950,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routeMarkerTapToPlace => 'Touchez la carte pour placer ce repère.';
+
+  @override
+  String get routeMarkerSnapToggle => 'Aligner sur le tracé de l\'itinéraire';
 
   @override
   String get routeMarkerPlaced =>

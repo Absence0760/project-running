@@ -118,6 +118,19 @@ void main() {
     expect(out.reason, ProgressionReason.hold);
   });
 
+  test('percent_cycle: first/bodyweight session (no prior top weight) -> establishBaseline, not hold', () {
+    // Regression: a concrete percentage-of-1RM prescription with no prior top
+    // weight (first session, or a bodyweight-logged one) was mislabelled hold —
+    // there was nothing to hold. The weight value is unchanged; only the label.
+    final out = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.percentCycle,
+      lastSets: [s(3, null)],
+      params: const {'percent': 0.85, 'oneRmKg': 150},
+    ));
+    expect(out.reason, ProgressionReason.establishBaseline);
+    expect(out.suggestedWeightKg, 127.5);
+  });
+
   test('rpe_autoreg: achieved RPE below target -> increase_weight', () {
     final out = nextPrescription(ProgressionInput(
       scheme: ProgressionScheme.rpeAutoreg,

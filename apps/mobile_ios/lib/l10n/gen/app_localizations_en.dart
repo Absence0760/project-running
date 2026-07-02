@@ -8935,6 +8935,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymRoutineNextTargetHold => 'Hold — repeat this target';
 
   @override
+  String get gymRoutineNextTargetEstablishBaseline =>
+      'Establish baseline — set a starting weight';
+
+  @override
   String get gymRoutineNextTargetDeload => 'Deload — back off the load';
 
   @override
@@ -9825,6 +9829,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routeMarkerTapToPlace => 'Tap the map to place this marker.';
+
+  @override
+  String get routeMarkerSnapToggle => 'Snap to route line';
 
   @override
   String get routeMarkerPlaced => 'Placed. Tap the map again to move it.';

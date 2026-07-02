@@ -733,6 +733,8 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         return l10n.gymRoutineNextTargetIncreaseReps;
       case ProgressionReason.deload:
         return l10n.gymRoutineNextTargetDeload;
+      case ProgressionReason.establishBaseline:
+        return l10n.gymRoutineNextTargetEstablishBaseline;
       case ProgressionReason.hold:
       case ProgressionReason.none:
         return l10n.gymRoutineNextTargetHold;

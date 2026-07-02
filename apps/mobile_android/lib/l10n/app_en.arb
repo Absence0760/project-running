@@ -11812,6 +11812,7 @@
   "gymRoutineNextTargetIncreaseWeight": "Add load next time",
   "gymRoutineNextTargetIncreaseReps": "Add reps next time",
   "gymRoutineNextTargetHold": "Hold — repeat this target",
+  "gymRoutineNextTargetEstablishBaseline": "Establish baseline — set a starting weight",
   "gymRoutineNextTargetDeload": "Deload — back off the load",
   "gymRoutineNextTargetRepClimb": "rep climb {from}→{to}",
   "@gymRoutineNextTargetRepClimb": {
@@ -12837,6 +12838,10 @@
   "routeMarkerTapToPlace": "Tap the map to place this marker.",
   "@routeMarkerTapToPlace": {
     "description": "Hint to place a marker by tapping the map"
+  },
+  "routeMarkerSnapToggle": "Snap to route line",
+  "@routeMarkerSnapToggle": {
+    "description": "Toggle to snap a placed marker onto the route polyline"
   },
   "routeMarkerPlaced": "Placed. Tap the map again to move it.",
   "@routeMarkerPlaced": {

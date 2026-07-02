@@ -20,7 +20,14 @@ enum ProgressionScheme {
   rpeAutoreg,
 }
 
-enum ProgressionReason { increaseWeight, increaseReps, hold, deload, none }
+enum ProgressionReason {
+  increaseWeight,
+  increaseReps,
+  hold,
+  establishBaseline,
+  deload,
+  none
+}
 
 class ProgressionSetLike {
   final num? reps;
@@ -257,13 +264,18 @@ ProgressionSuggestion nextPrescription(ProgressionInput input) {
           );
         }
         final prescribed = _round1(percent * oneRm);
+        // A first/bodyweight session has no prior top weight to compare against,
+        // so the prescription isn't a "hold" of anything — it's the starting load.
+        final ProgressionReason reason = weight == null
+            ? ProgressionReason.establishBaseline
+            : prescribed > weight
+                ? ProgressionReason.increaseWeight
+                : ProgressionReason.hold;
         return ProgressionSuggestion(
           suggestedWeightKg: prescribed,
           suggestedRepsMin: repsMin,
           suggestedRepsMax: repsMax,
-          reason: weight != null && prescribed > weight
-              ? ProgressionReason.increaseWeight
-              : ProgressionReason.hold,
+          reason: reason,
         );
       }
 

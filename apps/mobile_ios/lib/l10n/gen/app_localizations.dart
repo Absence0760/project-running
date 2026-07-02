@@ -14988,6 +14988,12 @@ abstract class AppLocalizations {
   /// **'Hold — repeat this target'**
   String get gymRoutineNextTargetHold;
 
+  /// No description provided for @gymRoutineNextTargetEstablishBaseline.
+  ///
+  /// In en, this message translates to:
+  /// **'Establish baseline — set a starting weight'**
+  String get gymRoutineNextTargetEstablishBaseline;
+
   /// No description provided for @gymRoutineNextTargetDeload.
   ///
   /// In en, this message translates to:
@@ -16505,6 +16511,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap the map to place this marker.'**
   String get routeMarkerTapToPlace;
+
+  /// Toggle to snap a placed marker onto the route polyline
+  ///
+  /// In en, this message translates to:
+  /// **'Snap to route line'**
+  String get routeMarkerSnapToggle;
 
   /// Confirmation that a marker was placed
   ///
