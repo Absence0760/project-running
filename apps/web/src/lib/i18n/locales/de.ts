@@ -290,6 +290,8 @@ export const messages = {
 	"dash.prColDistance": "Distanz",
 	"dash.prColTime": "Zeit",
 	"dash.prColDate": "Datum",
+	"dash.prColAgeGrade": "Altersgewichtung",
+	"dash.prAgeGradeTitle": "Altersgewichteter Wert im Vergleich zum Weltstandard für dein Alter und Geschlecht",
 	"dash.hideRecordTitle": "Diesen Rekord ausblenden",
 	"dash.hideRecordAria": "Rekord über {distance} ausblenden",
 	"dash.prEmptyNoRuns": "Absolviere geeignete Läufe, um Bestzeiten zu sehen",

@@ -432,4 +432,62 @@ test.describe('/dashboard', () => {
 			page.getByRole('heading', { name: /Richmond Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('PR table surfaces an age-grade % column (USER_A has DOB + sex)', async ({ page }) => {
+		// USER_A's profile carries date_of_birth + gender (seed), so a
+		// standard-distance PR can be age-graded. Insert a clean 5000 m run
+		// to guarantee a fresh, deterministic 5k PB row, then assert the
+		// age-grade column renders and the 5k row shows a percent value.
+		let runId = '';
+		try {
+			runId = await insertRun({
+				user_id: USER_A.id,
+				duration_s: 1080, // 18:00 — fast enough to be the 5k best
+				distance_m: 5000
+			});
+
+			await page.goto('/dashboard');
+
+			// Column header appears once at least one visible PR is gradeable.
+			await expect(
+				page.getByRole('columnheader', { name: /age grade/i })
+			).toBeVisible({ timeout: 10_000 });
+
+			// The 5k row's age-grade cell holds a one-decimal percent
+			// (formatAgeGradePercent → e.g. "72.4%"), not the "—" fallback.
+			const fiveKAgeGrade = page
+				.locator('.pr-table tbody tr', {
+					has: page.locator('.pr-distance', { hasText: /^5k$/ })
+				})
+				.locator('.pr-age-grade');
+			await expect(fiveKAgeGrade).toHaveText(/^\d{1,3}\.\d%$/);
+		} finally {
+			if (runId) await deleteRun(runId);
+		}
+	});
+
+	test('PR hide (×) control has a >=44px tap target', async ({ page }) => {
+		// A11y: the per-record hide control must meet the 44x44 minimum
+		// touch-target size. Regression guard for the restyle that gave the
+		// bare-glyph button a real hit area.
+		let runId = '';
+		try {
+			// Guarantee at least one visible PR row (→ a .pr-hide button).
+			runId = await insertRun({
+				user_id: USER_A.id,
+				duration_s: 1080,
+				distance_m: 5000
+			});
+			await page.goto('/dashboard');
+
+			const hideBtn = page.locator('.pr-hide').first();
+			await expect(hideBtn).toBeVisible({ timeout: 10_000 });
+			const box = await hideBtn.boundingBox();
+			expect(box).not.toBeNull();
+			expect(box!.width).toBeGreaterThanOrEqual(44);
+			expect(box!.height).toBeGreaterThanOrEqual(44);
+		} finally {
+			if (runId) await deleteRun(runId);
+		}
+	});
 });

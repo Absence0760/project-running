@@ -21,6 +21,7 @@
 		isReturningFromGap,
 	} from '$lib/training/fitness';
 	import { computeRunStreaks } from '$lib/runs/streaks';
+	import { ageGradeForRun, formatAgeGradePercent } from '$lib/runs/age_grade';
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
 	import { fetchGymSetHistory, fetchGymWorkouts } from '$lib/core/data';
@@ -84,6 +85,45 @@
 			visiblePrs.every((pr) => Date.now() - new Date(pr.date).getTime() > PR_STALE_MS),
 	);
 	let hiddenPrRows = $derived(personalRecords.filter((pr) => hiddenPrs.includes(pr.key)));
+
+	// Viewer DOB + sex, read once on mount from get_my_profile (same self-read
+	// path runs/[id] uses). Feed the shared age-grade helper so the PR table can
+	// score each record against the world standard for the runner's age & sex.
+	// Both stay null when the profile lacks the data → the column self-hides.
+	let viewerDobIso = $state<string | null>(null);
+	let viewerGender = $state<string | null>(null);
+
+	// PR distance keys map to the canonical standard-distance metres age grading
+	// is defined at. Any key not here (or a profile missing DOB/sex) yields no
+	// grade for that row.
+	const PR_KEY_DISTANCE_M: Record<string, number> = {
+		'1_mile': 1609.344,
+		'5k': 5000,
+		'10k': 10000,
+		half_marathon: 21097.5,
+		marathon: 42195,
+	};
+
+	function ageGradeForPr(pr: { key: string; time_s: number; date: string }): string | null {
+		const distanceM = PR_KEY_DISTANCE_M[pr.key];
+		if (!distanceM) return null;
+		const sex = viewerGender === 'male' || viewerGender === 'female' ? viewerGender : null;
+		const res = ageGradeForRun({
+			distanceM,
+			durationSec: pr.time_s,
+			dobIso: viewerDobIso,
+			runStartIso: pr.date,
+			sex,
+		});
+		return res ? formatAgeGradePercent(res.percent) : null;
+	}
+
+	let prAgeGrades = $derived.by(() => {
+		const map: Record<string, string | null> = {};
+		for (const pr of visiblePrs) map[pr.key] = ageGradeForPr(pr);
+		return map;
+	});
+	let showAgeGradeCol = $derived(Object.values(prAgeGrades).some((v) => v != null));
 	let planOverview = $state<ActivePlanOverview | null>(null);
 	let loading = $state(true);
 	let mileageView = $state<'weekly' | 'monthly' | 'yearly'>('weekly');
@@ -453,6 +493,19 @@
 		// inherits its Art 9 health-consent gate (targets stay null without body
 		// metrics — the rings then render unfilled, exactly as /nutrition does).
 		await loadTodaysNutrition();
+		// Best-effort viewer DOB + sex for age-grading the PR table. Self-read
+		// via get_my_profile (gender is deny-by-default for direct SELECTs). A
+		// failure or missing fields just leaves the age-grade column hidden.
+		try {
+			const { data: prof } = await supabase.rpc('get_my_profile');
+			const p = prof as { date_of_birth?: string | null; gender?: string | null } | null;
+			if (typeof p?.date_of_birth === 'string') viewerDobIso = p.date_of_birth;
+			if (p?.gender === 'male' || p?.gender === 'female' || p?.gender === 'nonbinary') {
+				viewerGender = p.gender;
+			}
+		} catch (_) {
+			/* silent — age-grade column is additive */
+		}
 		loading = false;
 	});
 
@@ -1437,6 +1490,9 @@
 								<th>{m('dash.prColDistance')}</th>
 								<th>{m('dash.prColTime')}</th>
 								<th>{m('dash.prColDate')}</th>
+								{#if showAgeGradeCol}
+									<th class="pr-age-grade-th">{m('dash.prColAgeGrade')}</th>
+								{/if}
 								<th></th>
 							</tr>
 						</thead>
@@ -1449,6 +1505,11 @@
 										{formatDate(pr.date)}
 										<span class="pr-age">{relativeAge(pr.date)}</span>
 									</td>
+									{#if showAgeGradeCol}
+										<td class="pr-age-grade" title={m('dash.prAgeGradeTitle')}>
+											{prAgeGrades[pr.key] ?? '—'}
+										</td>
+									{/if}
 									<td>
 										<button
 											type="button"
@@ -3081,19 +3142,29 @@
 	}
 	.pr-table tbody tr:last-child td { border-bottom: none; }
 	.pr-distance { font-weight: 600; }
+	.pr-age-grade {
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		color: var(--color-primary);
+	}
 	.pr-age {
 		display: block;
 		font-size: 0.72rem;
 		color: var(--color-text-tertiary);
 	}
 	.pr-hide {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
 		background: none;
 		border: none;
 		color: var(--color-text-tertiary);
 		font-size: 1.1rem;
 		line-height: 1;
 		cursor: pointer;
-		padding: 0 0.2rem;
+		padding: 0;
 	}
 	.pr-hide:hover { color: var(--color-text); }
 	.pr-show-hidden {

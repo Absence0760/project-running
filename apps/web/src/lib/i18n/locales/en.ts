@@ -299,6 +299,8 @@ export const en = {
 	"dash.prColDistance": "Distance",
 	"dash.prColTime": "Time",
 	"dash.prColDate": "Date",
+	"dash.prColAgeGrade": "Age grade",
+	"dash.prAgeGradeTitle": "Age-graded score vs the world standard for your age and sex",
 	"dash.hideRecordTitle": "Hide this record",
 	"dash.hideRecordAria": "Hide {distance} record",
 	"dash.prEmptyNoRuns": "Complete qualifying runs to see PRs",

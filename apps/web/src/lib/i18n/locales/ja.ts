@@ -286,6 +286,8 @@ export const messages = {
 	"dash.prColDistance": "距離",
 	"dash.prColTime": "タイム",
 	"dash.prColDate": "日付",
+	"dash.prColAgeGrade": "年齢グレード",
+	"dash.prAgeGradeTitle": "年齢と性別に応じた世界標準に対する年齢補正スコア",
 	"dash.hideRecordTitle": "この記録を非表示",
 	"dash.hideRecordAria": "{distance}の記録を非表示",
 	"dash.prEmptyNoRuns": "条件を満たすランを完了すると自己ベストが表示されます",
