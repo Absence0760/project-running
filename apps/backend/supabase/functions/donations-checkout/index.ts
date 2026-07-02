@@ -25,6 +25,7 @@
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { validateReturnUrl } from '../events-connect-onboard/lib.ts';
 import {
@@ -98,6 +99,27 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+
+  // Rate-limit before any DB read or the Stripe session create. The donor path
+  // is intentionally anonymous, so a logged-out attacker could otherwise spam
+  // pending Checkout-session creation against the platform Stripe account (each
+  // call is a Stripe API round-trip + a `donations` insert). Authenticated
+  // donors get a per-user bucket; anon donors share a per-IP bucket via the
+  // service-role client (the user-context guard rejects synthetic IP-derived
+  // keys). Fail-closed — this abuse surface must not open up on a rate-limit
+  // RPC blip. Mirrors clip-public-track's anon path. /audit/cost-controls Medium.
+  if (donorUserId) {
+    const denied = await checkRateLimit(
+      callerClient, donorUserId, 'donations-checkout', 30, 3600, { failClosed: true },
+    );
+    if (denied) return denied;
+  } else {
+    const anonKey = await ipBucketKey(req);
+    const denied = await checkRateLimit(
+      service, anonKey, 'donations-checkout:anon', 10, 3600, { failClosed: true },
+    );
+    if (denied) return denied;
+  }
 
   // Visibility gate AS THE CALLER (RLS): a fundraiser on a non-visible anchor
   // reads as not-found. The fundraisers SELECT policy returns the row only when
