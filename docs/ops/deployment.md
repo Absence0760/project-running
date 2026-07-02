@@ -126,6 +126,8 @@ Numbers are USD/month at the launch tier (1000 active users, ~5 runs/user/month)
 
 **Launch baseline: ~$70/month.** Scaling drivers (CloudFront egress past 1 TB once the free year ends, OSRM RAM as we add regions, Anthropic at higher coach usage) push that toward $200–300 in the 10k-user range. Detailed projections per service in each `deployment.md`.
 
+**Cost-minimized launch:** to ship for a few dollars a month, [`deployment_lean.md`](deployment_lean.md) records which services to defer (the two Fly routing engines, the worker, mobile stores, coach) and why each degrades gracefully — a **Lean** tier (~$34–49/mo, Supabase Pro + worker, backups intact) and a **Rock-bottom** tier (~$3–4/mo, Supabase Free + web-only). Every deferral re-attaches later by setting one env var or standing up one Fly app.
+
 **Cost-control ceilings (what stops a runaway):**
 
 Each spend vector carries at least two independent caps — one in IaC, one (where possible) in the provider console:
