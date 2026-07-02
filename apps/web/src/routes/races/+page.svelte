@@ -294,13 +294,19 @@
 {/if}
 
 {#if importing}
-	<div class="modal-backdrop" role="presentation" onclick={() => (importing = null)}>
+	<div
+		class="modal-backdrop"
+		role="presentation"
+		onclick={(e) => {
+			if (e.target === e.currentTarget) importing = null;
+		}}
+	>
 		<div
 			class="modal modal-narrow"
 			role="dialog"
 			aria-modal="true"
 			aria-label={m('races.importResult')}
-			onclick={(e) => e.stopPropagation()}
+			tabindex="-1"
 		>
 			<div class="modal-header">
 				<h2>{importing.name}</h2>

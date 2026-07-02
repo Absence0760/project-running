@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import {
 		createSessionPlan,
 		updateSessionPlan,
@@ -80,12 +80,12 @@
 		};
 	}
 
-	let title = $state(existing?.title ?? '');
-	let discipline = $state(existing?.discipline ?? '');
-	let equipment = $state(existing?.equipment ?? '');
-	let isPublic = $state(existing?.is_public ?? false);
-	let blocks = $state<EditBlock[]>(initBlocks(existing));
-	let items = $state<EditItem[]>(initItems(existing));
+	let title = $state(untrack(() => existing?.title ?? ''));
+	let discipline = $state(untrack(() => existing?.discipline ?? ''));
+	let equipment = $state(untrack(() => existing?.equipment ?? ''));
+	let isPublic = $state(untrack(() => existing?.is_public ?? false));
+	let blocks = $state<EditBlock[]>(untrack(() => initBlocks(existing)));
+	let items = $state<EditItem[]>(untrack(() => initItems(existing)));
 	let saving = $state(false);
 	let movementSuggestions = $state<string[]>([]);
 

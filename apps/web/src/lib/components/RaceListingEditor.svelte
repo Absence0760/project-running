@@ -42,13 +42,19 @@
 	}
 </script>
 
-<div class="modal-backdrop" role="presentation" onclick={() => oncancel?.()}>
+<div
+	class="modal-backdrop"
+	role="presentation"
+	onclick={(e) => {
+		if (e.target === e.currentTarget) oncancel?.();
+	}}
+>
 	<div
 		class="modal modal-narrow"
 		role="dialog"
 		aria-modal="true"
 		aria-label={m('races.editorTitle')}
-		onclick={(e) => e.stopPropagation()}
+		tabindex="-1"
 	>
 		<div class="modal-header">
 			<h2>{m('races.editorTitle')}</h2>

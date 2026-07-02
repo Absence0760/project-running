@@ -9,6 +9,7 @@
 	} from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { untrack } from 'svelte';
 
 	interface Props {
 		existing?: Challenge;
@@ -39,16 +40,16 @@
 		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	}
 
-	let title = $state(existing?.title ?? '');
-	let description = $state(existing?.description ?? '');
-	let metric = $state<ChallengeMetric>(existing?.metric ?? 'distance');
-	let scope = $state<ChallengeScope>(existing?.scope ?? 'individual');
-	let goalValue = $state<string>(existing?.goal_value != null ? String(existing.goal_value) : '');
-	let activityType = $state<ActivityType | ''>(existing?.activity_type ?? '');
-	let clubId = $state<string>(existing?.club_id ?? '');
-	let startsAt = $state(toLocalInput(existing?.starts_at, 0));
-	let endsAt = $state(toLocalInput(existing?.ends_at, 30));
-	let isPublic = $state(existing?.is_public ?? true);
+	let title = $state(untrack(() => existing?.title ?? ''));
+	let description = $state(untrack(() => existing?.description ?? ''));
+	let metric = $state<ChallengeMetric>(untrack(() => existing?.metric ?? 'distance'));
+	let scope = $state<ChallengeScope>(untrack(() => existing?.scope ?? 'individual'));
+	let goalValue = $state<string>(untrack(() => (existing?.goal_value != null ? String(existing.goal_value) : '')));
+	let activityType = $state<ActivityType | ''>(untrack(() => existing?.activity_type ?? ''));
+	let clubId = $state<string>(untrack(() => existing?.club_id ?? ''));
+	let startsAt = $state(untrack(() => toLocalInput(existing?.starts_at, 0)));
+	let endsAt = $state(untrack(() => toLocalInput(existing?.ends_at, 30)));
+	let isPublic = $state(untrack(() => existing?.is_public ?? true));
 	let busy = $state(false);
 
 	let adminClubs = $state<ClubWithMeta[]>([]);

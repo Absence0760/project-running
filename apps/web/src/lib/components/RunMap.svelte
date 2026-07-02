@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -144,7 +144,7 @@
 	// is not a lawful basis under ePrivacy Art 5(3)). Anon callers
 	// (`requireExplicitConsent`) always start gated; authed callers start
 	// gated unless consent is already on record this session.
-	let mapConsented = $state(requireExplicitConsent ? false : hasAcceptedConsent());
+	let mapConsented = $state(untrack(() => (requireExplicitConsent ? false : hasAcceptedConsent())));
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -231,7 +231,7 @@
 		return { type: 'FeatureCollection', features };
 	}
 
-	let mapContainer: HTMLDivElement;
+	let mapContainer = $state<HTMLDivElement>();
 	let map: maplibregl.Map;
 	let stopResizeWatch: (() => void) | null = null;
 	let animating = $state(false);

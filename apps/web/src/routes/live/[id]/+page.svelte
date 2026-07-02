@@ -34,7 +34,7 @@
 
 	let { data } = $props();
 
-	let mapContainer: HTMLDivElement;
+	let mapContainer = $state<HTMLDivElement>();
 	let map: maplibregl.Map;
 	let runnerMarker: maplibregl.Marker;
 	let stopResizeWatch: (() => void) | null = null;

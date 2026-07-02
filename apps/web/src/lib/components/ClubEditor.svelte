@@ -4,6 +4,7 @@
 	import type { Club, JoinPolicy } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { untrack } from 'svelte';
 
 	interface Props {
 		/// When set, the editor edits this club instead of creating a new one.
@@ -14,18 +15,18 @@
 	}
 	let { existing, oncreated, onsaved, oncancel }: Props = $props();
 
-	let name = $state(existing?.name ?? '');
-	let description = $state(existing?.description ?? '');
-	let location = $state(existing?.location_label ?? '');
+	let name = $state(untrack(() => existing?.name ?? ''));
+	let description = $state(untrack(() => existing?.description ?? ''));
+	let location = $state(untrack(() => existing?.location_label ?? ''));
 	let visibility = $state<'public' | 'private'>(
-		existing && !existing.is_public ? 'private' : 'public'
+		untrack(() => (existing && !existing.is_public ? 'private' : 'public'))
 	);
-	let joinPolicy = $state<JoinPolicy>(existing?.join_policy ?? 'open');
-	let requireWaiver = $state(existing?.requires_activity_waiver ?? false);
-	let websiteUrl = $state(existing?.website_url ?? '');
-	let instagramUrl = $state(existing?.instagram_url ?? '');
-	let stravaUrl = $state(existing?.strava_url ?? '');
-	let facebookUrl = $state(existing?.facebook_url ?? '');
+	let joinPolicy = $state<JoinPolicy>(untrack(() => existing?.join_policy ?? 'open'));
+	let requireWaiver = $state(untrack(() => existing?.requires_activity_waiver ?? false));
+	let websiteUrl = $state(untrack(() => existing?.website_url ?? ''));
+	let instagramUrl = $state(untrack(() => existing?.instagram_url ?? ''));
+	let stravaUrl = $state(untrack(() => existing?.strava_url ?? ''));
+	let facebookUrl = $state(untrack(() => existing?.facebook_url ?? ''));
 	let busy = $state(false);
 
 	$effect(() => {

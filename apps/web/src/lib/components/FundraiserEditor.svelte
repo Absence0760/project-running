@@ -8,7 +8,7 @@
 		type CreateFundraiserInput
 	} from '$lib/core/data';
 	import type { Fundraiser } from '$lib/types';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 
 	let {
 		runId = null,
@@ -24,12 +24,12 @@
 		oncancel?: () => void;
 	} = $props();
 
-	let charityName = $state(existing?.charity_name ?? '');
-	let charityUrl = $state(existing?.charity_url ?? '');
-	let title = $state(existing?.title ?? '');
-	let story = $state(existing?.story ?? '');
+	let charityName = $state(untrack(() => existing?.charity_name ?? ''));
+	let charityUrl = $state(untrack(() => existing?.charity_url ?? ''));
+	let title = $state(untrack(() => existing?.title ?? ''));
+	let story = $state(untrack(() => existing?.story ?? ''));
 	// Goal entered in major units; stored in cents.
-	let goalMajor = $state<number | null>(existing ? existing.goal_cents / 100 : null);
+	let goalMajor = $state<number | null>(untrack(() => (existing ? existing.goal_cents / 100 : null)));
 
 	let chargesEnabled = $state(false);
 	let loadingGate = $state(true);

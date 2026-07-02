@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { RoutineStep } from '$lib/gym/gym_routine';
 	import type { GymRoutineSummary } from '$lib/core/data';
 	import { createGymWorkout, type GymSetInput } from '$lib/core/data';
@@ -29,7 +30,7 @@
 	let currentIndex = $state(0);
 	// Sparse per-step record of what the runner entered (or skipped). Indexed by
 	// step position so a rewind can re-surface a prior edit.
-	let outcomes = $state<(StepOutcome | undefined)[]>(steps.map(() => undefined));
+	let outcomes = $state<(StepOutcome | undefined)[]>(untrack(() => steps.map(() => undefined)));
 	let resting = $state(false);
 	let restSeconds = $state(0);
 	let confirmingDiscard = $state(false);
