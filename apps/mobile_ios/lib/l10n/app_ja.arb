@@ -2592,6 +2592,7 @@
     }
   },
   "nutritionWeekOverGoal": "目標より1日 {n} 多い",
+  "nutritionWeekProtein": "タンパク質 {met}/{total}日",
   "@nutritionWeekOverGoal": {
     "description": "Weekly trend chip: avg kcal over the daily goal",
     "placeholders": {

@@ -11906,6 +11906,18 @@
       }
     }
   },
+  "nutritionWeekProtein": "Protein {met}/{total} days",
+  "@nutritionWeekProtein": {
+    "description": "Weekly trend chip: logged days that hit the protein goal, out of total logged days",
+    "placeholders": {
+      "met": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "nutritionGoalLine": "Daily goal",
   "nutritionGoalBreakdown": "Goal {base} + {exercise} kcal burned today",
   "dashGymReadinessIncluded": "Recent gym sessions are factored into your fatigue.",

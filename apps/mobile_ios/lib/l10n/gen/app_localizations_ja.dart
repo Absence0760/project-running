@@ -8660,6 +8660,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String nutritionWeekProtein(int met, int total) {
+    return 'タンパク質 $met/$total日';
+  }
+
+  @override
   String get nutritionGoalLine => '1日の目標';
 
   @override

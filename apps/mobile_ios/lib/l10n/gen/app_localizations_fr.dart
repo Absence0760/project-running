@@ -9137,6 +9137,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String nutritionWeekProtein(int met, int total) {
+    return 'Protéines $met/$total jours';
+  }
+
+  @override
   String get nutritionGoalLine => 'Objectif quotidien';
 
   @override

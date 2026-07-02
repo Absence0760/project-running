@@ -9115,6 +9115,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String nutritionWeekProtein(int met, int total) {
+    return 'Proteína $met/$total dias';
+  }
+
+  @override
   String get nutritionGoalLine => 'Meta diária';
 
   @override
@@ -19922,6 +19927,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String nutritionWeekOverGoal(int n) {
     return '$n acima da meta/dia';
+  }
+
+  @override
+  String nutritionWeekProtein(int met, int total) {
+    return 'Proteína $met/$total dias';
   }
 
   @override
