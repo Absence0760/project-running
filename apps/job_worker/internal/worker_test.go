@@ -145,6 +145,10 @@ type fakeBackend struct {
 	findIntegrationErr   error
 	alreadyImported      map[importedKey]bool
 	isAlreadyImportedErr error
+	// nearIdentities feeds FetchRunIdentitiesNear — the cross-provider
+	// dedupe guard's view of existing runs near a candidate's start.
+	nearIdentities    []RunIdentity
+	nearIdentitiesErr error
 	insertStravaRunErr   error
 	webhookEvents        map[string]bool
 	insertWebhookErr     error
@@ -802,6 +806,17 @@ func (f *fakeBackend) IsStravaActivityImported(_ context.Context, userID string,
 		return false, err
 	}
 	return f.alreadyImported[importedKey{userID, activityID}], nil
+}
+
+func (f *fakeBackend) FetchRunIdentitiesNear(_ context.Context, _ string, _ int64, _ int) ([]RunIdentity, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.nearIdentitiesErr != nil {
+		err := f.nearIdentitiesErr
+		f.nearIdentitiesErr = nil
+		return nil, err
+	}
+	return f.nearIdentities, nil
 }
 
 func (f *fakeBackend) InsertStravaRun(_ context.Context, userID string, act *StravaActivity) (*IngestedRunInfo, error) {

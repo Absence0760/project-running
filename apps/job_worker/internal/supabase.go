@@ -762,6 +762,56 @@ func (c *SupabaseClient) IsStravaActivityImported(ctx context.Context, userID st
 	return len(rows) > 0, nil
 }
 
+// FetchRunIdentitiesNear returns the start time + distance of every run for
+// this user whose start falls within toleranceS seconds of aroundMs (epoch
+// ms), ACROSS ALL SOURCES. It backs the cross-provider near-duplicate guard
+// (IsCrossProviderDuplicate) on the live Strava webhook ingest path: the
+// metadata.strava_id key only catches a re-import of the same Strava
+// activity, never the same effort already present under Garmin / HealthKit.
+//
+// The query is time-bounded (started_at between aroundMs ± toleranceS) so it
+// returns a handful of rows even for a user with a huge history — no
+// PostgREST 1000-row cap concern, and one cheap index range read per webhook
+// event rather than pulling the whole run history into memory.
+func (c *SupabaseClient) FetchRunIdentitiesNear(ctx context.Context, userID string, aroundMs int64, toleranceS int) ([]RunIdentity, error) {
+	lo := time.UnixMilli(aroundMs - int64(toleranceS)*1000).UTC().Format(time.RFC3339)
+	hi := time.UnixMilli(aroundMs + int64(toleranceS)*1000).UTC().Format(time.RFC3339)
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("started_at", "gte."+lo)
+	q.Add("started_at", "lte."+hi)
+	q.Set("select", "started_at,distance_m")
+	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		StartedAt string   `json:"started_at"`
+		DistanceM *float64 `json:"distance_m"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]RunIdentity, 0, len(rows))
+	for _, r := range rows {
+		t, perr := time.Parse(time.RFC3339, r.StartedAt)
+		if perr != nil {
+			continue
+		}
+		var dist float64
+		if r.DistanceM != nil {
+			dist = *r.DistanceM
+		}
+		out = append(out, RunIdentity{StartedAtMs: t.UnixMilli(), DistanceM: dist})
+	}
+	return out, nil
+}
+
 // privacyDefaultIsPublic resolves whether a newly-imported run for this
 // user should be public, from the universal `privacy_default` pref in
 // user_settings.prefs. Only an explicit 'public' default publishes;

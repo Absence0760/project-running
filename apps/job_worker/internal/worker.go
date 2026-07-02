@@ -56,6 +56,11 @@ type Backend interface {
 	// handler that replaces apps/backend/supabase/functions/strava-webhook.
 	FindIntegrationUserByAthlete(ctx context.Context, provider string, athleteID int64) (string, error)
 	IsStravaActivityImported(ctx context.Context, userID string, stravaActivityID int64) (bool, error)
+	// FetchRunIdentitiesNear pulls the start + distance of every run within
+	// a time window of the candidate (across ALL sources) so the handler can
+	// skip an activity already present under another provider — the
+	// cross-provider near-duplicate guard the per-source strava_id key misses.
+	FetchRunIdentitiesNear(ctx context.Context, userID string, aroundMs int64, toleranceS int) ([]RunIdentity, error)
 	InsertStravaRun(ctx context.Context, userID string, act *StravaActivity) (*IngestedRunInfo, error)
 	UpdateRunTrackURL(ctx context.Context, runID, trackURL string) error
 	// Webhook dedupe — bound to the `webhook_events` table. Returned

@@ -57,6 +57,38 @@ void main() {
       expect(isCrossSourceDuplicate(hc, existing), isFalse);
     });
 
+    test('start within the 180 s canonical window → duplicate', () {
+      // 2 min 59 s — inside the 180 s twin tolerance.
+      final hc = _run(
+        source: RunSource.healthconnect,
+        startedAt: DateTime.utc(2026, 4, 15, 7, 2, 59),
+        distanceM: 10000,
+      );
+      expect(isCrossSourceDuplicate(hc, existing), isTrue);
+    });
+
+    test('start beyond the 180 s window → NOT a duplicate (twin parity)', () {
+      // 4 min — beyond the 180 s tolerance; the old 5-min window would have
+      // wrongly deduped it. Pins lockstep with the web / Go / Deno twins.
+      final hc = _run(
+        source: RunSource.healthconnect,
+        startedAt: DateTime.utc(2026, 4, 15, 7, 4),
+        distanceM: 10000,
+      );
+      expect(isCrossSourceDuplicate(hc, existing), isFalse);
+    });
+
+    test('distance fraction is against the LARGER of the two (twin parity)', () {
+      // Candidate is 4% longer than the existing run: |Δ|/max = 400/10400 ≈
+      // 3.85% ≤ 5% → duplicate (the canonical max-denominator rule).
+      final hc = _run(
+        source: RunSource.healthconnect,
+        startedAt: DateTime.utc(2026, 4, 15, 7),
+        distanceM: 10400,
+      );
+      expect(isCrossSourceDuplicate(hc, existing), isTrue);
+    });
+
     test('±10% distance → NOT a duplicate (outside fraction)', () {
       final hc = _run(
         source: RunSource.healthconnect,

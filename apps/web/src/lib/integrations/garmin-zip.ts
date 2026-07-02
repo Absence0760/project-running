@@ -32,7 +32,13 @@ import {
 	type FitHrZones,
 } from './garmin-fit';
 import { loadSettings, effective, updateUniversal } from '../settings/settings';
-import { compositeKey, isCrossProviderDuplicate, type RunIdentity } from './garmin_dedupe';
+import {
+	compositeKey,
+	collectRunIdentities,
+	isCrossProviderDuplicate,
+	type RawRunRow,
+	type RunIdentity,
+} from './garmin_dedupe';
 
 export interface GarminZipProgress {
 	total: number;
@@ -110,16 +116,21 @@ export async function importGarminBundle(
 	// an Apple HealthKit copy) is invisible to them and re-imports. Pull every
 	// existing run's start time + distance ACROSS ALL SOURCES so an import
 	// skips a run already present under any provider.
-	const { data: existingAll } = await supabase
-		.from(TABLES.runs)
-		.select('started_at, distance_m')
-		.eq('user_id', uid);
-	const existingIdentities: RunIdentity[] = [];
-	for (const r of existingAll ?? []) {
-		const ms = Date.parse(r.started_at as string);
-		if (!Number.isFinite(ms)) continue;
-		existingIdentities.push({ startedAtMs: ms, distanceM: Number(r.distance_m ?? 0) });
-	}
+	//
+	// PAGE the read: PostgREST caps an unbounded SELECT at 1000 rows, which
+	// for the high-volume pros this guard exists to protect (1000+ runs) would
+	// silently compare against an arbitrary 1000-row slice and re-create
+	// duplicates anyway. `collectRunIdentities` loops `.range()` in 1000-row
+	// chunks the same way `fetchRuns` in core/data.ts does.
+	const existingIdentities = await collectRunIdentities((from, to) =>
+		supabase
+			.from(TABLES.runs)
+			.select('started_at, distance_m')
+			.eq('user_id', uid)
+			.order('started_at', { ascending: false })
+			.range(from, to)
+			.then(({ data, error }): RawRunRow[] | null => (error ? null : (data as RawRunRow[]))),
+	);
 	const hrZoneCollector: HrZoneCollector = { hrZones: null };
 
 	if (lower.endsWith('.fit')) {

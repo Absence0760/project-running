@@ -62,3 +62,40 @@ export function isCrossProviderDuplicate(
 	}
 	return false;
 }
+
+/// A raw `{ started_at, distance_m }` row as PostgREST returns it.
+export interface RawRunRow {
+	started_at: string | null;
+	distance_m: number | null;
+}
+
+/// Page size + safety ceiling for `collectRunIdentities`, matching the
+/// `fetchRuns` workaround in `core/data.ts`.
+export const RUN_IDENTITY_PAGE_SIZE = 1000;
+export const RUN_IDENTITY_SAFETY_MAX = 50_000;
+
+/// Pull every existing run's start + distance identity across ALL sources by
+/// paging `fetchPage` in `RUN_IDENTITY_PAGE_SIZE` chunks — PostgREST caps an
+/// unbounded SELECT at 1000 rows, which for the high-volume pros the
+/// cross-provider guard exists to protect (1000+ runs) would otherwise
+/// compare against an arbitrary slice and re-import duplicates anyway. Mirrors
+/// the paging loop in `fetchRuns`. `fetchPage` returns the rows for the
+/// inclusive `[from, to]` range, or `null` on error (loop stops, no throw).
+export async function collectRunIdentities(
+	fetchPage: (from: number, to: number) => PromiseLike<RawRunRow[] | null>,
+	pageSize: number = RUN_IDENTITY_PAGE_SIZE,
+	safetyMax: number = RUN_IDENTITY_SAFETY_MAX,
+): Promise<RunIdentity[]> {
+	const out: RunIdentity[] = [];
+	for (let from = 0; from < safetyMax; from += pageSize) {
+		const data = await fetchPage(from, from + pageSize - 1);
+		if (!data) break;
+		for (const r of data) {
+			const ms = Date.parse(r.started_at ?? '');
+			if (!Number.isFinite(ms)) continue;
+			out.push({ startedAtMs: ms, distanceM: Number(r.distance_m ?? 0) });
+		}
+		if (data.length < pageSize) break;
+	}
+	return out;
+}

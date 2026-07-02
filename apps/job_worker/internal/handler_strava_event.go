@@ -162,6 +162,29 @@ func (w *Worker) handleStravaEvent(ctx context.Context, job *Job) error {
 		return nil
 	}
 
+	// Cross-provider near-duplicate guard. The strava_id dedupe above only
+	// catches a re-import of THIS Strava activity; a dual-connected runner
+	// (Garmin watch auto-uploading to Strava, then the same run pulled from a
+	// Garmin bulk-export ZIP or Apple HealthKit) lands the effort under a
+	// different source with no shared provider id. Pull the runs starting
+	// within the tolerance window across all sources and skip if this effort
+	// already exists under any of them — this is the LIVE webhook path the
+	// e03a349b import fix never covered. Fail-open: a lookup error must not
+	// drop the activity (the DB external_id unique index is still a backstop).
+	if startMs, perr := time.Parse(time.RFC3339, act.StartDate); perr == nil {
+		near, nearErr := w.Backend.FetchRunIdentitiesNear(
+			ctx, userID, startMs.UnixMilli(), CrossProviderStartToleranceS)
+		if nearErr != nil {
+			w.Log.Warn("strava_event: cross-provider dedupe lookup failed; proceeding",
+				"err", nearErr, "activity_id", p.ObjectID)
+		} else if IsCrossProviderDuplicate(
+			RunIdentity{StartedAtMs: startMs.UnixMilli(), DistanceM: act.Distance}, near) {
+			w.Log.Info("strava_event: skip — same effort already present under another source",
+				"activity_id", p.ObjectID, "user_id", userID)
+			return nil
+		}
+	}
+
 	info, err := w.Backend.InsertStravaRun(ctx, userID, act)
 	if err != nil {
 		// A concurrent backfill (strava-import EF) can insert the same

@@ -355,6 +355,83 @@ void main() {
     });
   });
 
+  group('embedded best efforts', () {
+    // A GPX along the equator: `segments` legs of `stepM` metres each,
+    // `stepS` seconds apart, so the fastest embedded window is computable.
+    String evenGpx(int segments, double stepM, int stepS) {
+      const mPerDeg = 6371000 * 3.141592653589793 / 180;
+      final stepDeg = stepM / mPerDeg;
+      final start = DateTime.utc(2026, 4, 9, 7, 30);
+      final buf = StringBuffer('<?xml version="1.0"?>\n<gpx version="1.1" '
+          'creator="test"><trk><trkseg>\n');
+      for (var i = 0; i <= segments; i++) {
+        final t = start.add(Duration(seconds: i * stepS));
+        buf.writeln('<trkpt lat="0.0" lon="${i * stepDeg}"><ele>10</ele>'
+            '<time>${t.toIso8601String()}</time></trkpt>');
+      }
+      buf.write('</trkseg></trk></gpx>');
+      return buf.toString();
+    }
+
+    test('a 6 km imported run gets fastest_5k_s (reaches personal_records)',
+        () async {
+      // 60 × 100 m @ 30 s = 6 km at 5:00/km → fastest 5 km ≈ 1500 s.
+      final zip = await writeZip(
+        tmpDir,
+        csvContent: csv([
+          _stravaHeader,
+          ['1', 'Apr 9, 2026, 7:30:00 AM', 'Long run', 'Run', '6', '1800',
+              'activities/1.gpx'],
+        ]),
+        gpxFiles: {'activities/1.gpx': evenGpx(60, 100, 30)},
+      );
+
+      final r = await StravaImporter.importFromZip(zip);
+      final m = r.runs.single.metadata!;
+      expect(m.containsKey('fastest_5k_s'), isTrue,
+          reason: 'a fast 5 km inside an imported run must reach PRs');
+      final secs = m['fastest_5k_s'] as int;
+      expect(secs, inInclusiveRange(1495, 1505));
+      // No 10 km window fits in a 6 km run.
+      expect(m.containsKey('fastest_10k_s'), isFalse);
+    });
+
+    test('a sub-5 km imported run writes no embedded bests', () async {
+      // 40 × 100 m = 4 km — below the 5 km bracket.
+      final zip = await writeZip(
+        tmpDir,
+        csvContent: csv([
+          _stravaHeader,
+          ['1', 'Apr 9, 2026, 7:30:00 AM', 'Short', 'Run', '4', '1200',
+              'activities/1.gpx'],
+        ]),
+        gpxFiles: {'activities/1.gpx': evenGpx(40, 100, 30)},
+      );
+
+      final r = await StravaImporter.importFromZip(zip);
+      final m = r.runs.single.metadata!;
+      expect(m.containsKey('fastest_5k_s'), isFalse);
+    });
+
+    test('a trackless (CSV-only) import writes no fake embedded bests',
+        () async {
+      final zip = await writeZip(
+        tmpDir,
+        csvContent: csv([
+          _stravaHeader,
+          ['1', 'Apr 9, 2026, 7:30:00 AM', 'X', 'Run', '10', '3000',
+              'activities/1.gpx'],
+        ]),
+        gpxFiles: {'activities/1.gpx': _gpxNoPoints},
+      );
+
+      final r = await StravaImporter.importFromZip(zip);
+      final m = r.runs.single.metadata!;
+      expect(m.containsKey('fastest_5k_s'), isFalse);
+      expect(m.containsKey('fastest_10k_s'), isFalse);
+    });
+  });
+
   group('compressed track files', () {
     test('.gpx.gz is decompressed before parsing', () async {
       final gz = GZipEncoder().encode(utf8.encode(_gpxTwoPoint));

@@ -164,6 +164,81 @@ func TestStravaEvent_HappyPathInsertsRunAndUploadsTrack(t *testing.T) {
 	}
 }
 
+// A dual-connected runner's Garmin watch auto-uploads to Strava while the
+// same effort already landed under another source (a Garmin ZIP import). The
+// strava_id dedupe misses it (different provider id), so the handler must
+// consult the cross-provider guard and skip the insert.
+func TestStravaEvent_SkipsCrossProviderDuplicate(t *testing.T) {
+	be := newFakeBackend()
+	be.integrationByAthlete[200] = "user-A"
+	be.tokensByUser["user-A"] = TokenPair{AccessToken: "at-A", RefreshToken: "rt-A"}
+	st := &fakeStrava{
+		byActivity: map[int64]StravaActivityResult{
+			100: {Status: StravaFetchOK, Activity: &StravaActivity{
+				ID: 100, Name: "Morning Run", Distance: 10000, MovingTime: 3000,
+				StartDate: "2026-05-11T10:00:00Z", Type: "Run", SportType: "Run",
+			}},
+		},
+	}
+	// An existing run (any source) starting 90s earlier, ~same distance.
+	be.nearIdentities = []RunIdentity{
+		{StartedAtMs: ms("2026-05-11T09:58:30Z"), DistanceM: 10100},
+	}
+	be.jobs = []*Job{{
+		ID: 1, Kind: "strava_event",
+		Payload: stravaEventPayload(t, StravaEventPayload{
+			ObjectType: "activity", AspectType: "create",
+			ObjectID: 100, OwnerID: 200, EventTime: time.Now().Unix(),
+		}),
+	}}
+	w := newStravaWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.finished) != 1 || be.finished[0].Status != "done" {
+		t.Fatalf("cross-provider duplicate should finish done; got %v", be.finished)
+	}
+	if len(be.insertedStravaRuns) != 0 {
+		t.Errorf("cross-provider duplicate must NOT insert a runs row; got %d", len(be.insertedStravaRuns))
+	}
+}
+
+// A distinct run at a nearby time but a different distance must still ingest —
+// the guard gates on BOTH axes.
+func TestStravaEvent_IngestsWhenNearRunIsDifferentDistance(t *testing.T) {
+	be := newFakeBackend()
+	be.integrationByAthlete[200] = "user-A"
+	be.tokensByUser["user-A"] = TokenPair{AccessToken: "at-A", RefreshToken: "rt-A"}
+	st := &fakeStrava{
+		byActivity: map[int64]StravaActivityResult{
+			100: {Status: StravaFetchOK, Activity: &StravaActivity{
+				ID: 100, Name: "Morning Run", Distance: 10000, MovingTime: 3000,
+				StartDate: "2026-05-11T10:00:00Z", Type: "Run", SportType: "Run",
+			}},
+		},
+	}
+	// A nearby-start run but 40% shorter — a warm-up, not the same effort.
+	be.nearIdentities = []RunIdentity{
+		{StartedAtMs: ms("2026-05-11T09:59:00Z"), DistanceM: 6000},
+	}
+	be.jobs = []*Job{{
+		ID: 1, Kind: "strava_event",
+		Payload: stravaEventPayload(t, StravaEventPayload{
+			ObjectType: "activity", AspectType: "create",
+			ObjectID: 100, OwnerID: 200, EventTime: time.Now().Unix(),
+		}),
+	}}
+	w := newStravaWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	if len(be.insertedStravaRuns) != 1 {
+		t.Fatalf("a distinct nearby run must still ingest; got %d inserts", len(be.insertedStravaRuns))
+	}
+}
+
 func TestStravaEvent_DropsNonRunnableSport(t *testing.T) {
 	be := newFakeBackend()
 	be.integrationByAthlete[200] = "user-A"

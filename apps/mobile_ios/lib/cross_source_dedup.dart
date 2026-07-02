@@ -20,32 +20,45 @@
 
 import 'package:core_models/core_models.dart';
 
-/// ±5 minutes — wider than the cross-platform ingest clock skew
-/// you see in practice, narrower than back-to-back runs are likely
-/// scheduled.
-const Duration kCrossSourceTimeWindow = Duration(minutes: 5);
+/// ±180 seconds — the canonical cross-provider start tolerance, in lockstep
+/// with `CROSS_PROVIDER_START_TOLERANCE_S` in the web twin
+/// (`apps/web/src/lib/integrations/garmin_dedupe.ts`), the Deno twin
+/// (`apps/backend/supabase/functions/_shared/strava.ts`), and the Go worker
+/// (`apps/job_worker/internal/cross_provider.go`). A few minutes absorbs the
+/// offset between a watch's and a service's start stamp; two genuinely
+/// distinct runs can't start this close (you can't record two tracks at once).
+const Duration kCrossSourceTimeWindow = Duration(seconds: 180);
 
-/// ±5% of the existing run's distance. A 10 km run can vary by
-/// 500 m between Strava's polyline length and Health Connect's
-/// summary; that's well inside this window.
+/// ±5% relative distance — matches `CROSS_PROVIDER_DISTANCE_FRACTION` in the
+/// twins. GPS / algorithm differences between providers move total distance a
+/// percent or two.
 const double kCrossSourceDistanceFraction = 0.05;
 
-/// Returns true when `candidate` looks like a re-import of one of
-/// the `existing` runs from a different source. Comparison is
-/// directional: we don't dedup against runs of the SAME source as
-/// `candidate` (those are guarded by external_id at the DB level).
+/// Returns true when `candidate` looks like a re-import of one of the
+/// `existing` runs from a different source — start within the tolerance AND
+/// distance within the fraction (both axes, so a warm-up + race of similar
+/// distance but well-separated starts is never suppressed).
+///
+/// The near-duplicate math is the byte-identical twin of the canonical
+/// `isCrossProviderDuplicate` (start-gap ≤ 180 s AND |Δdist| ≤ 5% of the
+/// LARGER distance). Two mobile-specific guards stay on top of it: the
+/// comparison is cross-source only (`r.source == candidate.source` is skipped
+/// — same-source re-imports are guarded by the per-user `external_id` unique
+/// index at the DB, the mobile equivalent of the web importers running their
+/// exact `seen`/`composite` dedupe first), and a zero-distance existing run is
+/// ignored so a trackless indoor summary can't false-match.
 bool isCrossSourceDuplicate(Run candidate, List<Run> existing) {
   for (final r in existing) {
     if (r.source == candidate.source) continue;
-    final dt = (r.startedAt
-            .difference(candidate.startedAt)
-            .abs());
+    final dt = r.startedAt.difference(candidate.startedAt).abs();
     if (dt > kCrossSourceTimeWindow) continue;
     final candidateDist = candidate.distanceMetres;
     final existingDist = r.distanceMetres;
     if (existingDist <= 0 || candidateDist <= 0) continue;
-    final ratio = (candidateDist - existingDist).abs() / existingDist;
-    if (ratio > kCrossSourceDistanceFraction) continue;
+    final larger =
+        candidateDist.abs() > existingDist.abs() ? candidateDist.abs() : existingDist.abs();
+    final diff = (candidateDist - existingDist).abs();
+    if (diff > larger * kCrossSourceDistanceFraction) continue;
     return true;
   }
   return false;

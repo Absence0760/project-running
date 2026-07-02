@@ -3,9 +3,10 @@ import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
-	type RunIdentity,
+	type RawRunRow,
 	type StravaActivity,
 	type StravaTokens,
+	collectRunIdentities,
 	ingestActivity,
 	isCrossProviderDuplicate,
 	isStravaRunFamily,
@@ -466,17 +467,21 @@ async function backfill(
 	// to Strava, an Apple HealthKit copy, a Garmin bulk-export ZIP). Pull
 	// every existing run's start time + distance ACROSS ALL SOURCES so we can
 	// skip an activity that already exists under any provider.
-	const { data: existingAll } = await supabase
-		.from('runs')
-		.select('started_at, distance_m')
-		.eq('user_id', userId);
-	const existingIdentities: RunIdentity[] = [];
-	for (const raw of existingAll ?? []) {
-		const r = raw as { started_at: string | null; distance_m: number | null };
-		const ms = Date.parse(r.started_at ?? '');
-		if (!Number.isFinite(ms)) continue;
-		existingIdentities.push({ startedAtMs: ms, distanceM: Number(r.distance_m ?? 0) });
-	}
+	//
+	// PAGE the read: PostgREST caps an unbounded SELECT at 1000 rows, so a pro
+	// with 1000+ runs would otherwise compare against an arbitrary slice and
+	// re-import duplicates anyway — the exact failure this guard exists to
+	// close. `collectRunIdentities` loops `.range()` in 1000-row chunks
+	// (mirrors `fetchRuns` on web).
+	const existingIdentities = await collectRunIdentities((from, to) =>
+		supabase
+			.from('runs')
+			.select('started_at, distance_m')
+			.eq('user_id', userId)
+			.order('started_at', { ascending: false })
+			.range(from, to)
+			.then(({ data, error }): RawRunRow[] | null => (error ? null : (data as RawRunRow[]))),
+	);
 
 	let rateLimited = false;
 	while (true) {

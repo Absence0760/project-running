@@ -9,6 +9,8 @@ import 'package:flutter/foundation.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:uuid/uuid.dart';
 
+import 'embedded_bests.dart';
+
 /// Parse a Strava-formatted activity date string into a [DateTime].
 ///
 /// Strava CSVs use `"Apr 9, 2026, 7:30:00 AM"` (with optional comma after
@@ -239,14 +241,14 @@ class StravaImporter {
             ? track.last.timestamp!.difference(track.first.timestamp!)
             : Duration.zero);
 
-    return Run(
-      id: _uuid.v4(),
-      startedAt: startedAt,
-      duration: duration,
-      distanceMetres: distance,
+    // Embedded best efforts (fastest_{5k,10k,half_marathon,marathon}_s) so a
+    // fast sub-distance inside a long imported run reaches personal_records
+    // (the 20260529000002 trigger reads these keys) — matching what the live
+    // recorder writes and what the web/EF Strava importers now compute.
+    // Returns the map unchanged when the track has < 3 points or no per-point
+    // timestamps, so no fake bests are written.
+    final metadata = enrichMetadataWithEmbeddedBests(
       track: track,
-      source: RunSource.strava,
-      externalId: 'strava:$stravaId',
       metadata: {
         MetadataKeys.title: name.isEmpty ? 'Strava import' : name,
         // Match the web importer's derivation in apps/web/src/lib/
@@ -257,6 +259,17 @@ class StravaImporter {
         MetadataKeys.stravaActivityType: stravaType,
         MetadataKeys.importedAt: DateTime.now().toIso8601String(),
       },
+    );
+
+    return Run(
+      id: _uuid.v4(),
+      startedAt: startedAt,
+      duration: duration,
+      distanceMetres: distance,
+      track: track,
+      source: RunSource.strava,
+      externalId: 'strava:$stravaId',
+      metadata: metadata,
     );
   }
 
