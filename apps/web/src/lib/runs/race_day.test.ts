@@ -7,6 +7,9 @@ import {
 	negativeSplitPacing,
 	raceChecklist,
 	fmtSplitTime,
+	goalFeasibility,
+	GOAL_ONTRACK_BAND,
+	GOAL_FARBEHIND_BAND,
 } from './race_day';
 
 // ─────────── daysUntilRace ───────────
@@ -305,4 +308,80 @@ test('evenSplitPacing: marathon distance (42.195 km) has 43 splits, last partial
 	const partial = s.splitsSec[42];
 	const fullKm = s.splitsSec[0];
 	assert.ok(partial < fullKm, `partial ${partial} should be shorter than full ${fullKm}`);
+});
+
+// ─────────── goalFeasibility ───────────
+
+test('goalFeasibility: projection much faster than goal → ahead', () => {
+	// Goal 3:30:00 (12600 s), fitness projects 3:15:00 (11700 s).
+	const f = goalFeasibility(12600, 11700);
+	assert.ok(f);
+	assert.equal(f!.verdict, 'ahead');
+	assert.equal(f!.deltaSec, -900);
+});
+
+test('goalFeasibility: projection within the on-track band → on_track', () => {
+	// 1% slower than goal — inside the ±2% band.
+	const goal = 12600;
+	const f = goalFeasibility(goal, Math.round(goal * 1.01));
+	assert.ok(f);
+	assert.equal(f!.verdict, 'on_track');
+});
+
+test('goalFeasibility: projection 1% faster is still on_track', () => {
+	const goal = 12600;
+	const f = goalFeasibility(goal, Math.round(goal * 0.99));
+	assert.ok(f);
+	assert.equal(f!.verdict, 'on_track');
+});
+
+test('goalFeasibility: projection moderately slower → behind', () => {
+	// 5% slower — past the on-track band, inside the far-behind band.
+	const goal = 12600;
+	const f = goalFeasibility(goal, Math.round(goal * 1.05));
+	assert.ok(f);
+	assert.equal(f!.verdict, 'behind');
+	assert.ok(f!.deltaSec > 0, 'behind delta should be positive (slower)');
+});
+
+test('goalFeasibility: projection far slower → far_behind', () => {
+	// 12% slower — well past the far-behind band.
+	const goal = 12600;
+	const f = goalFeasibility(goal, Math.round(goal * 1.12));
+	assert.ok(f);
+	assert.equal(f!.verdict, 'far_behind');
+});
+
+test('goalFeasibility: exactly at the on-track band edge stays on_track', () => {
+	const goal = 10000;
+	// Slower edge: +2% exactly → ratio == GOAL_ONTRACK_BAND, still on_track.
+	const slow = goalFeasibility(goal, goal * (1 + GOAL_ONTRACK_BAND));
+	assert.equal(slow!.verdict, 'on_track');
+	// Faster edge: -2% exactly → ratio == -GOAL_ONTRACK_BAND, still on_track.
+	const fast = goalFeasibility(goal, goal * (1 - GOAL_ONTRACK_BAND));
+	assert.equal(fast!.verdict, 'on_track');
+});
+
+test('goalFeasibility: exactly at the far-behind band edge stays behind', () => {
+	const goal = 10000;
+	// +8% exactly → ratio == GOAL_FARBEHIND_BAND, still the recoverable "behind".
+	const f = goalFeasibility(goal, goal * (1 + GOAL_FARBEHIND_BAND));
+	assert.equal(f!.verdict, 'behind');
+	// A hair past it flips to far_behind.
+	const past = goalFeasibility(goal, goal * (1 + GOAL_FARBEHIND_BAND) + 1);
+	assert.equal(past!.verdict, 'far_behind');
+});
+
+test('goalFeasibility: null on non-positive / missing inputs', () => {
+	assert.equal(goalFeasibility(0, 12600), null);
+	assert.equal(goalFeasibility(12600, 0), null);
+	assert.equal(goalFeasibility(-1, 100), null);
+	assert.equal(goalFeasibility(NaN, 100), null);
+});
+
+test('goalFeasibility: deltaSec is rounded to whole seconds', () => {
+	const f = goalFeasibility(1000, 1000.6);
+	assert.ok(f);
+	assert.equal(f!.deltaSec, 1);
+	assert.equal(f!.verdict, 'on_track');
 });

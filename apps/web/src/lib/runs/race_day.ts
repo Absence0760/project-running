@@ -188,6 +188,54 @@ export function raceChecklist(distanceM: number): ChecklistSection[] {
 	];
 }
 
+export type GoalFeasibilityVerdict = 'ahead' | 'on_track' | 'behind' | 'far_behind';
+
+export interface GoalFeasibility {
+	verdict: GoalFeasibilityVerdict;
+	/**
+	 * `predictedSec - goalSec`, rounded. Negative = the fitness projection is
+	 * faster than the goal (ahead of it); positive = slower (behind it).
+	 */
+	deltaSec: number;
+}
+
+/**
+ * Band, as a fraction of the goal time, within which a fitness projection
+ * counts as "on track" for the goal. ±2 % of a 3:30 marathon is ~±4 min —
+ * inside the day-to-day noise of a Riegel projection off a single effort, so
+ * a runner isn't told they're off-pace over a rounding-scale gap.
+ */
+export const GOAL_ONTRACK_BAND = 0.02;
+/**
+ * Slower than goal by more than this fraction → "far behind" (a materially
+ * out-of-reach goal, ~+17 min on a 3:30). Between the on-track band and this
+ * is a recoverable "behind".
+ */
+export const GOAL_FARBEHIND_BAND = 0.08;
+
+/**
+ * Grade a runner's goal time against a fitness-derived prediction for the
+ * same distance. `goalSec` is what they're aiming for; `predictedSec` is the
+ * Riegel projection off their recent efforts. Returns null when either input
+ * is missing / non-positive (the caller hides the signal rather than showing
+ * a verdict off no data). Verdicts:
+ *   - `ahead`      — projection faster than goal by more than the on-track band
+ *   - `on_track`   — projection within ±`GOAL_ONTRACK_BAND` of the goal
+ *   - `behind`     — projection slower, but within `GOAL_FARBEHIND_BAND`
+ *   - `far_behind` — projection slower by more than `GOAL_FARBEHIND_BAND`
+ */
+export function goalFeasibility(goalSec: number, predictedSec: number): GoalFeasibility | null {
+	if (!(goalSec > 0) || !(predictedSec > 0)) return null;
+	const deltaSec = predictedSec - goalSec;
+	const ratio = deltaSec / goalSec;
+	let verdict: GoalFeasibilityVerdict;
+	if (ratio < -GOAL_ONTRACK_BAND) verdict = 'ahead';
+	else if (ratio <= GOAL_ONTRACK_BAND) verdict = 'on_track';
+	else if (ratio <= GOAL_FARBEHIND_BAND) verdict = 'behind';
+	else verdict = 'far_behind';
+	return { verdict, deltaSec: Math.round(deltaSec) };
+}
+
 /** Pretty-print seconds as MM:SS (or H:MM:SS for splits > 1h). */
 export function fmtSplitTime(seconds: number): string {
 	const total = Math.round(seconds);
