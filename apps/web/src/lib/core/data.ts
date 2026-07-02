@@ -4737,28 +4737,59 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 		.slice(0, limit);
 }
 
+/// The subset of `candidateIds` the viewer has NOT blocked. One batched read
+/// of user_blocks — the owner-read RLS policy scopes it to the viewer's own
+/// blocks, so this enforces the viewer→target direction that the client is
+/// authorised to read (the same direction `isBlockedByViewer` reads). The
+/// symmetric target→viewer direction is gated server-side on the content
+/// surfaces via `is_blocked_either_way`; a fully-symmetric discovery filter
+/// would need a set-returning definer RPC (follow-up). On a read error we
+/// keep all candidates rather than empty the list — the read failing is
+/// independent of the profile fetch, and blanking discovery on a transient
+/// blocks error would be a worse regression than the rare leak.
+async function filterOutBlocked(viewerId: string, candidateIds: string[]): Promise<string[]> {
+	if (candidateIds.length === 0) return candidateIds;
+	const { data, error } = await supabase
+		.from(TABLES.user_blocks)
+		.select('blocked_id')
+		.eq('blocker_id', viewerId)
+		.in('blocked_id', candidateIds);
+	if (error) return candidateIds;
+	const blocked = new Set((data ?? []).map((r) => r.blocked_id as string));
+	return candidateIds.filter((id) => !blocked.has(id));
+}
+
 async function hydratePeopleSuggestions(
 	ids: string[],
 	viewerId: string | null
 ): Promise<PeopleSuggestion[]> {
 	if (ids.length === 0) return [];
+	// Never surface a blocked account in People search / "Suggested for you".
+	// Every other social surface (kudos, comments, follows, leaderboards,
+	// profile) gates on the block predicate; discovery must too, or a runner
+	// who blocked a harasser keeps seeing them by name + avatar. Both search
+	// and suggestions funnel through this single hydrate step, so the filter
+	// lives here (matches the "keep block additions in one place" note on the
+	// user_blocks migration).
+	const visibleIds = viewerId ? await filterOutBlocked(viewerId, ids) : ids;
+	if (visibleIds.length === 0) return [];
 	const [profilesRes, countsRes, followsRes] = await Promise.all([
 		supabase
 			.from('user_profiles')
 			.select('id, display_name, avatar_url')
-			.in('id', ids),
+			.in('id', visibleIds),
 		// Public-run counts via a SECURITY DEFINER GROUP BY RPC — one small row
 		// per candidate, not one row per public run (which also can't be read
 		// off the base runs table by a non-owner since 20260701_001 dropped the
 		// public-anyone SELECT policy, so the old client tally returned ~0 for
 		// everyone but the viewer). See public_run_counts (migration 20270118_001).
-		supabase.rpc('public_run_counts', { p_user_ids: ids }),
+		supabase.rpc('public_run_counts', { p_user_ids: visibleIds }),
 		viewerId
 			? supabase
 					.from('user_follows')
 					.select('followee_id')
 					.eq('follower_id', viewerId)
-					.in('followee_id', ids)
+					.in('followee_id', visibleIds)
 			: Promise.resolve({ data: [] as { followee_id: string }[] } as { data: { followee_id: string }[] }),
 	]);
 	const counts = new Map<string, number>();
