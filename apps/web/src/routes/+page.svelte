@@ -62,9 +62,8 @@
 	</div>
 {:else}
 <nav class="landing-nav">
-	<a href="/" class="landing-logo">
-		<img src="/logo-mark.svg" alt="" class="landing-logo-mark" />
-		Threkir
+	<a href="/" class="landing-logo" aria-label="Threkir">
+		<img src="/wordmark-light.svg" alt="Threkir" class="landing-wordmark" />
 	</a>
 	<div class="nav-links">
 		<a href="#apps" class="nav-link">{m('landing.navApps')}</a>
@@ -173,20 +172,14 @@
 	}
 
 	.landing-logo {
-		font-weight: 700;
-		font-size: 1.25rem;
-		color: #ffffff;
 		display: flex;
 		align-items: center;
-		gap: var(--space-sm);
 		text-decoration: none;
 	}
-	.landing-logo-mark {
-		width: 2rem;
+	.landing-wordmark {
 		height: 2rem;
-		border-radius: var(--radius-md);
+		width: auto;
 		display: block;
-		object-fit: cover;
 	}
 
 	.nav-links {
