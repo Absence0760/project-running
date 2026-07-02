@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/people_screen.dart';
+import '../lib/widgets/error_state.dart';
 
 bool _supabaseReady = false;
 Future<void> _ensureSupabase() async {
@@ -44,12 +45,15 @@ class _FakeApi extends ApiClient {
     this.suggestions = const [],
     this.results = const [],
     this.followShouldThrow = false,
+    this.searchShouldThrow = false,
   });
   List<PeopleSuggestion> suggestions;
   List<PeopleSuggestion> results;
   bool followShouldThrow;
+  bool searchShouldThrow;
   int followCalls = 0;
   int unfollowCalls = 0;
+  int searchCalls = 0;
   String? lastSearchTerm;
 
   @override
@@ -59,7 +63,9 @@ class _FakeApi extends ApiClient {
   @override
   Future<List<PeopleSuggestion>> searchPeople(String query,
       {int limit = 20}) async {
+    searchCalls++;
     lastSearchTerm = query.trim();
+    if (searchShouldThrow) throw Exception('search down');
     return results;
   }
 
@@ -191,6 +197,35 @@ void main() {
       await tester.pump();
 
       expect(find.byIcon(Icons.search_off), findsOneWidget);
+    });
+
+    testWidgets('a failed search shows a retry error state, then retry succeeds',
+        (tester) async {
+      final api = _FakeApi(
+        suggestions: const [],
+        results: [_person(id: 's-1', name: 'Recovered Rae')],
+        searchShouldThrow: true,
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      await tester.enterText(find.byType(TextField), 'rae');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      // The failure surfaces an ErrorState with a Retry button — NOT the
+      // misleading "no matches" empty state.
+      expect(find.byType(ErrorState), findsOneWidget);
+      expect(find.byIcon(Icons.search_off), findsNothing);
+      expect(api.searchCalls, 1);
+
+      // Retry now succeeds and renders the result.
+      api.searchShouldThrow = false;
+      await tester.tap(find.text('Retry'));
+      await _settle(tester);
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.text('Recovered Rae'), findsOneWidget);
+      expect(api.searchCalls, 2);
     });
 
     testWidgets('search field exposes a persistent accessible name',

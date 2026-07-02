@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 import 'profile_screen.dart';
 
@@ -33,6 +34,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
 
   bool _loadingSuggestions = true;
   bool _searching = false;
+  bool _searchError = false;
   List<PeopleSuggestion> _suggestions = const [];
   List<PeopleSuggestion> _results = const [];
   String _query = '';
@@ -69,7 +71,10 @@ class _PeopleScreenState extends State<PeopleScreen> {
   void _onSearchChanged(String value) {
     _debounce?.cancel();
     final trimmed = value.trim();
-    setState(() => _query = trimmed);
+    setState(() {
+      _query = trimmed;
+      _searchError = false;
+    });
     if (trimmed.isEmpty) {
       _searchGen++;
       setState(() {
@@ -85,7 +90,10 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final term = _query;
     final gen = ++_searchGen;
     if (term.isEmpty) return;
-    setState(() => _searching = true);
+    setState(() {
+      _searching = true;
+      _searchError = false;
+    });
     try {
       final next = await widget.api.searchPeople(term, limit: 20);
       if (!mounted || gen != _searchGen) return;
@@ -94,8 +102,15 @@ class _PeopleScreenState extends State<PeopleScreen> {
         _searching = false;
       });
     } catch (_) {
+      // Surface the failure with a retry affordance instead of silently
+      // falling through to the "no matches" empty state — a failed search
+      // is not the same as an empty result. Mirrors the sibling Discover
+      // tab's ErrorState pattern (and web's search-failed toast).
       if (!mounted || gen != _searchGen) return;
-      setState(() => _searching = false);
+      setState(() {
+        _searchError = true;
+        _searching = false;
+      });
     }
   }
 
@@ -211,6 +226,16 @@ class _PeopleScreenState extends State<PeopleScreen> {
                 padding: EdgeInsets.all(24),
                 child: Center(
                   child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (hasQuery && _searchError)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: ErrorState(
+                  message: l10n.exploreRoutesSearchFailed,
+                  onRetry: _runSearch,
                 ),
               ),
             )
