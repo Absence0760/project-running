@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../route_markers.dart';
+import '../route_snap.dart';
 import 'live_run_map.dart';
 import 'top_banner.dart';
 
@@ -18,6 +19,13 @@ class RouteMarkersPanel extends StatefulWidget {
   final ApiClient? api;
   final String routeId;
   final bool isOwner;
+
+  /// The route's rendered polyline. A tapped point is projected onto this
+  /// line when the "Snap to route line" toggle is on (mirrors web's
+  /// `snapToRoute` in `RunMap.svelte`). `position_m` stays server-derived —
+  /// this only moves the placed lat/lng onto the course.
+  final List<Waypoint> routeLine;
+
   final ValueChanged<List<MapMarkerPin>> onPinsChanged;
   final ValueChanged<bool> onPlacingChanged;
 
@@ -30,6 +38,7 @@ class RouteMarkersPanel extends StatefulWidget {
     required this.api,
     required this.routeId,
     required this.isOwner,
+    required this.routeLine,
     required this.onPinsChanged,
     required this.onPlacingChanged,
     this.initialMarkers,
@@ -43,6 +52,9 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
   List<RouteMarkerRow> _markers = const [];
   bool _loaded = false;
   bool _placing = false;
+  // Default on: course markers belong on the course (mirrors web's
+  // `snapEnabled = true`).
+  bool _snapEnabled = true;
 
   @override
   void initState() {
@@ -117,7 +129,22 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
   void placeAt(Waypoint wp) {
     if (!_placing) return;
     _setPlacing(false);
-    _openEditor(lat: wp.lat, lng: wp.lng);
+    final placed = _maybeSnap(wp);
+    _openEditor(lat: placed.lat, lng: placed.lng);
+  }
+
+  /// Project a tapped point onto the route line when snapping is on and there
+  /// is a line to snap to; otherwise pass it through untouched. Mirrors
+  /// `maybeSnap` in web's `RunMap.svelte`.
+  ({double lat, double lng}) _maybeSnap(Waypoint wp) {
+    if (!_snapEnabled) return (lat: wp.lat, lng: wp.lng);
+    final coords = [
+      for (final w in widget.routeLine) [w.lng, w.lat],
+    ];
+    if (coords.length < 2) return (lat: wp.lat, lng: wp.lng);
+    final s = snapToPolyline((lng: wp.lng, lat: wp.lat), coords);
+    if (s == null) return (lat: wp.lat, lng: wp.lng);
+    return (lat: s.lat, lng: s.lng);
   }
 
   /// Called by the host when a course-marker pin is tapped.
@@ -284,13 +311,32 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
               ),
           ],
         ),
-        if (_placing)
+        if (_placing) ...[
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(l10n.routeMarkerTapToPlace,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.primary)),
           ),
+          InkWell(
+            onTap: () => setState(() => _snapEnabled = !_snapEnabled),
+            child: Row(
+              children: [
+                Checkbox(
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  value: _snapEnabled,
+                  onChanged: (v) =>
+                      setState(() => _snapEnabled = v ?? _snapEnabled),
+                ),
+                Expanded(
+                  child: Text(l10n.routeMarkerSnapToggle,
+                      style: theme.textTheme.bodySmall),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (_loaded && _markers.isEmpty && !_placing)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),

@@ -1,3 +1,4 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,16 +28,60 @@ RouteMarkerRow _marker({
   );
 }
 
-Widget _host({required bool isOwner, required List<RouteMarkerRow> markers}) {
+/// The 1 km west→east segment then a north leg from `route_snap_test.dart`.
+/// A point at (lng -0.11, lat 51.502) snaps down onto (lng -0.11, lat 51.5).
+const _routeLine = <Waypoint>[
+  Waypoint(lat: 51.5, lng: -0.12),
+  Waypoint(lat: 51.5, lng: -0.1),
+  Waypoint(lat: 51.51, lng: -0.1),
+];
+
+class _MarkersApi extends ApiClient {
+  double? addedLat;
+  double? addedLng;
+  int addCalls = 0;
+
+  @override
+  String? get userId => 'owner-1';
+
+  @override
+  Future<List<RouteMarkerRow>> fetchRouteMarkers(String routeId) async =>
+      const [];
+
+  @override
+  Future<RouteMarkerRow> addRouteMarker({
+    required String routeId,
+    required String kind,
+    required String label,
+    required double lat,
+    required double lng,
+    Map<String, dynamic> meta = const {},
+  }) async {
+    addCalls++;
+    addedLat = lat;
+    addedLng = lng;
+    return _marker(id: 'new', kind: kind, label: label);
+  }
+}
+
+Widget _host({
+  required bool isOwner,
+  required List<RouteMarkerRow> markers,
+  ApiClient? api,
+  GlobalKey<RouteMarkersPanelState>? panelKey,
+  List<Waypoint> routeLine = const [],
+}) {
   return MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: SingleChildScrollView(
         child: RouteMarkersPanel(
-          api: null,
+          key: panelKey,
+          api: api,
           routeId: 'route-1',
           isOwner: isOwner,
+          routeLine: routeLine,
           initialMarkers: markers,
           onPinsChanged: (_) {},
           onPlacingChanged: (_) {},
@@ -106,5 +151,81 @@ void main() {
       find.textContaining('No course markers yet'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('snap ON places a tapped-off-route marker on the route line',
+      (tester) async {
+    final api = _MarkersApi();
+    final key = GlobalKey<RouteMarkersPanelState>();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: const [],
+      api: api,
+      panelKey: key,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    // Enter placing mode — the snap toggle appears (default on).
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    expect(find.text('Snap to route line'), findsOneWidget);
+
+    // Tap ~222 m north of the horizontal first leg.
+    key.currentState!.placeAt(const Waypoint(lat: 51.502, lng: -0.11));
+    await tester.pumpAndSettle();
+
+    // Fill the name field and save.
+    await tester.enterText(find.byType(TextField).first, 'Aid 1');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    // Snapped onto the line: lat pulled to 51.5, lng unchanged.
+    expect((api.addedLat! - 51.5).abs() < 1e-6, isTrue,
+        reason: 'lat ${api.addedLat}');
+    expect((api.addedLng! - -0.11).abs() < 1e-6, isTrue,
+        reason: 'lng ${api.addedLng}');
+
+    // Drain the "tap to place" banner timer.
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('snap OFF places the marker at the raw tapped point',
+      (tester) async {
+    final api = _MarkersApi();
+    final key = GlobalKey<RouteMarkersPanelState>();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: const [],
+      api: api,
+      panelKey: key,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    // Disable snapping.
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+
+    key.currentState!.placeAt(const Waypoint(lat: 51.502, lng: -0.11));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'Aid 1');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    // Raw tapped coordinate — no projection onto the line.
+    expect((api.addedLat! - 51.502).abs() < 1e-6, isTrue,
+        reason: 'lat ${api.addedLat}');
+    expect((api.addedLng! - -0.11).abs() < 1e-6, isTrue,
+        reason: 'lng ${api.addedLng}');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
   });
 }

@@ -1089,6 +1089,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 api: widget.apiClient,
                 routeId: route.id,
                 isOwner: _isOwner,
+                routeLine: _displayWaypoints,
                 onPinsChanged: (pins) {
                   if (mounted) setState(() => _markerPins = pins);
                 },

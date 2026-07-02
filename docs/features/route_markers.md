@@ -88,10 +88,14 @@ cut-off chip renders identically on both platforms.
     Non-owner viewers keep the lightweight static circle layer.
 - **Mobile** — `widgets/route_markers_panel.dart` on `route_detail_screen.dart`,
   same schedule list + owner editor sheet; `LiveRunMap` renders the pins +
-  tap-to-place. `api_client` exposes the marker CRUD. The snap projection is now
-  ported (`route_snap.dart`, parity pair); wiring it into the tap placement +
-  the draggable-symbol affordance on `LiveRunMap` needs on-device maplibre work
-  and stays a followup (followups.md).
+  tap-to-place. `api_client` exposes the marker CRUD. **Snap-on-tap-placement
+  now ships**: a "Snap to route line" toggle (default on, shown while placing —
+  mirrors web's `snapEnabled = true`) projects the tapped point through
+  `route_snap.dart` (`snapToPolyline`, parity pair) onto the nearest point of
+  the course before the marker is placed; render-only, `position_m` stays
+  server-derived (5 widget tests in `route_markers_panel_test.dart`). The
+  **draggable-symbol drag-to-move** affordance on `LiveRunMap` still needs
+  on-device maplibre `SymbolManager` work and stays a followup (followups.md).
 - **Shared helper** — `route_markers.ts` ↔ `route_markers.dart` (parity pair):
   the kind catalogue (shared pin colour + i18n label key + which `meta` fields a
   kind carries), `sortMarkers` (schedule order), `parseCutoff`, and the
