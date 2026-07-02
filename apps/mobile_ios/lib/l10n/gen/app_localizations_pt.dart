@@ -5360,6 +5360,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsAccountAvatarRemove => 'Remover foto';
 
   @override
+  String get settingsAccountAvatarRemoveTitle => 'Remover foto de perfil?';
+
+  @override
+  String get settingsAccountAvatarRemoveConfirm =>
+      'Isto remove a tua foto de perfil atual. Podes carregar uma nova a qualquer momento.';
+
+  @override
   String get settingsAccountAvatarSaved => 'Foto de perfil atualizada.';
 
   @override
@@ -10319,6 +10326,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get challengesLeaveFailed => 'Não foi possível sair do desafio.';
+
+  @override
+  String get challengesDeleteFailed => 'Não foi possível excluir o desafio.';
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
@@ -16202,6 +16212,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get settingsAccountAvatarRemove => 'Remover foto';
 
   @override
+  String get settingsAccountAvatarRemoveTitle => 'Remover foto de perfil?';
+
+  @override
+  String get settingsAccountAvatarRemoveConfirm =>
+      'Isso remove sua foto de perfil atual. Você pode enviar uma nova quando quiser.';
+
+  @override
   String get settingsAccountAvatarSaved => 'Foto de perfil atualizada.';
 
   @override
@@ -21161,6 +21178,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesLeaveFailed => 'Não foi possível sair do desafio.';
+
+  @override
+  String get challengesDeleteFailed => 'Não foi possível excluir o desafio.';
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';

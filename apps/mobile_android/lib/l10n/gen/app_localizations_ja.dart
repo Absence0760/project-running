@@ -5047,6 +5047,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountAvatarRemove => '写真を削除';
 
   @override
+  String get settingsAccountAvatarRemoveTitle => 'プロフィール写真を削除しますか？';
+
+  @override
+  String get settingsAccountAvatarRemoveConfirm =>
+      '現在のプロフィール写真を削除します。新しい写真はいつでもアップロードできます。';
+
+  @override
   String get settingsAccountAvatarSaved => 'プロフィール写真を更新しました。';
 
   @override
@@ -9828,6 +9835,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get challengesLeaveFailed => 'チャレンジから退出できませんでした。';
+
+  @override
+  String get challengesDeleteFailed => 'チャレンジを削除できませんでした。';
 
   @override
   String get challengesLoadFailed => 'チャレンジを読み込めませんでした。';

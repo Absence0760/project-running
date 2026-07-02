@@ -8863,6 +8863,18 @@ abstract class AppLocalizations {
   /// **'Remove photo'**
   String get settingsAccountAvatarRemove;
 
+  /// Title of the remove-avatar confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Remove profile photo?'**
+  String get settingsAccountAvatarRemoveTitle;
+
+  /// Body of the remove-avatar confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This removes your current profile photo. You can upload a new one anytime.'**
+  String get settingsAccountAvatarRemoveConfirm;
+
   /// Banner shown after the avatar uploads
   ///
   /// In en, this message translates to:
@@ -17195,6 +17207,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t leave the challenge.'**
   String get challengesLeaveFailed;
+
+  /// Delete failure banner
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete the challenge.'**
+  String get challengesDeleteFailed;
 
   /// Load failure banner
   ///

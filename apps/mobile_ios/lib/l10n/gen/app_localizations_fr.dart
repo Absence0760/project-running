@@ -5375,6 +5375,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsAccountAvatarRemove => 'Supprimer la photo';
 
   @override
+  String get settingsAccountAvatarRemoveTitle =>
+      'Supprimer la photo de profil ?';
+
+  @override
+  String get settingsAccountAvatarRemoveConfirm =>
+      'Cela supprime votre photo de profil actuelle. Vous pouvez en importer une nouvelle à tout moment.';
+
+  @override
   String get settingsAccountAvatarSaved => 'Photo de profil mise à jour.';
 
   @override
@@ -10342,6 +10350,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get challengesLeaveFailed => 'Impossible de quitter le défi.';
+
+  @override
+  String get challengesDeleteFailed => 'Impossible de supprimer le défi.';
 
   @override
   String get challengesLoadFailed => 'Impossible de charger les défis.';

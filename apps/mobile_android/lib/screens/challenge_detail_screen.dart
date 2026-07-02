@@ -4,6 +4,7 @@ import '../challenge_progress.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../social_service.dart';
+import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
 String challengeValueLabel(AppLocalizations l10n, String metric, num value) {
@@ -37,8 +38,10 @@ class ChallengeDetailScreen extends StatefulWidget {
 class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
   ChallengeView? _challenge;
   List<ChallengeLeaderboardEntry> _board = const [];
+  Map<String, String> _clubNames = const {};
   bool _loaded = false;
   bool _notFound = false;
+  bool _loadError = false;
   bool _busy = false;
 
   @override
@@ -54,23 +57,33 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
         if (!mounted) return;
         setState(() {
           _notFound = true;
+          _loadError = false;
           _loaded = true;
         });
         return;
       }
+      final byTeam = c.scope == 'club_vs_club';
       final board = await widget.social
-          .fetchChallengeLeaderboard(widget.challengeId, byTeam: c.scope == 'club_vs_club');
+          .fetchChallengeLeaderboard(widget.challengeId, byTeam: byTeam);
+      var clubNames = const <String, String>{};
+      if (byTeam) {
+        final clubs = await widget.social.fetchMyClubs();
+        clubNames = {for (final cl in clubs) cl.row.id: cl.row.name};
+      }
       if (!mounted) return;
       setState(() {
         _challenge = c;
         _board = board;
+        _clubNames = clubNames;
         _loaded = true;
         _notFound = false;
+        _loadError = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _notFound = true;
+        _loadError = true;
+        _notFound = false;
         _loaded = true;
       });
     }
@@ -132,7 +145,7 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
       await widget.social.deleteChallenge(widget.challengeId);
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
-      if (mounted) showTopBanner(context, l10n.challengesLoadFailed);
+      if (mounted) showTopBanner(context, l10n.challengesDeleteFailed);
     }
   }
 
@@ -153,12 +166,18 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
         title: Text(c?.title ?? l10n.challengesTitle),
         actions: [
           if (isCreator)
-            IconButton(icon: const Icon(Icons.delete_outline), onPressed: _delete),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: l10n.challengesDelete,
+              onPressed: _delete,
+            ),
         ],
       ),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
-          : _notFound || c == null
+          : _loadError
+              ? ErrorState(message: l10n.challengesLoadFailed, onRetry: _load)
+              : _notFound || c == null
               ? Center(child: Text(l10n.challengesNotFound))
               : ListView(
                   padding: const EdgeInsets.all(16),
@@ -275,7 +294,9 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
       children: _board.map((e) {
         final me = !byTeam && meId != null && e.userId == meId;
         final name = byTeam
-            ? (e.teamClubId ?? '—')
+            ? (e.teamClubId == null
+                ? '—'
+                : (_clubNames[e.teamClubId] ?? e.teamClubId!))
             : (e.displayName ?? '—');
         return Container(
           margin: const EdgeInsets.only(bottom: 4),

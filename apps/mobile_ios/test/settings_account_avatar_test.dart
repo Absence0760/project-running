@@ -137,13 +137,26 @@ void main() {
     expect(find.byIcon(Icons.photo_camera_outlined), findsNothing);
   });
 
-  testWidgets('tapping Remove calls removeAvatar and drops the control',
+  testWidgets('Remove prompts a confirm before calling removeAvatar',
       (tester) async {
     final api = _AvatarApi(avatar: 'https://example.invalid/u1/avatar.png');
     await _pump(tester, api);
 
     await tester.tap(find.byIcon(Icons.delete_outline));
-    await tester.pump(); // start _removeAvatar
+    await tester.pumpAndSettle(); // open the confirm dialog
+
+    // The confirm dialog is shown; nothing deleted yet.
+    expect(find.text('Remove profile photo?'), findsOneWidget);
+    expect(api.removeCalls, 0);
+
+    // Confirm.
+    final confirm = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.text('Remove photo'),
+    );
+    expect(confirm, findsOneWidget);
+    await tester.tap(confirm);
+    await tester.pump(); // dialog pop + start _removeAvatar
     await tester.pump(const Duration(milliseconds: 100)); // future + setState
 
     expect(api.removeCalls, 1);
@@ -153,6 +166,24 @@ void main() {
 
     // Drain the showTopBanner auto-dismiss timer so no pending-timer error.
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('cancelling the confirm keeps the avatar', (tester) async {
+    final api = _AvatarApi(avatar: 'https://example.invalid/u1/avatar.png');
+    await _pump(tester, api);
+
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.text('Cancel'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(api.removeCalls, 0);
+    // The remove affordance is still present — nothing was deleted.
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
   });
 
   testWidgets('avatar tile shows the pick control when no avatar is set',

@@ -7212,6 +7212,14 @@
   "@settingsAccountAvatarRemove": {
     "description": "Tooltip on the remove-avatar button"
   },
+  "settingsAccountAvatarRemoveTitle": "Remove profile photo?",
+  "@settingsAccountAvatarRemoveTitle": {
+    "description": "Title of the remove-avatar confirm dialog"
+  },
+  "settingsAccountAvatarRemoveConfirm": "This removes your current profile photo. You can upload a new one anytime.",
+  "@settingsAccountAvatarRemoveConfirm": {
+    "description": "Body of the remove-avatar confirm dialog"
+  },
   "settingsAccountAvatarSaved": "Profile photo updated.",
   "@settingsAccountAvatarSaved": {
     "description": "Banner shown after the avatar uploads"
@@ -13397,6 +13405,10 @@
   "challengesLeaveFailed": "Couldn't leave the challenge.",
   "@challengesLeaveFailed": {
     "description": "Leave failure banner"
+  },
+  "challengesDeleteFailed": "Couldn't delete the challenge.",
+  "@challengesDeleteFailed": {
+    "description": "Delete failure banner"
   },
   "challengesLoadFailed": "Couldn't load challenges.",
   "@challengesLoadFailed": {

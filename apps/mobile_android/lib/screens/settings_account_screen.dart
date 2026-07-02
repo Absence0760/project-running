@@ -161,6 +161,26 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
     final api = widget.apiClient;
     final l10n = AppLocalizations.of(context);
     if (api == null) return;
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(l10n.settingsAccountAvatarRemoveTitle),
+            content: Text(l10n.settingsAccountAvatarRemoveConfirm),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(l10n.settingsAccountCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(l10n.settingsAccountAvatarRemove),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    if (!mounted) return;
     setState(() => _avatarBusy = true);
     try {
       await api.removeAvatar();
