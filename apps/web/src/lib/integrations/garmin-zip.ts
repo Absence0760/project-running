@@ -24,9 +24,15 @@ import { saveRun } from '../core/data';
 import { supabase } from '../core/supabase';
 import { TABLES, METADATA_KEYS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
-import { parseFitBuffer, garminExternalId, type ParsedFitRun, type FitHrZones } from './garmin-fit';
+import {
+	parseFitBuffer,
+	garminExternalId,
+	computeEmbeddedBests,
+	type ParsedFitRun,
+	type FitHrZones,
+} from './garmin-fit';
 import { loadSettings, effective, updateUniversal } from '../settings/settings';
-import { compositeKey } from './garmin_dedupe';
+import { compositeKey, isCrossProviderDuplicate, type RunIdentity } from './garmin_dedupe';
 
 export interface GarminZipProgress {
 	total: number;
@@ -97,6 +103,23 @@ export async function importGarminBundle(
 		if (gid) seenIds.add(String(gid));
 		seenComposite.add(compositeKey(r.started_at, r.distance_m));
 	}
+
+	// Cross-provider near-duplicate guard. `seenIds` / `seenComposite` above
+	// are scoped to `source='garmin'`, so the same activity that already
+	// arrived under another source (a Garmin watch auto-uploaded to Strava,
+	// an Apple HealthKit copy) is invisible to them and re-imports. Pull every
+	// existing run's start time + distance ACROSS ALL SOURCES so an import
+	// skips a run already present under any provider.
+	const { data: existingAll } = await supabase
+		.from(TABLES.runs)
+		.select('started_at, distance_m')
+		.eq('user_id', uid);
+	const existingIdentities: RunIdentity[] = [];
+	for (const r of existingAll ?? []) {
+		const ms = Date.parse(r.started_at as string);
+		if (!Number.isFinite(ms)) continue;
+		existingIdentities.push({ startedAtMs: ms, distanceM: Number(r.distance_m ?? 0) });
+	}
 	const hrZoneCollector: HrZoneCollector = { hrZones: null };
 
 	if (lower.endsWith('.fit')) {
@@ -114,6 +137,7 @@ export async function importGarminBundle(
 				file.name,
 				seenIds,
 				seenComposite,
+				existingIdentities,
 				hrZoneCollector,
 			);
 			if (handled === 'imported') progress.imported++;
@@ -160,11 +184,18 @@ export async function importGarminBundle(
 			let handled: 'imported' | 'skipped' | 'failed' = 'failed';
 			if (e.kind === 'fit') {
 				const buf = await zip.file(e.path)!.async('uint8array');
-				handled = await importFitFile(buf, e.path, seenIds, seenComposite, hrZoneCollector);
+				handled = await importFitFile(
+					buf,
+					e.path,
+					seenIds,
+					seenComposite,
+					existingIdentities,
+					hrZoneCollector,
+				);
 			} else if (e.kind === 'route') {
 				const blob = await zip.file(e.path)!.async('blob');
 				const synthetic = new File([blob], e.path.split('/').pop()!);
-				handled = await importRouteFile(synthetic, seenComposite);
+				handled = await importRouteFile(synthetic, seenComposite, existingIdentities);
 			} else if (e.kind === 'fit-zip') {
 				// Garmin sometimes wraps a single FIT inside a per-activity
 				// .zip; open it and pull out any .fit entries.
@@ -174,7 +205,14 @@ export async function importGarminBundle(
 				for (const name of Object.keys(inner.files)) {
 					if (!name.toLowerCase().endsWith('.fit')) continue;
 					const buf = await inner.file(name)!.async('uint8array');
-					innerHandled = await importFitFile(buf, name, seenIds, seenComposite, hrZoneCollector);
+					innerHandled = await importFitFile(
+							buf,
+							name,
+							seenIds,
+							seenComposite,
+							existingIdentities,
+							hrZoneCollector,
+						);
 					if (innerHandled === 'imported' || innerHandled === 'skipped') break;
 				}
 				handled = innerHandled;
@@ -200,6 +238,7 @@ async function importFitFile(
 	displayName: string,
 	seenIds: Set<string>,
 	seenComposite: Set<string>,
+	existingIdentities: RunIdentity[],
 	collector?: HrZoneCollector,
 ): Promise<'imported' | 'skipped' | 'failed'> {
 	let parsed: ParsedFitRun | null;
@@ -228,6 +267,20 @@ async function importFitFile(
 	const composite = compositeKey(parsed.startedAt, parsed.distance_m);
 	if (seenComposite.has(composite)) return 'skipped';
 
+	// Cross-provider near-duplicate: this same activity may already exist
+	// under another source (e.g. auto-uploaded to Strava). The garmin_id /
+	// composite checks above are garmin-scoped and never see it.
+	const startMs = Date.parse(parsed.startedAt);
+	if (
+		Number.isFinite(startMs) &&
+		isCrossProviderDuplicate(
+			{ startedAtMs: startMs, distanceM: parsed.distance_m },
+			existingIdentities,
+		)
+	) {
+		return 'skipped';
+	}
+
 	const metadata: Record<string, unknown> = {
 		[METADATA_KEYS.imported_from]: 'garmin',
 		[METADATA_KEYS.imported_at]: new Date().toISOString(),
@@ -241,6 +294,11 @@ async function importFitFile(
 	if (parsed.indoor) metadata[METADATA_KEYS.indoor] = true;
 	if (parsed.sub_sport) metadata[METADATA_KEYS.sub_sport] = parsed.sub_sport;
 	if (parsed.running_dynamics) metadata[METADATA_KEYS.running_dynamics] = parsed.running_dynamics;
+	// Embedded best efforts (fastest_{5k,10k,half_marathon,marathon}_s) so a
+	// fast sub-distance inside a long imported run reaches personal_records
+	// (the 20260529000002 trigger reads these). Empty {} → nothing written
+	// for indoor/trackless or too-short runs; no fake bests.
+	Object.assign(metadata, computeEmbeddedBests(parsed.track));
 
 	await saveRun({
 		started_at: parsed.startedAt,
@@ -263,6 +321,9 @@ async function importFitFile(
 
 	if (parsed.garmin_file_id) seenIds.add(parsed.garmin_file_id);
 	seenComposite.add(composite);
+	if (Number.isFinite(startMs)) {
+		existingIdentities.push({ startedAtMs: startMs, distanceM: parsed.distance_m });
+	}
 	return 'imported';
 }
 
@@ -273,6 +334,7 @@ async function importFitFile(
 async function importRouteFile(
 	file: File,
 	seenComposite: Set<string>,
+	existingIdentities: RunIdentity[],
 ): Promise<'imported' | 'skipped' | 'failed'> {
 	let routes;
 	try {
@@ -297,22 +359,39 @@ async function importRouteFile(
 	const composite = compositeKey(startedAt, r.distance_m);
 	if (seenComposite.has(composite)) return 'skipped';
 
+	const distanceM = Math.max(0, Math.round(r.distance_m));
+	const startMs = Date.parse(startedAt);
+	if (
+		Number.isFinite(startMs) &&
+		isCrossProviderDuplicate({ startedAtMs: startMs, distanceM }, existingIdentities)
+	) {
+		return 'skipped';
+	}
+
+	const metadata: Record<string, unknown> = {
+		imported_from: 'garmin',
+		imported_at: new Date().toISOString(),
+		source_file: file.name,
+	};
+	// Embedded best efforts off the GPX/TCX per-point timestamps + positions,
+	// same as the FIT path. {} when the original carried no per-point times.
+	Object.assign(metadata, computeEmbeddedBests(waypoints));
+
 	await saveRun({
 		started_at: new Date(startedAt).toISOString(),
-		distance_m: Math.max(0, Math.round(r.distance_m)),
+		distance_m: distanceM,
 		duration_s: durationS,
 		elevation_m: r.elevation_m ?? null,
 		source: 'garmin',
 		activity_type: 'run',
-		metadata: {
-			imported_from: 'garmin',
-			imported_at: new Date().toISOString(),
-			source_file: file.name,
-		},
+		metadata,
 		track: waypoints.length > 0 ? waypoints : undefined,
 		title: r.name || null,
 	});
 
 	seenComposite.add(composite);
+	if (Number.isFinite(startMs)) {
+		existingIdentities.push({ startedAtMs: startMs, distanceM });
+	}
 	return 'imported';
 }

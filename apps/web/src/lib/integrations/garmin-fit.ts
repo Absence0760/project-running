@@ -127,6 +127,111 @@ export function garminExternalId(fileId: string | null): string | null {
 	return fileId ? `garmin:${fileId}` : null;
 }
 
+// ---------------------------------------------------------------------------
+// Embedded best efforts.
+//
+// The whole-run distance of a long run misses every canonical PR bracket, so
+// a sub-20 5k inside a 30 km long run never reaches `personal_records`. The
+// 20260529000002 migration teaches the PR trigger to read
+// `metadata.fastest_{5k,10k,half_marathon,marathon}_s`; the live recorder
+// writes them (embedded_bests.dart) but no importer did. Keep the algorithm
+// in lockstep with `fastestWindowOf` in
+// `apps/mobile_android/lib/run_stats.dart` + `enrichMetadataWithEmbeddedBests`
+// in `apps/mobile_android/lib/embedded_bests.dart` (and the Deno twin in
+// `apps/backend/supabase/functions/_shared/strava.ts`) so an imported run's
+// best matches what a live recording of the same effort would write.
+// ---------------------------------------------------------------------------
+
+/// Canonical distances (metres) → metadata key. Matches the bracket
+/// midpoints the SQL trigger searches (±2 % wide, so 5000 m exactly).
+export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [string, number]> = [
+	['fastest_5k_s', 5000],
+	['fastest_10k_s', 10000],
+	['fastest_half_marathon_s', 21097.5],
+	['fastest_marathon_s', 42195],
+];
+
+function embeddedHaversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+	const r = 6371000;
+	const toRad = Math.PI / 180;
+	const dLat = (lat2 - lat1) * toRad;
+	const dLng = (lng2 - lng1) * toRad;
+	const s1 = Math.sin(dLat / 2);
+	const s2 = Math.sin(dLng / 2);
+	const a = s1 * s1 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * s2 * s2;
+	return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pointMs(p: TrackPoint): number | null {
+	if (typeof p.ts !== 'string') return null;
+	const ms = Date.parse(p.ts);
+	return Number.isFinite(ms) ? ms : null;
+}
+
+/// Fastest continuous `windowMetres` (whole seconds) anywhere in the track,
+/// or null when the track has < 2 points, is shorter than the window, or has
+/// no timestamped window. Sliding-window with linear interpolation at the
+/// exact distance boundary — the port of Dart's `fastestWindowOf`.
+export function fastestWindowSeconds(
+	track: readonly TrackPoint[],
+	windowMetres: number,
+): number | null {
+	const n = track.length;
+	if (n < 2 || windowMetres <= 0) return null;
+
+	const cum = new Array<number>(n).fill(0);
+	for (let i = 1; i < n; i++) {
+		cum[i] = cum[i - 1] +
+			embeddedHaversineM(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
+	}
+	if (cum[n - 1] < windowMetres) return null;
+
+	let best: number | null = null;
+	let i = 0;
+	for (let j = 1; j < n; j++) {
+		while (i + 1 < j && cum[j] - cum[i + 1] >= windowMetres) i++;
+		if (cum[j] - cum[i] < windowMetres) continue;
+
+		const ti = pointMs(track[i]);
+		const tj = pointMs(track[j]);
+		if (ti == null || tj == null) continue;
+
+		const segDist = cum[i + 1] - cum[i];
+		let startMs: number;
+		if (segDist <= 0) {
+			startMs = ti;
+		} else {
+			const ti1 = pointMs(track[i + 1]);
+			if (ti1 == null) {
+				startMs = ti;
+			} else {
+				const targetCum = cum[j] - windowMetres;
+				const fraction = Math.min(1, Math.max(0, (targetCum - cum[i]) / segDist));
+				startMs = ti + Math.round((ti1 - ti) * fraction);
+			}
+		}
+
+		const windowMs = tj - startMs;
+		if (windowMs <= 0) continue;
+		if (best == null || windowMs < best) best = windowMs;
+	}
+	return best == null ? null : Math.round(best / 1000);
+}
+
+/// Embedded best-effort seconds for every canonical distance the track is
+/// long enough to cover. Returns `{}` (no fake bests) when the track has < 3
+/// points or covers no canonical distance; callers merge the result into
+/// `metadata` and skip the write when empty.
+export function computeEmbeddedBests(track: readonly TrackPoint[]): Record<string, number> {
+	const out: Record<string, number> = {};
+	if (!Array.isArray(track) || track.length < 3) return out;
+	for (const [key, dist] of EMBEDDED_BEST_DISTANCES) {
+		const secs = fastestWindowSeconds(track, dist);
+		if (secs != null && secs > 0) out[key] = secs;
+	}
+	return out;
+}
+
 export interface ParsedFitRun {
 	/// ISO timestamp of the session start.
 	startedAt: string;

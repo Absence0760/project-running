@@ -3,9 +3,11 @@ import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
+	type RunIdentity,
 	type StravaActivity,
 	type StravaTokens,
 	ingestActivity,
+	isCrossProviderDuplicate,
 	isStravaRunFamily,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
@@ -458,6 +460,24 @@ async function backfill(
 		if (sid) seen.add(String(sid));
 	}
 
+	// Cross-provider near-duplicate guard. The `seen` set above only catches
+	// a re-import of the SAME Strava activity; it never sees the same effort
+	// that already arrived under another source (a Garmin watch auto-uploaded
+	// to Strava, an Apple HealthKit copy, a Garmin bulk-export ZIP). Pull
+	// every existing run's start time + distance ACROSS ALL SOURCES so we can
+	// skip an activity that already exists under any provider.
+	const { data: existingAll } = await supabase
+		.from('runs')
+		.select('started_at, distance_m')
+		.eq('user_id', userId);
+	const existingIdentities: RunIdentity[] = [];
+	for (const raw of existingAll ?? []) {
+		const r = raw as { started_at: string | null; distance_m: number | null };
+		const ms = Date.parse(r.started_at ?? '');
+		if (!Number.isFinite(ms)) continue;
+		existingIdentities.push({ startedAtMs: ms, distanceM: Number(r.distance_m ?? 0) });
+	}
+
 	let rateLimited = false;
 	while (true) {
 		const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterEpoch}&per_page=${pageSize}&page=${page}`;
@@ -486,6 +506,19 @@ async function backfill(
 			// now also rejects defensively (persona-hunt Pro #3).
 			if (!isStravaRunFamily(act.sport_type ?? act.type)) continue;
 			if (seen.has(String(act.id))) {
+				skipped++;
+				continue;
+			}
+			const startMs = Date.parse(act.start_date);
+			if (
+				Number.isFinite(startMs) &&
+				isCrossProviderDuplicate(
+					{ startedAtMs: startMs, distanceM: Math.round(act.distance) },
+					existingIdentities,
+				)
+			) {
+				// Already present under another source — skip so we don't
+				// double-insert the same physical activity.
 				skipped++;
 				continue;
 			}
