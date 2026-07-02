@@ -38,3 +38,32 @@ export function weeklyIntakeSummary(
 			: null;
 	return { loggedDays, avgCalories, deltaPerDay };
 }
+
+export interface WeeklyProteinSummary {
+	loggedDays: number;
+	/// Mean protein (g) across logged days (0 when nothing is logged).
+	avgProteinG: number;
+	/// Logged days whose protein reached or cleared the target — protein is a
+	/// floor, so hitting it is the win we count. Null when there's no target or
+	/// no logged day (hide the chip).
+	daysMetGoal: number | null;
+}
+
+/// Weekly protein consistency — how many of the last 7 logged days hit the
+/// protein target. A logged day is one with protein > 0, mirroring the
+/// intake-summary's own-metric convention; a day of food with genuinely zero
+/// protein (rare) is treated as unlogged for this stat rather than a miss.
+export function weeklyProteinSummary(
+	dailyProteinG: number[],
+	targetProteinG: number | null | undefined,
+): WeeklyProteinSummary {
+	const logged = dailyProteinG.filter((p) => p > 0);
+	const loggedDays = logged.length;
+	const avgProteinG =
+		loggedDays > 0 ? Math.round(logged.reduce((s, p) => s + p, 0) / loggedDays) : 0;
+	const daysMetGoal =
+		targetProteinG != null && targetProteinG > 0 && loggedDays > 0
+			? logged.filter((p) => p >= targetProteinG).length
+			: null;
+	return { loggedDays, avgProteinG, daysMetGoal };
+}
