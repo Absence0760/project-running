@@ -52,11 +52,21 @@ export async function lookupSharedRun(
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
 		});
-		const { data: run } = await supabase
+		const { data: run, error } = await supabase
 			.from('public_runs')
 			.select('id, user_id, distance_m, duration_s, started_at, source, metadata')
 			.eq('id', id)
 			.maybeSingle();
+		// A non-null error (as opposed to a clean data:null not-found) means
+		// Supabase/PostgREST is unreachable or 5xx'ing — every share card then
+		// silently degrades to the branded fallback with NO AWS/Lambda Errors
+		// metric to alarm on. The tagged line is what the
+		// share-run-upstream-unreachable CloudWatch metric-filter alarm keys
+		// off (mirrors generate-route's engine_unreachable). /audit/infra N2.
+		if (error) {
+			console.error('[share-run] upstream_unreachable');
+			return { run: null, displayName: null };
+		}
 		if (!run) return { run: null, displayName: null };
 		let displayName: string | null = null;
 		if (run.user_id) {
@@ -74,7 +84,10 @@ export async function lookupSharedRun(
 		}
 		return { run: run as SharedRun, displayName };
 	} catch (err) {
-		console.warn('lookupSharedRun: fetch failed', err);
+		console.error(
+			'[share-run] upstream_unreachable',
+			err instanceof Error ? err.message : String(err),
+		);
 		return { run: null, displayName: null };
 	}
 }

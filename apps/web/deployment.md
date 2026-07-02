@@ -267,6 +267,7 @@ The `Notifications` row in the database carries the user's subscription endpoint
 - Coach Lambda p95 duration >25 s over 5 min (approaching the 30 s timeout) → same topic
 - Coach Lambda throttles >0 in any 1 min window → same topic
 - generate-route Lambda error rate / p95 duration / throttles → same topic (thresholds in the generate-route section above — its timeout is 15 s, so the duration alarm fires at >12 s)
+- Each of the four share Lambdas (run / route / recap / badge): error rate / p95 duration → same topic; plus a `share-<surface>-upstream-unreachable` log-metric-filter alarm that fires when the lookup logs `[share-<surface>] upstream_unreachable` (Supabase down → every unfurl silently degrades to the branded fallback card at HTTP 200/404, which the `Errors` metric can't see — the sibling of generate-route's `engine_unreachable` alarm)
 - 4xx rate at the CloudFront distribution >5% over 5 min → same topic (catches mass auth failures, SPA fallback misconfig, etc.)
 - 5xx rate at the distribution >1% over 5 min → same topic
 

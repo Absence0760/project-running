@@ -193,6 +193,55 @@ resource "aws_cloudwatch_metric_alarm" "generate_route_engine_unreachable" {
   tags                = var.tags
 }
 
+# The four share Lambdas keep serving a branded fallback card (HTTP 200 PNG /
+# 404 HTML) when Supabase is unreachable — correct for never breaking a social
+# unfurl, but it means a Supabase outage degrades EVERY card with no AWS/Lambda
+# Errors metric to alarm on (the fallback is a returned response, not a throw).
+# Each lookup helper (apps/web/src/lib/share/share_*_lookup.ts) logs a tagged
+# `[share-<surface>] upstream_unreachable` line only on a real infra failure
+# (Supabase error / throw), NOT on a clean not-found — this metric-filter +
+# alarm pair keys off it, mirroring generate-route's engine_unreachable. One per
+# share log group via for_each. /audit/infra N2 2026-07-02.
+locals {
+  share_log_groups = {
+    run   = aws_cloudwatch_log_group.lambda_share_run.name
+    route = aws_cloudwatch_log_group.lambda_share_route.name
+    recap = aws_cloudwatch_log_group.lambda_share_recap.name
+    badge = aws_cloudwatch_log_group.lambda_share_badge.name
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "share_upstream_unreachable" {
+  for_each       = local.share_log_groups
+  name           = "${local.resource_prefix}-share-${each.key}-upstream-unreachable"
+  log_group_name = each.value
+  pattern        = "\"[share-${each.key}] upstream_unreachable\""
+
+  metric_transformation {
+    name          = "${local.resource_prefix}-share-${each.key}-upstream-unreachable-count"
+    namespace     = "Threkir/Share"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "share_upstream_unreachable" {
+  for_each            = local.share_log_groups
+  alarm_name          = "${local.resource_prefix}-share-${each.key}-upstream-unreachable"
+  alarm_description   = "Share-${each.key} Lambda logged >=5 upstream_unreachable events in each of two consecutive 5-min windows — Supabase is unreachable from the share renderer and every ${each.key} unfurl has silently degraded to the branded fallback card. Check Supabase health."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+  metric_name         = aws_cloudwatch_log_metric_filter.share_upstream_unreachable[each.key].metric_transformation[0].name
+  namespace           = aws_cloudwatch_log_metric_filter.share_upstream_unreachable[each.key].metric_transformation[0].namespace
+  period              = 300
+  statistic           = "Sum"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+}
+
 resource "aws_cloudwatch_log_metric_filter" "coach_bypass_paywall" {
   name           = "${local.resource_prefix}-coach-bypass-paywall"
   log_group_name = aws_cloudwatch_log_group.lambda.name

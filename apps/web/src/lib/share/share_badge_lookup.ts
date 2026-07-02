@@ -45,12 +45,20 @@ export async function lookupSharedBadge(
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
 		});
-		const { data: badge } = await supabase
+		const { data: badge, error } = await supabase
 			.from(TABLES.achievements)
 			.select('id, user_id, badge_key, tier, value_num, earned_at')
 			.eq('id', id)
 			.eq('is_public', true)
 			.maybeSingle();
+		// Non-null error (vs a clean data:null not-found) = Supabase unreachable
+		// / 5xx; the badge card degrades to the branded fallback with no Lambda
+		// Errors metric. Tagged line drives the share-badge-upstream-unreachable
+		// alarm. /audit/infra N2.
+		if (error) {
+			console.error('[share-badge] upstream_unreachable');
+			return { badge: null, displayName: null };
+		}
 		if (!badge) return { badge: null, displayName: null };
 		let displayName: string | null = null;
 		if (badge.user_id) {
@@ -61,7 +69,10 @@ export async function lookupSharedBadge(
 		}
 		return { badge: badge as SharedBadge, displayName };
 	} catch (err) {
-		console.warn('lookupSharedBadge: fetch failed', err);
+		console.error(
+			'[share-badge] upstream_unreachable',
+			err instanceof Error ? err.message : String(err),
+		);
 		return { badge: null, displayName: null };
 	}
 }

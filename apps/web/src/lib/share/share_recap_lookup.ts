@@ -56,9 +56,17 @@ export async function lookupSharedRecap(
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
 		});
-		const { data } = await supabase
+		const { data, error } = await supabase
 			.rpc('public_recap_by_id', { p_id: id })
 			.maybeSingle();
+		// Non-null error (vs a clean data:null not-found) = Supabase unreachable
+		// / 5xx; the recap card degrades to the branded fallback with no Lambda
+		// Errors metric. Tagged line drives the share-recap-upstream-unreachable
+		// alarm. /audit/infra N2.
+		if (error) {
+			console.error('[share-recap] upstream_unreachable');
+			return { recap: null };
+		}
 		const row = data as {
 			id: string;
 			user_id: string | null;
@@ -85,7 +93,10 @@ export async function lookupSharedRecap(
 			},
 		};
 	} catch (err) {
-		console.warn('lookupSharedRecap: fetch failed', err);
+		console.error(
+			'[share-recap] upstream_unreachable',
+			err instanceof Error ? err.message : String(err),
+		);
 		return { recap: null };
 	}
 }

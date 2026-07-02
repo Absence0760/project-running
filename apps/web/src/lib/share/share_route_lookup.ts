@@ -65,11 +65,19 @@ export async function lookupSharedRoute(
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
 		});
-		const { data: route } = await supabase
+		const { data: route, error } = await supabase
 			.from('public_routes')
 			.select('id, name, distance_m, surface, elevation_m')
 			.eq('id', id)
 			.maybeSingle();
+		// Non-null error (vs a clean data:null not-found) = Supabase unreachable
+		// / 5xx; the card degrades to the branded fallback with no Lambda Errors
+		// metric. Tagged line drives the share-route-upstream-unreachable alarm.
+		// /audit/infra N2.
+		if (error) {
+			console.error('[share-route] upstream_unreachable');
+			return { route: null, track: [] };
+		}
 		if (!route) return { route: null, track: [] };
 		let track: TrackPoint[] = [];
 		if (withTrack) {
@@ -88,7 +96,10 @@ export async function lookupSharedRoute(
 		}
 		return { route: route as SharedRoute, track };
 	} catch (err) {
-		console.warn('lookupSharedRoute: fetch failed', err);
+		console.error(
+			'[share-route] upstream_unreachable',
+			err instanceof Error ? err.message : String(err),
+		);
 		return { route: null, track: [] };
 	}
 }
