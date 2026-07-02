@@ -451,6 +451,24 @@ pnpm gen:dart               # Dart → packages/core_models/lib/src/generated/db
 pnpm gen:types:check
 ```
 
+### Regenerate app icons after editing the mark
+
+The app icon is a single vector master at `assets/icon.svg`. Every platform's
+raster icon (web favicon / touch / PWA, iOS + watchOS app-icon sets, Android +
+Wear OS mipmaps, the Garmin launcher) is generated from it — never hand-edited.
+After changing `assets/icon.svg`, regenerate them all in one command:
+
+```bash
+# Requires inkscape + ImageMagick 7 (the opt-in asset-pipeline tools).
+./assets/gen-icons.sh
+```
+
+The script is deterministic and idempotent: it re-renders each target at its
+committed pixel size (iOS/watchOS icons come out opaque truecolor, no alpha, as
+the App Store requires). The web header + PWA use `apps/web/static/logo-mark.svg`
+and `wordmark.svg`, which are separate hand-authored vector lockups derived from
+the same mark — edit those directly.
+
 ### Deploy Edge Functions
 
 ```bash
