@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { weeklyIntakeSummary } from './nutrition_week';
+import { weeklyIntakeSummary, weeklyProteinSummary } from './nutrition_week';
 
 test('weeklyIntakeSummary: averages over logged days only, ignores empty days', () => {
 	// Three logged days (2000, 2400, 2200), four empty → avg 2200.
@@ -56,4 +56,42 @@ test('weeklyIntakeSummary: a fractional target yields a whole-number delta (twin
 	const s = weeklyIntakeSummary([2200], 2300.4);
 	assert.equal(s.deltaPerDay, -100);
 	assert.equal(Number.isInteger(s.deltaPerDay), true);
+});
+
+test('weeklyProteinSummary: counts logged days that reached the protein goal', () => {
+	// Four logged days (150, 120, 165, 130), three empty. Goal 140 → 2 of 4 met.
+	const s = weeklyProteinSummary([0, 150, 0, 120, 165, 0, 130], 140);
+	assert.equal(s.loggedDays, 4);
+	assert.equal(s.avgProteinG, 141); // round((150+120+165+130)/4) = round(141.25)
+	assert.equal(s.daysMetGoal, 2);
+});
+
+test('weeklyProteinSummary: hitting the target exactly counts as met (floor, not ceiling)', () => {
+	const s = weeklyProteinSummary([140, 139], 140);
+	assert.equal(s.daysMetGoal, 1);
+});
+
+test('weeklyProteinSummary: all logged days can meet the goal', () => {
+	const s = weeklyProteinSummary([150, 160, 170], 140);
+	assert.equal(s.loggedDays, 3);
+	assert.equal(s.daysMetGoal, 3);
+});
+
+test('weeklyProteinSummary: no logged days → zero avg, null daysMetGoal', () => {
+	const s = weeklyProteinSummary([0, 0, 0], 140);
+	assert.deepEqual(s, { loggedDays: 0, avgProteinG: 0, daysMetGoal: null });
+});
+
+test('weeklyProteinSummary: empty input is all-zero, null daysMetGoal', () => {
+	const s = weeklyProteinSummary([], 140);
+	assert.deepEqual(s, { loggedDays: 0, avgProteinG: 0, daysMetGoal: null });
+});
+
+test('weeklyProteinSummary: missing/non-positive target hides daysMetGoal but keeps the average', () => {
+	for (const t of [null, undefined, 0, -20]) {
+		const s = weeklyProteinSummary([120, 140], t as number | null);
+		assert.equal(s.loggedDays, 2);
+		assert.equal(s.avgProteinG, 130);
+		assert.equal(s.daysMetGoal, null);
+	}
 });

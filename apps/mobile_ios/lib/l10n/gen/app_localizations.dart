@@ -15132,6 +15132,12 @@ abstract class AppLocalizations {
   /// **'{n} over goal/day'**
   String nutritionWeekOverGoal(int n);
 
+  /// Weekly trend chip: logged days that hit the protein goal, out of total logged days
+  ///
+  /// In en, this message translates to:
+  /// **'Protein {met}/{total} days'**
+  String nutritionWeekProtein(int met, int total);
+
   /// No description provided for @nutritionGoalLine.
   ///
   /// In en, this message translates to:

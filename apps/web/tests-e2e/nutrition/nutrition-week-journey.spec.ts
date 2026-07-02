@@ -226,6 +226,17 @@ test.describe('/nutrition — multi-day week journey', () => {
 			await expect(weekDelta).toContainText(/goal/);
 		});
 
+		// ── 5b. The week protein-consistency chip counts logged days that hit the goal ──
+		await test.step('the protein chip reports met / total logged days', async () => {
+			// Body metrics resolve a protein target, and today's UI-logged item
+			// carries 40 g protein, so >= 1 logged day exists → the chip renders as
+			// "met / total days". The met/total arithmetic is unit-tested precisely
+			// in nutrition_week.test.ts (weeklyProteinSummary).
+			const proteinChip = page.getByTestId('week-protein');
+			await expect(proteinChip).toBeVisible({ timeout: 10_000 });
+			await expect(proteinChip).toContainText(/\d+\/\d+/);
+		});
+
 		// ── 6. Reset the client-only water counter for the shared seed user ──
 		await test.step('leave the water tracker clean for the next run', async () => {
 			await page.evaluate(() => {

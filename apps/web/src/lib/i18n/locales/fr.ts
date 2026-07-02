@@ -3614,6 +3614,7 @@ export const messages = {
 	"nutrition.weekUnderGoal": "{n} sous l'objectif/jour",
 	"nutrition.weekOverGoal": "{n} au-dessus/jour",
 	"nutrition.weekOnGoal": "Objectif atteint",
+	"nutrition.weekProtein": "Protéines {met}/{total} jours",
 	"nutrition.goalLine": "Objectif quotidien",
 	"nutrition.logHeading": "Enregistrer un aliment",
 	"nutrition.searchPlaceholder": "Rechercher un aliment…",

@@ -567,7 +567,14 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 - **Water tracker** is a separate, tap-to-increment row of 250 ml units —
   deliberately the lowest-friction thing on the screen.
 - **Weekly trends** reuse the `mileage_trend_card` pattern (same
-  bucketing, same unit-aware rendering) on a second tab/section.
+  bucketing, same unit-aware rendering) on a second tab/section. The 7-day
+  trend header carries two consistency chips from `nutrition_week.ts` (parity
+  pair): the calorie **`X under/over goal/day`** delta (`weeklyIntakeSummary`)
+  and a **protein consistency** chip **`Protein met/total days`**
+  (`weeklyProteinSummary`) — how many of the logged days cleared the protein
+  goal, since protein is a floor (endurance-athlete default 1.8 g/kg) the
+  runner most often under-hits. The protein chip goes success-green when every
+  logged day met the target. Shipped web + mobile (both twins).
 
 > **Status (web shipped):** capture is a **modal** opened from `/nutrition`
 > (`FoodLogEditor` hosted in the shared `Modal`), honouring the §210

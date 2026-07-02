@@ -1277,25 +1277,35 @@ class _NutritionScreenState extends State<NutritionScreen> {
   Widget _trendCard(ThemeData theme, AppLocalizations l10n) {
     final tag = localeToTag(Localizations.localeOf(context));
     final now = DateTime.now();
-    final byDay = <String, double>{};
+    final calByDay = <String, double>{};
+    final proByDay = <String, double>{};
     for (final r in widget.store.rows) {
       final v = r['started_at'];
       final at = v is String ? DateTime.tryParse(v) : null;
       if (at == null) continue;
       final local = at.toLocal();
       final key = '${local.year}-${local.month}-${local.day}';
-      byDay[key] = (byDay[key] ?? 0) + ((r['calories'] as num?)?.toDouble() ?? 0);
+      calByDay[key] = (calByDay[key] ?? 0) + ((r['calories'] as num?)?.toDouble() ?? 0);
+      proByDay[key] = (proByDay[key] ?? 0) + ((r['protein_g'] as num?)?.toDouble() ?? 0);
     }
-    final days = <({String label, double calories})>[];
+    final days = <({String label, double calories, double protein})>[];
     for (var i = 6; i >= 0; i--) {
       final d = DateTime(now.year, now.month, now.day - i);
       final key = '${d.year}-${d.month}-${d.day}';
-      days.add((label: formatDowNarrow(d, tag), calories: byDay[key] ?? 0));
+      days.add((
+        label: formatDowNarrow(d, tag),
+        calories: calByDay[key] ?? 0,
+        protein: proByDay[key] ?? 0,
+      ));
     }
     final goal = _targets?.calories;
     final summary = weeklyIntakeSummary(
       [for (final d in days) d.calories],
       goal,
+    );
+    final protein = weeklyProteinSummary(
+      [for (final d in days) d.protein],
+      _targets?.proteinG,
     );
     // Bars + the goal reference line share one scale; include the goal so its
     // line stays on-chart even when no logged day reaches it.
@@ -1320,6 +1330,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 ),
                 if (summary.deltaPerDay != null)
                   _weekDeltaChip(theme, l10n, summary.deltaPerDay!),
+                if (protein.daysMetGoal != null) ...[
+                  const SizedBox(width: 6),
+                  _weekProteinChip(theme, l10n, protein),
+                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -1399,6 +1413,29 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ),
       child: Text(
         text,
+        style: theme.textTheme.labelSmall
+            ?.copyWith(color: fg, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _weekProteinChip(
+      ThemeData theme, AppLocalizations l10n, WeeklyProteinSummary p) {
+    final allMet = p.daysMetGoal == p.loggedDays;
+    final bg = allMet
+        ? theme.colorScheme.secondaryContainer
+        : theme.colorScheme.surfaceContainerHighest;
+    final fg = allMet
+        ? theme.colorScheme.onSecondaryContainer
+        : theme.colorScheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        l10n.nutritionWeekProtein(p.daysMetGoal!, p.loggedDays),
         style: theme.textTheme.labelSmall
             ?.copyWith(color: fg, fontWeight: FontWeight.w600),
       ),

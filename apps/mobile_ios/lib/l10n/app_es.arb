@@ -2592,6 +2592,7 @@
     }
   },
   "nutritionWeekOverGoal": "{n} sobre el objetivo/día",
+  "nutritionWeekProtein": "Proteína {met}/{total} días",
   "@nutritionWeekOverGoal": {
     "description": "Weekly trend chip: avg kcal over the daily goal",
     "placeholders": {

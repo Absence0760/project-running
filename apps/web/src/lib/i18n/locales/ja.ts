@@ -3610,6 +3610,7 @@ export const messages = {
 	"nutrition.weekUnderGoal": "目標より1日 {n} 少ない",
 	"nutrition.weekOverGoal": "目標より1日 {n} 多い",
 	"nutrition.weekOnGoal": "目標どおり",
+	"nutrition.weekProtein": "タンパク質 {met}/{total}日",
 	"nutrition.goalLine": "1日の目標",
 	"nutrition.logHeading": "食事を記録",
 	"nutrition.searchPlaceholder": "食品を検索…",
