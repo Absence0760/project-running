@@ -217,7 +217,7 @@ becomes an **action button**, not a tab.
   `Nutrition` tab is 7 slots. Collapsing the three *capture* entry points
   into one action button keeps the nav at five and groups them by the
   verb the user actually has in mind ("I want to log something").
-- **Tap `Log` →** a modality picker (on mobile the centre nav FAB fans these as a **speed-dial up above the button**, `widgets/log_speed_dial.dart`; the History Log FAB keeps a bottom sheet):
+- **Tap `Log` →** a modality picker (on mobile the centre nav FAB fans these as a **speed-dial of icon-only buttons in a shallow arc around the button** — one top-centre, one down-left, one down-right — `widgets/log_speed_dial.dart`; the History Log FAB keeps a bottom sheet):
 
 ```
         ┌─────────────────────────────────┐
