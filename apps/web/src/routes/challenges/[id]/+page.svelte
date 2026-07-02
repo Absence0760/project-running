@@ -173,6 +173,8 @@
 					metric={challenge.metric}
 					value={myRow?.value ?? challenge.my_value ?? 0}
 					goal={challenge.goal_value}
+					startsAt={challenge.starts_at}
+					endsAt={challenge.ends_at}
 				/>
 				{#if challenge.completed_at}
 					<span class="badge-earned">
