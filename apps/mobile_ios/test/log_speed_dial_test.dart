@@ -24,7 +24,7 @@ Widget _harness(void Function(BuildContext) onOpen) {
 
 void main() {
   group('showLogSpeedDial', () {
-    testWidgets('fans the three capture options and resolves the picked one',
+    testWidgets('fans the three icon-only actions and resolves the picked one',
         (tester) async {
       LogAction? result;
       await tester.pumpWidget(_harness((context) async {
@@ -33,15 +33,18 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Log run'), findsOneWidget);
-      expect(find.text('Log lift'), findsOneWidget);
-      expect(find.text('Log food'), findsOneWidget);
+      // Icon-only buttons — label lives on the Tooltip / Semantics, not as
+      // visible text.
+      expect(find.byTooltip('Log run'), findsOneWidget);
+      expect(find.byTooltip('Log lift'), findsOneWidget);
+      expect(find.byTooltip('Log food'), findsOneWidget);
+      expect(find.text('Log run'), findsNothing);
 
-      await tester.tap(find.text('Log lift'));
+      await tester.tap(find.byTooltip('Log lift'));
       await tester.pumpAndSettle();
       expect(result, LogAction.lift);
       // The overlay is torn down once a pick is made.
-      expect(find.text('Log lift'), findsNothing);
+      expect(find.byTooltip('Log lift'), findsNothing);
     });
 
     testWidgets('tapping the scrim dismisses and resolves null', (tester) async {
@@ -53,17 +56,17 @@ void main() {
       }));
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
-      expect(find.text('Log run'), findsOneWidget);
+      expect(find.byTooltip('Log run'), findsOneWidget);
 
       // Tap the top-left corner — the dismiss scrim, well clear of the fan.
       await tester.tapAt(const Offset(8, 8));
       await tester.pumpAndSettle();
       expect(resolved, isTrue);
       expect(result, isNull);
-      expect(find.text('Log run'), findsNothing);
+      expect(find.byTooltip('Log run'), findsNothing);
     });
 
-    testWidgets('recent capture type sits nearest the FAB (lowest in the fan)',
+    testWidgets('the recent action takes the top-centre slot (highest in the arc)',
         (tester) async {
       await tester.pumpWidget(_harness((context) {
         showLogSpeedDial(context: context, recent: LogAction.food);
@@ -71,11 +74,12 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      // The fan opens upward, so the recent action (food) is the bottom-most
-      // item — greater dy than run.
-      final foodTop = tester.getTopLeft(find.text('Log food')).dy;
-      final runTop = tester.getTopLeft(find.text('Log run')).dy;
-      expect(foodTop, greaterThan(runTop));
+      // The arc puts the recent action (food) at the top-centre, so it sits
+      // higher on screen (smaller dy) than the down-and-to-the-side run icon.
+      // Both icons are unique in this harness.
+      final foodTop = tester.getTopLeft(find.byIcon(Icons.restaurant)).dy;
+      final runTop = tester.getTopLeft(find.byIcon(Icons.directions_run)).dy;
+      expect(foodTop, lessThan(runTop));
     });
   });
 }

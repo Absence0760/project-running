@@ -167,9 +167,10 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('Log run'), findsOneWidget);
-      expect(find.text('Log lift'), findsOneWidget);
-      expect(find.text('Log food'), findsOneWidget);
+      // Icon-only fan — the label is on the Tooltip, not visible text.
+      expect(find.byTooltip('Log run'), findsOneWidget);
+      expect(find.byTooltip('Log lift'), findsOneWidget);
+      expect(find.byTooltip('Log food'), findsOneWidget);
     });
 
     testWidgets('keepRunPrimary: tapping the Log FAB starts a run, no menu',
@@ -180,8 +181,8 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump();
-      // No capture sheet — the tap jumped straight to the Run page.
-      expect(find.text('Log lift'), findsNothing);
+      // No fan — the tap jumped straight to the Run page.
+      expect(find.byTooltip('Log lift'), findsNothing);
     });
 
     testWidgets('picking Log lift lands on the Gym dwell-in page', (tester) async {
@@ -190,7 +191,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('Log lift'));
+      await tester.tap(find.byTooltip('Log lift'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       // Not a modal composer — the Log action navigates the PageView to the
@@ -207,7 +208,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('Log food'));
+      await tester.tap(find.byTooltip('Log food'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Nutrition'), findsOneWidget);
