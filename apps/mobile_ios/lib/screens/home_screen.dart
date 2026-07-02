@@ -19,6 +19,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../widgets/billing_issue_banner.dart';
 import '../widgets/log_sheet.dart';
+import '../widgets/log_speed_dial.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
 import 'fitness_hub_screen.dart';
@@ -340,25 +341,28 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.preferences.keepRunPrimary) {
       _performLogAction(LogAction.run);
     } else {
-      _openLogSheet();
+      _openLogMenu();
     }
   }
 
   /// Long-press on the centre Log button. In runner-primary mode this opens
-  /// the full sheet (so gym / nutrition stay reachable); otherwise it
+  /// the full menu (so gym / nutrition stay reachable); otherwise it
   /// repeats the last logged modality — preserving the one-gesture "start a
   /// run" muscle memory for a pure runner.
   void _onLogLongPress() {
     if (widget.preferences.keepRunPrimary) {
-      _openLogSheet();
+      _openLogMenu();
     } else {
       _performLogAction(
           logActionFromWire(widget.preferences.lastLogType) ?? LogAction.run);
     }
   }
 
-  Future<void> _openLogSheet() async {
-    final picked = await showLogSheet(
+  // The centre Log button fans the three capture actions up above itself
+  // (speed-dial) rather than opening a bottom sheet; the History Log FAB keeps
+  // the sheet.
+  Future<void> _openLogMenu() async {
+    final picked = await showLogSpeedDial(
       context: context,
       recent: logActionFromWire(widget.preferences.lastLogType),
     );

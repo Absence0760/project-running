@@ -160,7 +160,7 @@ void main() {
       expect(find.byType(PageView), findsOneWidget);
     });
 
-    testWidgets('tapping the Log FAB opens the capture sheet (default mode)',
+    testWidgets('tapping the Log FAB fans the capture speed-dial (default mode)',
         (tester) async {
       final s = await _makeStores();
       await _pump(tester, s);
@@ -172,7 +172,7 @@ void main() {
       expect(find.text('Log food'), findsOneWidget);
     });
 
-    testWidgets('keepRunPrimary: tapping the Log FAB starts a run, no sheet',
+    testWidgets('keepRunPrimary: tapping the Log FAB starts a run, no menu',
         (tester) async {
       final s = await _makeStores();
       await s.prefs.setKeepRunPrimary(true);
