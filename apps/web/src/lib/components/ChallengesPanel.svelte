@@ -72,6 +72,8 @@
 							metric={c.metric}
 							value={c.my_value ?? 0}
 							goal={c.goal_value}
+							startsAt={c.starts_at}
+							endsAt={c.ends_at}
 						/>
 					</a>
 				</li>

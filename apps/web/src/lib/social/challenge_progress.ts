@@ -129,3 +129,102 @@ function compareEntries(a: RankableEntry, b: RankableEntry): number {
 	const bk = b.user_id ?? b.team_club_id ?? '';
 	return ak < bk ? -1 : ak > bk ? 1 : 0;
 }
+
+const DAY_MS = 86_400_000;
+
+/** Tolerance band around the even-pace line inside which a runner counts as
+ * "on track" rather than ahead/behind — ±5 %. Shared with the Dart twin so the
+ * verdict is identical on both platforms. */
+export const ON_PACE_BAND = 0.05;
+
+export type ChallengePaceStatus = 'upcoming' | 'active' | 'ended';
+export type PaceVerdict = 'ahead' | 'on_track' | 'behind';
+
+/** Locale/unit-agnostic on-pace projection for a time-boxed goal challenge. The
+ * CALLER localises + unit-formats the numbers — this layer carries raw metric
+ * units + the verdict enum. Everything goal-derived is null on a goal-less
+ * (pure-ranking) board. */
+export interface ChallengePace {
+	status: ChallengePaceStatus;
+	/** Fraction of the challenge window elapsed at `nowMs`, clamped 0..1. */
+	elapsedFraction: number;
+	/** Whole days until the window closes (ceil), floored at 0. */
+	daysRemaining: number;
+	/** Where an even-paced runner would be at `nowMs` (goal × elapsedFraction). */
+	expectedValue: number | null;
+	/** Linear projection of the final value from the current rate
+	 * (value / elapsedFraction). Null before the window opens (no rate yet);
+	 * equals the frozen `value` once it has closed. */
+	projectedValue: number | null;
+	/** Metric units still needed to reach the goal (goal − value), floored at 0. */
+	remainingValue: number | null;
+	/** Metric units per day needed over the remaining window to still finish.
+	 * Null once complete, with no days left, or the window has closed. */
+	requiredPerDay: number | null;
+	/** ahead / on_track / behind vs the even-pace line, within `ON_PACE_BAND`.
+	 * Null outside the active window or once the goal is already met. */
+	verdict: PaceVerdict | null;
+}
+
+/** Project a joined runner's standing in a time-boxed goal challenge: where the
+ * even-pace line sits now, whether they're ahead/behind it, and the daily rate
+ * still needed to finish. All times are epoch ms so the helper stays pure and
+ * timezone-free (the caller parses the ISO window). Mirrors the SQL-fed value
+ * exactly — it only re-shapes the numbers the leaderboard already computed. */
+export function challengePace(
+	value: number,
+	goal: number | null,
+	startMs: number,
+	endMs: number,
+	nowMs: number,
+): ChallengePace {
+	const hasGoal = goal !== null && goal > 0;
+
+	let status: ChallengePaceStatus;
+	let elapsedFraction: number;
+	if (nowMs < startMs) {
+		status = 'upcoming';
+		elapsedFraction = 0;
+	} else if (nowMs >= endMs || endMs <= startMs) {
+		status = 'ended';
+		elapsedFraction = 1;
+	} else {
+		status = 'active';
+		elapsedFraction = (nowMs - startMs) / (endMs - startMs);
+	}
+
+	const daysRemaining = Math.max(0, Math.ceil((endMs - nowMs) / DAY_MS));
+	const expectedValue = hasGoal ? goal! * elapsedFraction : null;
+	const remainingValue = hasGoal ? Math.max(0, goal! - value) : null;
+
+	let projectedValue: number | null = null;
+	if (hasGoal && status === 'active' && elapsedFraction > 0) {
+		projectedValue = value / elapsedFraction;
+	} else if (hasGoal && status === 'ended') {
+		projectedValue = value;
+	}
+
+	let requiredPerDay: number | null = null;
+	if (hasGoal && status !== 'ended' && daysRemaining > 0 && remainingValue! > 0) {
+		requiredPerDay = remainingValue! / daysRemaining;
+	}
+
+	let verdict: PaceVerdict | null = null;
+	if (hasGoal && status === 'active' && value < goal! && expectedValue! > 0) {
+		const ratio = value / expectedValue!;
+		if (ratio >= 1 + ON_PACE_BAND) verdict = 'ahead';
+		else if (ratio < 1 - ON_PACE_BAND) verdict = 'behind';
+		else verdict = 'on_track';
+	}
+
+	return {
+		status,
+		elapsedFraction,
+		daysRemaining,
+		expectedValue,
+		projectedValue,
+		remainingValue,
+		requiredPerDay,
+		verdict,
+	};
+}

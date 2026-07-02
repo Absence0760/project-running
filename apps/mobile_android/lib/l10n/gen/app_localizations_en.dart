@@ -10130,6 +10130,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get challengesProgressComplete => 'Complete';
 
   @override
+  String get challengesPaceAhead => 'Ahead of pace';
+
+  @override
+  String get challengesPaceOnTrack => 'On pace to finish';
+
+  @override
+  String get challengesPaceBehind => 'Behind pace';
+
+  @override
+  String challengesPaceNeedPerDay(String rate) {
+    return '$rate per day to finish';
+  }
+
+  @override
   String challengesEndsIn(int n) {
     return 'Ends in $n days';
   }

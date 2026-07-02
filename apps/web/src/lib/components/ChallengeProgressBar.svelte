@@ -2,17 +2,37 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
 	import { formatDuration } from '$lib/format/time';
-	import { progressFraction, isComplete, type ChallengeMetric } from '$lib/social/challenge_progress';
+	import {
+		progressFraction,
+		isComplete,
+		challengePace,
+		type ChallengeMetric
+	} from '$lib/social/challenge_progress';
 
 	let {
 		metric,
 		value,
-		goal
-	}: { metric: ChallengeMetric; value: number; goal: number | null } = $props();
+		goal,
+		startsAt = null,
+		endsAt = null
+	}: {
+		metric: ChallengeMetric;
+		value: number;
+		goal: number | null;
+		startsAt?: string | null;
+		endsAt?: string | null;
+	} = $props();
 
 	const fraction = $derived(progressFraction(value, goal));
 	const complete = $derived(isComplete(value, goal));
 	const pct = $derived(fraction === null ? 0 : Math.round(fraction * 100));
+
+	const pace = $derived(
+		goal !== null && startsAt && endsAt && !complete
+			? challengePace(value, goal, new Date(startsAt).getTime(), new Date(endsAt).getTime(), Date.now())
+			: null
+	);
+	const showPace = $derived(pace !== null && pace.status === 'active' && pace.verdict !== null);
 
 	function fmt(v: number): string {
 		switch (metric) {
@@ -53,6 +73,22 @@
 			aria-valuemax="100"
 		>
 			<div class="fill" class:complete style="width: {pct}%"></div>
+		</div>
+	{/if}
+	{#if showPace && pace}
+		<div class="pace" class:behind={pace.verdict === 'behind'} class:ahead={pace.verdict === 'ahead'}>
+			<span class="verdict">
+				{#if pace.verdict === 'ahead'}
+					{m('challenges.paceAhead')}
+				{:else if pace.verdict === 'behind'}
+					{m('challenges.paceBehind')}
+				{:else}
+					{m('challenges.paceOnTrack')}
+				{/if}
+			</span>
+			{#if pace.verdict === 'behind' && pace.requiredPerDay !== null}
+				<span class="need">{m('challenges.paceNeedPerDay', { rate: fmt(pace.requiredPerDay) })}</span>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -100,6 +136,26 @@
 	}
 	.fill.complete {
 		background: var(--color-success);
+	}
+	.pace {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-sm);
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+	}
+	.pace .verdict {
+		font-weight: 600;
+		color: var(--color-primary);
+	}
+	.pace.ahead .verdict {
+		color: var(--color-success);
+	}
+	.pace.behind .verdict {
+		color: var(--color-warning);
+	}
+	.pace .need {
+		font-variant-numeric: tabular-nums;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.fill {

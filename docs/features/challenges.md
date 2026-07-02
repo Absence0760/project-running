@@ -6,6 +6,30 @@
 > - **`challenge_leaderboard` is SECURITY DEFINER, not invoker** (gated on `is_challenge_visible`). The "public runs readable by anyone" RLS policy on `runs` was retired (public access now flows through the `public_runs` view / `clip-public-track`), so a SECURITY INVOKER aggregate would see only the caller's own runs and zero every competitor. DEFINER + a visibility gate lets the board sum each opted-in participant's runs (incl. private ones — only the per-user SUM is exposed, never the rows, exactly like `event_results`). The completion RPC + sweep are likewise DEFINER and read base `runs` directly.
 > - **`vert` was added in a follow-on slice** (`20270302_001`, ADR §186): it first-classes total ascent as a real `runs.elevation_gain_m` column (backfilled from `metadata.elevation_m`), summed as `sum(coalesce(elevation_gain_m, 0))` and projected into `activities.summary` + `public_runs`. The metric set is now distance / duration / vert / activity_count / streak_days.
 
+## On-pace projection (2026-07-01)
+
+A joined, time-boxed **goal** challenge shows an on-pace hint alongside the
+progress bar so a runner knows whether they're on track, not just how far
+they've come. `challengePace(value, goal, startMs, endMs, nowMs)` (in the
+`challenge_progress` TS↔Dart pair) is a pure re-shape of the value the
+leaderboard already computed — **no new data, no extra query**: it derives the
+even-pace line (`goal × elapsedFraction`), an `ahead` / `on_track` / `behind`
+verdict within a shared `ON_PACE_BAND` (±5 %), a linear final-value projection,
+the metric still remaining, and the daily rate needed to finish. It returns
+`upcoming` / `active` / `ended` status and nulls every goal-derived field on a
+goal-less (pure-ranking) board.
+
+`ChallengeProgressBar.svelte` (web) takes optional `startsAt`/`endsAt` and
+renders the verdict — plus a `{rate} per day to finish` line when behind — only
+for an active, not-yet-complete goal challenge; it self-hides otherwise. Wired
+on the challenge detail page and the self-hiding `ChallengesPanel` dashboard/
+social strip. The mobile `challenge_detail_screen.dart` mirrors the hint under
+its progress bar. The verdict is unit/locale-agnostic in the helper; the UI
+formats the rate through the existing metric formatters. 22 mirror unit tests
+each side (`challenge_progress.test.ts` / `challenge_progress_test.dart`), a web
+Playwright `pace.spec.ts`, and a `challenge_detail_screen_test.dart` widget test
+pin it.
+
 ## Goal & user value
 
 Let runners join time-boxed **challenges** — "run 100 km in June", "20,000 m of vert this quarter", "run 20 days this month", "longest streak", "30 activities" — and watch a live leaderboard + personal progress bar fill as their logged activities accrue. Three social shapes: **individual** (everyone competes solo on one board), **club-vs-club** (each club's members pool a combined total, clubs ranked against each other), and **group-goal** (a club or ad-hoc cohort works toward one shared target — a co-op bar, not a ranking). It is the flagship engagement loop: it reuses the existing activity log, clubs, and follow graph rather than introducing a parallel data world, and it **self-hides entirely** when the user is in no challenge so non-joiners never see clutter. Completion fires a notification + records a durable badge.

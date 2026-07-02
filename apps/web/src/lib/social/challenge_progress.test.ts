@@ -6,7 +6,10 @@ import {
 	progressParts,
 	metricFromActivity,
 	rankParticipants,
+	challengePace,
 } from './challenge_progress';
+
+const DAY = 86_400_000;
 
 test('progressFraction clamps to 0..1', () => {
 	assert.equal(progressFraction(50, 100), 0.5);
@@ -103,4 +106,76 @@ test('rankParticipants falls back to team_club_id for team boards', () => {
 			['red', 1],
 		],
 	);
+});
+
+test('challengePace on_track at the even-pace line mid-window', () => {
+	const p = challengePace(50, 100, 0, 10 * DAY, 5 * DAY);
+	assert.equal(p.status, 'active');
+	assert.equal(p.elapsedFraction, 0.5);
+	assert.equal(p.expectedValue, 50);
+	assert.equal(p.projectedValue, 100);
+	assert.equal(p.remainingValue, 50);
+	assert.equal(p.daysRemaining, 5);
+	assert.equal(p.requiredPerDay, 10);
+	assert.equal(p.verdict, 'on_track');
+});
+
+test('challengePace behind flags the daily rate needed to finish', () => {
+	const p = challengePace(30, 100, 0, 10 * DAY, 5 * DAY);
+	assert.equal(p.verdict, 'behind');
+	assert.equal(p.projectedValue, 60);
+	assert.equal(p.remainingValue, 70);
+	assert.equal(p.requiredPerDay, 14);
+});
+
+test('challengePace ahead when past the even-pace line', () => {
+	const p = challengePace(70, 100, 0, 10 * DAY, 5 * DAY);
+	assert.equal(p.verdict, 'ahead');
+	assert.equal(p.projectedValue, 140);
+	assert.equal(p.requiredPerDay, 6);
+});
+
+test('challengePace goal-less board nulls every goal-derived field', () => {
+	const p = challengePace(50, null, 0, 10 * DAY, 5 * DAY);
+	assert.equal(p.status, 'active');
+	assert.equal(p.elapsedFraction, 0.5);
+	assert.equal(p.daysRemaining, 5);
+	assert.equal(p.expectedValue, null);
+	assert.equal(p.projectedValue, null);
+	assert.equal(p.remainingValue, null);
+	assert.equal(p.requiredPerDay, null);
+	assert.equal(p.verdict, null);
+});
+
+test('challengePace upcoming has no projection or verdict yet', () => {
+	const p = challengePace(0, 100, 2 * DAY, 12 * DAY, 0);
+	assert.equal(p.status, 'upcoming');
+	assert.equal(p.elapsedFraction, 0);
+	assert.equal(p.projectedValue, null);
+	assert.equal(p.verdict, null);
+	assert.equal(p.daysRemaining, 12);
+});
+
+test('challengePace ended freezes projection to the final value', () => {
+	const p = challengePace(80, 100, 0, 10 * DAY, 11 * DAY);
+	assert.equal(p.status, 'ended');
+	assert.equal(p.elapsedFraction, 1);
+	assert.equal(p.projectedValue, 80);
+	assert.equal(p.remainingValue, 20);
+	assert.equal(p.requiredPerDay, null);
+	assert.equal(p.verdict, null);
+	assert.equal(p.daysRemaining, 0);
+});
+
+test('challengePace complete drops the verdict + required rate', () => {
+	const p = challengePace(120, 100, 0, 10 * DAY, 5 * DAY);
+	assert.equal(p.verdict, null);
+	assert.equal(p.remainingValue, 0);
+	assert.equal(p.requiredPerDay, null);
+});
+
+test('challengePace daysRemaining ceils a partial day', () => {
+	const p = challengePace(40, 100, 0, 10 * DAY, 5.5 * DAY);
+	assert.equal(p.daysRemaining, 5);
+	assert.equal(p.requiredPerDay, 12);
 });
