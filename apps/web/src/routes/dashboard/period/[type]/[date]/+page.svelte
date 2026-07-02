@@ -5,6 +5,7 @@
 	import { fetchRuns } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatISO } from '$lib/training/training';
+	import { m } from '$lib/i18n/store.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import type { Run } from '$lib/types';
 
@@ -27,12 +28,18 @@
 	// the template free of that trigger.
 	let kicker = $derived(
 		type === 'week'
-			? 'Weekly summary'
+			? m('period.kickerWeek')
 			: type === 'month'
-				? 'Monthly summary'
-				: 'All-time summary',
+				? m('period.kickerMonth')
+				: m('period.kickerAll'),
 	);
-	let periodWord = $derived(type === 'week' ? 'week' : type === 'month' ? 'month' : 'period');
+	let tagline = $derived(
+		type === 'week'
+			? m('period.taglineWeek')
+			: type === 'month'
+				? m('period.taglineMonth')
+				: m('period.taglineAll'),
+	);
 
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
@@ -74,17 +81,13 @@
 <div class="page">
 	<a class="back" href="/dashboard" onclick={handleBack}>
 		<span class="material-symbols" aria-hidden="true">arrow_back</span>
-		Back to dashboard
+		{m('period.back')}
 	</a>
 
 	<header class="page-header">
 		<span class="kicker">{kicker}</span>
-		<h1>Period summary</h1>
-		<p class="tagline">
-			Mileage, time, pace, and a chronological run list for the
-			{periodWord} you picked. Use the toggle below to switch view — the URL updates so you can
-			share or bookmark.
-		</p>
+		<h1>{m('period.heading')}</h1>
+		<p class="tagline">{tagline}</p>
 	</header>
 
 	{#if loading}
@@ -97,7 +100,7 @@
 			<span class="skel skel-block"></span>
 			<span class="skel skel-block"></span>
 		</div>
-		<p class="sr-only" role="status">Loading runs…</p>
+		<p class="sr-only" role="status">{m('period.loading')}</p>
 	{:else}
 		<PeriodSummary
 			{runs}

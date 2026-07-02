@@ -1392,18 +1392,22 @@
 					<button class:active={mileageView === 'yearly'} onclick={() => (mileageView = 'yearly')}>{m('dash.viewYear')}</button>
 				</div>
 			</div>
-			<div class="chart">
-				{#each mileageData as week}
-					<div class="bar-col">
-						<div class="bar-tooltip">{formatDistance(week.distance_m)}</div>
-						<div
-							class="bar"
-							style="height: {(week.distance_m / maxBar) * 100}%"
-						></div>
-						<span class="bar-label">{week.week.split(' ')[0]}</span>
-					</div>
-				{/each}
-			</div>
+			{#if mileageData.length === 0}
+				<p class="empty-text">{m('dash.mileageEmpty')}</p>
+			{:else}
+				<div class="chart">
+					{#each mileageData as week}
+						<div class="bar-col">
+							<div class="bar-tooltip">{formatDistance(week.distance_m)}</div>
+							<div
+								class="bar"
+								style="height: {(week.distance_m / maxBar) * 100}%"
+							></div>
+							<span class="bar-label">{week.week.split(' ')[0]}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</section>
 
 		<!-- Training intensity — time in HR zones over the last 30/365 days
@@ -1415,6 +1419,7 @@
 		     failure leaves the card in its empty state and never blocks
 		     the rest of the dashboard. Per-point analysis from the
 		     gzipped track is the eventual accuracy upgrade. -->
+		{#if runs.length > 0}
 		<section class="card-elevated intensity-card">
 			<div class="card-head">
 				<h2>{m('dash.trainingIntensityTitle')}</h2>
@@ -1473,6 +1478,7 @@
 				</p>
 			{/if}
 		</section>
+		{/if}
 
 		<div class="two-col">
 			<!-- Personal records -->

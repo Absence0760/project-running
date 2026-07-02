@@ -368,19 +368,26 @@
 	}
 
 	let suggestions = $derived(
-		hasPlan
+		contextSummary?.runCount === 0
 			? [
-					t('coachChat.suggestPlanRestDay'),
-					t('coachChat.suggestPlanGoalTime'),
-					t('coachChat.suggestPlanLongRun'),
-					t('coachChat.suggestPlanTodayWorkout')
+					t('coachChat.suggestNewFirstRun'),
+					t('coachChat.suggestNewFirstFeel'),
+					t('coachChat.suggestNewHowOften'),
+					t('coachChat.suggestNewWalkRun')
 				]
-			: [
-					t('coachChat.suggestNoPlanLastRun'),
-					t('coachChat.suggestNoPlanEasyPace'),
-					t('coachChat.suggestNoPlanWeekOff'),
-					t('coachChat.suggestNoPlanTempo')
-				]
+			: hasPlan
+				? [
+						t('coachChat.suggestPlanRestDay'),
+						t('coachChat.suggestPlanGoalTime'),
+						t('coachChat.suggestPlanLongRun'),
+						t('coachChat.suggestPlanTodayWorkout')
+					]
+				: [
+						t('coachChat.suggestNoPlanLastRun'),
+						t('coachChat.suggestNoPlanEasyPace'),
+						t('coachChat.suggestNoPlanWeekOff'),
+						t('coachChat.suggestNoPlanTempo')
+					]
 	);
 
 	// Markdown rendering hoisted to $lib/coach/markdown so the DOMPurify

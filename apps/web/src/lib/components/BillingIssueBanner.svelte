@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m, currentLocale } from '$lib/i18n/store.svelte';
+	import { formatRelativeTime } from '$lib/format/time';
 
 	/// Persistent top-of-app banner that surfaces a recent
 	/// `BILLING_ISSUE` event from RevenueCat — a renewal payment failed
@@ -17,28 +19,18 @@
 	const since = $derived(auth.user?.billing_issue_at ?? null);
 	const isProTier = $derived(auth.isPro);
 	const visible = $derived(!!since && isProTier);
-
-	function relativeDays(iso: string): string {
-		const diffMs = Date.now() - new Date(iso).getTime();
-		const days = Math.max(0, Math.floor(diffMs / 86400000));
-		if (days === 0) return 'today';
-		if (days === 1) return 'yesterday';
-		return `${days} days ago`;
-	}
+	const when = $derived(since ? formatRelativeTime(since, Date.now(), currentLocale()) : '');
 </script>
 
 {#if visible && since}
 	<div class="banner" role="alert" data-testid="billing-issue-banner">
 		<span class="material-symbols">credit_card_off</span>
 		<div class="msg">
-			<strong>Your Pro renewal payment failed {relativeDays(since)}.</strong>
-			<span class="sub">
-				Update your card before your grace period ends or you'll be
-				downgraded to Free.
-			</span>
+			<strong>{m('billingIssue.headline', { when })}</strong>
+			<span class="sub">{m('billingIssue.body')}</span>
 		</div>
 		<button class="cta" onclick={() => goto('/settings/upgrade')}>
-			Manage subscription
+			{m('billingIssue.manage')}
 		</button>
 	</div>
 {/if}

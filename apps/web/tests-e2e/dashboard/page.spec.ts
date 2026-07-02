@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -488,6 +489,56 @@ test.describe('/dashboard', () => {
 			expect(box!.height).toBeGreaterThanOrEqual(44);
 		} finally {
 			if (runId) await deleteRun(runId);
+		}
+	});
+});
+
+/**
+ * Zero-data new runner — Day One after signup, no runs logged.
+ *
+ * A brand-new saga user (no runs, no HR zones) should NOT be greeted
+ * with the Training-intensity card's HR-zone jargon (new-runner #1 —
+ * gate matches the sibling analytics cards), and the Mileage card
+ * should show a worded empty-state hint rather than a header over
+ * blank space (new-runner #3).
+ */
+test.describe('/dashboard — zero-data new runner', () => {
+	let users: SagaUser[] = [];
+	let newRunner: SagaUser;
+
+	test.beforeAll(async () => {
+		users = await createSagaUsers(1, { displayNames: ['Saga New Runner'] });
+		newRunner = users[0];
+	});
+
+	test.afterAll(async () => {
+		if (users.length > 0) await deleteSagaUsers(users);
+	});
+
+	test('hides the intensity card + shows the mileage empty-state hint for a runless account', async ({
+		browser
+	}) => {
+		const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777';
+		const ctx = await browser.newContext({
+			baseURL,
+			storageState: newRunner.storageStatePath
+		});
+		const page = await ctx.newPage();
+		try {
+			await page.goto('/dashboard');
+
+			// Mileage card renders a worded hint, not an empty chart area.
+			await expect(
+				page.getByText('Log your first run to see your weekly mileage here.')
+			).toBeVisible({ timeout: 10_000 });
+
+			// The Training-intensity card self-hides with zero runs, so the
+			// z1–z5 HR-zone empty state never reaches a Day-One runner.
+			await expect(
+				page.getByRole('heading', { level: 2, name: /Training intensity/ })
+			).toHaveCount(0);
+		} finally {
+			await ctx.close();
 		}
 	});
 });

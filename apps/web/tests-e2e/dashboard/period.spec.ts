@@ -68,4 +68,21 @@ test.describe('/dashboard/period/[type]/[date]', () => {
 			page.getByRole('button', { name: 'Week' })
 		).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('page chrome is localised (kicker + heading + back link render, not raw keys)', async ({
+		page
+	}) => {
+		// The page was fully hardcoded English; it now resolves every
+		// string through m(). A missing/broken key renders the raw dotted
+		// key ("period.heading") instead of the copy — pin the resolved
+		// text so that regression is caught (default locale = en).
+		await page.goto('/dashboard/period/week/2026-04-01');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Period summary' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText('Weekly summary')).toBeVisible();
+		await expect(
+			page.getByRole('link', { name: /Back to dashboard/ })
+		).toBeVisible();
+	});
 });
