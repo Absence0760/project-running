@@ -228,6 +228,89 @@ resource "aws_cloudwatch_metric_alarm" "coach_bypass_paywall" {
   tags                = var.tags
 }
 
+# The four share-card Lambdas (share-run/route/recap/badge) are homogeneous —
+# 512 MB, 15 s timeout, SVG→PNG render with a graceful branded-fallback card at
+# HTTP 200 — so one error-rate + one p95 alarm each, generated with for_each and
+# routed to the same SNS topic. A throttle alarm is lower-value here (reserved-
+# concurrency-capped, buffered read surface) so it's omitted; the error-rate
+# alarm is the signal that was missing — an erroring share Lambda otherwise
+# breaks social unfurls with nobody paged. /audit/infra N1 2026-07-02.
+locals {
+  share_lambdas = {
+    run   = aws_lambda_function.share_run.function_name
+    route = aws_lambda_function.share_route.function_name
+    recap = aws_lambda_function.share_recap.function_name
+    badge = aws_lambda_function.share_badge.function_name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "share_lambda_errors" {
+  for_each            = local.share_lambdas
+  alarm_name          = "${local.resource_prefix}-share-${each.key}-lambda-errors"
+  alarm_description   = "Share-${each.key} Lambda 4xx/5xx error rate over 2% across two consecutive 5-min windows (10 min sustained). Social unfurl cards are failing."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 2
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  metric_query {
+    id          = "errors_pct"
+    expression  = "(errors / invocations) * 100"
+    label       = "Error rate (%)"
+    return_data = true
+  }
+
+  metric_query {
+    id = "errors"
+    metric {
+      namespace   = "AWS/Lambda"
+      metric_name = "Errors"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = each.value
+      }
+    }
+  }
+
+  metric_query {
+    id = "invocations"
+    metric {
+      namespace   = "AWS/Lambda"
+      metric_name = "Invocations"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = each.value
+      }
+    }
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "share_lambda_p95_duration" {
+  for_each            = local.share_lambdas
+  alarm_name          = "${local.resource_prefix}-share-${each.key}-lambda-p95"
+  alarm_description   = "Share-${each.key} Lambda p95 duration >12 s across two consecutive 5-min windows (approaching the 15 s timeout). Usually a slow Supabase read or resvg render pressure on the 512 MB budget."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 12000
+  treat_missing_data  = "notBreaching"
+  metric_name         = "Duration"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  extended_statistic  = "p95"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  dimensions = {
+    FunctionName = each.value
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   alarm_name        = "${local.resource_prefix}-coach-lambda-throttles"
   alarm_description = "Coach Lambda throttled (≥${var.lambda_throttle_alarm_threshold} throttles across two 5-min windows). Concurrent execution cap is being hit."
