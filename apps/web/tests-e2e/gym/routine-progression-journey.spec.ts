@@ -213,8 +213,15 @@ test.describe('gym routine + progression-signal journey — log → save-as-rout
 					await expect(
 						page.locator('.session-row', { hasText: '110 kg × 5' }),
 					).toBeVisible();
-					// Both sessions beat the running best at their time → two PR badges.
-					await expect(page.locator('.session-row .pr-badge')).toHaveCount(2);
+					// Both sessions raised the heaviest weight (100 then 110) AND the est.
+					// 1RM, so each carries a Heaviest + a Best-est.-1RM PR badge → four total.
+					await expect(page.locator('.session-row .pr-badge')).toHaveCount(4);
+					await expect(
+						page.locator('.session-row .pr-badge', { hasText: 'Heaviest' }),
+					).toHaveCount(2);
+					await expect(
+						page.locator('.session-row .pr-badge', { hasText: 'Best est. 1RM' }),
+					).toHaveCount(2);
 					// The headline est.-1RM delta is in the UP direction (latest e1RM
 					// from 110 > first from 100), rendered via gym.exercise.sinceFirstUp.
 					const delta = page.locator('.head .delta.delta-up');
@@ -248,11 +255,18 @@ test.describe('gym routine + progression-signal journey — log → save-as-rout
 					await expect(lastTime.locator('.lt-text')).toContainText('110 kg × 5');
 					await expect(lastTime.locator('.lt-delta.lt-up')).toContainText('10');
 
-					// The progression page now lists three sessions, three PR badges,
-					// headline still up.
+					// The progression page now lists three sessions; each raised both the
+					// heaviest weight and the est. 1RM → a Heaviest + a Best-est.-1RM badge
+					// per session, six total. Headline still up.
 					await page.goto(`/gym/exercise?name=${encodeURIComponent(exercise)}`);
 					await expect(page.locator('.session-row')).toHaveCount(3);
-					await expect(page.locator('.session-row .pr-badge')).toHaveCount(3);
+					await expect(page.locator('.session-row .pr-badge')).toHaveCount(6);
+					await expect(
+						page.locator('.session-row .pr-badge', { hasText: 'Heaviest' }),
+					).toHaveCount(3);
+					await expect(
+						page.locator('.session-row .pr-badge', { hasText: 'Best est. 1RM' }),
+					).toHaveCount(3);
 					await expect(
 						page.locator('.session-row', { hasText: '120 kg × 5' }),
 					).toBeVisible();

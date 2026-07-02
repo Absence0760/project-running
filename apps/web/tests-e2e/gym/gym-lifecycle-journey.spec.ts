@@ -176,9 +176,16 @@ test.describe('gym lifecycle journey — log → PR → records → save-as-rout
 				await expect(rows).toHaveCount(2);
 				// The heavier session's top-set line.
 				await expect(page.locator('.session-row', { hasText: '110 kg × 5' })).toBeVisible();
-				// Both sessions beat the running best at their time, so both carry
-				// an est.-1RM PR badge (first-ever 100, then the new-best 110).
-				await expect(page.locator('.session-row .pr-badge')).toHaveCount(2);
+				// Both sessions raised the heaviest weight (100 then 110) AND the est.
+				// 1RM, so each carries a Heaviest + a Best-est.-1RM PR badge — four total
+				// (the gym exercise-history weight-PR badges feature).
+				await expect(page.locator('.session-row .pr-badge')).toHaveCount(4);
+				await expect(
+					page.locator('.session-row .pr-badge', { hasText: 'Heaviest' }),
+				).toHaveCount(2);
+				await expect(
+					page.locator('.session-row .pr-badge', { hasText: 'Best est. 1RM' }),
+				).toHaveCount(2);
 			});
 		} finally {
 			// ── 8. Tear down everything we created ───────────────────────────
