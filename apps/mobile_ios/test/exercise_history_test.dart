@@ -62,6 +62,28 @@ void main() {
     expect(p!.sessions.map((x) => x.isEst1RmPr).toList(), [true, false, true]);
   });
 
+  test('marks a heaviest-weight PR independent of the e1RM PR', () {
+    final p = exerciseProgress(
+      [
+        s(workoutId: 'w1', startedAt: '2026-06-01T08:00:00Z', reps: 5, weightKg: 100), // weight 100, e1rm 116.7
+        s(workoutId: 'w2', startedAt: '2026-06-05T08:00:00Z', reps: 1, weightKg: 105), // weight 105 PR, e1rm 105 — NOT an e1rm PR
+      ],
+      'Bench Press',
+    );
+    expect(p, isNotNull);
+    // The heavy single sets a new heaviest-weight PR both sessions (100 then 105)…
+    expect(p!.sessions.map((x) => x.isWeightPr).toList(), [true, true]);
+    // …but only the first session set an e1RM PR (105 < 116.7).
+    expect(p.sessions.map((x) => x.isEst1RmPr).toList(), [true, false]);
+  });
+
+  test('a weighted session with no reps still sets a heaviest-weight PR', () {
+    final p = exerciseProgress([s(exerciseName: 'Carry', reps: null, weightKg: 50)], 'Carry');
+    expect(p, isNotNull);
+    expect(p!.sessions[0].isWeightPr, true);
+    expect(p.sessions[0].isEst1RmPr, false);
+  });
+
   test('headline est-1RM delta is latest minus first across sessions with an e1rm', () {
     final p = exerciseProgress(
       [

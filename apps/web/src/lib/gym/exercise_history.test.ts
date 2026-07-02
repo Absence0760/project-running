@@ -59,6 +59,34 @@ test('marks the session that set a new estimated-1RM PR', () => {
 	);
 });
 
+test('marks a heaviest-weight PR independent of the e1RM PR', () => {
+	const p = exerciseProgress(
+		[
+			s({ workout_id: 'w1', started_at: '2026-06-01T08:00:00Z', reps: 5, weight_kg: 100 }), // weight 100, e1rm 116.7
+			s({ workout_id: 'w2', started_at: '2026-06-05T08:00:00Z', reps: 1, weight_kg: 105 }), // weight 105 PR, e1rm 105 — NOT an e1rm PR
+		],
+		'Bench Press',
+	);
+	assert.ok(p);
+	// The heavy single sets a new heaviest-weight PR both sessions (100 then 105)…
+	assert.deepEqual(
+		p.sessions.map((x) => x.isWeightPr),
+		[true, true],
+	);
+	// …but only the first session set an e1RM PR (105 < 116.7).
+	assert.deepEqual(
+		p.sessions.map((x) => x.isEst1RmPr),
+		[true, false],
+	);
+});
+
+test('a weighted session with no reps still sets a heaviest-weight PR', () => {
+	const p = exerciseProgress([s({ exercise_name: 'Carry', reps: null, weight_kg: 50 })], 'Carry');
+	assert.ok(p);
+	assert.equal(p.sessions[0].isWeightPr, true);
+	assert.equal(p.sessions[0].isEst1RmPr, false);
+});
+
 test('headline est-1RM delta is latest minus first across sessions with an e1rm', () => {
 	const p = exerciseProgress(
 		[

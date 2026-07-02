@@ -43,6 +43,13 @@ class ExerciseSession {
   /// Weighted sets of this exercise logged in the session.
   final int setCount;
 
+  /// True when this session's heaviest set strictly beat every earlier
+  /// session's — a new heaviest-weight PR at the time. Judged on the same
+  /// single-set metric the records surface calls "Heaviest", so the badges
+  /// agree. Distinct from an e1RM PR: a heavier single at low reps can beat
+  /// the weight best without beating a prior high-rep e1RM.
+  final bool isWeightPr;
+
   /// True when this session's best e1RM strictly beat every earlier session's
   /// — i.e. it set a new estimated-1RM PR at the time.
   final bool isEst1RmPr;
@@ -55,6 +62,7 @@ class ExerciseSession {
     required this.bestEst1RmKg,
     required this.volumeKg,
     required this.setCount,
+    required this.isWeightPr,
     required this.isEst1RmPr,
   });
 }
@@ -142,11 +150,16 @@ ExerciseProgress? exerciseProgress(List<DatedGymSet> sets, String exerciseName) 
       return a.workoutId.compareTo(b.workoutId);
     });
 
-  var runningBest = double.negativeInfinity;
+  var runningBestE1rm = double.negativeInfinity;
+  var runningBestWeight = double.negativeInfinity;
   final sessions = ordered.map((g) {
     final e1rm = g.bestEst1RmKg;
-    final isPr = e1rm != null && e1rm > runningBest;
-    if (e1rm != null && e1rm > runningBest) runningBest = e1rm;
+    final isEst1RmPr = e1rm != null && e1rm > runningBestE1rm;
+    if (isEst1RmPr) runningBestE1rm = e1rm;
+    // A qualifying session always has a positive topWeightKg, so the first
+    // one clears -Infinity — the "no prior best ⇒ PR" rule workoutPrs uses.
+    final isWeightPr = g.topWeightKg > runningBestWeight;
+    if (isWeightPr) runningBestWeight = g.topWeightKg;
     return ExerciseSession(
       workoutId: g.workoutId,
       startedAt: g.startedAt,
@@ -155,7 +168,8 @@ ExerciseProgress? exerciseProgress(List<DatedGymSet> sets, String exerciseName) 
       bestEst1RmKg: e1rm == null ? null : _round1(e1rm),
       volumeKg: g.volumeKg.roundToDouble(),
       setCount: g.setCount,
-      isEst1RmPr: isPr,
+      isWeightPr: isWeightPr,
+      isEst1RmPr: isEst1RmPr,
     );
   }).toList();
 

@@ -60,11 +60,15 @@ test.describe('/gym/exercise — per-exercise progression', () => {
 			// Both sessions present; the heaviest set line is shown.
 			const rows = page.locator('.session-row');
 			await expect(rows).toHaveCount(2);
-			await expect(page.locator('.session-row', { hasText: '110 kg × 5' })).toBeVisible();
+			const heavier = page.locator('.session-row', { hasText: '110 kg × 5' });
+			await expect(heavier).toBeVisible();
 
-			// Exactly the PR sessions carry a badge: first-ever session (100) and
-			// the new-best session (110) — both beat the running best at the time.
-			await expect(page.locator('.session-row .pr-badge')).toHaveCount(2);
+			// Both sessions raised the heaviest weight (100 then 110) AND the est.
+			// 1RM, so each carries a Heaviest + a Best-est.-1RM PR badge — the same
+			// per-kind vocabulary as /gym/records + /gym/[id]. Four badges total.
+			await expect(page.locator('.session-row .pr-badge')).toHaveCount(4);
+			await expect(heavier.locator('.pr-badge', { hasText: 'Heaviest' })).toBeVisible();
+			await expect(heavier.locator('.pr-badge', { hasText: 'Best est. 1RM' })).toBeVisible();
 
 			// A session row links back to its workout.
 			await expect(rows.first().locator('a.row-link')).toHaveAttribute(
