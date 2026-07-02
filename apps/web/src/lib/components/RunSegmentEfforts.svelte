@@ -3,7 +3,7 @@
 	import { formatDuration } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
 	import {
-		fetchEffortsForRun,
+		fetchEffortsForRunWithError,
 		computeSegmentEffortsForRun,
 		fetchRoutesIntersectingTrack,
 		type SegmentEffortWithSegment,
@@ -39,9 +39,11 @@
 
 	let efforts = $state<SegmentEffortWithSegment[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 
 	async function load() {
 		loading = true;
+		loadError = null;
 		// Auto-effort generation per §37 v1: when the run owner views
 		// the detail page, we walk the track against any segments on
 		// the parent route and INSERT new efforts. The unique
@@ -71,8 +73,18 @@
 				console.warn('segment effort compute failed', e);
 			}
 		}
-		efforts = await fetchEffortsForRun(runId);
-		loading = false;
+		try {
+			const res = await fetchEffortsForRunWithError(runId);
+			if (res.error) {
+				loadError = res.error;
+				return;
+			}
+			efforts = res.efforts;
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(load);
@@ -96,6 +108,15 @@
 
 {#if loading}
 	<p class="muted">{m('segmentEfforts.checking')}</p>
+{:else if loadError}
+	<div class="error-banner" role="alert">
+		<span class="material-symbols" aria-hidden="true">error</span>
+		<div>
+			<strong>{m('runs.loadFailed')}</strong>
+			<span class="error-detail">{loadError}</span>
+		</div>
+		<button class="btn btn-outline btn-sm" onclick={load}>{m('runs.retry')}</button>
+	</div>
 {:else if efforts.length > 0}
 	<ul class="efforts">
 		{#each efforts as e (e.effort.id)}
@@ -131,6 +152,30 @@
 	}
 	.muted.small {
 		font-size: 0.78rem;
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.3rem;
 	}
 	.efforts {
 		list-style: none;

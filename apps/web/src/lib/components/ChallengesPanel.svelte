@@ -28,21 +28,38 @@
 
 	// Self-hiding entry point: renders nothing when the caller is in no live
 	// challenge, so non-joiners never see clutter. Mounted on /dashboard + the
-	// /social Challenges tab.
+	// /social Challenges tab. A load *failure* is kept distinct from the
+	// not-joined state (`loadError`) so a broken fetch surfaces instead of
+	// silently masquerading as "you're in no challenges".
 	let challenges = $state<ChallengeWithMeta[] | null>(null);
+	let loadError = $state<string | null>(null);
+
+	async function load() {
+		loadError = null;
+		try {
+			challenges = await myActiveChallenges();
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		}
+	}
 
 	$effect(() => {
-		myActiveChallenges()
-			.then((rows) => {
-				challenges = rows;
-			})
-			.catch(() => {
-				challenges = [];
-			});
+		void load();
 	});
 </script>
 
-{#if challenges && challenges.length > 0}
+{#if loadError}
+	<section class="challenges-strip card-elevated" aria-label={m('challenges.myChallenges')}>
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('challenges.loadFailed')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline btn-sm" onclick={load}>{m('plansPage.retry')}</button>
+		</div>
+	</section>
+{:else if challenges && challenges.length > 0}
 	<section class="challenges-strip card-elevated" aria-label={m('challenges.myChallenges')}>
 		<header>
 			<span class="head-ident">
@@ -88,6 +105,26 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-md);
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 	header {
 		display: flex;

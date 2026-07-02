@@ -470,8 +470,19 @@ test.describe('/settings/gear — wear log', () => {
 				)
 				.toEqual([{ note, area: 'outsole' }]);
 
-			// Delete it — row leaves the list, DB row gone.
+			// Delete it — now gated by a ConfirmDialog (matching the gear +
+			// rotation deletes on this page). The delete icon only OPENS the
+			// confirm; the row must survive until the user confirms.
 			await item.getByRole('button', { name: 'Delete observation' }).click();
+			// The confirm dialog (scoped by its .confirm-body) is the only new
+			// surface — its "Delete" confirm button appears.
+			const wearConfirm = page
+				.locator('.confirm-body')
+				.getByRole('button', { name: 'Delete', exact: true });
+			await expect(wearConfirm).toBeVisible({ timeout: 5_000 });
+			// Still present — a mere tap didn't destroy the observation.
+			await expect(wearLog.locator('.wear-item', { hasText: note })).toHaveCount(1);
+			await wearConfirm.click();
 			await expect(wearLog.locator('.wear-item', { hasText: note })).toHaveCount(0, {
 				timeout: 5_000
 			});

@@ -4,10 +4,10 @@
 	import { formatRelativeTime } from '$lib/format/time';
 	import { currentLocale, m as t } from '$lib/i18n/store.svelte';
 	import {
-		fetchKudosForRun,
+		fetchKudosForRunWithError,
 		giveKudos,
 		rescindKudos,
-		fetchRunComments,
+		fetchRunCommentsWithError,
 		postRunComment,
 		deleteRunComment,
 		type RunKudosSummary,
@@ -31,6 +31,7 @@
 	let kudos = $state<RunKudosSummary>({ count: 0, viewer_has_kudos: false });
 	let comments = $state<RunCommentWithAuthor[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let kudosBusy = $state(false);
 	let draftBody = $state('');
 	let posting = $state(false);
@@ -41,10 +42,23 @@
 
 	async function load() {
 		loading = true;
-		const [k, c] = await Promise.all([fetchKudosForRun(runId), fetchRunComments(runId)]);
-		kudos = k;
-		comments = c;
-		loading = false;
+		loadError = null;
+		try {
+			const [k, c] = await Promise.all([
+				fetchKudosForRunWithError(runId),
+				fetchRunCommentsWithError(runId),
+			]);
+			if (k.error || c.error) {
+				loadError = k.error ?? c.error;
+				return;
+			}
+			kudos = k.kudos;
+			comments = c.comments;
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(load);
@@ -164,6 +178,16 @@
 	</div>
 
 	{#if !loading}
+		{#if loadError}
+			<div class="error-banner" role="alert">
+				<span class="material-symbols" aria-hidden="true">error</span>
+				<div>
+					<strong>{t('runs.loadFailed')}</strong>
+					<span class="error-detail">{loadError}</span>
+				</div>
+				<button class="btn btn-outline btn-sm" onclick={load}>{t('runs.retry')}</button>
+			</div>
+		{:else}
 		<div class="comments">
 			{#each topLevel as comment (comment.id)}
 				<article class="comment">
@@ -274,6 +298,7 @@
 				</article>
 			{/each}
 		</div>
+		{/if}
 
 		{#if auth.loggedIn}
 			<form class="composer" onsubmit={(e) => { e.preventDefault(); submitComment(); }}>
@@ -525,5 +550,30 @@
 
 	.muted a {
 		color: var(--color-primary);
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.3rem;
 	}
 </style>

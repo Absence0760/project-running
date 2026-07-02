@@ -53,6 +53,10 @@
 	let wearNote = $state('');
 	let wearArea = $state<GearWearArea | ''>('');
 	let addingWear = $state(false);
+	// Gate the wear-log delete behind a confirm like the gear + rotation
+	// deletes on this page — a stray tap must not silently lose an
+	// observation.
+	let confirmingWearDelete = $state<GearWearLog | null>(null);
 
 	const WEAR_AREAS: GearWearArea[] = ['outsole', 'midsole', 'upper', 'other'];
 	function wearAreaLabel(area: GearWearArea): string {
@@ -93,7 +97,10 @@
 		}
 	}
 
-	async function handleDeleteWear(log: GearWearLog) {
+	async function handleDeleteWear() {
+		const log = confirmingWearDelete;
+		if (!log) return;
+		confirmingWearDelete = null;
 		try {
 			await deleteGearWearLog(log.id);
 			wearLogs = wearLogs.filter((l) => l.id !== log.id);
@@ -767,7 +774,7 @@
 									type="button"
 									class="wear-del"
 									aria-label={t('settingsGear.wearLogDelete')}
-									onclick={() => handleDeleteWear(log)}
+									onclick={() => (confirmingWearDelete = log)}
 								>
 									<span class="material-symbols" aria-hidden="true">close</span>
 								</button>
@@ -799,6 +806,16 @@
 	danger={true}
 	onconfirm={handleDelete}
 	oncancel={() => (confirmingDelete = null)}
+/>
+
+<ConfirmDialog
+	open={confirmingWearDelete !== null}
+	title={t('settingsGear.wearLogDelete')}
+	message={t('settingsGear.wearLogDeleteMessage')}
+	confirmLabel={t('settingsGear.delete')}
+	danger={true}
+	onconfirm={handleDeleteWear}
+	oncancel={() => (confirmingWearDelete = null)}
 />
 
 <style>

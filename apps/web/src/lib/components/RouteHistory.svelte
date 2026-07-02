@@ -31,16 +31,25 @@
 	let loading = $state(true);
 
 	onMount(async () => {
-		const rows = await fetchRunsOnRoute(routeId);
-		const me: RouteHistoryRun = {
-			id: currentRunId,
-			route_id: routeId,
-			distance_m: distanceM,
-			duration_s: durationS,
-			activity_type: activityType,
-		};
-		attempts = qualifyingAttempts(me, rows);
-		loading = false;
+		try {
+			const rows = await fetchRunsOnRoute(routeId);
+			const me: RouteHistoryRun = {
+				id: currentRunId,
+				route_id: routeId,
+				distance_m: distanceM,
+				duration_s: durationS,
+				activity_type: activityType,
+			};
+			attempts = qualifyingAttempts(me, rows);
+		} catch (e) {
+			// Enhancement panel: on failure it self-hides (never renders a
+			// wrong "past efforts" summary). Clearing loading in finally
+			// avoids the stuck-loading + unhandled-rejection the no-catch
+			// load had.
+			console.warn('route history load failed', e);
+		} finally {
+			loading = false;
+		}
 	});
 
 	let summary = $derived(summariseHistory(currentRunId, attempts));

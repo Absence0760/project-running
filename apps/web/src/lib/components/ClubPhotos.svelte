@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
-		fetchClubPhotos,
+		fetchClubPhotosWithError,
 		addClubPhoto,
 		deleteClubPhoto,
 		updateClubPhotoCaption,
@@ -25,6 +25,7 @@
 
 	let photos = $state<ClubPhoto[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let uploading = $state(false);
 	let pendingCaption = $state('');
 	let pendingFile = $state<File | null>(null);
@@ -43,8 +44,19 @@
 
 	async function load() {
 		loading = true;
-		photos = await fetchClubPhotos(clubId);
-		loading = false;
+		loadError = null;
+		try {
+			const res = await fetchClubPhotosWithError(clubId);
+			if (res.error) {
+				loadError = res.error;
+				return;
+			}
+			photos = res.photos;
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(load);
@@ -117,7 +129,7 @@
 	}
 </script>
 
-{#if canUpload || loading || photos.length > 0}
+{#if canUpload || loading || photos.length > 0 || loadError}
 <section class={wrapperClass}>
 <div class="photos">
 	<header class="hd">
@@ -169,6 +181,15 @@
 
 	{#if loading}
 		<p class="muted">{m('clubPhotos.loadingPhotos')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('socialClubs.loadErrorText')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline btn-sm" onclick={load}>{m('socialClubs.retry')}</button>
+		</div>
 	{:else if photos.length === 0 && !canUpload}
 		<p class="muted">{m('clubPhotos.noPhotos')}</p>
 	{:else if photos.length > 0}
@@ -297,6 +318,31 @@
 		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
 		font-weight: 500;
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.3rem;
 	}
 
 	.grid {

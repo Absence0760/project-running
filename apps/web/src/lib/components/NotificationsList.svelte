@@ -4,7 +4,7 @@
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { goto } from '$app/navigation';
 	import {
-		fetchNotifications,
+		fetchNotificationsWithError,
 		markNotificationRead,
 		markAllNotificationsRead,
 		deleteNotification,
@@ -17,12 +17,21 @@
 
 	let items = $state<NotificationView[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let filter = $state<'all' | 'unread'>('all');
 
 	async function load() {
 		loading = true;
+		loadError = null;
 		try {
-			items = await fetchNotifications(100);
+			const res = await fetchNotificationsWithError(100);
+			if (res.error) {
+				loadError = res.error;
+				return;
+			}
+			items = res.notifications;
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
 			loading = false;
 		}
@@ -196,6 +205,15 @@
 
 	{#if loading}
 		<p class="muted">{m('shell.loading')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('profile.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{m('profile.retry')}</button>
+		</div>
 	{:else if visible.length === 0}
 		<div class="empty">
 			{#if filter === 'unread'}
@@ -302,6 +320,30 @@
 		flex-direction: column;
 		align-items: center;
 		gap: var(--space-md);
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.4rem;
 	}
 
 	.list {

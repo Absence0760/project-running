@@ -5231,6 +5231,16 @@ export async function fetchEngagementSummaries(
 /// given kudos. Two parallel queries — count is server-side, viewer
 /// flag is one indexed lookup.
 export async function fetchKudosForRun(runId: string): Promise<RunKudosSummary> {
+	return (await fetchKudosForRunWithError(runId)).kudos;
+}
+
+/// Same as `fetchKudosForRun` but surfaces the load error instead of
+/// silently returning a zero count — so a caller can tell a failed fetch
+/// apart from a run with no kudos. Mirrors the `fetchRoutesWithError`
+/// convention.
+export async function fetchKudosForRunWithError(
+	runId: string,
+): Promise<{ kudos: RunKudosSummary; error: string | null }> {
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id;
 
@@ -5246,12 +5256,26 @@ export async function fetchKudosForRun(runId: string): Promise<RunKudosSummary> 
 					.eq('run_id', runId)
 					.eq('user_id', viewerId)
 					.maybeSingle()
-			: Promise.resolve({ data: null }),
+			: Promise.resolve({ data: null, error: null }),
 	]);
 
+	const err =
+		countRes.error ??
+		('error' in viewerRes ? (viewerRes.error as { message: string; code?: string } | null) : null);
+	if (err) {
+		console.error('fetchKudosForRun failed', err);
+		return {
+			kudos: { count: 0, viewer_has_kudos: false },
+			error: `${err.message}${err.code ? ` (${err.code})` : ''}`,
+		};
+	}
+
 	return {
-		count: countRes.count ?? 0,
-		viewer_has_kudos: viewerRes.data != null,
+		kudos: {
+			count: countRes.count ?? 0,
+			viewer_has_kudos: viewerRes.data != null,
+		},
+		error: null,
 	};
 }
 
@@ -5296,6 +5320,17 @@ export async function rescindKudos(runId: string): Promise<boolean> {
 /// Comments on a run, sorted oldest-first. Author profiles are joined
 /// in a second round trip so PostgREST doesn't need an embedded select.
 export async function fetchRunComments(runId: string, limit = 200): Promise<RunCommentWithAuthor[]> {
+	return (await fetchRunCommentsWithError(runId, limit)).comments;
+}
+
+/// Same as `fetchRunComments` but surfaces the load error instead of
+/// swallowing it to `[]` — so a caller can tell a failed fetch apart from
+/// a run that genuinely has no comments. Mirrors the `fetchRoutesWithError`
+/// convention.
+export async function fetchRunCommentsWithError(
+	runId: string,
+	limit = 200,
+): Promise<{ comments: RunCommentWithAuthor[]; error: string | null }> {
 	const { data: rows, error } = await supabase
 		.from(TABLES.run_comments)
 		.select('*')
@@ -5304,9 +5339,9 @@ export async function fetchRunComments(runId: string, limit = 200): Promise<RunC
 		.limit(limit);
 	if (error) {
 		console.error('fetchRunComments failed', error);
-		return [];
+		return { comments: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
-	if (!rows || rows.length === 0) return [];
+	if (!rows || rows.length === 0) return { comments: [], error: null };
 
 	const authorIds = Array.from(new Set(rows.map((r) => r.author_id)));
 	const { data: profiles } = await supabase
@@ -5316,10 +5351,13 @@ export async function fetchRunComments(runId: string, limit = 200): Promise<RunC
 	const byId = new Map<string, PublicProfile>();
 	for (const p of profiles ?? []) byId.set(p.id, p);
 
-	return rows.map((r) => ({
-		...r,
-		author: byId.get(r.author_id) ?? { id: r.author_id, display_name: null, avatar_url: null },
-	}));
+	return {
+		comments: rows.map((r) => ({
+			...r,
+			author: byId.get(r.author_id) ?? { id: r.author_id, display_name: null, avatar_url: null },
+		})),
+		error: null,
+	};
 }
 
 export async function postRunComment(input: {
@@ -5415,6 +5453,17 @@ async function signRunPhotoPaths(paths: string[]): Promise<Record<string, string
 }
 
 export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhoto[]> {
+	return (await fetchRunPhotosWithError(runId, limit)).photos;
+}
+
+/// Same as `fetchRunPhotos` but surfaces the load error instead of
+/// swallowing it to `[]` — so the gallery can render a distinct error
+/// state rather than looking byte-for-byte like an empty gallery. Mirrors
+/// the `fetchRoutesWithError` convention.
+export async function fetchRunPhotosWithError(
+	runId: string,
+	limit = 50,
+): Promise<{ photos: RunPhoto[]; error: string | null }> {
 	const { data, error } = await supabase
 		.from(TABLES.run_photos)
 		.select('*')
@@ -5424,7 +5473,7 @@ export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhot
 		.limit(limit);
 	if (error) {
 		console.error('fetchRunPhotos failed', error);
-		return [];
+		return { photos: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
 	const rows = data ?? [];
 	// Sign both the original and any present thumbnail in one batch
@@ -5438,11 +5487,14 @@ export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhot
 		if (r.thumb_512_path) paths.push(r.thumb_512_path);
 	}
 	const signed = await signRunPhotoPaths(paths);
-	return rows.map((r) => ({
-		...r,
-		url: signed[r.storage_path] ?? '',
-		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
-	}));
+	return {
+		photos: rows.map((r) => ({
+			...r,
+			url: signed[r.storage_path] ?? '',
+			thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
+		})),
+		error: null,
+	};
 }
 
 /// Event gallery (#49): every photo tagged to this event instance,
@@ -5713,6 +5765,17 @@ async function signRoutePhotoPaths(paths: string[]): Promise<Record<string, stri
 }
 
 export async function fetchRoutePhotos(routeId: string, limit = 50): Promise<RoutePhoto[]> {
+	return (await fetchRoutePhotosWithError(routeId, limit)).photos;
+}
+
+/// Same as `fetchRoutePhotos` but surfaces the load error instead of
+/// swallowing it to `[]` — so the gallery can render a distinct error
+/// state rather than looking byte-for-byte like an empty gallery. Mirrors
+/// the `fetchRoutesWithError` convention.
+export async function fetchRoutePhotosWithError(
+	routeId: string,
+	limit = 50,
+): Promise<{ photos: RoutePhoto[]; error: string | null }> {
 	const { data, error } = await supabase
 		.from(TABLES.route_photos)
 		.select('*')
@@ -5722,7 +5785,7 @@ export async function fetchRoutePhotos(routeId: string, limit = 50): Promise<Rou
 		.limit(limit);
 	if (error) {
 		console.error('fetchRoutePhotos failed', error);
-		return [];
+		return { photos: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
 	const rows = data ?? [];
 	const paths: string[] = [];
@@ -5731,11 +5794,14 @@ export async function fetchRoutePhotos(routeId: string, limit = 50): Promise<Rou
 		if (r.thumb_512_path) paths.push(r.thumb_512_path);
 	}
 	const signed = await signRoutePhotoPaths(paths);
-	return rows.map((r) => ({
-		...r,
-		url: signed[r.storage_path] ?? '',
-		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
-	}));
+	return {
+		photos: rows.map((r) => ({
+			...r,
+			url: signed[r.storage_path] ?? '',
+			thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
+		})),
+		error: null,
+	};
 }
 
 export async function addRoutePhoto(input: {
@@ -5863,6 +5929,17 @@ async function signClubPhotoPaths(paths: string[]): Promise<Record<string, strin
 }
 
 export async function fetchClubPhotos(clubId: string, limit = 50): Promise<ClubPhoto[]> {
+	return (await fetchClubPhotosWithError(clubId, limit)).photos;
+}
+
+/// Same as `fetchClubPhotos` but surfaces the load error instead of
+/// swallowing it to `[]` — so the gallery can render a distinct error
+/// state rather than looking byte-for-byte like an empty gallery. Mirrors
+/// the `fetchRoutesWithError` convention.
+export async function fetchClubPhotosWithError(
+	clubId: string,
+	limit = 50,
+): Promise<{ photos: ClubPhoto[]; error: string | null }> {
 	const { data, error } = await supabase
 		.from(TABLES.club_photos)
 		.select('*')
@@ -5872,7 +5949,7 @@ export async function fetchClubPhotos(clubId: string, limit = 50): Promise<ClubP
 		.limit(limit);
 	if (error) {
 		console.error('fetchClubPhotos failed', error);
-		return [];
+		return { photos: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
 	const rows = data ?? [];
 	const paths: string[] = [];
@@ -5881,11 +5958,14 @@ export async function fetchClubPhotos(clubId: string, limit = 50): Promise<ClubP
 		if (r.thumb_512_path) paths.push(r.thumb_512_path);
 	}
 	const signed = await signClubPhotoPaths(paths);
-	return rows.map((r) => ({
-		...r,
-		url: signed[r.storage_path] ?? '',
-		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
-	}));
+	return {
+		photos: rows.map((r) => ({
+			...r,
+			url: signed[r.storage_path] ?? '',
+			thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
+		})),
+		error: null,
+	};
 }
 
 export async function addClubPhoto(input: {
@@ -6069,14 +6149,27 @@ function asRouteCondition(row: Record<string, unknown>): RouteCondition {
 /// zones for a non-owner — the condition analogue of `route_markers_for_viewer`.
 /// Fails closed (empty list) on error so a redaction failure never leaks.
 export async function fetchRouteConditions(routeId: string): Promise<RouteCondition[]> {
+	return (await fetchRouteConditionsWithError(routeId)).conditions;
+}
+
+/// Same as `fetchRouteConditions` but surfaces the load error instead of
+/// swallowing it to `[]` — so the panel can render a distinct error state
+/// instead of sticking on "Loading…" forever. Mirrors the
+/// `fetchRoutesWithError` convention.
+export async function fetchRouteConditionsWithError(
+	routeId: string,
+): Promise<{ conditions: RouteCondition[]; error: string | null }> {
 	const { data, error } = await supabase.rpc('route_conditions_for_viewer', {
 		p_route_id: routeId
 	});
 	if (error) {
-		console.warn('route_conditions_for_viewer failed; failing closed (no conditions)', error);
-		return [];
+		console.warn('route_conditions_for_viewer failed', error);
+		return { conditions: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
-	return ((data ?? []) as Record<string, unknown>[]).map(asRouteCondition);
+	return {
+		conditions: ((data ?? []) as Record<string, unknown>[]).map(asRouteCondition),
+		error: null
+	};
 }
 
 export async function addRouteCondition(input: {
@@ -6705,6 +6798,17 @@ export interface SegmentEffortWithSegment {
 }
 
 export async function fetchSegmentsForRoute(routeId: string, limit = 100): Promise<Segment[]> {
+	return (await fetchSegmentsForRouteWithError(routeId, limit)).segments;
+}
+
+/// Same as `fetchSegmentsForRoute` but surfaces the load error instead of
+/// swallowing it to `[]` — so the panel can render a distinct error state
+/// instead of sticking on the loading spinner forever. Mirrors the
+/// `fetchRoutesWithError` convention.
+export async function fetchSegmentsForRouteWithError(
+	routeId: string,
+	limit = 100,
+): Promise<{ segments: Segment[]; error: string | null }> {
 	const { data, error } = await supabase
 		.from(TABLES.segments)
 		.select('*')
@@ -6713,9 +6817,9 @@ export async function fetchSegmentsForRoute(routeId: string, limit = 100): Promi
 		.limit(limit);
 	if (error) {
 		console.error('fetchSegmentsForRoute failed', error);
-		return [];
+		return { segments: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
-	return (data ?? []) as Segment[];
+	return { segments: (data ?? []) as Segment[], error: null };
 }
 
 export async function createSegment(input: {
@@ -6812,11 +6916,25 @@ export async function fetchSegmentLeaderboardTiered(
  * leaderboard.
  */
 export async function fetchEffortsForRun(runId: string): Promise<SegmentEffortWithSegment[]> {
+	return (await fetchEffortsForRunWithError(runId)).efforts;
+}
+
+/// Same as `fetchEffortsForRun` but surfaces the load error instead of
+/// swallowing it to `[]` — so the panel can render a distinct error state
+/// instead of sticking on "Checking segments…" forever. Mirrors the
+/// `fetchRoutesWithError` convention.
+export async function fetchEffortsForRunWithError(
+	runId: string,
+): Promise<{ efforts: SegmentEffortWithSegment[]; error: string | null }> {
 	const { data: efforts, error } = await supabase
 		.from(TABLES.segment_efforts)
 		.select('*')
 		.eq('run_id', runId);
-	if (error || !efforts || efforts.length === 0) return [];
+	if (error) {
+		console.error('fetchEffortsForRun failed', error);
+		return { efforts: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
+	}
+	if (!efforts || efforts.length === 0) return { efforts: [], error: null };
 
 	const segmentIds = Array.from(new Set(efforts.map((e) => e.segment_id)));
 	const { data: segments } = await supabase
@@ -6852,7 +6970,7 @@ export async function fetchEffortsForRun(runId: string): Promise<SegmentEffortWi
 			rank: rankByEffort.get(e.id) ?? 1,
 		});
 	}
-	return out;
+	return { efforts: out, error: null };
 }
 
 /**
@@ -6937,15 +7055,27 @@ export interface NotificationView {
  * "Alice commented on your 8 km run" without follow-up queries.
  */
 export async function fetchNotifications(limit = 50): Promise<NotificationView[]> {
+	return (await fetchNotificationsWithError(limit)).notifications;
+}
+
+/// Same as `fetchNotifications` but surfaces the load error instead of
+/// swallowing it to `[]` — so the inbox can render a distinct error state
+/// rather than looking byte-for-byte like a genuinely empty inbox (a
+/// broken inbox must not show "You have no notifications / Find people").
+/// Mirrors the `fetchRoutesWithError` convention.
+export async function fetchNotificationsWithError(
+	limit = 50,
+): Promise<{ notifications: NotificationView[]; error: string | null }> {
 	const { data: rows, error } = await supabase
 		.from(TABLES.notifications)
 		.select('*')
 		.order('created_at', { ascending: false })
 		.limit(limit);
-	if (error || !rows || rows.length === 0) {
-		if (error) console.error('fetchNotifications failed', error);
-		return [];
+	if (error) {
+		console.error('fetchNotifications failed', error);
+		return { notifications: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
+	if (!rows || rows.length === 0) return { notifications: [], error: null };
 
 	const actorIds = Array.from(new Set(rows.map((r) => r.actor_id).filter((x): x is string => !!x)));
 	const runIds = Array.from(new Set(rows.map((r) => r.run_id).filter((x): x is string => !!x)));
@@ -7006,24 +7136,27 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 		clubBy.set(c.id, { name: c.name, slug: c.slug });
 	}
 
-	return rows.map((row) => {
-		const r = row as NotificationRow;
-		const run = r.run_id ? runBy.get(r.run_id) ?? null : null;
-		const body = r.comment_id ? commentBy.get(r.comment_id) ?? null : null;
-		const ev = r.event_id ? eventBy.get(r.event_id) ?? null : null;
-		const club = r.club_id ? clubBy.get(r.club_id) ?? null : null;
-		return {
-			row: r,
-			actor: r.actor_id ? profileBy.get(r.actor_id) ?? null : null,
-			run_distance_m: run?.distance_m ?? null,
-			run_started_at: run?.started_at ?? null,
-			comment_excerpt: body ? (body.length > 120 ? body.slice(0, 117) + '…' : body) : null,
-			event_title: ev?.title ?? null,
-			event_club_slug: ev?.club_slug ?? null,
-			club_name: club?.name ?? null,
-			club_slug: club?.slug ?? null,
-		};
-	});
+	return {
+		notifications: rows.map((row) => {
+			const r = row as NotificationRow;
+			const run = r.run_id ? runBy.get(r.run_id) ?? null : null;
+			const body = r.comment_id ? commentBy.get(r.comment_id) ?? null : null;
+			const ev = r.event_id ? eventBy.get(r.event_id) ?? null : null;
+			const club = r.club_id ? clubBy.get(r.club_id) ?? null : null;
+			return {
+				row: r,
+				actor: r.actor_id ? profileBy.get(r.actor_id) ?? null : null,
+				run_distance_m: run?.distance_m ?? null,
+				run_started_at: run?.started_at ?? null,
+				comment_excerpt: body ? (body.length > 120 ? body.slice(0, 117) + '…' : body) : null,
+				event_title: ev?.title ?? null,
+				event_club_slug: ev?.club_slug ?? null,
+				club_name: club?.name ?? null,
+				club_slug: club?.slug ?? null,
+			};
+		}),
+		error: null,
+	};
 }
 
 export async function fetchUnreadNotificationCount(): Promise<number> {

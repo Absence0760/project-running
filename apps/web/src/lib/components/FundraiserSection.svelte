@@ -29,13 +29,24 @@
 
 	async function load() {
 		loading = true;
-		fundraiser = runId
-			? await fetchFundraiserForRun(runId)
-			: eventId
-				? await fetchFundraiserForEvent(eventId)
-				: null;
-		totals = fundraiser ? await fetchFundraiserTotals(fundraiser.id) : null;
-		loading = false;
+		try {
+			fundraiser = runId
+				? await fetchFundraiserForRun(runId)
+				: eventId
+					? await fetchFundraiserForEvent(eventId)
+					: null;
+			totals = fundraiser ? await fetchFundraiserTotals(fundraiser.id) : null;
+		} catch (e) {
+			// A transient load failure must NOT hide the owner's "Create
+			// fundraiser" CTA. Leaving fundraiser null falls through to the
+			// owner-CTA branch (and renders nothing for a non-owner) rather
+			// than sticking on loading and hiding the whole section.
+			console.warn('fundraiser load failed', e);
+			fundraiser = null;
+			totals = null;
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(load);

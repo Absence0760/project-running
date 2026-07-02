@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
-		fetchRunPhotos,
+		fetchRunPhotosWithError,
 		addRunPhoto,
 		deleteRunPhoto,
 		updateRunPhotoCaption,
@@ -22,6 +22,7 @@
 
 	let photos = $state<RunPhoto[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let uploading = $state(false);
 	let pendingCaption = $state('');
 	let pendingFile = $state<File | null>(null);
@@ -35,8 +36,19 @@
 
 	async function load() {
 		loading = true;
-		photos = await fetchRunPhotos(runId);
-		loading = false;
+		loadError = null;
+		try {
+			const res = await fetchRunPhotosWithError(runId);
+			if (res.error) {
+				loadError = res.error;
+				return;
+			}
+			photos = res.photos;
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(load);
@@ -109,7 +121,7 @@
 	}
 </script>
 
-{#if canManage || loading || photos.length > 0}
+{#if canManage || loading || photos.length > 0 || loadError}
 <section class={wrapperClass}>
 <div class="photos">
 	<header class="hd">
@@ -161,6 +173,15 @@
 
 	{#if loading}
 		<p class="muted">{m('runPhotos.loadingPhotos')}</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('runs.loadFailed')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline btn-sm" onclick={load}>{m('runs.retry')}</button>
+		</div>
 	{:else if photos.length === 0 && !canManage}
 		<p class="muted">{m('runPhotos.noPhotos')}</p>
 	{:else if photos.length > 0}
@@ -293,6 +314,31 @@
 		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
 		font-weight: 500;
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: #ef4444;
+		font-size: 1.3rem;
 	}
 
 	.grid {
