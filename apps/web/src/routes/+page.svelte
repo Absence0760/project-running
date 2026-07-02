@@ -63,7 +63,7 @@
 {:else}
 <nav class="landing-nav">
 	<a href="/" class="landing-logo">
-		<img src="/icon-192.png" alt="" class="landing-logo-mark" />
+		<img src="/logo-mark.svg" alt="" class="landing-logo-mark" />
 		Threkir
 	</a>
 	<div class="nav-links">

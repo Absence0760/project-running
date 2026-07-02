@@ -1045,7 +1045,7 @@
 
 			{#if posts.length === 0}
 				<div class="empty-card">
-					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 					<h3>{tr('clubHome.emptyFeedTitle')}</h3>
 					<p class="empty-text">
 						{#if isMember}
@@ -1206,7 +1206,7 @@
 				</div>
 			{:else}
 				<div class="empty-card">
-					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 					<h3>{tr('clubHome.emptyEventsTitle')}</h3>
 					<p class="empty-text">
 						{#if isAdmin}
@@ -1269,7 +1269,7 @@
 			{/if}
 			{#if clubRoutes.length === 0}
 				<div class="empty-card">
-					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 					<h3>{tr('clubHome.emptyRoutesTitle')}</h3>
 					<p class="empty-text">
 						{#if isAdmin}
@@ -1358,7 +1358,7 @@
 
 			{#if clubTemplates.length === 0 && sessionTemplates.length === 0 && gymRoutineTemplates.length === 0}
 				<div class="empty-card">
-					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 					<h3>{tr('clubHome.emptyTemplatesTitle')}</h3>
 					<p class="empty-text">{tr('clubHome.emptyTemplatesBody')}</p>
 				</div>
@@ -1482,7 +1482,7 @@
 		{:else if tab === 'members'}
 			{#if members.length === 0}
 				<div class="empty-card">
-					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+					<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 					<h3>{tr('clubHome.emptyMembersTitle')}</h3>
 					<p class="empty-text">
 						{tr('clubHome.emptyMembersBody')}

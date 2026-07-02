@@ -631,7 +631,7 @@
 <div class="live-page">
 	<header class="live-header">
 		<a href="/" class="live-logo">
-			<img src="/icon-192.png" alt="" class="live-logo-mark" />
+			<img src="/logo-mark.svg" alt="" class="live-logo-mark" />
 			Threkir
 		</a>
 		<div

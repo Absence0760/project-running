@@ -220,7 +220,7 @@
 			{t('workoutDetail.backToPlan')}
 		</a>
 		<div class="empty-card">
-			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 			<h2>{t('workoutDetail.loadFailedTitle')}</h2>
 			<p class="empty-text">
 				{t('workoutDetail.loadFailedText')}
@@ -237,7 +237,7 @@
 			{t('workoutDetail.backToPlan')}
 		</a>
 		<div class="empty-card">
-			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 			<h2>{t('workoutDetail.notFoundTitle')}</h2>
 			<p class="empty-text">
 				{t('workoutDetail.notFoundText')}

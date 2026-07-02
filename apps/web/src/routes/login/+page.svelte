@@ -172,7 +172,7 @@
 <div class="login-page">
 	<aside class="brand-pane" aria-hidden="true">
 		<a href="/" class="brand-logo">
-			<img src="/icon-192.png" alt="" class="brand-mark" />
+			<img src="/logo-mark.svg" alt="" class="brand-mark" />
 			<span class="brand-name">Threkir</span>
 		</a>
 		<div class="brand-copy">
@@ -199,7 +199,7 @@
 	<main class="form-pane">
 		<div class="login-card">
 			<a href="/" class="logo logo-mobile">
-				<img src="/icon-192.png" alt="" class="logo-mark" />
+				<img src="/logo-mark.svg" alt="" class="logo-mark" />
 				<span>Threkir</span>
 			</a>
 

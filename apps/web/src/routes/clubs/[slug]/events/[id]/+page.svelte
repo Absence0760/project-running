@@ -1304,7 +1304,7 @@
 			{m('clubEvent.backToClubs')}
 		</a>
 		<div class="empty-card">
-			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 			<h3>{m('clubEvent.notFoundTitle')}</h3>
 			<p class="empty-text">
 				{m('clubEvent.notFoundBody')}

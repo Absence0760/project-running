@@ -106,7 +106,7 @@
 		<p class="muted">{m('checkpoint.publicLoading')}</p>
 	{:else if notFound}
 		<div class="empty-card">
-			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
+			<img src="/logo-mark.svg" alt="" width="56" height="56" class="empty-mark" />
 			<h3>{m('checkpoint.publicTitle')}</h3>
 			<p class="empty-text">{m('checkpoint.publicNotFound')}</p>
 		</div>

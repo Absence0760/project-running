@@ -44,7 +44,7 @@
 <div class="invite-page">
 	<header class="invite-header">
 		<a href="/" class="logo">
-			<img src="/icon-192.png" alt="" class="logo-mark" />
+			<img src="/logo-mark.svg" alt="" class="logo-mark" />
 			<span>Threkir</span>
 		</a>
 	</header>
