@@ -3622,6 +3622,7 @@ export const en = {
 	"nutrition.weekUnderGoal": "{n} under goal/day",
 	"nutrition.weekOverGoal": "{n} over goal/day",
 	"nutrition.weekOnGoal": "On goal",
+	"nutrition.weekProtein": "Protein {met}/{total} days",
 	"nutrition.goalLine": "Daily goal",
 	"nutrition.logHeading": "Log food",
 	"nutrition.searchPlaceholder": "Search for a food…",

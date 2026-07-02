@@ -42,7 +42,7 @@
 	} from '$lib/nutrition/nutrition_totals';
 	import { computeDayBudget, type MacroKind } from '$lib/nutrition/nutrition_budget';
 	import { hydrationTargetMl, hydrationBudget } from '$lib/nutrition/hydration';
-	import { weeklyIntakeSummary } from '$lib/nutrition/nutrition_week';
+	import { weeklyIntakeSummary, weeklyProteinSummary } from '$lib/nutrition/nutrition_week';
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -58,7 +58,7 @@
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
 	let exerciseKcal = $state(0);
-	let weekDays = $state<{ label: string; calories: number }[]>([]);
+	let weekDays = $state<{ label: string; calories: number; protein: number }[]>([]);
 	let waterMl = $state(0);
 	let weightKg = $state<number | null>(null);
 	let exerciseMinutes = $state(0);
@@ -181,19 +181,22 @@
 			// Weekly calorie trend (last 7 days incl. today).
 			const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
 			const weekEntries = await fetchFoodLog(weekStart.toISOString(), tomorrow.toISOString());
-			const byDay = new Map<string, number>();
+			const calByDay = new Map<string, number>();
+			const proByDay = new Map<string, number>();
 			for (const e of weekEntries) {
 				const d = new Date(e.started_at);
 				const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-				byDay.set(key, (byDay.get(key) ?? 0) + (e.calories ?? 0));
+				calByDay.set(key, (calByDay.get(key) ?? 0) + (e.calories ?? 0));
+				proByDay.set(key, (proByDay.get(key) ?? 0) + (e.protein_g ?? 0));
 			}
-			const days: { label: string; calories: number }[] = [];
+			const days: { label: string; calories: number; protein: number }[] = [];
 			for (let i = 6; i >= 0; i--) {
 				const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
 				const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 				days.push({
 					label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-					calories: Math.round(byDay.get(key) ?? 0),
+					calories: Math.round(calByDay.get(key) ?? 0),
+					protein: Math.round(proByDay.get(key) ?? 0),
 				});
 			}
 			weekDays = days;
@@ -400,6 +403,9 @@
 	const hasAnyData = $derived(entries.length > 0 || weekDays.some((d) => d.calories > 0));
 	const weekSummary = $derived(
 		weeklyIntakeSummary(weekDays.map((d) => d.calories), targets?.calories ?? null),
+	);
+	const proteinSummary = $derived(
+		weeklyProteinSummary(weekDays.map((d) => d.protein), targets?.proteinG ?? null),
 	);
 	const trendAvg = $derived(weekSummary.avgCalories);
 	// Bars + the avg/goal reference lines share one scale; include the goal so
@@ -703,6 +709,13 @@
 							{:else}
 								<span class="week-delta week-delta-over" data-testid="week-delta">{m('nutrition.weekOverGoal', { n: delta })}</span>
 							{/if}
+						{/if}
+						{#if proteinSummary.daysMetGoal !== null}
+							<span
+								class="week-delta week-protein"
+								class:week-delta-on={proteinSummary.daysMetGoal === proteinSummary.loggedDays}
+								data-testid="week-protein"
+							>{m('nutrition.weekProtein', { met: proteinSummary.daysMetGoal, total: proteinSummary.loggedDays })}</span>
 						{/if}
 					</div>
 				</div>
@@ -1284,6 +1297,10 @@
 	.week-delta-over {
 		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+	}
+	.week-protein:not(.week-delta-on) {
+		color: var(--color-text-secondary);
+		background: color-mix(in srgb, var(--color-text) 8%, transparent);
 	}
 	.trend-col {
 		flex: 1;
