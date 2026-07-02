@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' show FoodEntry;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -28,10 +29,23 @@ class NutritionMealDetailScreen extends StatefulWidget {
 }
 
 class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
+  bool _loading = false;
+
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStore);
+    _ensureLoaded();
+  }
+
+  // Reached from the (already-hydrated) nutrition screen in normal use, but a
+  // cold deep-link can land here before the food store has loaded — hydrate it
+  // so an empty slot reads as "still loading", not "nothing logged".
+  Future<void> _ensureLoaded() async {
+    if (widget.store.dir != null) return;
+    setState(() => _loading = true);
+    await widget.store.init();
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -128,16 +142,20 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          _macroCard(theme, l10n, macros),
-          const SizedBox(height: 12),
-          _itemsCard(theme, l10n, entries),
-          const SizedBox(height: 12),
-          _trendCard(theme, l10n, trend, maxCal, tag),
-        ],
-      ),
+      body: _loading
+          ? const Center(
+              child: ActivityLoader(kind: ActivityLoaderKind.fuel, size: 76),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                _macroCard(theme, l10n, macros),
+                const SizedBox(height: 12),
+                _itemsCard(theme, l10n, entries),
+                const SizedBox(height: 12),
+                _trendCard(theme, l10n, trend, maxCal, tag),
+              ],
+            ),
     );
   }
 

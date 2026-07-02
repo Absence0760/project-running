@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/public_run_screen.dart';
 
@@ -38,11 +39,11 @@ void main() {
       expect(find.text('Run'), findsOneWidget);
     });
 
-    testWidgets('first frame shows the loading spinner', (tester) async {
+    testWidgets('first frame shows the loading indicator', (tester) async {
       await _pump(tester);
       // Single pump only — the post-fetch frame swaps in either
       // ErrorState or the run body once Supabase resolves.
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(ActivityLoader), findsOneWidget);
     });
   });
 }

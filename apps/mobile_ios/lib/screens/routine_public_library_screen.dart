@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../backend_timeout.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -136,7 +137,10 @@ class _RoutinePublicLibraryScreenState
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child:
+                        ActivityLoader(kind: ActivityLoaderKind.train, size: 76),
+                  )
                 : _error
                     ? ErrorState(
                         message: l10n.gymLibraryLoadError, onRetry: _load)
@@ -374,7 +378,9 @@ class _RoutinePublicPreviewScreenState
                   _adopting ? l10n.gymLibraryAdopting : l10n.gymLibraryAdopt),
             ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: ActivityLoader(kind: ActivityLoaderKind.train, size: 76),
+            )
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               children: [
