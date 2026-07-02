@@ -73,6 +73,10 @@ if [[ $SKIP_PREFLIGHT -eq 0 ]]; then
 	preflight_log="$(mktemp)"
 	if "$REPO_ROOT/bin/aws-preflight.sh" >"$preflight_log" 2>&1; then
 		ok "Preflight passed"
+		# Surface the identity + target account even on SUCCESS — the operator
+		# must SEE which account they're about to apply to (the box carries
+		# mgmt/disag/running profiles). Audit bin-scripts High.
+		grep -E 'Account:|Authenticated as|expected pin|No account pin' "$preflight_log" | sed 's/^/      /' || true
 	else
 		warn "Preflight surfaced issues:"
 		cat "$preflight_log" >&2
@@ -104,17 +108,28 @@ apply_stack() {
 	fi
 
 	# Generate a plan to a file so we apply exactly what we previewed.
+	# -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes. Capture the
+	# code explicitly (`|| plan_rc=$?` keeps `set -e` from aborting) and branch:
+	# an ERRORED plan (1) must be fatal, never fall through to apply a stale
+	# .tfplan (e.g. one left by a SIGKILL'd run) under --auto-approve. Audit
+	# bin-scripts Medium.
 	local plan_file=".tfplan"
-	if terraform plan -input=false -detailed-exitcode -out="$plan_file" "${extra_args[@]}"; then
-		ok "$label has no pending changes — skipping apply"
-		rm -f "$plan_file"
-		popd >/dev/null
-		return 0
-	fi
-	# detailed-exitcode: 0 = no changes, 1 = error, 2 = changes.
-	# `if terraform plan ...` swallows 1 and 2 alike. If we got here
-	# the plan either errored or has changes — terraform's own output
-	# distinguishes the two cleanly above this line.
+	local plan_rc=0
+	terraform plan -input=false -detailed-exitcode -out="$plan_file" "${extra_args[@]}" || plan_rc=$?
+	case "$plan_rc" in
+		0)
+			ok "$label has no pending changes — skipping apply"
+			rm -f "$plan_file"
+			popd >/dev/null
+			return 0
+			;;
+		2) : ;; # changes pending — fall through to the apply gate below
+		*)
+			rm -f "$plan_file"
+			popd >/dev/null
+			fatal "$label: terraform plan failed (exit $plan_rc) — not applying"
+			;;
+	esac
 
 	if [[ $PLAN_ONLY -eq 1 ]]; then
 		ok "Plan saved to $dir/$plan_file (--plan, not applying)"

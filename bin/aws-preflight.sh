@@ -53,8 +53,31 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 	acct="$(aws sts get-caller-identity --query Account --output text)"
 	ok "Authenticated as $arn"
 	ok "Account: $acct"
+	# Wrong-account guard. The workstation carries several SSO profiles
+	# (mgmt / disag / running); applying prod terraform against the wrong
+	# account is a real footgun. Pin the expected id via EXPECTED_AWS_ACCOUNT,
+	# or drop it in the PRIVATE estate repo at
+	# ../infra-secrets/running/aws-account, so nothing account-identifying
+	# lands in this PUBLIC repo. Set + mismatch → hard fail; unset → warn
+	# (the account is printed above either way, so the operator still eyeballs it).
+	expected_acct="${EXPECTED_AWS_ACCOUNT:-}"
+	if [[ -z "$expected_acct" ]]; then
+		acct_file="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}/running/aws-account"
+		[[ -f "$acct_file" ]] && expected_acct="$(tr -dc '0-9' <"$acct_file")"
+	fi
+	if [[ -n "$expected_acct" ]]; then
+		if [[ "$acct" == "$expected_acct" ]]; then
+			ok "Account matches the expected pin"
+		else
+			err "WRONG ACCOUNT: authenticated to $acct but expected $expected_acct — check \$AWS_PROFILE"
+			bump_fail
+		fi
+	else
+		warn "No account pin set — confirm $acct is the project-running account before applying"
+		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > ../infra-secrets/running/aws-account)"
+	fi
 else
-	err "AWS auth failed — run 'aws sso login --profile \${AWS_PROFILE:-runonward}'"
+	err "AWS auth failed — run 'aws sso login --profile \${AWS_PROFILE:-running}'"
 	bump_fail
 fi
 
