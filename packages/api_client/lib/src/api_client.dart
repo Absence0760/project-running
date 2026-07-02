@@ -593,9 +593,8 @@ class ApiClient {
     );
     final json = row.toJson();
     if (run.externalId != null && run.externalId!.isNotEmpty) {
-      await _client
-          .from(RunRow.table)
-          .upsert(json, onConflict: RunRow.colExternalId);
+      await _client.from(RunRow.table).upsert(json,
+          onConflict: '${RunRow.colUserId},${RunRow.colExternalId}');
     } else {
       await _client.from(RunRow.table).upsert(json);
     }
@@ -748,9 +747,8 @@ class ApiClient {
           })
           .toList();
       if (withExtId.isNotEmpty) {
-        await _client
-            .from(RunRow.table)
-            .upsert(withExtId, onConflict: RunRow.colExternalId);
+        await _client.from(RunRow.table).upsert(withExtId,
+            onConflict: '${RunRow.colUserId},${RunRow.colExternalId}');
       }
       if (withoutExtId.isNotEmpty) {
         await _client.from(RunRow.table).upsert(withoutExtId);
