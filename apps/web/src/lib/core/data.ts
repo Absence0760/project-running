@@ -183,6 +183,26 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	}));
 }
 
+/// Runs for the signed-in user that surface a hard fetch failure instead of
+/// degrading to `[]`. `fetchRuns` returns an empty list on a network / DB
+/// error, which is indistinguishable from a brand-new account with zero runs
+/// — so the /runs + /history surfaces showed the "log your first run"
+/// onboarding card (with no retry) on a transient failure. This sibling
+/// distinguishes the two: `error` is non-null only on a real failure; a
+/// genuinely-empty result is `{ runs: [], error: null }`. Mirrors the
+/// `fetchFoodLogWithError` convention. A signed-out caller is empty, not an
+/// error (nothing to load yet).
+export async function fetchRunsWithError(
+	opts?: FetchRunsOptions,
+): Promise<{ runs: Run[]; error: string | null }> {
+	try {
+		const runs = await fetchRuns({ ...opts, throwOnError: true });
+		return { runs, error: null };
+	} catch (e) {
+		return { runs: [], error: (e as Error)?.message ?? 'Failed to load runs' };
+	}
+}
+
 /// Supplementary counts for the Year-in-Running recap that can't be
 /// derived from `Run` rows alone (see `recap.ts#RecapExtras`): photos
 /// attached to the year's runs, and personal records achieved during the
@@ -8739,19 +8759,29 @@ export interface ActivityRow {
 /// than pulling an unbounded history (multi_modal.md § "activities view
 /// at scale").
 export async function fetchActivities(limit = 100): Promise<ActivityRow[]> {
+	return (await fetchActivitiesWithError(limit)).activities;
+}
+
+/// Same window as `fetchActivities` but surfaces a hard fetch failure
+/// instead of swallowing it into an empty feed. A network / DB error and a
+/// genuinely-empty history both used to collapse to `[]`, so a transient
+/// failure rendered as the "nothing logged yet" empty state on /history with
+/// no retry. This sibling distinguishes the two: `error` is non-null only on
+/// a real failure. Mirrors the `fetchFoodLogWithError` convention. A
+/// signed-out caller is empty, not an error.
+export async function fetchActivitiesWithError(
+	limit = 100,
+): Promise<{ activities: ActivityRow[]; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { activities: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.activities)
 		.select('id, kind, started_at, summary')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
 		.limit(limit);
-	if (error) {
-		console.error('fetchActivities failed', error);
-		return [];
-	}
-	return ((data ?? []) as unknown[])
+	if (error) return { activities: [], error: error.message };
+	const activities = ((data ?? []) as unknown[])
 		.map((row) => {
 			const r = row as {
 				id: string | null;
@@ -8767,6 +8797,7 @@ export async function fetchActivities(limit = 100): Promise<ActivityRow[]> {
 			};
 		})
 		.filter((r) => r.id !== '' && r.started_at !== '');
+	return { activities, error: null };
 }
 
 // ───────────────────────── Session plans (session_planner.md P1) ─────────────

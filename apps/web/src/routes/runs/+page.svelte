@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
-	import { fetchRuns, deleteRuns } from '$lib/core/data';
+	import { fetchRuns, fetchRunsWithError, deleteRuns } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import { periodStart } from '$lib/training/goals';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -26,6 +26,11 @@
 	// searchable, paginated list. See decisions §63 amendment.
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
+	/// Non-null only on a real fetch failure. A transient network / DB error
+	/// used to collapse to an empty list — identical to a brand-new account —
+	/// so the "log your first run" onboarding card showed with no way to
+	/// retry. This drives a distinct error card instead. See fetchRunsWithError.
+	let loadError = $state<string | null>(null);
 	let sourceFilter = $state<RunSource | 'all'>('all');
 	// Default to all activities, consistent with the source filter. A
 	// run-only default hid a walk-/cycle-/hike-only user's entire history
@@ -326,18 +331,26 @@
 
 	async function loadInitial() {
 		loading = true;
+		loadError = null;
 		const gen = ++fetchGen;
-		let fresh: Run[];
+		let res: { runs: Run[]; error: string | null };
 		let nextHasMore: boolean;
 		if (fetchMode === 'paginated') {
-			fresh = await fetchRuns({ limit: PAGE_SIZE, offset: 0 });
-			nextHasMore = fresh.length === PAGE_SIZE;
+			res = await fetchRunsWithError({ limit: PAGE_SIZE, offset: 0 });
+			nextHasMore = res.runs.length === PAGE_SIZE;
 		} else {
-			fresh = await fetchRuns();
+			res = await fetchRunsWithError();
 			nextHasMore = false;
 		}
 		if (gen !== fetchGen) return;
-		runs = fresh;
+		if (res.error) {
+			// Leave any previously-loaded runs in place; surface a retryable
+			// error card instead of the "no runs" empty state.
+			loadError = res.error;
+			loading = false;
+			return;
+		}
+		runs = res.runs;
 		hasMore = nextHasMore;
 		loading = false;
 	}
@@ -665,6 +678,22 @@
 
 	{#if loading}
 		{@render listSkeleton()}
+	{:else if loadError}
+		<div class="card-elevated empty load-error" role="alert" data-testid="runs-load-error">
+			<span class="material-symbols empty-icon" aria-hidden="true">error</span>
+			<h2 class="empty-text">{m('runs.loadFailed')}</h2>
+			<p class="empty-hint load-error-detail">{loadError}</p>
+			<div class="empty-actions">
+				<button
+					type="button"
+					class="btn btn-primary"
+					data-testid="runs-load-error-retry"
+					onclick={() => void loadInitial()}
+				>
+					{m('runs.retry')}
+				</button>
+			</div>
+		</div>
 	{:else}
 		<div class="run-list">
 			{#each visibleRuns as run}
@@ -1261,6 +1290,15 @@
 		flex-wrap: wrap;
 		justify-content: center;
 		margin-top: var(--space-md);
+	}
+	.load-error .empty-icon {
+		background: rgba(239, 68, 68, 0.12);
+		color: #ef4444;
+	}
+	.load-error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		word-break: break-word;
 	}
 
 	.load-more-row {

@@ -2,7 +2,12 @@
 	import { onMount, tick } from 'svelte';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
-	import { fetchActivities, fetchGymExerciseNames, type ActivityRow } from '$lib/core/data';
+	import {
+		fetchActivities,
+		fetchActivitiesWithError,
+		fetchGymExerciseNames,
+		type ActivityRow,
+	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
@@ -25,6 +30,11 @@
 	/// commits to its layout (which chips exist) on first content paint
 	/// instead of flickering as the feed lands.
 	let activitiesLoaded = $state(false);
+	/// Non-null only on a real fetch failure. Previously the feed swallowed
+	/// errors into an empty timeline, so a transient network / DB failure was
+	/// indistinguishable from a genuinely-empty history and rendered the
+	/// "nothing logged yet" state with no retry. See fetchActivitiesWithError.
+	let loadError = $state<string | null>(null);
 	type KindFilter = 'all' | 'run' | 'lift' | 'meal';
 	let kindFilter = $state<KindFilter>('all');
 
@@ -123,25 +133,35 @@
 	/// (by restore or a newer fetch) discards its result instead of
 	/// overwriting the current feed.
 	let fetchGen = $state(0);
-	$effect(() => {
-		const uid = auth.user?.id;
-		if (!uid || restoredFeed || activitiesLoadedFor === uid) return;
-		activitiesLoadedFor = uid;
-		// Pull the unified activities feed (windowed to the most recent 200).
-		// The full per-modality history lives on /runs, /gym, /nutrition; the
-		// "View all" link on each single-modality tab points there. Best-effort
-		// — a failure just leaves an empty timeline. (multi_modal.md § History.)
+	// Pull the unified activities feed (windowed to the most recent 200). The
+	// full per-modality history lives on /runs, /gym, /nutrition; the "View
+	// all" link on each single-modality tab points there. Surfaces a real
+	// failure as a retryable error card instead of an empty timeline (which
+	// would read as "nothing logged" and hide the retry). (multi_modal.md
+	// § History.)
+	function loadActivities() {
+		loadError = null;
+		activitiesLoaded = false;
 		const gen = ++fetchGen;
-		fetchActivities(200)
-			.then((rows) => {
-				if (gen === fetchGen) activityFeed = rows;
+		fetchActivitiesWithError(200)
+			.then((res) => {
+				if (gen !== fetchGen) return;
+				if (res.error) loadError = res.error;
+				else activityFeed = res.activities;
 			})
-			.catch(() => {
-				/* silent — empty timeline */
+			.catch((e) => {
+				if (gen === fetchGen) loadError = (e as Error)?.message ?? 'Failed to load history';
 			})
 			.finally(() => {
 				if (gen === fetchGen) activitiesLoaded = true;
 			});
+	}
+
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!uid || restoredFeed || activitiesLoadedFor === uid) return;
+		activitiesLoadedFor = uid;
+		loadActivities();
 	});
 
 	// --- Modality-aware logging ---
@@ -435,7 +455,21 @@
 			</div>
 		</div>
 
-		{#if timelineRows.length === 0}
+		{#if loadError}
+			<div class="card-elevated empty load-error" role="alert" data-testid="history-load-error">
+				<span class="material-symbols empty-icon" aria-hidden="true">error</span>
+				<h2 class="empty-text">{m('history.loadFailed')}</h2>
+				<p class="empty-hint load-error-detail">{loadError}</p>
+				<button
+					type="button"
+					class="btn btn-primary"
+					data-testid="history-load-error-retry"
+					onclick={() => loadActivities()}
+				>
+					{m('history.retry')}
+				</button>
+			</div>
+		{:else if timelineRows.length === 0}
 			<div class="card-elevated empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">inbox</span>
 				<h2 class="empty-text">{m('history.emptyTimeline')}</h2>
@@ -815,6 +849,23 @@
 		font-weight: 600;
 		color: var(--color-text);
 		padding: 0;
+	}
+	.empty-hint {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text-tertiary);
+		max-width: 28rem;
+	}
+	.load-error .empty-icon {
+		background: rgba(239, 68, 68, 0.12);
+		color: #ef4444;
+	}
+	.load-error-detail {
+		font-size: 0.78rem;
+		word-break: break-word;
+	}
+	.load-error .btn {
+		margin-top: var(--space-sm);
 	}
 
 	/* Skeleton mirrors the timeline shape so the page renders to roughly its
