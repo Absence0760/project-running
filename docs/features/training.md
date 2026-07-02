@@ -76,6 +76,17 @@ Two improvements over "best single run, one distance":
 
 Pure — reuses `riegelPredict` + `predictionConfidence` so the numbers can't drift from the engine. Returns `null` on an empty pool (the caller hides the surface — fail-closed, same as the Fitness card). **Surfaced on web** via `RacePredictorCard.svelte` on `/dashboard` (below the training-load chart), gated by the same `qualifyingRuns` filter the Fitness card uses (recording / reliable import, ≥ 1.5 km, sane duration, not treadmill — so it never anchors to a belt estimate). TS↔Dart parity pair, 11 mirror tests each; the Dart twin is ported for a future mobile surface (no mobile card today — see followups.md #11). Backlog #11.
 
+## Race-day goal feasibility (`race_day.ts` #goalFeasibility)
+
+The plan-detail `RaceDayPanel` (shown within 21 days of the goal race) used to short-circuit to the runner's goal time whenever one was set — recent fitness was ignored, so a runner never learned whether the goal they typed months ago is still in reach. It now **always** computes the fitness-derived Riegel projection off the best qualifying recent effort (≥ 1 km, last 90 days) and, when a goal time is set, grades the goal against it via `goalFeasibility(goalSec, predictedSec)`:
+
+- `ahead` — projection faster than goal by more than `GOAL_ONTRACK_BAND` (2 %)
+- `on_track` — projection within ±2 % of goal (inside the day-to-day noise of a single-effort Riegel projection, so a rounding-scale gap doesn't cry off-pace)
+- `behind` — projection slower, but within `GOAL_FARBEHIND_BAND` (8 %)
+- `far_behind` — projection slower by more than 8 % (a materially out-of-reach goal, ~+17 min on a 3:30)
+
+The panel renders the verdict + the signed delta (`X faster` / `X slower`) as a coloured pill under the predicted-finish line, hidden entirely when there's no goal or no qualifying effort to check against. Pure — reuses `riegelPredict` from `training.ts`, no new numbers. **Web-only** (the panel + `race_day.ts` are web-only — no mobile race-day surface); 9 unit tests in `race_day.test.ts`, wiring pinned by `tests-e2e/plans/race-day-feasibility.spec.ts`.
+
 ## Pace derivation — why multipliers, not Daniels tables
 
 Daniels' official training paces are derived from VDOT via the same implicit equation used for VDOT itself. There's no closed-form inverse; real implementations lookup the paces in a published table. For v1 we anchor training paces on goal pace directly (`easy = 1.22 × goal`, `tempo = 0.97 × goal`, etc.) — these multipliers land within ~5 s/km of the Daniels tables across the 3:00-5:00/km goal band, which is well inside the tolerance band a plan runner expects.

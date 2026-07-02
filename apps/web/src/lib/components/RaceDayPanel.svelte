@@ -6,6 +6,7 @@
 		negativeSplitPacing,
 		raceChecklist,
 		fmtSplitTime,
+		goalFeasibility,
 	} from '$lib/runs/race_day';
 	import { riegelPredict, predictionConfidence } from '$lib/training/training';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
@@ -24,15 +25,12 @@
 
 	let daysOut = $derived(daysUntilRace(raceDate, today));
 
-	// Predict the finish from the goal time if the user set one,
-	// otherwise pick a Riegel projection off the runner's best
-	// qualifying recent effort (>1 km, in the last 90 days). When the
-	// prediction is data-derived we also capture the anchoring effort so
-	// we can grade its confidence (distance gap / recency / sample size).
-	let prediction = $derived.by(() => {
-		if (goalTimeSec != null) {
-			return { sec: goalTimeSec, fromGoal: true, anchor: null, qualifyingCount: 0 };
-		}
+	// The fitness-derived prediction: a Riegel projection off the runner's
+	// best qualifying recent effort (>1 km, in the last 90 days). Computed
+	// even when a goal time is set, so we can sanity-check the goal against
+	// current fitness. The anchoring effort is captured to grade confidence
+	// (distance gap / recency / sample size).
+	let dataPrediction = $derived.by(() => {
 		const now = Date.now();
 		const cutoff = now - 90 * 24 * 60 * 60 * 1000;
 		let bestSec: number | null = null;
@@ -52,20 +50,36 @@
 				};
 			}
 		}
-		return { sec: bestSec, fromGoal: false, anchor, qualifyingCount };
+		return { sec: bestSec, anchor, qualifyingCount };
 	});
 
-	let predictedSec = $derived(prediction.sec);
+	let fromGoal = $derived(goalTimeSec != null);
+	// Headline finish: the goal time when the runner set one, else the
+	// fitness projection.
+	let predictedSec = $derived(fromGoal ? goalTimeSec : dataPrediction.sec);
 
 	// Confidence chip — only for data-derived predictions (a user-set
 	// goal time isn't a prediction, so no data-quality grade applies).
 	let confidence = $derived.by(() => {
-		if (prediction.fromGoal || prediction.anchor == null) return null;
+		if (fromGoal || dataPrediction.anchor == null) return null;
 		return predictionConfidence({
-			knownDistanceM: prediction.anchor.distanceM,
+			knownDistanceM: dataPrediction.anchor.distanceM,
 			targetDistanceM: distanceM,
-			daysSinceBest: prediction.anchor.daysSinceBest,
-			qualifyingRunCount: prediction.qualifyingCount,
+			daysSinceBest: dataPrediction.anchor.daysSinceBest,
+			qualifyingRunCount: dataPrediction.qualifyingCount,
+		});
+	});
+
+	// Goal feasibility — only when the runner set a goal AND recent efforts
+	// give a fitness projection to check it against. Hidden otherwise.
+	let feasibility = $derived.by(() => {
+		if (!fromGoal || goalTimeSec == null || dataPrediction.sec == null) return null;
+		return goalFeasibility(goalTimeSec, dataPrediction.sec);
+	});
+	let feasibilityLabel = $derived.by(() => {
+		if (feasibility == null) return null;
+		return m(`raceDayPanel.feasibility_${feasibility.verdict}`, {
+			delta: fmtSplitTime(Math.abs(feasibility.deltaSec)),
 		});
 	});
 
@@ -115,6 +129,9 @@
 						title={confidenceReason}
 					>{confidenceLabel}</span>
 				{/if}
+			{/if}
+			{#if feasibilityLabel != null}
+				<p class="feasibility feas-{feasibility?.verdict}">{feasibilityLabel}</p>
 			{/if}
 		</header>
 
@@ -205,6 +222,29 @@
 	.confidence-chip.conf-high { background: rgba(255, 255, 255, 0.92); color: #047857; }
 	.confidence-chip.conf-moderate { background: rgba(255, 255, 255, 0.82); color: #B45309; }
 	.confidence-chip.conf-low { background: rgba(255, 255, 255, 0.7); color: #B91C1C; }
+
+	.feasibility {
+		margin: 0.5rem 0 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.15);
+	}
+	.feasibility::before {
+		content: '';
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		background: currentColor;
+	}
+	.feasibility.feas-ahead,
+	.feasibility.feas-on_track { color: #ECFDF5; }
+	.feasibility.feas-behind { color: #FEF3C7; }
+	.feasibility.feas-far_behind { color: #FEE2E2; }
 
 	.pacing-section {
 		background: rgba(255, 255, 255, 0.12);
