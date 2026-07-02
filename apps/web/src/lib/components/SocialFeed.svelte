@@ -226,7 +226,7 @@
 	{:else if entries.length === 0}
 		<div class="empty-card">
 			{#if !followsAnyone}
-				<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
+				<img src="/logo-mark.svg" alt="" width="64" height="64" class="empty-mark" />
 				<h3>{m('socialFeed.emptyTitle')}</h3>
 				<p class="empty-text">
 					{m('socialFeed.emptyText')}
