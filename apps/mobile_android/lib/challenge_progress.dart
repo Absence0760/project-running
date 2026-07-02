@@ -132,3 +132,114 @@ int _compareEntries(RankableEntry a, RankableEntry b) {
   final bk = b.userId ?? b.teamClubId ?? '';
   return ak.compareTo(bk);
 }
+
+const int _dayMs = 86400000;
+
+/// Tolerance band around the even-pace line inside which a runner counts as
+/// "on track" rather than ahead/behind — ±5 %. Shared with the web twin so the
+/// verdict is identical on both platforms.
+const double kOnPaceBand = 0.05;
+
+enum ChallengePaceStatus { upcoming, active, ended }
+
+enum PaceVerdict { ahead, onTrack, behind }
+
+/// Locale/unit-agnostic on-pace projection for a time-boxed goal challenge. The
+/// CALLER localises + unit-formats the numbers — this layer carries raw metric
+/// units + the verdict enum. Everything goal-derived is null on a goal-less
+/// (pure-ranking) board.
+class ChallengePace {
+  final ChallengePaceStatus status;
+  final double elapsedFraction;
+  final int daysRemaining;
+  final num? expectedValue;
+  final num? projectedValue;
+  final num? remainingValue;
+  final num? requiredPerDay;
+  final PaceVerdict? verdict;
+  const ChallengePace({
+    required this.status,
+    required this.elapsedFraction,
+    required this.daysRemaining,
+    required this.expectedValue,
+    required this.projectedValue,
+    required this.remainingValue,
+    required this.requiredPerDay,
+    required this.verdict,
+  });
+}
+
+/// Project a joined runner's standing in a time-boxed goal challenge: where the
+/// even-pace line sits now, whether they're ahead/behind it, and the daily rate
+/// still needed to finish. All times are epoch ms so the helper stays pure and
+/// timezone-free (the caller parses the ISO window). Mirrors the SQL-fed value
+/// exactly — it only re-shapes the numbers the leaderboard already computed.
+ChallengePace challengePace(
+  num value,
+  num? goal,
+  int startMs,
+  int endMs,
+  int nowMs,
+) {
+  final hasGoal = goal != null && goal > 0;
+
+  final ChallengePaceStatus status;
+  final double elapsedFraction;
+  if (nowMs < startMs) {
+    status = ChallengePaceStatus.upcoming;
+    elapsedFraction = 0;
+  } else if (nowMs >= endMs || endMs <= startMs) {
+    status = ChallengePaceStatus.ended;
+    elapsedFraction = 1;
+  } else {
+    status = ChallengePaceStatus.active;
+    elapsedFraction = (nowMs - startMs) / (endMs - startMs);
+  }
+
+  final daysRemaining =
+      (endMs - nowMs) <= 0 ? 0 : ((endMs - nowMs) / _dayMs).ceil();
+  final num? expectedValue = hasGoal ? goal * elapsedFraction : null;
+  final num? remainingValue =
+      hasGoal ? (goal - value > 0 ? goal - value : 0) : null;
+
+  num? projectedValue;
+  if (hasGoal && status == ChallengePaceStatus.active && elapsedFraction > 0) {
+    projectedValue = value / elapsedFraction;
+  } else if (hasGoal && status == ChallengePaceStatus.ended) {
+    projectedValue = value;
+  }
+
+  num? requiredPerDay;
+  if (hasGoal &&
+      status != ChallengePaceStatus.ended &&
+      daysRemaining > 0 &&
+      remainingValue! > 0) {
+    requiredPerDay = remainingValue / daysRemaining;
+  }
+
+  PaceVerdict? verdict;
+  if (hasGoal &&
+      status == ChallengePaceStatus.active &&
+      value < goal &&
+      expectedValue! > 0) {
+    final ratio = value / expectedValue;
+    if (ratio >= 1 + kOnPaceBand) {
+      verdict = PaceVerdict.ahead;
+    } else if (ratio < 1 - kOnPaceBand) {
+      verdict = PaceVerdict.behind;
+    } else {
+      verdict = PaceVerdict.onTrack;
+    }
+  }
+
+  return ChallengePace(
+    status: status,
+    elapsedFraction: elapsedFraction,
+    daysRemaining: daysRemaining,
+    expectedValue: expectedValue,
+    projectedValue: projectedValue,
+    remainingValue: remainingValue,
+    requiredPerDay: requiredPerDay,
+    verdict: verdict,
+  );
+}

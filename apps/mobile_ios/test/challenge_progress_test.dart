@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/challenge_progress.dart';
 
+const int _day = 86400000;
+
 void main() {
   test('progressFraction clamps to 0..1', () {
     expect(progressFraction(50, 100), 0.5);
@@ -96,5 +98,77 @@ void main() {
       ['blue', 1],
       ['red', 1],
     ]);
+  });
+
+  test('challengePace on_track at the even-pace line mid-window', () {
+    final p = challengePace(50, 100, 0, 10 * _day, 5 * _day);
+    expect(p.status, ChallengePaceStatus.active);
+    expect(p.elapsedFraction, 0.5);
+    expect(p.expectedValue, 50);
+    expect(p.projectedValue, 100);
+    expect(p.remainingValue, 50);
+    expect(p.daysRemaining, 5);
+    expect(p.requiredPerDay, 10);
+    expect(p.verdict, PaceVerdict.onTrack);
+  });
+
+  test('challengePace behind flags the daily rate needed to finish', () {
+    final p = challengePace(30, 100, 0, 10 * _day, 5 * _day);
+    expect(p.verdict, PaceVerdict.behind);
+    expect(p.projectedValue, 60);
+    expect(p.remainingValue, 70);
+    expect(p.requiredPerDay, 14);
+  });
+
+  test('challengePace ahead when past the even-pace line', () {
+    final p = challengePace(70, 100, 0, 10 * _day, 5 * _day);
+    expect(p.verdict, PaceVerdict.ahead);
+    expect(p.projectedValue, 140);
+    expect(p.requiredPerDay, 6);
+  });
+
+  test('challengePace goal-less board nulls every goal-derived field', () {
+    final p = challengePace(50, null, 0, 10 * _day, 5 * _day);
+    expect(p.status, ChallengePaceStatus.active);
+    expect(p.elapsedFraction, 0.5);
+    expect(p.daysRemaining, 5);
+    expect(p.expectedValue, null);
+    expect(p.projectedValue, null);
+    expect(p.remainingValue, null);
+    expect(p.requiredPerDay, null);
+    expect(p.verdict, null);
+  });
+
+  test('challengePace upcoming has no projection or verdict yet', () {
+    final p = challengePace(0, 100, 2 * _day, 12 * _day, 0);
+    expect(p.status, ChallengePaceStatus.upcoming);
+    expect(p.elapsedFraction, 0);
+    expect(p.projectedValue, null);
+    expect(p.verdict, null);
+    expect(p.daysRemaining, 12);
+  });
+
+  test('challengePace ended freezes projection to the final value', () {
+    final p = challengePace(80, 100, 0, 10 * _day, 11 * _day);
+    expect(p.status, ChallengePaceStatus.ended);
+    expect(p.elapsedFraction, 1);
+    expect(p.projectedValue, 80);
+    expect(p.remainingValue, 20);
+    expect(p.requiredPerDay, null);
+    expect(p.verdict, null);
+    expect(p.daysRemaining, 0);
+  });
+
+  test('challengePace complete drops the verdict + required rate', () {
+    final p = challengePace(120, 100, 0, 10 * _day, 5 * _day);
+    expect(p.verdict, null);
+    expect(p.remainingValue, 0);
+    expect(p.requiredPerDay, null);
+  });
+
+  test('challengePace daysRemaining ceils a partial day', () {
+    final p = challengePace(40, 100, 0, 10 * _day, (5.5 * _day).round());
+    expect(p.daysRemaining, 5);
+    expect(p.requiredPerDay, 12);
   });
 }
