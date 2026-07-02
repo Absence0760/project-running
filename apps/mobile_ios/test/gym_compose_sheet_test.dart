@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,6 +13,22 @@ Future<({LocalGymStore store, Directory dir})> _store(String tag) async {
   final store = LocalGymStore();
   await store.init(overrideDirectory: dir);
   return (store: store, dir: dir);
+}
+
+/// A store whose create always fails, to drive the composer's save-error path.
+class _ThrowingGymStore extends LocalGymStore {
+  @override
+  Future<StoredGymWorkout> createLocal({
+    String? title,
+    required DateTime startedAt,
+    int? durationS,
+    String? notes,
+    bool isPublic = false,
+    Map<String, dynamic>? metadata,
+    List<GymSetInput> sets = const [],
+  }) async {
+    throw Exception('disk full');
+  }
 }
 
 /// A host whose button pushes the composer as a route, so the sheet's
@@ -91,6 +108,71 @@ void main() {
       expect(w.sets.first['weight_kg'], 140.0);
     } finally {
       f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('rapid double-tap Save creates only one workout',
+      (tester) async {
+    final f = await _store('double_');
+    try {
+      await tester.pumpWidget(_opener(f.store));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(1), 'Squat'); // exercise name
+      await tester.enterText(fields.at(2), '5'); // reps
+
+      // First tap starts the async save and (synchronously) flips _saving.
+      await tester.tap(find.text('Save workout'));
+      // Rebuild → the button now shows the saving spinner + onPressed is null.
+      await tester.pump();
+      // A second tap while the write is still in flight must be dropped by the
+      // _saving guard — not create a second workout / pop twice.
+      await tester.tap(find.byType(FilledButton));
+
+      // Now let the real file write complete and settle the route pop.
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(f.store.workouts, hasLength(1));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a failed save surfaces the error and writes nothing',
+      (tester) async {
+    final dir = Directory.systemTemp.createTempSync('gym_compose_savefail_');
+    final store = _ThrowingGymStore();
+    await store.init(overrideDirectory: dir);
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GymComposeSheet(store: store)),
+      ));
+      await tester.pump();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(1), 'Squat'); // exercise name
+      await tester.enterText(fields.at(2), '5'); // reps
+
+      await tester.tap(find.text('Save workout'));
+      // createLocal throws synchronously-ish; drain then rebuild the error text.
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+
+      expect(find.text("Couldn't save workout."), findsOneWidget);
+      // The sheet stays open and re-enables the Save button for a retry.
+      expect(find.text('Save workout'), findsOneWidget);
+      expect(store.workouts, isEmpty);
+    } finally {
+      dir.deleteSync(recursive: true);
     }
   });
 

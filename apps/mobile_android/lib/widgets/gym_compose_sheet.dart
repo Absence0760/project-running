@@ -398,7 +398,13 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _saving ? null : _save,
-                  child: Text(l10n.gymEditorSave),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(l10n.gymEditorSave),
                 ),
               ],
             ),
