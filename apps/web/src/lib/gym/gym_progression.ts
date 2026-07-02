@@ -28,6 +28,7 @@ export type ProgressionReason =
 	| 'increase_weight'
 	| 'increase_reps'
 	| 'hold'
+	| 'establish_baseline'
 	| 'deload'
 	| 'none';
 
@@ -211,11 +212,19 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 				return { suggestedWeightKg: weight, suggestedRepsMin: repsMin, suggestedRepsMax: repsMax, reason: 'hold' };
 			}
 			const prescribed = round1(percent * oneRm);
+			// A first/bodyweight session has no prior top weight to compare against,
+			// so the prescription isn't a "hold" of anything — it's the starting load.
+			const reason: ProgressionReason =
+				weight == null
+					? 'establish_baseline'
+					: prescribed > weight
+						? 'increase_weight'
+						: 'hold';
 			return {
 				suggestedWeightKg: prescribed,
 				suggestedRepsMin: repsMin,
 				suggestedRepsMax: repsMax,
-				reason: weight != null && prescribed > weight ? 'increase_weight' : 'hold',
+				reason,
 			};
 		}
 

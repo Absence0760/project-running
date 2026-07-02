@@ -3881,6 +3881,7 @@ export const en = {
 	"gym.routine.nextTarget.increase_weight": "Add load next time",
 	"gym.routine.nextTarget.increase_reps": "Add reps next time",
 	"gym.routine.nextTarget.hold": "Hold — repeat this target",
+	"gym.routine.nextTarget.establish_baseline": "Establish baseline — set a starting weight",
 	"gym.routine.nextTarget.deload": "Deload — back off the load",
 	"gym.routine.nextTarget.repClimb": "rep climb {from}→{to}",
 

@@ -3868,6 +3868,7 @@ export const messages = {
 	"gym.routine.nextTarget.increase_weight": "Subir carga la próxima vez",
 	"gym.routine.nextTarget.increase_reps": "Subir repeticiones la próxima vez",
 	"gym.routine.nextTarget.hold": "Mantener — repetir este objetivo",
+	"gym.routine.nextTarget.establish_baseline": "Establecer base — fija el peso inicial",
 	"gym.routine.nextTarget.deload": "Deload — reducir la carga",
 	"gym.routine.nextTarget.repClimb": "subida de reps {from}→{to}",
 

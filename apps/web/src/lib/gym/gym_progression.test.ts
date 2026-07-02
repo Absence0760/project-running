@@ -146,6 +146,21 @@ test('percent_cycle: prescription below last top weight -> hold', () => {
 	assert.equal(out.reason, 'hold');
 });
 
+test('percent_cycle: first/bodyweight session (no prior top weight) -> establish_baseline, not hold', () => {
+	// Regression: a concrete percentage-of-1RM prescription with no prior top
+	// weight (first session, or a bodyweight-logged one) was mislabelled 'hold' —
+	// there was nothing to hold. The weight value is unchanged; only the label was.
+	const out = nextPrescription(
+		input({
+			scheme: 'percent_cycle',
+			lastSets: [s(3, null)],
+			params: { percent: 0.85, oneRmKg: 150 },
+		}),
+	);
+	assert.equal(out.reason, 'establish_baseline');
+	assert.equal(out.suggestedWeightKg, 127.5);
+});
+
 test('rpe_autoreg: achieved RPE below target -> increase_weight', () => {
 	const out = nextPrescription(
 		input({

@@ -21,7 +21,7 @@ export interface NextTargetHint {
 	currentTopKg: number | null;
 	/// Reps at the heaviest logged set this session, for a rep-climb hint.
 	currentTopReps: number | null;
-	reason: 'increase_weight' | 'increase_reps' | 'hold' | 'deload';
+	reason: 'increase_weight' | 'increase_reps' | 'hold' | 'establish_baseline' | 'deload';
 }
 
 // Weights canonical kg.

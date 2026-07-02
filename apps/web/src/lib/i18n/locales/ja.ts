@@ -3864,6 +3864,7 @@ export const messages = {
 	"gym.routine.nextTarget.increase_weight": "次回は重量を上げる",
 	"gym.routine.nextTarget.increase_reps": "次回は回数を増やす",
 	"gym.routine.nextTarget.hold": "維持 — この目標を繰り返す",
+	"gym.routine.nextTarget.establish_baseline": "基準を設定 — 開始重量を決める",
 	"gym.routine.nextTarget.deload": "ディロード — 重量を下げる",
 	"gym.routine.nextTarget.repClimb": "回数アップ {from}→{to}",
 
