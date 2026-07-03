@@ -229,6 +229,76 @@ Deno.test('checkRateLimit: non-array data is treated as RPC failure', async () =
   assertEquals(r!.status, 503, 'non-array RPC result under fail-closed must 503');
 });
 
+// ───────────────────── RPC-error log scrubbing ─────────────────────
+
+// PostgREST errors carry `.details`/`.hint` that can echo the offending
+// row's values (the sentry_scrub.ts threat model). The helper must log
+// only `.code` + `.message` — a regression back to logging the raw
+// error object would ship row fragments to the function-log aggregator
+// on every rate-limited EF. /audit/pii-in-logs.
+
+function captureWarn(fn: () => Promise<void>): Promise<string> {
+  const logged: unknown[][] = [];
+  const orig = console.warn;
+  console.warn = (...args: unknown[]) => {
+    logged.push(args);
+  };
+  return fn()
+    .then(() => JSON.stringify(logged, (_k, v) => (v === undefined ? '<undefined>' : v)))
+    .finally(() => {
+      console.warn = orig;
+    });
+}
+
+const rowEchoingRpcError = {
+  message: 'duplicate key value violates unique constraint',
+  code: '23505',
+  details: 'Key (user_id)=(details-sentinel-uuid) already exists.',
+  hint: 'hint-sentinel do not log',
+};
+
+Deno.test('checkRateLimit: fail-open RPC-error log carries code+message, never details/hint', async () => {
+  const sb = mockSupabase({ data: null, error: rowEchoingRpcError });
+  const flat = await captureWarn(async () => {
+    await checkRateLimit(sb, 'u-1', 'b', 4, 3600);
+  });
+  assert(flat.includes('23505'), 'SQLSTATE code must survive for triage');
+  assert(flat.includes('duplicate key value'), 'message must survive for triage');
+  assert(!flat.includes('details-sentinel-uuid'), `details must be scrubbed; logged: ${flat}`);
+  assert(!flat.includes('hint-sentinel'), `hint must be scrubbed; logged: ${flat}`);
+});
+
+Deno.test('checkRateLimit: fail-closed RPC-error log carries code+message, never details/hint', async () => {
+  const sb = mockSupabase({ data: null, error: rowEchoingRpcError });
+  const flat = await captureWarn(async () => {
+    await checkRateLimit(sb, 'u-1', 'b', 4, 3600, { failClosed: true });
+  });
+  assert(flat.includes('23505'));
+  assert(!flat.includes('details-sentinel-uuid'), `details must be scrubbed; logged: ${flat}`);
+  assert(!flat.includes('hint-sentinel'), `hint must be scrubbed; logged: ${flat}`);
+});
+
+Deno.test('checkRateLimitTiered: RPC-error log carries code+message, never details/hint', async () => {
+  const sb = mockSupabase({ data: null, error: rowEchoingRpcError });
+  const flat = await captureWarn(async () => {
+    await checkRateLimitTiered(sb, 'u-1', 'b', 4, 16, 3600);
+  });
+  assert(flat.includes('23505'));
+  assert(!flat.includes('details-sentinel-uuid'), `details must be scrubbed; logged: ${flat}`);
+  assert(!flat.includes('hint-sentinel'), `hint must be scrubbed; logged: ${flat}`);
+});
+
+Deno.test('rpc-error log tolerates a null error (empty-array RPC result)', async () => {
+  // The failure-posture branch is also reached with error=null when the
+  // RPC returns no rows — the scrub must not throw on it.
+  const sb = mockSupabase({ data: [], error: null });
+  const flat = await captureWarn(async () => {
+    const r = await checkRateLimit(sb, 'u-1', 'b', 4, 3600);
+    assertEquals(r, null);
+  });
+  assert(flat.length > 0, 'the warn line must still be emitted');
+});
+
 // ───────────────────── checkRateLimitTiered ─────────────────────
 
 Deno.test('checkRateLimitTiered: returns null on allow', async () => {

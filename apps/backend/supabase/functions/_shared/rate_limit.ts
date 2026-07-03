@@ -30,12 +30,27 @@ export interface RateLimitOpts {
   failClosed?: boolean;
 }
 
+/// Log-safe projection of a Supabase/PostgREST error: `.code` +
+/// `.message` only. `.details`/`.hint` can echo the offending row's
+/// values (the sentry_scrub.ts threat model) and must never reach the
+/// function-log aggregator. Mirrors `supabaseErrorFields` in the web
+/// coach handler. /audit/pii-in-logs.
+function supabaseErrorFields(
+  error: unknown,
+): { code: string | undefined; message: string | undefined } {
+  const e = error as { code?: string; message?: string } | null | undefined;
+  return { code: e?.code, message: e?.message };
+}
+
 function rpcErrorResponse(bucket: string, error: unknown, failClosed: boolean): Response | null {
   if (!failClosed) {
-    console.warn('check_rate_limit RPC failed; allowing request:', error);
+    console.warn('check_rate_limit RPC failed; allowing request:', supabaseErrorFields(error));
     return null;
   }
-  console.warn('check_rate_limit RPC failed; rejecting fail-closed request:', error);
+  console.warn(
+    'check_rate_limit RPC failed; rejecting fail-closed request:',
+    supabaseErrorFields(error),
+  );
   return new Response(
     JSON.stringify({
       error: 'rate_limit_unavailable',
