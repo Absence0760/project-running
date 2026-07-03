@@ -9,11 +9,13 @@ import {
 	assertMatch,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+	avatarCandidatePaths,
 	BACKUP_FORMAT,
 	BACKUP_VERSION,
 	buildBackupManifest,
 	buildBackupSpecs,
 	isSafeStoragePath,
+	orphanStorageEntries,
 	PROFILE_SELECT,
 	shapeExportRoute,
 	stripProfileId,
@@ -47,7 +49,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// 20270222_001) added exercises filtered to the subject's OWN custom
 	// entries (author_id = uid) — seeded global rows are shared reference
 	// data, not personal data.
-	assertEquals(specs.length, 59, `expected 59 specs, got ${specs.length}`);
+	assertEquals(specs.length, 61, `expected 61 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -56,6 +58,8 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'integrations.json',
 		'run_kudos.json',
 		'run_comments.json',
+		'run_kudos_received.json',
+		'run_comments_received.json',
 		'run_photos.json',
 		'segment_efforts.json',
 		'gear.json',
@@ -591,4 +595,70 @@ Deno.test('buildBackupManifest matches the run-app-backup v1 shape', () => {
 	});
 	assertEquals(BACKUP_FORMAT, 'run-app-backup');
 	assertEquals(BACKUP_VERSION, 1);
+});
+
+Deno.test('avatarCandidatePaths enumerates the stable per-extension avatar set', () => {
+	// Mirrors the Go builder's avatarExts probe order and the web
+	// uploader's avatarPathsFor — the export probes exactly these
+	// paths, nothing else, so a hostile uid can't widen the fetch.
+	assertEquals(avatarCandidatePaths(TEST_UID), [
+		`${TEST_UID}/avatar.jpg`,
+		`${TEST_UID}/avatar.png`,
+		`${TEST_UID}/avatar.webp`,
+	]);
+});
+
+Deno.test('orphanStorageEntries sweeps unarchived objects, dedupes, and skips exports + traversal', () => {
+	const archived = new Set([`${TEST_UID}/run-1.json.gz`, `${TEST_UID}/run-1.hr.json.gz`]);
+	const entries = orphanStorageEntries({
+		bucket: 'runs',
+		userId: TEST_UID,
+		archived,
+		keys: [
+			`${TEST_UID}/run-1.json.gz`, // archived row-driven → deduped
+			`${TEST_UID}/run-1.hr.json.gz`, // archived row-driven → deduped
+			`${TEST_UID}/run-1.matched.json.gz`, // CAS orphan → swept
+			`${TEST_UID}/exports/2026-01-01.zip`, // prior export artifact → skipped
+			`${TEST_UID}/../etc/passwd`, // traversal → skipped
+			'other-user/run-9.json.gz', // outside the prefix → skipped
+		],
+	});
+	assertEquals(entries, [
+		{
+			key: `${TEST_UID}/run-1.matched.json.gz`,
+			entry: `storage/runs/run-1.matched.json.gz`,
+		},
+	]);
+});
+
+Deno.test('orphanStorageEntries only skips exports/ in the runs bucket', () => {
+	// run-photos has no exports/ convention; an object under that name
+	// there is still the subject's data and must be swept.
+	const entries = orphanStorageEntries({
+		bucket: 'run-photos',
+		userId: TEST_UID,
+		archived: new Set<string>(),
+		keys: [`${TEST_UID}/photo-1_512.jpg`, `${TEST_UID}/exports/x.jpg`],
+	});
+	assertEquals(entries, [
+		{ key: `${TEST_UID}/photo-1_512.jpg`, entry: 'storage/run-photos/photo-1_512.jpg' },
+		{ key: `${TEST_UID}/exports/x.jpg`, entry: 'storage/run-photos/exports/x.jpg' },
+	]);
+});
+
+Deno.test('kudos + comments received are exported via a parent-run inner join (GDPR Art 15/20)', () => {
+	// Neither table carries the run owner's uid, so the received legs
+	// filter on the embedded parent run's user_id — and the embed must
+	// project ONLY user_id so no other run column rides along twice.
+	const specs = buildBackupSpecs(TEST_UID);
+	const kudos = specs.find((s) => s.entry === 'run_kudos_received.json');
+	assertExists(kudos);
+	assertEquals(kudos!.table, 'run_kudos');
+	assertEquals(kudos!.filter, `runs.user_id=eq.${TEST_UID}`);
+	assertEquals(kudos!.select, '*,runs!inner(user_id)');
+	const comments = specs.find((s) => s.entry === 'run_comments_received.json');
+	assertExists(comments);
+	assertEquals(comments!.table, 'run_comments');
+	assertEquals(comments!.filter, `runs.user_id=eq.${TEST_UID}`);
+	assertEquals(comments!.select, '*,runs!inner(user_id)');
 });

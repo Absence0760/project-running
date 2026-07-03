@@ -101,6 +101,7 @@ const (
 	BucketRunPhotos   = "run-photos"
 	BucketRoutePhotos = "route-photos"
 	BucketClubPhotos  = "club-photos"
+	BucketAvatars     = "avatars"
 )
 
 // MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag

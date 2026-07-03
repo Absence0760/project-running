@@ -141,6 +141,19 @@ type Backend interface {
 	// and ships the zip without the failed entry.
 	DownloadPhoto(ctx context.Context, path string) ([]byte, string, error)
 
+	// DownloadAvatar pulls the raw bytes (+ Content-Type) of an
+	// avatars-bucket object. The Art 20 export bundles the profile
+	// picture itself, not just the avatar_url on the profile row.
+	// Returns a non-nil error when the object is missing; the builder
+	// probes each candidate path and tolerates misses.
+	DownloadAvatar(ctx context.Context, path string) ([]byte, string, error)
+
+	// ListStorageObjects walks a Storage bucket under `prefix` (the
+	// user's folder) and returns every object key, recursing into
+	// subfolders. The backup builder uses it to sweep CAS-orphaned
+	// objects that no DB row references into the DSAR export.
+	ListStorageObjects(ctx context.Context, bucket, prefix string) ([]string, error)
+
 	// FetchExportPersonalDataTables bundles every additional table
 	// the audit/data-export-completeness pass added to the export
 	// (May 2026 + 2026-05-25 refresh): coach_messages, notifications,
@@ -378,7 +391,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			UserID:        userID,
 			ExportedFrom:  "go-service",
 			ExtraTables:   extras,
-		}, s.Backend.DownloadRawTrackBytes, s.Backend.DownloadPhoto)
+		}, BackupFetchers{
+			RawTrack:    s.Backend.DownloadRawTrackBytes,
+			Photo:       s.Backend.DownloadPhoto,
+			Avatar:      s.Backend.DownloadAvatar,
+			ListObjects: s.Backend.ListStorageObjects,
+		})
 		if err != nil {
 			s.log().Error("dataexport: backup zip build failed", "err", err, "user_id", userID)
 			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
@@ -419,7 +437,12 @@ func (s *Server) extractUserID(r *http.Request) (string, error) {
 			return nil, fmt.Errorf("unexpected alg: %v", t.Header["alg"])
 		}
 		return s.JWTSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
+	}, jwt.WithValidMethods([]string{"HS256"}),
+		// golang-jwt validates `exp` only when present, so a token that
+		// omits it would be valid forever. Supabase always issues
+		// short-lived tokens with `exp` — same guard as livehub's
+		// extractSub.
+		jwt.WithExpirationRequired())
 	if err != nil || !tok.Valid {
 		return "", errors.New("invalid_token")
 	}
@@ -673,6 +696,29 @@ type RawTrackFetcher func(ctx context.Context, path string) ([]byte, error)
 // the images themselves, not just `run_photos.json` metadata.
 type PhotoFetcher func(ctx context.Context, path string) ([]byte, string, error)
 
+// ObjectLister enumerates every object key under a bucket prefix.
+// Backs the backup builder's orphan sweep; production wires
+// SupabaseClient.ListStorageObjects.
+type ObjectLister func(ctx context.Context, bucket, prefix string) ([]string, error)
+
+// BackupFetchers bundles the Storage callbacks BuildBackupZip fans out
+// over. Grouped in a struct because the positional list outgrew the
+// signature once avatars joined tracks + photos; a nil field skips its
+// section (tests exercise one section at a time).
+type BackupFetchers struct {
+	RawTrack    RawTrackFetcher
+	Photo       PhotoFetcher
+	Avatar      PhotoFetcher
+	ListObjects ObjectLister
+}
+
+// avatarExts enumerates the extensions the avatar uploader can write.
+// The web uploader keeps a SINGLE object at the stable
+// `{uid}/avatar.{ext}` path (remove-then-insert across all three
+// extensions), so the full candidate set is enumerable without a
+// bucket list — mirror of avatarPathsFor in apps/web/src/lib/core/data.ts.
+var avatarExts = []string{"jpg", "png", "webp"}
+
 // BackupFormatVersion is the manifest's `version` field. Bump only
 // when the on-disk shape changes incompatibly; readers reject
 // versions above the one they know.
@@ -690,7 +736,7 @@ const BackupFormatName = "run-app-backup"
 // web. Track download failures are silently swallowed — the row
 // stays in the manifest, the `tracks/...` entry is omitted, the
 // zip ships.
-func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher RawTrackFetcher, photoFetcher PhotoFetcher) ([]byte, error) {
+func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetchers) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
@@ -783,6 +829,11 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		return nil, err
 	}
 
+	// Object keys the row-driven loops below actually archived, per
+	// bucket — the orphan prefix-walk dedupes against these.
+	archivedRunObjects := map[string]bool{}
+	archivedPhotoObjects := map[string]bool{}
+
 	// Tracks — raw gzipped bytes, archived verbatim. STORE (no
 	// recompression) since the source is already deflated.
 	tracksAdded := 0
@@ -795,7 +846,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		if *r.TrackURL != expected {
 			continue
 		}
-		bytes, err := rawTrackFetcher(ctx, *r.TrackURL)
+		bytes, err := f.RawTrack(ctx, *r.TrackURL)
 		if err != nil || len(bytes) == 0 {
 			continue
 		}
@@ -810,6 +861,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		if _, err := fw.Write(bytes); err != nil {
 			return nil, err
 		}
+		archivedRunObjects[*r.TrackURL] = true
 		tracksAdded++
 	}
 
@@ -825,7 +877,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		if *r.HrSeriesURL != expected {
 			continue
 		}
-		bytes, err := rawTrackFetcher(ctx, *r.HrSeriesURL)
+		bytes, err := f.RawTrack(ctx, *r.HrSeriesURL)
 		if err != nil || len(bytes) == 0 {
 			continue
 		}
@@ -840,6 +892,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		if _, err := fw.Write(bytes); err != nil {
 			return nil, err
 		}
+		archivedRunObjects[*r.HrSeriesURL] = true
 		hrAdded++
 	}
 
@@ -875,7 +928,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 	// per-photo — the metadata row already shipped; the zip closes
 	// without the missing image (same contract as tracks).
 	photosAdded := 0
-	if photoFetcher != nil && in.ExtraTables != nil {
+	if f.Photo != nil && in.ExtraTables != nil {
 		for _, row := range in.ExtraTables["run_photos.json"] {
 			sp, _ := row["storage_path"].(string)
 			if sp == "" {
@@ -890,7 +943,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 			if sp != path.Clean(sp) || strings.HasPrefix(sp, "/") || strings.Contains(sp, "..") {
 				continue
 			}
-			body, _, err := photoFetcher(ctx, sp)
+			body, _, err := f.Photo(ctx, sp)
 			if err != nil || len(body) == 0 {
 				continue
 			}
@@ -905,18 +958,127 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 			if _, err := fw.Write(body); err != nil {
 				return nil, err
 			}
+			archivedPhotoObjects[sp] = true
 			photosAdded++
 		}
 	}
 
+	// Avatar — the profile picture bytes from the public `avatars`
+	// bucket, so the Art 20 export carries the image itself and not just
+	// the avatar_url on the profile row. Probes the enumerable candidate
+	// paths (see avatarExts); a miss on every path just means the user
+	// has no avatar.
+	avatarsAdded := 0
+	if f.Avatar != nil && in.UserID != "" {
+		for _, ext := range avatarExts {
+			body, _, err := f.Avatar(ctx, fmt.Sprintf("%s/avatar.%s", in.UserID, ext))
+			if err != nil || len(body) == 0 {
+				continue
+			}
+			header := &zip.FileHeader{
+				Name:   "avatar." + ext,
+				Method: zip.Store,
+			}
+			fw, err := zw.CreateHeader(header)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := fw.Write(body); err != nil {
+				return nil, err
+			}
+			avatarsAdded++
+		}
+	}
+
+	// Prefix-walk the user's folders in the runs + run-photos buckets
+	// so every object under {uid}/ lands in the zip even without a DB
+	// row — the row-driven loops above miss CAS-orphaned matched tracks
+	// ({uid}/{run_id}.matched.json.gz left behind by the re-upload race,
+	// see worker.go), legacy tracks whose run row is gone, and the
+	// worker-generated photo thumbnails. Deduped against the row-driven
+	// entries; {uid}/exports/ is skipped (prior export artifacts —
+	// self-referential, and each is itself a copy of this data). A list
+	// failure is tolerated so the row-driven export still ships.
+	orphansAdded := 0
+	if f.ListObjects != nil && in.UserID != "" {
+		prefix := in.UserID + "/"
+		type bucketWalk struct {
+			bucket   string
+			archived map[string]bool
+			skipRel  func(string) bool
+			fetch    func(context.Context, string) ([]byte, error)
+		}
+		var walks []bucketWalk
+		if f.RawTrack != nil {
+			walks = append(walks, bucketWalk{
+				bucket:   schema.BucketRuns,
+				archived: archivedRunObjects,
+				skipRel:  func(rel string) bool { return strings.HasPrefix(rel, "exports/") },
+				fetch:    f.RawTrack,
+			})
+		}
+		if f.Photo != nil {
+			walks = append(walks, bucketWalk{
+				bucket:   schema.BucketRunPhotos,
+				archived: archivedPhotoObjects,
+				fetch: func(ctx context.Context, key string) ([]byte, error) {
+					body, _, err := f.Photo(ctx, key)
+					return body, err
+				},
+			})
+		}
+		for _, w := range walks {
+			keys, err := f.ListObjects(ctx, w.bucket, in.UserID)
+			if err != nil {
+				continue
+			}
+			for _, key := range keys {
+				if !strings.HasPrefix(key, prefix) {
+					continue
+				}
+				rel := strings.TrimPrefix(key, prefix)
+				if rel == "" || (w.skipRel != nil && w.skipRel(rel)) {
+					continue
+				}
+				if w.archived[key] {
+					continue
+				}
+				// Same defence-in-depth as the row-driven loops: a
+				// hostile object name must not land a traversal entry
+				// in the zip.
+				if key != path.Clean(key) || strings.Contains(key, "..") {
+					continue
+				}
+				body, err := w.fetch(ctx, key)
+				if err != nil || len(body) == 0 {
+					continue
+				}
+				header := &zip.FileHeader{
+					Name:   "storage/" + w.bucket + "/" + rel,
+					Method: zip.Store,
+				}
+				fw, err := zw.CreateHeader(header)
+				if err != nil {
+					return nil, err
+				}
+				if _, err := fw.Write(body); err != nil {
+					return nil, err
+				}
+				orphansAdded++
+			}
+		}
+	}
+
 	// manifest last so the counts include the actual tracks + photos
-	// + extra tables that made it in.
+	// + avatar + orphan objects + extra tables that made it in.
 	counts := map[string]interface{}{
-		"runs":      len(in.Runs),
-		"routes":    len(in.Routes),
-		"tracks":    tracksAdded,
-		"hr_series": hrAdded,
-		"photos":    photosAdded,
+		"runs":            len(in.Runs),
+		"routes":          len(in.Routes),
+		"tracks":          tracksAdded,
+		"hr_series":       hrAdded,
+		"photos":          photosAdded,
+		"avatars":         avatarsAdded,
+		"storage_orphans": orphansAdded,
 	}
 	for k, v := range extraCounts {
 		counts[k] = v

@@ -397,10 +397,12 @@ function xmlEscape(v: string): string {
 // Per-table failures are tolerated (logged + skipped) so a single
 // missing migration doesn't strand the export.
 import {
+	avatarCandidatePaths,
 	type BackupTableSpec,
 	buildBackupManifest,
 	buildBackupSpecs,
 	isSafeStoragePath,
+	orphanStorageEntries,
 	PROFILE_SELECT,
 	shapeExportRoute,
 	stripProfileId,
@@ -577,6 +579,8 @@ async function buildBackupZip(
 	// restore paths can re-upload byte-for-byte. Same path-shape
 	// assertion + RLS guarantee as buildGpxZip. The GPX rendering lives
 	// in the `gpx` format; the backup format matches the Go layout.
+	const archivedRunObjects = new Set<string>();
+	const archivedPhotoObjects = new Set<string>();
 	let tracksAdded = 0;
 	for (const r of runs) {
 		if (!r.track_url) continue;
@@ -588,6 +592,7 @@ async function buildBackupZip(
 			const bytes = new Uint8Array(await blob.arrayBuffer());
 			if (bytes.length === 0) continue;
 			await zip.add(`tracks/${r.id}.json.gz`, new Uint8ArrayReader(bytes), { level: 0 });
+			archivedRunObjects.add(r.track_url);
 			tracksAdded++;
 		} catch (_) {
 			/* skip the run; runs.json still lists it */
@@ -607,6 +612,7 @@ async function buildBackupZip(
 			const bytes = new Uint8Array(await blob.arrayBuffer());
 			if (bytes.length === 0) continue;
 			await zip.add(`hr/${r.id}.hr.json.gz`, new Uint8ArrayReader(bytes), { level: 0 });
+			archivedRunObjects.add(r.hr_series_url);
 			hrAdded++;
 		} catch (_) {
 			/* skip; the run row still ships */
@@ -628,9 +634,62 @@ async function buildBackupZip(
 			if (bytes.length === 0) continue;
 			const basename = sp.split('/').pop()!;
 			await zip.add(`photos/${basename}`, new Uint8ArrayReader(bytes), { level: 0 });
+			archivedPhotoObjects.add(sp);
 			photosAdded++;
 		} catch (_) {
 			/* skip; the metadata row already shipped */
+		}
+	}
+
+	// Avatar — the profile-picture bytes from the public `avatars`
+	// bucket, so the Art 20 export carries the image itself and not
+	// just the avatar_url on the profile row. Probes the enumerable
+	// candidate paths; a miss on every path just means no avatar.
+	let avatarsAdded = 0;
+	for (const p of avatarCandidatePaths(userId)) {
+		try {
+			const { data: blob } = await supabase.storage.from('avatars').download(p);
+			if (!blob) continue;
+			const bytes = new Uint8Array(await blob.arrayBuffer());
+			if (bytes.length === 0) continue;
+			await zip.add(`avatar.${p.split('.').pop()}`, new Uint8ArrayReader(bytes), { level: 0 });
+			avatarsAdded++;
+		} catch (_) {
+			/* no avatar stored at this candidate path */
+		}
+	}
+
+	// Prefix-walk the user's folders in the runs + run-photos buckets so
+	// every object under {userId}/ lands in the zip even without a DB
+	// row — the row-driven loops above miss CAS-orphaned matched tracks,
+	// legacy tracks whose run row is gone, and worker-generated photo
+	// thumbnails. Deduped against the row-driven entries via
+	// orphanStorageEntries; a per-bucket list failure is tolerated so the
+	// row-driven export still ships. Mirrors the Go builder's walk.
+	let orphansAdded = 0;
+	for (const { bucket, archived } of [
+		{ bucket: 'runs', archived: archivedRunObjects },
+		{ bucket: 'run-photos', archived: archivedPhotoObjects },
+	]) {
+		try {
+			const keys = await listAllObjects(supabase, bucket, userId);
+			for (const { key, entry } of orphanStorageEntries({ bucket, keys, userId, archived })) {
+				try {
+					const { data: blob } = await supabase.storage.from(bucket).download(key);
+					if (!blob) continue;
+					const bytes = new Uint8Array(await blob.arrayBuffer());
+					if (bytes.length === 0) continue;
+					await zip.add(entry, new Uint8ArrayReader(bytes), { level: 0 });
+					orphansAdded++;
+				} catch (_) {
+					/* skip the object; the sweep is best-effort per entry */
+				}
+			}
+		} catch (e) {
+			console.error(
+				`export-data backup: ${bucket} orphan sweep failed:`,
+				e instanceof Error ? e.message : String(e),
+			);
 		}
 	}
 
@@ -640,6 +699,8 @@ async function buildBackupZip(
 	counts['tracks'] = tracksAdded;
 	counts['hr_series'] = hrAdded;
 	counts['photos'] = photosAdded;
+	counts['avatars'] = avatarsAdded;
+	counts['storage_orphans'] = orphansAdded;
 	await zip.add(
 		'manifest.json',
 		new TextReader(JSON.stringify(buildBackupManifest({ userId, counts }), null, 2)),
@@ -649,6 +710,38 @@ async function buildBackupZip(
 	const blob = await blobWriter.getData();
 	const buf = await blob.arrayBuffer();
 	return new Uint8Array(buf);
+}
+
+// listAllObjects walks a Storage bucket folder recursively, returning
+// full object keys. The list API pages at `limit` and marks folders
+// with a null id, so each folder is paged and null-id entries are
+// descended into.
+async function listAllObjects(
+	supabase: ReturnType<typeof createClient>,
+	bucket: string,
+	folder: string,
+): Promise<string[]> {
+	const pageSize = 100;
+	const out: string[] = [];
+	for (let offset = 0; ; offset += pageSize) {
+		const { data, error } = await supabase.storage.from(bucket).list(folder, {
+			limit: pageSize,
+			offset,
+			sortBy: { column: 'name', order: 'asc' },
+		});
+		if (error) throw new Error(error.message);
+		const entries = (data ?? []) as Array<{ name: string; id: string | null }>;
+		for (const e of entries) {
+			if (!e.name) continue;
+			const full = `${folder}/${e.name}`;
+			if (e.id == null) {
+				out.push(...(await listAllObjects(supabase, bucket, full)));
+			} else {
+				out.push(full);
+			}
+		}
+		if (entries.length < pageSize) return out;
+	}
 }
 
 async function fetchBackupTable(

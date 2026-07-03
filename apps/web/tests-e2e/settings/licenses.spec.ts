@@ -20,8 +20,20 @@ const KNOWN_DEPS: { name: string; license: string }[] = [
 	{ name: '@supabase/ssr', license: 'MIT' },
 	{ name: 'MapLibre GL JS', license: 'BSD-3-Clause' },
 	{ name: 'Anthropic SDK', license: 'MIT' },
-	{ name: 'JSZip', license: 'MIT / GPL-3.0' },
-	{ name: 'isomorphic-dompurify', license: 'MPL-2.0' },
+	// Dual-licensed deps carry an explicit election on the public record
+	// (audit/licenses 2026-07-02): JSZip is (MIT OR GPL-3.0-or-later) — MIT
+	// elected; DOMPurify is (MPL-2.0 OR Apache-2.0) — Apache-2.0 elected.
+	{ name: 'JSZip', license: 'MIT (elected)' },
+	{ name: 'isomorphic-dompurify', license: 'MIT' },
+	{ name: 'DOMPurify', license: 'Apache-2.0 (elected)' },
+	{ name: '@sentry/sveltekit', license: 'MIT' },
+	{ name: '@zip.js/zip.js', license: 'BSD-3-Clause' },
+	{ name: 'fit-file-parser', license: 'MIT' },
+	{ name: 'marked', license: 'MIT' },
+	{ name: 'material-symbols', license: 'Apache-2.0' },
+	// Ships no license metadata in the npm package; upstream mapbox/jsonlint
+	// verified MIT — pinned so the row (and the verification note) can't drift.
+	{ name: '@mapbox/jsonlint-lines-primitives', license: 'MIT (verified upstream)' },
 	{ name: 'mdsvex', license: 'MIT' },
 	{ name: 'normalize.css', license: 'MIT' },
 	{ name: 'unplugin-icons', license: 'MIT' },
@@ -40,7 +52,7 @@ test.describe('/settings/licenses (signed-in)', () => {
 			{ timeout: 10_000 },
 		);
 
-		await expect(page.getByRole('link', { name: 'SvelteKit' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'SvelteKit', exact: true })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Svelte', exact: true })).toBeVisible();
 		await expect(page.getByRole('link', { name: '@supabase/supabase-js' })).toBeVisible();
 

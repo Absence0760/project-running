@@ -203,6 +203,23 @@ func TestServer_ExpiredTokenIs401(t *testing.T) {
 	}
 }
 
+func TestServer_TokenWithoutExpIs401(t *testing.T) {
+	// A correctly-signed token with the right `sub` but NO `exp` claim
+	// (signTestToken omits exp when expDelta == 0). Without
+	// WithExpirationRequired such a token is valid forever — it must be
+	// rejected on this security boundary, same as livehub.
+	be := &fakeBackend{tier: "pro"}
+	base, teardown := newProServer(t, be)
+	defer teardown()
+
+	tok := signTestToken(t, "u1", 0)
+	resp := postJSON(t, base, "/v1/premium/vo2max", tok, "{}")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("token without exp = %d, want 401 (no immortal tokens)", resp.StatusCode)
+	}
+}
+
 func TestServer_FreeTierIs402(t *testing.T) {
 	be := &fakeBackend{tier: "free"}
 	base, teardown := newProServer(t, be)

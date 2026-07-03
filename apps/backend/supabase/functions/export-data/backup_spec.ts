@@ -50,6 +50,25 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: `author_id=eq.${uid}`,
 			select: '*',
 		},
+		// run_kudos / run_comments RECEIVED on the subject's runs — social
+		// reactions to their activities are data about the subject under
+		// Art 15/20. Neither table carries the run owner's uid, so the
+		// export inner-joins the parent run and filters on its user_id
+		// (the event_pricing_as_host pattern); the embedded runs object
+		// projects only user_id (the subject's own id). Giver/author ids
+		// ship as-is — kudos and comments are publicly attributed in-app.
+		{
+			entry: 'run_kudos_received.json',
+			table: 'run_kudos',
+			filter: `runs.user_id=eq.${uid}`,
+			select: '*,runs!inner(user_id)',
+		},
+		{
+			entry: 'run_comments_received.json',
+			table: 'run_comments',
+			filter: `runs.user_id=eq.${uid}`,
+			select: '*,runs!inner(user_id)',
+		},
 		{
 			entry: 'run_photos.json',
 			table: 'run_photos',
@@ -432,12 +451,49 @@ export function shapeExportRoute(row: Record<string, unknown>): Record<string, u
 	return out;
 }
 
+/// The avatar uploader keeps a SINGLE object at the stable
+/// `{userId}/avatar.{ext}` path (remove-then-insert across all three
+/// extensions — see avatarPathsFor in apps/web/src/lib/core/data.ts),
+/// so the full candidate set is enumerable without a bucket list.
+/// Mirrors the Go builder's avatarExts probe order.
+export const AVATAR_EXTENSIONS = ['jpg', 'png', 'webp'] as const;
+
+export function avatarCandidatePaths(userId: string): string[] {
+	return AVATAR_EXTENSIONS.map((ext) => `${userId}/avatar.${ext}`);
+}
+
 /// Reject any Storage path a malformed row could use to feed a
 /// traversal into the service-role downloader's URL or the zip entry
 /// name. Mirrors the Go builder's path.Clean + prefix checks.
 export function isSafeStoragePath(p: string): boolean {
 	if (p === '' || p.startsWith('/') || p.includes('..') || p.includes('\\')) return false;
 	return p.split('/').every((seg) => seg !== '' && seg !== '.');
+}
+
+/// Pick the objects the orphan prefix-walk should archive: every key
+/// under `{userId}/` that the row-driven loops did NOT already ship —
+/// CAS-orphaned matched tracks, legacy tracks whose run row is gone,
+/// worker-generated photo thumbnails. `{userId}/exports/` is skipped in
+/// the runs bucket (prior export artifacts — self-referential). Mirrors
+/// the Go builder's walk filter so both backup paths sweep the same set.
+export function orphanStorageEntries(input: {
+	bucket: string;
+	keys: string[];
+	userId: string;
+	archived: Set<string>;
+}): Array<{ key: string; entry: string }> {
+	const prefix = `${input.userId}/`;
+	const out: Array<{ key: string; entry: string }> = [];
+	for (const key of input.keys) {
+		if (!key.startsWith(prefix)) continue;
+		const rel = key.slice(prefix.length);
+		if (rel === '') continue;
+		if (input.bucket === 'runs' && rel.startsWith('exports/')) continue;
+		if (input.archived.has(key)) continue;
+		if (!isSafeStoragePath(key)) continue;
+		out.push({ key, entry: `storage/${input.bucket}/${rel}` });
+	}
+	return out;
 }
 
 /// Build `manifest.json` — same field set as the Go worker's
