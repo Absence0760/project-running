@@ -24,9 +24,16 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { escapeHtml, safeHref } from '$lib/util/html_escape';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	// MapTiler logs the requester IP per tile fetch, so we never
+	// instantiate maplibregl before the user has accepted the cookie
+	// banner (audit/cookie-consent). Starts true only when consent is
+	// already on record; otherwise the "Load map" tap is the affirmative
+	// act under ePrivacy Art 5(3).
+	let mapConsented = $state(hasAcceptedConsent());
 	let geolocate: maplibregl.GeolocateControl | null = null;
 	let stopResizeWatch: (() => void) | null = null;
 	let loading = $state(false);
@@ -184,7 +191,8 @@
 		selectedBands = [];
 	}
 
-	onMount(() => {
+	function startMap() {
+		if (map || !mapEl) return;
 		const prefersDark =
 			typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -713,6 +721,17 @@
 		// "Updated …" stamp even on a keyless deploy.
 		refresh();
 		refreshPins();
+	}
+
+	function loadMapNow() {
+		mapConsented = true;
+		// The map container only mounts once `mapConsented` flips, so
+		// wait one microtask for the DOM before initialising.
+		queueMicrotask(startMap);
+	}
+
+	onMount(() => {
+		if (mapConsented) startMap();
 	});
 
 	onDestroy(() => {
@@ -1506,6 +1525,25 @@
 			<span class="material-symbols">{sidebarOpen ? 'chevron_left' : 'chevron_right'}</span>
 		</button>
 		<div bind:this={mapEl} class="map"></div>
+		{#if !mapConsented}
+			<!--
+				audit/cookie-consent: MapTiler logs the requester IP per
+				tile fetch, so the discovery basemap loads only after the
+				visitor opts in. Overlaid on the (empty) map container so
+				the bind stays stable for when the map does initialise.
+			-->
+			<div class="map-consent" data-testid="route-heatmap-consent">
+				<div class="map-consent-card">
+					<h3>{m('runMap.consentTitle')}</h3>
+					<p>
+						{m('runMap.consentPrefix')}<strong>MapTiler</strong>{m('runMap.consentMiddle')}<strong>{m('runMap.loadMap')}</strong>{m('runMap.consentBeforeLink')}<a href="/cookie-notice">{m('runMap.cookieNotice')}</a>{m('runMap.consentSuffix')}
+					</p>
+					<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+						{m('runMap.loadMap')}
+					</button>
+				</div>
+			</div>
+		{/if}
 	</div>
 </div>
 
@@ -1533,6 +1571,36 @@
 	}
 	.discover.collapsed .discover-sidebar {
 		display: none;
+	}
+	.map-consent {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		z-index: 3;
+	}
+	.map-consent-card {
+		max-width: 28rem;
+		text-align: center;
+		padding: var(--space-lg) var(--space-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		color: var(--color-text);
+	}
+	.map-consent-card h3 {
+		margin: 0 0 var(--space-sm);
+		font-size: 1.05rem;
+	}
+	.map-consent-card p {
+		margin: 0 0 var(--space-md);
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		font-size: 0.9rem;
 	}
 	.discover-map-wrap {
 		position: relative;

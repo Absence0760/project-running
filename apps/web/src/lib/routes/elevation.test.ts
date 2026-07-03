@@ -1,6 +1,69 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateElevationGain, sampleCoordinates } from './elevation';
+import { calculateElevationGain, fetchElevations, sampleCoordinates } from './elevation';
+
+// Consent gate (audit/third-party-data-flows). In the tsx runner there is
+// no `localStorage`, so `elevationConsentGiven()` is fail-closed — Open-Meteo
+// must never be reached. We stub `fetch` to detonate if it fires.
+test('fetchElevations — without consent, never touches the network', async () => {
+	const original = globalThis.fetch;
+	let called = false;
+	globalThis.fetch = (async () => {
+		called = true;
+		throw new Error('fetch must not be called without consent');
+	}) as typeof fetch;
+	try {
+		const out = await fetchElevations([
+			[8.54, 47.37],
+			[8.55, 47.38],
+		]);
+		assert.deepEqual(out, [0, 0]);
+		assert.equal(called, false);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test('fetchElevations — empty input returns [] without a network call', async () => {
+	const original = globalThis.fetch;
+	globalThis.fetch = (async () => {
+		throw new Error('fetch must not be called for empty input');
+	}) as typeof fetch;
+	try {
+		assert.deepEqual(await fetchElevations([]), []);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test('fetchElevations — with recorded consent, calls Open-Meteo', async () => {
+	const originalFetch = globalThis.fetch;
+	const originalLs = (globalThis as { localStorage?: unknown }).localStorage;
+	let requestedUrl = '';
+	(globalThis as { localStorage?: unknown }).localStorage = {
+		getItem: (k: string) =>
+			k === 'cookie_consent' ? JSON.stringify({ choice: 'accepted' }) : null,
+	};
+	globalThis.fetch = (async (url: string) => {
+		requestedUrl = String(url);
+		return {
+			ok: true,
+			json: async () => ({ elevation: [410, 412] }),
+		} as unknown as Response;
+	}) as typeof fetch;
+	try {
+		const out = await fetchElevations([
+			[8.54, 47.37],
+			[8.55, 47.38],
+		]);
+		assert.deepEqual(out, [410, 412]);
+		assert.ok(requestedUrl.includes('api.open-meteo.com'));
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalLs === undefined) delete (globalThis as { localStorage?: unknown }).localStorage;
+		else (globalThis as { localStorage?: unknown }).localStorage = originalLs;
+	}
+});
 
 test('calculateElevationGain — accumulates only positive deltas', () => {
 	assert.equal(calculateElevationGain([100, 110, 105, 120]), 25);

@@ -1,12 +1,51 @@
+// The localStorage key `consent.svelte.ts` persists the cookie-banner
+// choice under. Duplicated here (not imported) because `consent.svelte.ts`
+// uses Svelte runes ($state) and so can't be loaded by the tsx unit runner
+// that exercises this module.
+const CONSENT_STORAGE_KEY = 'cookie_consent';
+
+/**
+ * True only when the visitor has accepted the cookie banner. Open-Meteo
+ * receives every coordinate we look up — a route often starts at the
+ * user's home — plus the requester's IP, so it is a third-party
+ * personal-data hop that ePrivacy Art 5(3) / GDPR require consent for
+ * before it fires (audit/third-party-data-flows, audit/cookie-consent).
+ *
+ * Reads the SAME localStorage signal the map components' `hasAcceptedConsent`
+ * reads, so the elevation lookup and the MapTiler basemap gate honour one
+ * banner choice. Fail-closed: no browser / no accepted record → no lookup.
+ */
+function elevationConsentGiven(): boolean {
+	if (typeof localStorage === 'undefined') return false;
+	try {
+		const raw = localStorage.getItem(CONSENT_STORAGE_KEY);
+		if (!raw) return false;
+		const parsed = JSON.parse(raw) as { choice?: string };
+		return parsed?.choice === 'accepted';
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Fetch elevation data for a list of coordinates using the Open-Meteo API.
  * Free, no API key required, rate-limited to reasonable usage.
  * Returns elevations in metres for each coordinate.
+ *
+ * Gated on consent (see `elevationConsentGiven`): without it we skip the
+ * network entirely and return zeros, so the route still saves — just
+ * without an elevation profile — and no coordinates/IP leave the browser.
  */
 export async function fetchElevations(
 	coordinates: [number, number][]
 ): Promise<number[]> {
 	if (coordinates.length === 0) return [];
+
+	// Fail-closed third-party gate. Return the same all-zero shape the
+	// outage fallback below uses so every caller degrades identically.
+	if (!elevationConsentGiven()) {
+		return coordinates.map(() => 0);
+	}
 
 	// Open-Meteo accepts up to ~100 points per request, batch if needed
 	const batchSize = 100;

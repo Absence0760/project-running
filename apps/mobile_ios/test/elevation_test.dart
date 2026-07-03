@@ -23,8 +23,24 @@ void main() {
   group('fetchElevations', () {
     test('returns empty list for empty input', () async {
       final out = await fetchElevations(const [],
-          fetcher: (_) async => fail('fetcher must not be called'));
+          consented: true, fetcher: (_) async => fail('fetcher must not be called'));
       expect(out, isEmpty);
+    });
+
+    test('without consent, returns zeros and never calls the fetcher',
+        () async {
+      // Fail-closed consent gate (audit/third-party-data-flows): Open-Meteo
+      // receives the coordinates + the requester IP, so we skip it entirely
+      // when the caller has not passed consent. The default is fail-closed,
+      // so `consented` is omitted here.
+      final out = await fetchElevations(
+        const [
+          Waypoint(lat: 47.37, lng: 8.54),
+          Waypoint(lat: 47.38, lng: 8.55),
+        ],
+        fetcher: (_) async => fail('fetcher must not be called without consent'),
+      );
+      expect(out, [0, 0]);
     });
 
     test('parses elevation array on success', () async {
@@ -39,6 +55,7 @@ void main() {
           Waypoint(lat: 47.38, lng: 8.55),
           Waypoint(lat: 47.39, lng: 8.56),
         ],
+        consented: true,
         fetcher: stub.call,
       );
       expect(out, [410.0, 412.5, 415.0]);
@@ -51,6 +68,7 @@ void main() {
           Waypoint(lat: 47.37, lng: 8.54),
           Waypoint(lat: 47.38, lng: 8.55),
         ],
+        consented: true,
         fetcher: bomb,
       );
       expect(out, [0, 0]);
@@ -67,6 +85,7 @@ void main() {
           Waypoint(lat: 47.37, lng: 8.54),
           Waypoint(lat: 47.38, lng: 8.55),
         ],
+        consented: true,
         fetcher: stub.call,
       );
       expect(out, [0, 0]);
@@ -85,7 +104,8 @@ void main() {
         for (var i = 0; i < kElevationBatchSize + 2; i++)
           Waypoint(lat: 47.0 + i * 0.0001, lng: 8.0),
       ];
-      final out = await fetchElevations(points, fetcher: stub.call);
+      final out =
+          await fetchElevations(points, consented: true, fetcher: stub.call);
       expect(out, hasLength(kElevationBatchSize + 2));
       expect(stub.callCount, 2,
           reason: 'must split into 2 batches when > kElevationBatchSize');
@@ -104,6 +124,7 @@ void main() {
           Waypoint(lat: 47.0, lng: 8.0),
           Waypoint(lat: 47.5, lng: 8.5),
         ],
+        consented: true,
         fetcher: stub.call,
       );
       expect(stub.lastUrl!.queryParameters['latitude'], '47.0,47.5');
@@ -123,6 +144,7 @@ void main() {
 
       final out = await fetchElevations(
         const [Waypoint(lat: 0, lng: 0), Waypoint(lat: 1, lng: 1)],
+        consented: true,
         fetcher: hangingFetcher,
       ).timeout(
         // Outer guard: if the inner timeout regressed and the helper

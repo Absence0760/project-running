@@ -48,11 +48,23 @@ Future<String> _defaultFetcher(Uri url) async {
 /// non-200), the corresponding batch falls back to all-zero — the
 /// route can still save without elevation data. Mirrors web's
 /// fall-through behaviour at L4 (best-effort).
+///
+/// Fail-closed consent gate (parity with web's `elevation.ts`): Open-Meteo
+/// receives every coordinate — a route often starts at the user's home —
+/// plus the requester IP, so it is a third-party personal-data hop. When
+/// [consented] is false the lookup is skipped entirely and an all-zero
+/// list of the same length is returned (the route still saves, just
+/// without an elevation profile). Callers pass the user's consent for the
+/// enrichment; a caller that omits it fails closed.
 Future<List<double>> fetchElevations(
   List<Waypoint> coordinates, {
+  bool consented = false,
   ElevationFetcher? fetcher,
 }) async {
   if (coordinates.isEmpty) return const [];
+  if (!consented) {
+    return List<double>.filled(coordinates.length, 0);
+  }
   final out = <double>[];
   for (var i = 0; i < coordinates.length; i += kElevationBatchSize) {
     final batch = coordinates.sublist(

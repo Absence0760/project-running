@@ -27,6 +27,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/routes/elevation';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import {
 		closestPointDistanceM,
 		formatWaypointRanges,
@@ -117,8 +118,13 @@
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
-	let searchInput: HTMLInputElement = undefined!;
+	let searchInput = $state<HTMLInputElement>();
 	let map: maplibregl.Map;
+	// MapTiler logs the requester IP per tile fetch, so the basemap is
+	// not instantiated before the user has accepted the cookie banner
+	// (audit/cookie-consent). Starts true only when consent is already
+	// on record; otherwise the "Load map" tap is the affirmative act.
+	let mapConsented = $state(hasAcceptedConsent());
 	let waypoints: TrackPoint[] = [];
 	let routeCoordinates: [number, number][] = [];
 	let routeElevations: number[] = [];
@@ -241,7 +247,7 @@
 		searchQuery = '';
 		searchResults = [];
 		showResults = false;
-		searchInput.blur();
+		searchInput?.blur();
 	}
 
 	// --- Waypoint markers ---
@@ -1792,27 +1798,39 @@
 
 	// --- Map setup ---
 
-	onMount(() => {
+	function startMap() {
+		if (map || !mapContainer) return;
 		const defaultCenter: [number, number] = [0, 20];
 		const defaultZoom = 2;
 
-		function initMap(center: [number, number], zoom: number) {
+		const doInit = (center: [number, number], zoom: number) => {
 			map = new maplibregl.Map({
 				container: mapContainer,
 				style: MAP_STYLES.streets,
 				center, zoom
 			});
 			setupMap();
-		}
+		};
 
 		navigator.geolocation.getCurrentPosition(
-			(pos) => initMap([pos.coords.longitude, pos.coords.latitude], 16),
-			() => initMap(defaultCenter, defaultZoom),
+			(pos) => doInit([pos.coords.longitude, pos.coords.latitude], 16),
+			() => doInit(defaultCenter, defaultZoom),
 			// Keep the timeout short so a cold start doesn't delay the map render,
 			// but accept a cached fix (maximumAge) so a recent position centres on
 			// the user instantly instead of falling back to defaultCenter.
 			{ timeout: 3000, maximumAge: 600000 }
 		);
+	}
+
+	function loadMapNow() {
+		mapConsented = true;
+		// The map container only mounts once `mapConsented` flips, so
+		// wait one microtask for the DOM before initialising.
+		queueMicrotask(startMap);
+	}
+
+	onMount(() => {
+		if (mapConsented) startMap();
 
 		// Keyboard shortcuts
 		keyHandler = (e: KeyboardEvent) => {
@@ -2049,6 +2067,7 @@
 </script>
 
 <div class="map-wrapper">
+	{#if mapConsented}
 	<div class="search-box">
 		<div class="search-row">
 			<input
@@ -2089,8 +2108,29 @@
 		<span><kbd>Esc</kbd> {t('routeBuilder.shortcutClear')}</span>
 		<span>{t('routeBuilder.shortcutRightClickDelete')}</span>
 	</div>
+	{/if}
 
 	<div bind:this={mapContainer} class="map-container"></div>
+
+	{#if !mapConsented}
+		<!--
+			audit/cookie-consent: MapTiler logs the requester IP per tile
+			fetch, so the builder basemap loads only after the visitor
+			opts in. Overlaid on the (empty) map container so the bind
+			stays stable for when the map does initialise.
+		-->
+		<div class="map-consent" data-testid="route-builder-consent">
+			<div class="map-consent-card">
+				<h3>{t('runMap.consentTitle')}</h3>
+				<p>
+					{t('runMap.consentPrefix')}<strong>MapTiler</strong>{t('runMap.consentMiddle')}<strong>{t('runMap.loadMap')}</strong>{t('runMap.consentBeforeLink')}<a href="/cookie-notice">{t('runMap.cookieNotice')}</a>{t('runMap.consentSuffix')}
+				</p>
+				<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+					{t('runMap.loadMap')}
+				</button>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -2103,6 +2143,40 @@
 	.map-container {
 		width: 100%;
 		height: 100%;
+	}
+
+	.map-consent {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		z-index: 3;
+	}
+
+	.map-consent-card {
+		max-width: 28rem;
+		text-align: center;
+		padding: var(--space-lg) var(--space-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		color: var(--color-text);
+	}
+
+	.map-consent-card h3 {
+		margin: 0 0 var(--space-sm);
+		font-size: 1.05rem;
+	}
+
+	.map-consent-card p {
+		margin: 0 0 var(--space-md);
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		font-size: 0.9rem;
 	}
 
 	/* Numbered waypoint markers — parity with the mobile twin. The

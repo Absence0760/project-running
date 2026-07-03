@@ -142,7 +142,9 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     if (_fetchingEle) return;
     setState(() => _fetchingEle = true);
     try {
-      final eles = await fetchElevations(widget.waypoints);
+      // The "Add elevation" tap is the explicit user action that consents
+      // to the Open-Meteo lookup (audit/third-party-data-flows).
+      final eles = await fetchElevations(widget.waypoints, consented: true);
       if (mounted &&
           eles.length == widget.waypoints.length &&
           eles.any((e) => e != 0)) {

@@ -351,6 +351,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     try {
       final elevations = await fetchElevations(
         sample,
+        // The user is actively drawing this route (OS location granted +
+        // an explicit in-app action), which is the consent for the
+        // Open-Meteo elevation enrichment (audit/third-party-data-flows).
+        consented: true,
         fetcher: widget.elevationFetcher,
       );
       final gain = calculateElevationGain(elevations);

@@ -7,6 +7,7 @@
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import type { PrivacyZone } from '$lib/routes/privacy';
 	import { m } from '$lib/i18n/store.svelte';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 
 	interface Props {
 		oncreated: (zone: PrivacyZone) => void;
@@ -14,7 +15,7 @@
 	}
 	let { oncreated, oncancel }: Props = $props();
 
-	let mapEl: HTMLDivElement;
+	let mapEl = $state<HTMLDivElement>();
 	let map: maplibregl.Map | null = null;
 	let marker: maplibregl.Marker | null = null;
 	let stopResizeWatch: (() => void) | null = null;
@@ -24,8 +25,26 @@
 	let radius = $state(250);
 	let geoBusy = $state(false);
 	let geoError = $state<string | null>(null);
+	// MapTiler logs the requester IP per tile fetch, so we never
+	// instantiate maplibregl before the user has accepted the cookie
+	// banner (audit/cookie-consent). Starts true only if consent is
+	// already on record this session; otherwise the "Load map" tap is
+	// the affirmative act under ePrivacy Art 5(3).
+	let mapConsented = $state(hasAcceptedConsent());
 
 	onMount(() => {
+		if (mapConsented) initMap();
+	});
+
+	function loadMapNow() {
+		mapConsented = true;
+		// The map container only mounts once `mapConsented` flips, so
+		// wait one microtask for the DOM before initialising.
+		queueMicrotask(initMap);
+	}
+
+	function initMap() {
+		if (map || !mapEl) return;
 		const prefersDark =
 			typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -48,7 +67,7 @@
 		map.on('load', () => {
 			drawCircle();
 		});
-	});
+	}
 
 	onDestroy(() => {
 		stopResizeWatch?.();
@@ -164,7 +183,25 @@
 <div class="picker">
 	<p class="hint">{m('privacyZonePicker.hint')}</p>
 
-	<div class="map" bind:this={mapEl}></div>
+	{#if mapConsented}
+		<div class="map" bind:this={mapEl}></div>
+	{:else}
+		<!--
+			audit/cookie-consent: MapTiler logs the requester IP per tile
+			fetch. Load the picker map only after the visitor opts in.
+		-->
+		<div class="map map-consent" data-testid="privacy-zone-consent">
+			<div class="map-consent-card">
+				<h3>{m('runMap.consentTitle')}</h3>
+				<p>
+					{m('runMap.consentPrefix')}<strong>MapTiler</strong>{m('runMap.consentMiddle')}<strong>{m('runMap.loadMap')}</strong>{m('runMap.consentBeforeLink')}<a href="/cookie-notice">{m('runMap.cookieNotice')}</a>{m('runMap.consentSuffix')}
+				</p>
+				<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+					{m('runMap.loadMap')}
+				</button>
+			</div>
+		</div>
+	{/if}
 
 	<div class="controls">
 		<button type="button" class="btn btn-outline" onclick={useCurrentLocation} disabled={geoBusy}>
@@ -209,6 +246,37 @@
 		border-radius: var(--radius-md);
 		overflow: hidden;
 		border: 1px solid var(--color-border);
+	}
+
+	.map-consent {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-bg-secondary);
+		padding: var(--space-md);
+	}
+
+	.map-consent-card {
+		max-width: 28rem;
+		text-align: center;
+		padding: var(--space-lg) var(--space-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		color: var(--color-text);
+	}
+
+	.map-consent-card h3 {
+		margin: 0 0 var(--space-sm);
+		font-size: 1.05rem;
+	}
+
+	.map-consent-card p {
+		margin: 0 0 var(--space-md);
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		font-size: 0.9rem;
 	}
 
 	.controls {
