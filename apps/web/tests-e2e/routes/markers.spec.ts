@@ -132,6 +132,33 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(rows.first().locator('.marker-label')).toHaveText('Halfway aid');
 	});
 
+	test('owner adds a marker by typing coordinates, keyboard-only', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await page.goto(`/routes/${routeId}`);
+
+		await page.getByRole('button', { name: 'Add marker' }).click();
+
+		await page.getByLabel('Name').fill('Typed aid');
+
+		// An out-of-range latitude blocks the save with the validation message.
+		await page.getByLabel('Latitude').fill('999');
+		await page.getByLabel('Longitude').fill('-0.121');
+		await expect(
+			page.getByText('Enter a valid latitude (-90 to 90) and longitude (-180 to 180).')
+		).toBeVisible();
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.locator('.markers-list .marker-row')).toHaveCount(0);
+
+		// Valid coordinates save without any map interaction.
+		await page.getByLabel('Latitude').fill('51.5055');
+		await page.getByLabel('Latitude').press('Tab');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+		const rows = page.locator('.markers-list .marker-row');
+		await expect(rows).toHaveCount(1);
+		await expect(rows.first().locator('.marker-label')).toHaveText('Typed aid');
+	});
+
 	test('owner sees draggable pins on the map and a drag-to-move hint', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {

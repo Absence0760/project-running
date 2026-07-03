@@ -68,6 +68,8 @@
 	let draftNote = $state('');
 	let draftLat = $state<number | null>(null);
 	let draftLng = $state<number | null>(null);
+	let draftLatText = $state('');
+	let draftLngText = $state('');
 	let formOpen = $state(false);
 	let saving = $state(false);
 	let confirmDeleteId = $state<string | null>(null);
@@ -119,9 +121,39 @@
 		if (pendingPlacement && formOpen) {
 			draftLat = pendingPlacement.lat;
 			draftLng = pendingPlacement.lng;
+			draftLatText = formatCoord(pendingPlacement.lat);
+			draftLngText = formatCoord(pendingPlacement.lng);
 			pendingPlacement = null;
 		}
 	});
+
+	function formatCoord(v: number): string {
+		return String(Number(v.toFixed(6)));
+	}
+
+	function parseCoord(text: string, max: number): number | null {
+		const t = text.trim();
+		if (!t) return null;
+		const v = Number(t);
+		if (!Number.isFinite(v) || Math.abs(v) > max) return null;
+		return v;
+	}
+
+	let coordInvalid = $derived(
+		(draftLatText.trim() !== '' && parseCoord(draftLatText, 90) == null) ||
+			(draftLngText.trim() !== '' && parseCoord(draftLngText, 180) == null)
+	);
+
+	// Typing a full, valid coordinate pair moves the draft pin live — the
+	// keyboard-accessible twin of a map click.
+	function applyCoordInput() {
+		const lat = parseCoord(draftLatText, 90);
+		const lng = parseCoord(draftLngText, 180);
+		if (lat != null && lng != null) {
+			draftLat = lat;
+			draftLng = lng;
+		}
+	}
 
 	// A drag of an already-saved pin persists immediately (a quick reposition
 	// that doesn't need the form). The edited marker never reaches here — it
@@ -162,6 +194,8 @@
 		draftNote = '';
 		draftLat = null;
 		draftLng = null;
+		draftLatText = '';
+		draftLngText = '';
 	}
 
 	function openAdd() {
@@ -180,6 +214,8 @@
 		draftNote = typeof mk.meta?.note === 'string' ? (mk.meta.note as string) : '';
 		draftLat = mk.lat;
 		draftLng = mk.lng;
+		draftLatText = formatCoord(mk.lat);
+		draftLngText = formatCoord(mk.lng);
 		formOpen = true;
 		placing = true;
 	}
@@ -211,6 +247,16 @@
 		if (!draftLabel.trim()) {
 			showToast(m('routeMarker.labelRequired'), 'error');
 			return;
+		}
+		if (draftLatText.trim() !== '' || draftLngText.trim() !== '') {
+			const lat = parseCoord(draftLatText, 90);
+			const lng = parseCoord(draftLngText, 180);
+			if (lat == null || lng == null) {
+				showToast(m('routeMarker.coordInvalid'), 'error');
+				return;
+			}
+			draftLat = lat;
+			draftLng = lng;
 		}
 		if (draftLat == null || draftLng == null) {
 			showToast(m('routeMarker.placeRequired'), 'info');
@@ -357,6 +403,29 @@
 				<input type="checkbox" bind:checked={snapEnabled} />
 				{m('routeMarker.snapToggle')}
 			</label>
+			<div class="coord-fields">
+				<label>
+					{m('routeMarker.latLabel')}
+					<input
+						type="text"
+						inputmode="decimal"
+						bind:value={draftLatText}
+						oninput={applyCoordInput}
+					/>
+				</label>
+				<label>
+					{m('routeMarker.lngLabel')}
+					<input
+						type="text"
+						inputmode="decimal"
+						bind:value={draftLngText}
+						oninput={applyCoordInput}
+					/>
+				</label>
+			</div>
+			{#if coordInvalid}
+				<p class="error" role="alert">{m('routeMarker.coordInvalid')}</p>
+			{/if}
 			<label>
 				{m('routeMarker.kindLabel')}
 				<select bind:value={draftKind}>
@@ -530,6 +599,11 @@
 	.snap-row {
 		margin-bottom: var(--space-xs);
 		font-size: 0.85rem;
+	}
+	.coord-fields {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-sm);
 	}
 	.markers-drag-hint {
 		margin: 0;
