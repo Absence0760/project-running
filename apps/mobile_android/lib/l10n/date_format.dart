@@ -9,9 +9,10 @@ import 'package:intl/intl.dart';
 ///
 /// `intl`'s [DateFormat] needs `initializeDateFormatting()` to have run once
 /// for non-`en` locales — `main.dart` does that at startup, tests do it in
-/// `setUp`. The day-first explicit patterns (`d MMM`, `d MMM y`) preserve the
-/// exact English output the app shipped before this migration while still
-/// localising the month names for the other five locales.
+/// `setUp`. Every helper uses CLDR skeletons (`yMMMd`, `MMMd`, `MMMEd`, …)
+/// rather than explicit patterns, so field order follows each locale's own
+/// convention: month-first for `en` (US), day-first for de/fr/es/pt,
+/// year-first for ja.
 
 /// Renders an instant in the device's local time zone before formatting.
 ///
@@ -29,16 +30,17 @@ import 'package:intl/intl.dart';
 /// local value, so there is never a double conversion.
 DateTime _local(DateTime dt) => dt.isUtc ? dt.toLocal() : dt;
 
-/// Medium absolute date: `15 May 2026` (en), `15. Mai 2026`-style for other
-/// locales (localised month name, day-first). Used for run titles, share
-/// cards, review dates, manual-entry date chips.
+/// Medium absolute date, locale-ordered: `May 15, 2026` (en), `15. Mai 2026`
+/// (de), `2026年5月15日` (ja). Used for run titles, share cards, review
+/// dates, manual-entry date chips.
 String formatDateMed(DateTime dt, String tag) =>
-    DateFormat('d MMM y', tag).format(_local(dt));
+    DateFormat.yMMMd(tag).format(_local(dt));
 
-/// Short absolute date without the year: `15 May` (en). Used for period
-/// summaries and compact run-list rows.
+/// Short absolute date without the year, locale-ordered: `May 15` (en),
+/// `15. Mai` (de), `5月15日` (ja). Used for period summaries, compact
+/// run-list rows, event date chips, and chart axis endpoints.
 String formatDateShort(DateTime dt, String tag) =>
-    DateFormat('d MMM', tag).format(_local(dt));
+    DateFormat.MMMd(tag).format(_local(dt));
 
 /// Full month name: `May` short or `January` full — this is the full form,
 /// `DateFormat.MMMM`. Used for the period-summary month title.
@@ -68,12 +70,8 @@ String formatDateTime(DateTime dt, String tag) =>
 /// time line.
 String formatTime(DateTime dt, String tag) => DateFormat.jm(tag).format(_local(dt));
 
-/// Weekday + short date with no year: `Fri, May 15` (en). Used for the
-/// runs-screen date subtitle.
+/// Weekday + short date with no year, locale-ordered: `Fri, May 15` (en),
+/// `Fr., 15. Mai` (de), `5月15日(金)` (ja). Used for the runs-screen date
+/// subtitle.
 String formatDowDateShort(DateTime dt, String tag) =>
-    DateFormat('EEE, MMM d', tag).format(_local(dt));
-
-/// Short month + day, month-first: `May 15` (en). Used for event date chips
-/// and the runs-screen heatmap tooltip.
-String formatMonthDayShort(DateTime dt, String tag) =>
-    DateFormat.MMMd(tag).format(_local(dt));
+    DateFormat.MMMEd(tag).format(_local(dt));

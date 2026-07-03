@@ -656,7 +656,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 for (final dt in _instances)
                   ChoiceChip(
                     showCheckmark: false,
-                    label: Text(formatMonthDayShort(
+                    label: Text(formatDateShort(
                         dt, localeToTag(Localizations.localeOf(context)))),
                     selected: dt == _activeInstance,
                     onSelected: (_) => _pickInstance(dt),

@@ -9,26 +9,39 @@ void main() {
   final d = DateTime(2026, 5, 15, 9, 30); // a Friday
 
   group('formatDateMed', () {
-    test('en is day-first with abbreviated month + year', () {
-      expect(formatDateMed(d, 'en'), '15 May 2026');
+    test('en is month-first with abbreviated month + year', () {
+      expect(formatDateMed(d, 'en'), 'May 15, 2026');
     });
-    test('de localises the month name', () {
-      expect(formatDateMed(d, 'de'), '15 Mai 2026');
+    test('de is day-first with localised month name', () {
+      expect(formatDateMed(d, 'de'), '15. Mai 2026');
     });
-    test('ja localises the month', () {
-      expect(formatDateMed(d, 'ja'), contains('5月'));
-      expect(formatDateMed(d, 'ja'), contains('2026'));
-      expect(formatDateMed(d, 'ja'), contains('15'));
+    test('fr is day-first', () {
+      expect(formatDateMed(d, 'fr'), '15 mai 2026');
+    });
+    test('es is day-first', () {
+      expect(formatDateMed(d, 'es'), '15 may 2026');
+    });
+    test('pt_BR is day-first', () {
+      expect(formatDateMed(d, 'pt_BR'), '15 de mai. de 2026');
+    });
+    test('ja is year-first', () {
+      expect(formatDateMed(d, 'ja'), '2026年5月15日');
     });
   });
 
   group('formatDateShort', () {
-    test('en day + abbreviated month, no year', () {
-      expect(formatDateShort(d, 'en'), '15 May');
-      expect(formatDateShort(DateTime(2026, 1, 5), 'en'), '5 Jan');
+    test('en month-first, no year', () {
+      expect(formatDateShort(d, 'en'), 'May 15');
+      expect(formatDateShort(DateTime(2026, 1, 5), 'en'), 'Jan 5');
     });
-    test('de localises the month', () {
-      expect(formatDateShort(d, 'de'), '15 Mai');
+    test('de day-first with localised month', () {
+      expect(formatDateShort(d, 'de'), '15. Mai');
+    });
+    test('fr day-first', () {
+      expect(formatDateShort(d, 'fr'), '15 mai');
+    });
+    test('ja year-less month-day', () {
+      expect(formatDateShort(d, 'ja'), '5月15日');
     });
   });
 
@@ -103,11 +116,11 @@ void main() {
     test('en weekday + month + day', () {
       expect(formatDowDateShort(d, 'en'), 'Fri, May 15');
     });
-  });
-
-  group('formatMonthDayShort', () {
-    test('en month + day', () {
-      expect(formatMonthDayShort(d, 'en'), 'May 15');
+    test('de weekday + day-first date', () {
+      expect(formatDowDateShort(d, 'de'), 'Fr., 15. Mai');
+    });
+    test('ja month-day + weekday', () {
+      expect(formatDowDateShort(d, 'ja'), '5月15日(金)');
     });
   });
 
@@ -144,7 +157,7 @@ void main() {
       // constructor; normalization must be a no-op for them.
       final localMonth = DateTime(2026, 1, 15);
       expect(formatMonthName(localMonth, 'en'), 'January');
-      expect(formatDateShort(localMonth, 'en'), '15 Jan');
+      expect(formatDateShort(localMonth, 'en'), 'Jan 15');
     });
   });
 }

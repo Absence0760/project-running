@@ -68,9 +68,9 @@ void main() {
   // ── periodTitle / periodLabel ────────────────────────────────────────
 
   group('periodTitle', () {
-    test('week: "Week of <day> <month>"', () {
+    test('week: "Week of <month> <day>"', () {
       final anchor = DateTime(2026, 4, 15); // Wed -> week starts Mon 13 Apr
-      expect(periodTitle(PeriodType.week, anchor, 'en'), 'Week of 13 Apr');
+      expect(periodTitle(PeriodType.week, anchor, 'en'), 'Week of Apr 13');
     });
 
     test('month: "<month name> <year>"', () {
@@ -80,10 +80,10 @@ void main() {
   });
 
   group('periodLabel', () {
-    test('week: date range "d Mon – d Mon"', () {
+    test('week: date range "Mon d – Mon d"', () {
       final anchor = DateTime(2026, 4, 13); // Monday
       final label = periodLabel(PeriodType.week, anchor, 'en');
-      expect(label, '13 Apr – 19 Apr');
+      expect(label, 'Apr 13 – Apr 19');
     });
 
     test('month: same as title format', () {
@@ -209,12 +209,12 @@ void main() {
         localeTag: 'en',
       );
 
-      expect(text, contains('Week of 13 Apr'));
+      expect(text, contains('Week of Apr 13'));
       expect(text, contains('2 runs'));
       expect(text, contains('13.00 km'));
       expect(text, contains('Avg pace:'));
-      expect(text, contains('14 Apr'));
-      expect(text, contains('16 Apr'));
+      expect(text, contains('Apr 14'));
+      expect(text, contains('Apr 16'));
     });
 
     test('single run uses singular "run"', () {
@@ -302,8 +302,8 @@ void main() {
 
   group('shortDate', () {
     test('formats day and abbreviated month', () {
-      expect(shortDate(DateTime(2026, 1, 5), 'en'), '5 Jan');
-      expect(shortDate(DateTime(2026, 12, 31), 'en'), '31 Dec');
+      expect(shortDate(DateTime(2026, 1, 5), 'en'), 'Jan 5');
+      expect(shortDate(DateTime(2026, 12, 31), 'en'), 'Dec 31');
     });
   });
 

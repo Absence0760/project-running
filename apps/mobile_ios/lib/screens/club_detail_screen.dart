@@ -954,7 +954,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     child: Column(
                       children: [
                         Text(
-                          formatMonthDayShort(e.nextInstanceStart,
+                          formatDateShort(e.nextInstanceStart,
                               localeToTag(Localizations.localeOf(context))),
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: theme.colorScheme.primary,

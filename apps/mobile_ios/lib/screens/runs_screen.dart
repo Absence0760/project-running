@@ -604,8 +604,8 @@ class _RunsScreenState extends State<RunsScreen> {
   static String _formatRangeDate(DateTime d, String tag) {
     final now = DateTime.now();
     return d.year == now.year
-        ? formatMonthDayShort(d, tag)
-        : '${formatMonthDayShort(d, tag)}, ${d.year}';
+        ? formatDateShort(d, tag)
+        : formatDateMed(d, tag);
   }
 
   Future<void> _fetchRemote() async {

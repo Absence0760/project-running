@@ -1928,7 +1928,7 @@ String fmtRelative(DateTime when, String localeTag, {DateTime? now}) {
 }
 
 String fmtEventDate(DateTime when, String localeTag) =>
-    '${formatMonthDayShort(when, localeTag)}, ${formatTime(when, localeTag)}';
+    '${formatDateShort(when, localeTag)}, ${formatTime(when, localeTag)}';
 
 String fmtKm(num metres) =>
     formatFixed(metres / 1000, 2, activeLocaleTag);
