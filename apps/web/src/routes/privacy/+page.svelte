@@ -1,5 +1,5 @@
 <script lang="ts">
-	const lastUpdated = '2026-05-15';
+	const lastUpdated = '2026-07-02';
 </script>
 
 <svelte:head>
@@ -25,15 +25,22 @@
 
 	<h2>1. Who we are</h2>
 	<p>
-		<strong>Controller:</strong> Threkir, operated by <em>TODO: legal entity name + address</em>.
+		<strong>Controller:</strong> Threkir, operated by Jared Howard.
+		<em>[Legal entity name and registered postal address to be confirmed before EU launch.]</em>
 		<br />
 		<strong>Privacy contact:</strong> <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>.
 		<br />
-		<strong>EU representative (Art 27 GDPR):</strong> <em>TODO: name + address of the appointed representative</em>. See
-		<a href="/docs/compliance/eu-representative">eu-representative.md</a> in the project repo for
-		context.
+		<strong>EU representative (Art 27 GDPR):</strong>
+		<em
+			>[To be appointed before offering services to EU residents — representative name and EU
+			establishment address to be confirmed before EU launch.]</em
+		>
 		<br />
-		<strong>UK representative (Art 27 UK GDPR):</strong> <em>TODO if offering services to UK residents</em>.
+		<strong>UK representative (Art 27 UK GDPR):</strong>
+		<em
+			>[To be appointed before offering services to UK residents — representative name and UK
+			establishment address to be confirmed before UK launch.]</em
+		>
 	</p>
 
 	<h2>2. What data we collect</h2>
@@ -85,18 +92,76 @@
 
 	<h2>4. Who we share with (sub-processors)</h2>
 	<p>
-		Our service relies on a small set of vetted sub-processors. The current list and what data
-		each receives:
+		Our service relies on a small set of vetted sub-processors. Each receives only the data it
+		needs for its purpose. The current list — what each is for, and what it receives:
 	</p>
 	<ul>
-		<li><strong>Supabase</strong> — database, authentication, file storage.</li>
-		<li><strong>Amazon Web Services</strong> — web hosting (S3, CloudFront, Lambda).</li>
-		<li><strong>Fly.io</strong> — background workers + the live spectator hub.</li>
-		<li><strong>Anthropic</strong> (or, on fallback, OpenAI) — AI Coach.</li>
-		<li><strong>MapTiler</strong> — map tiles.</li>
-		<li><strong>Sentry</strong> — error monitoring.</li>
-		<li><strong>RevenueCat + Stripe / Apple IAP / Google Play Billing</strong> — subscriptions.</li>
-		<li><strong>Strava / parkrun / Garmin Connect / Health Connect / HealthKit</strong> — only when you connect them.</li>
+		<li>
+			<strong>Supabase</strong> (hosted in eu-west-2, London) — database, authentication, file
+			storage. Holds all account, activity (including GPS tracks and health-related fields), and
+			social data.
+		</li>
+		<li>
+			<strong>Amazon Web Services</strong> — web hosting (S3, CloudFront, Lambda, KMS, Route 53).
+			Serves the web bundle and holds data-export Storage objects and server logs.
+		</li>
+		<li>
+			<strong>Fly.io</strong> (London) — background workers, route processing, and the live
+			spectator hub. Your run tracks transit through map-matching and route-generation jobs.
+		</li>
+		<li>
+			<strong>Anthropic</strong> (or, on fallback, OpenAI) — AI Coach. Receives your chat prompt
+			plus a summary of your recent training (which can include heart-rate and goal data).
+		</li>
+		<li>
+			<strong>MapTiler</strong> (EU, with global edge caching) — map tiles. Receives the map
+			viewport and your IP address on each tile request; loads only after you accept the cookie
+			banner.
+		</li>
+		<li>
+			<strong>Open-Meteo</strong> (EU) — elevation lookup when you build or view a route. Receives
+			the route's waypoint coordinates (which can include a point near your home) and your IP
+			address.
+		</li>
+		<li>
+			<strong>Sentry</strong> — error monitoring. Receives a pseudonymous user id, URL paths, and
+			redacted error traces.
+		</li>
+		<li>
+			<strong>RevenueCat + Stripe + Apple IAP + Google Play Billing</strong> — subscription
+			billing. Receive your subscription tier and payment tokens; card numbers never reach us.
+		</li>
+		<li>
+			<strong>Stripe Connect</strong> (marketplace — distinct from the subscription billing above)
+			— paid event registration and fundraiser donations. Your email, payment, and any display
+			name or message you add are sent to a Checkout Session tied to the event host's or charity's
+			<em>own</em> connected Stripe account, so that recipient — not Threkir — becomes a custodian
+			of that contact data.
+		</li>
+		<li>
+			<strong>Email delivery</strong> (Resend or AWS SES — provider selection pending) —
+			transactional and digest email. Receives your email address, name, and the message content
+			(receipts, lifecycle and safety mail, the weekly digest).
+		</li>
+		<li>
+			<strong>Google Sign-In</strong> — identity, only when you choose "Sign in with Google".
+			Validates an ID token and returns your email and name to us. This is a separate flow from
+			Google Play Billing above.
+		</li>
+		<li>
+			<strong>Google FCM</strong> and <strong>Apple APNs</strong> — push-notification delivery,
+			only when you enable notifications. Receive your device push token and the notification title
+			and body.
+		</li>
+		<li>
+			<strong>RunSignUp / ChronoTrack / UltraSignup</strong> — race-result import, only when you
+			import or link a race. We may send an optional race-platform user id and receive finisher
+			results (names, bib numbers, times).
+		</li>
+		<li>
+			<strong>Strava / parkrun / Garmin Connect / Health Connect / HealthKit</strong> — only when
+			you connect them. Receive OAuth tokens; return the activity data they publish to us.
+		</li>
 	</ul>
 	<p>
 		Our server-side error monitoring (Sentry) captures crash and exception reports from our
@@ -107,14 +172,26 @@
 		consent.
 	</p>
 	<p>
-		We notify you of new sub-processors via an in-app notice at least 30 days before they go
-		live. You may withdraw consent and delete your account if you object.
+		We give at least 30 days' notice before a new sub-processor goes live. The canonical
+		disclosure is our maintained sub-processor list; registered users are additionally notified by
+		email (and, where available, in-app). You may object by emailing the privacy contact above, or
+		withdraw consent and delete your account.
 	</p>
 
 	<h2>5. International transfers</h2>
 	<p>
-		Several sub-processors are based in the United States. We rely on the <strong>EU-US Data
-		Privacy Framework</strong> certifications where available, plus the European Commission's
+		Your core data has an EU home: <strong>Supabase</strong> — our primary database, authentication
+		and file store, which holds your GPS tracks, health-related fields, and account data — is
+		hosted in <strong>eu-west-2 (London)</strong>. Our background workers and live-spectator hub
+		(<strong>Fly.io</strong>) also run in London, and <strong>MapTiler</strong> and
+		<strong>Open-Meteo</strong> serve from the EU (with global edge caching for map tiles).
+	</p>
+	<p>
+		Several other sub-processors are based in the United States (for example AWS compute,
+		Anthropic, Stripe, RevenueCat, and Sentry). For those transfers we rely on the <strong
+			>EU-US Data Privacy Framework</strong
+		>
+		certifications where available, plus the European Commission's
 		<strong>Standard Contractual Clauses</strong> (2021) for everything else. The data-processing
 		agreement for each provider is held on file; email <a href="mailto:privacy@threkir.com"
 			>privacy@threkir.com</a
@@ -190,7 +267,7 @@
 	<p>
 		Privacy: <a href="mailto:privacy@threkir.com">privacy@threkir.com</a>
 		<br />Security: <a href="mailto:security@threkir.com">security@threkir.com</a>
-		<br />Postal: <em>TODO: legal address</em>
+		<br />Postal: <em>[Registered postal address to be confirmed before EU launch.]</em>
 	</p>
 </div>
 

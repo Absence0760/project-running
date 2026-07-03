@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { consent } from '$lib/settings/consent.svelte';
 
-	const lastUpdated = '2026-05-15';
+	const lastUpdated = '2026-07-02';
 
 	// audit/cookie-consent (May 2026): the prior page told users to
 	// use a "Cookie settings" link in the footer that does not exist.
@@ -72,9 +72,15 @@
 	</p>
 	<ul>
 		<li>
-			<strong>MapTiler</strong> — every map tile fetch logs the requesting IP. We treat tile
-			fetches as strictly necessary on map screens (run detail, route detail, route builder,
-			live spectator); the map cannot render without them.
+			<strong>MapTiler</strong> (EU, with global edge caching) — every map tile fetch logs the
+			requesting IP and the map viewport. Map tiles load only after you accept the consent banner;
+			on map screens (run detail, route detail, route builder, live spectator) the map renders as
+			a "Load map" placeholder until then.
+		</li>
+		<li>
+			<strong>Open-Meteo</strong> (EU) — fires when you build or view a route, to look up
+			elevation. The request includes the route's waypoint coordinates (which can include a point
+			near your home) and your IP address.
 		</li>
 		<li>
 			<strong>Anthropic / OpenAI</strong> — only fires when you open the AI Coach. The
