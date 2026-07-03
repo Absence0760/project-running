@@ -1348,14 +1348,17 @@ export async function setRouteClubId(routeId: string, clubId: string | null): Pr
 	if (error) throw error;
 }
 
-/// Read a route by id. Owners and active club members get the full
-/// `routes` row directly (RLS allows it). Anon and non-owner /
-/// non-club-member callers read the redacted metadata from the
-/// `public_routes` view and assemble a `Route` with server-clipped
-/// waypoints from `clip_route_for_viewer`. Non-owners never see
-/// unclipped polyline / `geom` / `start_point` on the wire — closes
-/// the audit/public-rows + audit/privacy-zones High finding.
+/// Read a route by id. The OWNER gets the full `routes` row directly.
+/// Anon, non-owner, and non-owner club-member callers all get a
+/// privacy-clipped route: the polyline is routed through
+/// `clip_route_for_viewer` and `geom` / `start_point` are nulled, so
+/// unclipped geometry never crosses the wire to anyone but the owner.
+/// RLS also lets an active club member SELECT the base row, so the
+/// owner check here — not RLS — is what stops a non-owner club member
+/// from reading the unclipped waypoints. Closes the audit/public-rows
+/// + audit/privacy-zones High finding.
 export async function fetchRouteById(id: string): Promise<Route | null> {
+	const viewerId = auth.user?.id ?? null;
 	const ownerRead = await supabase
 		.from('routes')
 		.select('*')
@@ -1372,6 +1375,20 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 			shadow_hidden?: boolean;
 		};
 		void shadow_hidden;
+		if (rest.user_id !== viewerId) {
+			// RLS surfaced this base row to a non-owner (active club member).
+			// Never hand back the unclipped polyline / `geom` / `start_point`;
+			// route the waypoints through the same server-side privacy clip the
+			// non-owner branch below uses and drop the raw geometry columns.
+			const clipped = await fetchClippedRouteForViewer(id);
+			return {
+				...rest,
+				geom: null,
+				start_point: null,
+				waypoints: clipped,
+				surface: parseRouteSurface(rest.surface),
+			} as Route;
+		}
 		return { ...rest, surface: parseRouteSurface(rest.surface) } as Route;
 	}
 

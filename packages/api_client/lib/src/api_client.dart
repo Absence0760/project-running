@@ -583,6 +583,9 @@ class ApiClient {
       startedAt: run.startedAt.toUtc(),
       durationS: run.duration.inSeconds,
       distanceM: run.distanceMetres,
+      // Round-trip the route link. Omitting it makes the upsert write
+      // route_id = null, wiping a `linkRunToRoute` on the next sync.
+      routeId: run.routeId,
       source: run.source.name,
       activityType: (run.metadata?['activity_type'] as String?) ?? 'run',
       isDnf: run.metadata?['is_dnf'] == true,
@@ -715,6 +718,8 @@ class ApiClient {
         startedAt: r.startedAt.toUtc(),
         durationS: r.duration.inSeconds,
         distanceM: r.distanceMetres,
+        // Round-trip the route link — see saveRun.
+        routeId: r.routeId,
         source: r.source.name,
         activityType: (r.metadata?['activity_type'] as String?) ?? 'run',
         isDnf: r.metadata?['is_dnf'] == true,
@@ -2140,16 +2145,25 @@ class ApiClient {
   Future<({Route? route, String? ownerId})> fetchRouteById(
     String routeId,
   ) async {
+    final viewerId = _client.auth.currentUser?.id;
     final ownerRow = await _client
         .from(RouteRow.table)
         .select()
         .eq(RouteRow.colId, routeId)
         .maybeSingle();
     if (ownerRow != null) {
-      return (
-        route: _routeFromRow(ownerRow),
-        ownerId: ownerRow[RouteRow.colUserId] as String?,
-      );
+      final ownerId = ownerRow[RouteRow.colUserId] as String?;
+      if (ownerId == viewerId) {
+        return (route: _routeFromRow(ownerRow), ownerId: ownerId);
+      }
+      // RLS also surfaces the base row to an active club member. A
+      // non-owner must never receive the unclipped polyline, so route the
+      // waypoints through the same server-side privacy clip the public
+      // branch below uses.
+      final routeRow = Map<String, dynamic>.from(ownerRow);
+      routeRow['waypoints'] =
+          _waypointsToJson(await _clipRouteForViewer(routeId));
+      return (route: _routeFromRow(routeRow), ownerId: ownerId);
     }
 
     final publicRow = await _client
@@ -2161,13 +2175,24 @@ class ApiClient {
 
     // public_routes carries no `waypoints`; fetch the clipped polyline
     // separately so the response respects the owner's privacy zones.
-    List<Waypoint> clipped;
+    final ownerId = publicRow[RouteRow.colUserId] as String?;
+    final routeRow = Map<String, dynamic>.from(publicRow);
+    routeRow['waypoints'] =
+        _waypointsToJson(await _clipRouteForViewer(routeId));
+    return (route: _routeFromRow(routeRow), ownerId: ownerId);
+  }
+
+  /// Server-side privacy-zone-clipped waypoints for a route the viewer
+  /// does not own. Fails closed (empty polyline) on RPC error rather
+  /// than leaking the unclipped track — matches the `clipTrackForUser`
+  /// contract. Used by both non-owner read paths in [fetchRouteById].
+  Future<List<Waypoint>> _clipRouteForViewer(String routeId) async {
     try {
       final clip = await _client.rpc(
         'clip_route_for_viewer',
         params: {'p_route_id': routeId},
       );
-      clipped = (clip as List?)
+      return (clip as List?)
               ?.map((p) {
                 final m = p as Map<String, dynamic>;
                 return Waypoint(
@@ -2179,22 +2204,18 @@ class ApiClient {
               .toList() ??
           const [];
     } catch (_) {
-      // Fail closed — render an empty polyline rather than leak the
-      // unclipped track on RPC error. Matches clipTrackForUser shape.
-      clipped = const [];
+      return const [];
     }
-
-    final ownerId = publicRow[RouteRow.colUserId] as String?;
-    final routeRow = Map<String, dynamic>.from(publicRow);
-    routeRow['waypoints'] = clipped
-        .map((w) => {
-              'lat': w.lat,
-              'lng': w.lng,
-              if (w.elevationMetres != null) 'ele': w.elevationMetres,
-            })
-        .toList();
-    return (route: _routeFromRow(routeRow), ownerId: ownerId);
   }
+
+  static List<Map<String, dynamic>> _waypointsToJson(List<Waypoint> points) =>
+      points
+          .map((w) => {
+                'lat': w.lat,
+                'lng': w.lng,
+                if (w.elevationMetres != null) 'ele': w.elevationMetres,
+              })
+          .toList();
 
   Future<List<RunRow>> fetchPublicRunsByUser(String userId, {int limit = 50}) async {
     // Reads through the public_runs view (decisions §33 wire-leak
@@ -4857,6 +4878,9 @@ class ApiClient {
       duration: Duration(seconds: r.durationS),
       distanceMetres: r.distanceM,
       track: const [],
+      // Carry the route link through the read so a `linkRunToRoute` isn't
+      // silently wiped to null on the next newer-wins merge / saveRun.
+      routeId: r.routeId,
       source: RunSource.values.firstWhere(
         (s) => s.name == r.source,
         orElse: () => RunSource.app,

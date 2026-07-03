@@ -93,6 +93,7 @@ void main() {
       String? trackUrl,
       String? externalId,
       DateTime? createdAt,
+      String? routeId,
     }) {
       return <String, dynamic>{
         'id': id,
@@ -103,7 +104,7 @@ void main() {
             .toIso8601String(),
         'duration_s': durationS,
         'distance_m': distanceM,
-        'route_id': null,
+        'route_id': routeId,
         'source': source,
         'external_id': externalId,
         'metadata': metadata,
@@ -176,6 +177,20 @@ void main() {
       final created = DateTime.utc(2026, 4, 10, 8, 30);
       final run = ApiClient.debugRunFromRow(minimalRow(createdAt: created));
       expect(run.createdAt, created);
+    });
+
+    test('route_id is parsed onto Run.routeId so linkRunToRoute survives sync',
+        () {
+      // Regression: _runFromRow used to drop route_id entirely, so the
+      // newer-wins merge wiped a run's route link to null on the next
+      // normal sync after linkRunToRoute(). The read must carry it.
+      final run = ApiClient.debugRunFromRow(minimalRow(routeId: 'route-9'));
+      expect(run.routeId, 'route-9');
+    });
+
+    test('null route_id decodes to a null routeId', () {
+      final run = ApiClient.debugRunFromRow(minimalRow());
+      expect(run.routeId, isNull);
     });
   });
 
