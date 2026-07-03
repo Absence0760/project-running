@@ -1812,14 +1812,13 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		{name: "race_pings.json", table: schema.TableRacePings, filter: uidEq, sel: "*"},
 		// user_settings — the universal (per-user) prefs bag: privacy
 		// zones, HR settings, date-of-birth, week-start, units, and
-		// every other preference. The dataexport server also surfaces
-		// this as `profile.json`'s `settings_prefs` field via the
-		// separate FetchUserSettingsPrefs call, but the EF rollback
-		// path has no profile.json — so the spec list now carries
-		// user_settings too, keeping both export paths in lockstep and
-		// giving the subject a self-describing `user_settings.json`.
-		// It's the subject's own data, so the full prefs ship
-		// unredacted. persona round-5 privacy / GDPR Art 20.
+		// every other preference. Both export paths also surface this
+		// as `profile.json`'s `settings_prefs` field (here via the
+		// separate FetchUserSettingsPrefs call); the spec entry stays
+		// so the archive carries a self-describing `user_settings.json`
+		// and the two spec lists match. It's the subject's own data, so
+		// the full prefs ship unredacted. persona round-5 privacy /
+		// GDPR Art 20.
 		{name: "user_settings.json", table: schema.TableUserSettings, filter: uidEq, sel: "*"},
 		// user_device_settings — per-device behavioural prefs +
 		// last-seen-at. Distinct from user_settings (the per-user bag

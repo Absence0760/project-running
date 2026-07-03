@@ -51,7 +51,7 @@ without a re-encode step.
   "version": 1,
   "exported_at": "2026-04-15T12:34:56.000Z",
   "exported_by_user_id": "uuid",
-  "exported_from": "web" | "mobile_android" | "mobile_ios",
+  "exported_from": "web" | "mobile_android" | "mobile_ios" | "go-service" | "edge-function",
   "counts": { "runs": 47, "routes": 3, "goals": 2, "tracks": 45 }
 }
 ```
@@ -59,6 +59,14 @@ without a re-encode step.
 Version number is checked on import. A version bump means the reader must
 know how to interpret the new layout — older clients reject newer backups
 rather than lose data silently.
+
+The two server writers (`go-service` — the Go worker's `POST /v1/export`
+`format: 'backup'` — and `edge-function` — the deprecated `export-data`
+rollback path) emit the same layout plus the Art 20 extras clients don't
+fetch: `hr/{run_id}.hr.json.gz` sidecars, `photos/` image bytes, and one
+`{table}.json` per personal-data table (see `exportPersonalDataSpecs` in
+`apps/job_worker/internal/supabase.go` / `backup_spec.ts` in the EF).
+Readers ignore entries they don't know, so restore works unchanged.
 
 ## `runs.json`
 

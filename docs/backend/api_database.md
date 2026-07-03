@@ -1590,23 +1590,22 @@ No request body required. Irreversible.
 
 > **Status: Deprecated.** Superseded by `POST /v1/export` on the Go worker (`apps/job_worker/internal/dataexport/`). Clients pick transport via `PUBLIC_EXPORT_HUB_URL` (web) / `EXPORT_HUB_URL` (mobile); unset → call the EF; set → call the worker. The EF is kept deployed as the rollback path.
 
-Exports all of a user's runs as a GPX zip or CSV. GDPR data portability.
+Exports a user's data as a CSV, a GPX zip, or the full `run-app-backup` zip. GDPR data portability.
 
 **Request:**
 ```json
-{ "format": "gpx" }   // or "csv"
+{ "format": "gpx" }   // or "csv" or "backup"
 ```
 
 **Response:**
 ```json
 { "url": "https://<ref>.supabase.co/storage/v1/object/sign/runs/<user_id>/exports/<ts>.zip?token=...",
-  "path": "<user_id>/exports/<ts>.zip",
   "expires_in": 600,
   "count": 142,
   "format": "gpx" }
 ```
 
-A signed Supabase Storage URL pointing to the generated artifact, valid for 10 minutes. CSV produces a single row-per-run file. GPX produces a zip containing one `runs/<run_id>.gpx` per run that has a track plus a top-level `runs.json` manifest mirroring the CSV column set. Capped at 5000 runs per export. Rate limit: free 2/h, pro 8/h via `check_rate_limit_tiered`.
+A signed Supabase Storage URL pointing to the generated artifact, valid for 10 minutes (the Storage `path` is deliberately not echoed — see the function's header comment). CSV produces a single row-per-run file. GPX produces a zip containing one `runs/<run_id>.gpx` per run that has a track plus a top-level `runs.json` manifest mirroring the CSV column set. `backup` produces the same `run-app-backup` v1 archive layout as the Go worker's canonical export — `manifest.json` + `runs.json` + `routes.json` + `profile.json` (incl. `subscription_tier` / `subscription_at` / `billing_issue_at`) + raw `tracks/` and `hr/` gzips + `photos/` bytes + one `.json` per personal-data table via `backup_spec.ts` (incl. `route_markers` + `checkpoint_crossings`) — see [backup_restore.md](../ops/backup_restore.md). Capped at 5000 runs per export. Rate limit: free 2/h, pro 8/h via `check_rate_limit_tiered`.
 
 ---
 
