@@ -3,6 +3,8 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
 import { auth } from '../stores/auth.svelte';
 import { TIER_LIMITS } from '../coach/types';
+import { m } from '../i18n/store.svelte';
+import type { MessageKey } from '../i18n/messages';
 
 /// Registry of gated / tier-aware features. Two kinds of entries live
 /// here:
@@ -22,7 +24,8 @@ import { TIER_LIMITS } from '../coach/types';
 ///   gating because they're behaviour changes, not screens.
 ///
 /// To add a new gated feature:
-///   1. Add an entry to `GATED_FEATURES` with a human-readable label.
+///   1. Add an entry to `GATED_FEATURES` with `features.*` label +
+///      description message keys, added to every locale catalogue.
 ///   2. Add the key to `PRO_ONLY_FEATURES`.
 ///   3. Server-side: check `is_pro()` via RPC before the expensive work,
 ///      returning `{ error: 'pro_required', feature: '<key>' }` on 403.
@@ -32,20 +35,26 @@ import { TIER_LIMITS } from '../coach/types';
 
 export const GATED_FEATURES: Record<
 	string,
-	{ label: string; description: string }
+	{
+		label: MessageKey;
+		description: MessageKey;
+		descriptionParams?: Record<string, string | number>;
+	}
 > = {
 	ai_coach: {
-		label: 'AI Coach',
+		label: 'features.aiCoach.label',
+		description: 'features.aiCoach.description',
 		// Build the daily-cap numbers from TIER_LIMITS so this string
 		// can't drift from the server enforcement values (`handler.ts`
 		// reads the same constants).
-		description:
-			`Personalised training advice from Claude, grounded in your plan and runs. Free users get ${TIER_LIMITS.free.dailyLimit} messages per day; Pro users get ${TIER_LIMITS.pro.dailyLimit}.`,
+		descriptionParams: {
+			free: TIER_LIMITS.free.dailyLimit,
+			pro: TIER_LIMITS.pro.dailyLimit,
+		},
 	},
 	priority_processing: {
-		label: 'Priority Processing',
-		description:
-			'Faster response times when the service is under heavy load. Pro requests are routed ahead of the free queue at the rate-limit boundary.',
+		label: 'features.priorityProcessing.label',
+		description: 'features.priorityProcessing.description',
 	},
 };
 
@@ -109,9 +118,11 @@ export function isPro(): boolean {
 }
 
 export function featureLabel(feature: string): string {
-	return GATED_FEATURES[feature]?.label ?? feature;
+	const entry = GATED_FEATURES[feature];
+	return entry ? m(entry.label) : feature;
 }
 
 export function featureDescription(feature: string): string {
-	return GATED_FEATURES[feature]?.description ?? '';
+	const entry = GATED_FEATURES[feature];
+	return entry ? m(entry.description, entry.descriptionParams) : '';
 }
