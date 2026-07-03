@@ -227,10 +227,14 @@ test('track-preview thumbnails gate the MapTiler static map on consent', () => {
 	// IP per fetch — an ePrivacy/GDPR third-party request before consent.
 	// The MapTiler `buildStaticMapUrl` branch must sit behind a
 	// `consent.accepted ?` ternary (the self-hosted local override is
-	// exempt). audit/cookie-consent.
+	// exempt). audit/cookie-consent. The run-detail page is in the list
+	// because its off-screen share-card <img> lives in the DOM (fixed,
+	// top:-9999px — not display:none), so the browser fetches it on
+	// every run view, not only on the Share-as-image tap.
 	for (const file of [
 		'src/lib/components/RouteTrackPreview.svelte',
 		'src/lib/components/RunTrackPreview.svelte',
+		'src/routes/runs/[id]/+page.svelte',
 	]) {
 		const source = read(file);
 		assert.match(
@@ -239,6 +243,26 @@ test('track-preview thumbnails gate the MapTiler static map on consent', () => {
 			`${file} must gate buildStaticMapUrl behind a consent.accepted ternary — otherwise it fires a MapTiler request (logging the visitor IP) before consent on anon surfaces.`,
 		);
 	}
+});
+
+test('event meet-point static map gates MapTiler on consent', () => {
+	// Reason: audit/cookie-consent (2026-07-02) Medium — the meet-point
+	// <img> on /clubs/[slug]/events/[id] fired a MapTiler static-map
+	// request for any signed-in club member before (or against) their
+	// cookie-banner choice. A session is not consent under ePrivacy
+	// Art 5(3); the URL must only be built once consent is recorded or
+	// the member taps the Load-map placeholder.
+	const source = read('src/routes/clubs/[slug]/events/[id]/+page.svelte');
+	assert.match(
+		source,
+		/\(consent\.accepted \|\| meetMapConsented\)[\s\S]{0,200}buildStaticMarkerMapUrl/,
+		'the event page must gate buildStaticMarkerMapUrl behind consent.accepted or the explicit Load-map opt-in.',
+	);
+	assert.doesNotMatch(
+		source,
+		/meetMapConsented\s*=\s*\$state\(\s*true\s*\)/,
+		'meetMapConsented must not default to true — the placeholder tap is the affirmative act.',
+	);
 });
 
 test('interactive MapTiler maps gate maplibregl init on consent (authed surfaces too)', () => {

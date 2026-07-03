@@ -74,6 +74,7 @@
 	import { rasterizeSvgToPng, downloadBlob } from '$lib/format/svg_raster';
 	import { parseChipTimingCsv, resultsToCsv, type ParsedResultRow } from '$lib/runs/event_results_csv';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { consent } from '$lib/settings/consent.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type {
 		EventWithMeta,
@@ -107,8 +108,13 @@
 				: mapsDirectionsUrl(meetPoint.lat, meetPoint.lng)
 			: '',
 	);
+	// MapTiler logs the requester IP per static-map fetch, and a signed-in
+	// session is not consent under ePrivacy Art 5(3) — so the meet-point
+	// thumbnail waits for the cookie-banner choice, or the explicit
+	// "Load map" tap as the affirmative act. audit/cookie-consent.
+	let meetMapConsented = $state(false);
 	let meetMapUrl = $derived(
-		meetPoint
+		meetPoint && (consent.accepted || meetMapConsented)
 			? buildStaticMarkerMapUrl(meetPoint.lat, meetPoint.lng, {
 					w: 320,
 					h: 180,
@@ -1414,6 +1420,20 @@
 							>
 								<img src={meetMapUrl} alt={m('clubEvent.meetMapAlt')} loading="lazy" />
 							</a>
+						{:else if (env.PUBLIC_MAPTILER_KEY ?? '') && !consent.accepted && !meetMapConsented}
+							<div class="meet-map-consent" data-testid="meet-map-consent">
+								<h3>{m('runMap.consentTitle')}</h3>
+								<p>
+									{m('runMap.consentPrefix')}<strong>MapTiler</strong>{m('runMap.consentMiddle')}<strong>{m('runMap.loadMap')}</strong>{m('runMap.consentBeforeLink')}<a href="/cookie-notice">{m('runMap.cookieNotice')}</a>{m('runMap.consentSuffix')}
+								</p>
+								<button
+									type="button"
+									class="btn btn-secondary"
+									onclick={() => (meetMapConsented = true)}
+								>
+									{m('runMap.loadMap')}
+								</button>
+							</div>
 						{/if}
 						<a
 							class="btn btn-secondary meet-directions"
@@ -2552,6 +2572,27 @@
 		width: 320px;
 		max-width: 100%;
 		height: auto;
+	}
+
+	.meet-map-consent {
+		width: 320px;
+		max-width: 100%;
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-secondary);
+	}
+
+	.meet-map-consent h3 {
+		margin: 0 0 var(--space-xs);
+		font-size: 0.95rem;
+	}
+
+	.meet-map-consent p {
+		margin: 0 0 var(--space-sm);
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		font-size: 0.85rem;
 	}
 
 	.meet-directions {

@@ -45,6 +45,7 @@
 	import { defaultZoneCutoffs } from '$lib/training/hr_zones';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { consent } from '$lib/settings/consent.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { isInAnyZone, PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
@@ -1027,7 +1028,11 @@
 	/// the local Protomaps dev stack, `buildStaticMapUrl` for
 	/// production MapTiler. 1080×600 to fit the share card cleanly
 	/// at 1080-square; null when there's no track to render (the
-	/// card falls back to the stats-only layout).
+	/// card falls back to the stats-only layout). The card's <img>
+	/// sits in the DOM (off-screen, not display:none) so the browser
+	/// fetches it on every page view — the MapTiler branch must
+	/// therefore wait for consent like the list thumbnails do; the
+	/// self-hosted local override is exempt. audit/cookie-consent.
 	let shareMapUrl = $derived.by(() => {
 		if (!hasMapTrack || baseTrack.length < 2) return null;
 		const pts = baseTrack.map((p) => ({ lat: p.lat, lng: p.lng }));
@@ -1037,12 +1042,14 @@
 				h: 600,
 				styleUrl: PUBLIC_TILE_STYLE_URL,
 			}) ??
-			buildStaticMapUrl(pts, {
-				w: 1080,
-				h: 600,
-				style: 'streets-v2',
-				key: PUBLIC_MAPTILER_KEY,
-			})
+			(consent.accepted
+				? buildStaticMapUrl(pts, {
+						w: 1080,
+						h: 600,
+						style: 'streets-v2',
+						key: PUBLIC_MAPTILER_KEY,
+					})
+				: null)
 		);
 	});
 </script>
