@@ -63,8 +63,9 @@ rather than lose data silently.
 The two server writers (`go-service` — the Go worker's `POST /v1/export`
 `format: 'backup'` — and `edge-function` — the deprecated `export-data`
 rollback path) emit the same layout plus the Art 20 extras clients don't
-fetch: `hr/{run_id}.hr.json.gz` sidecars, `photos/` image bytes, and one
-`{table}.json` per personal-data table (see `exportPersonalDataSpecs` in
+fetch: `hr/{run_id}.hr.json.gz` sidecars, `photos/` image bytes, the
+`avatar.{ext}` profile picture, and one `{table}.json` per personal-data
+table (see `exportPersonalDataSpecs` in
 `apps/job_worker/internal/supabase.go` / `backup_spec.ts` in the EF).
 Readers ignore entries they don't know, so restore works unchanged.
 

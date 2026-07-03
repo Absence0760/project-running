@@ -48,6 +48,8 @@ type fakeBackend struct {
 	// run-photos bytes (format=backup only) — keyed by storage_path.
 	photoBytes map[string][]byte
 	photoErr   map[string]error
+	// avatars-bucket bytes (format=backup only) — keyed by object path.
+	avatarBytes map[string][]byte
 }
 
 type uploadCall struct {
@@ -124,6 +126,14 @@ func (f *fakeBackend) DownloadPhoto(_ context.Context, path string) ([]byte, str
 		return nil, "", fmt.Errorf("photo not found: %s", path)
 	}
 	return b, "image/jpeg", nil
+}
+
+func (f *fakeBackend) DownloadAvatar(_ context.Context, path string) ([]byte, string, error) {
+	b, ok := f.avatarBytes[path]
+	if !ok {
+		return nil, "", fmt.Errorf("avatar not found: %s", path)
+	}
+	return b, "image/png", nil
 }
 
 func signTestToken(t *testing.T, sub string, expDelta int) string {
@@ -627,7 +637,7 @@ func TestBuildBackupZip_ProducesValidArchive(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, Routes: routes, Profile: profile, SettingsPrefs: prefs,
 		UserID: "uid", ExportedFrom: "test",
-	}, fetcher, nil)
+	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,7 +738,7 @@ func TestBuildBackupZip_PartialTrackFailureDoesNotSinkArchive(t *testing.T) {
 
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "uid", ExportedFrom: "test",
-	}, fetcher, nil)
+	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -780,7 +790,7 @@ func TestBuildBackupZip_ArchivesHrSidecar(t *testing.T) {
 
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "uid", ExportedFrom: "test",
-	}, fetcher, nil)
+	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -860,7 +870,7 @@ func TestBuildBackupZip_BundlesRunPhotoBytes(t *testing.T) {
 
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, photoFetcher)
+	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, Photo: photoFetcher})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -899,6 +909,86 @@ func TestBuildBackupZip_BundlesRunPhotoBytes(t *testing.T) {
 	}
 }
 
+func TestBuildBackupZip_ArchivesAvatarBytes(t *testing.T) {
+	// data-export-completeness Medium: the avatars-bucket object was
+	// never archived — the backup carried avatar_url only. The builder
+	// probes the enumerable `{uid}/avatar.{ext}` candidate set and
+	// archives every hit verbatim.
+	imgBytes := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A}
+	var probed []string
+	avatar := func(_ context.Context, p string) ([]byte, string, error) {
+		probed = append(probed, p)
+		if p == "uid/avatar.png" {
+			return imgBytes, "image/png", nil
+		}
+		return nil, "", errors.New("object not found")
+	}
+
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test",
+	}, BackupFetchers{Avatar: avatar})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	entries := map[string][]byte{}
+	var manifest map[string]any
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		entries[f.Name] = b
+		if f.Name == "manifest.json" {
+			_ = json.Unmarshal(b, &manifest)
+		}
+	}
+	got, ok := entries["avatar.png"]
+	if !ok {
+		t.Fatalf("avatar.png missing; entries=%v", keysOf(entries))
+	}
+	if !bytes.Equal(got, imgBytes) {
+		t.Errorf("avatar bytes mismatch: got %v want %v", got, imgBytes)
+	}
+	wantProbes := []string{"uid/avatar.jpg", "uid/avatar.png", "uid/avatar.webp"}
+	if fmt.Sprint(probed) != fmt.Sprint(wantProbes) {
+		t.Errorf("probed=%v, want exactly the canonical candidate set %v", probed, wantProbes)
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["avatars"] != float64(1) {
+		t.Errorf("counts[avatars]=%v, want 1", counts["avatars"])
+	}
+}
+
+func TestBuildBackupZip_NoAvatarShipsZeroCount(t *testing.T) {
+	avatar := func(_ context.Context, _ string) ([]byte, string, error) {
+		return nil, "", errors.New("object not found")
+	}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test",
+	}, BackupFetchers{Avatar: avatar})
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	var manifest map[string]any
+	for _, f := range zr.File {
+		if strings.HasPrefix(f.Name, "avatar.") {
+			t.Errorf("no avatar entry should land when every probe misses; got %s", f.Name)
+		}
+		if f.Name == "manifest.json" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			_ = json.Unmarshal(b, &manifest)
+		}
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["avatars"] != float64(0) {
+		t.Errorf("counts[avatars]=%v, want 0", counts["avatars"])
+	}
+}
+
 func keysOf(m map[string][]byte) []string {
 	ks := make([]string, 0, len(m))
 	for k := range m {
@@ -923,7 +1013,7 @@ func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
 	}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "uid", ExportedFrom: "test",
-	}, fetcher, nil)
+	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -941,9 +1031,9 @@ func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
 func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test",
-	}, func(_ context.Context, _ string) ([]byte, error) {
+	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) {
 		return nil, errors.New("must not be called")
-	}, nil)
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -956,7 +1046,7 @@ func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T)
 func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test", Profile: nil,
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
+	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1186,7 +1276,7 @@ func TestBuildBackupZip_PathTraversalAttemptIsBlocked(t *testing.T) {
 			}
 			body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 				Runs: runs, UserID: "uid", ExportedFrom: "test",
-			}, fetcher, nil)
+			}, BackupFetchers{RawTrack: fetcher})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1237,7 +1327,7 @@ func TestBuildBackupZip_ManyRoutesAndTracksScale(t *testing.T) {
 	start := time.Now()
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, Routes: routes, UserID: "uid", ExportedFrom: "test",
-	}, fetcher, nil)
+	}, BackupFetchers{RawTrack: fetcher})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatal(err)
@@ -1280,7 +1370,7 @@ func TestBuildBackupZip_RouteWithNilPointerFieldsRoundTrips(t *testing.T) {
 	}}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Routes: routes, UserID: "uid", ExportedFrom: "test",
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
+	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1325,7 +1415,7 @@ func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
 	}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "new-uid", ExportedFrom: "test",
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
+	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1349,7 +1439,7 @@ func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
 func TestBuildBackupZip_ManifestExportedFromIsPreserved(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "go-service-test",
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
+	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1427,7 +1517,7 @@ func TestBuildBackupZip_ExtraTablesAppearAsZipEntries(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: nil, Routes: nil, UserID: "uid", ExportedFrom: "test",
 		ExtraTables: extras,
-	}, nil, nil)
+	}, BackupFetchers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1486,7 +1576,7 @@ func TestBuildBackupZip_ExtraTablesContentIsPreservedAsArray(t *testing.T) {
 	}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
-	}, nil, nil)
+	}, BackupFetchers{})
 	if err != nil {
 		t.Fatal(err)
 	}

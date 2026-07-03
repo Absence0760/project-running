@@ -432,6 +432,17 @@ export function shapeExportRoute(row: Record<string, unknown>): Record<string, u
 	return out;
 }
 
+/// The avatar uploader keeps a SINGLE object at the stable
+/// `{userId}/avatar.{ext}` path (remove-then-insert across all three
+/// extensions — see avatarPathsFor in apps/web/src/lib/core/data.ts),
+/// so the full candidate set is enumerable without a bucket list.
+/// Mirrors the Go builder's avatarExts probe order.
+export const AVATAR_EXTENSIONS = ['jpg', 'png', 'webp'] as const;
+
+export function avatarCandidatePaths(userId: string): string[] {
+	return AVATAR_EXTENSIONS.map((ext) => `${userId}/avatar.${ext}`);
+}
+
 /// Reject any Storage path a malformed row could use to feed a
 /// traversal into the service-role downloader's URL or the zip entry
 /// name. Mirrors the Go builder's path.Clean + prefix checks.

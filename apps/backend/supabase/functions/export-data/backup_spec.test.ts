@@ -9,6 +9,7 @@ import {
 	assertMatch,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+	avatarCandidatePaths,
 	BACKUP_FORMAT,
 	BACKUP_VERSION,
 	buildBackupManifest,
@@ -591,4 +592,15 @@ Deno.test('buildBackupManifest matches the run-app-backup v1 shape', () => {
 	});
 	assertEquals(BACKUP_FORMAT, 'run-app-backup');
 	assertEquals(BACKUP_VERSION, 1);
+});
+
+Deno.test('avatarCandidatePaths enumerates the stable per-extension avatar set', () => {
+	// Mirrors the Go builder's avatarExts probe order and the web
+	// uploader's avatarPathsFor — the export probes exactly these
+	// paths, nothing else, so a hostile uid can't widen the fetch.
+	assertEquals(avatarCandidatePaths(TEST_UID), [
+		`${TEST_UID}/avatar.jpg`,
+		`${TEST_UID}/avatar.png`,
+		`${TEST_UID}/avatar.webp`,
+	]);
 });

@@ -336,6 +336,12 @@ func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte
 	return c.downloadFromBucket(ctx, schema.BucketRunPhotos, path)
 }
 
+// DownloadAvatar fetches the user's profile picture from the public
+// avatars bucket for the Art 20 export.
+func (c *SupabaseClient) DownloadAvatar(ctx context.Context, path string) ([]byte, string, error) {
+	return c.downloadFromBucket(ctx, schema.BucketAvatars, path)
+}
+
 // UploadPhoto writes a run photo back to the run-photos bucket. Used by
 // the photo_process handler after EXIF stripping.
 func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error {

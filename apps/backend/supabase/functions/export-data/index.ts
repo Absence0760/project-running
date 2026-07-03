@@ -397,6 +397,7 @@ function xmlEscape(v: string): string {
 // Per-table failures are tolerated (logged + skipped) so a single
 // missing migration doesn't strand the export.
 import {
+	avatarCandidatePaths,
 	type BackupTableSpec,
 	buildBackupManifest,
 	buildBackupSpecs,
@@ -634,12 +635,31 @@ async function buildBackupZip(
 		}
 	}
 
+	// Avatar — the profile-picture bytes from the public `avatars`
+	// bucket, so the Art 20 export carries the image itself and not
+	// just the avatar_url on the profile row. Probes the enumerable
+	// candidate paths; a miss on every path just means no avatar.
+	let avatarsAdded = 0;
+	for (const p of avatarCandidatePaths(userId)) {
+		try {
+			const { data: blob } = await supabase.storage.from('avatars').download(p);
+			if (!blob) continue;
+			const bytes = new Uint8Array(await blob.arrayBuffer());
+			if (bytes.length === 0) continue;
+			await zip.add(`avatar.${p.split('.').pop()}`, new Uint8ArrayReader(bytes), { level: 0 });
+			avatarsAdded++;
+		} catch (_) {
+			/* no avatar stored at this candidate path */
+		}
+	}
+
 	// manifest.json last so the counts reflect what actually made it in.
 	counts['runs'] = runs.length;
 	counts['routes'] = routesOut.length;
 	counts['tracks'] = tracksAdded;
 	counts['hr_series'] = hrAdded;
 	counts['photos'] = photosAdded;
+	counts['avatars'] = avatarsAdded;
 	await zip.add(
 		'manifest.json',
 		new TextReader(JSON.stringify(buildBackupManifest({ userId, counts }), null, 2)),

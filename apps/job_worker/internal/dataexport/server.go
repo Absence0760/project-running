@@ -141,6 +141,13 @@ type Backend interface {
 	// and ships the zip without the failed entry.
 	DownloadPhoto(ctx context.Context, path string) ([]byte, string, error)
 
+	// DownloadAvatar pulls the raw bytes (+ Content-Type) of an
+	// avatars-bucket object. The Art 20 export bundles the profile
+	// picture itself, not just the avatar_url on the profile row.
+	// Returns a non-nil error when the object is missing; the builder
+	// probes each candidate path and tolerates misses.
+	DownloadAvatar(ctx context.Context, path string) ([]byte, string, error)
+
 	// FetchExportPersonalDataTables bundles every additional table
 	// the audit/data-export-completeness pass added to the export
 	// (May 2026 + 2026-05-25 refresh): coach_messages, notifications,
@@ -378,7 +385,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			UserID:        userID,
 			ExportedFrom:  "go-service",
 			ExtraTables:   extras,
-		}, s.Backend.DownloadRawTrackBytes, s.Backend.DownloadPhoto)
+		}, BackupFetchers{
+			RawTrack: s.Backend.DownloadRawTrackBytes,
+			Photo:    s.Backend.DownloadPhoto,
+			Avatar:   s.Backend.DownloadAvatar,
+		})
 		if err != nil {
 			s.log().Error("dataexport: backup zip build failed", "err", err, "user_id", userID)
 			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
@@ -678,6 +689,23 @@ type RawTrackFetcher func(ctx context.Context, path string) ([]byte, error)
 // the images themselves, not just `run_photos.json` metadata.
 type PhotoFetcher func(ctx context.Context, path string) ([]byte, string, error)
 
+// BackupFetchers bundles the Storage callbacks BuildBackupZip fans out
+// over. Grouped in a struct because the positional list outgrew the
+// signature once avatars joined tracks + photos; a nil field skips its
+// section (tests exercise one section at a time).
+type BackupFetchers struct {
+	RawTrack RawTrackFetcher
+	Photo    PhotoFetcher
+	Avatar   PhotoFetcher
+}
+
+// avatarExts enumerates the extensions the avatar uploader can write.
+// The web uploader keeps a SINGLE object at the stable
+// `{uid}/avatar.{ext}` path (remove-then-insert across all three
+// extensions), so the full candidate set is enumerable without a
+// bucket list — mirror of avatarPathsFor in apps/web/src/lib/core/data.ts.
+var avatarExts = []string{"jpg", "png", "webp"}
+
 // BackupFormatVersion is the manifest's `version` field. Bump only
 // when the on-disk shape changes incompatibly; readers reject
 // versions above the one they know.
@@ -695,7 +723,7 @@ const BackupFormatName = "run-app-backup"
 // web. Track download failures are silently swallowed — the row
 // stays in the manifest, the `tracks/...` entry is omitted, the
 // zip ships.
-func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher RawTrackFetcher, photoFetcher PhotoFetcher) ([]byte, error) {
+func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetchers) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
@@ -800,7 +828,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		if *r.TrackURL != expected {
 			continue
 		}
-		bytes, err := rawTrackFetcher(ctx, *r.TrackURL)
+		bytes, err := f.RawTrack(ctx, *r.TrackURL)
 		if err != nil || len(bytes) == 0 {
 			continue
 		}
@@ -830,7 +858,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		if *r.HrSeriesURL != expected {
 			continue
 		}
-		bytes, err := rawTrackFetcher(ctx, *r.HrSeriesURL)
+		bytes, err := f.RawTrack(ctx, *r.HrSeriesURL)
 		if err != nil || len(bytes) == 0 {
 			continue
 		}
@@ -880,7 +908,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 	// per-photo — the metadata row already shipped; the zip closes
 	// without the missing image (same contract as tracks).
 	photosAdded := 0
-	if photoFetcher != nil && in.ExtraTables != nil {
+	if f.Photo != nil && in.ExtraTables != nil {
 		for _, row := range in.ExtraTables["run_photos.json"] {
 			sp, _ := row["storage_path"].(string)
 			if sp == "" {
@@ -895,7 +923,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 			if sp != path.Clean(sp) || strings.HasPrefix(sp, "/") || strings.Contains(sp, "..") {
 				continue
 			}
-			body, _, err := photoFetcher(ctx, sp)
+			body, _, err := f.Photo(ctx, sp)
 			if err != nil || len(body) == 0 {
 				continue
 			}
@@ -914,14 +942,42 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		}
 	}
 
+	// Avatar — the profile picture bytes from the public `avatars`
+	// bucket, so the Art 20 export carries the image itself and not just
+	// the avatar_url on the profile row. Probes the enumerable candidate
+	// paths (see avatarExts); a miss on every path just means the user
+	// has no avatar.
+	avatarsAdded := 0
+	if f.Avatar != nil && in.UserID != "" {
+		for _, ext := range avatarExts {
+			body, _, err := f.Avatar(ctx, fmt.Sprintf("%s/avatar.%s", in.UserID, ext))
+			if err != nil || len(body) == 0 {
+				continue
+			}
+			header := &zip.FileHeader{
+				Name:   "avatar." + ext,
+				Method: zip.Store,
+			}
+			fw, err := zw.CreateHeader(header)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := fw.Write(body); err != nil {
+				return nil, err
+			}
+			avatarsAdded++
+		}
+	}
+
 	// manifest last so the counts include the actual tracks + photos
-	// + extra tables that made it in.
+	// + avatar + extra tables that made it in.
 	counts := map[string]interface{}{
 		"runs":      len(in.Runs),
 		"routes":    len(in.Routes),
 		"tracks":    tracksAdded,
 		"hr_series": hrAdded,
 		"photos":    photosAdded,
+		"avatars":   avatarsAdded,
 	}
 	for k, v := range extraCounts {
 		counts[k] = v
