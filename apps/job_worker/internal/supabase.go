@@ -1268,8 +1268,14 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// `date_of_birth` (the real column, added by
 	// 20260829_001_segments_v2_tiered_leaderboards.sql) + `parkrun_number`
 	// were missing entirely. Both are personal data the subject has
-	// an Art 20 right to receive.
-	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default")
+	// an Art 20 right to receive. The 2026-07-02 audit High then added
+	// `subscription_tier` / `subscription_at` / `billing_issue_at`:
+	// server-managed, but still commercial data the business holds
+	// about the subject under Art 15(1) / CCPA right-to-know, and
+	// user_profiles is the only place it lives (RevenueCat keys by the
+	// Supabase user id). Keep in lockstep with the EF twin's
+	// PROFILE_SELECT in export-data/backup_spec.ts.
+	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default,subscription_tier,subscription_at,billing_issue_at")
 	q.Set("limit", "1")
 	u := c.BaseURL + "/rest/v1/" + schema.TableUserProfiles + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)

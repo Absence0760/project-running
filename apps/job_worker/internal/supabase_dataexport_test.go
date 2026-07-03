@@ -177,24 +177,29 @@ func TestFetchExportProfile_NotPresentReturnsNilNilError(t *testing.T) {
 	}
 }
 
-func TestFetchExportProfile_ServerManagedFieldsAbsentFromQuery(t *testing.T) {
-	// Server-managed billing fields (subscription_tier,
-	// subscription_at) are not personal data the subject provided
-	// and don't belong in an Art 20 export. The column-level revoke
-	// from 20260707_001 reinforces this at the DB layer.
+func TestFetchExportProfile_IncludesSubscriptionColumns(t *testing.T) {
+	// audit/data-export-completeness (2026-07-02) High. An earlier
+	// test asserted these columns were ABSENT on the theory that
+	// server-managed billing state isn't the subject's data — but
+	// Art 15(1) / CCPA right-to-know cover commercial data the
+	// business holds ABOUT the subject, and user_profiles is the only
+	// place tier / since-when / billing-issue state lives (RevenueCat
+	// keys by the Supabase user id). The 20260707_001 column revoke is
+	// scoped to `authenticated`; the service-role worker reads fine.
 	var capturedRaw string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedRaw = r.URL.RawQuery
 		_, _ = w.Write([]byte(`[]`))
 	})
 	_, _ = client.FetchExportProfile(context.Background(), "user-A")
-	forbidden := []string{
+	required := []string{
 		"subscription_tier",
 		"subscription_at",
+		"billing_issue_at",
 	}
-	for _, col := range forbidden {
-		if strings.Contains(capturedRaw, col) {
-			t.Errorf("profile select must not request %q: %q", col, capturedRaw)
+	for _, col := range required {
+		if !strings.Contains(capturedRaw, col) {
+			t.Errorf("profile select must request %q: %q", col, capturedRaw)
 		}
 	}
 }
