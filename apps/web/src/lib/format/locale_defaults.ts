@@ -7,7 +7,7 @@
 
 const FALLBACK_LOCALE = 'en-US';
 
-function regionOf(locale: string): string {
+export function regionOfLocale(locale: string): string {
 	try {
 		return (new Intl.Locale(locale).region ?? '').toUpperCase();
 	} catch {
@@ -20,7 +20,7 @@ function regionOf(locale: string): string {
 const IMPERIAL_REGIONS = new Set(['US', 'GB', 'LR', 'MM']);
 
 export function defaultUnitForLocale(locale: string = FALLBACK_LOCALE): 'km' | 'mi' {
-	return IMPERIAL_REGIONS.has(regionOf(locale)) ? 'mi' : 'km';
+	return IMPERIAL_REGIONS.has(regionOfLocale(locale)) ? 'mi' : 'km';
 }
 
 // Sunday-first-week regions where the CLDR week data isn't available.
@@ -31,7 +31,7 @@ const SUNDAY_FIRST_REGIONS = new Set([
 ]);
 
 export function defaultWeekStartForLocale(locale: string = FALLBACK_LOCALE): 'monday' | 'sunday' {
-	const region = regionOf(locale);
+	const region = regionOfLocale(locale);
 	// Region-less locales ('en', '') stay on the neutral ISO/Monday
 	// default (mirrors the km default for `defaultUnitForLocale`) rather
 	// than letting Intl maximize 'en' → en-US → Sunday.

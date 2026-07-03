@@ -1317,6 +1317,7 @@ export const messages = {
 	"settingsIntegrations.availableHeading": "Integrações disponíveis",
 	"settingsIntegrations.stravaDescription": "Sincronize atividades automaticamente da sua conta do Strava",
 	"settingsIntegrations.parkrunDescription": "Importe todo o seu histórico do parkrun",
+	"settingsIntegrations.parkrunRegionNote": "O parkrun está presente apenas em alguns países e pode não haver eventos perto de você — ainda assim, você pode conectar se tiver um ID de atleta do parkrun.",
 	"settingsIntegrations.garminDescription": "Importação em lote de arquivos .fit (uma única atividade ou exportação completa dos dados da conta). O OAuth ao vivo requer aprovação do programa de desenvolvedores da Garmin.",
 	"settingsIntegrations.healthkitDescription": "Vai sincronizar no dispositivo assim que o app iOS for lançado (em breve).",
 	"settingsIntegrations.lastSynced": "Última sincronização {date}",

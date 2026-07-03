@@ -26,6 +26,8 @@
 	import { importStravaZip, type StravaZipProgress } from '$lib/integrations/strava-zip';
 	import { importGarminBundle, type GarminZipProgress } from '$lib/integrations/garmin-zip';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { browser } from '$app/environment';
+	import { parkrunLikelyUnavailable } from '$lib/integrations/parkrun_regions';
 
 	interface IntegrationUI {
 		provider: string;
@@ -53,6 +55,11 @@
 
 	let pageLoading = $state(true);
 	let confirmingDisconnect = $state<number | null>(null);
+
+	// parkrun runs in ~20 countries; outside its footprint the card keeps
+	// working (an expat can still connect an athlete ID) but discloses that
+	// there may be no events nearby instead of presenting as universal.
+	const parkrunRegionNote = browser ? parkrunLikelyUnavailable(navigator.language) : false;
 
 	// RunSignUp race-results import runs through the race-results-import EF (no
 	// stored integration row). The whole leg is gated on a server-side API key;
@@ -319,6 +326,9 @@
 					<div class="integration-info">
 						<h3>{integration.name}</h3>
 						<p>{m(`settingsIntegrations.${integration.provider}Description` as MessageKey)}</p>
+						{#if integration.provider === 'parkrun' && parkrunRegionNote}
+							<p class="sync-note">{m('settingsIntegrations.parkrunRegionNote')}</p>
+						{/if}
 						{#if integration.connected && integration.lastSync}
 							<span class="last-sync">
 								{m('settingsIntegrations.lastSynced', { date: new Date(integration.lastSync).toLocaleDateString(activeFormatLocale(), {

@@ -1314,6 +1314,7 @@ export const messages = {
 	"settingsIntegrations.availableHeading": "利用できる連携",
 	"settingsIntegrations.stravaDescription": "Strava アカウントからアクティビティを自動で同期",
 	"settingsIntegrations.parkrunDescription": "parkrun の全履歴をインポート",
+	"settingsIntegrations.parkrunRegionNote": "parkrun は一部の国でのみ開催されており、お近くにイベントがない場合があります。parkrun のアスリート ID をお持ちであれば連携できます。",
 	"settingsIntegrations.garminDescription": ".fit ファイルの一括インポート（単一アクティビティまたはアカウントデータの完全エクスポート）。ライブ OAuth には Garmin デベロッパープログラムの承認が必要です。",
 	"settingsIntegrations.healthkitDescription": "iOS アプリのリリース後、端末上で同期されます（近日対応）。",
 	"settingsIntegrations.lastSynced": "最終同期 {date}",
