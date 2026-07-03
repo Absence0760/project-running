@@ -37,12 +37,15 @@ android {
     defaultConfig {
         applicationId = "com.threkir.app"
         minSdk = 26
-        // Play Console requires targetSdk >= 35 for new + updated apps
-        // (one year behind the latest Android release). Pinning the
-        // value here so we don't silently regress if Flutter SDK
-        // ships with an older default. Bump in lockstep with the
-        // watch_wear app (its targetSdk is also pinned to 35).
-        targetSdk = 35
+        // Play Console requires targetSdk >= 36 (Android 16) for new +
+        // updated apps from 2026-08-31 (one year behind the latest
+        // Android release). Pinning the value here so we don't silently
+        // regress if Flutter SDK ships with an older default. watch_wear
+        // stays on its own pin — Wear OS is exempt from the annual
+        // target-API requirement (its floor is API 30).
+        // targetSdk 36 behaviour changes to re-verify on-device are
+        // listed in deployment.md § targetSdk 36.
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

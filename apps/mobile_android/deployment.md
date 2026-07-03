@@ -127,6 +127,16 @@ The dev flavour reads from `apps/mobile_android/.env.local` (gitignored), which 
 
 The `BACKGROUND_LOCATION` permission is the most scrutinized at review time. The Play Store requires a **prominent in-app disclosure** explaining why we need it before requesting; that lives on the `OnboardingScreen`. Don't remove that disclosure.
 
+### targetSdk 36 (Android 16) — what to re-verify on-device
+
+`targetSdk = 36` (Play requires it for updates from **2026-08-31**; `compileSdk` follows `flutter.compileSdkVersion`, currently 36). Android 16 behaviour changes that activate at this target and need a manual pass on an Android 16 device before release:
+
+- **Edge-to-edge is mandatory** — `windowOptOutEdgeToEdgeEnforcement` is ignored on Android 16. Flutter's current stable handles insets, but verify the onboarding, recording (`run_screen`), and bottom-nav surfaces don't draw under the status/gesture bars.
+- **Orientation / aspect-ratio restrictions ignored on ≥600 dp displays** — the app fills the window on tablets/foldables regardless of preferred orientation; check the recorder and map layouts at tablet widths.
+- **Predictive back on by default** — verify back gestures from the recording screen still hit the in-app confirm flow rather than dismissing the activity.
+- **Foreground-service recording** — no new FGS type is required (`FOREGROUND_SERVICE_LOCATION` stands), but soak-test a full background-locked recording on Android 16 for regressions in the tightened background-work quotas.
+- **Notifications** — verify the live recording notification and push-notification taps; the app uses no full-screen intents, so `USE_FULL_SCREEN_INTENT` is not needed.
+
 ---
 
 ## Privacy policy
