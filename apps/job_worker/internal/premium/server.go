@@ -145,7 +145,12 @@ func (s *Server) extractUserID(r *http.Request) (string, error) {
 			return nil, fmt.Errorf("unexpected alg: %v", t.Header["alg"])
 		}
 		return s.JWTSecret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
+	}, jwt.WithValidMethods([]string{"HS256"}),
+		// golang-jwt validates `exp` only when present, so a token that
+		// omits it would be valid forever. Supabase always issues
+		// short-lived tokens with `exp` — same guard as livehub's
+		// extractSub.
+		jwt.WithExpirationRequired())
 	if err != nil || !tok.Valid {
 		return "", errors.New("invalid_token")
 	}

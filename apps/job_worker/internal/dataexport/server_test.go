@@ -358,6 +358,29 @@ func TestServer_ExpiredTokenIsRejected(t *testing.T) {
 	}
 }
 
+func TestServer_TokenWithoutExpIsRejected(t *testing.T) {
+	// A correctly-signed token with the right `sub` but NO `exp` claim
+	// (signTestToken omits exp when expDelta == 0). Without
+	// WithExpirationRequired such a token is valid forever — it must be
+	// rejected on this security boundary, same as livehub.
+	be := &fakeBackend{}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 0))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 401 {
+		t.Fatalf("status=%d, want 401 (no immortal tokens)", resp.StatusCode)
+	}
+}
+
 // --- pure helpers --------------------------------------------------------
 
 func TestBuildCSV_ColumnOrderAndDataShape(t *testing.T) {
