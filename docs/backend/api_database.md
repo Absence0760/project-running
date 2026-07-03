@@ -1279,7 +1279,7 @@ create table event_checkpoints (
   cutoff_elapsed_s  integer,                             -- cutoff as elapsed s from start; >= 0 (CHECK)
   cutoff_clock      text,                                -- 'HH:MM' wall-clock cutoff (CHECK regex)
   requires_weigh_in boolean not null default false,      -- arms the Art 9 health path at this checkpoint
-  created_by        uuid references auth.users not null,
+  created_by        uuid references auth.users on delete set null,  -- nullable + SET NULL (20270311_001) so the organiser can delete their account; the checkpoint survives
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
