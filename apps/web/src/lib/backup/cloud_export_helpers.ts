@@ -4,8 +4,12 @@
 /// `live_hub_helpers.ts`.
 ///
 /// The Go endpoint and the legacy `export-data` Edge Function both
-/// accept `{format: 'csv' | 'gpx'}` and both return
-/// `{url, expires_in, count, format}`. The only thing that differs is
+/// accept `{format: 'csv' | 'gpx' | 'backup'}` and both return
+/// `{url, expires_in, count, format}`. `backup` is the comprehensive
+/// GDPR Art. 20 archive (the `run-app-backup` zip bundling every
+/// personal-data table that the mobile `backup_server_client.dart`
+/// already requests); `csv` / `gpx` are the runs-only summaries. The
+/// only thing that differs is
 /// the transport — `supabase.functions.invoke()` vs `fetch()` against
 /// the Go base URL — and the auth header shape (the EF picks up the
 /// bearer from supabase-js's session automatically; the Go endpoint
@@ -13,7 +17,7 @@
 /// helper here just builds the absolute URL so the call site doesn't
 /// have to reason about trailing-slash normalisation.
 
-export type CloudExportFormat = 'csv' | 'gpx';
+export type CloudExportFormat = 'csv' | 'gpx' | 'backup';
 
 export interface CloudExportResponse {
 	url: string;

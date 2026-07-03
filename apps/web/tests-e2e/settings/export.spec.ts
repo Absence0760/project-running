@@ -242,4 +242,79 @@ test.describe('/settings/account — data export', () => {
 			timeout: 5_000
 		});
 	});
+
+	test('Full account archive posts {format:"backup"} and opens the signed URL', async ({
+		page,
+		context
+	}) => {
+		// The comprehensive GDPR Art. 20 export. Unlike the runs-only
+		// CSV / JSON / GPX buttons, this is the server-built
+		// `run-app-backup` zip covering every personal-data table —
+		// the same `{format:'backup'}` contract the mobile
+		// `backup_server_client.dart` uses. Pin that the button
+		// actually requests `backup` (not `gpx`), and that a success
+		// response opens the signed URL + toasts the count.
+		const fakeSignedUrl =
+			'https://signed.example/runs/exports/full-archive?token=fake';
+		let requestedFormat: string | null = null;
+		await page.route('**/functions/v1/export-data', (route) => {
+			requestedFormat =
+				(route.request().postDataJSON() as { format?: string })?.format ??
+				null;
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					url: fakeSignedUrl,
+					expires_in: 600,
+					count: 12,
+					format: 'backup'
+				})
+			});
+		});
+		await context.route('**/runs/exports/**', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'text/plain',
+				body: 'fake-archive'
+			})
+		);
+
+		await page.goto('/settings/account');
+
+		const popupPromise = context.waitForEvent('page');
+		await page
+			.getByRole('button', { name: /Download full account archive/ })
+			.click();
+		const popup = await popupPromise;
+		await popup.waitForLoadState('domcontentloaded');
+
+		expect(requestedFormat).toBe('backup');
+		expect(popup.url()).toBe(fakeSignedUrl);
+		await expect(page.getByText(/Export ready \(12 runs\)/)).toBeVisible({
+			timeout: 5_000
+		});
+	});
+
+	test('Full account archive surfaces a server-side failure as a toast', async ({
+		page
+	}) => {
+		// Fail-closed: a 500 must not leave the button stuck on
+		// "Building zip..." with no explanation.
+		await page.route('**/functions/v1/export-data', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'fetch_failed' })
+			})
+		);
+
+		await page.goto('/settings/account');
+		await page
+			.getByRole('button', { name: /Download full account archive/ })
+			.click();
+		await expect(page.getByText(/Export failed:/)).toBeVisible({
+			timeout: 5_000
+		});
+	});
 });

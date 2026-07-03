@@ -58,6 +58,7 @@
 	let exporting = $state(false);
 	let exportingJson = $state(false);
 	let exportingGpx = $state(false);
+	let exportingArchive = $state(false);
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
@@ -463,6 +464,33 @@
 			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			exportingGpx = false;
+		}
+	}
+
+	/// Comprehensive GDPR Art. 20 archive. Asks the server (Go
+	/// `/v1/export` or the legacy `export-data` EF) to build the
+	/// `run-app-backup` zip that bundles EVERY personal-data table —
+	/// coach chat, direct messages, health / body metrics, the
+	/// financial ledger, integrations, social graph — not just runs.
+	/// This is the same `{format:'backup'}` path the mobile client
+	/// (`backup_server_client.dart`) uses, and the canonical
+	/// data-portability export (the in-page Full backup ZIP above is
+	/// client-built and runs/routes/profile only). Opens the returned
+	/// signed URL in a new tab to stream the download, mirroring the
+	/// GPX cloud-export idiom.
+	async function handleFullAccountArchive() {
+		exportingArchive = true;
+		try {
+			const res = await cloudExport('backup');
+			window.open(res.url, '_blank', 'noopener');
+			showToast(
+				m('settingsAccount.exportReady', { count: res.count }),
+				'success',
+			);
+		} catch (e) {
+			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			exportingArchive = false;
 		}
 	}
 
@@ -999,18 +1027,18 @@
 			{m('settingsAccount.dataExportDescPrefix')}<code>runs.json</code>{m('settingsAccount.dataExportDescBetween')}<code>runs.json</code>{m('settingsAccount.dataExportDescSuffix')}
 		</p>
 		<div class="btn-row">
-			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson || exportingGpx}>
+			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson || exportingGpx || exportingArchive}>
 				<span class="material-symbols">download</span>
 				{exporting ? m('settingsAccount.exporting') : m('settingsAccount.exportCsv')}
 			</button>
-			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson || exportingGpx}>
+			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson || exportingGpx || exportingArchive}>
 				<span class="material-symbols">code</span>
 				{exportingJson ? m('settingsAccount.exporting') : m('settingsAccount.exportJson')}
 			</button>
 			<button
 				class="btn btn-outline"
 				onclick={handleCloudGpxExport}
-				disabled={exporting || exportingJson || exportingGpx}
+				disabled={exporting || exportingJson || exportingGpx || exportingArchive}
 				title={m('settingsAccount.cloudExportTitle')}
 			>
 				<span class="material-symbols">cloud_download</span>
@@ -1019,6 +1047,35 @@
 		</div>
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
 			<strong>{m('settingsAccount.cloudExportFootnotePrefix')}</strong>{m('settingsAccount.cloudExportFootnoteSuffix')}
+		</p>
+
+		<!--
+			Comprehensive GDPR Art. 20 archive. Distinct from the three
+			runs-only exports above: this is the complete personal-data
+			bundle (every table — coach chat, messages, health metrics,
+			ledger, integrations, social graph), the same server-built
+			`{format:'backup'}` path the mobile client uses. The label +
+			footnote below are plain-text placeholders — they still need
+			`settingsAccount.*` i18n keys added to all six locale
+			catalogues (owned by the i18n session).
+		-->
+		<div class="btn-row" style="margin-top: 0.75rem;">
+			<button
+				class="btn btn-outline"
+				onclick={handleFullAccountArchive}
+				disabled={exporting || exportingJson || exportingGpx || exportingArchive}
+				title="Everything we hold about you (GDPR Art. 20) — coach chats, messages, health metrics, integrations, and more — as one server-built zip."
+				data-testid="full-account-archive"
+			>
+				<span class="material-symbols">database</span>
+				{exportingArchive ? m('settingsAccount.buildingZip') : 'Download full account archive'}
+			</button>
+		</div>
+		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
+			<strong>Full account archive</strong> is the complete GDPR-portability
+			export: every personal-data table, not just runs. Server-built to
+			bypass browser memory limits; subject to the same hourly export limit
+			(free 2, Pro 8).
 		</p>
 	</section>
 
