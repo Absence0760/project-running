@@ -154,8 +154,12 @@ Play Console → App content → Data safety. Be precise; mismatches between the
 | Precise location | Yes | No | No | Yes |
 | Health & fitness — heart rate, steps | Yes | No | Yes | Yes |
 | Email address | Yes | No | No (account requirement) | Yes |
+| Name | Yes (optional display name, setup wizard / profile) | No | Yes | Yes |
 | User IDs | Yes | No | No | Yes |
+| Device or other IDs | Yes (FCM push token → `device_tokens`, registered on sign-in when Firebase is configured) | No | No | Yes |
+| Purchase history | Yes (Pro subscription state via RevenueCat / Play Billing) | No | Yes (only if the user subscribes) | Yes |
 | Photos | Yes (if user uploads) | No | Yes | Yes |
+| Other user-generated content | Yes (comments, club posts, route reviews, run notes, AI Coach chat messages) | No | Yes | Yes |
 | App interactions / Diagnostics | Yes (Sentry crash reports) | No | Optional via opt-out | Yes |
 
 "Shared" is **No** for everything we don't actively send to third-party servers. Strava / Garmin / RevenueCat / Anthropic are **only** invoked when the user signs in to those services or uses Coach, which counts as user-initiated rather than programmatic sharing. Phrasing in the questionnaire matters; if uncertain, default to the more conservative "Yes — Optional → user-initiated".
