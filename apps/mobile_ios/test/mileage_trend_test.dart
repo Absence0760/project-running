@@ -40,7 +40,7 @@ void main() {
       );
       expect(out, hasLength(1));
       expect(out.first.distanceM, 13000);
-      expect(out.first.label, '11 May');
+      expect(out.first.label, 'May 11');
     });
 
     test('separates runs across week boundaries', () {
@@ -56,9 +56,9 @@ void main() {
       );
       expect(out, hasLength(2));
       // Order is chronological.
-      expect(out[0].label, '4 May');
+      expect(out[0].label, 'May 4');
       expect(out[0].distanceM, 5000);
-      expect(out[1].label, '11 May');
+      expect(out[1].label, 'May 11');
       expect(out[1].distanceM, 8000);
     });
 

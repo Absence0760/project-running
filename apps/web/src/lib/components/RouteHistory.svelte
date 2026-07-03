@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatDuration } from '$lib/format/time';
 	import { fetchRunsOnRoute } from '$lib/core/data';
+	import { m } from '$lib/i18n/store.svelte';
 	
 	import {
 		qualifyingAttempts,
@@ -63,15 +64,18 @@
 			</span>
 			<span class="headline">
 				{#if summary.isPb}
-					Personal best on {routeName ?? 'this route'}
+					{m('routeHistory.personalBest', { route: routeName ?? m('routeHistory.thisRoute') })}
 				{:else}
-					{formatSignedDelta(summary.deltaSeconds)} behind PB
+					{m('routeHistory.behindPb', { delta: formatSignedDelta(summary.deltaSeconds) })}
 				{/if}
 			</span>
 		</div>
 		<div class="meta">
-			Attempt {summary.rank} of {summary.total} — PB:
-			{formatDuration(summary.pb.duration_s)}
+			{m('routeHistory.attemptMeta', {
+				rank: summary.rank,
+				total: summary.total,
+				pb: formatDuration(summary.pb.duration_s),
+			})}
 		</div>
 	</div>
 {/if}

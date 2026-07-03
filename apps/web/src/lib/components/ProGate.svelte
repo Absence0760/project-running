@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { featureLabel, featureDescription } from '$lib/settings/features';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		feature: string;
@@ -14,11 +15,11 @@
 	</div>
 	<h3>{featureLabel(feature)}</h3>
 	<p class="desc">{featureDescription(feature)}</p>
-	<span class="pro-badge">PRO</span>
-	<p class="cta">Upgrade to Pro to unlock this feature.</p>
+	<span class="pro-badge">{m('proGate.badge')}</span>
+	<p class="cta">{m('proGate.cta')}</p>
 	<a href="/settings/upgrade" class="btn-upgrade">
 		<span class="material-symbols">star</span>
-		Upgrade
+		{m('proGate.upgrade')}
 	</a>
 </div>
 

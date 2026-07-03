@@ -1049,33 +1049,20 @@
 			<strong>{m('settingsAccount.cloudExportFootnotePrefix')}</strong>{m('settingsAccount.cloudExportFootnoteSuffix')}
 		</p>
 
-		<!--
-			Comprehensive GDPR Art. 20 archive. Distinct from the three
-			runs-only exports above: this is the complete personal-data
-			bundle (every table — coach chat, messages, health metrics,
-			ledger, integrations, social graph), the same server-built
-			`{format:'backup'}` path the mobile client uses. The label +
-			footnote below are plain-text placeholders — they still need
-			`settingsAccount.*` i18n keys added to all six locale
-			catalogues (owned by the i18n session).
-		-->
 		<div class="btn-row" style="margin-top: 0.75rem;">
 			<button
 				class="btn btn-outline"
 				onclick={handleFullAccountArchive}
 				disabled={exporting || exportingJson || exportingGpx || exportingArchive}
-				title="Everything we hold about you (GDPR Art. 20) — coach chats, messages, health metrics, integrations, and more — as one server-built zip."
+				title={m('settingsAccount.fullArchiveTitle')}
 				data-testid="full-account-archive"
 			>
 				<span class="material-symbols">database</span>
-				{exportingArchive ? m('settingsAccount.buildingZip') : 'Download full account archive'}
+				{exportingArchive ? m('settingsAccount.buildingZip') : m('settingsAccount.fullArchive')}
 			</button>
 		</div>
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
-			<strong>Full account archive</strong> is the complete GDPR-portability
-			export: every personal-data table, not just runs. Server-built to
-			bypass browser memory limits; subject to the same hourly export limit
-			(free 2, Pro 8).
+			<strong>{m('settingsAccount.fullArchiveFootnotePrefix')}</strong>{m('settingsAccount.fullArchiveFootnoteSuffix')}
 		</p>
 	</section>
 

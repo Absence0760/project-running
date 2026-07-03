@@ -82,8 +82,8 @@ void main() {
         ],
         now: now,
       );
-      // Weekly bucket starts Monday 11 May → "11 May".
-      expect(find.text('11 May'), findsOneWidget);
+      // Weekly bucket starts Monday 11 May → "May 11".
+      expect(find.text('May 11'), findsOneWidget);
     });
 
     testWidgets(
@@ -100,7 +100,7 @@ void main() {
       await tester.tap(find.text('Month'));
       await tester.pump();
       expect(find.text("May '26"), findsOneWidget);
-      expect(find.text('11 May'), findsNothing,
+      expect(find.text('May 11'), findsNothing,
           reason: 'monthly view must replace the weekly bucket label');
     });
 

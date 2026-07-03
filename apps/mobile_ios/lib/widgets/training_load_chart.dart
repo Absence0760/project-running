@@ -85,14 +85,14 @@ class TrainingLoadChart extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    formatMonthDayShort(points.first.date,
+                    formatDateShort(points.first.date,
                         localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   Text(
-                    formatMonthDayShort(points.last.date,
+                    formatDateShort(points.last.date,
                         localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,

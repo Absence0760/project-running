@@ -74,13 +74,13 @@ void main() {
 
     test('returns a locale-formatted absolute date beyond a week', () {
       final twoWeeks = now.subtract(const Duration(days: 14));
-      expect(coachArchiveLabel(twoWeeks, 'en', now: now), '14 Apr 2026');
+      expect(coachArchiveLabel(twoWeeks, 'en', now: now), 'Apr 14, 2026');
     });
 
     test('formats single-digit month and day', () {
       final earlyJan = DateTime.utc(2026, 1, 3, 12, 0);
       final muchLater = earlyJan.add(const Duration(days: 30));
-      expect(coachArchiveLabel(earlyJan, 'en', now: muchLater), '3 Jan 2026');
+      expect(coachArchiveLabel(earlyJan, 'en', now: muchLater), 'Jan 3, 2026');
     });
   });
 

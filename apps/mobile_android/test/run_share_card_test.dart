@@ -63,7 +63,7 @@ void main() {
       final run = _run();
       await _pump(tester, run, prefs);
       expect(find.text('Morning run'), findsOneWidget);
-      expect(find.textContaining('15 Apr 2026'), findsOneWidget);
+      expect(find.textContaining('Apr 15, 2026'), findsOneWidget);
     });
 
     testWidgets('renders Distance, Time, and Pace stat labels', (tester) async {
