@@ -21,6 +21,11 @@
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
 	import { describeRoute, localisedTemplate } from '$lib/routes/route_description';
 	import { requestAiDescription } from '$lib/routes/route_describe_client';
+	import { coachEnabled } from '$lib/coach/coach_flag';
+
+	// The "Describe this route" button always works (offline template); the
+	// AI-enhancement upsell below it only makes sense when the Coach is live.
+	const coachOn = coachEnabled();
 	import { env } from '$env/dynamic/public';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
@@ -518,7 +523,7 @@
 								{m('routeDetail.aiAttribution')}
 							</p>
 						{/if}
-						{#if showUpgradeHint}
+						{#if showUpgradeHint && coachOn}
 							<p class="desc-upgrade">
 								{m('routeDetail.enhanceUpgradeHint')}
 								<a href="/settings/upgrade">{m('routeDetail.enhanceAi')}</a>

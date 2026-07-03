@@ -7,6 +7,13 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { guidedRunLibrary, type GuidedRun } from '$lib/training/guided_runs';
+	import { coachEnabled } from '$lib/coach/coach_flag';
+
+	// When the Coach is off (rock-bottom deploy, ANTHROPIC_API_KEY unset → the
+	// chat would 503) the chat surface is replaced by a "coming soon" notice.
+	// The guided-runs rail below is fully static (local TTS cue scripts, no
+	// Anthropic) so it stays visible. paywall.md.
+	const coachOn = coachEnabled();
 	import type { TrainingPlan } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
 
@@ -171,7 +178,12 @@
 	-->
 	<h1 class="visually-hidden">{m('coachPage.h1')}</h1>
 	<div class="chat-host">
-		{#if !coachConsentChecked || !loaded}
+		{#if !coachOn}
+			<div class="coach-coming-soon">
+				<h2>{m('coachPage.comingSoonHeading')}</h2>
+				<p>{m('coachPage.comingSoonBody')}</p>
+			</div>
+		{:else if !coachConsentChecked || !loaded}
 			<p class="muted">{m('shell.loading')}</p>
 		{:else if !coachConsentDecided}
 			<!--
@@ -286,6 +298,23 @@
 	}
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+	.coach-coming-soon {
+		max-width: 44rem;
+		margin: var(--space-lg) auto;
+		padding: var(--space-xl);
+		background: var(--color-surface);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-lg);
+		line-height: 1.55;
+		text-align: center;
+	}
+	.coach-coming-soon h2 {
+		margin: 0 0 var(--space-sm);
+	}
+	.coach-coming-soon p {
+		margin: 0;
+		color: var(--color-text-secondary);
 	}
 	.coach-consent {
 		max-width: 44rem;

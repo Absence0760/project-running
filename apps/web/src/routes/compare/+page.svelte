@@ -5,6 +5,10 @@
 		type FeatureSupport,
 	} from '$lib/settings/compare_features';
 	import { m } from '$lib/i18n/store.svelte';
+	import { coachEnabled } from '$lib/coach/coach_flag';
+
+	// Drop the "AI Coach" explore link when the Coach is off (rock-bottom).
+	const coachOn = coachEnabled();
 
 	function cellLabel(v: FeatureSupport): string {
 		return v === 'yes' ? m('compare.cellYes') : v === 'no' ? m('compare.cellNo') : m('compare.cellPartial');
@@ -101,8 +105,10 @@
 		</p>
 		<p class="cmp-links">
 			{m('compare.exploreFeatures')}
-			<a href="/coach">{m('compare.linkAiCoach')}</a>
-			<span class="sep">&middot;</span>
+			{#if coachOn}
+				<a href="/coach">{m('compare.linkAiCoach')}</a>
+				<span class="sep">&middot;</span>
+			{/if}
 			<a href="/plans">{m('compare.linkTrainingPlans')}</a>
 			<span class="sep">&middot;</span>
 			<a href="/clubs">{m('compare.linkClubs')}</a>

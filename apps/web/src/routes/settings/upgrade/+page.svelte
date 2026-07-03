@@ -8,6 +8,12 @@
 		managementUrl,
 		isRevenueCatConfigured,
 	} from '$lib/billing/revenuecat';
+	import { coachEnabled } from '$lib/coach/coach_flag';
+
+	// Every Pro perk is a Coach feature, so when the Coach is off (rock-bottom
+	// deploy, ANTHROPIC_API_KEY unset) Pro delivers nothing. Don't sell it:
+	// show a "coming soon" teaser and lead with donations. paywall.md.
+	const coachOn = coachEnabled();
 
 	// External donation link. One-off donations are intentionally routed
 	// through an external provider so the app doesn't have to own a payment
@@ -109,7 +115,7 @@
 		</article>
 
 		<article class="tier tier-pro" class:active={isPro} aria-labelledby="tier-pro-h">
-			<span class="tier-flag">{m('upgrade.mostPopular')}</span>
+			<span class="tier-flag">{coachOn ? m('upgrade.mostPopular') : m('upgrade.comingSoonFlag')}</span>
 			<header class="tier-head">
 				<h2 id="tier-pro-h">Pro</h2>
 				{#if isPro}<span class="pro-badge">{m('upgrade.active')}</span>{/if}
@@ -162,11 +168,13 @@
 				<button class="btn btn-outline" onclick={handleManageSubscription}>
 					{m('upgrade.manageSubscription')}
 				</button>
-			{:else}
+			{:else if coachOn}
 				<button class="btn btn-primary tier-cta" onclick={handleGetPro} disabled={purchasing}>
 					{purchasing ? m('upgrade.redirecting') : m('upgrade.getPro', { price: priceLabel })}
 				</button>
 				<p class="tier-fine">{m('upgrade.cancelAnytime')}</p>
+			{:else}
+				<p class="coming-soon-note">{m('upgrade.proComingSoon')}</p>
 			{/if}
 		</article>
 	</section>
@@ -178,7 +186,7 @@
 				{m('upgrade.donateBody')}
 			</p>
 		</div>
-		<button class="btn btn-outline" onclick={handleDonate}>
+		<button class="btn" class:btn-primary={!coachOn} class:btn-outline={coachOn} onclick={handleDonate}>
 			<span class="material-symbols" aria-hidden="true">favorite</span>
 			{m('upgrade.donate')}
 		</button>
@@ -355,6 +363,17 @@
 		color: var(--color-text-tertiary);
 		text-align: center;
 		line-height: 1.4;
+	}
+	.coming-soon-note {
+		margin: var(--space-sm) 0 0;
+		padding: 0.75rem 1rem;
+		background: var(--color-bg-secondary);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		text-align: center;
+		line-height: 1.45;
 	}
 	.pro-note {
 		margin: var(--space-sm) 0;

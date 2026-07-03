@@ -23,6 +23,7 @@
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { m, initLocale } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
+	import { coachEnabled } from '$lib/coach/coach_flag';
 
 	// Apply the persisted theme on first client mount. Users with a
 	// saved non-auto preference may see a brief flash on first paint —
@@ -120,7 +121,7 @@
 	// mobile's always-reachable Log sheet, decisions §63 amendment) — the
 	// pure-runner clutter is kept off the *content* surfaces instead, which
 	// self-hide their gym/nutrition cards on no data (/dashboard, /history).
-	const navItems: { href: string; labelKey: MessageKey; icon: string; accent: string }[] = [
+	const navItemsBase: { href: string; labelKey: MessageKey; icon: string; accent: string }[] = [
 		{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
 		{ href: '/history', labelKey: 'nav.history', icon: 'timeline', accent: '#D97A54' },
 		{ href: '/runs', labelKey: 'nav.runs', icon: 'directions_run', accent: '#6FA8DC' },
@@ -129,6 +130,10 @@
 		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
 		{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
 	];
+	// The AI Coach nav entry is hidden when the Coach is off (rock-bottom
+	// deploy, PUBLIC_COACH_ENABLED unset) — don't surface a nav door that
+	// only leads to a "coming soon" page. coach_flag.ts.
+	const navItems = navItemsBase.filter((item) => coachEnabled() || item.href !== '/coach');
 
 	// "Shell-less" surfaces: rendered without the app sidebar regardless of
 	// auth state. Landing, auth flows, and the share / spectator pages that

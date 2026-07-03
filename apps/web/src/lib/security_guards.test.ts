@@ -991,7 +991,8 @@ test('web-stack log groups all set retention_in_days', () => {
 });
 
 test('web-stack WAF web_acl_id wires the distribution + scope-down filters /api/coach', () => {
-	// Reason: the WAF rate-limit rule fires per IP at 100 req / 5 min;
+	// Reason: the WAF rate-limit rule fires per IP over a 5-min window
+	// (limit = var.waf_rate_limit; prod passes 30, module default 100);
 	// without the scope-down filter it would rate-limit ALL traffic
 	// (static assets included), throttling legitimate users on the
 	// first page load. Without the web_acl_id wire it wouldn't fire
@@ -1009,6 +1010,33 @@ test('web-stack WAF web_acl_id wires the distribution + scope-down filters /api/
 		/scope_down_statement[\s\S]*?byte_match_statement[\s\S]*?\/api\/coach/,
 		'WAF rate-limit rule must have a scope_down_statement byte-matching /api/coach so static-asset traffic isn\'t rate-limited.',
 	);
+});
+
+test('/settings/upgrade gates the Get Pro CTA on coachEnabled (never sells a hollow Pro)', () => {
+	// Reason: every Pro perk is a Coach feature, so when the Coach is off
+	// (PUBLIC_COACH_ENABLED unset — the rock-bottom deploy) a Pro subscription
+	// delivers nothing. The storefront must not sell it: the purchasable
+	// "Get Pro" CTA renders only under the coachOn branch, else a "coming soon"
+	// teaser. Un-gating this re-introduces a hollow-subscription (consumer-
+	// protection / chargeback) risk. See docs/features/paywall.md.
+	const page = read('src/routes/settings/upgrade/+page.svelte');
+	assert.match(
+		page,
+		/import \{ coachEnabled \} from '\$lib\/coach\/coach_flag'/,
+		'upgrade page must import coachEnabled from the fail-closed coach_flag gate.',
+	);
+	assert.match(
+		page,
+		/\{:else if coachOn\}[\s\S]*?upgrade\.getPro/,
+		'the "Get Pro" CTA must live under the {:else if coachOn} branch so it is hidden when the Coach is off.',
+	);
+	assert.match(
+		page,
+		/\{:else\}[\s\S]*?upgrade\.proComingSoon/,
+		'when the Coach is off the Pro card must fall back to the upgrade.proComingSoon teaser.',
+	);
+	const flag = read('src/lib/coach/coach_flag.ts');
+	assert.match(flag, /PUBLIC_COACH_ENABLED/, 'coach_flag must read PUBLIC_COACH_ENABLED.');
 });
 
 test('AWS Budgets carries all three thresholds (50% ACTUAL, 100% ACTUAL, 100% FORECASTED)', () => {

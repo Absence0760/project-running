@@ -22,6 +22,10 @@
 	} from '$lib/training/fitness';
 	import { computeRunStreaks } from '$lib/runs/streaks';
 	import { ageGradeForRun, formatAgeGradePercent } from '$lib/runs/age_grade';
+	import { coachEnabled } from '$lib/coach/coach_flag';
+
+	// Hide the "Ask the Coach" promo when the Coach is off (rock-bottom deploy).
+	const coachOn = coachEnabled();
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
 	import { fetchGymSetHistory, fetchGymWorkouts } from '$lib/core/data';
@@ -1634,23 +1638,25 @@
 			</a>
 		{/if}
 
-		<a class="coach-promo" href="/coach">
-			<div class="coach-icon">
-				<span class="material-symbols">sports</span>
-			</div>
-			<div class="coach-body">
-				<span class="today-label">{m('dash.askTheCoachKicker')}</span>
-				<strong>{m('dash.coachPromoQuestion')}</strong>
-				<span class="coach-sub">
-					{#if planOverview}
-						{m('dash.coachGroundedPlan')}
-					{:else}
-						{m('dash.coachGroundedRuns')}
-					{/if}
-				</span>
-			</div>
-			<span class="material-symbols coach-arrow">chevron_right</span>
-		</a>
+		{#if coachOn}
+			<a class="coach-promo" href="/coach">
+				<div class="coach-icon">
+					<span class="material-symbols">sports</span>
+				</div>
+				<div class="coach-body">
+					<span class="today-label">{m('dash.askTheCoachKicker')}</span>
+					<strong>{m('dash.coachPromoQuestion')}</strong>
+					<span class="coach-sub">
+						{#if planOverview}
+							{m('dash.coachGroundedPlan')}
+						{:else}
+							{m('dash.coachGroundedRuns')}
+						{/if}
+					</span>
+				</div>
+				<span class="material-symbols coach-arrow">chevron_right</span>
+			</a>
+		{/if}
 	{/if}
 </div>
 
