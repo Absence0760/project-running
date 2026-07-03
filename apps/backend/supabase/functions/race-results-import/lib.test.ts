@@ -89,6 +89,16 @@ Deno.test('mapRunSignUpResult maps a finisher onto a race run', () => {
   assertEquals(run!.metadata.age_group, 'M35-39');
 });
 
+Deno.test('mapped metadata never carries the promoted-away activity_type key', () => {
+  // activity_type is a real runs column (20261207_001); a bag copy would ride
+  // the matchRunId merge path back onto stripped rows. The column write stays.
+  const run = mapRunSignUpResult({ bib_num: '1234', chip_time: '1:47:23' }, OPTS);
+  assert(run !== null);
+  assertEquals(run!.activity_type, 'run');
+  assertEquals('activity_type' in run!.metadata, false);
+  assertEquals('is_dnf' in run!.metadata, false);
+});
+
 Deno.test('mapRunSignUpResult falls back to gun time when chip is absent', () => {
   const run = mapRunSignUpResult({ bib_num: '5', clock_time: '0:30:00' }, OPTS);
   assert(run !== null);

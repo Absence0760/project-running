@@ -101,7 +101,6 @@ export function mapRunSignUpResult(
   const startedAt = `${opts.raceDate}T10:00:00Z`;
 
   const metadata: Record<string, unknown> = {
-    activity_type: 'run',
     race_name: capField(opts.raceName),
   };
   if (bib) metadata.bib = bib;
