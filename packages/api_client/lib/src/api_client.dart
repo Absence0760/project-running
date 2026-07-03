@@ -780,12 +780,26 @@ class ApiClient {
     // uses; a per-row match failure must not break the batch upsert.
     // Skip auto-match for runs whose track upload failed — their row
     // wasn't upserted, so the link would dangle.
-    for (final run in eligibleRuns) {
-      try {
-        await autoMatchRunToPlanWorkout(
-            run.id, run.startedAt.toUtc(), run.distanceMetres);
-      } catch (e) {
-        debugPrint('autoMatchRunToPlanWorkout failed: $e');
+    // The plan/week scope is identical for every run in the batch, so
+    // fetch it once here instead of once per run (a bulk import used to
+    // re-query training_plans N times). If the prefetch itself fails,
+    // fall back to the per-run fetch so a transient error can't silence
+    // matching for the whole batch.
+    List<String>? batchWeekIds;
+    try {
+      batchWeekIds = await _planWeekIdsForUser(userId);
+    } catch (e) {
+      debugPrint('saveRunsBatch: plan week prefetch failed: $e');
+    }
+    if (batchWeekIds == null || batchWeekIds.isNotEmpty) {
+      for (final run in eligibleRuns) {
+        try {
+          await autoMatchRunToPlanWorkout(
+              run.id, run.startedAt.toUtc(), run.distanceMetres,
+              planWeekIds: batchWeekIds);
+        } catch (e) {
+          debugPrint('autoMatchRunToPlanWorkout failed: $e');
+        }
       }
     }
     return trackFailures.keys.toSet();
@@ -2041,30 +2055,18 @@ class ApiClient {
   Future<String?> autoMatchRunToPlanWorkout(
     String runId,
     DateTime runDate,
-    double runDistanceM,
-  ) async {
+    double runDistanceM, {
+    List<String>? planWeekIds,
+  }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return null;
     final isoDate = '${runDate.year.toString().padLeft(4, '0')}-'
         '${runDate.month.toString().padLeft(2, '0')}-'
         '${runDate.day.toString().padLeft(2, '0')}';
 
-    // Pre-fetch the user's plan + week ids and constrain the workout query
-    // with `inFilter(week_id, ...)`. RLS on `plan_workouts` already chains
-    // through `plan_weeks -> training_plans.user_id`, but the explicit
-    // scope is defence in depth: without it a future RLS edit that broke
-    // the chain could match a run to another user's workout. Mirrors the
-    // web client-realtime H2 data-isolation fix.
-    final plans = await _client
-        .from(TrainingPlanRow.table)
-        .select(
-            '${TrainingPlanRow.colId}, ${PlanWeekRow.table}(${PlanWeekRow.colId})')
-        .eq(TrainingPlanRow.colUserId, userId);
-    final weekIds = <String>[
-      for (final p in plans as List)
-        for (final w in ((p as Map)[PlanWeekRow.table] as List? ?? const []))
-          (w as Map)[PlanWeekRow.colId] as String,
-    ];
+    // [planWeekIds] lets batch callers (saveRunsBatch) fetch the plan/week
+    // scope once for the whole batch instead of once per run.
+    final weekIds = planWeekIds ?? await _planWeekIdsForUser(userId);
     if (weekIds.isEmpty) return null;
 
     final candidates = await _client
@@ -2096,6 +2098,25 @@ class ApiClient {
       PlanWorkoutRow.colCompletedAt: DateTime.now().toUtc().toIso8601String(),
     }).eq(PlanWorkoutRow.colId, bestId);
     return bestId;
+  }
+
+  /// The caller's plan-week ids, used to constrain the auto-match workout
+  /// query with `inFilter(week_id, ...)`. RLS on `plan_workouts` already
+  /// chains through `plan_weeks -> training_plans.user_id`, but the explicit
+  /// scope is defence in depth: without it a future RLS edit that broke
+  /// the chain could match a run to another user's workout. Mirrors the
+  /// web client-realtime H2 data-isolation fix.
+  Future<List<String>> _planWeekIdsForUser(String userId) async {
+    final plans = await _client
+        .from(TrainingPlanRow.table)
+        .select(
+            '${TrainingPlanRow.colId}, ${PlanWeekRow.table}(${PlanWeekRow.colId})')
+        .eq(TrainingPlanRow.colUserId, userId);
+    return <String>[
+      for (final p in plans as List)
+        for (final w in ((p as Map)[PlanWeekRow.table] as List? ?? const []))
+          (w as Map)[PlanWeekRow.colId] as String,
+    ];
   }
 
   /// Recent public runs from a single user — drives the runs tab on

@@ -175,3 +175,32 @@ test('live spectator next-cutoff card sources waypoints through the clipped rout
 		'Route reads on this page go through $lib/core/data, not inline view queries.',
 	);
 });
+
+test('plans/new loads club templates with one batched query, not one per club', () => {
+	// Reason: the template picker used to call fetchClubTemplates inside a
+	// clubs.map — one round-trip per club (N+1, audit/db-performance
+	// Medium). The scope is a single training_plans read filtered on all
+	// club ids at once; the data layer groups per club so the picker's
+	// club-ordered display is unchanged.
+	const page = read('src/routes/plans/new/+page.svelte');
+	assert.match(
+		page,
+		/fetchClubTemplatesForClubs\(/,
+		'plans/new must load templates through the batched fetchClubTemplatesForClubs.',
+	);
+	assert.doesNotMatch(
+		page,
+		/fetchClubTemplates\(/,
+		'plans/new must not call the single-club fetchClubTemplates per club — that is the N+1.',
+	);
+	const data = read('src/lib/core/data.ts');
+	const fnMatch = data.match(
+		/export async function fetchClubTemplatesForClubs[\s\S]*?\n}/,
+	);
+	assert.ok(fnMatch, 'Could not locate fetchClubTemplatesForClubs — rename?');
+	assert.match(
+		fnMatch![0],
+		/\.in\('club_id', clubIds\)/,
+		'fetchClubTemplatesForClubs must filter all club ids in ONE query.',
+	);
+});
