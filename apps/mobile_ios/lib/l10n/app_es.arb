@@ -1521,6 +1521,7 @@
   "integrationsSyncNow": "Sincronizar ahora",
   "integrationsParkrunName": "parkrun",
   "integrationsParkrunTileSubtitle": "Importar resultados por número de atleta",
+  "integrationsParkrunRegionNote": "parkrun solo está presente en algunos países y puede que no haya eventos cerca de ti — aun así puedes importar resultados con un ID de atleta de parkrun.",
   "integrationsSignInTitle": "Inicia sesión para conectar servicios",
   "integrationsSignInSubtitle": "Strava + parkrun requieren una cuenta para que las actividades sincronizadas lleguen a tu historial.",
   "integrationsHealthConnectTitle": "Escribir carreras en Health Connect",

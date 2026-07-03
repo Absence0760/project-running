@@ -5608,6 +5608,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Importar resultados pelo número de atleta';
 
   @override
+  String get integrationsParkrunRegionNote =>
+      'O parkrun está presente apenas em alguns países e pode não haver eventos perto de si — ainda assim, pode importar resultados com um número de atleta do parkrun.';
+
+  @override
   String get integrationsSignInTitle => 'Entre para conectar serviços';
 
   @override
@@ -16471,6 +16475,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get integrationsParkrunTileSubtitle =>
       'Importar resultados pelo número de atleta';
+
+  @override
+  String get integrationsParkrunRegionNote =>
+      'O parkrun está presente apenas em alguns países e pode não haver eventos perto de você — ainda assim, você pode importar resultados com um número de atleta do parkrun.';
 
   @override
   String get integrationsSignInTitle => 'Entre para conectar serviços';

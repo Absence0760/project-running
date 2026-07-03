@@ -5616,6 +5616,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ergebnisse per Athletennummer importieren';
 
   @override
+  String get integrationsParkrunRegionNote =>
+      'parkrun gibt es nur in einigen Ländern — in deiner Nähe finden möglicherweise keine Läufe statt. Mit einer parkrun-Athleten-ID kannst du deine Ergebnisse trotzdem importieren.';
+
+  @override
   String get integrationsSignInTitle => 'Anmelden, um Dienste zu verbinden';
 
   @override

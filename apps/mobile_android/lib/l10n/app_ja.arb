@@ -1521,6 +1521,7 @@
   "integrationsSyncNow": "今すぐ同期",
   "integrationsParkrunName": "parkrun",
   "integrationsParkrunTileSubtitle": "アスリート番号で結果をインポート",
+  "integrationsParkrunRegionNote": "parkrun は一部の国でのみ開催されており、お近くにイベントがない場合があります。parkrun のアスリート番号があれば結果をインポートできます。",
   "integrationsSignInTitle": "サインインしてサービスを接続",
   "integrationsSignInSubtitle": "同期したアクティビティを履歴に取り込むには、Strava + parkrunにアカウントが必要です。",
   "integrationsHealthConnectTitle": "ランをHealth Connectに書き込む",

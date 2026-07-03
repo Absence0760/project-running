@@ -9247,6 +9247,12 @@ abstract class AppLocalizations {
   /// **'Import results by athlete number'**
   String get integrationsParkrunTileSubtitle;
 
+  /// parkrun tile subtitle shown when the device region is outside the parkrun footprint
+  ///
+  /// In en, this message translates to:
+  /// **'parkrun runs in a limited set of countries and may not have events near you — you can still import results with a parkrun athlete ID.'**
+  String get integrationsParkrunRegionNote;
+
   /// Tile title shown when signed out
   ///
   /// In en, this message translates to:

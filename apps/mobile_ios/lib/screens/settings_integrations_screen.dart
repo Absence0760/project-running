@@ -12,6 +12,7 @@ import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
 import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../parkrun_regions.dart';
 import '../preferences.dart';
 import '../race_service.dart';
 import '../strava.dart';
@@ -376,7 +377,15 @@ class _SettingsIntegrationsScreenState
               ListTile(
                 leading: const Icon(Icons.directions_run),
                 title: Text(l10n.integrationsParkrunName),
-                subtitle: Text(l10n.integrationsParkrunTileSubtitle),
+                // Outside parkrun's ~20-country footprint the tile stays
+                // tappable (an expat can still import by athlete ID) but
+                // discloses that there may be no events nearby, mirroring
+                // web's parkrun_regions.ts note.
+                subtitle: Text(parkrunLikelyUnavailable(WidgetsBinding
+                        .instance.platformDispatcher.locale
+                        .toLanguageTag())
+                    ? l10n.integrationsParkrunRegionNote
+                    : l10n.integrationsParkrunTileSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _importParkrun,
               ),

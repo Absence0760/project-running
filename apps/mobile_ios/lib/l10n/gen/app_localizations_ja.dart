@@ -5286,6 +5286,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get integrationsParkrunTileSubtitle => 'アスリート番号で結果をインポート';
 
   @override
+  String get integrationsParkrunRegionNote =>
+      'parkrun は一部の国でのみ開催されており、お近くにイベントがない場合があります。parkrun のアスリート番号があれば結果をインポートできます。';
+
+  @override
   String get integrationsSignInTitle => 'サインインしてサービスを接続';
 
   @override
