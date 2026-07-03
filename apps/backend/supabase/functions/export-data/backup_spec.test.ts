@@ -8,7 +8,17 @@ import {
 	assertExists,
 	assertMatch,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { buildBackupSpecs, summariseJobsByKind } from './backup_spec.ts';
+import {
+	BACKUP_FORMAT,
+	BACKUP_VERSION,
+	buildBackupManifest,
+	buildBackupSpecs,
+	isSafeStoragePath,
+	PROFILE_SELECT,
+	shapeExportRoute,
+	stripProfileId,
+	summariseJobsByKind,
+} from './backup_spec.ts';
 
 const TEST_UID = '00000000-0000-0000-0000-000000000abc';
 
@@ -23,9 +33,11 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// + host), event_pricing_as_host — plus the four pre-existing user_id
 	// gaps the widened completeness guard then surfaced (achievements,
 	// challenge_participants, challenge_badges, public_recaps). A regression
-	// that drops one is a silent Art 20 completeness gap. The Go list
-	// carries two extra entries this twin omits by long-standing design
-	// (route_markers, checkpoint_crossings), so the counts differ by two.
+	// that drops one is a silent Art 20 completeness gap. route_markers +
+	// checkpoint_crossings were added to the Go worker in 8d16f665 (June
+	// 2026) without this twin — an unintentional drift, not a design
+	// choice — and were wired in per audit/data-export-completeness
+	// 2026-07-02 High, so the two lists carry the same table set again.
 	// The 2026-06-20 widened-guard pass then surfaced route_conditions
 	// (migration 20270215_001) as a further user_id gap and wired it in.
 	// The 2026-06-20 nutrition saved-meals batch added meal_templates
@@ -35,7 +47,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// 20270222_001) added exercises filtered to the subject's OWN custom
 	// entries (author_id = uid) — seeded global rows are shared reference
 	// data, not personal data.
-	assertEquals(specs.length, 57, `expected 57 specs, got ${specs.length}`);
+	assertEquals(specs.length, 59, `expected 59 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -59,6 +71,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'club_members.json',
 		'saved_routes.json',
 		'route_reviews.json',
+		'route_markers.json',
 		'route_conditions.json',
 		'race_pings.json',
 		'user_settings.json',
@@ -71,6 +84,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'coaching_as_coach.json',
 		'coaching_as_athlete.json',
 		'event_results.json',
+		'checkpoint_crossings.json',
 		'event_result_claims.json',
 		'user_blocks.json',
 		'club_posts.json',
@@ -329,6 +343,40 @@ Deno.test('event_results exported for the subject (GDPR Art 20)', () => {
 	assertEquals(results.filter, `user_id=eq.${TEST_UID}`);
 });
 
+Deno.test('route_markers exported for the subject (GDPR Art 20)', () => {
+	// audit/data-export-completeness 2026-07-02 High. Added to the Go
+	// worker in 8d16f665 without this twin — the two-table drift the
+	// audit re-flagged. The subject's own course annotations ship in
+	// full: every column is their own input or geometry-derived.
+	const markers = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'route_markers.json');
+	assertExists(markers);
+	assertEquals(markers.table, 'route_markers');
+	assertEquals(markers.filter, `user_id=eq.${TEST_UID}`);
+	assertEquals(markers.select, '*');
+});
+
+Deno.test('checkpoint_crossings exported without recorded_by (GDPR Art 20 / Art 9)', () => {
+	// audit/data-export-completeness 2026-07-02 High. The subject's own
+	// race-checkpoint timing plus Art 9 weigh-in body weight + medical
+	// hold/note — data they are unconditionally entitled to. The
+	// projection must match the Go worker's: `recorded_by` (the
+	// official who logged the crossing, a third-party uid) never ships.
+	const crossings = buildBackupSpecs(TEST_UID).find(
+		(s) => s.entry === 'checkpoint_crossings.json',
+	);
+	assertExists(crossings);
+	assertEquals(crossings.table, 'checkpoint_crossings');
+	assertEquals(crossings.filter, `user_id=eq.${TEST_UID}`);
+	assertEquals(crossings.select.includes('recorded_by'), false);
+	for (const col of ['in_time', 'out_time', 'body_weight_kg', 'medical_hold', 'medical_note']) {
+		assertEquals(
+			crossings.select.includes(col),
+			true,
+			`checkpoint_crossings select must carry ${col}`,
+		);
+	}
+});
+
 Deno.test('user_settings exported for the subject, owner-scoped, unredacted (GDPR Art 20)', () => {
 	// persona round-5 privacy / GDPR Art 20. The universal per-user
 	// prefs bag (privacy zones, HR settings, date-of-birth, week-start,
@@ -460,4 +508,87 @@ Deno.test('summariseJobsByKind never leaks raw payload', () => {
 	for (const row of summary) {
 		assertEquals(Object.keys(row).sort(), ['count', 'kind']);
 	}
+});
+
+Deno.test('PROFILE_SELECT carries the subscription columns and matches the Go projection', () => {
+	// audit/data-export-completeness 2026-07-02 High: subscription_tier /
+	// subscription_at / billing_issue_at are commercial data the business
+	// holds about the subject (Art 15(1) / CCPA right-to-know) and were
+	// missing from BOTH export paths. Must stay in lockstep with the Go
+	// worker's FetchExportProfile select.
+	for (
+		const col of [
+			'subscription_tier',
+			'subscription_at',
+			'billing_issue_at',
+			'display_name',
+			'date_of_birth',
+			'parkrun_number',
+			'hr_zones',
+			'gender',
+			'activity_default',
+			'privacy_default',
+		]
+	) {
+		assertEquals(PROFILE_SELECT.includes(col), true, `PROFILE_SELECT must carry ${col}`);
+	}
+});
+
+Deno.test('stripProfileId removes id, keeps everything else, passes null through', () => {
+	assertEquals(stripProfileId(null), null);
+	const stripped = stripProfileId({
+		id: TEST_UID,
+		display_name: 'Jared',
+		subscription_tier: 'pro',
+	});
+	assertEquals(stripped, { display_name: 'Jared', subscription_tier: 'pro' });
+});
+
+Deno.test('shapeExportRoute keeps required columns, drops nulls and user_id', () => {
+	const shaped = shapeExportRoute({
+		id: 'r1',
+		user_id: TEST_UID,
+		name: 'River loop',
+		waypoints: [[0, 0], [1, 1]],
+		distance_m: 5000,
+		elevation_m: null,
+		surface: 'trail',
+		slug: null,
+		geom: 'SRID=4326;LINESTRING(...)',
+	});
+	assertEquals(shaped, {
+		id: 'r1',
+		name: 'River loop',
+		waypoints: [[0, 0], [1, 1]],
+		distance_m: 5000,
+		surface: 'trail',
+	});
+});
+
+Deno.test('isSafeStoragePath rejects traversal and absolute paths', () => {
+	assertEquals(isSafeStoragePath(`${TEST_UID}/photo-1.jpg`), true);
+	assertEquals(isSafeStoragePath(''), false);
+	assertEquals(isSafeStoragePath('/etc/passwd'), false);
+	assertEquals(isSafeStoragePath('a/../b.jpg'), false);
+	assertEquals(isSafeStoragePath('a//b.jpg'), false);
+	assertEquals(isSafeStoragePath('a/./b.jpg'), false);
+	assertEquals(isSafeStoragePath('a\\b.jpg'), false);
+});
+
+Deno.test('buildBackupManifest matches the run-app-backup v1 shape', () => {
+	const manifest = buildBackupManifest({
+		userId: TEST_UID,
+		counts: { runs: 2, routes: 1, tracks: 2, hr_series: 0, photos: 1 },
+		exportedAt: '2026-07-03T00:00:00.000Z',
+	});
+	assertEquals(manifest, {
+		format: BACKUP_FORMAT,
+		version: BACKUP_VERSION,
+		exported_at: '2026-07-03T00:00:00.000Z',
+		exported_by_user_id: TEST_UID,
+		exported_from: 'edge-function',
+		counts: { runs: 2, routes: 1, tracks: 2, hr_series: 0, photos: 1 },
+	});
+	assertEquals(BACKUP_FORMAT, 'run-app-backup');
+	assertEquals(BACKUP_VERSION, 1);
 });

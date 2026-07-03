@@ -94,6 +94,11 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{ entry: 'club_members.json', table: 'club_members', filter: uidEq, select: '*' },
 		{ entry: 'saved_routes.json', table: 'saved_routes', filter: uidEq, select: '*' },
 		{ entry: 'route_reviews.json', table: 'route_reviews', filter: uidEq, select: '*' },
+		// route_markers — the subject's own course annotations (aid stations,
+		// cutoffs, crew access, hazards, notes, climbs) on their saved routes.
+		// Added to the Go worker in 8d16f665 without this twin; the gap was
+		// re-flagged by audit/data-export-completeness 2026-07-02 High.
+		{ entry: 'route_markers.json', table: 'route_markers', filter: uidEq, select: '*' },
 		// route_conditions — the subject's own community condition reports on routes
 		// (migration 20270215_001): condition, severity, note, optional report
 		// location, timestamps. Reporter's own contributed content under Art 20.
@@ -159,6 +164,19 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// event_results — own race finish records (time, rank, DNF/DNS,
 		// age-grade). audit/data-export-completeness (2026-05-30) Critical.
 		{ entry: 'event_results.json', table: 'event_results', filter: uidEq, select: '*' },
+		// checkpoint_crossings — the subject's own race-checkpoint timing and,
+		// where a checkpoint weighs runners in, their Art 9 weigh-in body
+		// weight + medical hold/note. The projection omits `recorded_by` (the
+		// official who logged the crossing — a third-party uid), mirroring the
+		// Go worker's select. Added to the Go worker in 8d16f665 without this
+		// twin; re-flagged by audit/data-export-completeness 2026-07-02 High.
+		{
+			entry: 'checkpoint_crossings.json',
+			table: 'checkpoint_crossings',
+			filter: uidEq,
+			select:
+				'id,event_id,checkpoint_id,instance_start,user_id,bib,runner_name,in_time,out_time,body_weight_kg,body_weight_pct,medical_hold,medical_note,recorded_at,updated_at',
+		},
 		// event_result_claims — the subject's own result claims (status +
 		// who decided). audit-findings (2026-05-30) High.
 		{
@@ -354,6 +372,91 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// public_recaps — the subject's published Year/Month-in-Running snapshots.
 		{ entry: 'public_recaps.json', table: 'public_recaps', filter: uidEq, select: '*' },
 	];
+}
+
+/// Manifest constants — must match the Go worker's BackupFormatName /
+/// BackupFormatVersion and the client writers' BACKUP_FORMAT /
+/// BACKUP_VERSION. A non-matching manifest is rejected by every
+/// restore path.
+export const BACKUP_FORMAT = 'run-app-backup';
+export const BACKUP_VERSION = 1;
+
+/// user_profiles projection for `profile.json`. Mirrors the Go
+/// worker's FetchExportProfile select, including the subscription
+/// columns (`subscription_tier`, `subscription_at`,
+/// `billing_issue_at`) — commercial data the business holds about
+/// the subject under GDPR Art 15(1) / CCPA right-to-know
+/// (audit/data-export-completeness 2026-07-02 High). Service-role
+/// reads bypass the 20260707_001 column-level revokes.
+export const PROFILE_SELECT =
+	'id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default,subscription_tier,subscription_at,billing_issue_at';
+
+/// Strip `id` from the profile so the archive is re-homeable —
+/// restore stamps the new owner's uid. Mirrors the Go worker's
+/// stripProfileID.
+export function stripProfileId(
+	profile: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+	if (!profile) return null;
+	const { id: _id, ...rest } = profile;
+	return rest;
+}
+
+const ROUTE_REQUIRED_COLUMNS = ['id', 'name', 'waypoints'] as const;
+const ROUTE_OPTIONAL_COLUMNS = [
+	'distance_m',
+	'elevation_m',
+	'surface',
+	'is_public',
+	'slug',
+	'tags',
+	'is_featured',
+	'run_count',
+	'is_starred',
+	'description',
+	'club_id',
+	'created_at',
+	'updated_at',
+] as const;
+
+/// Project a routes row into the `routes.json` shape the Go worker's
+/// ExportRoute emits: id/name/waypoints always, optional columns only
+/// when non-null, `user_id` stripped for re-homeability.
+export function shapeExportRoute(row: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const col of ROUTE_REQUIRED_COLUMNS) {
+		out[col] = row[col] ?? null;
+	}
+	for (const col of ROUTE_OPTIONAL_COLUMNS) {
+		if (row[col] != null) out[col] = row[col];
+	}
+	return out;
+}
+
+/// Reject any Storage path a malformed row could use to feed a
+/// traversal into the service-role downloader's URL or the zip entry
+/// name. Mirrors the Go builder's path.Clean + prefix checks.
+export function isSafeStoragePath(p: string): boolean {
+	if (p === '' || p.startsWith('/') || p.includes('..') || p.includes('\\')) return false;
+	return p.split('/').every((seg) => seg !== '' && seg !== '.');
+}
+
+/// Build `manifest.json` — same field set as the Go worker's
+/// BuildBackupZip manifest. `counts` carries runs/routes/tracks/
+/// hr_series/photos plus one count per extra-table entry.
+export function buildBackupManifest(input: {
+	userId: string;
+	counts: Record<string, number>;
+	exportedAt?: string;
+}): Record<string, unknown> {
+	return {
+		format: BACKUP_FORMAT,
+		version: BACKUP_VERSION,
+		exported_at: input.exportedAt ?? new Date().toISOString(),
+		exported_by_user_id: input.userId,
+		exported_from: 'edge-function',
+		counts: input.counts,
+	};
 }
 
 /// Aggregate raw `jobs.kind` strings into a count-by-kind summary —
