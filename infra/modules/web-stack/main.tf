@@ -1692,10 +1692,26 @@ resource "aws_cloudfront_distribution" "this" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
-  # SPA fallback — SvelteKit static fallback is index.html on 404.
+  # SPA fallback — SvelteKit static fallback is index.html.
   # The Lambda-served behaviours above run BEFORE this fallback, so
   # a 404 on a /share/run/<id> returned by the Lambda surfaces as a
   # real 404 (the Lambda's own not-found HTML), not the SPA shell.
+  #
+  # Both 403 AND 404 map to the shell: the S3 bucket policy grants
+  # s3:GetObject only (no s3:ListBucket), so S3 answers a missing key
+  # with 403 AccessDenied, not 404 — a deep-link / hard-refresh / crawl
+  # of a dynamic client route (/dashboard, /runs/<id>, /u/<id>, …) hits
+  # the 403 path. Without the 403 mapping those routes surface
+  # AccessDenied instead of the SPA. This is the standard CloudFront+S3
+  # SPA idiom; the distribution serves no genuinely access-protected S3
+  # keys (all objects are the public static build), so nothing legitimate
+  # is masked by turning 403 into the shell.
+  custom_error_response {
+    error_code         = 403
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+
   custom_error_response {
     error_code         = 404
     response_code      = 200
