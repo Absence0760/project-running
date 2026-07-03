@@ -50,6 +50,25 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: `author_id=eq.${uid}`,
 			select: '*',
 		},
+		// run_kudos / run_comments RECEIVED on the subject's runs — social
+		// reactions to their activities are data about the subject under
+		// Art 15/20. Neither table carries the run owner's uid, so the
+		// export inner-joins the parent run and filters on its user_id
+		// (the event_pricing_as_host pattern); the embedded runs object
+		// projects only user_id (the subject's own id). Giver/author ids
+		// ship as-is — kudos and comments are publicly attributed in-app.
+		{
+			entry: 'run_kudos_received.json',
+			table: 'run_kudos',
+			filter: `runs.user_id=eq.${uid}`,
+			select: '*,runs!inner(user_id)',
+		},
+		{
+			entry: 'run_comments_received.json',
+			table: 'run_comments',
+			filter: `runs.user_id=eq.${uid}`,
+			select: '*,runs!inner(user_id)',
+		},
 		{
 			entry: 'run_photos.json',
 			table: 'run_photos',

@@ -49,7 +49,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// 20270222_001) added exercises filtered to the subject's OWN custom
 	// entries (author_id = uid) — seeded global rows are shared reference
 	// data, not personal data.
-	assertEquals(specs.length, 59, `expected 59 specs, got ${specs.length}`);
+	assertEquals(specs.length, 61, `expected 61 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -58,6 +58,8 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'integrations.json',
 		'run_kudos.json',
 		'run_comments.json',
+		'run_kudos_received.json',
+		'run_comments_received.json',
 		'run_photos.json',
 		'segment_efforts.json',
 		'gear.json',
@@ -642,4 +644,21 @@ Deno.test('orphanStorageEntries only skips exports/ in the runs bucket', () => {
 		{ key: `${TEST_UID}/photo-1_512.jpg`, entry: 'storage/run-photos/photo-1_512.jpg' },
 		{ key: `${TEST_UID}/exports/x.jpg`, entry: 'storage/run-photos/exports/x.jpg' },
 	]);
+});
+
+Deno.test('kudos + comments received are exported via a parent-run inner join (GDPR Art 15/20)', () => {
+	// Neither table carries the run owner's uid, so the received legs
+	// filter on the embedded parent run's user_id — and the embed must
+	// project ONLY user_id so no other run column rides along twice.
+	const specs = buildBackupSpecs(TEST_UID);
+	const kudos = specs.find((s) => s.entry === 'run_kudos_received.json');
+	assertExists(kudos);
+	assertEquals(kudos!.table, 'run_kudos');
+	assertEquals(kudos!.filter, `runs.user_id=eq.${TEST_UID}`);
+	assertEquals(kudos!.select, '*,runs!inner(user_id)');
+	const comments = specs.find((s) => s.entry === 'run_comments_received.json');
+	assertExists(comments);
+	assertEquals(comments!.table, 'run_comments');
+	assertEquals(comments!.filter, `runs.user_id=eq.${TEST_UID}`);
+	assertEquals(comments!.select, '*,runs!inner(user_id)');
 });

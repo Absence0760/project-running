@@ -1813,6 +1813,25 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			name: "run_comments.json", table: schema.TableRunComments,
 			filter: "author_id=eq." + uid, sel: "*",
 		},
+		// run_kudos / run_comments RECEIVED on the subject's runs — social
+		// reactions to their activities are data about the subject under
+		// Art 15/20. Neither table carries the run owner's uid, so the
+		// export inner-joins the parent run and filters on its user_id
+		// (the event_pricing_as_host pattern); the embedded runs object
+		// projects only user_id (the subject's own id). The giver/author
+		// identity ships as-is — kudos and comments are publicly
+		// attributed in-app, so this discloses nothing the subject
+		// can't already see.
+		{
+			name: "run_kudos_received.json", table: schema.TableRunKudos,
+			filter: "runs.user_id=eq." + uid,
+			sel:    "*,runs!inner(user_id)",
+		},
+		{
+			name: "run_comments_received.json", table: schema.TableRunComments,
+			filter: "runs.user_id=eq." + uid,
+			sel:    "*,runs!inner(user_id)",
+		},
 		// run_photos metadata. The image bytes themselves are bundled
 		// under `photos/` by BuildBackupZip via DownloadPhoto, keyed off
 		// each row's `storage_path` (audit-findings 2026-05-30 High).
