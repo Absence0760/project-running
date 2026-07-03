@@ -10,7 +10,8 @@
 --
 -- Invariants under test (from the cache migration's header):
 --   - INSERT/UPDATE/DELETE on `runs` recompute the cache automatically via
---     the after-row triggers — no manual refresh call.
+--     the AFTER statement triggers (per-row until 20270315_001) — no manual
+--     refresh call.
 --   - Exactly one row per (user_id, distance); the best (lowest
 --     duration_s) qualifying run wins and a slower run never shadows it.
 --   - Deleting the run that currently holds the PB promotes the next-best
@@ -23,7 +24,7 @@
 --
 -- Everything below drives the cache through the triggers (never through a
 -- direct refresh call) so a regression that detaches a trigger, or relaxes
--- the write-deny, fails here. The after-row triggers fire synchronously
+-- the write-deny, fails here. The statement triggers fire synchronously
 -- inside this transaction, so each assertion observes a settled cache.
 
 begin;
