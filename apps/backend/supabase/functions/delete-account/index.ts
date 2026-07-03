@@ -597,14 +597,18 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
 
   // Delete Storage files. The `runs` bucket holds gzipped tracks +
   // per-user export blobs at `{user.id}/exports/<ts>.{csv,zip}`; the
-  // `run-photos` bucket holds run photos. deletePrefix recurses
-  // through pseudo-folders so the exports/ subdirectory is fully
-  // drained alongside the top-level tracks. A partial drain followed
-  // by the auth-row cascade orphans blobs with no row to point at
-  // them, so we abort before deleting the auth user — the user can
-  // retry once Storage recovers.
+  // photo buckets hold user-uploaded imagery, all keyed under the
+  // owner's `{user.id}/` prefix (each bucket's path-shape CHECK or
+  // policy enforces it). The route-photos / club-photos rows cascade
+  // with the auth user, so without this drain the bytes would sit
+  // unreadable-but-retained forever — a GDPR Art 17 erasure gap
+  // (audit/storage 2026-07). deletePrefix recurses through
+  // pseudo-folders so exports/ + thumbnail subprefixes are fully
+  // drained. A partial drain followed by the auth-row cascade orphans
+  // blobs with no row to point at them, so we abort before deleting
+  // the auth user — the user can retry once Storage recovers.
   try {
-    for (const bucket of ['runs', 'run-photos']) {
+    for (const bucket of ['runs', 'run-photos', 'route-photos', 'club-photos']) {
       deletedCounts[`storage_${bucket}`] = await deletePrefix(
         adminClient,
         bucket,

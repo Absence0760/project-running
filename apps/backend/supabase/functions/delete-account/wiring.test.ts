@@ -122,13 +122,17 @@ Deno.test('handler calls deleteUserReports before admin.deleteUser', () => {
 	);
 });
 
-Deno.test('handler walks both runs + run-photos buckets', () => {
+Deno.test('handler walks every user-content bucket in the mandatory drain', () => {
 	// The avatars bucket is best-effort outside the main try/catch
-	// because the bucket doesn't exist yet; the runs + run-photos
-	// drains are mandatory.
+	// because the bucket doesn't exist yet; the other four drains are
+	// mandatory. route-photos + club-photos rows cascade with the auth
+	// user, so dropping either bucket from this loop retains the photo
+	// bytes forever — the GDPR Art 17 gap audit/storage 2026-07 found.
 	assert(
-		/for\s+\(const\s+bucket\s+of\s+\['runs',\s*'run-photos'\]\)/.test(SRC),
-		'handler must iterate runs + run-photos in the mandatory bucket-drain loop',
+		/for\s+\(const\s+bucket\s+of\s+\['runs',\s*'run-photos',\s*'route-photos',\s*'club-photos'\]\)/
+			.test(SRC),
+		'handler must iterate runs + run-photos + route-photos + club-photos ' +
+			'in the mandatory bucket-drain loop',
 	);
 	assert(
 		/deletePrefix\(adminClient,\s*'avatars'/.test(SRC),
