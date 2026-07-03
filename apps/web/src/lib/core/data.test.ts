@@ -104,3 +104,74 @@ test('api_client.dart round-trips runs.route_id on read and both write paths', (
 		'saveRun (write) must set routeId: run.routeId — omitting it re-writes route_id = null on upsert.',
 	);
 });
+
+test('fetchRouteById anon/public branch assembles waypoints from the server clip', () => {
+	// Reason: the live spectator page (`/live/[id]`) is a public share
+	// surface — anon viewers reach it with just the link. When the
+	// owner-read returns nothing (anon / stranger), the public branch
+	// must read metadata from the `public_routes` view (which omits
+	// waypoints/geom/start_point by construction) and take the polyline
+	// only from clip_route_for_viewer, so an anon spectator's next-cutoff
+	// card is built from privacy-clipped waypoints (audit/privacy-zones
+	// Medium, 2026-07-02).
+	const source = read('src/lib/core/data.ts');
+	const fnMatch = source.match(/export async function fetchRouteById[\s\S]*?^}/m);
+	assert.ok(fnMatch, 'Could not locate fetchRouteById body — rename?');
+	const body = fnMatch![0];
+	const publicBranch = body.slice(body.indexOf('assemblePublicRoute'));
+	assert.ok(
+		publicBranch.length > 'assemblePublicRoute'.length,
+		'fetchRouteById must fall through to assemblePublicRoute for callers the routes RLS rejects (anon / strangers).',
+	);
+	assert.match(
+		publicBranch,
+		/from\('public_routes'\)/,
+		'The public branch must read metadata from the public_routes view, never the base routes table.',
+	);
+	assert.match(
+		publicBranch,
+		/fetchClippedRouteForViewer\(id\)/,
+		'The public branch must source the polyline from clip_route_for_viewer.',
+	);
+	assert.match(
+		publicBranch,
+		/waypoints:\s*assembled\.clipped/,
+		'The assembled public route must carry the clipped waypoints, nothing else.',
+	);
+});
+
+test('live spectator next-cutoff card sources waypoints through the clipped route reader', () => {
+	// Reason: the /live/[id] next-cutoff ETA card projects live position
+	// against the linked route's waypoints, and the viewer is usually NOT
+	// the route owner (club member, follower, or anon with the share
+	// link). fetchRouteById is the owner-aware reader — it hands the raw
+	// polyline only to the owner and clips for everyone else — so the
+	// page must build the roadbook from it and never query the routes
+	// table directly, which would resurrect the unclipped wire-leak the
+	// audit/privacy-zones Medium finding tracked (closed at the
+	// data-fetch root, 2026-07-02).
+	const source = read('src/routes/live/[id]/+page.svelte');
+	const fnMatch = source.match(/async function loadRouteCutoffs[\s\S]*?\n\t}/);
+	assert.ok(fnMatch, 'Could not locate loadRouteCutoffs — rename?');
+	const body = fnMatch![0];
+	assert.match(
+		body,
+		/fetchRouteById\(run\.route_id\)/,
+		'loadRouteCutoffs must fetch the route via fetchRouteById (the owner-aware, privacy-clipping reader).',
+	);
+	assert.match(
+		body,
+		/route\?\.waypoints/,
+		'The roadbook waypoints must come from the fetched (clipped-for-non-owners) route, not another source.',
+	);
+	assert.doesNotMatch(
+		source,
+		/\.from\('routes'\)/,
+		'The live spectator page must not read the base routes table directly — RLS surfaces unclipped club-owned rows to club members.',
+	);
+	assert.doesNotMatch(
+		source,
+		/\.from\('public_routes'\)/,
+		'Route reads on this page go through $lib/core/data, not inline view queries.',
+	);
+});

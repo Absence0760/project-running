@@ -1970,6 +1970,50 @@ void main() {
     });
   });
 
+  group('live spectator cutoff card reads route geometry via fetchRouteById',
+      () {
+    // Reason: audit/privacy-zones Medium (2026-07-02) — the next-cutoff
+    // ETA card on the live spectator surface projects the runner's live
+    // position against the linked route's waypoints, and the viewer is
+    // usually NOT the route owner (a club member or an anon visitor with
+    // the public share link). ApiClient.fetchRouteById is the owner-aware
+    // reader: it returns the raw polyline only to the owner and routes
+    // every other viewer through clip_route_for_viewer, failing closed to
+    // an empty polyline on RPC error. The screen must source the roadbook
+    // waypoints from that helper only — a direct routes-table read here
+    // would resurrect the unclipped wire-leak that was closed at the
+    // data-fetch root (decisions §33).
+
+    test('_loadCutoffLegs sources waypoints from api.fetchRouteById only', () {
+      final src =
+          File('lib/screens/live_spectator_screen.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        src,
+        r'Future<void> _loadCutoffLegs\(String\? routeId\)\s*async\s*\{',
+      );
+      expect(
+        body.contains('fetchRouteById'),
+        isTrue,
+        reason: '_loadCutoffLegs must fetch the route via '
+            'ApiClient.fetchRouteById — the owner-aware reader that clips '
+            'waypoints for non-owner viewers.',
+      );
+      expect(
+        src.contains("from('routes')"),
+        isFalse,
+        reason: 'live_spectator_screen.dart must not read the routes table '
+            'directly — RLS surfaces unclipped club-owned rows to club '
+            'members, and only fetchRouteById applies the non-owner clip.',
+      );
+      expect(
+        src.contains('RouteRow.table'),
+        isFalse,
+        reason: 'live_spectator_screen.dart must not query RouteRow.table — '
+            'route reads go through ApiClient.fetchRouteById.',
+      );
+    });
+  });
+
   group('release builds never load .env.development', () {
     // Reason: pubspec.yaml ships .env.development as a Flutter asset for
     // local development convenience (decisions §137 — on mobile, dev
