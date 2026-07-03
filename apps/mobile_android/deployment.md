@@ -166,6 +166,18 @@ Play Console → App content → Data safety. Be precise; mismatches between the
 
 ---
 
+## Content rating — IARC interactive elements
+
+The IARC questionnaire rates the *content* (a running app lands at "Everyone" / PEGI 3), but it also asks about **interactive elements**, which are displayed alongside the rating and must be declared truthfully:
+
+- **Users Interact** — Yes: social feed, run comments, club posts, direct messages, coach chat.
+- **Shares Location** — Yes: public run/route share pages and live spectator links expose (privacy-clipped) location.
+- **Digital Purchases** — Yes: the Pro subscription in-app purchase.
+
+A mismatch between these declarations and the binary is grounds for a rating recall or review rejection, same as the Data safety form.
+
+---
+
 ## Release workflow — `mobile_android@*`
 
 Triggered by tagging `mobile_android@1.2.3`. The workflow at `.github/workflows/release-android.yml`:

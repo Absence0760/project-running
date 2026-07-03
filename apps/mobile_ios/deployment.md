@@ -168,6 +168,16 @@ These rows must stay consistent with `ios/Runner/PrivacyInfo.xcprivacy` (the pri
 
 Apple cross-checks the App Privacy declarations against actual API usage during review. Declaring "no precise location" while the binary calls `CLLocationManager` requestAlwaysAuthorization is an instant rejection.
 
+### Age rating — capability declarations
+
+App Store Connect's age-rating questionnaire (revised 2025: 4+/9+/13+/16+/18+ tiers) asks about app capabilities, not just content. Declare truthfully:
+
+- **User-generated content / social features** — Yes: social feed, run comments, club posts, direct messages.
+- **Location sharing** — Yes: public run/route shares and live spectator links expose (privacy-clipped) location.
+- **In-app purchases** — Yes: the Pro subscription (the "In-App Purchases" badge is also derived automatically from the IAP configuration).
+
+The base content rating stays low for a running app; these capability flags are what raise the effective tier, and misdeclaring them is a review rejection. Keep the answers consistent with the Play IARC interactive elements in [`apps/mobile_android/deployment.md`](../mobile_android/deployment.md).
+
 ---
 
 ## Release workflow — `mobile_ios@*`
