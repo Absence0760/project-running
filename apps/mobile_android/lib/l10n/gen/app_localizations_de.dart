@@ -9971,6 +9971,19 @@ class AppLocalizationsDe extends AppLocalizations {
       'Platziere den Marker zuerst auf der Karte.';
 
   @override
+  String get routeMarkerLatLabel => 'Breitengrad';
+
+  @override
+  String get routeMarkerLngLabel => 'Längengrad';
+
+  @override
+  String get routeMarkerCoordInvalid =>
+      'Gib einen gültigen Breitengrad (-90 bis 90) und Längengrad (-180 bis 180) ein.';
+
+  @override
+  String get routeMarkerEnterCoords => 'Stattdessen Koordinaten eingeben';
+
+  @override
   String routeMarkerSaveFailed(String error) {
     return 'Marker konnte nicht gespeichert werden: $error';
   }

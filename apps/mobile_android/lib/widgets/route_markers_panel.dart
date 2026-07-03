@@ -11,7 +11,9 @@ import 'top_banner.dart';
 /// Course-marker panel for the route-detail screen (Flutter twin of web
 /// `RouteMarkerEditor.svelte`). Renders an ordered course-schedule list and
 /// — for the route owner — an add / edit / delete flow that drops a pin by
-/// tapping the map. The host owns the `LiveRunMap` and forwards map taps via
+/// tapping the map or by typing lat/lng into the editor sheet (the
+/// keyboard / screen-reader placement path, WCAG 2.1.1).
+/// The host owns the `LiveRunMap` and forwards map taps via
 /// the [GlobalKey]-exposed [RouteMarkersPanelState.placeAt] /
 /// [RouteMarkersPanelState.selectMarker]; the panel pushes the rendered pins
 /// + placing-mode flag back up through [onPinsChanged] / [onPlacingChanged].
@@ -171,7 +173,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     final result = await showModalBottomSheet<_MarkerDraft>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _MarkerEditorSheet(existing: existing),
+      builder: (ctx) => _MarkerEditorSheet(existing: existing, lat: lat, lng: lng),
     );
     if (result == null) return;
     final api = widget.api;
@@ -182,6 +184,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
           existing.id,
           kind: result.kind,
           label: result.label,
+          lat: result.lat,
+          lng: result.lng,
           meta: result.meta,
         );
       } else {
@@ -189,8 +193,8 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
           routeId: widget.routeId,
           kind: result.kind,
           label: result.label,
-          lat: lat!,
-          lng: lng!,
+          lat: result.lat,
+          lng: result.lng,
           meta: result.meta,
         );
       }
@@ -336,6 +340,17 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
               ],
             ),
           ),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () {
+                _setPlacing(false);
+                _openEditor();
+              },
+              icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+              label: Text(l10n.routeMarkerEnterCoords),
+            ),
+          ),
         ],
         if (_loaded && _markers.isEmpty && !_placing)
           Padding(
@@ -419,16 +434,33 @@ Color _hexColor(String hex) {
   return Color(0xFF000000 | v);
 }
 
+double? parseMarkerCoordinate(String text, double max) {
+  final v = double.tryParse(text.trim());
+  if (v == null || v.isNaN || v.abs() > max) return null;
+  return v;
+}
+
+String formatMarkerCoordinate(double v) {
+  return v
+      .toStringAsFixed(6)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
 class _MarkerDraft {
   final String kind;
   final String label;
+  final double lat;
+  final double lng;
   final Map<String, dynamic> meta;
-  _MarkerDraft(this.kind, this.label, this.meta);
+  _MarkerDraft(this.kind, this.label, this.lat, this.lng, this.meta);
 }
 
 class _MarkerEditorSheet extends StatefulWidget {
   final RouteMarkerRow? existing;
-  const _MarkerEditorSheet({this.existing});
+  final double? lat;
+  final double? lng;
+  const _MarkerEditorSheet({this.existing, this.lat, this.lng});
 
   @override
   State<_MarkerEditorSheet> createState() => _MarkerEditorSheetState();
@@ -439,6 +471,8 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
   late TextEditingController _label;
   late TextEditingController _note;
   late TextEditingController _cutoff;
+  late TextEditingController _lat;
+  late TextEditingController _lng;
   Set<String> _services = {};
 
   @override
@@ -456,6 +490,12 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     }
     final cutoff = parseCutoff(e?.meta);
     _cutoff = TextEditingController(text: cutoff?.clock ?? '');
+    final lat = widget.lat ?? e?.lat;
+    final lng = widget.lng ?? e?.lng;
+    _lat = TextEditingController(
+        text: lat == null ? '' : formatMarkerCoordinate(lat));
+    _lng = TextEditingController(
+        text: lng == null ? '' : formatMarkerCoordinate(lng));
   }
 
   @override
@@ -463,6 +503,8 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     _label.dispose();
     _note.dispose();
     _cutoff.dispose();
+    _lat.dispose();
+    _lng.dispose();
     super.dispose();
   }
 
@@ -491,6 +533,16 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
       showTopBanner(context, l10n.routeMarkerLabelRequired);
       return;
     }
+    final lat = parseMarkerCoordinate(_lat.text, 90);
+    final lng = parseMarkerCoordinate(_lng.text, 180);
+    if (lat == null || lng == null) {
+      showTopBanner(
+          context,
+          _lat.text.trim().isEmpty && _lng.text.trim().isEmpty
+              ? l10n.routeMarkerPlaceRequired
+              : l10n.routeMarkerCoordInvalid);
+      return;
+    }
     final spec = kindSpec(_kind);
     final meta = <String, dynamic>{};
     if (spec.hasServices && _services.isNotEmpty) {
@@ -502,7 +554,8 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
     if ((_kind == 'note' || _kind == 'hazard') && _note.text.trim().isNotEmpty) {
       meta['note'] = _note.text.trim();
     }
-    Navigator.of(context).pop(_MarkerDraft(_kind, _label.text.trim(), meta));
+    Navigator.of(context).pop(
+        _MarkerDraft(_kind, _label.text.trim(), lat, lng, meta));
   }
 
   @override
@@ -541,6 +594,32 @@ class _MarkerEditorSheetState extends State<_MarkerEditorSheet> {
                 labelText: l10n.routeMarkerNameLabel,
                 hintText: l10n.routeMarkerNamePlaceholder,
               ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _lat,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true, signed: true),
+                    decoration: InputDecoration(
+                      labelText: l10n.routeMarkerLatLabel,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _lng,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true, signed: true),
+                    decoration: InputDecoration(
+                      labelText: l10n.routeMarkerLngLabel,
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (spec.hasServices) ...[
               const SizedBox(height: 4),

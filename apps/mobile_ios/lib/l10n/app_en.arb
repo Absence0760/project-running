@@ -12875,6 +12875,22 @@
   "@routeMarkerPlaceRequired": {
     "description": "Validation: marker must be placed"
   },
+  "routeMarkerLatLabel": "Latitude",
+  "@routeMarkerLatLabel": {
+    "description": "Latitude field label for manual marker coordinate entry"
+  },
+  "routeMarkerLngLabel": "Longitude",
+  "@routeMarkerLngLabel": {
+    "description": "Longitude field label for manual marker coordinate entry"
+  },
+  "routeMarkerCoordInvalid": "Enter a valid latitude (-90 to 90) and longitude (-180 to 180).",
+  "@routeMarkerCoordInvalid": {
+    "description": "Validation: typed marker coordinates out of range or unparseable"
+  },
+  "routeMarkerEnterCoords": "Enter coordinates instead",
+  "@routeMarkerEnterCoords": {
+    "description": "Button opening the marker editor without a map tap, for keyboard / screen-reader placement"
+  },
   "routeMarkerSaveFailed": "Could not save marker: {error}",
   "@routeMarkerSaveFailed": {
     "description": "Error: save marker failed",

@@ -9964,6 +9964,19 @@ class AppLocalizationsEs extends AppLocalizations {
       'Primero coloca el marcador en el mapa.';
 
   @override
+  String get routeMarkerLatLabel => 'Latitud';
+
+  @override
+  String get routeMarkerLngLabel => 'Longitud';
+
+  @override
+  String get routeMarkerCoordInvalid =>
+      'Introduce una latitud válida (-90 a 90) y una longitud válida (-180 a 180).';
+
+  @override
+  String get routeMarkerEnterCoords => 'Introducir coordenadas en su lugar';
+
+  @override
   String routeMarkerSaveFailed(String error) {
     return 'No se pudo guardar el marcador: $error';
   }

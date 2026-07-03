@@ -16566,6 +16566,30 @@ abstract class AppLocalizations {
   /// **'Tap the map to place the marker first.'**
   String get routeMarkerPlaceRequired;
 
+  /// Latitude field label for manual marker coordinate entry
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude'**
+  String get routeMarkerLatLabel;
+
+  /// Longitude field label for manual marker coordinate entry
+  ///
+  /// In en, this message translates to:
+  /// **'Longitude'**
+  String get routeMarkerLngLabel;
+
+  /// Validation: typed marker coordinates out of range or unparseable
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).'**
+  String get routeMarkerCoordInvalid;
+
+  /// Button opening the marker editor without a map tap, for keyboard / screen-reader placement
+  ///
+  /// In en, this message translates to:
+  /// **'Enter coordinates instead'**
+  String get routeMarkerEnterCoords;
+
   /// Error: save marker failed
   ///
   /// In en, this message translates to:

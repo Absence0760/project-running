@@ -9985,6 +9985,19 @@ class AppLocalizationsFr extends AppLocalizations {
       'Placez d\'abord le repère sur la carte.';
 
   @override
+  String get routeMarkerLatLabel => 'Latitude';
+
+  @override
+  String get routeMarkerLngLabel => 'Longitude';
+
+  @override
+  String get routeMarkerCoordInvalid =>
+      'Saisissez une latitude valide (-90 à 90) et une longitude valide (-180 à 180).';
+
+  @override
+  String get routeMarkerEnterCoords => 'Saisir des coordonnées à la place';
+
+  @override
   String routeMarkerSaveFailed(String error) {
     return 'Impossible d\'enregistrer le repère : $error';
   }

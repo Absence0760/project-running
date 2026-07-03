@@ -9478,6 +9478,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeMarkerPlaceRequired => '先に地図上にマーカーを配置してください。';
 
   @override
+  String get routeMarkerLatLabel => '緯度';
+
+  @override
+  String get routeMarkerLngLabel => '経度';
+
+  @override
+  String get routeMarkerCoordInvalid => '有効な緯度（-90〜90）と経度（-180〜180）を入力してください。';
+
+  @override
+  String get routeMarkerEnterCoords => '代わりに座標を入力';
+
+  @override
   String routeMarkerSaveFailed(String error) {
     return 'マーカーを保存できませんでした: $error';
   }

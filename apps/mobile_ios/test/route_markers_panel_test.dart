@@ -40,6 +40,9 @@ class _MarkersApi extends ApiClient {
   double? addedLat;
   double? addedLng;
   int addCalls = 0;
+  double? updatedLat;
+  double? updatedLng;
+  int updateCalls = 0;
 
   @override
   String? get userId => 'owner-1';
@@ -61,6 +64,20 @@ class _MarkersApi extends ApiClient {
     addedLat = lat;
     addedLng = lng;
     return _marker(id: 'new', kind: kind, label: label);
+  }
+
+  @override
+  Future<void> updateRouteMarker(
+    String id, {
+    String? kind,
+    String? label,
+    double? lat,
+    double? lng,
+    Map<String, dynamic>? meta,
+  }) async {
+    updateCalls++;
+    updatedLat = lat;
+    updatedLng = lng;
   }
 }
 
@@ -190,6 +207,112 @@ void main() {
     // Drain the "tap to place" banner timer.
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('typed coordinates create a marker without any map tap',
+      (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: const [],
+      api: api,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Name'), 'Typed aid');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Latitude'), '51.502');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Longitude'), '-0.11');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.addCalls, 1);
+    expect((api.addedLat! - 51.502).abs() < 1e-6, isTrue,
+        reason: 'lat ${api.addedLat}');
+    expect((api.addedLng! - -0.11).abs() < 1e-6, isTrue,
+        reason: 'lng ${api.addedLng}');
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('out-of-range typed coordinates block the save', (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: const [],
+      api: api,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.text('Add marker'));
+    await tester.pump();
+    await tester.tap(find.text('Enter coordinates instead'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Bad');
+    await tester.enterText(find.widgetWithText(TextField, 'Latitude'), '999');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Longitude'), '-0.11');
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+
+    expect(api.addCalls, 0);
+    expect(
+      find.text(
+          'Enter a valid latitude (-90 to 90) and longitude (-180 to 180).'),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'editing prefills coordinates and a typed change moves the marker',
+      (tester) async {
+    final api = _MarkersApi();
+    await tester.pumpWidget(_host(
+      isOwner: true,
+      markers: [
+        _marker(id: 'm1', kind: 'aid_station', label: 'Aid 1', positionM: 500),
+      ],
+      api: api,
+      routeLine: _routeLine,
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+
+    final latField =
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Latitude'));
+    final lngField =
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Longitude'));
+    expect(latField.controller!.text, '51.5');
+    expect(lngField.controller!.text, '-0.12');
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Latitude'), '51.507');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Longitude'), '-0.125');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(api.updateCalls, 1);
+    expect((api.updatedLat! - 51.507).abs() < 1e-6, isTrue,
+        reason: 'lat ${api.updatedLat}');
+    expect((api.updatedLng! - -0.125).abs() < 1e-6, isTrue,
+        reason: 'lng ${api.updatedLng}');
   });
 
   testWidgets('snap OFF places the marker at the raw tapped point',

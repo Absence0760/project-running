@@ -9960,6 +9960,19 @@ class AppLocalizationsPt extends AppLocalizations {
       'Posicione o marcador no mapa primeiro.';
 
   @override
+  String get routeMarkerLatLabel => 'Latitude';
+
+  @override
+  String get routeMarkerLngLabel => 'Longitude';
+
+  @override
+  String get routeMarkerCoordInvalid =>
+      'Insira uma latitude válida (-90 a 90) e uma longitude válida (-180 a 180).';
+
+  @override
+  String get routeMarkerEnterCoords => 'Inserir coordenadas';
+
+  @override
   String routeMarkerSaveFailed(String error) {
     return 'Não foi possível salvar o marcador: $error';
   }
@@ -20810,6 +20823,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get routeMarkerPlaceRequired =>
       'Posicione o marcador no mapa primeiro.';
+
+  @override
+  String get routeMarkerLatLabel => 'Latitude';
+
+  @override
+  String get routeMarkerLngLabel => 'Longitude';
+
+  @override
+  String get routeMarkerCoordInvalid =>
+      'Insira uma latitude válida (-90 a 90) e uma longitude válida (-180 a 180).';
+
+  @override
+  String get routeMarkerEnterCoords => 'Inserir coordenadas';
 
   @override
   String routeMarkerSaveFailed(String error) {
