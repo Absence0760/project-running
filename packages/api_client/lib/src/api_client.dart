@@ -26,6 +26,20 @@ const String _eventSafeCols =
     'author_id, created_at, updated_at, recurrence_freq, '
     'recurrence_byday, recurrence_until, recurrence_count';
 
+/// Log-safe projection of a caught exception: runtime type + SQLSTATE
+/// code only. A `PostgrestException`'s message/details/hint can echo
+/// the offending row's values (a safety contact's email on the
+/// safety_contacts paths), and Flutter's default `debugPrint` writes to
+/// logcat/os_log in every build mode — so raw `$e` interpolation is a
+/// device-log PII leak. Mirrors the `.code`/`.message` scrub on the web
+/// and Edge Function tiers. /audit/pii-in-logs.
+String safeErrorLabel(Object e) {
+  if (e is PostgrestException) {
+    return 'PostgrestException(code: ${e.code ?? 'unknown'})';
+  }
+  return e.runtimeType.toString();
+}
+
 /// Typed client for the Supabase REST API.
 ///
 /// Must call [initialize] before using any methods.
@@ -448,7 +462,7 @@ class ApiClient {
               (row) => SafetyContact.fromJson(row as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('fetchMySafetyContacts failed: $e');
+      debugPrint('fetchMySafetyContacts failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
@@ -529,7 +543,7 @@ class ApiClient {
               PendingSafetyRequest.fromJson(row as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('fetchPendingSafetyRequests failed: $e');
+      debugPrint('fetchPendingSafetyRequests failed: ${safeErrorLabel(e)}');
       return const [];
     }
   }
