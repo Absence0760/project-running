@@ -28,7 +28,15 @@ no longer metadata keys — read/write `runs.activity_type` / `runs.is_dnf`.
 `_shared/strava.ts`, `parkrun-import`, `export-data` (CSV + backup),
 the Go worker (`InsertStravaRun`, `FetchExportRuns`, `FetchPremiumRuns`,
 `isRunlike`, the dataexport CSV/backup), the `activities` + `public_runs`
-views, `auto_tag_default_gear`, `refresh_personal_records_for_user`.
+views, `auto_tag_default_gear`, `refresh_personal_records_for_user`;
+`race-results-import` (column-only since 2026-07 — it shipped writing the
+column AND a stray bag copy, fixed alongside `20270314_001`);
+`coach_roster_summary` (read the stripped `metadata->>'is_dnf'` until
+`20270314_001` switched it to the column — the filter was a silent no-op).
+
+`20270314_001` also re-stripped the stray bag copies that post-promotion
+writers (race-results-import, the watch direct uploads) had re-added to
+existing rows, rescuing any non-`'run'` watch value into the column first.
 
 **Web client read/write sites — switched to the columns (Round 4, F3
 Tier-2):** the SvelteKit app no longer touches `metadata.activity_type` /
@@ -249,6 +257,6 @@ When you add a new key, classify it explicitly — and update the strip list in 
 
 - **Web has no Dart-style runtime guard.** Web is now a significant metadata writer (Strava ZIP import sets `strava_id`/`avg_bpm`/`strava_activity_type` in `apps/web/src/lib/integrations/strava-zip.ts`; Garmin ZIP import sets `garmin_id`/`avg_bpm`/`max_bpm` in `garmin-zip.ts`; `saveRun` in `data.ts` merges `title`/`notes`/`manual_entry`/`elevation_m`; the run detail page edits in place). The Dart-side CI guard described above doesn't scan TS — keep web writes in sync with this registry by PR review. The `metadata-key-keeper` agent (`.claude/agents/metadata-key-keeper.md`) sweeps both sides on diff time.
 - **Apple Watch has its own Supabase client** (`apps/watch_ios/WatchApp/SupabaseService.swift`) that does not share this registry. Any metadata keys written from the watch have to be manually reconciled with this file. See [../apps/watch_ios/CLAUDE.md](../../apps/watch_ios/CLAUDE.md).
-- **Apple-Watch WCSession ingest drops most metadata keys.** The phone-side bridge that receives a watch run (`apps/mobile_ios/ios/Runner/WatchIngestBridge.swift`) forwards a hardcoded key list (`id`/`started_at`/`source`/`activity_type` + `duration_s`/`distance_m`/`avg_bpm`), and `WatchIngest._runFromArgs` in `apps/mobile_android/lib/main.dart` rebuilds `Run.metadata` from `avg_bpm` + `activity_type` only. Any other key the watch sends — `last_modified_at` today (so a WCSession watch run is invisible to the phone's delta-fetch after the first pull), plus future `steps`/`laps` — is silently lost on this path. Fix is to forward + apply the key on both files; tracked in [followups.md § Mobile](../product/followups.md#mobile). The DEBUG-direct upload path (`SupabaseService.swift`) bypasses the bridge and is unaffected.
+- **Apple-Watch WCSession ingest forwards a hardcoded key list — anything else is dropped.** The phone-side bridge that receives a watch run (`apps/mobile_ios/ios/Runner/WatchIngestBridge.swift`) forwards `id`/`started_at`/`source`/`activity_type`/`last_modified_at` + `duration_s`/`distance_m`/`avg_bpm`, and the decoders (`WatchIngest._runFromArgs` in `apps/mobile_android/lib/main.dart`, `runFromWatchPayload` in `watch_ingest_queue.dart`) rebuild `Run.metadata` from `avg_bpm` + `activity_type` + `last_modified_at` (the queue decoder also forwards `laps` when present). `last_modified_at` IS forwarded end-to-end (2026-06-04 — see the registry row above), so a WCSession run is delta-visible from the first push. Still lost on this path: `steps`, and `laps` on the bridge leg (the bridge's key list omits them, so the queue decoder's `laps` support never sees WCSession input). Forward + apply any new key in BOTH the bridge and the decoders or it silently vanishes. The DEBUG-direct upload path (`SupabaseService.swift`) bypasses the bridge and is unaffected.
 - **No runtime validation.** Nothing checks that an incoming `metadata` blob matches this registry. The check is purely social — this doc — plus whatever type assertions the reader writes at the call site. The Dart-side CI guard above is a static analogue that at least catches writes that drop into a grep.
 - **`steps` wire type is unverified.** The Android code writes it as an `int` from the pedometer; the web reader indexes it as-is. `Json` on both clients will accept either a number or a string, so if a writer ever coerces it, both platforms will silently drift. Worth a future audit — or a cast at the write site.
