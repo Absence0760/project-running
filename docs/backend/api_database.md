@@ -1564,9 +1564,12 @@ No request body — triggered by Supabase cron, not by clients.
 Permanently deletes the authenticated user's account and all associated data.
 
 **Flow:**
-1. Authenticate user via JWT
-2. Delete all Storage files in the `runs` bucket under `{user_id}/`
-3. Delete the auth user via `admin.deleteUser()` — row data in `runs`, `routes`, `user_profiles`, `user_settings`, etc. cascades automatically via `ON DELETE CASCADE` foreign keys
+1. Authenticate user via JWT; rate-limit 3/hour (fail-closed)
+2. Best-effort third-party revocations — each outcome (`ok`/`skipped`/`failed`) recorded to `deletion_audit_log.third_party_outcomes`, failures logged for operator replay but never abort the erasure: Strava OAuth deauthorize, Garmin (fail-closed placeholder until OAuth ships), RevenueCat subscriber DELETE, FCM push-token batchRemove, Stripe Connect Express account DELETE (`/v1/accounts/{id}` — closes the host's live payout account before the `instructor_payout_accounts` row cascades away with its id)
+3. Mandatory pre-cascade cleanups — any failure aborts with 500 and leaves the auth row intact for retry: `vault.secrets` (integration tokens), `reports` rows targeting the user, `jobs` queue payloads carrying the user id, `rate_limits` rows, `segments` anonymisation
+4. Mandatory Storage drain: recursive `{user_id}/` prefix walk of the `runs` (tracks + exports), `run-photos`, `route-photos`, and `club-photos` buckets — abort on failure; plus a best-effort `avatars` drain
+5. Delete the auth user via `admin.deleteUser()` — row data in `runs`, `routes`, `user_profiles`, `user_settings`, etc. cascades automatically via `ON DELETE CASCADE` foreign keys
+6. Enqueue the deletion-receipt email (no `user_id` in the payload) and write the `ok` audit row with per-table deleted counts
 
 **Response:**
 ```json
