@@ -352,11 +352,12 @@
     "packageJson": {
       "dependencies": [
         "npm:html-to-image@^1.11.13",
-        "npm:svelte@5.56.3"
+        "npm:svelte@5.56.4"
       ],
       "overrides": {
         "cookie": "^1.0.2",
         "devalue": "^5.8.1",
+        "undici": "^7.28.0",
         "@sveltejs/kit": {
           "cookie": "^1.0.2",
           "devalue": "^5.8.1"
@@ -367,35 +368,35 @@
       "apps/web": {
         "packageJson": {
           "dependencies": [
-            "npm:@anthropic-ai/sdk@~0.104.1",
-            "npm:@iconify-json/material-symbols@1.2.78",
-            "npm:@playwright/test@^1.60.0",
+            "npm:@anthropic-ai/sdk@0.106",
+            "npm:@iconify-json/material-symbols@1.2.81",
+            "npm:@playwright/test@^1.61.1",
             "npm:@resvg/resvg-js@^2.6.2",
-            "npm:@sentry/sveltekit@^10.57.0",
+            "npm:@sentry/sveltekit@^10.62.0",
             "npm:@supabase/ssr@0.12",
-            "npm:@supabase/supabase-js@^2.107.0",
+            "npm:@supabase/supabase-js@^2.108.2",
             "npm:@sveltejs/adapter-static@3.0.10",
-            "npm:@sveltejs/kit@2.65.1",
+            "npm:@sveltejs/kit@2.68.0",
             "npm:@sveltejs/vite-plugin-svelte@7.1.2",
             "npm:@types/aws-lambda@8.10.162",
-            "npm:@types/node@^25.9.3",
+            "npm:@types/node@^26.0.1",
             "npm:@zip.js/zip.js@^2.7.45",
             "npm:esbuild@0.28.1",
             "npm:fit-file-parser@^3.0.2",
             "npm:html-to-image@^1.11.13",
-            "npm:isomorphic-dompurify@^3.17.0",
+            "npm:isomorphic-dompurify@^3.18.0",
             "npm:jszip@^3.10.1",
             "npm:maplibre-gl@^5.24.0",
             "npm:marked@^18.0.5",
-            "npm:material-symbols@~0.45.1",
+            "npm:material-symbols@~0.45.4",
             "npm:mdsvex@~0.12.7",
             "npm:normalize.css@8.0.1",
-            "npm:oauth2-mock-server@8.2.3",
-            "npm:svelte-check@4.6.0",
-            "npm:svelte@5.56.3",
+            "npm:oauth2-mock-server@9.0.0",
+            "npm:svelte-check@4.7.1",
+            "npm:svelte@5.56.4",
             "npm:typescript@6.0.3",
             "npm:unplugin-icons@23.0.1",
-            "npm:vite@8.0.16"
+            "npm:vite@8.1.0"
           ]
         }
       }
