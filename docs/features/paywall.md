@@ -64,6 +64,39 @@ cost breakdown, monthly progress bars, donor count, and tiered
 donation buttons that existed under the previous donations-only model
 are gone — see [decisions.md § 23](../architecture/decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
 
+**The Pro storefront is gated on `PUBLIC_COACH_ENABLED`**
+(`$lib/coach/coach_flag.ts`, fail-closed like `weigh_in_flag.ts`).
+Because every Pro perk is a Coach feature, a Pro subscription delivers
+nothing while the Coach is off — the rock-bottom deploy leaves
+`ANTHROPIC_API_KEY` unset so `/api/coach` 503s. When the flag is unset
+the Pro card drops its "Get Pro" CTA for a "Pro — coming soon" teaser
+(`upgrade.proComingSoon`), the "Most popular" ribbon becomes
+"Coming soon", and the Donate button becomes the primary CTA — so the
+app never sells a hollow subscription and leads with donations instead.
+Setting `PUBLIC_COACH_ENABLED=true` (which you only do once the Coach is
+live, i.e. the Lean tier) restores the purchasable card with no code
+change. The tier machinery (`subscription_tier`, `is_pro()`,
+`TIER_LIMITS`, RevenueCat webhook) stays intact and dormant either way.
+Mobile has its own upgrade surface and is not part of the rock-bottom
+web launch — mirroring this gate on Flutter is a followup.
+
+The same `coachEnabled()` flag hides every other **web** entry point into
+the AI Coach so rock-bottom shows no door that only 503s:
+
+- the **Coach sidebar nav item** (`+layout.svelte` filters it out),
+- the **`/coach` page chat** — replaced by a "coming soon" notice
+  (`coachPage.comingSoon*`); the static guided-runs rail below it stays
+  (it's local TTS cue scripts, no Anthropic dependency),
+- the **dashboard "Ask the Coach" promo** card,
+- the **route-detail "Enhance with AI (Pro)" upsell** (the offline
+  "Describe this route" template button stays — it needs no AI),
+- the **`/compare` "AI Coach" explore link**.
+
+The human coach-athlete roster (`/coaching`) is a **separate feature** and
+is NOT gated — it has no Anthropic dependency. `security_guards.test.ts`
+pins the storefront gate so Pro can't be silently re-sold while the Coach
+is off.
+
 The `monthly_funding` table stays in the schema (orphaned but not
 dropped); reviving transparent funding later is a one-page revert.
 

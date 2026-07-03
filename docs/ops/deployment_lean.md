@@ -2,8 +2,8 @@
 
 A cost-minimized variant of [`deployment.md`](deployment.md). Same providers, same
 mechanics, same IaC — it just **defers the expensive, additive services** and leans on
-each one's graceful-degradation path so a fully usable web app ships for a few dollars a
-month instead of ~$70.
+each one's graceful-degradation path so a fully usable web app ships for ~$10/mo
+(rock-bottom) instead of ~$70.
 
 This is a launch strategy, not a different architecture. Every deferred service re-attaches
 later by setting one env var or standing up one Fly app — nothing here paints you into a
@@ -27,7 +27,8 @@ engines and the mobile-store fees.
 | Fly GraphHopper (4 GB) + vol | ~$16.50 | No — route generation is additive | **Defer** |
 | Fly graph_cycle (Go sidecar) | ~$5+ (not separately costed in the docs) | No — v3 loop generator, tried first for route generation | **Defer** |
 | Fly worker (256 MB) | ~$5 | Email / push / live / photo thumbnails | Keep on Lean; **defer** on Rock-bottom |
-| AWS S3 + CloudFront + Lambda + R53 (prod only) | ~$2–3 | Yes — the web app | Keep |
+| AWS S3 + CloudFront + Lambda + R53 zone + KMS + alarms (prod only) | ~$3 | Yes — the web app | Keep |
+| AWS WAF (coach ACL + 2 rate rules) | ~$7 | Denial-of-wallet guard on /api/coach + /api/routes/generate | **Keep both tiers** (fixed cost, on by default) |
 | Anthropic (Coach) | ~$15 usage | Optional feature | Hard-cap on Lean; **off** on Rock-bottom |
 | Domain (.com) | ~$1 | Yes | Keep |
 | MapTiler / Resend / RevenueCat | $0 free tier | — | Keep (free) |
@@ -37,7 +38,7 @@ engines and the mobile-store fees.
 
 ## Two tiers
 
-### Lean — ~$34–49/mo
+### Lean — ~$41–56/mo
 
 Fully functional web launch with backups intact.
 
@@ -49,16 +50,29 @@ Fully functional web launch with backups intact.
 - Coach **on**, with a manual Anthropic console spend cap (~$30).
 - No mobile stores.
 
-### Rock-bottom — ~$3–4/mo (coach off) — SELECTED 2026-07-02
+### Rock-bottom — ~$10–11/mo (coach off) — SELECTED 2026-07-02
 
 Absolute floor. Appropriate **pre-launch / no real users** or for a demo. Accepts real
 tradeoffs (below).
 
 - Supabase **Free** ($0) — **auto-pauses after 7 days idle and has no daily backups.**
-- AWS prod web-stack (~$2–3), `preview` env deferred, coach Lambda left at 503.
+- AWS prod web-stack (~$3), `preview` env deferred, coach Lambda left at 503.
+- AWS **WAF kept** (~$7) — the per-IP denial-of-wallet guard on `/api/coach` + `/api/routes/generate`. Fixed cost, on by default (`waf_enabled = true`); left in place so it's already there when coach flips on, and prod tightens the coach limit to 30 req / 5 min / IP (`waf_rate_limit`, module default 100). This ~$7 is the bulk of the rock-bottom bill.
+- AWS Budgets ceiling set to **$30** (`envs/prod`, forecast alarm at 100 %) so the account can't quietly drift ~3x above the ~$10 baseline before anyone notices.
 - Domain (~$1/mo).
 - **No Fly services at all** (no worker, no OSRM, no GraphHopper, no graph_cycle).
 - Coach **off** (`ANTHROPIC_API_KEY` unset → endpoint returns 503).
+- **Pro not sold + AI surface hidden** (`PUBLIC_COACH_ENABLED` unset). Every Pro
+  perk is a Coach feature, so with the Coach off Pro delivers nothing —
+  `/settings/upgrade` shows a "Pro — coming soon" teaser and leads with donations
+  rather than selling a hollow subscription (also a consumer-protection /
+  chargeback risk). The same flag hides every web entry point into the AI Coach
+  (sidebar nav, the `/coach` chat → "coming soon", the dashboard promo, the
+  route-detail AI upsell, the `/compare` link) so nothing surfaces a door that
+  only 503s; the static guided-runs rail and the offline "Describe this route"
+  template stay. The tier machinery stays dormant; set `PUBLIC_COACH_ENABLED=true`
+  when the Coach goes live (Lean tier) to restore it all with no code change. See
+  [paywall.md](../features/paywall.md).
 - No mobile stores. MapTiler + Resend on free tiers.
 
 > **Two Lambdas deploy either way.** The web-stack module provisions both the `coach` and the
