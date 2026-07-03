@@ -98,6 +98,22 @@ Deno.test('invalidatePushTokens enumerates iOS tokens alongside Android', () => 
 	);
 });
 
+Deno.test('handler calls deleteStripeConnectAccount before admin.deleteUser', () => {
+	// instructor_payout_accounts.user_id cascades with the auth user, so
+	// the Stripe Express account id is only readable pre-cascade. Without
+	// this call the live Connect account (KYC data, bank details) survives
+	// erasure on Stripe's side with our mapping to it destroyed
+	// (audit/account-deletion-completeness 2026-07 High).
+	const stripe = SRC.indexOf('deleteStripeConnectAccount(adminClient, user.id)');
+	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
+	assert(stripe !== -1, 'handler must call deleteStripeConnectAccount');
+	assert(
+		stripe < del,
+		'deleteStripeConnectAccount must run BEFORE admin.deleteUser — the ' +
+			'instructor_payout_accounts row holding the account id cascades away',
+	);
+});
+
 Deno.test('handler calls cleanupVaultSecrets before admin.deleteUser', () => {
 	const vault = SRC.indexOf('cleanupVaultSecrets(adminClient, user.id)');
 	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
@@ -178,12 +194,13 @@ Deno.test('handler builds a third_party_outcomes record from the best-effort cal
 	// fifth argument. garmin_deauth is wired even though Garmin OAuth is
 	// deferred (it no-ops to 'skipped' today) so the deletion path can't
 	// silently forget Garmin once OAuth lands — audit-findings 2026-05-30.
-	const built = /const\s+thirdPartyOutcomes\s*:\s*ThirdPartyOutcomes\s*=\s*\{[^}]*strava_deauth[^}]*garmin_deauth[^}]*revenuecat_delete[^}]*fcm_remove[^}]*\}/m
+	const built = /const\s+thirdPartyOutcomes\s*:\s*ThirdPartyOutcomes\s*=\s*\{[^}]*strava_deauth[^}]*garmin_deauth[^}]*revenuecat_delete[^}]*fcm_remove[^}]*stripe_connect_delete[^}]*\}/m
 		.test(SRC);
 	assert(
 		built,
 		'handler must build a ThirdPartyOutcomes record from deauthorizeStrava + ' +
-			'deauthorizeGarmin + deleteRevenueCatSubscriber + invalidatePushTokens results',
+			'deauthorizeGarmin + deleteRevenueCatSubscriber + invalidatePushTokens + ' +
+			'deleteStripeConnectAccount results',
 	);
 	// And recordAudit must receive it on every call site. Count the
 	// argument uses (`thirdPartyOutcomes` immediately followed by `,` or
@@ -272,5 +289,9 @@ Deno.test('handler uses the shared lib.ts helpers (no duplicated URL constants)'
 	assert(
 		!/['"]https:\/\/iid\.googleapis\.com/.test(SRC),
 		'handler must use FCM_BATCH_REMOVE_URL from ./lib.ts',
+	);
+	assert(
+		!/['"]https:\/\/api\.stripe\.com/.test(SRC),
+		'handler must use stripeAccountUrl() from ./lib.ts',
 	);
 });

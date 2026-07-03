@@ -16,6 +16,14 @@ export function revenueCatSubscriberUrl(userId: string): string {
 	return `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`;
 }
 
+export function stripeAccountUrl(accountId: string): string {
+	// Stripe REST API: DELETE /v1/accounts/{id} closes an Express
+	// connected account the platform controls. accountId is a Stripe
+	// acct_… id — URL-safe, but encode defensively like the RevenueCat
+	// helper above.
+	return `https://api.stripe.com/v1/accounts/${encodeURIComponent(accountId)}`;
+}
+
 export const FCM_BATCH_REMOVE_URL =
 	'https://iid.googleapis.com/iid/v1:batchRemove';
 
@@ -149,6 +157,7 @@ export interface ThirdPartyOutcomes {
 	garmin_deauth: ThirdPartyOutcome;
 	revenuecat_delete: ThirdPartyOutcome;
 	fcm_remove: ThirdPartyOutcome;
+	stripe_connect_delete: ThirdPartyOutcome;
 }
 
 // ─── account-deletion receipt enqueue ───

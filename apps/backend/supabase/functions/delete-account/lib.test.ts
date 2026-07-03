@@ -12,6 +12,7 @@ import {
 	hashUserIdForAudit,
 	normalizeReceiptLocale,
 	revenueCatSubscriberUrl,
+	stripeAccountUrl,
 } from './lib.ts';
 
 Deno.test('STRAVA_DEAUTHORIZE_URL is the canonical Strava endpoint', () => {
@@ -27,6 +28,16 @@ Deno.test('revenueCatSubscriberUrl percent-encodes non-URL-safe chars', () => {
 	const url = revenueCatSubscriberUrl('user/with spaces?and=ampersands');
 	// encodeURIComponent escapes /, space, ?, =, &
 	assertMatch(url, /user%2Fwith%20spaces%3Fand%3Dampersands$/);
+});
+
+Deno.test('stripeAccountUrl interpolates the connected-account id', () => {
+	const url = stripeAccountUrl('acct_1ABC23DEF456');
+	assertEquals(url, 'https://api.stripe.com/v1/accounts/acct_1ABC23DEF456');
+});
+
+Deno.test('stripeAccountUrl percent-encodes non-URL-safe chars', () => {
+	const url = stripeAccountUrl('acct/../evil?x=1');
+	assertMatch(url, /acct%2F\.\.%2Fevil%3Fx%3D1$/);
 });
 
 Deno.test('FCM_BATCH_REMOVE_URL is the canonical FCM endpoint', () => {

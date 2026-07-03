@@ -16,6 +16,7 @@ import {
   formatDeletedCounts,
   hashUserIdForAudit,
   revenueCatSubscriberUrl,
+  stripeAccountUrl,
 } from './lib.ts';
 
 const PAGE = 1000;
@@ -186,6 +187,75 @@ async function deleteRevenueCatSubscriber(userId: string): Promise<ThirdPartyOut
   } catch (e) {
     console.error(
       'delete-account: revenuecat delete failed:',
+      e instanceof Error ? e.message : String(e),
+    );
+    return 'failed';
+  }
+}
+
+// The instructor_payout_accounts row cascades away with the auth user,
+// but the live Stripe Express account (KYC identity, bank details,
+// payout history) would survive on Stripe's side with our mapping to
+// it gone — no way to fulfil a later Stripe-side erasure request.
+// DELETE /v1/accounts/{id} closes the connected account. Must run
+// before admin.deleteUser while the row still holds the account id.
+//
+// A configured-but-unset STRIPE_SECRET_KEY while an account exists is
+// 'failed', not 'skipped' — same fail-closed posture as the Garmin
+// placeholder: never record "nothing to clean" when a live third-party
+// account is known to exist. Stripe rejects the delete while the
+// account holds a balance; that also lands as 'failed' in the audit
+// trail (with the account id in the logs) so an operator can replay
+// once the balance settles.
+async function deleteStripeConnectAccount(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<ThirdPartyOutcome> {
+  let accountId: string | null = null;
+  try {
+    const { data, error } = await adminClient
+      .from('instructor_payout_accounts')
+      .select('stripe_connect_account_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) {
+      console.error(
+        'delete-account: payout account lookup failed:',
+        error.message,
+      );
+      return 'failed';
+    }
+    accountId = data?.stripe_connect_account_id ?? null;
+  } catch (e) {
+    console.error(
+      'delete-account: payout account lookup failed:',
+      e instanceof Error ? e.message : String(e),
+    );
+    return 'failed';
+  }
+  if (!accountId) return 'skipped';
+  const secretKey = Deno.env.get('STRIPE_SECRET_KEY');
+  if (!secretKey) {
+    console.error(
+      `delete-account: stripe connect delete for ${accountId} impossible — STRIPE_SECRET_KEY unset`,
+    );
+    return 'failed';
+  }
+  try {
+    const r = await fetch(stripeAccountUrl(accountId), {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    // 404 = the account no longer exists at Stripe (already closed) —
+    // a successful no-op for Art 17(2) purposes, like RevenueCat.
+    if (r.ok || r.status === 404) return 'ok';
+    console.error(
+      `delete-account: stripe connect delete for ${accountId} failed: ${r.status}`,
+    );
+    return 'failed';
+  } catch (e) {
+    console.error(
+      `delete-account: stripe connect delete for ${accountId} failed:`,
       e instanceof Error ? e.message : String(e),
     );
     return 'failed';
@@ -472,6 +542,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     garmin_deauth: await deauthorizeGarmin(adminClient, user.id),
     revenuecat_delete: await deleteRevenueCatSubscriber(user.id),
     fcm_remove: await invalidatePushTokens(adminClient, user.id),
+    stripe_connect_delete: await deleteStripeConnectAccount(adminClient, user.id),
   };
 
   // Per-table deleted-row counts for the audit trail. Only the tables
