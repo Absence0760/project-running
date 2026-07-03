@@ -111,7 +111,12 @@
 		</li>
 		<li>
 			<strong>Anthropic</strong> (or, on fallback, OpenAI) — AI Coach. Receives your chat prompt
-			plus a summary of your recent training (which can include heart-rate and goal data).
+			plus a summary of your recent training (which can include heart-rate and goal data). We use
+			the provider's commercial API: your prompts and the responses are <strong>not used to train
+			the provider's models</strong>, and under Anthropic's default API retention policy inputs and
+			outputs are deleted from Anthropic's systems within 30 days of processing (material flagged
+			by automated trust-and-safety screening can be retained longer). Your chat history itself is
+			stored by us, not the provider — see section 6.
 		</li>
 		<li>
 			<strong>MapTiler</strong> (EU, with global edge caching) — map tiles. Receives the map
@@ -206,6 +211,7 @@
 		<li><strong>Account, runs, routes</strong>: until you delete the account.</li>
 		<li><strong>Live spectator pings</strong>: 24 hours after the run ends.</li>
 		<li><strong>Coach chat history</strong>: 18 months from the message timestamp.</li>
+		<li><strong>AI-provider copies of coach prompts</strong>: deleted by the provider within 30 days of processing (Anthropic API default retention); never used for model training.</li>
 		<li><strong>Notifications</strong>: 90 days from creation.</li>
 		<li><strong>Push tokens (FCM / APNs)</strong>: 60 days of inactivity (`last_seen_at`).</li>
 		<li><strong>Background-job records</strong>: 30 days after completion (terminal state).</li>

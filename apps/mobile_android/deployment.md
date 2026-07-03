@@ -127,6 +127,16 @@ The dev flavour reads from `apps/mobile_android/.env.local` (gitignored), which 
 
 The `BACKGROUND_LOCATION` permission is the most scrutinized at review time. The Play Store requires a **prominent in-app disclosure** explaining why we need it before requesting; that lives on the `OnboardingScreen`. Don't remove that disclosure.
 
+### targetSdk 36 (Android 16) — what to re-verify on-device
+
+`targetSdk = 36` (Play requires it for updates from **2026-08-31**; `compileSdk` follows `flutter.compileSdkVersion`, currently 36). Android 16 behaviour changes that activate at this target and need a manual pass on an Android 16 device before release:
+
+- **Edge-to-edge is mandatory** — `windowOptOutEdgeToEdgeEnforcement` is ignored on Android 16. Flutter's current stable handles insets, but verify the onboarding, recording (`run_screen`), and bottom-nav surfaces don't draw under the status/gesture bars.
+- **Orientation / aspect-ratio restrictions ignored on ≥600 dp displays** — the app fills the window on tablets/foldables regardless of preferred orientation; check the recorder and map layouts at tablet widths.
+- **Predictive back on by default** — verify back gestures from the recording screen still hit the in-app confirm flow rather than dismissing the activity.
+- **Foreground-service recording** — no new FGS type is required (`FOREGROUND_SERVICE_LOCATION` stands), but soak-test a full background-locked recording on Android 16 for regressions in the tightened background-work quotas.
+- **Notifications** — verify the live recording notification and push-notification taps; the app uses no full-screen intents, so `USE_FULL_SCREEN_INTENT` is not needed.
+
 ---
 
 ## Privacy policy
@@ -154,11 +164,27 @@ Play Console → App content → Data safety. Be precise; mismatches between the
 | Precise location | Yes | No | No | Yes |
 | Health & fitness — heart rate, steps | Yes | No | Yes | Yes |
 | Email address | Yes | No | No (account requirement) | Yes |
+| Name | Yes (optional display name, setup wizard / profile) | No | Yes | Yes |
 | User IDs | Yes | No | No | Yes |
+| Device or other IDs | Yes (FCM push token → `device_tokens`, registered on sign-in when Firebase is configured) | No | No | Yes |
+| Purchase history | Yes (Pro subscription state via RevenueCat / Play Billing) | No | Yes (only if the user subscribes) | Yes |
 | Photos | Yes (if user uploads) | No | Yes | Yes |
+| Other user-generated content | Yes (comments, club posts, route reviews, run notes, AI Coach chat messages) | No | Yes | Yes |
 | App interactions / Diagnostics | Yes (Sentry crash reports) | No | Optional via opt-out | Yes |
 
 "Shared" is **No** for everything we don't actively send to third-party servers. Strava / Garmin / RevenueCat / Anthropic are **only** invoked when the user signs in to those services or uses Coach, which counts as user-initiated rather than programmatic sharing. Phrasing in the questionnaire matters; if uncertain, default to the more conservative "Yes — Optional → user-initiated".
+
+---
+
+## Content rating — IARC interactive elements
+
+The IARC questionnaire rates the *content* (a running app lands at "Everyone" / PEGI 3), but it also asks about **interactive elements**, which are displayed alongside the rating and must be declared truthfully:
+
+- **Users Interact** — Yes: social feed, run comments, club posts, direct messages, coach chat.
+- **Shares Location** — Yes: public run/route share pages and live spectator links expose (privacy-clipped) location.
+- **Digital Purchases** — Yes: the Pro subscription in-app purchase.
+
+A mismatch between these declarations and the binary is grounds for a rating recall or review rejection, same as the Data safety form.
 
 ---
 

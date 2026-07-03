@@ -154,13 +154,29 @@ App Store Connect → App Privacy. Same data classes as the Play Data Safety for
 | Location (precise + coarse) | No | Yes | App functionality |
 | Health & Fitness — heart rate, steps | No | Yes | App functionality |
 | Email | No | Yes | App functionality |
+| Name (optional display name) | No | Yes | App functionality |
 | User ID | No | Yes | App functionality |
+| Device ID (APNs/FCM push token) | No | Yes | App functionality |
+| Purchase history (subscription state via RevenueCat) | No | Yes | App functionality |
 | Photos | No | Yes (when the user uploads) | App functionality |
+| Other user content (comments, posts, reviews, notes, Coach chat) | No | Yes | App functionality |
 | Crash data, performance data | No | No | App functionality (analytics) |
+
+These rows must stay consistent with `ios/Runner/PrivacyInfo.xcprivacy` (the privacy manifest declares the same collected-data types) and with the Android Data Safety table in [`apps/mobile_android/deployment.md`](../mobile_android/deployment.md).
 
 "Used to track" = correlated with data from other companies for ads. We don't do this; answer "No" everywhere.
 
 Apple cross-checks the App Privacy declarations against actual API usage during review. Declaring "no precise location" while the binary calls `CLLocationManager` requestAlwaysAuthorization is an instant rejection.
+
+### Age rating — capability declarations
+
+App Store Connect's age-rating questionnaire (revised 2025: 4+/9+/13+/16+/18+ tiers) asks about app capabilities, not just content. Declare truthfully:
+
+- **User-generated content / social features** — Yes: social feed, run comments, club posts, direct messages.
+- **Location sharing** — Yes: public run/route shares and live spectator links expose (privacy-clipped) location.
+- **In-app purchases** — Yes: the Pro subscription (the "In-App Purchases" badge is also derived automatically from the IAP configuration).
+
+The base content rating stays low for a running app; these capability flags are what raise the effective tier, and misdeclaring them is a review rejection. Keep the answers consistent with the Play IARC interactive elements in [`apps/mobile_android/deployment.md`](../mobile_android/deployment.md).
 
 ---
 
