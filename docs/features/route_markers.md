@@ -74,6 +74,13 @@ cut-off chip renders identically on both platforms.
   makes them **interactive**:
   - **Click to place** — with the add/edit form open the map shows a crosshair
     cursor; a click drops the pin (or moves the in-flight draft).
+  - **Type coordinates** — the form carries labelled Latitude / Longitude
+    inputs (validated to ±90 / ±180) wired to the same draft position a map
+    click fills, so a keyboard-only or screen-reader user can place or move a
+    marker without the map (WCAG 2.1.1). A map click / draft-pin drag syncs
+    the fields; typing a valid pair moves the draft pin live; save re-parses
+    the fields and rejects out-of-range values with an inline `role="alert"`
+    error.
   - **Snap to the route line** — a "Snap to route line" toggle (default on, in
     the form) projects every placement + drag onto the nearest point of the
     course so a marker sticks to the line. The snap is render-only: `position_m`
@@ -93,7 +100,12 @@ cut-off chip renders identically on both platforms.
   mirrors web's `snapEnabled = true`) projects the tapped point through
   `route_snap.dart` (`snapToPolyline`, parity pair) onto the nearest point of
   the course before the marker is placed; render-only, `position_m` stays
-  server-derived (5 widget tests in `route_markers_panel_test.dart`). The
+  server-derived. **Coordinate entry ships too**: the editor sheet carries
+  Latitude / Longitude fields (prefilled from the tap or the existing marker,
+  validated to ±90 / ±180; an edit persists the typed position), and placing
+  mode offers an "Enter coordinates instead" button that opens the sheet
+  without a map tap — the keyboard / screen-reader placement path matching
+  web (8 widget tests in `route_markers_panel_test.dart`). The
   **draggable-symbol drag-to-move** affordance on `LiveRunMap` still needs
   on-device maplibre `SymbolManager` work and stays a followup (followups.md).
 - **Shared helper** — `route_markers.ts` ↔ `route_markers.dart` (parity pair):
