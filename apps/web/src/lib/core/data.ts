@@ -5085,7 +5085,7 @@ async function fetchFollowingLifts(
 	const cutoff = new Date(Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 	const queryChunk = async (ids: string[]) => {
 		let q = supabase
-			.from(TABLES.gym_workouts)
+			.from('public_gym_workouts')
 			.select('id, user_id, started_at, title, set_count, volume_kg')
 			.eq('is_public', true)
 			.in('user_id', ids)

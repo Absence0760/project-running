@@ -227,7 +227,7 @@ export type Database = {
           activity_type: string | null
           club_id: string | null
           created_at: string
-          creator_id: string
+          creator_id: string | null
           description: string | null
           ends_at: string
           goal_value: number | null
@@ -243,7 +243,7 @@ export type Database = {
           activity_type?: string | null
           club_id?: string | null
           created_at?: string
-          creator_id: string
+          creator_id?: string | null
           description?: string | null
           ends_at: string
           goal_value?: number | null
@@ -259,7 +259,7 @@ export type Database = {
           activity_type?: string | null
           club_id?: string | null
           created_at?: string
-          creator_id?: string
+          creator_id?: string | null
           description?: string | null
           ends_at?: string
           goal_value?: number | null
@@ -857,7 +857,7 @@ export type Database = {
       event_checkpoints: {
         Row: {
           created_at: string
-          created_by: string
+          created_by: string | null
           cutoff_clock: string | null
           cutoff_elapsed_s: number | null
           event_id: string
@@ -871,7 +871,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          created_by: string
+          created_by?: string | null
           cutoff_clock?: string | null
           cutoff_elapsed_s?: number | null
           event_id: string
@@ -885,7 +885,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           cutoff_clock?: string | null
           cutoff_elapsed_s?: number | null
           event_id?: string
@@ -1875,6 +1875,13 @@ export type Database = {
             columns: ["workout_id"]
             isOneToOne: false
             referencedRelation: "gym_workouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_sets_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "public_gym_workouts"
             referencedColumns: ["id"]
           },
         ]
@@ -4152,6 +4159,84 @@ export type Database = {
           total_distance_m: number | null
           user_id: string | null
           week_start: string | null
+        }
+        Relationships: []
+      }
+      public_food_log: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          created_at: string | null
+          fat_g: number | null
+          id: string | null
+          is_public: boolean | null
+          item_name: string | null
+          meal_slot: string | null
+          protein_g: number | null
+          started_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string | null
+          fat_g?: number | null
+          id?: string | null
+          is_public?: boolean | null
+          item_name?: string | null
+          meal_slot?: string | null
+          protein_g?: number | null
+          started_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string | null
+          fat_g?: number | null
+          id?: string | null
+          is_public?: boolean | null
+          item_name?: string | null
+          meal_slot?: string | null
+          protein_g?: number | null
+          started_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      public_gym_workouts: {
+        Row: {
+          created_at: string | null
+          duration_s: number | null
+          id: string | null
+          is_public: boolean | null
+          set_count: number | null
+          started_at: string | null
+          title: string | null
+          user_id: string | null
+          volume_kg: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_s?: number | null
+          id?: string | null
+          is_public?: boolean | null
+          set_count?: number | null
+          started_at?: string | null
+          title?: string | null
+          user_id?: string | null
+          volume_kg?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_s?: number | null
+          id?: string | null
+          is_public?: boolean | null
+          set_count?: number | null
+          started_at?: string | null
+          title?: string | null
+          user_id?: string | null
+          volume_kg?: number | null
         }
         Relationships: []
       }
