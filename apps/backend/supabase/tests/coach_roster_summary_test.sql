@@ -29,13 +29,17 @@ insert into coach_athletes (coach_id, athlete_id, status, invite_token, accepted
   ('aaaaaaaa-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-0000000000b1', 'ended', 'crs-tok-b', now());
 
 -- Athlete A: two runs in the last 7d (counted) + one 20-day-old run (in the
--- 28-day chronic window, NOT the 7d acute window) + one is_dnf run in the 7d
--- window that must be EXCLUDED from every aggregate.
-insert into runs (id, user_id, started_at, duration_s, distance_m, source, metadata) values
-  ('aaaaaaaa-0000-0000-0000-0000000000f1', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '1 day',  1800, 5000,  'app', '{"activity_type":"run"}'),
-  ('aaaaaaaa-0000-0000-0000-0000000000f2', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '3 days', 2400, 8000,  'app', '{"activity_type":"run"}'),
-  ('aaaaaaaa-0000-0000-0000-0000000000f3', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '20 days', 3600, 12000, 'app', '{"activity_type":"run"}'),
-  ('aaaaaaaa-0000-0000-0000-0000000000f4', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '2 days', 900, 99000, 'app', '{"activity_type":"run","is_dnf":true}');
+-- 28-day chronic window, NOT the 7d acute window) + one is_dnf COLUMN run in
+-- the 7d window that must be EXCLUDED from every aggregate + one run carrying
+-- a stray legacy metadata.is_dnf bag key (promoted away by 20261207_001) that
+-- must be INCLUDED — the function reads the column, never the bag
+-- (20270314_001 pinned this after the filter silently no-op'd on the bag).
+insert into runs (id, user_id, started_at, duration_s, distance_m, source, is_dnf, metadata) values
+  ('aaaaaaaa-0000-0000-0000-0000000000f1', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '1 day',  1800, 5000,  'app', false, '{"activity_type":"run"}'),
+  ('aaaaaaaa-0000-0000-0000-0000000000f2', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '3 days', 2400, 8000,  'app', false, '{"activity_type":"run"}'),
+  ('aaaaaaaa-0000-0000-0000-0000000000f3', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '20 days', 3600, 12000, 'app', false, '{"activity_type":"run"}'),
+  ('aaaaaaaa-0000-0000-0000-0000000000f4', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '2 days', 900, 99000, 'app', true, '{"activity_type":"run"}'),
+  ('aaaaaaaa-0000-0000-0000-0000000000f5', 'aaaaaaaa-0000-0000-0000-0000000000a1', now() - interval '4 days', 600, 1000, 'app', false, '{"is_dnf":true}');
 
 -- Athlete B (ended link) has runs too -- proves the ended link contributes
 -- nothing, not even that it is in the result.
@@ -73,19 +77,19 @@ select is(
 
 select is(
   (select runs_7d from coach_roster_summary()),
-  2, 'runs_7d counts the two last-7-day runs, excluding the 20-day-old + the DNF');
+  3, 'runs_7d counts the three last-7-day non-DNF runs (a stray metadata.is_dnf bag key does not exclude), excluding the 20-day-old + the is_dnf-column DNF');
 
 select is(
   (select distance_7d_m from coach_roster_summary()),
-  13000::double precision, 'distance_7d_m sums only the two valid 7-day runs (5000 + 8000)');
+  14000::double precision, 'distance_7d_m sums only the non-DNF 7-day runs (5000 + 8000 + 1000)');
 
-select ok(
-  (select load_acute from coach_roster_summary()) > 0,
-  'load_acute is positive for an athlete who ran in the last 7 days');
+select is(
+  (select load_acute from coach_roster_summary()),
+  140::double precision, 'load_acute = (5 + 8 + 1) km x 10 -- the 99 km is_dnf run contributes nothing');
 
-select ok(
-  (select load_chronic from coach_roster_summary()) > 0,
-  'load_chronic is positive (28-day window includes the older run)');
+select is(
+  (select load_chronic from coach_roster_summary()),
+  65::double precision, 'load_chronic = (5 + 8 + 12 + 1) km x 10 / 4 -- DNF excluded from the 28-day window too');
 
 select is(
   (select plan_completion_pct from coach_roster_summary()),
