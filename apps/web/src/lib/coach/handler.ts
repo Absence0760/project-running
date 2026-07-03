@@ -127,7 +127,7 @@ export async function handleCoach(
 	// Go through the SECURITY DEFINER `get_my_profile()` RPC instead.
 	const consentLookup = await supabase.rpc('get_my_profile').maybeSingle();
 	if (consentLookup.error) {
-		console.error('[coach] consent lookup failed', consentLookup.error);
+		console.error('[coach] consent lookup failed', supabaseErrorFields(consentLookup.error));
 		return jsonError(500, 'consent check failed');
 	}
 	// `.maybeSingle()` on a SetofOptions RPC narrows to `{}` in
@@ -254,7 +254,7 @@ export async function handleCoach(
 			const { error: delErr } = body.plan_id
 				? await delQuery.eq('plan_id', body.plan_id)
 				: await delQuery.is('plan_id', null);
-			if (delErr) console.error('[coach] truncate failed', delErr);
+			if (delErr) console.error('[coach] truncate failed', supabaseErrorFields(delErr));
 		}
 	}
 
@@ -274,7 +274,7 @@ export async function handleCoach(
 				})
 				.select('id')
 				.single();
-			if (insertErr) console.error('[coach] persist user msg failed', insertErr);
+			if (insertErr) console.error('[coach] persist user msg failed', supabaseErrorFields(insertErr));
 			else userMessageId = data?.id ?? null;
 		}
 	}
@@ -437,10 +437,12 @@ export async function handleCoach(
 						})
 						.select('id')
 						.single();
-					if (insertErr) console.error('[coach] persist assistant failed', insertErr);
+					if (insertErr) console.error('[coach] persist assistant failed', supabaseErrorFields(insertErr));
 					else assistantMessageId = data?.id ?? null;
 				} catch (e) {
-					console.error('[coach] persist assistant exception', e);
+					console.error('[coach] persist assistant exception', {
+						message: e instanceof Error ? e.message : String(e),
+					});
 				}
 			}
 		}
@@ -466,4 +468,17 @@ function jsonError(
 	extra: Record<string, unknown> = {},
 ): CoachResult {
 	return buildJsonError(status, error, extra) as CoachResult;
+}
+
+/// Extract only the log-safe fields from a Supabase/PostgREST error.
+/// `.code` + `.message` are safe to log; `.details` and `.hint` can
+/// echo row fragments — the caller's chat content is Art 9 health/injury
+/// data on this path — and the raw object must never reach CloudWatch.
+/// Mirrors the `.code`/`.message` pattern used in rate_limit_errors.ts +
+/// the Edge Functions, and the security_guards.test.ts raw-object ban.
+/// /audit/pii-in-logs.
+export function supabaseErrorFields(
+	err: { code?: string; message?: string } | null | undefined,
+): { code: string | undefined; message: string | undefined } {
+	return { code: err?.code, message: err?.message };
 }

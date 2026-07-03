@@ -49,13 +49,40 @@ func NewSupabaseClient(baseURL, serviceKey string) *SupabaseClient {
 // HTTPError lets the worker's transient/permanent classifier branch on
 // the status code rather than substring-matching the message text.
 // Same pattern as SupabaseClient.kt's HttpException on the watch.
+//
+// Error() deliberately reports only the status, method, and request
+// PATH (never the query string, which carries PostgREST filter values
+// like emails, and never the response Body). Response bodies from
+// PostgREST/GoTrue/Storage can echo user PII — emails, run titles,
+// health/injury content — and this error propagates via `%w` all the
+// way into Fly.io logs. `Body` is retained for in-process branching
+// (SQLSTATE sniffing, invalid_grant classification) but is NOT part of
+// the formatted message, so a leak can't ride the log path. /audit/pii-in-logs.
 type HTTPError struct {
 	StatusCode int
-	Body       string
+	// Method + Endpoint scope the failure for operators without
+	// leaking anything. Endpoint is the URL path only — no query.
+	// They may be empty when the error is constructed off a bare
+	// status (push transports, some Strava paths); Error() degrades
+	// gracefully in that case.
+	Method   string
+	Endpoint string
+	// Body is the raw response payload. Kept for callers that must
+	// branch on its content (e.g. the 23505 dedupe check, Strava's
+	// invalid_grant/expired classification) — never formatted into
+	// Error(), so it never reaches a log line.
+	Body string
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("supabase http %d: %s", e.StatusCode, e.Body)
+	reason := http.StatusText(e.StatusCode)
+	if reason == "" {
+		reason = "unexpected status"
+	}
+	if e.Method != "" && e.Endpoint != "" {
+		return fmt.Sprintf("supabase http %d (%s): %s %s", e.StatusCode, reason, e.Method, e.Endpoint)
+	}
+	return fmt.Sprintf("supabase http %d (%s)", e.StatusCode, reason)
 }
 
 func (c *SupabaseClient) do(ctx context.Context, req *http.Request) ([]byte, error) {
@@ -73,7 +100,12 @@ func (c *SupabaseClient) do(ctx context.Context, req *http.Request) ([]byte, err
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Method:     req.Method,
+			Endpoint:   req.URL.Path,
+			Body:       string(body),
+		}
 	}
 	return body, nil
 }
@@ -252,7 +284,12 @@ func (c *SupabaseClient) downloadFromBucket(ctx context.Context, bucket, path st
 		return nil, "", err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, "", &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+		return nil, "", &HTTPError{
+			StatusCode: resp.StatusCode,
+			Method:     req.Method,
+			Endpoint:   req.URL.Path,
+			Body:       string(body),
+		}
 	}
 	return body, resp.Header.Get("Content-Type"), nil
 }
