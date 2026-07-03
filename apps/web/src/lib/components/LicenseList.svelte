@@ -51,15 +51,76 @@
 		},
 		{
 			name: 'JSZip',
-			license: 'MIT / GPL-3.0',
+			license: 'MIT (elected)',
 			url: 'https://github.com/Stuk/jszip',
-			fullText: 'Dual-licensed under MIT or GPL-3.0. See upstream repository for the full text of both licenses.',
+			fullText:
+				'JSZip is dual-licensed under the MIT license or GPL-3.0-or-later; this project elects and ' +
+				'uses it under the MIT option. MIT License. Copyright (c) Stuart Knightley, David Duponchel, ' +
+				'Franz Buchinger, Antonio Villar Cloquell. See upstream repository for the full text of both licenses.',
+		},
+		{
+			name: 'DOMPurify',
+			license: 'Apache-2.0 (elected)',
+			url: 'https://github.com/cure53/DOMPurify',
+			fullText:
+				'DOMPurify is dual-licensed under MPL-2.0 or Apache-2.0; this project elects and uses it ' +
+				'under the Apache-2.0 option. Apache License 2.0. Copyright (c) Cure53 and other contributors. ' +
+				'Shipped via isomorphic-dompurify. See upstream repository for the full text of both licenses.',
 		},
 		{
 			name: 'isomorphic-dompurify',
-			license: 'MPL-2.0',
+			license: 'MIT',
 			url: 'https://github.com/kkomelin/isomorphic-dompurify',
-			fullText: 'Mozilla Public License 2.0. See upstream repository for the full text.',
+			fullText:
+				'MIT License. Copyright (c) Konstantin Komelin and contributors. The wrapped DOMPurify ' +
+				'library is dual-licensed under MPL-2.0 or Apache-2.0; this project elects and uses ' +
+				'DOMPurify under the Apache-2.0 option (see the DOMPurify entry). See upstream repository for the full text.',
+		},
+		{
+			name: '@sentry/sveltekit',
+			license: 'MIT',
+			url: 'https://github.com/getsentry/sentry-javascript',
+			fullText: 'MIT License. Copyright (c) Functional Software, Inc. dba Sentry. See upstream repository for the full text.',
+		},
+		{
+			name: '@zip.js/zip.js',
+			license: 'BSD-3-Clause',
+			url: 'https://github.com/gildas-lormeau/zip.js',
+			fullText:
+				'BSD 3-Clause License. Copyright (c) Gildas Lormeau. Redistribution and use in source and ' +
+				'binary forms, with or without modification, are permitted provided that the conditions of ' +
+				'the BSD-3-Clause are met. See upstream repository for the full text.',
+		},
+		{
+			name: 'fit-file-parser',
+			license: 'MIT',
+			url: 'https://github.com/jimmykane/fit-parser',
+			fullText: 'MIT License. See upstream repository for the full text.',
+		},
+		{
+			name: 'marked',
+			license: 'MIT',
+			url: 'https://github.com/markedjs/marked',
+			fullText:
+				'MIT License. Copyright (c) 2011-2018, Christopher Jeffrey; copyright (c) 2018+, ' +
+				'MarkedJS contributors. See upstream repository for the full text.',
+		},
+		{
+			name: 'material-symbols',
+			license: 'Apache-2.0',
+			url: 'https://github.com/marella/material-symbols',
+			fullText:
+				'Apache License 2.0. The Material Symbols font is created by Google and packaged for npm ' +
+				'by Marella. See upstream repository for the full text.',
+		},
+		{
+			name: '@mapbox/jsonlint-lines-primitives',
+			license: 'MIT (verified upstream)',
+			url: 'https://github.com/mapbox/jsonlint',
+			fullText:
+				'The npm package ships no license metadata, so automated scanners report it as "Custom". ' +
+				'The upstream mapbox/jsonlint repository is MIT-licensed — Copyright (c) 2012 Zachary Carter. ' +
+				'Shipped transitively via maplibre-gl; recorded here so the verified terms are on file.',
 		},
 		{
 			name: 'mdsvex',
