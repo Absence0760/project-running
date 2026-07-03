@@ -117,7 +117,9 @@ Same shape as the phone app: `dev` and `production`. The dev flavour reads from 
 - `android.permission.ACCESS_FINE_LOCATION` + `BACKGROUND_LOCATION`
 - `android.permission.ACTIVITY_RECOGNITION`
 - `android.permission.BODY_SENSORS` — Health Services HR
+- `android.permission.BODY_SENSORS_BACKGROUND` — keeps HR samples flowing once the display goes ambient (Wear OS 3.5+ / API 34+); declare it in the Data Safety form too
 - `android.permission.FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION`
+- `android.permission.FOREGROUND_SERVICE_HEALTH` — `RunRecordingService` reads HR via Health Services while recording (`foregroundServiceType="location|health"`); required on targetSdk 34+ or the service start throws `SecurityException`
 - `android.permission.POST_NOTIFICATIONS`
 - `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — for the long-run battery whitelist UX
 - `android.permission.WAKE_LOCK` — partial wake-lock during recording
