@@ -3716,6 +3716,37 @@ export async function fetchClubTemplates(clubId: string, limit = 100): Promise<T
 	return (data ?? []) as TrainingPlan[];
 }
 
+/// Plan templates for many clubs in one query, grouped by club id — the
+/// /plans/new picker used to call fetchClubTemplates once per club (N+1).
+/// Per-club ordering matches fetchClubTemplates (created_at desc); the
+/// limit scales with the club count so no club is starved by another's
+/// template volume.
+export async function fetchClubTemplatesForClubs(
+	clubIds: string[],
+	limitPerClub = 100
+): Promise<Map<string, TrainingPlan[]>> {
+	const grouped = new Map<string, TrainingPlan[]>();
+	if (clubIds.length === 0) return grouped;
+	const { data, error } = await supabase
+		.from('training_plans')
+		.select('*')
+		.eq('is_template', true)
+		.in('club_id', clubIds)
+		.order('created_at', { ascending: false })
+		.limit(limitPerClub * clubIds.length);
+	if (error) {
+		console.error('fetchClubTemplatesForClubs failed', error);
+		return grouped;
+	}
+	for (const row of (data ?? []) as TrainingPlan[]) {
+		if (!row.club_id) continue;
+		const list = grouped.get(row.club_id);
+		if (list) list.push(row);
+		else grouped.set(row.club_id, [row]);
+	}
+	return grouped;
+}
+
 /// Clone a template into a user-owned active plan, anchored at
 /// new_start_date. Returns the new plan's id; caller should navigate
 /// to /plans/{id}. The RPC enforces authorisation server-side.

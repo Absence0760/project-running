@@ -8,7 +8,7 @@
 	import RoutineEditor from '$lib/components/RoutineEditor.svelte';
 	import {
 		fetchMyClubs,
-		fetchClubTemplates,
+		fetchClubTemplatesForClubs,
 		clonePlanTemplate,
 		createTrainingPlan,
 		fetchGymExerciseNames,
@@ -145,13 +145,10 @@
 	onMount(async () => {
 		try {
 			const clubs = await fetchMyClubs();
-			const lists = await Promise.all(
-				clubs.map(async (c) => {
-					const list = await fetchClubTemplates(c.id);
-					return list.map((template) => ({ template, clubName: c.name }));
-				})
+			const byClub = await fetchClubTemplatesForClubs(clubs.map((c) => c.id));
+			templates = clubs.flatMap((c) =>
+				(byClub.get(c.id) ?? []).map((template) => ({ template, clubName: c.name }))
 			);
-			templates = lists.flat();
 			// Pre-select the template a club's "Adopt" deep link points at
 			// (/plans/new?from=<templateId>). Only honour it when it's one of
 			// the user's loaded club templates — a stale or foreign id leaves
