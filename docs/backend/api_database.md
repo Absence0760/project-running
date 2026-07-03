@@ -974,10 +974,15 @@ create table personal_records (
 );
 ```
 
-Triggers: `runs_personal_records_insert / update / delete` call
-`refresh_personal_records_for_user(uid)`, a `security definer` helper
-that deletes + re-inserts the caller's four rows (full rebuild per
-user on any run change — simpler to reason about than incremental).
+Triggers: `runs_personal_records_insert / update / delete` — statement-level
+AFTER triggers with transition tables since `20270315_001` (per-row before
+that) — call `refresh_personal_records_for_user(uid)` once per statement per
+affected user, a `security definer` helper that deletes + re-inserts the
+caller's rows (full rebuild per user on any run change — simpler to reason
+about than incremental; batching per statement keeps a bulk import at one
+rebuild per chunk instead of one per row). The UPDATE trigger's old OF
+column list lives in the trigger function as a changed-value filter over
+the same six columns.
 The helper is guarded: `auth.uid() is not null and auth.uid() !=
 p_user_id` raises `not authorized`, so a logged-in attacker can't call
 the RPC with a victim's id. Service-role / seed inserts run with

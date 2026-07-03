@@ -31,11 +31,19 @@ retention cron referenced in a comment that was never created.
   mile bracket (`20261021_001`), and the auth guard (`20260904_001`),
   consolidated by `20261009_001`. The live body is the **latest** migration that
   touches the function — read it, don't reconstruct from the originals.
-- **Maintained by:** trigger on `runs` insert/delete calling the refresher.
+- **Maintained by:** statement-level AFTER INSERT/UPDATE/DELETE triggers on
+  `runs` (`20270315_001`; per-row until then) calling the refresher once per
+  statement per affected `user_id` from the transition tables — a bulk import
+  of N runs costs one full recompute per chunk, not N. The UPDATE path only
+  refreshes users whose `distance_m` / `duration_s` / `source` / `user_id` /
+  `is_dnf` / `metadata` values actually changed (the old trigger's OF column
+  list, moved in-function because transition tables forbid column lists), and
+  refreshes both the old and new owner on a `user_id` change.
 - **Manual rebuild:** `select refresh_personal_records_for_user(id) from auth.users;`
 - **Pinned by:** `personal_records_cache_invariants_test.sql` (mutate a run, assert
-  the cache matches the authoritative query), plus the brackets / DNF / embedded /
-  mile suites.
+  the cache matches the authoritative query), `personal_records_statement_trigger_test.sql`
+  (multi-row statements refresh once per affected user and still land the
+  authoritative result), plus the brackets / DNF / embedded / mile suites.
 - **Trap:** this function is the canonical bare-body casualty. Any new migration
   that does `create or replace function refresh_personal_records_for_user` must
   patch the **latest** body, not rewrite from scratch.
