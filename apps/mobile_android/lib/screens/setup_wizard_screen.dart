@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../locale_defaults.dart';
 import '../onboarding.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
@@ -27,8 +28,9 @@ class SetupWizardScreen extends StatefulWidget {
   /// one — prefills the name field so the user can edit before continuing.
   final String? initialDisplayName;
 
-  /// The user's current `preferred_unit` ('km' | 'mi'), prefilled into the
-  /// units toggle.
+  /// The user's explicitly chosen `preferred_unit` ('km' | 'mi'), if any,
+  /// prefilled into the units toggle. Null when the user never picked one
+  /// — the wizard then seeds from the device locale.
   final String? initialPreferredUnit;
 
   const SetupWizardScreen({
@@ -69,8 +71,18 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
     if (widget.initialDisplayName != null) {
       _displayNameCtl.text = widget.initialDisplayName!;
     }
+    // Units step default: an explicit prior choice wins, otherwise the
+    // device locale decides (mi for US/GB/LR/MM, km elsewhere) instead of
+    // hard-coding km for every signup — mirrors web /onboarding's
+    // `defaultUnitForLocale(navigator.language)` seed. The raw device
+    // locale (not Localizations.localeOf) because the app's resolved
+    // locale drops the region subtag the derivation needs.
     final unit = widget.initialPreferredUnit;
-    if (unit == 'km' || unit == 'mi') _preferredUnit = unit!;
+    _preferredUnit = (unit == 'km' || unit == 'mi')
+        ? unit!
+        : defaultUnitForLocale(WidgetsBinding
+            .instance.platformDispatcher.locale
+            .toLanguageTag());
   }
 
   @override

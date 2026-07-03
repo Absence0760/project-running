@@ -51,11 +51,18 @@ Future<Preferences> _prefs() async {
   return p;
 }
 
-Future<void> _pump(WidgetTester tester, _FakeApi api, Preferences prefs) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _FakeApi api,
+  Preferences prefs, {
+  Locale? locale,
+  String? initialPreferredUnit,
+}) async {
   // Host under a Navigator with a base route so the wizard's pop-on-finish
   // has somewhere to land (it's pushed as a fullscreen route in the app).
   await tester.pumpWidget(
     MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(
@@ -68,6 +75,7 @@ Future<void> _pump(WidgetTester tester, _FakeApi api, Preferences prefs) async {
                     apiClient: api,
                     preferences: prefs,
                     settingsSync: null,
+                    initialPreferredUnit: initialPreferredUnit,
                   ),
                 ),
               ),
@@ -167,6 +175,52 @@ void main() {
       await tester.tap(find.text(l10n.setupGenderFemale).last);
       await tester.pumpAndSettle();
       expect(find.byType(CheckboxListTile), findsOneWidget);
+    });
+
+    group('locale-derived unit default', () {
+      Future<void> finish(WidgetTester tester, AppLocalizations l10n) async {
+        for (var i = 0; i < onboardingTotalSteps - 1; i++) {
+          await tester.tap(find.text(l10n.setupContinue));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text(l10n.setupOpenDashboard));
+        await tester.pumpAndSettle(const Duration(seconds: 4));
+      }
+
+      void setDeviceLocale(WidgetTester tester, Locale locale) {
+        tester.platformDispatcher.localeTestValue = locale;
+        addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+      }
+
+      testWidgets('en_US device locale seeds miles when no unit was chosen',
+          (tester) async {
+        final api = _FakeApi();
+        setDeviceLocale(tester, const Locale('en', 'US'));
+        await _pump(tester, api, await _prefs(), locale: const Locale('en'));
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        await finish(tester, l10n);
+        expect(api.completedUnit, 'mi');
+      });
+
+      testWidgets('de_DE device locale seeds kilometres', (tester) async {
+        final api = _FakeApi();
+        setDeviceLocale(tester, const Locale('de', 'DE'));
+        await _pump(tester, api, await _prefs(), locale: const Locale('en'));
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        await finish(tester, l10n);
+        expect(api.completedUnit, 'km');
+      });
+
+      testWidgets('an explicit prior choice overrides the locale seed',
+          (tester) async {
+        final api = _FakeApi();
+        setDeviceLocale(tester, const Locale('en', 'US'));
+        await _pump(tester, api, await _prefs(),
+            locale: const Locale('en'), initialPreferredUnit: 'km');
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        await finish(tester, l10n);
+        expect(api.completedUnit, 'km');
+      });
     });
   });
 }

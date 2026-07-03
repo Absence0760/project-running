@@ -181,7 +181,13 @@ class _HomeScreenState extends State<HomeScreen> {
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
           initialDisplayName: profile!.displayName,
-          initialPreferredUnit: profile.preferredUnit,
+          // The profile column is 'km'-defaulted at signup
+          // (confirm_age_and_terms), so it can't distinguish a user's
+          // choice from the default — passing it would clobber the
+          // wizard's locale-derived unit seed. The bag key exists only
+          // once the user explicitly picked a unit.
+          initialPreferredUnit: widget.settingsSync?.service
+              ?.effective<String>(SettingsKeys.preferredUnit),
         ),
       ),
     );

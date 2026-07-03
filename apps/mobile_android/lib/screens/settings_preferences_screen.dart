@@ -5,6 +5,7 @@ import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../locale_defaults.dart';
 import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../push_messaging_bridge.dart';
@@ -686,6 +687,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     await _putUniversal(SettingsKeys.emailLifecycleDrip, on ? 'off' : 'on');
   }
 
+  // New users have no stored week_start_day — fall back to the locale
+  // default (Sunday-first regions like the US/CA, Monday elsewhere)
+  // instead of hard-coding Monday. Mirrors web /settings/preferences'
+  // `defaultWeekStartForLocale(navigator.language)` fallback. The raw
+  // device locale (not Localizations.localeOf) because the app's
+  // resolved locale drops the region subtag the derivation needs.
+  String get _weekStartLocaleDefault => defaultWeekStartForLocale(
+      WidgetsBinding.instance.platformDispatcher.locale.toLanguageTag());
+
   Future<void> _editWeekStartDay() async {
     final l10n = AppLocalizations.of(context);
     const opts = ['monday', 'sunday'];
@@ -694,7 +704,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: l10n.prefsWeekStart,
       options: opts,
       labels: labels,
-      current: _bagValue<String>(SettingsKeys.weekStartDay) ?? 'monday',
+      current: _bagValue<String>(SettingsKeys.weekStartDay) ??
+          _weekStartLocaleDefault,
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.weekStartDay, picked);
@@ -1184,8 +1195,10 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
             ListTile(
               title: Text(l10n.prefsWeekStart),
               subtitle: Text(
-                _weekStartLabel(l10n,
-                    _bagValue<String>(SettingsKeys.weekStartDay) ?? 'monday'),
+                _weekStartLabel(
+                    l10n,
+                    _bagValue<String>(SettingsKeys.weekStartDay) ??
+                        _weekStartLocaleDefault),
               ),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
