@@ -15,8 +15,9 @@ extra_lambda_env = {
 }
 
 # AWS Budgets — account-wide spend ceiling. See infra/envs/prod/budgets.tf.
-# At least one email address is required.
-monthly_budget_limit_usd = 200
+# At least one email address is required. 30 suits the rock-bottom tier
+# (~$10/mo AWS baseline); raise toward ~150 for the full launch profile.
+monthly_budget_limit_usd = 30
 budget_alert_emails      = ["you@example.com"]
 
 # SNS subscribers for the per-env alerts topic the coach Lambda

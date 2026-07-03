@@ -45,9 +45,9 @@ variable "graph_cycle_url" {
 }
 
 variable "monthly_budget_limit_usd" {
-  description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick something a few times the projected baseline (~$70/mo at launch per docs/ops/deployment.md)."
+  description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick a few times the projected baseline so the 50 % alert doesn't cry wolf every month. Rock-bottom AWS baseline is ~$10/mo (WAF ~$7 + KMS $1 + Route 53 zone $0.50 + alarms ~$1.50), so the default 30 keeps the 50 % threshold ($15) clear of it while still catching a ~3x runaway. Raise toward ~$150 when moving to the full launch profile (~$70/mo baseline per docs/ops/deployment.md)."
   type        = number
-  default     = 200
+  default     = 30
 }
 
 variable "budget_alert_emails" {

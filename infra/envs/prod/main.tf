@@ -77,11 +77,11 @@ module "web" {
   public_supabase_anon_key = var.public_supabase_anon_key
   public_site_url          = "https://${var.apex_domain}"
 
-  # Caps worst-case concurrency. 50 = ~50 simultaneous coach turns,
+  # Caps worst-case concurrency. 20 = ~20 simultaneous coach turns,
   # which at ~3k input + ~1k output × Anthropic pricing puts the
-  # absolute burst spend at a known ceiling. Raise once we have real
-  # traffic data.
-  lambda_reserved_concurrency = 50
+  # absolute burst spend at a known ceiling. Tightened for a
+  # cost-minimized launch; raise once we have real traffic data.
+  lambda_reserved_concurrency = 20
 
   # Self-hosted GraphHopper engine URL for server-side route generation.
   # Non-secret (an internal engine URL), so it's a plain var, not sops.
@@ -98,6 +98,16 @@ module "web" {
   # the engine's load ceiling. 25 is comfortable for launch traffic;
   # raise once real usage is observed.
   generate_route_reserved_concurrency = 25
+
+  # Prod tightens the coach WAF per-IP rate limit below the module
+  # default (100). A free user's coach cap is 2/day and a pro's 10/day
+  # (TIER_LIMITS in apps/web/src/lib/coach/types.ts), so 30 req / 5 min
+  # from a single IP is already far past any legitimate pattern — even a
+  # shared NAT/CGNAT egress — while shrinking the denial-of-wallet burst
+  # surface ~3x versus the default. generate-route keeps the module
+  # default (100): it hits the self-hosted engine, not a paid API, and
+  # is concurrency-capped separately.
+  waf_rate_limit = 30
 
   # Email subscribers for the per-env SNS alerts topic. Validated as
   # RFC-shaped in the module — the validation rejects @example.com
