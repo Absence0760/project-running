@@ -50,6 +50,9 @@ type fakeBackend struct {
 	photoErr   map[string]error
 	// avatars-bucket bytes (format=backup only) — keyed by object path.
 	avatarBytes map[string][]byte
+	// per-bucket object listings for the orphan sweep (format=backup only).
+	listedObjects map[string][]string
+	listErr       error
 }
 
 type uploadCall struct {
@@ -134,6 +137,13 @@ func (f *fakeBackend) DownloadAvatar(_ context.Context, path string) ([]byte, st
 		return nil, "", fmt.Errorf("avatar not found: %s", path)
 	}
 	return b, "image/png", nil
+}
+
+func (f *fakeBackend) ListStorageObjects(_ context.Context, bucket, _ string) ([]string, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return f.listedObjects[bucket], nil
 }
 
 func signTestToken(t *testing.T, sub string, expDelta int) string {
@@ -986,6 +996,151 @@ func TestBuildBackupZip_NoAvatarShipsZeroCount(t *testing.T) {
 	counts := manifest["counts"].(map[string]any)
 	if counts["avatars"] != float64(0) {
 		t.Errorf("counts[avatars]=%v, want 0", counts["avatars"])
+	}
+}
+
+func TestBuildBackupZip_PrefixWalkArchivesOrphanObjects(t *testing.T) {
+	// data-export-completeness Medium: row-driven fetches miss objects
+	// with no DB row (CAS-orphaned matched tracks, legacy tracks, photo
+	// thumbnails). The prefix walk sweeps every object under {uid}/ into
+	// storage/{bucket}/, deduped against the row-driven entries, with
+	// exports/ and traversal names excluded.
+	trackURL := "uid/run-1.json.gz"
+	rawTrack := gzipString(t, `[{"lat":1.0,"lng":2.0},{"lat":3.0,"lng":4.0}]`)
+	matchedBytes := gzipString(t, `[{"lat":1.1,"lng":2.1}]`)
+	thumbBytes := []byte{0xFF, 0xD8, 0xFF}
+	runs := []ExportRun{{
+		ID: "run-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
+		DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &trackURL,
+	}}
+	extras := map[string][]map[string]interface{}{
+		"run_photos.json": {
+			{"id": "photo-1", "storage_path": "uid/photo-1.jpg"},
+		},
+	}
+	rawFetch := func(_ context.Context, p string) ([]byte, error) {
+		switch p {
+		case trackURL:
+			return rawTrack, nil
+		case "uid/run-1.matched.json.gz":
+			return matchedBytes, nil
+		}
+		return nil, errors.New("unexpected raw fetch: " + p)
+	}
+	photoFetch := func(_ context.Context, p string) ([]byte, string, error) {
+		switch p {
+		case "uid/photo-1.jpg":
+			return []byte{0x01}, "image/jpeg", nil
+		case "uid/photo-1_512.jpg":
+			return thumbBytes, "image/jpeg", nil
+		}
+		return nil, "", errors.New("unexpected photo fetch: " + p)
+	}
+	lister := func(_ context.Context, bucket, prefix string) ([]string, error) {
+		if prefix != "uid" {
+			t.Errorf("lister prefix=%q, want uid", prefix)
+		}
+		switch bucket {
+		case "runs":
+			return []string{
+				trackURL,                     // already archived row-driven → deduped
+				"uid/run-1.matched.json.gz",  // CAS orphan → swept
+				"uid/exports/2026-01-01.zip", // prior export artifact → skipped
+				"uid/../etc/passwd",          // traversal name → skipped
+				"other/run-9.json.gz",        // outside the prefix → skipped
+			}, nil
+		case "run-photos":
+			return []string{
+				"uid/photo-1.jpg",     // already archived row-driven → deduped
+				"uid/photo-1_512.jpg", // worker thumbnail, no export row → swept
+			}, nil
+		}
+		return nil, errors.New("unexpected bucket: " + bucket)
+	}
+
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
+	}, BackupFetchers{RawTrack: rawFetch, Photo: photoFetch, ListObjects: lister})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	entries := map[string][]byte{}
+	var manifest map[string]any
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		entries[f.Name] = b
+		if f.Name == "manifest.json" {
+			_ = json.Unmarshal(b, &manifest)
+		}
+	}
+	if got := entries["storage/runs/run-1.matched.json.gz"]; !bytes.Equal(got, matchedBytes) {
+		t.Errorf("orphaned matched track not swept verbatim; entries=%v", keysOf(entries))
+	}
+	if got := entries["storage/run-photos/photo-1_512.jpg"]; !bytes.Equal(got, thumbBytes) {
+		t.Errorf("orphaned thumbnail not swept verbatim; entries=%v", keysOf(entries))
+	}
+	for name := range entries {
+		if name == "storage/runs/run-1.json.gz" || name == "storage/run-photos/photo-1.jpg" {
+			t.Errorf("row-driven object duplicated by the walk: %s", name)
+		}
+		if strings.HasPrefix(name, "storage/runs/exports/") {
+			t.Errorf("exports/ artifact must be skipped: %s", name)
+		}
+		if strings.Contains(name, "..") {
+			t.Errorf("traversal entry landed in the zip: %s", name)
+		}
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["storage_orphans"] != float64(2) {
+		t.Errorf("counts[storage_orphans]=%v, want 2", counts["storage_orphans"])
+	}
+	if counts["tracks"] != float64(1) || counts["photos"] != float64(1) {
+		t.Errorf("row-driven counts drifted: %v", counts)
+	}
+}
+
+func TestBuildBackupZip_ListerErrorDoesNotSinkArchive(t *testing.T) {
+	trackURL := "uid/run-1.json.gz"
+	rawTrack := gzipString(t, `[{"lat":1.0,"lng":2.0},{"lat":3.0,"lng":4.0}]`)
+	runs := []ExportRun{{
+		ID: "run-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
+		DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &trackURL,
+	}}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	}, BackupFetchers{
+		RawTrack: func(_ context.Context, _ string) ([]byte, error) { return rawTrack, nil },
+		ListObjects: func(_ context.Context, _, _ string) ([]string, error) {
+			return nil, errors.New("storage list unavailable")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	var manifest map[string]any
+	hasTrack := false
+	for _, f := range zr.File {
+		if f.Name == "tracks/run-1.json.gz" {
+			hasTrack = true
+		}
+		if f.Name == "manifest.json" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			_ = json.Unmarshal(b, &manifest)
+		}
+	}
+	if !hasTrack {
+		t.Errorf("row-driven track must still ship when the lister fails")
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["storage_orphans"] != float64(0) {
+		t.Errorf("counts[storage_orphans]=%v, want 0", counts["storage_orphans"])
 	}
 }
 

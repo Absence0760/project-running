@@ -451,6 +451,32 @@ export function isSafeStoragePath(p: string): boolean {
 	return p.split('/').every((seg) => seg !== '' && seg !== '.');
 }
 
+/// Pick the objects the orphan prefix-walk should archive: every key
+/// under `{userId}/` that the row-driven loops did NOT already ship —
+/// CAS-orphaned matched tracks, legacy tracks whose run row is gone,
+/// worker-generated photo thumbnails. `{userId}/exports/` is skipped in
+/// the runs bucket (prior export artifacts — self-referential). Mirrors
+/// the Go builder's walk filter so both backup paths sweep the same set.
+export function orphanStorageEntries(input: {
+	bucket: string;
+	keys: string[];
+	userId: string;
+	archived: Set<string>;
+}): Array<{ key: string; entry: string }> {
+	const prefix = `${input.userId}/`;
+	const out: Array<{ key: string; entry: string }> = [];
+	for (const key of input.keys) {
+		if (!key.startsWith(prefix)) continue;
+		const rel = key.slice(prefix.length);
+		if (rel === '') continue;
+		if (input.bucket === 'runs' && rel.startsWith('exports/')) continue;
+		if (input.archived.has(key)) continue;
+		if (!isSafeStoragePath(key)) continue;
+		out.push({ key, entry: `storage/${input.bucket}/${rel}` });
+	}
+	return out;
+}
+
 /// Build `manifest.json` — same field set as the Go worker's
 /// BuildBackupZip manifest. `counts` carries runs/routes/tracks/
 /// hr_series/photos plus one count per extra-table entry.

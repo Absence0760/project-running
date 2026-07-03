@@ -15,6 +15,7 @@ import {
 	buildBackupManifest,
 	buildBackupSpecs,
 	isSafeStoragePath,
+	orphanStorageEntries,
 	PROFILE_SELECT,
 	shapeExportRoute,
 	stripProfileId,
@@ -602,5 +603,43 @@ Deno.test('avatarCandidatePaths enumerates the stable per-extension avatar set',
 		`${TEST_UID}/avatar.jpg`,
 		`${TEST_UID}/avatar.png`,
 		`${TEST_UID}/avatar.webp`,
+	]);
+});
+
+Deno.test('orphanStorageEntries sweeps unarchived objects, dedupes, and skips exports + traversal', () => {
+	const archived = new Set([`${TEST_UID}/run-1.json.gz`, `${TEST_UID}/run-1.hr.json.gz`]);
+	const entries = orphanStorageEntries({
+		bucket: 'runs',
+		userId: TEST_UID,
+		archived,
+		keys: [
+			`${TEST_UID}/run-1.json.gz`, // archived row-driven → deduped
+			`${TEST_UID}/run-1.hr.json.gz`, // archived row-driven → deduped
+			`${TEST_UID}/run-1.matched.json.gz`, // CAS orphan → swept
+			`${TEST_UID}/exports/2026-01-01.zip`, // prior export artifact → skipped
+			`${TEST_UID}/../etc/passwd`, // traversal → skipped
+			'other-user/run-9.json.gz', // outside the prefix → skipped
+		],
+	});
+	assertEquals(entries, [
+		{
+			key: `${TEST_UID}/run-1.matched.json.gz`,
+			entry: `storage/runs/run-1.matched.json.gz`,
+		},
+	]);
+});
+
+Deno.test('orphanStorageEntries only skips exports/ in the runs bucket', () => {
+	// run-photos has no exports/ convention; an object under that name
+	// there is still the subject's data and must be swept.
+	const entries = orphanStorageEntries({
+		bucket: 'run-photos',
+		userId: TEST_UID,
+		archived: new Set<string>(),
+		keys: [`${TEST_UID}/photo-1_512.jpg`, `${TEST_UID}/exports/x.jpg`],
+	});
+	assertEquals(entries, [
+		{ key: `${TEST_UID}/photo-1_512.jpg`, entry: 'storage/run-photos/photo-1_512.jpg' },
+		{ key: `${TEST_UID}/exports/x.jpg`, entry: 'storage/run-photos/exports/x.jpg' },
 	]);
 });

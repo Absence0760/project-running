@@ -342,6 +342,67 @@ func (c *SupabaseClient) DownloadAvatar(ctx context.Context, path string) ([]byt
 	return c.downloadFromBucket(ctx, schema.BucketAvatars, path)
 }
 
+// ListStorageObjects walks a Storage bucket under `prefix` (a folder,
+// no trailing slash) and returns every object key, recursing into
+// subfolders. The Storage list API pages at `limit` and marks folders
+// with a null id, so the walk pages each folder and descends on the
+// null-id entries. Backs the backup export's orphan sweep.
+func (c *SupabaseClient) ListStorageObjects(ctx context.Context, bucket, prefix string) ([]string, error) {
+	const pageSize = 100
+	var out []string
+	var walk func(folder string) error
+	walk = func(folder string) error {
+		for offset := 0; ; offset += pageSize {
+			payload, err := json.Marshal(map[string]any{
+				"prefix": folder,
+				"limit":  pageSize,
+				"offset": offset,
+				"sortBy": map[string]string{"column": "name", "order": "asc"},
+			})
+			if err != nil {
+				return err
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+				c.BaseURL+"/storage/v1/object/list/"+bucket, bytes.NewReader(payload))
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Content-Type", "application/json")
+			body, err := c.do(ctx, req)
+			if err != nil {
+				return err
+			}
+			var entries []struct {
+				Name string  `json:"name"`
+				ID   *string `json:"id"`
+			}
+			if err := json.Unmarshal(body, &entries); err != nil {
+				return err
+			}
+			for _, e := range entries {
+				if e.Name == "" {
+					continue
+				}
+				full := folder + "/" + e.Name
+				if e.ID == nil {
+					if err := walk(full); err != nil {
+						return err
+					}
+					continue
+				}
+				out = append(out, full)
+			}
+			if len(entries) < pageSize {
+				return nil
+			}
+		}
+	}
+	if err := walk(prefix); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UploadPhoto writes a run photo back to the run-photos bucket. Used by
 // the photo_process handler after EXIF stripping.
 func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error {

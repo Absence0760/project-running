@@ -139,6 +139,10 @@ func (b *dataexportBackend) DownloadAvatar(ctx context.Context, path string) ([]
 	return b.client.DownloadAvatar(ctx, path)
 }
 
+func (b *dataexportBackend) ListStorageObjects(ctx context.Context, bucket, prefix string) ([]string, error) {
+	return b.client.ListStorageObjects(ctx, bucket, prefix)
+}
+
 func (b *dataexportBackend) FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, error) {
 	return b.client.FetchExportPersonalDataTables(ctx, userID)
 }
