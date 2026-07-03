@@ -1412,6 +1412,25 @@ void main() {
             'default red screen in debug so developers see crashes.',
       );
     });
+
+    test('release-mode debugPrint no-op override is present', () {
+      // Reason: Flutter's default debugPrint forwards to print() in
+      // every build mode — only assert() blocks are stripped in
+      // release. The layered-resilience contract debugPrints caught
+      // exceptions across ~76 files, and a PostgrestException's
+      // details/hint can echo row content (safety-contact emails,
+      // health free text) into logcat/os_log on a release build.
+      // /audit/pii-in-logs.
+      final source = File('lib/main.dart').readAsStringSync();
+      final releaseBlock = source.substring(source.indexOf('if (kReleaseMode)'));
+      expect(
+        releaseBlock,
+        contains('debugPrint = (String? message, {int? wrapWidth}) {};'),
+        reason: 'main.dart must no-op debugPrint inside the kReleaseMode '
+            'block so exception dumps never reach device logs on a '
+            'release build.',
+      );
+    });
   });
 
   group('lock-screen notification bridge', () {

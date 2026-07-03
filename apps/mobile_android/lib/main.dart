@@ -71,7 +71,17 @@ void main() async {
   //
   // Kept as the default red screen in debug so we don't mask bugs during
   // development.
+  //
+  // The debugPrint no-op: Flutter's default debugPrint forwards to
+  // print() in EVERY build mode — release included; only assert()
+  // blocks are compiler-stripped. The layered-resilience contract
+  // debugPrints caught exceptions (`$e`) across ~76 files, and a
+  // PostgrestException's details/hint can echo row content (contact
+  // emails, health free text) into logcat/os_log on a release build
+  // attached for field debugging. No-op the whole class in release;
+  // keep debug verbose. /audit/pii-in-logs.
   if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
     ErrorWidget.builder = (details) {
       debugPrint('ErrorWidget: ${details.exception}');
       return Container(
