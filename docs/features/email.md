@@ -3,12 +3,17 @@
 The single source of truth for the app's outbound email. For the **in-app**
 notification inbox (the bell + Notifications tab) see `decisions.md § 38`; this
 doc is the **email** layer that delivers a subset of those notifications plus
-transactional / lifecycle mail.
+transactional / lifecycle mail — and the GoTrue **auth** emails (signup
+confirmation, recovery, magic link, email change), which are rendered by the
+`auth-email` Edge Function via GoTrue's send-email hook (see § GoTrue auth
+emails below).
 
 ## Architecture
 
-All email is sent **server-side by the Go worker** (`apps/job_worker/`), never
-from a client. These job kinds on the `jobs` queue drive it:
+All product email is sent **server-side by the Go worker**
+(`apps/job_worker/`), never from a client; auth email is sent server-side by
+the `auth-email` Edge Function (below). These job kinds on the `jobs` queue
+drive the worker:
 
 - **`notification_email`** — mirrors a row in the `notifications` table (the
   same row the in-app bell renders). An AFTER-INSERT trigger on `notifications`
@@ -129,6 +134,76 @@ Shared pieces:
 All shipped emails are end-to-end tested against the local Docker Mailpit
 (`http://127.0.0.1:54324`); none required Firebase/APNs credentials.
 
+## GoTrue auth emails (`auth-email` Edge Function)
+
+GoTrue's own transactional emails — signup confirmation, password recovery,
+magic link / email OTP, invite, email change, reauthentication — used to be
+GoTrue's built-in English-only templates, a separate surface from the localized
+worker pipeline above (the 2026-07 i18n-readiness audit's one High finding).
+They are now rendered and sent by the `auth-email` Edge Function
+(`apps/backend/supabase/functions/auth-email/`), wired in as GoTrue's
+**send-email auth hook** (`config.toml [auth.hook.send_email]` locally;
+Dashboard → Auth → Hooks in prod):
+
+- **Trust boundary** — GoTrue signs each hook POST per the Standard Webhooks
+  spec (`webhook-id` / `webhook-timestamp` / `webhook-signature` over the raw
+  body, HMAC-SHA256 keyed by the base64 payload of the `v1,whsec_…` secret in
+  `SEND_EMAIL_HOOK_SECRET`; `|`-separated secrets for rotation). The function
+  is `verify_jwt = false` (GoTrue sends no Supabase JWT), so the signature
+  check is the entire gate and it fails closed: missing secret → 503, missing
+  or invalid signature / >5-min-stale timestamp → 401, 64 KB body cap. Pinned
+  by `lib.test.ts` + `handler.test.ts` (40 deno tests) and three wire-level
+  cases in `_shared/handler_envelope.test.ts`.
+- **Locale** — `user_settings.prefs.locale` (service-role read, the same
+  §120 pref the worker uses) → signup-time `user_metadata.locale` → `en`. The
+  settings read is auxiliary: if it fails the mail still goes out in the
+  fallback locale, never blocks the auth flow. The catalogue covers the same
+  six locales as `email_i18n.go` (`en/de/fr/es/ja/pt-BR`), same normalization
+  (region collapse, `pt* → pt-BR`, unknown → `en`), and the HTML/text layout
+  is a port of the worker's renderer so auth mail is visually identical to
+  product mail.
+- **Actions** — one catalogue entry per `email_action_type`: `signup`,
+  `invite`, `magiclink`, `recovery` (+ `email` OTP reusing the magic-link
+  copy), `email_change` (a secure email change sends TWO mails from one hook
+  invocation — the current address pairs `token` + `token_hash_new`, the new
+  address `token_new` + `token_hash`; the field names are reversed upstream
+  for backwards compatibility), `reauthentication` (code-only, no link), and
+  `password_changed_notification`. Unknown/future action types fall through
+  to an informational default and never fail the hook — a hook failure
+  surfaces as a GoTrue API error to the user mid-signup/reset.
+- **Verify link** — built byte-compatible with GoTrue's own
+  `{SUPABASE_URL}/auth/v1/verify?token={token_hash}&type={action}&redirect_to=…`
+  (including GoTrue's leave-unencoded-unless-`&=#` redirect quirk), so the web
+  e2e reset flow's `extractLink` + `/auth/reset` greps keep working. The OTP
+  code rides along as the link alternative.
+- **Transport** — the same SMTP env contract as the worker (`SMTP_HOST/PORT/
+  USERNAME/PASSWORD/FROM`): a minimal Deno SMTP client (`smtp.ts` — implicit
+  TLS on 465, opportunistic STARTTLS otherwise, AUTH PLAIN when credentials
+  are set), multipart/alternative with RFC 2047 subjects. Unset SMTP → 503
+  (fail-closed; GoTrue reports the send failure rather than silently
+  dropping).
+- **Local wiring** — `config.toml [auth.hook.send_email]` carries a committed
+  local-dev secret (an `env()` reference would break `supabase start` on any
+  machine without the var exported), mirrored in the committed
+  `supabase/functions/.env`, which the CLI auto-loads into the local edge
+  runtime on `supabase start` — so signup/recovery mail lands in Mailpit
+  localized with zero setup. `.env.development` carries the same values for
+  a manual `supabase functions serve --env-file` run.
+- **Prod deploy** — the function ships with the normal `deploy-functions` CI
+  job, but the hook itself must be configured on the hosted project: generate
+  a secret in Dashboard → Auth → Hooks (send email hook, HTTPS, pointed at
+  the deployed function URL), and set the SAME value as the function secret
+  (`supabase secrets set SEND_EMAIL_HOOK_SECRET=v1,whsec_…`) along with the
+  `SMTP_*` vars (the worker's provider credentials work as-is). Until the
+  hook is enabled there, prod keeps GoTrue's built-in templates — enabling it
+  is a pre-launch ops checklist item (see § Production ops).
+- **Manual verification** (one step, after any config.toml change): restart
+  the local stack (`cd apps/backend && supabase stop && supabase start`),
+  trigger a mail-sending auth flow from the web app (e.g. `/login?reset=1` →
+  send reset link for `runner@test.com`), and check Mailpit at
+  `http://127.0.0.1:54324` for the branded, localized message whose verify
+  link round-trips.
+
 ## Planned / not built
 
 - [~] **Weekly digest** (engagement) — **FULLY BUILT INCL. SCHEDULER, SEND STILL GATED
@@ -227,9 +302,11 @@ All shipped emails are end-to-end tested against the local Docker Mailpit
 - **Data-export-ready email** — the export endpoint is **synchronous** and
   returns a 10-minute signed URL inline; an async email would arrive stale.
   Revisit only if export moves to an async/job model.
-- **Password-changed / new-device sign-in** — no GoTrue auth hooks are
-  configured and there's no sign-in/device tracking (the `device_tokens` table
-  has no write path). That's separate infrastructure, not an email.
+- **New-device sign-in alerts** — there's no sign-in/device tracking to key
+  them off. The send-email hook IS now configured (§ GoTrue auth emails) and
+  its catalogue already carries `password_changed_notification` copy, so if
+  GoTrue's security-notification sends are ever enabled they arrive localized
+  — but we don't enable them today.
 
 ## Production ops (required before any email actually sends)
 
@@ -257,6 +334,13 @@ None of this sends in prod until an operator:
    neither set → `native_push` jobs finish done while leaving the rows pending,
    and the mobile bridge no-ops (compiles + runs without the config files). A
    configured-but-invalid credential fails the worker loudly at startup.
+2d. (For **auth emails**) enables the send-email hook on the hosted project —
+   Dashboard → Auth → Hooks pointed at the deployed `auth-email` function URL
+   with a generated secret, plus `supabase secrets set
+   SEND_EMAIL_HOOK_SECRET=… SMTP_HOST=… SMTP_PORT=… SMTP_USERNAME=…
+   SMTP_PASSWORD=… SMTP_FROM=…` on the functions side. Until then prod auth
+   mail falls back to GoTrue's built-in English templates (functional, just
+   unlocalized/unbranded).
 3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
    spam-filed.
 4. (Before any **bulk/engagement** mail — the weekly digest AND the lifecycle
@@ -328,5 +412,12 @@ None of this sends in prod until an operator:
   web-only (no mobile deep-link route).
 - Clients (locale write): web `apps/web/src/routes/settings/preferences/`,
   mobile `apps/mobile_android/lib/screens/settings_preferences_screen.dart`.
+- Auth emails: `apps/backend/supabase/functions/auth-email/` — `lib.ts`
+  (Standard Webhooks verification + the six-locale catalogue + send plan +
+  render + MIME), `smtp.ts` (Deno SMTP client), `handler.ts` (the injectable
+  request path), `index.ts` (env + service-role locale lookup wiring); hook
+  config in `apps/backend/supabase/config.toml [auth.hook.send_email]` +
+  the committed `supabase/functions/.env`.
 - ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),
-  §121 (subscription emails), §131 (safety-contact alerts).
+  §121 (subscription emails), §131 (safety-contact alerts), §203 (auth-email
+  hook).

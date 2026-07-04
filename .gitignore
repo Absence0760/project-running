@@ -42,6 +42,13 @@ apps/web/playwright/.cache/
 .env
 .env.local
 .env.*.local
+# The auto-started local edge runtime loads exactly one env file —
+# `apps/backend/supabase/functions/.env` — on `supabase start`. Ours
+# carries only committed non-secret local-stack values (the auth-email
+# hook's local-dev signing secret + the Mailpit SMTP endpoint), same
+# class as `.env.development`, so un-ignore it. Real keys stay in
+# `.env.local`.
+!apps/backend/supabase/functions/.env
 # `.env.development` (committed local-dev defaults — local-stack values only:
 # public Supabase demo keys + loopback URLs, no real secrets) is NOT matched by
 # the patterns above, so it stays tracked everywhere. `.env.local` is your

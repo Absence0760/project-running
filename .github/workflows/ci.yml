@@ -651,6 +651,11 @@ jobs:
           CRON_SECRET=ci-cron-secret
           STRAVA_ALLOWED_REDIRECTS=http://localhost:7777/settings/integrations
           STRIPE_EVENTS_WEBHOOK_SECRET=ci-stripe-events-secret
+          # Standard Webhooks secret for the auth-email envelope tests
+          # (the rejection branches need the secret PRESENT so they hit
+          # 401, not the 503 hook_not_configured guard). No SMTP vars:
+          # this job never sends a correctly signed request.
+          SEND_EMAIL_HOOK_SECRET=v1,whsec_Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz
           SENTRY_DSN=
           APP_RELEASE=ci
           ENV

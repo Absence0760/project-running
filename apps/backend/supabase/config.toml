@@ -14,6 +14,29 @@ enable_signup = true
 [auth.email]
 enable_confirmations = false
 
+# Every GoTrue auth email (signup confirmation, recovery, magic link,
+# email change, reauthentication) is rendered + sent by the auth-email
+# Edge Function — localized six-locale catalogue, same SMTP transport
+# shape as the Go worker — instead of GoTrue's built-in English-only
+# templates (docs/features/email.md § GoTrue auth emails). GoTrue signs
+# each hook POST per the Standard Webhooks spec with the secret below;
+# the function verifies it (its trust boundary — verify_jwt is false
+# for it, see the functions block at the bottom).
+#
+# The literal secret is a LOCAL-DEV value, committed on purpose (same
+# class as the seed password): `env()` substitution would leave GoTrue
+# with an empty signing key on every machine that hasn't exported the
+# var, breaking `supabase start` / all auth email. It is mirrored in
+# supabase/functions/.env (auto-loaded into the local edge runtime on
+# `supabase start`) — keep the two in lockstep. Production configures
+# this hook on the hosted project (Dashboard → Auth → Hooks) with a
+# generated secret + the deployed function URL; never `config push`
+# this file's value there.
+[auth.hook.send_email]
+enabled = true
+uri = "http://host.docker.internal:54321/functions/v1/auth-email"
+secrets = "v1,whsec_bG9jYWwtZGV2LW9ubHktc2VuZC1lbWFpbC1ob29rLXNlY3JldA=="
+
 # Pin the local mail-catcher ports rather than relying on the CLI default
 # (web 54324 / SMTP 54325 / POP3 54326). The Go worker's notification-email
 # sender targets SMTP 54325 in local dev (SMTP_HOST=127.0.0.1
@@ -64,6 +87,11 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # attributes a donation when a JWT IS present; the visibility read is done
 # as the caller so a private-anchor fundraiser stays unreachable.
 #
+# auth-email also opts out: GoTrue calls it with a Standard Webhooks
+# signature (the [auth.hook.send_email] secret above), not a Supabase
+# JWT — the platform gate would 401 the hook before the signature
+# check runs. The function fails closed without the secret.
+#
 # The other functions (strava-import, parkrun-import, export-data,
 # delete-account, clip-public-track, events-connect-onboard,
 # events-checkout, events-cancel) all need a Supabase JWT (anon for
@@ -71,6 +99,9 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # default verify_jwt = true.
 
 [functions.strava-webhook]
+verify_jwt = false
+
+[functions.auth-email]
 verify_jwt = false
 
 [functions.donations-checkout]

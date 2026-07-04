@@ -1,8 +1,8 @@
-// HTTP-level handler-envelope tests for the four webhook / cron
+// HTTP-level handler-envelope tests for the webhook / cron / hook
 // functions that bypass the platform's `verify_jwt` gate
-// (`config.toml` pins `verify_jwt = false` for these four —
+// (`config.toml` pins `verify_jwt = false` for these five —
 // refresh-tokens, strava-webhook, revenuecat-webhook, stripe-events-
-// webhook — because they authenticate themselves another way). These tests close the
+// webhook, auth-email — because they authenticate themselves another way). These tests close the
 // "Edge Function HTTP envelope" gap from docs/testing/testing.md — the pure
 // helpers in `_shared/webhook_security.ts` + `revenuecat-webhook/lib.ts`
 // are already covered (~33 deno tests); this file pins the WIRE-LEVEL
@@ -13,7 +13,7 @@
 // (clip-public-track, delete-account, export-data, parkrun-import,
 // strava-import) are 401'd at the platform gateway before the
 // handler runs, so the handler-body auth surface there is degenerate
-// — the platform's `verify_jwt = true` config IS the test. The four
+// — the platform's `verify_jwt = true` config IS the test. The five
 // here are the ones where the handler does its own auth, which is
 // where bugs would actually surface.
 //
@@ -226,6 +226,87 @@ Deno.test({
       throw new Error(
         `expected 401 (bad_signature), got ${res.status}; ` +
         'a wrong HMAC must be rejected — not pass through to body parsing.',
+      );
+    }
+    if (json?.error !== 'bad_signature') {
+      throw new Error(
+        `expected error: bad_signature, got ${JSON.stringify(json)}`,
+      );
+    }
+  },
+});
+
+// ── auth-email ────────────────────────────────────────────────────
+// GoTrue's send-email hook signs each POST per the Standard Webhooks
+// spec (webhook-id / webhook-timestamp / webhook-signature over the
+// raw body, keyed by SEND_EMAIL_HOOK_SECRET). The signature IS the
+// trust boundary — verify_jwt is false, so these tests prove an
+// unsigned caller can't make the function render + send auth mail.
+// They expect the env-loaded host (the CI step's .env.local carries a
+// ci-scoped SEND_EMAIL_HOOK_SECRET); without the secret the handler
+// 503s hook_not_configured instead, which fails these loudly.
+
+Deno.test({
+  name: 'auth-email: 405 on GET (POST-only)',
+  ignore: SKIP,
+  fn: async () => {
+    const res = await fetch(endpoint('auth-email'));
+    await res.body?.cancel();
+    if (res.status !== 405) {
+      throw new Error(
+        `expected 405 (method-not-allowed), got ${res.status}; ` +
+        'the method gate must reject GET before reading the body.',
+      );
+    }
+  },
+});
+
+Deno.test({
+  name: 'auth-email: 401 missing_headers when the Standard Webhooks ' +
+    'headers are absent',
+  ignore: SKIP,
+  fn: async () => {
+    const res = await fetch(endpoint('auth-email'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"user":{"email":"a@example.com"},"email_data":{"email_action_type":"signup"}}',
+    });
+    const json = await res.json().catch(() => null);
+    if (res.status !== 401) {
+      throw new Error(
+        `expected 401 (missing_headers), got ${res.status}; ` +
+        'an unsigned POST must never reach rendering or SMTP.',
+      );
+    }
+    if (json?.error !== 'missing_headers') {
+      throw new Error(
+        `expected error: missing_headers, got ${JSON.stringify(json)}; ` +
+        'the response body shape is part of the contract.',
+      );
+    }
+  },
+});
+
+Deno.test({
+  name: 'auth-email: 401 bad_signature on a wrong signature',
+  ignore: SKIP,
+  fn: async () => {
+    const res = await fetch(endpoint('auth-email'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'webhook-id': 'msg_envelope_test',
+        // Fresh timestamp so the freshness window can't be what rejects.
+        'webhook-timestamp': String(Math.floor(Date.now() / 1000)),
+        'webhook-signature': `v1,${btoa('not-the-real-signature')}`,
+      },
+      body: '{"user":{"email":"a@example.com"},"email_data":{"email_action_type":"signup"}}',
+    });
+    const json = await res.json().catch(() => null);
+    if (res.status !== 401) {
+      throw new Error(
+        `expected 401 (bad_signature), got ${res.status}; ` +
+        'a wrong HMAC must be rejected — not pass through to sending.',
       );
     }
     if (json?.error !== 'bad_signature') {
