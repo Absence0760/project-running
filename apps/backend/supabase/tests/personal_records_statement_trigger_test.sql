@@ -10,12 +10,14 @@
 -- Also pins the in-function watched-column filter that replaced the
 -- UPDATE trigger's OF list (transition tables forbid column lists): an
 -- UPDATE that changes none of distance_m / duration_s / source /
--- user_id / is_dnf / metadata triggers no refresh, and an owner-change
--- UPDATE refreshes both the old and new owner.
+-- user_id / is_dnf / fastest_{5k,10k,half_marathon,marathon}_s (the
+-- promoted embedded-best columns, 20270325_001 — the bag itself is no
+-- longer watched) triggers no refresh, and an owner-change UPDATE
+-- refreshes both the old and new owner.
 
 begin;
 
-select plan(17);
+select plan(20);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -122,6 +124,33 @@ select is(
   current_setting('test.pr_refresh_calls'), '0',
   'an UPDATE changing no watched value triggers no refresh'
 );
+
+select set_config('test.pr_refresh_calls', '0', false);
+update runs set metadata = metadata || '{"title":"renamed"}'::jsonb
+  where id = '57a70001-0000-0000-0000-000000000001';
+
+select is(
+  current_setting('test.pr_refresh_calls'), '0',
+  'a metadata-only UPDATE triggers no refresh — the bag left the watch list with the embedded-best promotion'
+);
+
+select set_config('test.pr_refresh_calls', '0', false);
+update runs set fastest_5k_s = 999
+  where id = '57a70001-0000-0000-0000-000000000004';
+
+select is(
+  current_setting('test.pr_refresh_calls'), '1',
+  'an UPDATE setting a promoted embedded-best column refreshes once'
+);
+select is(
+  (select best_time_s from personal_records
+   where user_id = '57a70000-0000-0000-0000-0000000000a1' and distance = '5k'),
+  999,
+  'the fastest_5k_s column value lands as the 5k PR'
+);
+
+update runs set fastest_5k_s = null
+  where id = '57a70001-0000-0000-0000-000000000004';
 
 select set_config('test.pr_refresh_calls', '0', false);
 delete from runs where id in ('57a70001-0000-0000-0000-000000000001',

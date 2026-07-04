@@ -3401,6 +3401,10 @@ export type Database = {
           elevation_gain_m: number | null
           event_id: string | null
           external_id: string | null
+          fastest_10k_s: number | null
+          fastest_5k_s: number | null
+          fastest_half_marathon_s: number | null
+          fastest_marathon_s: number | null
           hr_series_url: string | null
           id: string
           is_dnf: boolean
@@ -3422,6 +3426,10 @@ export type Database = {
           elevation_gain_m?: number | null
           event_id?: string | null
           external_id?: string | null
+          fastest_10k_s?: number | null
+          fastest_5k_s?: number | null
+          fastest_half_marathon_s?: number | null
+          fastest_marathon_s?: number | null
           hr_series_url?: string | null
           id?: string
           is_dnf?: boolean
@@ -3443,6 +3451,10 @@ export type Database = {
           elevation_gain_m?: number | null
           event_id?: string | null
           external_id?: string | null
+          fastest_10k_s?: number | null
+          fastest_5k_s?: number | null
+          fastest_half_marathon_s?: number | null
+          fastest_marathon_s?: number | null
           hr_series_url?: string | null
           id?: string
           is_dnf?: boolean
@@ -4426,6 +4438,10 @@ export type Database = {
           duration_s: number | null
           elevation_gain_m: number | null
           event_id: string | null
+          fastest_10k_s: number | null
+          fastest_5k_s: number | null
+          fastest_half_marathon_s: number | null
+          fastest_marathon_s: number | null
           has_track: boolean | null
           id: string | null
           is_dnf: boolean | null
@@ -4444,6 +4460,10 @@ export type Database = {
           duration_s?: number | null
           elevation_gain_m?: number | null
           event_id?: never
+          fastest_10k_s?: number | null
+          fastest_5k_s?: number | null
+          fastest_half_marathon_s?: number | null
+          fastest_marathon_s?: number | null
           has_track?: never
           id?: string | null
           is_dnf?: boolean | null
@@ -4462,6 +4482,10 @@ export type Database = {
           duration_s?: number | null
           elevation_gain_m?: number | null
           event_id?: never
+          fastest_10k_s?: number | null
+          fastest_5k_s?: number | null
+          fastest_half_marathon_s?: number | null
+          fastest_marathon_s?: number | null
           has_track?: never
           id?: string | null
           is_dnf?: boolean | null

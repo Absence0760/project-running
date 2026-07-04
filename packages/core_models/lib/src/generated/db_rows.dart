@@ -3961,6 +3961,10 @@ class RunRow {
   static const String colIsDnf = 'is_dnf';
   static const String colRaceListingId = 'race_listing_id';
   static const String colElevationGainM = 'elevation_gain_m';
+  static const String colFastest5kS = 'fastest_5k_s';
+  static const String colFastest10kS = 'fastest_10k_s';
+  static const String colFastestHalfMarathonS = 'fastest_half_marathon_s';
+  static const String colFastestMarathonS = 'fastest_marathon_s';
 
   final String id;
   final String userId;
@@ -3981,6 +3985,10 @@ class RunRow {
   final bool isDnf;
   final String? raceListingId;
   final double? elevationGainM;
+  final int? fastest5kS;
+  final int? fastest10kS;
+  final int? fastestHalfMarathonS;
+  final int? fastestMarathonS;
 
   const RunRow({
     required this.id,
@@ -4002,6 +4010,10 @@ class RunRow {
     required this.isDnf,
     this.raceListingId,
     this.elevationGainM,
+    this.fastest5kS,
+    this.fastest10kS,
+    this.fastestHalfMarathonS,
+    this.fastestMarathonS,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -4024,6 +4036,10 @@ class RunRow {
     isDnf: (json['is_dnf'] as bool?) ?? false,
     raceListingId: json['race_listing_id'] as String?,
     elevationGainM: (json['elevation_gain_m'] as num?)?.toDouble(),
+    fastest5kS: (json['fastest_5k_s'] as num?)?.toInt(),
+    fastest10kS: (json['fastest_10k_s'] as num?)?.toInt(),
+    fastestHalfMarathonS: (json['fastest_half_marathon_s'] as num?)?.toInt(),
+    fastestMarathonS: (json['fastest_marathon_s'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4046,6 +4062,10 @@ class RunRow {
     colIsDnf: isDnf,
     colRaceListingId: raceListingId,
     colElevationGainM: elevationGainM,
+    colFastest5kS: fastest5kS,
+    colFastest10kS: fastest10kS,
+    colFastestHalfMarathonS: fastestHalfMarathonS,
+    colFastestMarathonS: fastestMarathonS,
   };
 }
 

@@ -42,7 +42,11 @@ data class RunRow(
     val activityType: String,
     val isDnf: Boolean,
     val raceListingId: String? = null,
-    val elevationGainM: Double? = null
+    val elevationGainM: Double? = null,
+    val fastest5kS: Int? = null,
+    val fastest10kS: Int? = null,
+    val fastestHalfMarathonS: Int? = null,
+    val fastestMarathonS: Int? = null
 ) {
     companion object {
         const val TABLE = "runs"
@@ -65,6 +69,10 @@ data class RunRow(
         const val COL_IS_DNF = "is_dnf"
         const val COL_RACE_LISTING_ID = "race_listing_id"
         const val COL_ELEVATION_GAIN_M = "elevation_gain_m"
+        const val COL_FASTEST_5K_S = "fastest_5k_s"
+        const val COL_FASTEST_10K_S = "fastest_10k_s"
+        const val COL_FASTEST_HALF_MARATHON_S = "fastest_half_marathon_s"
+        const val COL_FASTEST_MARATHON_S = "fastest_marathon_s"
 
         fun fromJson(json: JsonObject): RunRow = RunRow(
             id = json["id"]!!.jsonPrimitive.content,
@@ -85,7 +93,11 @@ data class RunRow(
             activityType = json["activity_type"]!!.jsonPrimitive.content,
             isDnf = json["is_dnf"]!!.jsonPrimitive.boolean,
             raceListingId = json["race_listing_id"]?.jsonPrimitive?.contentOrNull,
-            elevationGainM = json["elevation_gain_m"]?.jsonPrimitive?.double
+            elevationGainM = json["elevation_gain_m"]?.jsonPrimitive?.double,
+            fastest5kS = json["fastest_5k_s"]?.jsonPrimitive?.int,
+            fastest10kS = json["fastest_10k_s"]?.jsonPrimitive?.int,
+            fastestHalfMarathonS = json["fastest_half_marathon_s"]?.jsonPrimitive?.int,
+            fastestMarathonS = json["fastest_marathon_s"]?.jsonPrimitive?.int
         )
     }
 
@@ -108,7 +120,11 @@ data class RunRow(
         COL_ACTIVITY_TYPE to activityType,
         COL_IS_DNF to isDnf,
         COL_RACE_LISTING_ID to raceListingId,
-        COL_ELEVATION_GAIN_M to elevationGainM
+        COL_ELEVATION_GAIN_M to elevationGainM,
+        COL_FASTEST_5K_S to fastest5kS,
+        COL_FASTEST_10K_S to fastest10kS,
+        COL_FASTEST_HALF_MARATHON_S to fastestHalfMarathonS,
+        COL_FASTEST_MARATHON_S to fastestMarathonS
     )
 }
 

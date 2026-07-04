@@ -1,11 +1,14 @@
--- Pins migration 20260529000002 — personal-records also reads embedded
--- best efforts from `metadata.fastest_X_s`. Persona-hunt Round 2 #4.
+-- Pins the embedded-best personal-records path. Persona-hunt Round 2 #4
+-- introduced embedded bests as metadata.fastest_X_s keys (20260529000002);
+-- migration 20270325_001 promoted them to real runs columns
+-- (fastest_5k_s / fastest_10k_s / fastest_half_marathon_s /
+-- fastest_marathon_s) and the refresher now reads ONLY the columns.
 --
 -- Scenario: a pro runs an 18 km tempo with a sub-20 5k embedded in
 -- the middle. The whole-run distance_m=18000 doesn't fit any
--- canonical bracket, so pre-fix the trigger missed the 5k effort
--- entirely. Post-fix the mobile client writes the embedded best to
--- `metadata.fastest_5k_s` and the trigger picks it up.
+-- canonical bracket, so without the embedded-best candidate the
+-- trigger misses the 5k effort entirely. The client writes the
+-- embedded best to runs.fastest_5k_s and the trigger picks it up.
 
 begin;
 select plan(5);
@@ -24,7 +27,7 @@ end $$;
 
 -- An 18 km tempo with an embedded sub-20 5k. The whole-run time is
 -- 80 min; the middle 5k clocked 19:30 (1170s).
-insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata, fastest_5k_s)
 values (
   '11111111-1111-1111-1111-111111111111',
   '99999999-9999-9999-9999-99999999ffff',
@@ -32,7 +35,8 @@ values (
   18000,
   4800,
   'app',
-  jsonb_build_object('fastest_5k_s', 1170, 'activity_type', 'run')
+  '{"activity_type":"run"}',
+  1170
 );
 
 -- A separate 5k race finish at 19:45 (whole-run). Slightly slower
@@ -81,8 +85,9 @@ select is(
   'PR points at the long run (where the embedded effort lived)'
 );
 
--- An empty / missing metadata.fastest_X_s must NOT crash the trigger
--- and must NOT promote a 0 / null candidate to PR.
+-- A stale/rogue bag-key write must be invisible: the column is the ONLY
+-- read path post-promotion (20270325_001), so a metadata.fastest_5k_s
+-- faster than the current PR changes nothing.
 insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '33333333-3333-3333-3333-333333333333',
@@ -91,7 +96,7 @@ values (
   3000,
   900,
   'app',
-  jsonb_build_object('fastest_5k_s', 'nope', 'activity_type', 'run')  -- non-numeric — must be skipped
+  jsonb_build_object('fastest_5k_s', 600, 'activity_type', 'run')
 );
 
 do $$
@@ -106,12 +111,12 @@ select is(
    where user_id = '99999999-9999-9999-9999-99999999ffff'
      and distance = '5k'),
   1170,
-  'Non-numeric metadata.fastest_5k_s value is skipped, PR unchanged'
+  'A bag-only metadata.fastest_5k_s is ignored — the column is the only read path'
 );
 
 -- Boundary: a 10k whole-run that fits the bracket beats an embedded
 -- 10k from a different run that's slower.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata, fastest_10k_s)
 values (
   '44444444-4444-4444-4444-444444444444',
   '99999999-9999-9999-9999-99999999ffff',
@@ -119,7 +124,8 @@ values (
   10000,
   2400,
   'app',
-  '{"activity_type":"run"}'
+  '{"activity_type":"run"}',
+  null
 ),
 (
   '55555555-5555-5555-5555-555555555555',
@@ -128,7 +134,8 @@ values (
   25000,
   6000,
   'app',
-  jsonb_build_object('fastest_10k_s', 2450, 'activity_type', 'run')
+  '{"activity_type":"run"}',
+  2450
 );
 
 do $$
