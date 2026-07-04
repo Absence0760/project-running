@@ -1200,6 +1200,18 @@ jobs:
           fi
           echo "Using watchOS simulator $udid"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      # Pre-boot the simulator and block until the boot fully completes.
+      # Left to its own devices, `xcodebuild test` boots the cold simulator
+      # itself and can race its own install: the app lands on disk before
+      # SpringBoard/LaunchServices finish coming up, and the launch request
+      # dies with FBSOpenApplicationErrorDomain "Unknown application display
+      # identifier" (RequestDenied/NotFound) — run 28709488211, exit 65 on
+      # the same image/Xcode/UDID that had passed 78 minutes earlier.
+      # `bootstatus -b` boots if needed and blocks until data migration +
+      # SpringBoard are ready, so the install/launch always targets a
+      # settled device.
+      - name: Boot the simulator and wait for it to settle
+        run: xcrun simctl bootstatus "${{ steps.watch-sim.outputs.udid }}" -b
       - name: Run WatchAppTests
         run: |
           xcodebuild test \
