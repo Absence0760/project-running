@@ -64,10 +64,11 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   const listingId = typeof body.listingId === 'string' ? body.listingId : '';
   if (!listingId) return Response.json({ error: 'listingId required' }, { status: 400 });
 
-  // The listing is public-read, so the user's own (RLS-scoped) client can
-  // resolve the race name / date / distance to stamp onto the result.
+  // The calendar is public-read through the redacted public_race_listings
+  // view (20270320_001 — the base table is submitter-own-rows only), so the
+  // user's own client resolves the race name / date / distance there.
   const { data: listing, error: listingErr } = await supabase
-    .from('race_listings')
+    .from('public_race_listings')
     .select('id, provider, provider_race_id, name, race_date, distance_m')
     .eq('id', listingId)
     .maybeSingle();

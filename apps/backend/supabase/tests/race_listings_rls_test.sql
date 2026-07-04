@@ -1,12 +1,14 @@
--- RLS + integrity for race_listings (migration 20270214_001).
--- A race calendar is public-read; authenticated users may submit a listing but
--- can't self-verify (the force_unverified trigger forces is_verified=false on a
--- non-service-role write); a submitter may edit only their own UNVERIFIED
--- listing; the entry/results URLs must be http(s).
+-- RLS + integrity for race_listings (migrations 20270214_001 + 20270320_001).
+-- The calendar is public-read through the redacted public_race_listings view
+-- (no submitted_by — 20270320_001); the base table is submitter-own-rows only.
+-- Authenticated users may submit a listing but can't self-verify (the
+-- force_unverified trigger forces is_verified=false on a non-service-role
+-- write); a submitter may edit only their own UNVERIFIED listing; the
+-- entry/results URLs must be http(s).
 
 begin;
 
-select plan(10);
+select plan(13);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -30,11 +32,24 @@ select is(
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ddc01","role":"authenticated"}';
 
--- 2. anon/authenticated read sees the public calendar.
+-- 2. anon/authenticated read the public calendar through the redacted view.
+select is(
+  (select count(*)::int from public_race_listings),
+  1,
+  'authenticated user reads the public race calendar via public_race_listings'
+);
+
+-- 2b. The base table hides other users' listings (submitted_by crosswalk).
 select is(
   (select count(*)::int from race_listings),
-  1,
-  'authenticated user reads the public race calendar'
+  0,
+  'the base table exposes no rows the caller did not submit'
+);
+
+-- 2c. The view does not carry submitted_by at all.
+select hasnt_column(
+  'public', 'public_race_listings', 'submitted_by',
+  'public_race_listings redacts submitted_by'
 );
 
 -- 3. A user may submit a listing.
@@ -75,10 +90,20 @@ select is(
 update race_listings set name = 'Hijacked'
   where id = '11111111-1111-1111-1111-1111000ddc01';
 select is(
-  (select name from race_listings where id = '11111111-1111-1111-1111-1111000ddc01'),
+  (select name from public_race_listings where id = '11111111-1111-1111-1111-1111000ddc01'),
   'Verified City Marathon',
   'a user cannot edit a verified listing they did not submit'
 );
+
+-- 7b. anon reads the calendar via the view (discovery stays logged-out).
+set local role anon;
+set local "request.jwt.claims" = '{}';
+select cmp_ok(
+  (select count(*)::int from public_race_listings), '>=', 1,
+  'anon reads the public calendar via public_race_listings'
+);
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ddc01","role":"authenticated"}';
 
 -- 8. A javascript: entry_url is rejected by the scheme CHECK.
 select throws_ok(
