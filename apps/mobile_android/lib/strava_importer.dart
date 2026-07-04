@@ -243,8 +243,9 @@ class StravaImporter {
 
     // Embedded best efforts (fastest_{5k,10k,half_marathon,marathon}_s) so a
     // fast sub-distance inside a long imported run reaches personal_records
-    // (the 20260529000002 trigger reads these keys) — matching what the live
-    // recorder writes and what the web/EF Strava importers now compute.
+    // (the refresher reads the promoted runs columns, 20270325_001; the
+    // api_client save path lifts these bag keys onto them) — matching what
+    // the live recorder writes and what the web/EF Strava importers compute.
     // Returns the map unchanged when the track has < 3 points or no per-point
     // timestamps, so no fake bests are written.
     final metadata = enrichMetadataWithEmbeddedBests(

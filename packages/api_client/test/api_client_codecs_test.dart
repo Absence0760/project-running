@@ -142,6 +142,26 @@ void main() {
       expect(run.metadata?['is_dnf'], true);
     });
 
+    test('embedded-best columns are surfaced onto metadata when present', () {
+      final row = minimalRow()
+        ..['fastest_5k_s'] = 1170
+        ..['fastest_marathon_s'] = 10500;
+      final run = ApiClient.debugRunFromRow(row);
+      expect(run.metadata?['fastest_5k_s'], 1170);
+      expect(run.metadata?['fastest_marathon_s'], 10500);
+    });
+
+    test('null embedded-best columns stay absent from metadata', () {
+      final run = ApiClient.debugRunFromRow(minimalRow());
+      expect(run.metadata?.containsKey('fastest_5k_s'), isNot(true));
+      expect(run.metadata?.containsKey('fastest_10k_s'), isNot(true));
+      expect(
+        run.metadata?.containsKey('fastest_half_marathon_s'),
+        isNot(true),
+      );
+      expect(run.metadata?.containsKey('fastest_marathon_s'), isNot(true));
+    });
+
     test('existing metadata keys survive alongside the stashed columns', () {
       final run = ApiClient.debugRunFromRow(minimalRow(
         activityType: 'cycle',
@@ -221,6 +241,54 @@ void main() {
       ApiClient.debugMetadataWithoutPromotedColumns(input);
       expect(input['activity_type'], 'walk');
       expect(input['steps'], 9000);
+    });
+
+    test('strips the four promoted embedded-best keys from the bag', () {
+      final out = ApiClient.debugMetadataWithoutPromotedColumns({
+        'fastest_5k_s': 1170,
+        'fastest_10k_s': 2450,
+        'fastest_half_marathon_s': 5400,
+        'fastest_marathon_s': 10500,
+        'avg_bpm': 150,
+      });
+      expect(out, {'avg_bpm': 150});
+    });
+  });
+
+  group('embeddedBestSeconds (saveRun bag → column lift)', () {
+    test('lifts an int value through unchanged', () {
+      expect(
+        ApiClient.debugEmbeddedBestSeconds({'fastest_5k_s': 1170}, 'fastest_5k_s'),
+        1170,
+      );
+    });
+
+    test('coerces a num and admits zero (the old regex domain)', () {
+      expect(
+        ApiClient.debugEmbeddedBestSeconds({'fastest_5k_s': 1170.0}, 'fastest_5k_s'),
+        1170,
+      );
+      expect(
+        ApiClient.debugEmbeddedBestSeconds({'fastest_5k_s': 0}, 'fastest_5k_s'),
+        0,
+      );
+    });
+
+    test('drops negative, non-numeric, absent, and null-bag values', () {
+      expect(
+        ApiClient.debugEmbeddedBestSeconds({'fastest_5k_s': -5}, 'fastest_5k_s'),
+        isNull,
+      );
+      expect(
+        ApiClient.debugEmbeddedBestSeconds({'fastest_5k_s': 'nope'}, 'fastest_5k_s'),
+        isNull,
+      );
+      expect(
+        ApiClient.debugEmbeddedBestSeconds(
+            {'fastest_10k_s': 2450}, 'fastest_5k_s'),
+        isNull,
+      );
+      expect(ApiClient.debugEmbeddedBestSeconds(null, 'fastest_5k_s'), isNull);
     });
   });
 
