@@ -185,6 +185,15 @@ test.describe('/routes/[id] — course markers', () => {
 
 		const pin = page.locator('.map-panel .course-pin');
 		await expect(pin).toBeVisible();
+		// The pin renders before the map's entrance fitBounds animation
+		// finishes, and MapLibre reprojects it every camera frame — a
+		// boundingBox read taken mid-animation is stale by mouse.down(),
+		// which then lands on empty canvas and no drag ever starts (the
+		// intermittent shard failure in CI run 28707481878). Wait for the
+		// settled-camera stamp RunMap sets on `idle`.
+		await expect(page.locator('.map-panel [data-map-idle="true"]')).toBeAttached({
+			timeout: 15_000
+		});
 		const from = await pin.boundingBox();
 		if (!from) throw new Error('pin has no bounding box');
 

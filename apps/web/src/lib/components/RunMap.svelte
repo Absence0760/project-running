@@ -755,6 +755,14 @@
 		cumulativeM = buildCumulative(trackCoords);
 
 		map.on('load', () => addOverlays(trackCoords, trackBounds, true));
+		// The entrance fitBounds (inside the load handler above) animates the
+		// camera, so a pin's screen position keeps moving for a beat after it
+		// first renders. `idle` fires only once tiles are loaded AND no camera
+		// animation is in flight — stamp it on the container so pointer-driven
+		// tests (marker drag) can wait for a settled map instead of racing the
+		// animation. Registered before `load` can fire; `idle` cannot precede
+		// it because fitBounds is called synchronously inside the load handler.
+		map.once('idle', () => mapContainer?.setAttribute('data-map-idle', 'true'));
 
 		// Segment-detail click handler. Snaps to the nearest track point,
 		// builds a ±150 m window, and reports stats up to the host.
