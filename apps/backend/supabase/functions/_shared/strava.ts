@@ -247,18 +247,18 @@ export async function ingestActivity(
 				if (track.length >= 2) {
 					await uploadTrack(supabase, userId, runId, track);
 					// Embedded best efforts: a fast 5k/10k inside a long run
-					// misses every whole-run canonical bracket, so without these
-					// keys it never reaches `personal_records` (the 20260529000002
-					// trigger reads them). Computed here — the one place the Strava
+					// misses every whole-run canonical bracket, so without the
+					// promoted fastest_*_s columns (20270325_001) it never reaches
+					// `personal_records`. Computed here — the one place the Strava
 					// stream is materialised — so both `strava-import` and
 					// `strava-webhook` get it off a single fetch. Skipped silently
-					// (no metadata write) when the track is too short to cover any
+					// (no write) when the track is too short to cover any
 					// canonical distance.
 					const bests = computeEmbeddedBests(track);
 					if (Object.keys(bests).length > 0) {
 						await supabase
 							.from('runs')
-							.update({ metadata: { ...metadata, ...bests } })
+							.update(bests)
 							.eq('id', runId);
 					}
 				}
@@ -427,8 +427,8 @@ export async function collectRunIdentities(
 //
 // The whole-run distance of a long run misses every canonical PR bracket, so
 // a sub-20 5k inside a 30 km long run never reaches `personal_records`. The
-// 20260529000002 migration teaches the PR trigger to read
-// `metadata.fastest_{5k,10k,half_marathon,marathon}_s`; the live recorder
+// refresher reads the promoted `runs.fastest_{5k,10k,half_marathon,marathon}_s`
+// columns (20270325_001; metadata keys before that); the live recorder
 // writes them (embedded_bests.dart) but no importer did. Keep the algorithm
 // in lockstep with `fastestWindowOf` in
 // `apps/mobile_android/lib/run_stats.dart` + `enrichMetadataWithEmbeddedBests`
@@ -436,7 +436,7 @@ export async function collectRunIdentities(
 // matches what a live recording of the same effort would write.
 // ---------------------------------------------------------------------------
 
-/// Canonical distances (metres) → metadata key. Matches the bracket
+/// Canonical distances (metres) → runs column. Matches the bracket
 /// midpoints the SQL trigger searches (±2 % wide, so 5000 m exactly).
 export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [string, number]> = [
 	['fastest_5k_s', 5000],
@@ -520,8 +520,8 @@ export function fastestWindowSeconds(
 
 /// Embedded best-effort seconds for every canonical distance the track is
 /// long enough to cover. Returns `{}` (no fake bests) when the track has < 3
-/// points or covers no canonical distance; callers merge the result into
-/// `metadata` and skip the write when empty.
+/// points or covers no canonical distance; callers write the result to the
+/// promoted runs columns and skip the write when empty.
 export function computeEmbeddedBests(
 	track: readonly EmbeddedTrackPoint[],
 ): Record<string, number> {
