@@ -64,6 +64,11 @@ create index race_listings_name_trgm
 alter table race_listings enable row level security;
 
 -- Public read (a race calendar is public discovery data). Anyone, incl. anon.
+-- SUPERSEDED by 20270320_001: the base-table SELECT is now submitter-own-rows
+-- only and the public calendar is served by the redacted public_race_listings
+-- view (every column except submitted_by) — using(true) let anon read the
+-- submitted_by user-id crosswalk. search_race_listings + the client/EF
+-- listing lookups read the view.
 create policy "race listings readable by all"
   on race_listings for select using (true);
 -- Authenticated users may submit a listing (is_verified stays false until an

@@ -26,6 +26,13 @@
   `medical_note`) and `recorded_by` are **column-SELECT-locked**: the table
   default is revoked and only the non-health columns are re-granted to
   `anon` / `authenticated`, so the public results surface can never read them.
+  **Retention (Art 5(1)(e)):** the health columns are scrubbed (nulled) 90
+  days after `recorded_at` by the `purge-stale-checkpoint-health-data` cron
+  (migration `20270317_001`, pinned by `checkpoint_health_retention_test.sql`);
+  the crossing rows and their in/out split times survive — they are the race's
+  results (same permanence as `event_results`). The window covers post-race
+  medical / incident review; tighten it by editing the interval in the
+  function body.
 - **`upsert_checkpoint_crossing(...)`** — the SOLE writer (SECURITY DEFINER).
   Authorises the caller as an organiser (else 42501), validates the event
   (42704) + that the checkpoint belongs to it (23503) + the identity rule
