@@ -30,6 +30,10 @@ create table runs (
                 check (activity_type in ('run','walk','hike','cycle','stroller')),
   is_dnf        boolean not null default false, -- did-not-finish; PR engine excludes these. Promoted from metadata in 20261207_001 (F3)
   elevation_gain_m numeric,                 -- total ascent (metres). Nullable; backfilled from metadata.elevation_m in 20270302_001 (ADR §186), summed by the vert challenge metric, projected into activities.summary + public_runs. Writers populate both this + metadata.elevation_m.
+  fastest_5k_s  integer,                    -- embedded-best seconds (fastest rolling 5 km window in the track). Promoted from metadata in 20270325_001; PR-candidate read by refresh_personal_records_for_user, exposed on public_runs.
+  fastest_10k_s integer,                    -- same, rolling 10 km window (20270325_001)
+  fastest_half_marathon_s integer,          -- same, rolling 21.0975 km window (20270325_001)
+  fastest_marathon_s integer,               -- same, rolling 42.195 km window (20270325_001)
   external_id   text unique,                -- deduplication key
   metadata      jsonb,                      -- source-specific extra fields (avg_bpm, steps, elevation_m, provider ids, …)
   track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz
@@ -102,7 +106,7 @@ when `bpm` is absent.
 - strips audit/sync/training-plan-linkage keys from `metadata` (denylist in lockstep with [metadata.md](metadata.md)'s "Public-safe?" column — `imported_from`, `*_id`, `*_activity_type`, `last_modified_at`, `recovered_from_crash`, `in_progress*`, `manual_entry`, `indoor_estimated`, `distance_source`, `plan_workout_id`, `workout_step_results`, `workout_adherence`, `source_file`, `max_bpm`),
 - nulls `route_id` / `event_id` when the joined route or event isn't itself public (via SECURITY DEFINER helpers `is_public_route_by_id` / `is_public_event_by_id` — since `20270318_001` all three helpers, incl. `is_public_club_by_id`, also answer false for a `shadow_hidden` target, and the event helper additionally honours the event-level `is_public` gate from `20270113_001`, so an auto-hidden or members-only target can't stay linkable through the public views),
 - restricts to `is_public = true`,
-- exposes `activity_type` + `is_dnf` as **columns** (public-safe — both were public-safe metadata keys before they were promoted to real columns in `20261207_001`, F3; the view now selects the columns and the keys no longer ride in the `metadata` projection),
+- exposes `activity_type` + `is_dnf` as **columns** (public-safe — both were public-safe metadata keys before they were promoted to real columns in `20261207_001`, F3; the view now selects the columns and the keys no longer ride in the `metadata` projection), and likewise the four embedded-best columns `fastest_5k_s` / `fastest_10k_s` / `fastest_half_marathon_s` / `fastest_marathon_s` (public-safe bag keys before their promotion in `20270325_001`),
 - omits `updated_at` — same signal as `metadata.last_modified_at` (already stripped); leaks last-edit / last-sync timestamps to anyone with the share link (`20260807_001`).
 - omits `track_url` (the `{user_id}/{run_id}.json.gz` Storage path — dropped `20260924_001` for defence-in-depth so a future Storage-RLS loosening can't re-open direct download from a leaked path) but exposes a derived boolean `has_track` (`track_url IS NOT NULL`, `20261105_001`) so the feed / `/u/[id]` map-thumbnail gate has a safe existence signal without the path. Non-owner thumbnails fetch the clipped trace by `run_id` through the `clip-public-track` Edge Function, which derives the path itself.
 
