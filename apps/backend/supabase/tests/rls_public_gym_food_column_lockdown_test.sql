@@ -19,10 +19,17 @@
 --      (no external_id / last_modified_at)
 --   7. the OWNER still reads their own full row from the base table
 --      (the redaction must not lock the owner out — 20260817_001 regression)
+--
+-- And for 20270327_001 (public_gym_sets — the per-set view the share page
+-- needs; its absence 404'd every public workout share, CI run 28707481878):
+--   8. the base gym_sets table exposes NO public workout's sets to anon
+--      (the "visible via parent" policy is owner-only-effective now)
+--   9. public_gym_sets exposes the public workout's sets to anon
+--  10. public_gym_sets's column set is EXACTLY the safe projection (no rpe)
 
 begin;
 
-select plan(7);
+select plan(10);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -42,6 +49,14 @@ insert into gym_workouts (
   'strava:987654', '2026-04-15T09:35:00Z', 5, 4200,
   jsonb_build_object('plan_workout_id', '00000000-0000-0000-0000-000000000000')
 );
+
+-- Two sets under the public workout, carrying the rpe the view must strip.
+insert into gym_sets (id, workout_id, set_index, exercise_name, reps, weight_kg, rpe)
+values
+  ('cccccccc-0000-0000-0000-0000000000f1',
+   'aaaaaaaa-0000-0000-0000-0000000000f1', 0, 'Squat', 5, 100, 8.5),
+  ('cccccccc-0000-0000-0000-0000000000f2',
+   'aaaaaaaa-0000-0000-0000-0000000000f1', 1, 'Squat', 5, 102.5, 9.0);
 
 -- One public food_log row, same shape.
 insert into food_log (
@@ -88,6 +103,22 @@ select columns_are(
   array['id', 'user_id', 'started_at', 'item_name', 'meal_slot', 'calories',
         'protein_g', 'carbs_g', 'fat_g', 'is_public', 'created_at'],
   'public_food_log projects only the safe columns (no external_id / last_modified_at)');
+
+-- 8 + 9. per-set rows: hidden on the base table, served by public_gym_sets.
+select is(
+  (select count(*)::int from gym_sets where workout_id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
+  0, 'base gym_sets exposes no public workout sets to a non-owner');
+
+select is(
+  (select count(*)::int from public_gym_sets where workout_id = 'aaaaaaaa-0000-0000-0000-0000000000f1'),
+  2, 'public_gym_sets exposes the public workout sets to a non-owner');
+
+-- 10. exact-column pin — rpe is absent from the view.
+select columns_are(
+  'public', 'public_gym_sets',
+  array['id', 'workout_id', 'set_index', 'exercise_name', 'reps',
+        'weight_kg', 'duration_s'],
+  'public_gym_sets projects only the safe columns (no rpe)');
 
 -- 7. the owner still reads their own full row from the base table.
 set local role authenticated;

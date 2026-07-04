@@ -3,14 +3,16 @@
 ///   - apps/web/src/routes/share/workout/[id]/+page.ts (dev-server SSR +
 ///     SPA hydration).
 ///
-/// A public gym workout is readable by anyone (the "gym_workouts owner or
-/// public read" RLS policy gates non-owner/anon reads on `is_public`), so the
-/// share page works logged-out. Only the headline columns + the sets needed
-/// to render the read-only detail are fetched — no notes / RPE leak beyond
-/// what the owner already chose to make public.
+/// A public gym workout is readable by anyone via the redacted
+/// `public_gym_workouts` / `public_gym_sets` views (the base tables are
+/// owner-only since migration 20270313_001 dropped their public-read RLS
+/// branches — an anon base-table read matches zero rows and rendered every
+/// share page as "Workout not found", CI run 28707481878), so the share page
+/// works logged-out. Only the headline columns + the sets needed to render
+/// the read-only detail are fetched — no notes / RPE leak beyond what the
+/// owner already chose to make public.
 
 import { createClient } from '@supabase/supabase-js';
-import { TABLES } from '../core/schema';
 
 export interface SharedWorkoutSet {
 	set_index: number;
@@ -54,11 +56,11 @@ export async function lookupSharedWorkout(
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
 		});
-		// `is_public = true` is enforced by RLS, but filter explicitly too so a
-		// non-public id resolves to "not found" rather than relying on RLS to
-		// blank the row.
+		// `is_public = true` is baked into the views, but filter explicitly too
+		// so a non-public id resolves to "not found" rather than relying on the
+		// view to blank the row.
 		const { data: workout } = await supabase
-			.from(TABLES.gym_workouts)
+			.from('public_gym_workouts')
 			.select('id, user_id, title, started_at, set_count, volume_kg, is_public')
 			.eq('id', id)
 			.eq('is_public', true)
@@ -66,7 +68,7 @@ export async function lookupSharedWorkout(
 		if (!workout) return { workout: null, displayName: null };
 
 		const { data: sets } = await supabase
-			.from(TABLES.gym_sets)
+			.from('public_gym_sets')
 			.select('set_index, exercise_name, reps, weight_kg, duration_s')
 			.eq('workout_id', id)
 			.order('set_index', { ascending: true });

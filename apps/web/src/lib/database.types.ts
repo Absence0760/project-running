@@ -4274,6 +4274,33 @@ export type Database = {
           },
         ]
       }
+      public_gym_sets: {
+        Row: {
+          duration_s: number | null
+          exercise_name: string | null
+          id: string | null
+          reps: number | null
+          set_index: number | null
+          weight_kg: number | null
+          workout_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_sets_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "gym_workouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_sets_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "public_gym_workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_gym_workouts: {
         Row: {
           created_at: string | null
