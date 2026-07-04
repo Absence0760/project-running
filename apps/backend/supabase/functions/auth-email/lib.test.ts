@@ -170,6 +170,27 @@ Deno.test('verifySendEmailHook — bare whsec_ secret form accepted', async () =
   );
 });
 
+Deno.test('verifySendEmailHook — prefix-less v1,<base64> secret form accepted', async () => {
+  // The CI env-file carries the secret WITHOUT the whsec_ marker on
+  // purpose (it trips GitHub secret scanning's Stripe-webhook pattern
+  // on a throwaway fixture — see the edge-functions job in ci.yml).
+  // Tightening parseHookSecrets to require the marker would silently
+  // 503 that job's auth-email envelope tests.
+  const body = '{}';
+  const ts = tsFor(NOW);
+  const bare = 'v1,' + btoa('ci-auth-email-hook-secret-32chars');
+  const sig = await signSendEmailHook(bare, 'm', ts, body);
+  assertEquals(
+    await verifySendEmailHook(
+      body,
+      { id: 'm', timestamp: ts, signature: sig },
+      bare,
+      NOW,
+    ),
+    'ok',
+  );
+});
+
 Deno.test('normalizeEmailLocale — mirrors the worker table', () => {
   assertEquals(normalizeEmailLocale(''), 'en');
   assertEquals(normalizeEmailLocale(null), 'en');

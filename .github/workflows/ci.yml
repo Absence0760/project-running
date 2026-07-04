@@ -655,7 +655,11 @@ jobs:
           # (the rejection branches need the secret PRESENT so they hit
           # 401, not the 503 hook_not_configured guard). No SMTP vars:
           # this job never sends a correctly signed request.
-          SEND_EMAIL_HOOK_SECRET=v1,whsec_Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz
+          # Deliberately the prefix-less `v1,<base64>` form (which
+          # parseHookSecrets accepts): a `whsec_` marker here trips
+          # GitHub secret scanning's Stripe-webhook pattern on a value
+          # that is a throwaway CI fixture (alert #2).
+          SEND_EMAIL_HOOK_SECRET=v1,Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz
           SENTRY_DSN=
           APP_RELEASE=ci
           ENV
