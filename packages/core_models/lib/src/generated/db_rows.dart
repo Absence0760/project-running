@@ -215,7 +215,7 @@ class ChallengeRow {
   static const String colParticipantCount = 'participant_count';
 
   final String id;
-  final String creatorId;
+  final String? creatorId;
   final String? clubId;
   final String title;
   final String? description;
@@ -231,7 +231,7 @@ class ChallengeRow {
 
   const ChallengeRow({
     required this.id,
-    required this.creatorId,
+    this.creatorId,
     this.clubId,
     required this.title,
     this.description,
@@ -248,7 +248,7 @@ class ChallengeRow {
 
   factory ChallengeRow.fromJson(Map<String, dynamic> json) => ChallengeRow(
     id: json['id'] as String,
-    creatorId: json['creator_id'] as String,
+    creatorId: json['creator_id'] as String?,
     clubId: json['club_id'] as String?,
     title: json['title'] as String,
     description: json['description'] as String?,
@@ -1007,7 +1007,7 @@ class EventCheckpointRow {
   final int? cutoffElapsedS;
   final String? cutoffClock;
   final bool requiresWeighIn;
-  final String createdBy;
+  final String? createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -1021,7 +1021,7 @@ class EventCheckpointRow {
     this.cutoffElapsedS,
     this.cutoffClock,
     required this.requiresWeighIn,
-    required this.createdBy,
+    this.createdBy,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1036,7 +1036,7 @@ class EventCheckpointRow {
     cutoffElapsedS: (json['cutoff_elapsed_s'] as num?)?.toInt(),
     cutoffClock: json['cutoff_clock'] as String?,
     requiresWeighIn: (json['requires_weigh_in'] as bool?) ?? false,
-    createdBy: json['created_by'] as String,
+    createdBy: json['created_by'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
   );

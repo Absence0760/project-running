@@ -39,6 +39,7 @@ The GDPR Art 5(1)(e) storage-limitation principle requires retention to be "no l
 | **Email** (sent via Supabase Auth provider) | Supabase + email provider | Provider's default | Provider | TODO: confirm provider + DPA terms |
 | **Personal records** (`personal_records`) | Postgres | Until account deletion | `delete-account` cascade | Derived from runs; not strictly needed but UX-expected |
 | **Fitness snapshots / training load** (`fitness_snapshots`) | Postgres | Until account deletion | `delete-account` cascade | Derived; CTL/ATL/TSB curves |
+| **Checkpoint weigh-in / medical fields** (`checkpoint_crossings.body_weight_kg` / `body_weight_pct` / `medical_hold` / `medical_note` — Art 9) | Postgres | 90 days from `recorded_at` (columns scrubbed, row kept) | `purge-stale-checkpoint-health-data` cron (`20270317_001_checkpoint_health_retention.sql`) | The in/out split times ARE the race results (same permanence as `event_results`), so the purge nulls only the health columns; 90 days covers post-race medical/incident review |
 
 ## Auto-deletion / purge jobs
 
@@ -56,9 +57,11 @@ The GDPR Art 5(1)(e) storage-limitation principle requires retention to be "no l
 | `purge-stale-device-tokens` | 03:29 UTC daily | `device_tokens` whose `last_seen_at` is over 60 days old | `20260922_001_data_retention_purge_jobs.sql` |
 | `purge-stale-jobs` | 03:35 UTC daily | `jobs` rows in terminal state with `finished_at` older than 30 days | `20260928_001_gdpr_dsar_closeouts.sql` |
 | `purge-stale-direct-messages` | 03:41 UTC daily | `direct_messages` older than 2 years (`created_at`) | `20261119_001_purge_stale_direct_messages.sql` |
+| `purge-stale-checkpoint-health-data` | 03:47 UTC daily | Scrubs (nulls) the Art 9 weigh-in / medical columns on `checkpoint_crossings` older than 90 days (`recorded_at`); the split-time rows survive | `20270317_001_checkpoint_health_retention.sql` |
 
-Twelve `cron.schedule`d cleanup/purge jobs are live (every job above
-deletes rows; the non-deleting scheduled jobs — MV refresh, token-refresh
+Thirteen `cron.schedule`d cleanup/purge jobs are live (every job above
+deletes rows — or, for the checkpoint health job, scrubs columns; the
+non-deleting scheduled jobs — MV refresh, token-refresh
 enqueue, event-reminder enqueue, and the jobs-stuck / jobs-failed alerts —
 are not retention jobs and are excluded). Window tightening is a
 single-file edit to the function body. The `gdpr_dsar_closeouts_test.sql`

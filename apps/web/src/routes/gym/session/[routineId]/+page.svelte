@@ -5,7 +5,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchGymRoutineDetail,
-		fetchExerciseSetHistory,
+		fetchExerciseSetHistoryBatch,
 		type GymRoutineDetail,
 	} from '$lib/core/data';
 	import { expandRoutineSteps, type RoutineStep, type PlannedRoutine } from '$lib/gym/gym_routine';
@@ -67,27 +67,29 @@
 			string,
 			{ weightKg: number | null; repsMin: number | null; repsMax: number | null }
 		>();
-		await Promise.all(
-			[...byKey.entries()].map(async ([key, ex]) => {
-				const history = await fetchExerciseSetHistory(ex.exercise_name);
-				const last = lastSessionSets(history, ex.exercise_name);
-				if (!last) return;
-				const firstSet = ex.sets[0];
-				const sug = nextPrescription({
-					scheme: ex.progression,
-					lastSets: last,
-					targetRepsMin: firstSet?.target_reps_min ?? null,
-					targetRepsMax: firstSet?.target_reps_max ?? null,
-					params: ex.progression_params,
-				});
-				if (sug.reason === 'none') return;
-				suggestions.set(key, {
-					weightKg: sug.suggestedWeightKg,
-					repsMin: sug.suggestedRepsMin,
-					repsMax: sug.suggestedRepsMax,
-				});
-			}),
+		// One batched RPC for every schemed exercise (lastSessionSets filters the
+		// flat result by normalised key) instead of a round-trip per exercise.
+		const history = await fetchExerciseSetHistoryBatch(
+			[...byKey.values()].map((e) => e.exercise_name),
 		);
+		for (const [key, ex] of byKey) {
+			const last = lastSessionSets(history, ex.exercise_name);
+			if (!last) continue;
+			const firstSet = ex.sets[0];
+			const sug = nextPrescription({
+				scheme: ex.progression,
+				lastSets: last,
+				targetRepsMin: firstSet?.target_reps_min ?? null,
+				targetRepsMax: firstSet?.target_reps_max ?? null,
+				params: ex.progression_params,
+			});
+			if (sug.reason === 'none') continue;
+			suggestions.set(key, {
+				weightKg: sug.suggestedWeightKg,
+				repsMin: sug.suggestedRepsMin,
+				repsMax: sug.suggestedRepsMax,
+			});
+		}
 		if (suggestions.size === 0) return expanded;
 
 		return expanded.map((step) => {

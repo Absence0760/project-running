@@ -127,7 +127,9 @@ export type RaceProvider =
 	| 'raceresult'
 	| 'ultrasignup';
 
-export type RaceListing = Omit<RaceListingRow, 'provider'> & {
+// submitted_by is omitted: reads go through the redacted public_race_listings
+// view (migration 20270320_001), which never carries the submitter crosswalk.
+export type RaceListing = Omit<RaceListingRow, 'provider' | 'submitted_by'> & {
 	provider: RaceProvider;
 };
 
