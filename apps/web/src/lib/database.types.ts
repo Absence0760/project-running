@@ -1717,6 +1717,13 @@ export type Database = {
             referencedRelation: "gym_routines"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "gym_routine_exercises_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "public_gym_routines"
+            referencedColumns: ["id"]
+          },
         ]
       }
       gym_routine_sets: {
@@ -3461,6 +3468,13 @@ export type Database = {
             foreignKeyName: "runs_race_listing_id_fkey"
             columns: ["race_listing_id"]
             isOneToOne: false
+            referencedRelation: "public_race_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_race_listing_id_fkey"
+            columns: ["race_listing_id"]
+            isOneToOne: false
             referencedRelation: "race_listings"
             referencedColumns: ["id"]
           },
@@ -4204,6 +4218,50 @@ export type Database = {
         }
         Relationships: []
       }
+      public_gym_routines: {
+        Row: {
+          author_id: string | null
+          club_id: string | null
+          created_at: string | null
+          exercise_count: number | null
+          id: string | null
+          is_public_template: boolean | null
+          notes: string | null
+          periodisation: string | null
+          title: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          club_id?: string | null
+          created_at?: string | null
+          exercise_count?: number | null
+          id?: string | null
+          is_public_template?: boolean | null
+          notes?: string | null
+          periodisation?: string | null
+          title?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          club_id?: string | null
+          created_at?: string | null
+          exercise_count?: number | null
+          id?: string | null
+          is_public_template?: boolean | null
+          notes?: string | null
+          periodisation?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_routines_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_gym_workouts: {
         Row: {
           created_at: string | null
@@ -4255,6 +4313,54 @@ export type Database = {
           avatar_url?: string | null
           display_name?: string | null
           id?: string | null
+        }
+        Relationships: []
+      }
+      public_race_listings: {
+        Row: {
+          created_at: string | null
+          distance_m: number | null
+          entry_url: string | null
+          id: string | null
+          is_verified: boolean | null
+          location_label: string | null
+          location_point: unknown
+          name: string | null
+          provider: string | null
+          provider_race_id: string | null
+          race_date: string | null
+          results_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          distance_m?: number | null
+          entry_url?: string | null
+          id?: string | null
+          is_verified?: boolean | null
+          location_label?: string | null
+          location_point?: unknown
+          name?: string | null
+          provider?: string | null
+          provider_race_id?: string | null
+          race_date?: string | null
+          results_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          distance_m?: number | null
+          entry_url?: string | null
+          id?: string | null
+          is_verified?: boolean | null
+          location_label?: string | null
+          location_point?: unknown
+          name?: string | null
+          provider?: string | null
+          provider_race_id?: string | null
+          race_date?: string | null
+          results_url?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -4368,6 +4474,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "runs_race_listing_id_fkey"
+            columns: ["race_listing_id"]
+            isOneToOne: false
+            referencedRelation: "public_race_listings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "runs_race_listing_id_fkey"
             columns: ["race_listing_id"]
@@ -4924,6 +5037,19 @@ export type Database = {
         Returns: {
           duration_s: number
           exercise_name: string
+          reps: number
+          rpe: number
+          started_at: string
+          weight_kg: number
+          workout_id: string
+        }[]
+      }
+      gym_exercise_set_history_batch: {
+        Args: { p_names: string[] }
+        Returns: {
+          duration_s: number
+          exercise_name: string
+          normalised_name: string
           reps: number
           rpe: number
           started_at: string
