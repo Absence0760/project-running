@@ -16,15 +16,16 @@
 --      the client depends on can't regress.
 --
 --   3. THE REDACTION BOUNDARY (decisions §33). The view is security_invoker, so
---      base-table RLS decides cross-user visibility. gym_workouts / food_log
---      keep an "owner or public" read policy, so their public rows surface to
---      non-owners (and anon) through the view. runs DELIBERATELY has no
---      public-read policy (dropped in 20260701_001) — non-owner run reads must
---      go through the redacted `public_runs` view, never the base table. So a
---      public RUN is NOT visible through `activities` to anyone but its owner.
---      That asymmetry is intentional; this test pins it so nobody "fixes" the
---      view by re-adding a runs public-read policy that would leak unredacted
---      run columns (track_url, route_id, …).
+--      base-table RLS decides cross-user visibility — and since 20270313_001
+--      ALL THREE base tables are owner-only readable (runs lost its public-read
+--      policy in 20260701_001; gym_workouts / food_log lost theirs in
+--      20270313_001). Non-owner public reads go exclusively through the
+--      redacted views (public_runs / public_gym_workouts / public_food_log),
+--      so `activities` is an OWNER-ONLY timeline: a non-owner (and anon) sees
+--      NOTHING of another user through it, public rows included. This test
+--      pins that so nobody "fixes" the view by re-adding a base-table
+--      public-read policy that would leak unredacted columns (track_url,
+--      external_id, notes, metadata, …).
 --
 -- Fixture for owner A, newest-first:
 --   f1   2026-03-10 12:00  meal  private
@@ -137,15 +138,13 @@ select is(
 -- ── Non-owner context (RLS via security_invoker) ──
 set local "request.jwt.claims" = '{"sub":"0000000b-0000-0000-0000-00000000000b"}';
 
--- 11. A non-owner sees the public LIFT + MEAL — those base tables allow public
--- read — but NOT the public run (redaction boundary, decisions §33).
-select results_eq(
-  $$ select id, kind from public.activities
-     where user_id = '0000000a-0000-0000-0000-00000000000a'
-     order by started_at desc $$,
-  $$ values ('b1111111-1111-1111-1111-111111111111'::uuid, 'lift'),
-            ('c2222222-2222-2222-2222-222222222222'::uuid, 'meal') $$,
-  'non-owner sees public lifts + meals, not runs'
+-- 11. A non-owner sees NOTHING of A's through the view — public rows included.
+-- Since 20270313_001 every base table is owner-only readable; non-owner public
+-- reads go through public_runs / public_gym_workouts / public_food_log.
+select is_empty(
+  $$ select 1 from public.activities
+     where user_id = '0000000a-0000-0000-0000-00000000000a' $$,
+  'non-owner sees no activities of another user (public reads use the redacted views)'
 );
 
 -- 12. No private row of A's leaks to B through the view.
@@ -165,28 +164,29 @@ select is_empty(
   'non-owner cannot read any run (public or private) via the view'
 );
 
--- ── Anon (logged-out share / feed surface) ──
+-- ── Anon ──
 set local role anon;
 set local "request.jwt.claims" = '';
 
--- 14. Anon sees the same public non-run rows the base RLS allows — and nothing
--- else. (The view is granted broadly; base-table RLS is the real gate.)
-select results_eq(
-  $$ select id, kind from public.activities
-     where user_id = '0000000a-0000-0000-0000-00000000000a'
-     order by started_at desc $$,
-  $$ values ('b1111111-1111-1111-1111-111111111111'::uuid, 'lift'),
-            ('c2222222-2222-2222-2222-222222222222'::uuid, 'meal') $$,
-  'anon sees only public lifts + meals'
+-- 14. Anon has no SELECT grant on the view at all (the documented audience is
+-- authenticated only — 20261204_001's grant; 20270324_001 stripped the
+-- unintended default-privilege grants).
+select throws_ok(
+  $$ select 1 from public.activities limit 1 $$,
+  '42501',
+  null,
+  'anon cannot read the activities view at all'
 );
 
--- 15. Anon gets no private row and no run — the redaction boundary holds even
--- logged out.
-select is_empty(
-  $$ select 1 from public.activities
-     where user_id = '0000000a-0000-0000-0000-00000000000a'
-       and (is_public = false or kind = 'run') $$,
-  'anon never sees a private row or any run via the view'
+-- 15. Nor write through it — denied either as a missing INSERT privilege
+-- (42501, 20270324_001) or as a non-updatable UNION view (0A000); both are a
+-- refusal, so pin "throws" rather than one code.
+select throws_ok(
+  $$ insert into public.activities (id, user_id, kind, started_at, summary, is_public)
+     values (gen_random_uuid(), '0000000a-0000-0000-0000-00000000000a', 'run', now(), '{}', true) $$,
+  null,
+  null,
+  'anon cannot write through the activities view'
 );
 
 select * from finish();
