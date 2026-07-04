@@ -144,6 +144,13 @@ create index routes_public on routes (is_public, created_at desc) where is_publi
 create index routes_club_id on routes (club_id, created_at desc) where club_id is not null;
 create index idx_routes_user_starred on routes (user_id, updated_at desc) where is_starred;
 create index routes_name_trgm on routes using gin (name extensions.gin_trgm_ops);
+-- 20270326_001: per-sort-branch partial indexes for search_public_routes
+create index routes_public_popular_sort on routes (run_count desc nulls last, created_at desc)
+  where is_public = true and shadow_hidden = false;
+create index routes_public_featured_sort on routes (featured_at desc nulls last, created_at desc)
+  where is_public = true and shadow_hidden = false;
+create index routes_public_newest_sort on routes (created_at desc nulls last)
+  where is_public = true and shadow_hidden = false;
 ```
 
 **`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
@@ -1835,7 +1842,7 @@ select * from routes_intersecting_track(
 
 ### `search_public_routes(p_query text, p_min_distance_m numeric, p_max_distance_m numeric, p_surface text, p_tags text[], p_featured_only boolean, p_sort text, p_limit int, p_offset int)`
 
-Filtered + sorted search over public routes (`is_public = true`), all parameters optional with defaults (`p_featured_only false`, `p_sort 'newest'`, `p_limit 50`, `p_offset 0`). `p_query` does a case-insensitive `ilike` over `name` (pg_trgm GIN index `routes_name_trgm`, migration `20270316_001` — which also dropped the tsvector `routes_name_search` index, since a `to_tsvector` GIN can never serve `ilike`); the numeric/surface/tags args narrow the set (`p_tags` uses the `&&` array-overlap operator); `p_sort` ∈ `popular` / `featured` / `newest`. **Returns `setof public_routes`** — the narrowed public-safe view, not the full `routes` columns. SECURITY DEFINER, granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Latest signature in migration `20261217_001_f17_naming_uniformity.sql`; earlier it was the simpler `(q text, max_results int)`. Used by `RouteExplorer.svelte` via `apps/web/src/lib/core/data.ts:searchPublicRoutes`.
+Filtered + sorted search over public routes (`is_public = true`), all parameters optional with defaults (`p_featured_only false`, `p_sort 'newest'`, `p_limit 50`, `p_offset 0`). `p_query` does a case-insensitive `ilike` over `name` (pg_trgm GIN index `routes_name_trgm`, migration `20270316_001` — which also dropped the tsvector `routes_name_search` index, since a `to_tsvector` GIN can never serve `ilike`); the numeric/surface/tags args narrow the set (`p_tags` uses the `&&` array-overlap operator); `p_sort` ∈ `popular` / `featured` / `newest`. **Returns `setof public_routes`** — the narrowed public-safe view, not the full `routes` columns. SECURITY DEFINER, granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Latest signature in migration `20261217_001_f17_naming_uniformity.sql`; earlier it was the simpler `(q text, max_results int)`. **Live body in `20270326_001`** (db-performance High): plpgsql with one CASE-free `ORDER BY` branch per sort mode instead of the original three CASE-wrapped arms — a CASE sort key can never match a b-tree, so every call used to sort the whole public set. Each branch is served by a matching partial index (`routes_public_popular_sort` (`run_count desc nulls last, created_at desc`), `routes_public_featured_sort` (`featured_at desc nulls last, created_at desc`), `routes_public_newest_sort` (`created_at desc nulls last`), all `where is_public and not shadow_hidden`; an unrecognised `p_sort` keeps the old trailing `created_at desc` arm via the pre-existing `routes_public` index). Ordering semantics are unchanged, including nulls placement; pinned old-vs-new by `search_public_routes_sort_test.sql`. Used by `RouteExplorer.svelte` via `apps/web/src/lib/core/data.ts:searchPublicRoutes`.
 
 ### `popular_route_tags(tag_limit int)`
 
