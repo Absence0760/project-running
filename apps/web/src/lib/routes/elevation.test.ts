@@ -57,7 +57,11 @@ test('fetchElevations — with recorded consent, calls Open-Meteo', async () => 
 			[8.55, 47.38],
 		]);
 		assert.deepEqual(out, [410, 412]);
-		assert.ok(requestedUrl.includes('api.open-meteo.com'));
+		// Exact-hostname compare, not a substring check — CodeQL
+		// js/incomplete-url-substring-sanitization (alert 151), and stricter
+		// anyway: a proxy-shaped URL like evil.test/?api.open-meteo.com
+		// would have passed includes().
+		assert.equal(new URL(requestedUrl).hostname, 'api.open-meteo.com');
 	} finally {
 		globalThis.fetch = originalFetch;
 		if (originalLs === undefined) delete (globalThis as { localStorage?: unknown }).localStorage;
