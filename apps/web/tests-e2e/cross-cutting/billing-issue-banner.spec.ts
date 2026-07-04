@@ -51,7 +51,10 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 		const banner = page.getByTestId('billing-issue-banner');
 		await expect(banner).toBeVisible({ timeout: 10_000 });
 		await expect(banner).toContainText(/Pro renewal payment failed/i);
-		await expect(banner).toContainText(/3 days ago/i);
+		// The banner localizes its timestamp via the shared
+		// formatRelativeTime (narrow Intl form: "3d ago", not the old
+		// bespoke "3 days ago").
+		await expect(banner).toContainText(/3d ago/i);
 		await expect(banner).toContainText(/Update your card/i);
 
 		// CTA navigates to /settings/upgrade where Manage subscription
@@ -79,7 +82,7 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 		await expect(page.getByTestId('billing-issue-banner')).toHaveCount(0);
 	});
 
-	test('relative-days copy shows "today" for a flag set within the last 24h', async ({
+	test('relative copy stays sub-day for a flag set within the last 24h', async ({
 		page
 	}) => {
 		const admin = getAdminClient();
@@ -90,8 +93,10 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 
 		await page.goto('/dashboard');
 
+		// formatRelativeTime renders "now" inside the first minute, then
+		// "Nm ago" / "Nh ago" — never a day-granular form within 24h.
 		await expect(page.getByTestId('billing-issue-banner')).toContainText(
-			/today/i,
+			/failed (now|\d+[mh] ago)/i,
 			{ timeout: 10_000 }
 		);
 	});
