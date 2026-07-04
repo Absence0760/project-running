@@ -19,7 +19,7 @@
 
 begin;
 
-select plan(17);
+select plan(20);
 
 -- ─── 1. public = false on private buckets ──────────────────────────
 select is(
@@ -37,6 +37,21 @@ select is(
   'run-photos bucket MUST have public = false — flipped from true '
   'to false in 20260712_001 after the audit caught it; regressing '
   'would re-open the same RLS-bypass surface'
+);
+
+select is(
+  (select public from storage.buckets where id = 'route-photos'),
+  false,
+  'route-photos bucket MUST have public = false — non-owner reads go '
+  'through the visibility-gated SELECT policy, and a public flag would '
+  'bypass it for anyone holding an object path'
+);
+
+select is(
+  (select public from storage.buckets where id = 'club-photos'),
+  false,
+  'club-photos bucket MUST have public = false — same RLS-bypass '
+  'surface as route-photos'
 );
 
 -- ─── 2. file_size_limit set on user-upload buckets ─────────────────
@@ -122,6 +137,21 @@ select ok(
        and policyname = 'avatars owner can delete') = 1,
   'avatars bucket MUST have an owner-scoped DELETE policy — without it '
   'any authenticated user could delete another users avatar'
+);
+
+-- All four avatars owner policies are scoped `to authenticated`
+-- (20270321_001). They shipped `to public` — fail-closed only because every
+-- predicate needs auth.uid() — so pin the role scope to keep the anon write
+-- surface structurally closed, not predicate-dependent.
+select is(
+  (select count(*) from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and policyname like 'avatars owner can %'
+       and roles = array['authenticated']::name[])::int,
+  4::int,
+  'all four avatars owner policies MUST be scoped to authenticated — '
+  'a to-public policy leaves anon one predicate edit away from the '
+  'bucket''s write path'
 );
 
 -- avatars DOWNLOADS flow through the public-bucket CDN bypass, but the
