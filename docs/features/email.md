@@ -419,5 +419,5 @@ None of this sends in prod until an operator:
   config in `apps/backend/supabase/config.toml [auth.hook.send_email]` +
   the committed `supabase/functions/.env`.
 - ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),
-  §121 (subscription emails), §131 (safety-contact alerts), §202 (auth-email
+  §121 (subscription emails), §131 (safety-contact alerts), §203 (auth-email
   hook).
