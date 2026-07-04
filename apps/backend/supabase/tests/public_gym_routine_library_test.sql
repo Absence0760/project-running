@@ -1,11 +1,16 @@
--- Pins migration 20270226_001 (public gym-routine library). gym_programming.md.
+-- Pins migrations 20270226_001 (public gym-routine library) + 20270319_001
+-- (redaction: non-author reads go through the public_gym_routines view; the
+-- base-table public branch is gone). gym_programming.md.
 --
 -- set_gym_routine_public (owner publish / unpublish toggle):
 --   1. The author publishes their personal routine (flips is_public_template).
 --   2. A non-author cannot publish it.
 --   3. A club-owned routine cannot be made a public template.
--- RLS public read boundary:
---   4. A stranger (no club tie) can SELECT the public template + its children.
+-- Redacted read boundary (20270319_001):
+--   4. A stranger (no club tie) reads the template via public_gym_routines and
+--      its exercises/sets children directly (the private.is_public_gym_routine
+--      oracle), but NOT the base gym_routines row — and the view carries
+--      neither external_id nor last_modified_at.
 --   5. A stranger cannot SELECT a private (non-public, non-club) routine.
 -- clone_gym_routine_template (public-template adopt):
 --   6. A stranger clones the public template into a personal, club-less copy.
@@ -13,7 +18,7 @@
 --   8. After the author unpublishes, the stranger can no longer clone it.
 
 begin;
-select plan(9);
+select plan(13);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -81,15 +86,35 @@ select throws_ok(
 );
 
 -- ============================================================
--- 4 + 5. RLS public read boundary
+-- 4 + 5. Redacted read boundary (20270319_001)
 -- ============================================================
--- The stranger sees the public template + its sets through the inherited reads.
 set local "request.jwt.claims" = '{"sub":"99999999-0000-0000-0000-00000000ab02","role":"authenticated"}';
+
+-- The stranger browses the template through the redacted view...
+select is(
+  (select count(*)::int from public_gym_routines
+     where id = 'aaaaaaaa-0000-0000-0000-00000000ab01'::uuid),
+  1, 'a stranger reads a public template through public_gym_routines');
+
+-- ...but the base row stays hidden (external_id / last_modified_at live there).
+select is(
+  (select count(*)::int from gym_routines
+     where id = 'aaaaaaaa-0000-0000-0000-00000000ab01'::uuid),
+  0, 'the base gym_routines row is NOT readable by a non-author');
+
+select hasnt_column(
+  'public', 'public_gym_routines', 'external_id',
+  'public_gym_routines redacts external_id');
+
+select hasnt_column(
+  'public', 'public_gym_routines', 'last_modified_at',
+  'public_gym_routines redacts last_modified_at');
+
+-- The children stay directly readable for the preview (the definer oracle).
 select is(
   (select count(*)::int from gym_routine_sets s
      join gym_routine_exercises e on e.id = s.routine_exercise_id
-     join gym_routines r on r.id = e.routine_id
-     where r.id = 'aaaaaaaa-0000-0000-0000-00000000ab01'::uuid),
+     where e.routine_id = 'aaaaaaaa-0000-0000-0000-00000000ab01'::uuid),
   2, 'a stranger can read a public template''s sets (preview)');
 
 -- The stranger cannot read the club-owned routine (not a member, not public).
