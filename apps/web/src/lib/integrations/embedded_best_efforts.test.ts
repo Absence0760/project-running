@@ -1,9 +1,9 @@
 // Embedded best-effort computation for imported runs. Pre-fix no importer
-// wrote metadata.fastest_{5k,10k,...}_s, so a fast sub-distance inside a long
-// imported run never reached personal_records (the 20260529000002 trigger
-// reads those keys). Keep in lockstep with Dart's fastestWindowOf
-// (apps/mobile_android/lib/run_stats.dart) + the Deno twin in
-// apps/backend/supabase/functions/_shared/strava.ts.
+// wrote the fastest_{5k,10k,...}_s values, so a fast sub-distance inside a
+// long imported run never reached personal_records (the refresher reads the
+// promoted runs columns since 20270325_001). Keep in lockstep with Dart's
+// fastestWindowOf (apps/mobile_android/lib/run_stats.dart) + the Deno twin
+// in apps/backend/supabase/functions/_shared/strava.ts.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -44,7 +44,8 @@ test('computeEmbeddedBests — a sub-5km track has no bests', () => {
 
 test('computeEmbeddedBests — even 6 km run yields ~total-time 5k, no 10k', () => {
 	const bests = computeEmbeddedBests(evenTrack(60, 100, 30)); // 6 km @ 5:00/km
-	assert.ok(bests.fastest_5k_s >= 1495 && bests.fastest_5k_s <= 1505, `got ${bests.fastest_5k_s}`);
+	const fast5k = bests.fastest_5k_s ?? -1;
+	assert.ok(fast5k >= 1495 && fast5k <= 1505, `got ${bests.fastest_5k_s}`);
 	assert.equal(bests.fastest_10k_s, undefined);
 });
 
@@ -60,8 +61,10 @@ test('computeEmbeddedBests — a fast 5k inside a long run is detected', () => {
 	}
 	const bests = computeEmbeddedBests(track);
 	// Embedded fast 5k (~1000 s) beats the whole-run-scaled pace (1500 s).
-	assert.ok(bests.fastest_5k_s >= 995 && bests.fastest_5k_s <= 1005, `got ${bests.fastest_5k_s}`);
-	assert.ok(bests.fastest_10k_s >= 2990 && bests.fastest_10k_s <= 3010, `got ${bests.fastest_10k_s}`);
+	const fast5k = bests.fastest_5k_s ?? -1;
+	const fast10k = bests.fastest_10k_s ?? -1;
+	assert.ok(fast5k >= 995 && fast5k <= 1005, `got ${bests.fastest_5k_s}`);
+	assert.ok(fast10k >= 2990 && fast10k <= 3010, `got ${bests.fastest_10k_s}`);
 	assert.equal(bests.fastest_half_marathon_s, undefined);
 });
 

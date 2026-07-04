@@ -881,6 +881,12 @@ export async function saveRun(input: {
 	source: string;
 	/// Real `runs.activity_type` column (20261207_001). Defaults to 'run'.
 	activity_type?: 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
+	/// Promoted embedded-best columns (20270325_001) — seconds of the fastest
+	/// rolling window per canonical distance, from computeEmbeddedBests.
+	/// Written as real runs columns, never metadata keys.
+	embedded_bests?: Partial<
+		Record<'fastest_5k_s' | 'fastest_10k_s' | 'fastest_half_marathon_s' | 'fastest_marathon_s', number>
+	>;
 	metadata: Record<string, unknown> | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
 	/// Per-point HR for a trackless (indoor / treadmill) run. Uploaded as the
@@ -919,6 +925,7 @@ export async function saveRun(input: {
 		metadata: mergedMetadata,
 		is_public: isPublic,
 	};
+	if (input.embedded_bests) Object.assign(row, input.embedded_bests);
 	if (input.external_id) row.external_id = input.external_id;
 
 	const { data, error } = await supabase

@@ -305,13 +305,14 @@ async function importFitFile(
 	if (parsed.indoor) metadata[METADATA_KEYS.indoor] = true;
 	if (parsed.sub_sport) metadata[METADATA_KEYS.sub_sport] = parsed.sub_sport;
 	if (parsed.running_dynamics) metadata[METADATA_KEYS.running_dynamics] = parsed.running_dynamics;
-	// Embedded best efforts (fastest_{5k,10k,half_marathon,marathon}_s) so a
-	// fast sub-distance inside a long imported run reaches personal_records
-	// (the 20260529000002 trigger reads these). Empty {} → nothing written
-	// for indoor/trackless or too-short runs; no fake bests.
-	Object.assign(metadata, computeEmbeddedBests(parsed.track));
+	// Embedded best efforts (the promoted fastest_{5k,10k,half_marathon,
+	// marathon}_s columns, 20270325_001) so a fast sub-distance inside a long
+	// imported run reaches personal_records. Empty {} → nothing written for
+	// indoor/trackless or too-short runs; no fake bests.
+	const embeddedBests = computeEmbeddedBests(parsed.track);
 
 	await saveRun({
+		embedded_bests: embeddedBests,
 		started_at: parsed.startedAt,
 		distance_m: parsed.distance_m,
 		duration_s: parsed.duration_s,
@@ -385,10 +386,10 @@ async function importRouteFile(
 		source_file: file.name,
 	};
 	// Embedded best efforts off the GPX/TCX per-point timestamps + positions,
-	// same as the FIT path. {} when the original carried no per-point times.
-	Object.assign(metadata, computeEmbeddedBests(waypoints));
-
+	// same as the FIT path — written to the promoted runs columns. {} when
+	// the original carried no per-point times.
 	await saveRun({
+		embedded_bests: computeEmbeddedBests(waypoints),
 		started_at: new Date(startedAt).toISOString(),
 		distance_m: distanceM,
 		duration_s: durationS,
