@@ -226,7 +226,7 @@ class RaceService extends ChangeNotifier {
     final listingId = row['race_listing_id'] as String?;
     if (listingId != null) {
       final l = await _c
-          .from('race_listings')
+          .from('public_race_listings')
           .select()
           .eq('id', listingId)
           .maybeSingle();

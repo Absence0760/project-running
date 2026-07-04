@@ -5,7 +5,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchGymWorkoutWithSets,
-		fetchExerciseSetHistory,
+		fetchExerciseSetHistoryBatch,
 		fetchGymRoutineDetail,
 		deleteGymWorkout,
 		setGymWorkoutPublic,
@@ -114,20 +114,17 @@
 		notFound = w == null;
 		// The PR badges + "vs last time" only judge THIS workout's exercises
 		// against their own earlier sessions, so fetch just those exercises'
-		// history (one bounded RPC each) instead of the user's entire gym_sets
-		// log. Dedup by the normalised key so a differently-cased pair isn't
-		// fetched twice (the RPC already matches normalised names).
-		// perf-hunt 2026-06-10.
+		// history — ONE batched RPC for the whole workout (migration
+		// 20270323_001; server matches normalised names). Dedup by the
+		// normalised key so a differently-cased pair isn't requested twice.
+		// perf-hunt 2026-06-10 / 2026-07-03.
 		if (w) {
 			const byKey = new Map<string, string>();
 			for (const s of w.sets) {
 				const key = normaliseExerciseName(s.exercise_name);
 				if (key && !byKey.has(key)) byKey.set(key, s.exercise_name);
 			}
-			const histories = await Promise.all(
-				[...byKey.values()].map((nm) => fetchExerciseSetHistory(nm)),
-			);
-			history = histories.flat();
+			history = await fetchExerciseSetHistoryBatch([...byKey.values()]);
 		} else {
 			history = [];
 		}

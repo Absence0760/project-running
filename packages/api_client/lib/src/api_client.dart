@@ -5564,16 +5564,29 @@ class ApiClient {
   /// `routine_exercise_id` is in that list) grouped client-side — the shape
   /// [LocalRoutineStore] consumes. Null when the id doesn't resolve (RLS hides
   /// others').
+  /// A public template a non-author previews (the library detail path) misses
+  /// on the owner-only base table and falls back to the redacted
+  /// public_gym_routines view (migration 20270319_001), which carries no
+  /// external_id / last_modified_at — created_at stands in for the model's
+  /// required last-modified field.
   Future<({
     GymRoutineRow routine,
     List<({GymRoutineExerciseRow exercise, List<GymRoutineSetRow> sets})> exercises,
   })?> fetchGymRoutineDetail(String id) async {
-    final r = await _client
+    var r = await _client
         .from(GymRoutineRow.table)
         .select()
         .eq(GymRoutineRow.colId, id)
         .maybeSingle();
-    if (r == null) return null;
+    if (r == null) {
+      final pub = await _client
+          .from('public_gym_routines')
+          .select()
+          .eq(GymRoutineRow.colId, id)
+          .maybeSingle();
+      if (pub == null) return null;
+      r = {...pub, GymRoutineRow.colLastModifiedAt: pub[GymRoutineRow.colCreatedAt]};
+    }
     final routine = GymRoutineRow.fromJson(r);
     final exRows = await _client
         .from(GymRoutineExerciseRow.table)
@@ -5747,20 +5760,22 @@ class ApiClient {
   /// data is exposed. Mirrors web `data.ts#fetchPublicGymRoutineLibrary`.
   Future<List<({GymRoutineRow routine, String? authorHandle})>>
       fetchPublicGymRoutineLibrary({String query = ''}) async {
-    var sel = _client
-        .from(GymRoutineRow.table)
-        .select()
-        .eq(GymRoutineRow.colIsPublicTemplate, true);
+    // public_gym_routines redacts external_id + last_modified_at (migration
+    // 20270319_001); created_at stands in for the model's required field.
+    var sel = _client.from('public_gym_routines').select();
     final trimmed = query.trim();
     if (trimmed.isNotEmpty) {
       sel = sel.ilike(GymRoutineRow.colTitle, '%$trimmed%');
     }
     final rows = await sel
-        .order(GymRoutineRow.colLastModifiedAt, ascending: false)
+        .order(GymRoutineRow.colCreatedAt, ascending: false)
         .limit(100);
     final routines = (rows as List)
         .cast<Map<String, dynamic>>()
-        .map(GymRoutineRow.fromJson)
+        .map((r) => GymRoutineRow.fromJson({
+              ...r,
+              GymRoutineRow.colLastModifiedAt: r[GymRoutineRow.colCreatedAt],
+            }))
         .toList();
     final authorIds = {for (final r in routines) r.authorId}.toList();
     final byId = <String, String?>{};

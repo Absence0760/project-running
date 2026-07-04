@@ -2054,7 +2054,7 @@ export async function fetchRaceResultForRun(runId: string): Promise<RaceResultFo
 	let listing: RaceListing | null = null;
 	if (data.race_listing_id) {
 		const { data: l } = await supabase
-			.from('race_listings')
+			.from('public_race_listings')
 			.select('*')
 			.eq('id', data.race_listing_id as string)
 			.maybeSingle();
@@ -7965,6 +7965,40 @@ export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithD
 	return (await fetchExerciseSetHistoryWithError(name)).sets;
 }
 
+/// N exercises' set history in ONE round-trip (migration 20270323_001) — the
+/// batched sibling of fetchExerciseSetHistory for the session / detail pages
+/// that previously called the singular RPC once per exercise. Server-side the
+/// match is on the normalised name (same expression as normaliseExerciseName),
+/// so consumers can group the flat result by that key.
+export async function fetchExerciseSetHistoryBatch(names: string[]): Promise<GymSetWithDate[]> {
+	const wanted = names.map((n) => n.trim()).filter((n) => n.length > 0);
+	if (!auth.user?.id || wanted.length === 0) return [];
+	const { data, error } = await supabase.rpc('gym_exercise_set_history_batch', {
+		p_names: wanted
+	});
+	if (error) {
+		console.error('fetchExerciseSetHistoryBatch failed', error);
+		return [];
+	}
+	return ((data ?? []) as Array<{
+		workout_id: string;
+		started_at: string;
+		exercise_name: string;
+		reps: number | null;
+		weight_kg: number | string | null;
+		rpe: number | string | null;
+		duration_s: number | null;
+	}>).map((r) => ({
+		workout_id: r.workout_id,
+		started_at: r.started_at,
+		exercise_name: r.exercise_name,
+		reps: r.reps,
+		weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
+		rpe: r.rpe == null ? null : Number(r.rpe),
+		duration_s: r.duration_s
+	}));
+}
+
 /// Distinct exercise names the user has logged, most-used first — for the gym
 /// editor's autocomplete datalist. Bounded to the count of distinct exercises
 /// (dozens), so a caller that only needs the names never pulls raw set history.
@@ -8228,13 +8262,31 @@ export async function fetchGymRoutines(limit = 100): Promise<GymRoutineSummary[]
 
 /// A single routine with its exercises (by position) + their planned sets (by
 /// set_index). Returns null when the id doesn't resolve (RLS hides others').
+/// A public template a non-author previews (the library detail page) misses on
+/// the owner-only base table and falls back to the redacted
+/// public_gym_routines view (migration 20270319_001), which carries no
+/// last_modified_at — created_at stands in for the required summary field.
 export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetail | null> {
-	const { data: routine, error: rErr } = await supabase
+	let routine: GymRoutineSummary | null = null;
+	const { data: base, error: rErr } = await supabase
 		.from(TABLES.gym_routines)
 		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
 		.eq('id', id)
 		.maybeSingle();
-	if (rErr || !routine) return null;
+	if (!rErr && base) {
+		routine = base as GymRoutineSummary;
+	} else {
+		const { data: pub } = await supabase
+			.from('public_gym_routines')
+			.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, created_at')
+			.eq('id', id)
+			.maybeSingle();
+		if (pub) {
+			const p = pub as Omit<GymRoutineSummary, 'last_modified_at'>;
+			routine = { ...p, last_modified_at: p.created_at };
+		}
+	}
+	if (!routine) return null;
 	const { data: exRows, error: eErr } = await supabase
 		.from(TABLES.gym_routine_exercises)
 		.select(
@@ -9429,17 +9481,20 @@ export async function fetchPublicGymRoutineLibrary(
 	query = '',
 	limit = 100
 ): Promise<{ routines: PublicGymRoutineEntry[]; error: string | null }> {
+	// public_gym_routines redacts external_id + last_modified_at (migration
+	// 20270319_001); created_at stands in for the required summary field.
 	let q = supabase
-		.from(TABLES.gym_routines)
-		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, last_modified_at, created_at')
-		.eq('is_public_template', true)
-		.order('last_modified_at', { ascending: false })
+		.from('public_gym_routines')
+		.select('id, author_id, club_id, is_public_template, title, notes, exercise_count, created_at')
+		.order('created_at', { ascending: false })
 		.limit(limit);
 	const trimmed = query.trim();
 	if (trimmed) q = q.ilike('title', `%${trimmed}%`);
 	const { data, error } = await q;
 	if (error) return { routines: [], error: error.message };
-	const rows = (data ?? []) as GymRoutineSummary[];
+	const rows = ((data ?? []) as Array<Omit<GymRoutineSummary, 'last_modified_at'>>).map(
+		(r) => ({ ...r, last_modified_at: r.created_at }) as GymRoutineSummary
+	);
 	const authorIds = [...new Set(rows.map((r) => r.author_id))];
 	const byId = new Map<string, string | null>();
 	if (authorIds.length > 0) {
