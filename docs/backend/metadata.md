@@ -23,6 +23,10 @@ no longer metadata keys — read/write `runs.activity_type` / `runs.is_dnf`.
 |---|---|---|
 | `activity_type` | `runs.activity_type text not null default 'run'` + CHECK `in ('run','walk','hike','cycle','stroller')`. Exposed on `public_runs` as a column, the `activities` view summary, the gear auto-tag trigger, and VDOT qualification. | `20261207_001` (was `20260601_001`'s jsonb CHECK, now dropped) |
 | `is_dnf` | `runs.is_dnf boolean not null default false`. The personal-records refresher filters on it (a DNF must not be promoted as a distance PR). Exposed on `public_runs` as a column. | `20261207_001` (was `20260530000001`'s `metadata->>'is_dnf'` filter) |
+| `fastest_5k_s` | `runs.fastest_5k_s integer` (nullable). Seconds of the fastest rolling-5km window inside the GPS track — the embedded-best PR candidate `refresh_personal_records_for_user` reads alongside whole-run brackets (a sub-20 5k inside an 18 km long run). Exposed on `public_runs` as a column (was a public-safe bag key). Absent (null) when the track is too short / has no per-point timestamps — no fake bests. | `20270325_001` (was `20260529000002`'s `metadata->>'fastest_5k_s'` read) |
+| `fastest_10k_s` | `runs.fastest_10k_s integer` — same contract, rolling-10km window. | `20270325_001` |
+| `fastest_half_marathon_s` | `runs.fastest_half_marathon_s integer` — same contract, rolling-21.0975km window. | `20270325_001` |
+| `fastest_marathon_s` | `runs.fastest_marathon_s integer` — same contract, rolling-42.195km window. | `20270325_001` |
 
 **Server-side writers/readers already migrated (Round 3, this change):**
 `_shared/strava.ts`, `parkrun-import`, `export-data` (CSV + backup),
@@ -69,6 +73,21 @@ the lift makes that the column write. The byte-identical iOS twin matches.
 **Client read/write sites STILL on the jsonb keys (Tier-2, deferred — these
 silently read `null` / write a now-ignored bag key until switched):**
 - `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-side ingest lifts it into the column via the same `Run`-carrier path — see § Known issues).
+
+**Embedded-best writers/readers — all switched with `20270325_001`:**
+the SQL refresher (`refresh_personal_records_for_user`) reads only the
+columns and the statement-trigger watch list swapped `metadata` for the four
+columns (a bag-only edit no longer forces a PR recompute); web's Garmin
+importers pass `computeEmbeddedBests` to `saveRun`'s `embedded_bests` input
+(`core/data.ts`) which writes the columns; the Strava EF (`_shared/strava.ts`
+`ingestActivity`) updates the columns after the track upload; Flutter keeps
+the keys in the in-memory `Run.metadata` bag (written by
+`embedded_bests.dart` at save/import time) and `ApiClient.saveRun` /
+`saveRunsBatch` lift them onto the columns via `_embeddedBestSeconds`
+(non-negative-integer domain, mirroring the old SQL regex validation) while
+`_runFromRow` stashes non-null columns back onto the bag — the same carrier
+pattern as `activity_type` / `is_dnf` above. The Go worker's Strava path
+never computed embedded bests (pre-existing gap, unchanged).
 
 ### Core run properties
 
@@ -159,17 +178,19 @@ Keys that carry transient or platform-internal state. Treat these as implementat
 
 ### Personal-records hints
 
-Per-canonical-distance fastest times, computed at save time by the live recorder AND at import time by the Strava + Garmin importers (from the imported activity's per-point track/stream). Persona-hunt Round 2 finding Pro #4 — pre-fix the canonical `personal_records` cache (migration `20260528000002`) only considered whole-run `distance_m` against the bracket. A sub-20 5k inside an 18 km long run never landed in the PR table. Migration `20260529000002_personal_records_embedded_bests.sql` now factors these keys in. Originally only the mobile recorder wrote them, so a fast sub-distance inside an **imported** long run (Strava / Garmin) still never reached `personal_records`; the importers now write them via the shared `computeEmbeddedBests` helpers (`garmin-fit.ts` on web, `_shared/strava.ts` on the backend).
-
-| Key | Shape | Writers | Readers | Required? | Notes |
-|---|---|---|---|---|---|
-| `fastest_5k_s` | `int` — seconds of the fastest rolling-5km window inside the GPS track | `mobile_android/lib/embedded_bests.dart` (live recorder, called from `screens/run_screen.dart` at save time, mirrored to iOS twin); `apps/web/src/lib/integrations/garmin-zip.ts` (Garmin FIT + GPX/TCX import, via `computeEmbeddedBests` in `garmin-fit.ts`); `apps/backend/supabase/functions/_shared/strava.ts` (`ingestActivity`, via `computeEmbeddedBests` — the live Strava API path used by `strava-import` + `strava-webhook`) | `apps/backend/supabase/migrations/20260529000002_personal_records_embedded_bests.sql` (the `refresh_personal_records_for_user` trigger function reads it alongside whole-run candidates) | Optional — only present when the track is long enough (≥ 5 km) AND has ≥ 3 waypoints | Auto-computed at save/import time. The importers use the same sliding-window algorithm as `fastestWindowOf` (`run_stats.dart`) so an imported run's best matches a live recording of the same effort; a track with no per-point timestamps (indoor / treadmill / route file without times) writes nothing — no fake bests. A faster manual override is preserved; a slower existing value is overwritten with the auto-computed one. Public-safe (passes through `public_runs`). |
-| `fastest_10k_s` | `int` — seconds | same | same | same as above, gated on track ≥ 10 km | same |
-| `fastest_half_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 21.097 km | same |
-| `fastest_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 42.195 km | same |
-
+> The four embedded-best keys — `fastest_5k_s` / `fastest_10k_s` /
+> `fastest_half_marathon_s` / `fastest_marathon_s` — were promoted to real
+> `runs` columns by `20270325_001` (backfilled from the bag with the same
+> non-negative-integer validation the trigger's regex applied, then
+> stripped). See [Promoted to real columns](#promoted-to-real-columns-no-longer-metadata-keys)
+> above for the column contracts and the per-writer migration state. Value
+> semantics are unchanged: auto-computed at save/import time with the
+> `fastestWindowOf` sliding window, absent (null) for trackless /
+> timestamp-less / too-short runs (no fake bests), a faster manual bag value
+> still wins over the auto-computed one on the Flutter carrier path.
+>
 > `is_dnf` was promoted to a real `runs.is_dnf` column by `20261207_001` —
-> see [Promoted to real columns](#promoted-to-real-columns-no-longer-metadata-keys) above.
+> same section above.
 
 ### Client-side synthetic
 

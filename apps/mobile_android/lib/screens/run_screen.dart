@@ -1912,10 +1912,11 @@ class _RunScreenState extends State<RunScreen> {
     }
 
     // Persona-hunt Round 2 #4: compute embedded best efforts (per
-    // canonical distance) over the GPS track and merge into metadata
-    // so the SQL `personal_records` trigger can pick up a sub-20 5k
-    // inside an 18 km long run. Helper is null-safe + idempotent + a
-    // no-op for tracks under 3 points.
+    // canonical distance) over the GPS track and merge into metadata;
+    // the api_client save path lifts them onto the promoted fastest_*_s
+    // columns (20270325_001) so the SQL `personal_records` trigger can
+    // pick up a sub-20 5k inside an 18 km long run. Helper is null-safe
+    // + idempotent + a no-op for tracks under 3 points.
     final enrichedMetadata = enrichMetadataWithEmbeddedBests(
       track: raw.track,
       metadata: metadata,

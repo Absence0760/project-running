@@ -132,8 +132,8 @@ export function garminExternalId(fileId: string | null): string | null {
 //
 // The whole-run distance of a long run misses every canonical PR bracket, so
 // a sub-20 5k inside a 30 km long run never reaches `personal_records`. The
-// 20260529000002 migration teaches the PR trigger to read
-// `metadata.fastest_{5k,10k,half_marathon,marathon}_s`; the live recorder
+// refresher reads the promoted `runs.fastest_{5k,10k,half_marathon,marathon}_s`
+// columns (20270325_001; metadata keys before that); the live recorder
 // writes them (embedded_bests.dart) but no importer did. Keep the algorithm
 // in lockstep with `fastestWindowOf` in
 // `apps/mobile_android/lib/run_stats.dart` + `enrichMetadataWithEmbeddedBests`
@@ -142,9 +142,15 @@ export function garminExternalId(fileId: string | null): string | null {
 // best matches what a live recording of the same effort would write.
 // ---------------------------------------------------------------------------
 
-/// Canonical distances (metres) → metadata key. Matches the bracket
+export type EmbeddedBestColumn =
+	| 'fastest_5k_s'
+	| 'fastest_10k_s'
+	| 'fastest_half_marathon_s'
+	| 'fastest_marathon_s';
+
+/// Canonical distances (metres) → runs column. Matches the bracket
 /// midpoints the SQL trigger searches (±2 % wide, so 5000 m exactly).
-export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [string, number]> = [
+export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [EmbeddedBestColumn, number]> = [
 	['fastest_5k_s', 5000],
 	['fastest_10k_s', 10000],
 	['fastest_half_marathon_s', 21097.5],
@@ -220,10 +226,12 @@ export function fastestWindowSeconds(
 
 /// Embedded best-effort seconds for every canonical distance the track is
 /// long enough to cover. Returns `{}` (no fake bests) when the track has < 3
-/// points or covers no canonical distance; callers merge the result into
-/// `metadata` and skip the write when empty.
-export function computeEmbeddedBests(track: readonly TrackPoint[]): Record<string, number> {
-	const out: Record<string, number> = {};
+/// points or covers no canonical distance; callers pass the result to
+/// saveRun's `embedded_bests` so it lands on the promoted runs columns.
+export function computeEmbeddedBests(
+	track: readonly TrackPoint[],
+): Partial<Record<EmbeddedBestColumn, number>> {
+	const out: Partial<Record<EmbeddedBestColumn, number>> = {};
 	if (!Array.isArray(track) || track.length < 3) return out;
 	for (const [key, dist] of EMBEDDED_BEST_DISTANCES) {
 		const secs = fastestWindowSeconds(track, dist);

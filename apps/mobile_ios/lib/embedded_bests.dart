@@ -3,9 +3,12 @@
 /// metadata bag. Persona-hunt Round 2 finding Pro #4 — pre-fix the
 /// canonical `personal_records` cache only considered whole-run
 /// distance, so a sub-20 5k inside an 18 km long run never landed in
-/// the user's PR list. Migration 20260529_001 now reads
-/// `metadata.fastest_X_s` alongside whole-run candidates; this
-/// helper writes those keys at save time.
+/// the user's PR list. The refresher reads the promoted
+/// `runs.fastest_X_s` columns alongside whole-run candidates
+/// (migration 20270325_001; metadata keys before that); this helper
+/// still writes the keys into the in-memory bag at save time, and the
+/// api_client save path lifts them onto the columns — the same
+/// carrier pattern as activity_type / is_dnf.
 ///
 /// Same canonical distances + bracket midpoints the SQL trigger
 /// uses (the trigger's brackets are ±2% wide; the helper picks the
@@ -16,7 +19,7 @@ import 'package:core_models/core_models.dart';
 
 import 'run_stats.dart';
 
-/// (metadata_key, distance_metres) pairs the trigger looks for.
+/// (promoted_column, distance_metres) pairs the trigger looks for.
 const _embeddedBestDistances = <String, double>{
   'fastest_5k_s': 5000,
   'fastest_10k_s': 10000,

@@ -603,6 +603,12 @@ class ApiClient {
       source: run.source.name,
       activityType: (run.metadata?['activity_type'] as String?) ?? 'run',
       isDnf: run.metadata?['is_dnf'] == true,
+      fastest5kS: _embeddedBestSeconds(run.metadata, 'fastest_5k_s'),
+      fastest10kS: _embeddedBestSeconds(run.metadata, 'fastest_10k_s'),
+      fastestHalfMarathonS:
+          _embeddedBestSeconds(run.metadata, 'fastest_half_marathon_s'),
+      fastestMarathonS:
+          _embeddedBestSeconds(run.metadata, 'fastest_marathon_s'),
       externalId: run.externalId,
       metadata: _metadataWithoutPromotedColumns(run.metadata),
       trackUrl: trackUrl,
@@ -737,6 +743,12 @@ class ApiClient {
         source: r.source.name,
         activityType: (r.metadata?['activity_type'] as String?) ?? 'run',
         isDnf: r.metadata?['is_dnf'] == true,
+        fastest5kS: _embeddedBestSeconds(r.metadata, 'fastest_5k_s'),
+        fastest10kS: _embeddedBestSeconds(r.metadata, 'fastest_10k_s'),
+        fastestHalfMarathonS:
+            _embeddedBestSeconds(r.metadata, 'fastest_half_marathon_s'),
+        fastestMarathonS:
+            _embeddedBestSeconds(r.metadata, 'fastest_marathon_s'),
         externalId: r.externalId,
         metadata: _metadataWithoutPromotedColumns(r.metadata),
         trackUrl: trackUrl.isEmpty ? null : trackUrl,
@@ -1364,6 +1376,14 @@ class ApiClient {
     Map<String, dynamic>? metadata,
   ) =>
       _metadataWithoutPromotedColumns(metadata);
+
+  /// Test-only: exposes [_embeddedBestSeconds] for the same reason.
+  @visibleForTesting
+  static int? debugEmbeddedBestSeconds(
+    Map<String, dynamic>? metadata,
+    String key,
+  ) =>
+      _embeddedBestSeconds(metadata, key);
 
   /// Test-only: exposes [_routeFromRow] for the same reason.
   @visibleForTesting
@@ -4875,18 +4895,34 @@ class ApiClient {
   // as compile errors on the consuming fields below, not as silent runtime
   // drift.
 
-  // activity_type and is_dnf are promoted columns (migration 20261207_001);
-  // the `Run` domain object still carries them inside its metadata bag for a
-  // single read path, so saveRun lifts them into the columns and strips them
-  // from the persisted bag here — the column is the only stored copy.
+  // activity_type and is_dnf (migration 20261207_001) plus the four
+  // embedded-best fastest_*_s keys (migration 20270325_001) are promoted
+  // columns; the `Run` domain object still carries them inside its metadata
+  // bag for a single read path, so saveRun lifts them into the columns and
+  // strips them from the persisted bag here — the column is the only stored
+  // copy.
   static Map<String, dynamic>? _metadataWithoutPromotedColumns(
     Map<String, dynamic>? metadata,
   ) {
     if (metadata == null) return null;
     final out = Map<String, dynamic>.from(metadata)
       ..remove('activity_type')
-      ..remove('is_dnf');
+      ..remove('is_dnf')
+      ..remove('fastest_5k_s')
+      ..remove('fastest_10k_s')
+      ..remove('fastest_half_marathon_s')
+      ..remove('fastest_marathon_s');
     return out.isEmpty ? null : out;
+  }
+
+  // Bag → column lift for the promoted embedded-best keys. Non-negative
+  // integers only — the same domain the old SQL-side `~ '^[0-9]+$'`
+  // validation admitted; anything else is dropped, never written.
+  static int? _embeddedBestSeconds(Map<String, dynamic>? metadata, String key) {
+    final v = metadata?[key];
+    final secs = v is int ? v : (v is num ? v.toInt() : null);
+    if (secs == null || secs < 0) return null;
+    return secs;
   }
 
   static Run _runFromRow(Map<String, dynamic> row) {
@@ -4900,12 +4936,22 @@ class ApiClient {
     // ({user_id}/{run_id}.hr.json.gz) so run-detail can fall back to it for the
     // HR-zone chart when the GPS track has no per-point bpm (decisions §116).
     if (r.hrSeriesUrl != null) metadata['hr_series_url'] = r.hrSeriesUrl;
-    // activity_type / is_dnf are promoted columns (migration 20261207_001); the
-    // column is authoritative. Surface them back onto metadata so the domain
-    // readers keep their single access path, the same convenience stash as
-    // track_url above.
+    // activity_type / is_dnf (20261207_001) and the embedded-best
+    // fastest_*_s keys (20270325_001) are promoted columns; the column is
+    // authoritative. Surface them back onto metadata so the domain readers
+    // keep their single access path, the same convenience stash as
+    // track_url above. The nullable bests only stash when present, matching
+    // the old absent-key bag semantics.
     metadata['activity_type'] = r.activityType;
     metadata['is_dnf'] = r.isDnf;
+    if (r.fastest5kS != null) metadata['fastest_5k_s'] = r.fastest5kS;
+    if (r.fastest10kS != null) metadata['fastest_10k_s'] = r.fastest10kS;
+    if (r.fastestHalfMarathonS != null) {
+      metadata['fastest_half_marathon_s'] = r.fastestHalfMarathonS;
+    }
+    if (r.fastestMarathonS != null) {
+      metadata['fastest_marathon_s'] = r.fastestMarathonS;
+    }
 
     return Run(
       id: r.id,
