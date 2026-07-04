@@ -136,6 +136,28 @@ Deno.test('handler — valid signup sends one localized mail with the verify lin
   );
 });
 
+Deno.test('handler — API_EXTERNAL_URL beats the Docker-internal SUPABASE_URL in verify links', async () => {
+  // The local CLI stack injects SUPABASE_URL=http://kong:8000 into the edge
+  // runtime; a verify link built from it is unreachable from any browser
+  // (broke the reset-password e2es in CI run 28707481878). The committed
+  // supabase/functions/.env pins API_EXTERNAL_URL to the host-reachable
+  // origin — it must win whenever both are set.
+  const { deps, sent } = makeDeps({
+    env: {
+      SUPABASE_URL: 'http://kong:8000',
+      API_EXTERNAL_URL: 'http://127.0.0.1:54321',
+    },
+  });
+  const res = await makeAuthEmailHandler(deps)(await signedRequest(SIGNUP_PAYLOAD));
+  assertEquals(res.status, 200);
+  assertEquals(sent.length, 1);
+  assertStringIncludes(
+    sent[0].mime,
+    'http://127.0.0.1:54321/auth/v1/verify?token=pkce_hash&type=signup',
+  );
+  assert(!sent[0].mime.includes('kong:8000'));
+});
+
 Deno.test('handler — settings lookup failure falls back to metadata locale', async () => {
   const { deps, sent } = makeDeps({ localeThrows: true });
   const res = await makeAuthEmailHandler(deps)(await signedRequest(SIGNUP_PAYLOAD));

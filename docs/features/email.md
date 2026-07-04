@@ -172,10 +172,18 @@ Dashboard → Auth → Hooks in prod):
   to an informational default and never fail the hook — a hook failure
   surfaces as a GoTrue API error to the user mid-signup/reset.
 - **Verify link** — built byte-compatible with GoTrue's own
-  `{SUPABASE_URL}/auth/v1/verify?token={token_hash}&type={action}&redirect_to=…`
+  `{base}/auth/v1/verify?token={token_hash}&type={action}&redirect_to=…`
   (including GoTrue's leave-unencoded-unless-`&=#` redirect quirk), so the web
   e2e reset flow's `extractLink` + `/auth/reset` greps keep working. The OTP
-  code rides along as the link alternative.
+  code rides along as the link alternative. The base is `API_EXTERNAL_URL`
+  when set, else the runtime-injected `SUPABASE_URL`: the local stack injects
+  the Docker-internal `http://kong:8000` as `SUPABASE_URL`, which no browser
+  resolves (CI run 28707481878 broke every reset-password e2e this way), so
+  the committed `supabase/functions/.env` pins `API_EXTERNAL_URL` to
+  `http://127.0.0.1:54321`. Prod leaves it unset — the hosted runtime's
+  `SUPABASE_URL` is already the public project URL. (The name mirrors
+  GoTrue's `api_external_url`; a `SUPABASE_`-prefixed name can't be used —
+  the CLI reserves the prefix and drops such vars from env files.)
 - **Transport** — the same SMTP env contract as the worker (`SMTP_HOST/PORT/
   USERNAME/PASSWORD/FROM`): a minimal Deno SMTP client (`smtp.ts` — implicit
   TLS on 465, opportunistic STARTTLS otherwise, AUTH PLAIN when credentials

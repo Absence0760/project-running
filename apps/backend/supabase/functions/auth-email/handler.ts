@@ -97,7 +97,15 @@ export function makeAuthEmailHandler(
       user.user_metadata?.locale,
     );
 
-    const supabaseUrl = deps.getEnv('SUPABASE_URL') ?? emailData.site_url ?? '';
+    // Verify links must be reachable from the RECIPIENT's browser. In the
+    // hosted runtime SUPABASE_URL is the public project URL, but the local
+    // CLI stack injects the Docker-internal http://kong:8000 — a link built
+    // from it 404s in the user's browser (CI run 28707481878 broke every
+    // reset-password e2e this way). API_EXTERNAL_URL (committed in
+    // supabase/functions/.env for local dev, unset in prod) overrides it
+    // with the host-reachable API origin.
+    const supabaseUrl = deps.getEnv('API_EXTERNAL_URL') ??
+      deps.getEnv('SUPABASE_URL') ?? emailData.site_url ?? '';
 
     for (const send of sends) {
       const rendered = renderAuthEmail(locale, send, {
