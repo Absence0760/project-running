@@ -20,6 +20,7 @@ import 'explore_routes_screen.dart';
 import 'routes_heatmap_screen.dart';
 import 'route_builder_screen.dart';
 import 'route_detail_screen.dart';
+import 'run_heatmap_screen.dart';
 import '../widgets/top_banner.dart';
 
 /// Page size for the cloud fetch + visible-list window. Same value as
@@ -1075,174 +1076,129 @@ class RoutesScreenState extends State<RoutesScreen> {
               },
             );
 
-    if (widget.embedded) {
-      // Embedded mode: SocialScreen owns the Scaffold + the FAB. The
-      // discovery affordances (Explore / Heatmap) become labelled
-      // OutlinedButtons in a clearly-titled "Discover" strip at the
-      // top of the body so they don't look like stray AppBar-style
-      // icon buttons floating above the search field. Sync stays
-      // as a compact trailing affordance on the same row.
-      return Column(
-        children: [
-          if (_selecting)
-            _selectionBanner(
-                theme: theme, visible: routes, ownedIds: ownedIds),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.travel_explore_outlined,
-                  size: 16,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  l10n.routesDiscover,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                if (_syncing)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                else if (widget.apiClient?.userId != null)
-                  IconButton(
-                    icon: const Icon(Icons.cloud_download, size: 20),
-                    tooltip: l10n.routesSyncFromCloud,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _fetchRemoteRoutes,
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.explore, size: 18),
-                    label: Text(l10n.routesPublicRoutes),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExploreRoutesScreen(
-                            apiClient: widget.apiClient,
-                            routeStore: widget.routeStore,
-                            preferences: widget.preferences,
-                            onStartRun: widget.onStartRun,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (widget.apiClient != null) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(
-                        Icons.local_fire_department_outlined,
-                        size: 18,
-                      ),
-                      label: Text(l10n.routesHeatmap),
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RoutesHeatmapScreen(
-                            api: widget.apiClient!,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Expanded(child: body),
-        ],
-      );
-    }
+    // Both mounts share the same body shape: the labelled "Discover" strip
+    // (Public routes / Heatmap / Your heatmap + the compact sync affordance)
+    // over the route list. The strip is the single home of every map/
+    // discovery entry point — icon-only AppBar actions proved
+    // undiscoverable (field reports for both heatmaps).
+    final content = Column(
+      children: [
+        if (_selecting)
+          _selectionBanner(theme: theme, visible: routes, ownedIds: ownedIds),
+        ..._discoverHeader(theme, l10n),
+        Expanded(child: body),
+      ],
+    );
+
+    // Embedded mode: the parent owns the Scaffold + the FAB.
+    if (widget.embedded) return content;
 
     return Scaffold(
-      appBar: AppBar(
-        actions: _buildActions(context),
-      ),
+      appBar: AppBar(title: Text(l10n.fitnessRunsRoutes)),
       floatingActionButton: buildRouteFabs(context),
-      body: _selecting
-          ? Column(
-              children: [
-                _selectionBanner(
-                    theme: theme, visible: routes, ownedIds: ownedIds),
-                Expanded(child: body),
-              ],
-            )
-          : body,
+      body: content,
     );
   }
 
-  /// Inline action buttons: Explore (browse public routes), Heatmap,
-  /// and a Sync indicator. Used by both the standalone AppBar (when
-  /// `embedded: false`) and the inline toolbar row (when embedded).
-  List<Widget> _buildActions(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+  /// The "Discover" strip: a titled row with the compact sync affordance,
+  /// then the labelled discovery buttons — Public routes, the community
+  /// routes heatmap (discoverable-route + club pins), and the user's own
+  /// run heatmap. Wrap-laid so three buttons flow to a second line on
+  /// narrow phones instead of overflowing.
+  List<Widget> _discoverHeader(ThemeData theme, AppLocalizations l10n) {
     return [
-      IconButton(
-        icon: const Icon(Icons.explore),
-        tooltip: l10n.routesExplorePublic,
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ExploreRoutesScreen(
-                apiClient: widget.apiClient,
-                routeStore: widget.routeStore,
-                preferences: widget.preferences,
-                onStartRun: widget.onStartRun,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+        child: Row(
+          children: [
+            Icon(
+              Icons.travel_explore_outlined,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              l10n.routesDiscover,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          );
-        },
+            const Spacer(),
+            if (_syncing)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (widget.apiClient?.userId != null)
+              IconButton(
+                icon: const Icon(Icons.cloud_download, size: 20),
+                tooltip: l10n.routesSyncFromCloud,
+                visualDensity: VisualDensity.compact,
+                onPressed: _fetchRemoteRoutes,
+              ),
+          ],
+        ),
       ),
-      if (widget.apiClient != null)
-        IconButton(
-          icon: const Icon(Icons.local_fire_department_outlined),
-          tooltip: l10n.routesHeatmapTooltip,
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => RoutesHeatmapScreen(
-                api: widget.apiClient!,
-              ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.explore, size: 18),
+              label: Text(l10n.routesPublicRoutes),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExploreRoutesScreen(
+                      apiClient: widget.apiClient,
+                      routeStore: widget.routeStore,
+                      preferences: widget.preferences,
+                      onStartRun: widget.onStartRun,
+                    ),
+                  ),
+                );
+              },
             ),
-          ),
+            if (widget.apiClient != null) ...[
+              OutlinedButton.icon(
+                icon: const Icon(
+                  Icons.local_fire_department_outlined,
+                  size: 18,
+                ),
+                label: Text(l10n.routesHeatmap),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RoutesHeatmapScreen(
+                      api: widget.apiClient!,
+                    ),
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.person_pin_circle_outlined, size: 18),
+                label: Text(l10n.runHeatmapTitle),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RunHeatmapScreen(
+                      api: widget.apiClient!,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
-      if (_syncing)
-        const Padding(
-          padding: EdgeInsets.all(12),
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        )
-      else if (widget.apiClient?.userId != null)
-        IconButton(
-          icon: const Icon(Icons.cloud_download),
-          tooltip: l10n.routesSyncFromCloud,
-          onPressed: _fetchRemoteRoutes,
-        ),
+      ),
     ];
   }
 

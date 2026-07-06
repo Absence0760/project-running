@@ -13,7 +13,6 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
-import '../lib/screens/run_heatmap_screen.dart';
 import '../lib/screens/runs_screen.dart';
 
 /// Signed-in fake with no remote runs — keeps `_fetchRemote` off the network
@@ -117,28 +116,5 @@ void main() {
     // sub-tab opts out (pinned in fitness_hub_screen_test.dart).
     await pumpRunList(tester);
     expect(find.byIcon(Icons.cloud_download), findsOneWidget);
-  });
-
-  testWidgets(
-      'the filter header carries a labelled heatmap entry that opens the '
-      'personal run heatmap', (tester) async {
-    // Seed one run — an entirely empty store renders the no-runs empty
-    // state, which has no filter header (and rightly no heatmap entry).
-    await pumpRunList(tester, runs: [
-      Run(
-        id: 'r1',
-        startedAt: DateTime.now(),
-        duration: const Duration(minutes: 25),
-        distanceMetres: 5000,
-        source: RunSource.app,
-      ),
-    ]);
-    // Labelled button on the source-filter row — not an icon-only AppBar
-    // action (field report: the flame icon was undiscoverable).
-    final heatmapButton = find.widgetWithText(TextButton, 'Run heatmap');
-    expect(heatmapButton, findsOneWidget);
-    await tester.tap(heatmapButton);
-    await tester.pumpAndSettle();
-    expect(find.byType(RunHeatmapScreen), findsOneWidget);
   });
 }

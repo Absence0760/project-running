@@ -11,7 +11,6 @@ import '../l10n/gen/app_localizations.dart';
 import '../run_heatmap.dart';
 import '../tile_cache.dart';
 import '../widgets/live_run_map.dart' show currentTileUrl;
-import 'routes_heatmap_screen.dart';
 
 /// Personal run-track heatmap — the mobile mirror of web `/runs/heatmap`
 /// (decisions/parity row "Personal run-track heatmap"). A Strava-style
@@ -235,25 +234,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.runHeatmapTitle),
-        actions: [
-          // Labelled hand-off to the sibling surface: this screen is the
-          // user's OWN tracks; the routes heatmap is the community map
-          // (discoverable-route + club pins). Users looking for "the heatmap
-          // like on web" land here first, so the sibling must be one
-          // labelled tap away. pushReplacement keeps the stack flat.
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).pushReplacement(
-              MaterialPageRoute<void>(
-                builder: (_) => RoutesHeatmapScreen(api: widget.api),
-              ),
-            ),
-            icon: const Icon(Icons.travel_explore, size: 18),
-            label: Text(l10n.routesHeatmapTooltip),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(l10n.runHeatmapTitle)),
       body: Stack(
         children: [
           FlutterMap(

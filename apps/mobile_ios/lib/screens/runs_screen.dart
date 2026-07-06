@@ -29,7 +29,6 @@ import 'gym_detail_screen.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'run_detail_screen.dart';
-import 'run_heatmap_screen.dart';
 import '../widgets/top_banner.dart';
 
 /// Runs list showing local runs with sync status.
@@ -1447,14 +1446,6 @@ class _RunsScreenState extends State<RunsScreen> {
               });
               _persistFilters();
             },
-            onOpenHeatmap: widget.apiClient != null
-                ? () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            RunHeatmapScreen(api: widget.apiClient!),
-                      ),
-                    )
-                : null,
           );
         }
         if (emptyAfterFilter && index == 1) {
@@ -1853,12 +1844,6 @@ class _RunsFilterHeader extends StatelessWidget {
   final ValueChanged<ActivityType?> onActivityChanged;
   final ValueChanged<RunSource?> onSourceChanged;
 
-  /// Opens the personal run heatmap. Rendered as a labelled button on the
-  /// source-filter row — the icon-only AppBar flame it replaces was
-  /// undiscoverable (field report: "why don't we have the heatmap on
-  /// mobile?"). Null when signed out (the heatmap downloads own tracks).
-  final VoidCallback? onOpenHeatmap;
-
   const _RunsFilterHeader({
     required this.l10n,
     required this.rangeLabel,
@@ -1870,7 +1855,6 @@ class _RunsFilterHeader extends StatelessWidget {
     required this.sourceFilter,
     required this.onActivityChanged,
     required this.onSourceChanged,
-    this.onOpenHeatmap,
   });
 
   /// The selectable run sources in display order. Labels are resolved
@@ -1993,13 +1977,10 @@ class _RunsFilterHeader extends StatelessWidget {
         const SizedBox(height: 8),
         // Source filter collapsed into a popup so the 7-entry list doesn't
         // need its own scrollable row. Matches the AppBar's existing
-        // PopupMenuButton pattern for date-range and sort. The heatmap
-        // entry shares this row (right-aligned) — a labelled button here
-        // mirrors web's /runs toolbar "Heatmap" link.
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            PopupMenuButton<RunSource?>(
+        // PopupMenuButton pattern for date-range and sort.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PopupMenuButton<RunSource?>(
               tooltip: l10n.historySourceFilterTooltip,
               initialValue: sourceFilter,
               onSelected: onSourceChanged,
@@ -2016,32 +1997,24 @@ class _RunsFilterHeader extends StatelessWidget {
                     child: Text(_sourceName(src, l10n)),
                   ),
               ],
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.filter_alt_outlined,
-                        size: 16, color: theme.colorScheme.outline),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.historySourceLabel(_sourceLabel(sourceFilter, l10n)),
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    Icon(Icons.arrow_drop_down,
-                        size: 18, color: theme.colorScheme.outline),
-                  ],
-                ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.filter_alt_outlined,
+                      size: 16, color: theme.colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.historySourceLabel(_sourceLabel(sourceFilter, l10n)),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  Icon(Icons.arrow_drop_down,
+                      size: 18, color: theme.colorScheme.outline),
+                ],
               ),
             ),
-            if (onOpenHeatmap != null)
-              TextButton.icon(
-                onPressed: onOpenHeatmap,
-                icon: const Icon(Icons.local_fire_department_outlined,
-                    size: 18),
-                label: Text(l10n.runHeatmapTooltip),
-              ),
-          ],
+          ),
         ),
         const SizedBox(height: 8),
       ],

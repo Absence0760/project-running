@@ -1,3 +1,4 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,10 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/routes_screen.dart';
+
+/// Signed-out fake — non-null so the api-gated Discover entries render,
+/// null userId so no fetch paths fire.
+class _FakeApi extends ApiClient {}
 
 List<cm.Route> _makeRoutes(int count) {
   return [
@@ -31,13 +36,14 @@ Future<Preferences> _makePrefs() async {
   return p;
 }
 
-Future<void> _pump(WidgetTester tester, {required Preferences prefs}) {
+Future<void> _pump(WidgetTester tester,
+    {required Preferences prefs, ApiClient? api}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: RoutesScreen(
-        apiClient: null,
+        apiClient: api,
         routeStore: LocalRouteStore(),
         preferences: prefs,
       ),
@@ -47,24 +53,43 @@ Future<void> _pump(WidgetTester tester, {required Preferences prefs}) {
 
 void main() {
   group('RoutesScreen — initial render', () {
-    testWidgets('AppBar carries no "Routes" title (bottom-nav labels suffice)',
-        (tester) async {
-      // Bottom-nav already labels this tab "Routes". Pin the absence
-      // of a duplicate AppBar title.
+    testWidgets('AppBar carries the "Routes" title', (tester) async {
+      // Routes is a pushed full-screen destination (Fitness → Runs →
+      // Routes), no longer a bottom-nav tab — the AppBar names it.
       final prefs = await _makePrefs();
       await _pump(tester, prefs: prefs);
       await tester.pump();
       expect(find.byType(AppBar), findsOneWidget);
-      final appBar = tester.widget<AppBar>(find.byType(AppBar));
-      expect(appBar.title, isNull);
+      expect(find.widgetWithText(AppBar, 'Routes'), findsOneWidget);
     });
 
-    testWidgets('renders the Explore action in the app bar',
+    testWidgets('renders the labelled Public-routes entry in the Discover strip',
         (tester) async {
       final prefs = await _makePrefs();
       await _pump(tester, prefs: prefs);
       await tester.pump();
-      expect(find.byIcon(Icons.explore), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Public routes'),
+          findsOneWidget);
+    });
+
+    testWidgets(
+        'the Discover strip surfaces both heatmap entries when an api '
+        'client is wired, and hides them when it is not', (tester) async {
+      final prefs = await _makePrefs();
+      await _pump(tester, prefs: prefs, api: _FakeApi());
+      await tester.pump();
+      // Community routes heatmap + the user's own run heatmap, both as
+      // labelled buttons — the routes page is the single home of the
+      // map/discovery entry points.
+      expect(find.widgetWithText(OutlinedButton, 'Heatmap'), findsOneWidget);
+      expect(
+          find.widgetWithText(OutlinedButton, 'Your heatmap'), findsOneWidget);
+
+      await _pump(tester, prefs: prefs);
+      await tester.pump();
+      expect(find.widgetWithText(OutlinedButton, 'Heatmap'), findsNothing);
+      expect(
+          find.widgetWithText(OutlinedButton, 'Your heatmap'), findsNothing);
     });
 
     testWidgets('hides the cloud-sync icon when apiClient is null',
