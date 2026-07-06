@@ -38,6 +38,24 @@ indexed anyway).
 | `/share/race/[id]` | Lambda-SSR (`share-entity`) | `share_race_meta` | `SportsEvent` |
 | dashboard / runs / `/u/[id]` / `/clubs/*` / `/races` / feed / … | CSR (app shell) | generic shell | — (auth-gated, not indexed) |
 
+## Canonical consolidation (in-app → share twin)
+
+Several entities have both an **in-app** page (CSR, inside the app shell,
+often login-gated) and a **public share** page built for indexing. To stop
+the two URLs splitting ranking signal, each in-app page emits a
+`<link rel="canonical">` pointing at its public twin:
+
+| In-app page | canonical → |
+|---|---|
+| `/routes/[id]` | `/share/route/[id]` |
+| `/u/[id]` | `/share/profile/[id]` |
+| `/clubs/[slug]` | `/share/club/[slug]` |
+| `/clubs/[slug]/events/[id]` | `/share/event/[id]` |
+
+The canonical derives from the URL param (via `build<X>ShareCanonical`),
+so it's present even before/without the client data load. Runs already
+carry this on `/runs/[id]` → `/share/run/[id]`.
+
 ## The shared entity-SSR Lambda
 
 `apps/web/lambda/share-entity/` — **one HTML-only Lambda** dispatching the
