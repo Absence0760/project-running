@@ -46,6 +46,12 @@ export async function lookupSharedClub(
 		const { data: club, error } = await supabase
 			.from('clubs')
 			.select('id, slug, name, description, avatar_url, location_label, is_public')
+			// shadow_hidden = a moderation auto-hide (migration 20270218_001):
+			// hidden targets must "drop out of every PUBLIC / SEARCH / DISCOVERY
+			// surface", and a /share/* page is one. Exclude them so a
+			// moderation-hidden club can't be re-surfaced by its share link
+			// (mirrors public_routes / public_profile_by_id, which both filter it).
+			.eq('shadow_hidden', false)
 			.eq('slug', slug)
 			.maybeSingle();
 		if (error) {

@@ -87,16 +87,22 @@ export const GET: RequestHandler = async () => {
 					.limit(MAX_RUNS),
 				// Public entity share pages. Events inherit public-club
 				// visibility via RLS, clubs filter is_public, race_listings
-				// is anon-readable public discovery data.
+				// is anon-readable public discovery data. All exclude
+				// shadow_hidden (moderation auto-hide, migration 20270218_001) —
+				// a hidden target must not be advertised to crawlers. Events
+				// have no shadow_hidden column, so gate on the parent club's
+				// via an inner-join filter.
 				supabase
 					.from('events')
-					.select('id, updated_at')
+					.select('id, updated_at, clubs!inner(shadow_hidden)')
+					.eq('clubs.shadow_hidden', false)
 					.order('updated_at', { ascending: false })
 					.limit(MAX_ENTITIES),
 				supabase
 					.from('clubs')
 					.select('slug, updated_at')
 					.eq('is_public', true)
+					.eq('shadow_hidden', false)
 					.order('updated_at', { ascending: false })
 					.limit(MAX_ENTITIES),
 				// Anon reads go through the redacted public_race_listings
@@ -127,7 +133,8 @@ export const GET: RequestHandler = async () => {
 				started_at: r.started_at,
 			}));
 			runCountByRouteId = buildRunCountByRouteId(popularityRes.data ?? []);
-			events = eventsRes.data ?? [];
+			// Drop the join-only `clubs` field the shadow_hidden filter pulled in.
+			events = (eventsRes.data ?? []).map((e) => ({ id: e.id, updated_at: e.updated_at }));
 			clubs = clubsRes.data ?? [];
 			races = racesRes.data ?? [];
 		} catch (err) {

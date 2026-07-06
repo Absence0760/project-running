@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { getAdminClient } from '../fixtures/local-supabase';
 
 /**
  * `/share/club/[slug]` — the public, anon, SSR club share page.
@@ -49,5 +50,40 @@ test.describe('/share/club/[slug] — anon', () => {
 		const obj = JSON.parse(ld as string);
 		expect(obj['@type']).toBe('SportsOrganization');
 		expect(obj.sport).toBe('Running');
+	});
+});
+
+/**
+ * Moderation: a shadow-hidden (auto-hidden) club must drop out of every
+ * public/discovery surface (migration 20270218_001), including its
+ * /share/club page — otherwise a direct share link re-surfaces content a
+ * moderator hid. We flip shadow_hidden via service-role (mirroring
+ * admin/auto-hide-unhide.spec.ts) and always revert.
+ */
+test.describe('/share/club/[slug] — shadow-hidden exclusion (anon)', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	const SLUG = 'richmond-run-club';
+
+	test.afterEach(async () => {
+		// Always restore visibility so a failed run doesn't leave the
+		// seeded club hidden for other specs.
+		const admin = getAdminClient();
+		await admin.from('clubs').update({ shadow_hidden: false }).eq('slug', SLUG);
+	});
+
+	test('a shadow-hidden public club renders the not-found page, not its data', async ({
+		page,
+	}) => {
+		const admin = getAdminClient();
+		const { error } = await admin.from('clubs').update({ shadow_hidden: true }).eq('slug', SLUG);
+		expect(error).toBeNull();
+
+		await page.goto(`/share/club/${SLUG}`);
+
+		// Not the club's real page: generic title + the not-found card.
+		await expect(page).toHaveTitle('Club — Threkir');
+		await expect(page.getByRole('heading', { name: 'Club not found.' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Richmond Run Club' })).toHaveCount(0);
 	});
 });

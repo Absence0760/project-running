@@ -58,7 +58,7 @@ export async function lookupSharedEvent(
 		const { data: event, error } = await supabase
 			.from('events')
 			.select(
-				'id, club_id, title, description, starts_at, duration_min, distance_m, category, discipline, clubs(name, slug, location_label, is_public)',
+				'id, club_id, title, description, starts_at, duration_min, distance_m, category, discipline, clubs(name, slug, location_label, is_public, shadow_hidden)',
 			)
 			.eq('id', id)
 			.maybeSingle();
@@ -70,10 +70,12 @@ export async function lookupSharedEvent(
 			return { event: null };
 		}
 		if (!event) return { event: null };
-		// Defence-in-depth: RLS already blocks a private club's event for
-		// anon, but never surface one even if the embed shape shifts.
-		const club = (event as { clubs?: { name?: string; slug?: string; location_label?: string; is_public?: boolean } | null }).clubs ?? null;
-		if (club && club.is_public === false) return { event: null };
+		const club = (event as { clubs?: { name?: string; slug?: string; location_label?: string; is_public?: boolean; shadow_hidden?: boolean } | null }).clubs ?? null;
+		// RLS already blocks a private club's event for anon; never surface
+		// one even if the embed shape shifts. A shadow-hidden (moderation
+		// auto-hidden) club must also drop from this public surface, so its
+		// events are not re-surfaced by a direct share link.
+		if (club && (club.is_public === false || club.shadow_hidden === true)) return { event: null };
 		const e = event as Record<string, unknown>;
 		return {
 			event: {
