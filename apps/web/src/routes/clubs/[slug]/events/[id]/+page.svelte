@@ -1286,6 +1286,7 @@
 </script>
 
 <svelte:head>
+	<title>{event?.title ?? m('clubEvent.metaFallback')} — Threkir</title>
 	<link rel="canonical" href={canonicalUrl} />
 </svelte:head>
 
