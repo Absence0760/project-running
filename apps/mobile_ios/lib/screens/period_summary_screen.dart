@@ -406,30 +406,36 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
           onPressed: _period == PeriodType.all ? null : _previous,
         ),
         Expanded(
-          child: GestureDetector(
-            onTap: () => _switchPeriodType(),
-            child: Column(
-              children: [
-                Text(
-                  periodTitle(_period, _anchor, tag, weekStartDay: _weekStartDay),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
+          child: MergeSemantics(
+            child: Semantics(
+              button: true,
+              child: GestureDetector(
+                onTap: () => _switchPeriodType(),
+                child: Column(
+                  children: [
+                    Text(
+                      periodTitle(_period, _anchor, tag,
+                          weekStartDay: _weekStartDay),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      switch (_period) {
+                        PeriodType.week => l10n.periodSwitchToMonthly,
+                        PeriodType.month => l10n.periodSwitchToAllTime,
+                        PeriodType.all => l10n.periodSwitchToWeekly,
+                      },
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  switch (_period) {
-                    PeriodType.week => l10n.periodSwitchToMonthly,
-                    PeriodType.month => l10n.periodSwitchToAllTime,
-                    PeriodType.all => l10n.periodSwitchToWeekly,
-                  },
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+              ),
             ),
           ),
         ),

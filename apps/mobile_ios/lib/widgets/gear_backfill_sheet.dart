@@ -172,13 +172,16 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
                 tristate: false,
                 onChanged: _saving ? null : (v) => _selectAll(v ?? false),
               ),
-              GestureDetector(
-                onTap: _saving ? null : () => _selectAll(!allSelected),
-                child: Text(
-                  allSelected
-                      ? l10n.gearBackfillSelectNone
-                      : l10n.gearBackfillSelectAll,
-                  style: theme.textTheme.bodyMedium,
+              Semantics(
+                button: true,
+                child: GestureDetector(
+                  onTap: _saving ? null : () => _selectAll(!allSelected),
+                  child: Text(
+                    allSelected
+                        ? l10n.gearBackfillSelectNone
+                        : l10n.gearBackfillSelectAll,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
               ),
               const Spacer(),

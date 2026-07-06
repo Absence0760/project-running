@@ -969,11 +969,17 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                       width: 120,
                       height: 44,
                       alignment: Alignment.topCenter,
-                      child: GestureDetector(
-                        onTap: widget.onMarkerTap == null
-                            ? null
-                            : () => widget.onMarkerTap!(m.id),
-                        child: _CourseMarkerPin(label: m.label, color: m.color),
+                      child: MergeSemantics(
+                        child: Semantics(
+                          button: widget.onMarkerTap != null,
+                          child: GestureDetector(
+                            onTap: widget.onMarkerTap == null
+                                ? null
+                                : () => widget.onMarkerTap!(m.id),
+                            child:
+                                _CourseMarkerPin(label: m.label, color: m.color),
+                          ),
+                        ),
                       ),
                     ),
                 ],

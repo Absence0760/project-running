@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -349,6 +350,44 @@ void main() {
       expect(find.byKey(const ValueKey('chart-hover-marker')), findsNothing,
           reason: 'Out-of-range hoverIdx must guard against null deref + '
               'must not paint a bogus marker at index 0.');
+    });
+
+    testWidgets('course-marker pins expose merged button semantics',
+        (tester) async {
+      final track = [_w(51.5, -0.1), _w(51.51, -0.099)];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LiveRunMap(
+                track: track,
+                followRunner: false,
+                courseMarkers: const [
+                  MapMarkerPin(
+                    id: 'm1',
+                    label: 'Aid 1',
+                    color: '#16a34a',
+                    lat: 51.505,
+                    lng: -0.0995,
+                  ),
+                ],
+                onMarkerTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(Duration.zero);
+      final semantics = tester.getSemantics(find.text('Aid 1'));
+      expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue,
+          reason: 'A spectator/host tapping a course marker must hear it '
+              'announced as a button with its label, not an unlabeled tap '
+              'target.');
     });
   });
 }

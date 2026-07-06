@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -223,6 +224,11 @@ void main() {
       await tester.pump();
 
       expect(find.widgetWithText(FilledButton, 'Attach 2'), findsOneWidget);
+
+      // The toggle is a bare text GestureDetector — it must expose merged
+      // button semantics so TalkBack announces it as actionable.
+      final semantics = tester.getSemantics(find.text('Select none'));
+      expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
     });
   });
 }

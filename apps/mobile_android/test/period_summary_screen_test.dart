@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -117,6 +118,23 @@ void main() {
       );
       await tester.pump();
       expect(find.text('No runs this week'), findsOneWidget);
+    });
+
+    testWidgets('period-type switcher exposes merged button semantics',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(
+        tester,
+        period: PeriodType.week,
+        anchor: DateTime(2026, 4, 27),
+        runStore: s.runStore,
+        routeStore: s.routeStore,
+        prefs: s.prefs,
+      );
+      await tester.pump();
+      final semantics =
+          tester.getSemantics(find.text('Tap to switch to monthly'));
+      expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
     });
   });
 }
