@@ -47,7 +47,10 @@ Fully functional web launch with backups intact.
 - AWS prod web-stack (~$3), `preview` env deferred.
 - Fly **worker only** (~$5) — email, web push, live spectator, photo thumbnails, premium
   compute endpoints. No OSRM, no GraphHopper.
-- Coach **on**, with a manual Anthropic console spend cap (~$30).
+- Coach **on**, with a manual Anthropic console spend cap (~$30). Pro is
+  sellable (`PUBLIC_COACH_ENABLED=true`), but leave `PUBLIC_ROUTE_GEN_ENABLED`
+  unset — the route engines are still deferred here, and the flag keeps the
+  Pro card + `/routes/new` from advertising the dead perk (decisions §204).
 - No mobile stores.
 
 ### Rock-bottom — ~$10–11/mo (coach off) — SELECTED 2026-07-02
@@ -62,17 +65,21 @@ tradeoffs (below).
 - Domain (~$1/mo).
 - **No Fly services at all** (no worker, no OSRM, no GraphHopper, no graph_cycle).
 - Coach **off** (`ANTHROPIC_API_KEY` unset → endpoint returns 503).
-- **Pro not sold + AI surface hidden** (`PUBLIC_COACH_ENABLED` unset). Every Pro
-  perk is a Coach feature, so with the Coach off Pro delivers nothing —
-  `/settings/upgrade` shows a "Pro — coming soon" teaser and leads with donations
-  rather than selling a hollow subscription (also a consumer-protection /
-  chargeback risk). The same flag hides every web entry point into the AI Coach
-  (sidebar nav, the `/coach` chat → "coming soon", the dashboard promo, the
-  route-detail AI upsell, the `/compare` link) so nothing surfaces a door that
-  only 503s; the static guided-runs rail and the offline "Describe this route"
-  template stay. The tier machinery stays dormant; set `PUBLIC_COACH_ENABLED=true`
-  when the Coach goes live (Lean tier) to restore it all with no code change. See
-  [paywall.md](../features/paywall.md).
+- **Pro not sold + AI surface hidden** (`PUBLIC_COACH_ENABLED` and
+  `PUBLIC_ROUTE_GEN_ENABLED` both unset). Pro's perks are the Coach and
+  server-side route generation (decisions §204); with the Coach off and the
+  engines deferred, Pro delivers nothing — `/settings/upgrade` shows a
+  "Pro — coming soon" teaser and leads with donations rather than selling a
+  hollow subscription (also a consumer-protection / chargeback risk). The coach
+  flag hides every web entry point into the AI Coach (sidebar nav, the `/coach`
+  chat → "coming soon", the dashboard promo, the route-detail AI upsell, the
+  `/compare` link) so nothing surfaces a door that only 503s; the static
+  guided-runs rail and the offline "Describe this route" template stay. The
+  route-gen flag hides the `/routes/new` Pro upsell and the Pro-card bullet —
+  and the generate endpoint answers 501 *before* its tier gate, so nothing ever
+  answers "upgrade" for the deferred engines. The tier machinery stays dormant;
+  set each flag true when its feature goes live to restore it all with no code
+  change. See [paywall.md](../features/paywall.md).
 - No mobile stores. MapTiler + Resend on free tiers.
 
 > **Two Lambdas deploy either way.** The web-stack module provisions both the `coach` and the
@@ -92,7 +99,7 @@ tradeoffs (below).
 | Deferred | What breaks | What still works | Re-enable |
 |---|---|---|---|
 | **OSRM** | `map_match` jobs land `status='skipped'`; no road-snapped polyline overlay | Runs record, upload, and display normally | Stand up the `osrm` Fly app, set `OSRM_URL` on the worker; stale rows re-match on next claim (no schema change) |
-| **GraphHopper + graph_cycle** | "Generate a route by distance" is unconfigured: with both `GRAPHHOPPER_URL` and `GRAPH_CYCLE_URL` unset the generate-route Lambda returns 501 and the web client falls back to its client-side OSRM heuristic | Manual route drawing, search, snap-to-road; the heuristic still produces a rough loop | Stand up the `graph_cycle` and/or `graphhopper` Fly app(s) + set `GRAPH_CYCLE_URL` / `GRAPHHOPPER_URL` (and the matching sops shared-secret keys) on the generate-route Lambda |
+| **GraphHopper + graph_cycle** | "Generate a route by distance" is unconfigured: with both `GRAPHHOPPER_URL` and `GRAPH_CYCLE_URL` unset the generate-route Lambda returns 501 (checked *before* the Pro tier gate, so no upsell for the dead perk — decisions §204) and the web client falls back to its client-side OSRM heuristic | Manual route drawing, search, snap-to-road; the heuristic still produces a rough loop for every tier | Stand up the `graph_cycle` and/or `graphhopper` Fly app(s) + set `GRAPH_CYCLE_URL` / `GRAPHHOPPER_URL` (and the matching sops shared-secret keys) on the generate-route Lambda; set `PUBLIC_ROUTE_GEN_ENABLED=true` on the web build so the Pro perk is advertised (server generation is Pro-gated; free stays on the heuristic) |
 | **Worker** (Rock-bottom) | App-notification emails, weekly digest, web push, live spectator hub, **server-side photo thumbnails + EXIF defense-in-depth** all go dark; `strava_event` / `photo_process` / email jobs queue but don't drain | Auth email (password reset / magic link) via Supabase's own SMTP; runs record + sync + display; **client-side EXIF strip still runs before upload** (`exif_strip` twin), so photos don't leak GPS — they just get no server thumbnail | Deploy the `job_worker` Fly app (+$5); queued jobs drain on first boot |
 | **Coach** | `/api/coach` returns 503 | Everything else | Set the Anthropic key + console cap; re-apply the env stack |
 | **Mobile stores** | No Android / iOS / Wear listings | The web app is the full-feature surface | Apple Developer + Play Console enrolment + the mobile release workflows |

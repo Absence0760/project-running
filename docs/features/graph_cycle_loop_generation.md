@@ -241,6 +241,16 @@ P1 is purely the prod graph build, with no remaining algorithm risk.)
   every start (clean loops areaEff 0.42–0.60 vs polygon's zero), so it adds no
   coverage as a middle tier.
 - Selection + the loop-poor shortfall banner are reused unchanged.
+- **Pro gate (decisions §204, 2026-07-05):** the whole server chain is a Pro
+  perk. After input validation the handler answers 501 when no engine is
+  configured, then requires a `x-supabase-authorization` JWT + a true
+  `is_pro()` (fail-closed) before any engine fetch; free/anonymous callers get
+  403 `{error:'pro_required'}` and the route builder falls back to the
+  in-browser OSRM heuristic, which stays the free tier. The 501-before-403
+  order means an engines-deferred deploy never upsells. Client advertising
+  (the `/routes/new` upsell + the Pro-card bullet) is gated on
+  `PUBLIC_ROUTE_GEN_ENABLED` (`route_gen_flag.ts`). See
+  [paywall.md](paywall.md).
 
 ## Phases (all DONE — see § Built results)
 

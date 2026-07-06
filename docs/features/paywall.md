@@ -57,6 +57,27 @@ What the Pro tier changes:
   breaks. A free user's response carries `upgrade:true`, which surfaces a
   one-line "Enhance with AI (Pro)" upsell linking to `/settings/upgrade`.
 
+- **Server-side route generation** ([decisions.md §204](../architecture/decisions.md#204-server-side-route-generation-is-the-second-pro-perk-the-free-tier-keeps-the-in-browser-heuristic)).
+  The engine-backed "Generate a route by distance" path
+  (`/api/routes/generate` → graph_cycle + GraphHopper) requires a user
+  JWT and a true `is_pro()` in the shared handler
+  (`$lib/routes/generate/handler.ts`), fail-closed exactly like
+  route-describe: a missing Supabase env or a failed RPC denies (500),
+  never grants. Free / anonymous callers get 403
+  `{error:'pro_required', upgrade:true}` **before any engine fetch** and
+  the route builder falls back to its in-browser OSRM heuristic — the
+  free tier keeps working loop generation, Pro gets loops traced on the
+  real street graph. Order matters for honest selling: the handler
+  answers **501 (engines unconfigured) before the tier gate**, so a
+  deploy with the engines deferred never answers "upgrade" for a perk it
+  can't deliver. The client half is `route_gen_flag.ts`
+  (`PUBLIC_ROUTE_GEN_ENABLED`, fail-closed, mirrors `coach_flag.ts`): it
+  gates the `/routes/new` upsell note and the Pro-card bullet. The JWT
+  rides `x-supabase-authorization` (CloudFront's OAC owns
+  `Authorization`); the generate-route origin request policy whitelists
+  it and Terraform hands the Lambda `PUBLIC_SUPABASE_URL` +
+  `PUBLIC_SUPABASE_ANON_KEY`.
+
 `/settings/upgrade` shows a two-card layout: a Pro plan card
 ($9.99 / month, feature bullets, "Get Pro" CTA) and a one-off Donate
 button that links to an external payment provider. The transparent
@@ -64,21 +85,28 @@ cost breakdown, monthly progress bars, donor count, and tiered
 donation buttons that existed under the previous donations-only model
 are gone — see [decisions.md § 23](../architecture/decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations).
 
-**The Pro storefront is gated on `PUBLIC_COACH_ENABLED`**
-(`$lib/coach/coach_flag.ts`, fail-closed like `weigh_in_flag.ts`).
-Because every Pro perk is a Coach feature, a Pro subscription delivers
-nothing while the Coach is off — the rock-bottom deploy leaves
-`ANTHROPIC_API_KEY` unset so `/api/coach` 503s. When the flag is unset
-the Pro card drops its "Get Pro" CTA for a "Pro — coming soon" teaser
+**The Pro storefront is gated on a live perk** — sellable when
+`coachEnabled() || routeGenEnabled()`, i.e. when either
+`PUBLIC_COACH_ENABLED` (`$lib/coach/coach_flag.ts`) or
+`PUBLIC_ROUTE_GEN_ENABLED` (`$lib/routes/route_gen_flag.ts`, decisions
+§204) is set; both flags are fail-closed like `weigh_in_flag.ts`. On a
+deploy with both perks off — the rock-bottom deploy leaves
+`ANTHROPIC_API_KEY` unset so `/api/coach` 503s, and both rock-bottom and
+Lean defer the route engines so `/api/routes/generate` 501s — a Pro
+subscription delivers nothing. With both flags unset the Pro card drops
+its "Get Pro" CTA for a "Pro — coming soon" teaser
 (`upgrade.proComingSoon`), the "Most popular" ribbon becomes
 "Coming soon", and the Donate button becomes the primary CTA — so the
 app never sells a hollow subscription and leads with donations instead.
-Setting `PUBLIC_COACH_ENABLED=true` (which you only do once the Coach is
-live, i.e. the Lean tier) restores the purchasable card with no code
-change. The tier machinery (`subscription_tier`, `is_pro()`,
-`TIER_LIMITS`, RevenueCat webhook) stays intact and dormant either way.
-Mobile has its own upgrade surface and is not part of the rock-bottom
-web launch — mirroring this gate on Flutter is a followup.
+Each flagged perk's card bullet is additionally gated on its own flag
+(the Coach bullets on `coachOn`, the route-generation bullet on
+`routeGenOn`), so a partially-live deploy (e.g. Lean: Coach on, engines
+still deferred) sells Pro without advertising the dead perk. Setting
+each flag true (only once its feature is actually live) restores the
+full card with no code change. The tier machinery (`subscription_tier`,
+`is_pro()`, `TIER_LIMITS`, RevenueCat webhook) stays intact and dormant
+either way. Mobile has its own upgrade surface and is not part of the
+rock-bottom web launch — mirroring this gate on Flutter is a followup.
 
 The same `coachEnabled()` flag hides every other **web** entry point into
 the AI Coach so rock-bottom shows no door that only 503s:
@@ -104,8 +132,8 @@ dropped); reviving transparent funding later is a one-page revert.
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Every screen in the app. AI Coach capped at 2 messages/day. Standard request priority. |
-| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + AI Coach capped at 10 messages/day (5× the free cap) + priority processing (wider context budget, longer responses). |
+| `free` | Default for every new account | Every screen in the app. AI Coach capped at 2 messages/day. Standard request priority. Route generation via the in-browser heuristic. |
+| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + AI Coach capped at 10 messages/day (5× the free cap) + priority processing (wider context budget, longer responses) + AI route descriptions + server-side route generation (real street-graph loops, decisions §204). |
 | `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
