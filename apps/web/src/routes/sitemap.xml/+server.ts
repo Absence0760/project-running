@@ -35,6 +35,14 @@ const DEFAULT_SITE_URL = 'https://threkir.com';
 const MAX_ROUTES = 10_000;
 const MAX_RUNS = 10_000;
 const MAX_ENTITIES = 10_000;
+// Sitemap protocol hard limit: 50,000 URLs per file. The five capped
+// lists above (routes + runs + events + clubs + races) sum to a
+// theoretical 50k, which with the top-level + learn entries would tip
+// just over and make the WHOLE file invalid (search engines reject an
+// oversized sitemap outright). Guard the total; the durable fix once
+// real counts approach this is a sitemap index (multiple files), see
+// the truncation warning below.
+const SITEMAP_MAX_URLS = 50_000;
 
 export const GET: RequestHandler = async () => {
 	const base = env.PUBLIC_SITE_URL || DEFAULT_SITE_URL;
@@ -149,11 +157,23 @@ export const GET: RequestHandler = async () => {
 		listGuides().map((g) => ({ slug: g.slug, updated: g.updated })),
 		CATEGORIES.map((c) => c.id),
 	);
-	const body = buildSitemap([
+	// Order matters for the total-cap truncation below: the small,
+	// high-value surfaces (top-level + learn) go first so they're never
+	// the ones dropped; the high-cardinality entity lists follow.
+	const entries = [
 		...composeEntries(base, routes, runs, runCountByRouteId),
-		...entityEntries(base, events, clubs, races),
 		...learn,
-	]);
+		...entityEntries(base, events, clubs, races),
+	];
+	if (entries.length > SITEMAP_MAX_URLS) {
+		// Not a silent cap — surface that the single-file sitemap has
+		// outgrown the protocol limit and needs splitting into an index.
+		console.warn(
+			`sitemap: ${entries.length} URLs exceeds the ${SITEMAP_MAX_URLS} per-file limit; ` +
+				`truncating. Split into a sitemap index.`,
+		);
+	}
+	const body = buildSitemap(entries.slice(0, SITEMAP_MAX_URLS));
 	return new Response(body, {
 		headers: {
 			'content-type': 'application/xml; charset=utf-8',
