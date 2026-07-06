@@ -73,6 +73,8 @@
     <string name="activity_cycle">Cycle</string>
     <string name="sign_in">Sign in</string>
     <string name="sign_out">Sign out</string>
+    <string name="cd_cancel_countdown">Cancel countdown</string>
+    <string name="cd_route_preview_change">Route preview map, tap to change route</string>
     <string name="cd_route_selected">Route %1$s selected, tap to change</string>
     <string name="cd_activity_type">Activity type, currently %1$s, tap to change</string>
     <string name="cd_choose_route">Choose a route, none selected</string>

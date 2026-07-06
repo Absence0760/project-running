@@ -53,6 +53,8 @@
     <string name="activity_cycle">Radfahren</string>
     <string name="sign_in">Anmelden</string>
     <string name="sign_out">Abmelden</string>
+    <string name="cd_cancel_countdown">Countdown abbrechen</string>
+    <string name="cd_route_preview_change">Routenvorschau-Karte, zum Ändern der Route tippen</string>
     <string name="cd_route_selected">Route %1$s ausgewählt, zum Ändern tippen</string>
     <string name="cd_activity_type">Aktivitätstyp, aktuell %1$s, zum Ändern tippen</string>
     <string name="cd_choose_route">Route wählen, keine ausgewählt</string>

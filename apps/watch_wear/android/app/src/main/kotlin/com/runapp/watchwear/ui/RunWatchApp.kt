@@ -294,10 +294,15 @@ private fun CountdownOverlay(
         }
         onComplete()
     }
+    val cancelCountdownCd = stringResource(R.string.cd_cancel_countdown)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(onClick = onCancel),
+            .clickable(onClick = onCancel)
+            .semantics {
+                contentDescription = cancelCountdownCd
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center,
     ) {
         // Map underlay: route polyline + tiles centred on the
@@ -520,7 +525,16 @@ private fun PreRunScreen(
         // it fits-bounds and frames the whole polyline). Without a
         // route, the watch background shows through unchanged.
         if (authed && selectedRouteWaypoints.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().clickable(onClick = onOpenRoutePicker)) {
+            val routePreviewCd = stringResource(R.string.cd_route_preview_change)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(onClick = onOpenRoutePicker)
+                    .semantics {
+                        contentDescription = routePreviewCd
+                        role = Role.Button
+                    }
+            ) {
                 RouteMiniMap(
                     route = selectedRouteWaypoints,
                     current = null,

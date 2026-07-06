@@ -53,6 +53,8 @@
     <string name="activity_cycle">Vélo</string>
     <string name="sign_in">Se connecter</string>
     <string name="sign_out">Se déconnecter</string>
+    <string name="cd_cancel_countdown">Annuler le compte à rebours</string>
+    <string name="cd_route_preview_change">Aperçu de l'itinéraire, appuyez pour changer d'itinéraire</string>
     <string name="cd_route_selected">Itinéraire %1$s sélectionné, touchez pour changer</string>
     <string name="cd_activity_type">Type d\'activité, actuellement %1$s, touchez pour changer</string>
     <string name="cd_choose_route">Choisir un itinéraire, aucun sélectionné</string>

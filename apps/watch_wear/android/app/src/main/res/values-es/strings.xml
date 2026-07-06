@@ -53,6 +53,8 @@
     <string name="activity_cycle">Ciclismo</string>
     <string name="sign_in">Iniciar sesión</string>
     <string name="sign_out">Cerrar sesión</string>
+    <string name="cd_cancel_countdown">Cancelar la cuenta atrás</string>
+    <string name="cd_route_preview_change">Mapa de vista previa de la ruta, toca para cambiar de ruta</string>
     <string name="cd_route_selected">Ruta %1$s seleccionada, toca para cambiar</string>
     <string name="cd_activity_type">Tipo de actividad, actualmente %1$s, toca para cambiar</string>
     <string name="cd_choose_route">Elige una ruta, ninguna seleccionada</string>

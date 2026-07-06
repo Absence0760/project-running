@@ -52,6 +52,8 @@
     <string name="activity_cycle">サイクル</string>
     <string name="sign_in">サインイン</string>
     <string name="sign_out">サインアウト</string>
+    <string name="cd_cancel_countdown">カウントダウンをキャンセル</string>
+    <string name="cd_route_preview_change">ルートプレビューマップ、タップしてルートを変更</string>
     <string name="cd_route_selected">ルート %1$s を選択中、タップして変更</string>
     <string name="cd_activity_type">アクティビティの種類、現在 %1$s、タップして変更</string>
     <string name="cd_choose_route">ルートを選択、未選択</string>
