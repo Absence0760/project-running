@@ -99,8 +99,11 @@ export const GET: RequestHandler = async () => {
 					.eq('is_public', true)
 					.order('updated_at', { ascending: false })
 					.limit(MAX_ENTITIES),
+				// Anon reads go through the redacted public_race_listings
+				// view, not the base table (migration 20270320_001 dropped
+				// the base-table anon policy to strip submitted_by).
 				supabase
-					.from('race_listings')
+					.from('public_race_listings')
 					.select('id, updated_at')
 					.order('race_date', { ascending: false })
 					.limit(MAX_ENTITIES),

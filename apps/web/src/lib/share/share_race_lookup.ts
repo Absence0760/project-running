@@ -3,11 +3,13 @@
 ///   - apps/web/src/routes/share/race/[id]/+page.ts (dev-server SSR).
 ///   - the production entity-SSR Lambda that owns /share/race/*.
 ///
-/// The race calendar is public discovery data — race_listings is
-/// anon-readable by RLS (migration 20270214_001). Selects only the
-/// display-safe columns and deliberately omits `submitted_by` (redacted
-/// per 20270320_001) and the precise `location_point` geometry — only the
-/// coarse `location_label` is surfaced.
+/// The race calendar is public discovery data, but anon reads go through
+/// the redacted `public_race_listings` VIEW, not the base table: migration
+/// 20270320_001 dropped the base-table anon SELECT policy and moved anon
+/// access to the view specifically to strip `submitted_by`. Reading the
+/// base table with the anon key returns nothing. Selects only the
+/// display-safe columns and never the precise `location_point` geometry —
+/// only the coarse `location_label` is surfaced.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -42,7 +44,7 @@ export async function lookupSharedRace(
 			auth: { persistSession: false },
 		});
 		const { data: race, error } = await supabase
-			.from('race_listings')
+			.from('public_race_listings')
 			.select('id, name, race_date, distance_m, location_label, entry_url, is_verified')
 			.eq('id', id)
 			.maybeSingle();

@@ -12,6 +12,23 @@ import { expect, test } from '@playwright/test';
 test.describe('/share/club/[slug] — anon', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
+	// Seed fixture (apps/backend/supabase/seed.sql): the public
+	// 'Richmond Run Club'. Data-present test — proves anon can actually
+	// READ a public club by slug through RLS + column grants.
+	test('a public club renders its data + SportsOrganization JSON-LD', async ({ page }) => {
+		await page.goto('/share/club/richmond-run-club');
+
+		await expect(page).toHaveTitle('Richmond Run Club — Threkir');
+		await expect(page.getByRole('heading', { name: 'Richmond Run Club' })).toBeVisible();
+
+		const ld = JSON.parse(
+			(await page.locator('script[type="application/ld+json"]').first().textContent()) as string
+		);
+		expect(ld['@type']).toBe('SportsOrganization');
+		expect(ld.name).toBe('Richmond Run Club');
+		expect(ld.sport).toBe('Running');
+	});
+
 	test('unknown slug renders the branded not-found page with a valid SEO head', async ({
 		page,
 	}) => {
