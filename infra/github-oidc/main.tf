@@ -143,6 +143,7 @@ resource "aws_iam_role_policy" "deploy_prod" {
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-recap*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-badge*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-entity*",
         ]
       },
     ]
@@ -211,6 +212,7 @@ resource "aws_iam_role_policy" "deploy_preview" {
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-route*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-recap*",
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-badge*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-entity*",
         ]
       },
     ]

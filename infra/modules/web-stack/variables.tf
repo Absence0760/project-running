@@ -91,6 +91,12 @@ variable "share_badge_lambda_zip_path" {
   default     = null
 }
 
+variable "share_entity_lambda_zip_path" {
+  description = "Optional path to a pre-built share-entity Lambda zip (apps/web/lambda/share-entity/dist/share-entity.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. One HTML-only Lambda handling /share/{event,profile,club,race} per-request SSR over anon-readable public rows (no og:image PNG)."
+  type        = string
+  default     = null
+}
+
 variable "generate_route_lambda_zip_path" {
   description = "Optional path to a pre-built generate-route Lambda zip (apps/web/lambda/generate-route/dist/generate-route.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Handles /api/routes/generate* — server-side round-trip route generation against the self-hosted GraphHopper engine."
   type        = string

@@ -85,6 +85,18 @@ locals {
     },
   )
 
+  # share-entity Lambda env. One HTML-only Lambda serving the four public
+  # /share/{event,profile,club,race} entity paths; same anon-key posture
+  # as the other share Lambdas (reads only anon-readable public rows;
+  # PUBLIC_SITE_URL for env-specific absolute canonical / og:url URLs).
+  share_entity_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+      PUBLIC_SITE_URL          = var.public_site_url
+    },
+  )
+
   # generate-route Lambda env. Engine URLs (GRAPH_CYCLE_URL + GRAPHHOPPER_URL)
   # are non-secret internal URLs passed as plain Terraform vars; an empty string
   # is omitted so the handler sees that env unset and simply skips that engine
@@ -133,6 +145,7 @@ locals {
   effective_share_route_zip_path    = var.share_route_lambda_zip_path != null ? var.share_route_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_share_recap_zip_path    = var.share_recap_lambda_zip_path != null ? var.share_recap_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_share_badge_zip_path    = var.share_badge_lambda_zip_path != null ? var.share_badge_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_entity_zip_path   = var.share_entity_lambda_zip_path != null ? var.share_entity_lambda_zip_path : data.archive_file.placeholder.output_path
   effective_generate_route_zip_path = var.generate_route_lambda_zip_path != null ? var.generate_route_lambda_zip_path : data.archive_file.placeholder.output_path
 }
 
@@ -963,6 +976,107 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_badge" {
   }
 }
 
+# ─── Shared entity-SSR Lambda (/share/{event,profile,club,race}) ───
+#
+# One HTML-only Lambda serving the four public entity share paths (see
+# apps/web/lambda/share-entity/README.md). Same execution role + log
+# group naming + CI-owns-code / Terraform-owns-shape lifecycle as the
+# other share Lambdas. No @resvg / PNG path, so it runs comfortably at
+# 256 MB (vs 512 for the image-rendering share Lambdas).
+
+resource "aws_cloudwatch_log_group" "lambda_share_entity" {
+  name              = "/aws/lambda/${local.resource_prefix}-share-entity"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secrets.arn
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "share_entity" {
+  function_name = "${local.resource_prefix}-share-entity"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  # Node 24 — same runtime as the other share Lambdas. Bumping here also
+  # requires the esbuild target in apps/web/lambda/share-entity/build.mjs.
+  runtime       = "nodejs24.x"
+  architectures = ["arm64"]
+  # 256 MB — pure HTML handler (no PNG rasteriser), so it needs less
+  # headroom than the 512 MB image-rendering share Lambdas.
+  memory_size                    = 256
+  timeout                        = 15
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
+  filename         = local.effective_share_entity_zip_path
+  source_code_hash = filebase64sha256(local.effective_share_entity_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.share_entity_lambda_env
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = var.tags
+
+  # CI updates code on every web@* tag; Terraform owns infra-shape.
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_share_entity]
+}
+
+resource "aws_lambda_alias" "share_entity_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.share_entity.function_name
+  function_version = aws_lambda_function.share_entity.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "share_entity" {
+  function_name      = aws_lambda_function.share_entity.function_name
+  qualifier          = aws_lambda_alias.share_entity_live.name
+  authorization_type = "AWS_IAM"
+  # Buffered — a single HTML body, no SSE.
+  invoke_mode = "BUFFERED"
+
+  cors {
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["GET"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_share_entity" {
+  name                              = "${local.resource_prefix}-share-entity-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke_share_entity" {
+  statement_id           = "AllowCloudFrontInvokeShareEntity"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.share_entity.function_name
+  qualifier              = aws_lambda_alias.share_entity_live.name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Generate-route Lambda (server-side round-trip route generation) ───
 #
 # Non-streaming JSON handler for POST /api/routes/generate. Replaces the
@@ -1406,6 +1520,36 @@ resource "aws_cloudfront_origin_request_policy" "share_badge" {
   }
 }
 
+# Cache + origin-request policies for the shared entity-SSR Lambda. Same
+# 5-min TTL + Cache-Control agreement as the other share Lambdas so a
+# privated/deleted entity drops off the unfurl within 5 minutes.
+resource "aws_cloudfront_cache_policy" "share_entity" {
+  name        = "${local.resource_prefix}-share-entity"
+  comment     = "Share-entity Lambda — cache per-entity HTML for 5m so privacy/deletion changes propagate fast"
+  default_ttl = 300
+  max_ttl     = 300
+  min_ttl     = 0
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+    cookies_config { cookie_behavior = "none" }
+    headers_config { header_behavior = "none" }
+    query_strings_config { query_string_behavior = "none" }
+  }
+}
+
+resource "aws_cloudfront_origin_request_policy" "share_entity" {
+  name = "${local.resource_prefix}-share-entity-origin"
+  cookies_config { cookie_behavior = "none" }
+  query_strings_config { query_string_behavior = "none" }
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = ["accept", "accept-encoding"]
+    }
+  }
+}
+
 # Origin request policy for the generate-route Lambda. Server-side route
 # generation is a Pro perk (decisions §204), so the viewer JWT rides
 # `x-supabase-authorization` to the handler's is_pro() gate — same slot as
@@ -1523,6 +1667,19 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id                = "lambda-share-badge"
     domain_name              = replace(aws_lambda_function_url.share_badge.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
     origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_badge.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  origin {
+    origin_id                = "lambda-share-entity"
+    domain_name              = replace(aws_lambda_function_url.share_entity.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_entity.id
 
     custom_origin_config {
       http_port              = 80
@@ -1798,6 +1955,90 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = false
     cache_policy_id            = aws_cloudfront_cache_policy.share_badge.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_badge.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  # Shared entity-SSR Lambda: per-request SSR HTML for the four public
+  # entity share paths so a newly-created/edited entity unfurls with the
+  # right per-entity head regardless of build cadence. HTML only (no
+  # og:image PNG). See apps/web/lambda/share-entity/README.md.
+  ordered_cache_behavior {
+    path_pattern               = "/share/event/*"
+    target_origin_id           = "lambda-share-entity"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_entity.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_entity.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/share/profile/*"
+    target_origin_id           = "lambda-share-entity"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_entity.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_entity.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/share/club/*"
+    target_origin_id           = "lambda-share-entity"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_entity.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_entity.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/share/race/*"
+    target_origin_id           = "lambda-share-entity"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_entity.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_entity.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
 
     dynamic "function_association" {

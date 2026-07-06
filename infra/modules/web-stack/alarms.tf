@@ -208,6 +208,14 @@ locals {
     route = aws_cloudwatch_log_group.lambda_share_route.name
     recap = aws_cloudwatch_log_group.lambda_share_recap.name
     badge = aws_cloudwatch_log_group.lambda_share_badge.name
+    # The shared entity Lambda logs a per-surface tag ([share-event] /
+    # [share-profile] / [share-club] / [share-race]) rather than a single
+    # [share-entity], so it gets four metric filters — one per surface —
+    # all against its single log group, keeping per-surface visibility.
+    event   = aws_cloudwatch_log_group.lambda_share_entity.name
+    profile = aws_cloudwatch_log_group.lambda_share_entity.name
+    club    = aws_cloudwatch_log_group.lambda_share_entity.name
+    race    = aws_cloudwatch_log_group.lambda_share_entity.name
   }
 }
 
@@ -286,10 +294,11 @@ resource "aws_cloudwatch_metric_alarm" "coach_bypass_paywall" {
 # breaks social unfurls with nobody paged. /audit/infra N1 2026-07-02.
 locals {
   share_lambdas = {
-    run   = aws_lambda_function.share_run.function_name
-    route = aws_lambda_function.share_route.function_name
-    recap = aws_lambda_function.share_recap.function_name
-    badge = aws_lambda_function.share_badge.function_name
+    run    = aws_lambda_function.share_run.function_name
+    route  = aws_lambda_function.share_route.function_name
+    recap  = aws_lambda_function.share_recap.function_name
+    badge  = aws_lambda_function.share_badge.function_name
+    entity = aws_lambda_function.share_entity.function_name
   }
 }
 

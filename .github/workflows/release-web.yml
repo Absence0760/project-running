@@ -171,6 +171,13 @@ jobs:
         working-directory: apps/web
         run: node lambda/share-badge/build.mjs
 
+      - name: Bundle share-entity Lambda
+        # One HTML-only Lambda serving /share/{event,profile,club,race}
+        # per-request SSR. Same post-build ordering constraint — it embeds
+        # apps/web/build/index.html. See apps/web/lambda/share-entity/README.md.
+        working-directory: apps/web
+        run: node lambda/share-entity/build.mjs
+
       # ──────────────────── AWS auth via OIDC ────────────────────
 
       - name: Pick deploy role ARN
@@ -215,6 +222,7 @@ jobs:
           echo "share_route_lambda=runonward-web-${ENV}-share-route" >> "$GITHUB_OUTPUT"
           echo "share_recap_lambda=runonward-web-${ENV}-share-recap" >> "$GITHUB_OUTPUT"
           echo "share_badge_lambda=runonward-web-${ENV}-share-badge" >> "$GITHUB_OUTPUT"
+          echo "share_entity_lambda=runonward-web-${ENV}-share-entity" >> "$GITHUB_OUTPUT"
 
           if [[ "$ENV" == "prod" ]]; then ALIAS="threkir.com"; else ALIAS="preview.threkir.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \
@@ -312,6 +320,20 @@ jobs:
             --name live \
             --function-version "$NEW_VERSION"
           echo "Share-badge Lambda alias 'live' now points at version $NEW_VERSION"
+
+      - name: Update share-entity Lambda
+        run: |
+          NEW_VERSION=$(aws lambda update-function-code \
+            --function-name "${{ steps.aws.outputs.share_entity_lambda }}" \
+            --zip-file "fileb://apps/web/lambda/share-entity/dist/share-entity.zip" \
+            --publish \
+            --query Version \
+            --output text)
+          aws lambda update-alias \
+            --function-name "${{ steps.aws.outputs.share_entity_lambda }}" \
+            --name live \
+            --function-version "$NEW_VERSION"
+          echo "Share-entity Lambda alias 'live' now points at version $NEW_VERSION"
 
       - name: Invalidate CloudFront
         run: |
