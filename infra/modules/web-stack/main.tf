@@ -94,8 +94,15 @@ locals {
   # sends as X-Engine-Key to clear each engine's guard — pulled from the sops file
   # (ONLY those keys, not the whole secret bag the coach Lambda gets). Absent in
   # sops → no header sent; if the engine's guard is active it 403s, the handler
-  # falls back, and (for round_trip) the engine-unreachable alarm fires.
+  # falls back, and (for round_trip) the engine-unreachable alarm fires. The
+  # Supabase pair backs the Pro gate's is_pro() check (decisions §204) — both
+  # are public client values, not secrets; if they're ever absent the handler
+  # fails the tier check closed (500) rather than skipping the gate.
   generate_route_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+    },
     var.graph_cycle_url != "" ? { GRAPH_CYCLE_URL = var.graph_cycle_url } : {},
     var.graphhopper_url != "" ? { GRAPHHOPPER_URL = var.graphhopper_url } : {},
     local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if k == "GRAPHHOPPER_API_KEY" || k == "GRAPH_CYCLE_API_KEY" } : {},
@@ -1399,11 +1406,12 @@ resource "aws_cloudfront_origin_request_policy" "share_badge" {
   }
 }
 
-# Origin request policy for the generate-route Lambda. The handler reads
-# the request body only (a coordinate + distance), no viewer JWT — so,
-# unlike the coach policy, no `x-supabase-authorization` is forwarded.
-# `Authorization` is still excluded: the Lambda OAC takes that header for
-# its sigv4 signature, and forwarding the viewer's would 403 the origin.
+# Origin request policy for the generate-route Lambda. Server-side route
+# generation is a Pro perk (decisions §204), so the viewer JWT rides
+# `x-supabase-authorization` to the handler's is_pro() gate — same slot as
+# the coach policy. `Authorization` is still excluded: the Lambda OAC takes
+# that header for its sigv4 signature, and forwarding the viewer's would
+# 403 the origin.
 resource "aws_cloudfront_origin_request_policy" "generate_route" {
   name = "${local.resource_prefix}-generate-route-origin"
   cookies_config { cookie_behavior = "none" }
@@ -1411,7 +1419,7 @@ resource "aws_cloudfront_origin_request_policy" "generate_route" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["content-type", "accept", "accept-encoding"]
+      items = ["content-type", "accept", "accept-encoding", "x-supabase-authorization"]
     }
   }
 }
