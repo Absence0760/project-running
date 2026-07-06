@@ -2206,12 +2206,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routesPublicRoutes => 'Public routes';
 
   @override
-  String get routesHeatmap => 'Heatmap';
-
-  @override
-  String get routesExplorePublic => 'Explore public routes';
-
-  @override
   String get routesHeatmapTooltip => 'Routes heatmap';
 
   @override

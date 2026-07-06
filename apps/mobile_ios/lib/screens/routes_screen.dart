@@ -1168,12 +1168,16 @@ class RoutesScreenState extends State<RoutesScreen> {
               },
             ),
             if (widget.apiClient != null) ...[
+              // The two heatmaps sit side by side, so both labels carry
+              // their qualifier ("Routes" = community discoverable-route +
+              // club pins; "Run" = the user's own tracks) — a bare
+              // "Heatmap" next to a sibling heatmap says nothing.
               OutlinedButton.icon(
                 icon: const Icon(
                   Icons.local_fire_department_outlined,
                   size: 18,
                 ),
-                label: Text(l10n.routesHeatmap),
+                label: Text(l10n.routesHeatmapTooltip),
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1185,7 +1189,7 @@ class RoutesScreenState extends State<RoutesScreen> {
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.person_pin_circle_outlined, size: 18),
-                label: Text(l10n.runHeatmapTitle),
+                label: Text(l10n.runHeatmapTooltip),
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(

@@ -621,8 +621,6 @@
   "routesDiscover": "Descubrir",
   "routesSyncFromCloud": "Sincronizar desde la nube",
   "routesPublicRoutes": "Rutas públicas",
-  "routesHeatmap": "Mapa de calor",
-  "routesExplorePublic": "Explorar rutas públicas",
   "routesHeatmapTooltip": "Mapa de calor de rutas",
   "routesSearchHint": "Buscar rutas por nombre…",
   "routesClearSearch": "Borrar búsqueda",

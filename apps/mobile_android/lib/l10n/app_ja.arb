@@ -621,8 +621,6 @@
   "routesDiscover": "見つける",
   "routesSyncFromCloud": "クラウドから同期",
   "routesPublicRoutes": "公開ルート",
-  "routesHeatmap": "ヒートマップ",
-  "routesExplorePublic": "公開ルートを探索",
   "routesHeatmapTooltip": "ルートのヒートマップ",
   "routesSearchHint": "名前でルートを検索…",
   "routesClearSearch": "検索をクリア",

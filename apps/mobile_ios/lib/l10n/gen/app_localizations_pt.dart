@@ -2223,12 +2223,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routesPublicRoutes => 'Rotas públicas';
 
   @override
-  String get routesHeatmap => 'Mapa de calor';
-
-  @override
-  String get routesExplorePublic => 'Explorar rotas públicas';
-
-  @override
   String get routesHeatmapTooltip => 'Mapa de calor das rotas';
 
   @override
@@ -13090,12 +13084,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routesPublicRoutes => 'Rotas públicas';
-
-  @override
-  String get routesHeatmap => 'Mapa de calor';
-
-  @override
-  String get routesExplorePublic => 'Explorar rotas públicas';
 
   @override
   String get routesHeatmapTooltip => 'Mapa de calor das rotas';

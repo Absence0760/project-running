@@ -3002,14 +3002,6 @@
   "@routesPublicRoutes": {
     "description": "Label on the button that opens the Explore public-routes screen from the embedded routes view"
   },
-  "routesHeatmap": "Heatmap",
-  "@routesHeatmap": {
-    "description": "Label on the button that opens the routes heatmap screen"
-  },
-  "routesExplorePublic": "Explore public routes",
-  "@routesExplorePublic": {
-    "description": "Tooltip on the standalone-AppBar Explore action in the routes list"
-  },
   "routesHeatmapTooltip": "Routes heatmap",
   "@routesHeatmapTooltip": {
     "description": "Tooltip on the standalone-AppBar heatmap action in the routes list"

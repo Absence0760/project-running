@@ -2232,12 +2232,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routesPublicRoutes => 'Itinéraires publics';
 
   @override
-  String get routesHeatmap => 'Carte de chaleur';
-
-  @override
-  String get routesExplorePublic => 'Explorer les itinéraires publics';
-
-  @override
   String get routesHeatmapTooltip => 'Carte de chaleur des itinéraires';
 
   @override

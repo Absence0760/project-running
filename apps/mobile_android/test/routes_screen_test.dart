@@ -80,16 +80,19 @@ void main() {
       await tester.pump();
       // Community routes heatmap + the user's own run heatmap, both as
       // labelled buttons — the routes page is the single home of the
-      // map/discovery entry points.
-      expect(find.widgetWithText(OutlinedButton, 'Heatmap'), findsOneWidget);
+      // map/discovery entry points. Both labels carry their qualifier
+      // since the siblings sit side by side.
+      expect(find.widgetWithText(OutlinedButton, 'Routes heatmap'),
+          findsOneWidget);
       expect(
-          find.widgetWithText(OutlinedButton, 'Your heatmap'), findsOneWidget);
+          find.widgetWithText(OutlinedButton, 'Run heatmap'), findsOneWidget);
 
       await _pump(tester, prefs: prefs);
       await tester.pump();
-      expect(find.widgetWithText(OutlinedButton, 'Heatmap'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Routes heatmap'),
+          findsNothing);
       expect(
-          find.widgetWithText(OutlinedButton, 'Your heatmap'), findsNothing);
+          find.widgetWithText(OutlinedButton, 'Run heatmap'), findsNothing);
     });
 
     testWidgets('hides the cloud-sync icon when apiClient is null',

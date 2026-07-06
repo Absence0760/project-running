@@ -3833,18 +3833,6 @@ abstract class AppLocalizations {
   /// **'Public routes'**
   String get routesPublicRoutes;
 
-  /// Label on the button that opens the routes heatmap screen
-  ///
-  /// In en, this message translates to:
-  /// **'Heatmap'**
-  String get routesHeatmap;
-
-  /// Tooltip on the standalone-AppBar Explore action in the routes list
-  ///
-  /// In en, this message translates to:
-  /// **'Explore public routes'**
-  String get routesExplorePublic;
-
   /// Tooltip on the standalone-AppBar heatmap action in the routes list
   ///
   /// In en, this message translates to:

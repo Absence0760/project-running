@@ -2126,12 +2126,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routesPublicRoutes => '公開ルート';
 
   @override
-  String get routesHeatmap => 'ヒートマップ';
-
-  @override
-  String get routesExplorePublic => '公開ルートを探索';
-
-  @override
   String get routesHeatmapTooltip => 'ルートのヒートマップ';
 
   @override

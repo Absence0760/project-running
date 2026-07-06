@@ -2231,12 +2231,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routesPublicRoutes => 'Öffentliche Routen';
 
   @override
-  String get routesHeatmap => 'Heatmap';
-
-  @override
-  String get routesExplorePublic => 'Öffentliche Routen erkunden';
-
-  @override
   String get routesHeatmapTooltip => 'Routen-Heatmap';
 
   @override
