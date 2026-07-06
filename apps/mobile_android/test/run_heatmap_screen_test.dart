@@ -62,6 +62,28 @@ void main() {
     expect(find.widgetWithText(AppBar, l10n.runHeatmapTitle), findsOneWidget);
   });
 
+  testWidgets('the AppBar carries a labelled hand-off to the routes heatmap',
+      (tester) async {
+    // The community heatmap (discoverable-route + club pins) must be one
+    // labelled tap from here — field report: users looking for the web-style
+    // heatmap land on this personal one and think the community map is
+    // missing. Render-only pin; pushing RoutesHeatmapScreen would drag its
+    // live fetches + debounce timers into this harness.
+    await _pump(
+      tester,
+      fetchRunsFn: () async => [],
+      fetchTrackFn: (_) async => [],
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text(l10n.routesHeatmapTooltip),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('aggregates downloaded tracks and shows the legend',
       (tester) async {
     var trackCalls = 0;
