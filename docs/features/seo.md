@@ -89,6 +89,16 @@ e2e-tested without standing up the Lambda.
   `public_profile_by_id` SECURITY DEFINER RPC) — no email / private field.
 - **Profiles are NOT in the sitemap** — no people-directory crawl
   manifest; profiles are link-discoverable only.
+- **Shadow-hidden (moderation auto-hidden) targets must not surface.**
+  `shadow_hidden` (migration 20270218_001) drops a target from every
+  public/search/discovery surface. Enforcement is per-query, NOT in the
+  base-table RLS, so every anon read here must filter it: the club lookup
+  + sitemap filter `shadow_hidden = false` on `clubs`; events have no such
+  column, so the event lookup + sitemap gate on the parent club's flag;
+  profiles are covered because `public_profile_by_id` already filters it.
+  Adding a new club/event read? Filter `shadow_hidden` or it leaks. (The
+  durable fix — an RLS backstop `AND not shadow_hidden` on the public
+  club/event policies — is an open backend follow-up.)
 
 ## Shared marketing/brand pieces
 
