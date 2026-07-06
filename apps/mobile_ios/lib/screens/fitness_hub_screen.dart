@@ -152,6 +152,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
             settingsSync: widget.settingsSync,
             onOpenRoutes: _openRoutes,
             onOpenPlans: _openPlans,
+            showSyncActions: false,
           ),
           GymScreen(
             key: const PageStorageKey('fitness-gym'),

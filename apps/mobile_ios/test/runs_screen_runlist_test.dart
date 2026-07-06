@@ -108,4 +108,13 @@ void main() {
     // The range label ellipsises rather than overflowing the title slot.
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a standalone run-list mount keeps the cloud slot by default',
+      (tester) async {
+    // showSyncActions defaults to true: a signed-in, fully-synced store shows
+    // the refresh state of the cloud slot. Only the Fitness hub's Runs
+    // sub-tab opts out (pinned in fitness_hub_screen_test.dart).
+    await pumpRunList(tester);
+    expect(find.byIcon(Icons.cloud_download), findsOneWidget);
+  });
 }

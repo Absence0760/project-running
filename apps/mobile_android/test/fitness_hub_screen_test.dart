@@ -141,6 +141,20 @@ void main() {
     expect(find.byIcon(Icons.route), findsOneWidget);
   });
 
+  testWidgets('Runs sub-tab hides the cloud sync slot; All keeps it',
+      (tester) async {
+    await pump(tester, runs: [runRow('r1')]);
+    // All tab (api: null, signed out) renders the cloud slot's offline state.
+    expect(find.byIcon(Icons.cloud_off), findsOneWidget);
+    await tester.tap(find.text('Runs').first);
+    await tester.pumpAndSettle();
+    // The Runs sub-tab passes showSyncActions: false — no cloud slot at all,
+    // in any of its three states.
+    expect(find.byIcon(Icons.cloud_off), findsNothing);
+    expect(find.byIcon(Icons.cloud_upload), findsNothing);
+    expect(find.byIcon(Icons.cloud_download), findsNothing);
+  });
+
   testWidgets('Gym sub-tab hosts GymScreen with its empty-onboarding state',
       (tester) async {
     await pump(tester, runs: [runRow('r1')]);

@@ -75,6 +75,12 @@ class RunsScreen extends StatefulWidget {
   /// run surface (relocated out of the Run-tab idle button). Null elsewhere.
   final VoidCallback? onOpenPlans;
 
+  /// When false the cloud slot (sync-unsynced badge / refresh / offline) is
+  /// suppressed. The Fitness hub's Runs sub-tab passes false so the sync
+  /// affordance lives only on the All tab — the two tabs sit side by side and
+  /// duplicating the cloud slot both clutters and overflows the Runs AppBar.
+  final bool showSyncActions;
+
   const RunsScreen({
     super.key,
     this.apiClient,
@@ -87,6 +93,7 @@ class RunsScreen extends StatefulWidget {
     this.showKindChips = true,
     this.onOpenRoutes,
     this.onOpenPlans,
+    this.showSyncActions = true,
   });
 
   @override
@@ -1156,7 +1163,7 @@ class _RunsScreenState extends State<RunsScreen> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           )
-        else if (unsyncedCount > 0)
+        else if (widget.showSyncActions && unsyncedCount > 0)
           // The unsynced badge sits in the rightmost AppBar action slot.
           // Without the trailing padding the badge label clips against
           // the screen edge as soon as the count gets to two digits.
@@ -1174,13 +1181,13 @@ class _RunsScreenState extends State<RunsScreen> {
               ),
             ),
           )
-        else if (widget.apiClient?.userId != null)
+        else if (widget.showSyncActions && widget.apiClient?.userId != null)
           IconButton(
             icon: const Icon(Icons.cloud_download),
             tooltip: l10n.historyRefreshTooltip,
             onPressed: _fetchRemote,
           )
-        else
+        else if (widget.showSyncActions)
           IconButton(
             icon: const Icon(Icons.cloud_off),
             tooltip: l10n.historyOfflineTooltip,
