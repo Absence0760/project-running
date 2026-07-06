@@ -19,7 +19,7 @@
 
 begin;
 
-select plan(20);
+select plan(24);
 
 -- ─── 1. public = false on private buckets ──────────────────────────
 select is(
@@ -196,6 +196,42 @@ select ok(
   'via a direct Storage GET with the object path'
 );
 
+-- route-photos reads gate on private.is_route_visible_to — since
+-- 20270329_001 the shadow_hidden-aware route visibility helper. A
+-- regression to a bare `bucket_id = 'route-photos'` form would expose
+-- every route photo (including moderation-hidden routes') to anyone
+-- holding the object path.
+select ok(
+  exists (
+    select 1 from pg_policies
+     where schemaname = 'storage'
+       and tablename = 'objects'
+       and cmd = 'SELECT'
+       and qual ilike '%route-photos%'
+       and qual ilike '%is_route_visible_to%'
+  ),
+  'route-photos SELECT policy MUST reference private.is_route_visible_to '
+  '— the visibility (incl. shadow_hidden, 20270329_001) gate on the bytes'
+);
+
+-- club-photos reads gate on a plain join through club_photos → clubs, so
+-- the policy inherits clubs'' own RLS (incl. the 20270328_001
+-- shadow_hidden backstop) by composability. A regression to a bare
+-- bucket_id check would sever that inheritance.
+select ok(
+  exists (
+    select 1 from pg_policies
+     where schemaname = 'storage'
+       and tablename = 'objects'
+       and cmd = 'SELECT'
+       and qual ilike '%club-photos%'
+       and qual ilike '%club_photos%'
+       and qual ilike '%clubs%'
+  ),
+  'club-photos SELECT policy MUST join through club_photos → clubs — the '
+  'join is what inherits clubs'' RLS (is_public + shadow_hidden backstop)'
+);
+
 -- ─── 6. Generalised: every bucket has size + mime caps ─────────────
 -- Catches a new bucket being created without limits — the exact
 -- omission that triggered 20260620_001 (SVG-XSS vector). Iterates
@@ -238,6 +274,43 @@ select is(
   'every blob in run-photos MUST be referenced by a run_photos row '
   '(via storage_path OR thumb_512_path) — orphans pay for storage '
   'cost + are a latent privacy footprint if anyone guesses the path'
+);
+
+-- Same invariant for the other two photo buckets: a blob nobody's
+-- metadata row references is unreachable through the app but still
+-- costs storage and is a latent privacy footprint.
+select is(
+  (
+    select count(*) from storage.objects
+      where bucket_id = 'route-photos'
+        and name not in (
+          select storage_path from route_photos
+            where storage_path is not null
+          union
+          select thumb_512_path from route_photos
+            where thumb_512_path is not null
+        )
+  )::int,
+  0::int,
+  'every blob in route-photos MUST be referenced by a route_photos row '
+  '(via storage_path OR thumb_512_path)'
+);
+
+select is(
+  (
+    select count(*) from storage.objects
+      where bucket_id = 'club-photos'
+        and name not in (
+          select storage_path from club_photos
+            where storage_path is not null
+          union
+          select thumb_512_path from club_photos
+            where thumb_512_path is not null
+        )
+  )::int,
+  0::int,
+  'every blob in club-photos MUST be referenced by a club_photos row '
+  '(via storage_path OR thumb_512_path)'
 );
 
 select * from finish();
