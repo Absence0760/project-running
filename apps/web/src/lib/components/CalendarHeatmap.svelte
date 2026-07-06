@@ -4,7 +4,7 @@
 	import type { Run } from '$lib/types';
 	import { formatISO } from '$lib/training/training';
 	import { fmtKm } from '$lib/format/units.svelte';
-	import { bucketRunsByLocalDay } from './calendar_heatmap';
+	import { bucketRunsByLocalDay, heatScaleMax } from './calendar_heatmap';
 
 	let { runs = [], weekStartDay = 'sunday' }: { runs: Run[]; weekStartDay?: 'monday' | 'sunday' } =
 		$props();
@@ -40,7 +40,7 @@
 	// the wrong cell.
 	let dayMap = $derived(bucketRunsByLocalDay(runs, gridStart.getTime()));
 
-	let maxDistance = $derived(Math.max(...dayMap.values(), 1));
+	let maxDistance = $derived(heatScaleMax(dayMap.values()));
 
 	// Generate grid: 20 weeks x 7 days
 	let cells = $derived.by(() => {

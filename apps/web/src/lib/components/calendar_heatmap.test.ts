@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { localDateKey, bucketRunsByLocalDay } from './calendar_heatmap';
+import { localDateKey, bucketRunsByLocalDay, heatScaleMax } from './calendar_heatmap';
 import { formatISO } from '../training/training';
 import type { Run } from '../types';
 
@@ -72,4 +72,26 @@ test('bucketRunsByLocalDay keys match formatISO so cells light up', { skip: offs
 	// find the bucket. The UTC-slice key would miss it.
 	const cellKey = formatISO(new Date('2026-01-16T02:00:00'));
 	assert.ok(map.has(cellKey), 'local cell key must hit the bucket');
+});
+
+test('heatScaleMax returns 1 for empty or all-zero inputs', () => {
+	assert.equal(heatScaleMax([]), 1);
+	assert.equal(heatScaleMax([0, 0]), 1);
+});
+
+test('heatScaleMax equals the max for small samples', () => {
+	assert.equal(heatScaleMax([5000]), 5000);
+	assert.equal(heatScaleMax([3000, 8000]), 8000);
+});
+
+test('heatScaleMax ignores a single outlier long run in a full window', () => {
+	// Nine ordinary 5 km days + one half-marathon: the scale should sit at
+	// the ordinary volume so those days do not all collapse into the
+	// lightest bucket.
+	const days = [...Array.from({ length: 9 }, () => 5000), 21100];
+	assert.equal(heatScaleMax(days), 5000);
+});
+
+test('heatScaleMax skips zero days when picking the percentile', () => {
+	assert.equal(heatScaleMax([0, 0, 0, 4000, 6000]), 6000);
 });

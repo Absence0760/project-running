@@ -35,3 +35,20 @@ export function bucketRunsByLocalDay(runs: Run[], sinceMs = -Infinity): Map<stri
 	}
 	return map;
 }
+
+/**
+ * The intensity scale's normaliser: the 90th-percentile nonzero day total
+ * rather than the true max. Normalising against the single longest day let
+ * one outlier (a half-marathon in a window of 5-8 km days) push every
+ * ordinary day into the lightest bucket, visually flattening the week-to-week
+ * rhythm the heatmap exists to show. Days above the percentile clamp into the
+ * darkest bucket (the caller already clamps ratio at 1). With few running
+ * days the percentile lands on the max, so small samples behave as before.
+ * persona-intermediate 2026-07-02.
+ */
+export function heatScaleMax(dayTotals: Iterable<number>): number {
+	const nonzero = [...dayTotals].filter((v) => v > 0).sort((a, b) => a - b);
+	if (nonzero.length === 0) return 1;
+	const idx = Math.min(nonzero.length - 1, Math.ceil(0.9 * nonzero.length) - 1);
+	return Math.max(nonzero[idx], 1);
+}
