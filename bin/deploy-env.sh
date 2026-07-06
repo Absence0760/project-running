@@ -115,7 +115,7 @@ apply_stack() {
 	# bin-scripts Medium.
 	local plan_file=".tfplan"
 	local plan_rc=0
-	terraform plan -input=false -detailed-exitcode -out="$plan_file" "${extra_args[@]}" || plan_rc=$?
+	terraform plan -input=false -detailed-exitcode -out="$plan_file" ${extra_args[@]+"${extra_args[@]}"} || plan_rc=$?
 	case "$plan_rc" in
 		0)
 			ok "$label has no pending changes — skipping apply"

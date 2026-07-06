@@ -5,14 +5,14 @@
 # tab to authenticate, and verifies the session afterwards.
 #
 # Usage:
-#   bin/aws-login.sh                   # uses $AWS_PROFILE, defaults to runonward
+#   bin/aws-login.sh                   # uses $AWS_PROFILE, defaults to running
 #   bin/aws-login.sh runonward-prod    # explicit profile
 
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-PROFILE="${1:-${AWS_PROFILE:-runonward}}"
+PROFILE="${1:-${AWS_PROFILE:-running}}"
 
 need_cmd aws
 

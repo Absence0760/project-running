@@ -105,13 +105,18 @@ case "$MODE" in
 		if [[ -t 0 ]]; then
 			fatal "stdin is a TTY — pipe the value in, or use --from-file or --prompt"
 		fi
-		VALUE="$(cat)"
+		# `printf x` + strip guards the command substitution's
+		# strip-ALL-trailing-newlines behaviour — the documented contract
+		# is byte-exact input minus exactly ONE trailing newline (below).
+		VALUE="$(cat; printf x)"
+		VALUE="${VALUE%x}"
 		;;
 	file)
 		if [[ ! -r "$FROM_FILE" ]]; then
 			fatal "--from-file: cannot read $FROM_FILE"
 		fi
-		VALUE="$(cat "$FROM_FILE")"
+		VALUE="$(cat "$FROM_FILE"; printf x)"
+		VALUE="${VALUE%x}"
 		;;
 	prompt)
 		read -rsp "Value for $KEY (input hidden): " VALUE

@@ -93,7 +93,7 @@ print_status() {
 	if ! aws sts get-caller-identity >/dev/null 2>&1; then
 		aws_ok=0
 		warn "AWS auth missing — Phase 2a / 2d / 3b probes can't verify state."
-		dim "  Run 'aws sso login --profile \${AWS_PROFILE:-runonward}' for accurate status."
+		dim "  Run 'aws sso login --profile \${AWS_PROFILE:-running}' for accurate status."
 	fi
 	for phase in 2a 2b 2c 2d 3a 3b; do
 		if probe_phase_done "$phase"; then
