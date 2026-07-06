@@ -787,6 +787,48 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(banner).toContainText(/Couldn't generate/i);
 	});
 
+	test('Generate 403 pro_required shows the Pro upsell and still falls back to the heuristic', async ({
+		page,
+	}) => {
+		// Server-side generation is a Pro perk (decisions §204): a free-tier
+		// caller gets 403 {error:'pro_required'} and the builder must (a)
+		// surface the upgrade affordance (gated on PUBLIC_ROUTE_GEN_ENABLED,
+		// true in the e2e env) and (b) keep serving the free path — the
+		// in-browser OSRM heuristic — rather than dead-ending on a Pro block.
+		// OSRM is forced down so the heuristic's own generation-specific
+		// error proves the fallback ran; the upsell must appear regardless.
+		await page.route('**/api/routes/generate', (route) =>
+			route.fulfill({
+				status: 403,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'pro_required', upgrade: true }),
+			}),
+		);
+		await page.route('**/v1/foot/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await setStartPoint(page, { lng: 144.97, lat: -37.816 });
+		await expect(page.locator('.point-set').first()).toBeVisible({ timeout: 5_000 });
+
+		await page.getByRole('button', { name: /Generate .* (loop|route)/ }).click();
+		const upsell = page.locator('.pro-upsell');
+		await expect(upsell).toBeVisible({ timeout: 30_000 });
+		await expect(upsell.getByRole('link', { name: /Upgrade to Pro/i })).toHaveAttribute(
+			'href',
+			'/settings/upgrade',
+		);
+		// The free path still ran: the heuristic surfaced its own outcome
+		// (here the forced-OSRM-down generation error), not a Pro block.
+		const banner = page.locator('.routing-error').first();
+		await expect(banner).toBeVisible({ timeout: 30_000 });
+		await expect(banner).toContainText(/Couldn't generate/i);
+	});
+
 	// Reason: a field report surfaced that the Generate-by-distance
 	// start picker had no visual confirmation — the user clicked
 	// "Pick start on map", clicked the map, and saw only a sidebar

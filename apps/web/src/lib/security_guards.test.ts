@@ -1036,13 +1036,16 @@ test('web-stack WAF web_acl_id wires the distribution + scope-down filters /api/
 	);
 });
 
-test('/settings/upgrade gates the Get Pro CTA on coachEnabled (never sells a hollow Pro)', () => {
-	// Reason: every Pro perk is a Coach feature, so when the Coach is off
-	// (PUBLIC_COACH_ENABLED unset — the rock-bottom deploy) a Pro subscription
-	// delivers nothing. The storefront must not sell it: the purchasable
-	// "Get Pro" CTA renders only under the coachOn branch, else a "coming soon"
-	// teaser. Un-gating this re-introduces a hollow-subscription (consumer-
-	// protection / chargeback) risk. See docs/features/paywall.md.
+test('/settings/upgrade gates the Get Pro CTA on a live perk (never sells a hollow Pro)', () => {
+	// Reason: Pro's flagged perks are the AI Coach (PUBLIC_COACH_ENABLED) and
+	// server route generation (PUBLIC_ROUTE_GEN_ENABLED — decisions §204).
+	// When both are off (rock-bottom deploy) a Pro subscription delivers
+	// nothing. The storefront must not sell it: the purchasable "Get Pro" CTA
+	// renders only under the proSellable (coachOn || routeGenOn) branch, else
+	// a "coming soon" teaser — and each flagged perk's bullet is gated on its
+	// own flag so the card never advertises a dead feature. Un-gating this
+	// re-introduces a hollow-subscription (consumer-protection / chargeback)
+	// risk. See docs/features/paywall.md.
 	const page = read('src/routes/settings/upgrade/+page.svelte');
 	assert.match(
 		page,
@@ -1051,16 +1054,61 @@ test('/settings/upgrade gates the Get Pro CTA on coachEnabled (never sells a hol
 	);
 	assert.match(
 		page,
-		/\{:else if coachOn\}[\s\S]*?upgrade\.getPro/,
-		'the "Get Pro" CTA must live under the {:else if coachOn} branch so it is hidden when the Coach is off.',
+		/import \{ routeGenEnabled \} from '\$lib\/routes\/route_gen_flag'/,
+		'upgrade page must import routeGenEnabled from the fail-closed route_gen_flag gate.',
+	);
+	assert.match(
+		page,
+		/const proSellable = coachOn \|\| routeGenOn/,
+		'proSellable must require at least one live perk (coachOn || routeGenOn).',
+	);
+	assert.match(
+		page,
+		/\{:else if proSellable\}[\s\S]*?upgrade\.getPro/,
+		'the "Get Pro" CTA must live under the {:else if proSellable} branch so it is hidden when every perk is off.',
 	);
 	assert.match(
 		page,
 		/\{:else\}[\s\S]*?upgrade\.proComingSoon/,
-		'when the Coach is off the Pro card must fall back to the upgrade.proComingSoon teaser.',
+		'when no perk is live the Pro card must fall back to the upgrade.proComingSoon teaser.',
+	);
+	assert.match(
+		page,
+		/\{#if coachOn\}[\s\S]*?upgrade\.proFeatCoachTitle/,
+		'the Coach perk bullet must be gated on coachOn so the card never advertises a dead Coach.',
+	);
+	assert.match(
+		page,
+		/\{#if routeGenOn\}[\s\S]*?upgrade\.proFeatRouteGenTitle/,
+		'the route-generation perk bullet must be gated on routeGenOn so the card never advertises deferred engines.',
 	);
 	const flag = read('src/lib/coach/coach_flag.ts');
 	assert.match(flag, /PUBLIC_COACH_ENABLED/, 'coach_flag must read PUBLIC_COACH_ENABLED.');
+	const rgFlag = read('src/lib/routes/route_gen_flag.ts');
+	assert.match(rgFlag, /PUBLIC_ROUTE_GEN_ENABLED/, 'route_gen_flag must read PUBLIC_ROUTE_GEN_ENABLED.');
+});
+
+test('RouteBuilder sends the generate JWT in `x-supabase-authorization`, not `Authorization`', () => {
+	// Reason: same collision as the coach clients — the production Lambda
+	// Function URL is AWS_IAM-auth and CloudFront's OAC signs `Authorization`
+	// via sigv4, so the viewer JWT must ride the custom header. Server-side
+	// generation is a Pro perk (decisions §204); putting the JWT in
+	// Authorization would 403 at the origin and silently downgrade every Pro
+	// user to the in-browser heuristic with no local-dev signal (dev reads
+	// the same custom header).
+	const source = read('src/lib/components/RouteBuilder.svelte');
+	const generateFetch = source.match(/fetch\('\/api\/routes\/generate'[\s\S]*?\}\);/);
+	assert.ok(generateFetch, 'Could not locate the /api/routes/generate fetch in RouteBuilder.');
+	assert.match(
+		generateFetch![0],
+		/['"]X-Supabase-Authorization['"]/,
+		'RouteBuilder must send the user JWT in the x-supabase-authorization header.',
+	);
+	assert.doesNotMatch(
+		generateFetch![0],
+		/['"]Authorization['"]:/,
+		'RouteBuilder must not put the viewer JWT in Authorization — CloudFront OAC owns that header.',
+	);
 });
 
 test('AWS Budgets carries all three thresholds (50% ACTUAL, 100% ACTUAL, 100% FORECASTED)', () => {

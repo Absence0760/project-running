@@ -9,11 +9,19 @@
 		isRevenueCatConfigured,
 	} from '$lib/billing/revenuecat';
 	import { coachEnabled } from '$lib/coach/coach_flag';
+	import { routeGenEnabled } from '$lib/routes/route_gen_flag';
 
-	// Every Pro perk is a Coach feature, so when the Coach is off (rock-bottom
-	// deploy, ANTHROPIC_API_KEY unset) Pro delivers nothing. Don't sell it:
-	// show a "coming soon" teaser and lead with donations. paywall.md.
+	// Pro is sellable only when at least one perk is actually live: the AI
+	// Coach (PUBLIC_COACH_ENABLED) or server route generation
+	// (PUBLIC_ROUTE_GEN_ENABLED, decisions §204). On a deploy with both off
+	// (rock-bottom: ANTHROPIC_API_KEY unset, engines deferred) Pro delivers
+	// nothing — show a "coming soon" teaser and lead with donations instead
+	// of selling a hollow subscription. Each perk's bullet is additionally
+	// gated on its own flag so the card never advertises a dead feature.
+	// paywall.md.
 	const coachOn = coachEnabled();
+	const routeGenOn = routeGenEnabled();
+	const proSellable = coachOn || routeGenOn;
 
 	// External donation link. One-off donations are intentionally routed
 	// through an external provider so the app doesn't have to own a payment
@@ -104,10 +112,12 @@
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<span>{m('upgrade.freeFeatSync')}</span>
 				</li>
-				<li>
-					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<span>{m('upgrade.freeFeatCoach')}</span>
-				</li>
+				{#if coachOn}
+					<li>
+						<span class="check material-symbols" aria-hidden="true">check_circle</span>
+						<span>{m('upgrade.freeFeatCoach')}</span>
+					</li>
+				{/if}
 			</ul>
 			{#if !isPro}
 				<p class="tier-note">{m('upgrade.youreOnFree')}</p>
@@ -115,7 +125,7 @@
 		</article>
 
 		<article class="tier tier-pro" class:active={isPro} aria-labelledby="tier-pro-h">
-			<span class="tier-flag">{coachOn ? m('upgrade.mostPopular') : m('upgrade.comingSoonFlag')}</span>
+			<span class="tier-flag">{proSellable ? m('upgrade.mostPopular') : m('upgrade.comingSoonFlag')}</span>
 			<header class="tier-head">
 				<h2 id="tier-pro-h">Pro</h2>
 				{#if isPro}<span class="pro-badge">{m('upgrade.active')}</span>{/if}
@@ -132,13 +142,24 @@
 			</header>
 			<p class="tier-blurb">{m('upgrade.proBlurb')}</p>
 			<ul class="tier-features">
-				<li>
-					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<div>
-						<strong>{m('upgrade.proFeatCoachTitle')}</strong>
-						<span class="feat-sub">{m('upgrade.proFeatCoachSub')}</span>
-					</div>
-				</li>
+				{#if coachOn}
+					<li>
+						<span class="check material-symbols" aria-hidden="true">check_circle</span>
+						<div>
+							<strong>{m('upgrade.proFeatCoachTitle')}</strong>
+							<span class="feat-sub">{m('upgrade.proFeatCoachSub')}</span>
+						</div>
+					</li>
+				{/if}
+				{#if routeGenOn}
+					<li>
+						<span class="check material-symbols" aria-hidden="true">check_circle</span>
+						<div>
+							<strong>{m('upgrade.proFeatRouteGenTitle')}</strong>
+							<span class="feat-sub">{m('upgrade.proFeatRouteGenSub')}</span>
+						</div>
+					</li>
+				{/if}
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<div>
@@ -168,7 +189,7 @@
 				<button class="btn btn-outline" onclick={handleManageSubscription}>
 					{m('upgrade.manageSubscription')}
 				</button>
-			{:else if coachOn}
+			{:else if proSellable}
 				<button class="btn btn-primary tier-cta" onclick={handleGetPro} disabled={purchasing}>
 					{purchasing ? m('upgrade.redirecting') : m('upgrade.getPro', { price: priceLabel })}
 				</button>
@@ -186,7 +207,7 @@
 				{m('upgrade.donateBody')}
 			</p>
 		</div>
-		<button class="btn" class:btn-primary={!coachOn} class:btn-outline={coachOn} onclick={handleDonate}>
+		<button class="btn" class:btn-primary={!proSellable} class:btn-outline={proSellable} onclick={handleDonate}>
 			<span class="material-symbols" aria-hidden="true">favorite</span>
 			{m('upgrade.donate')}
 		</button>

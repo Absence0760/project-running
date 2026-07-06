@@ -14,6 +14,7 @@
 	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { env } from '$env/dynamic/public';
+	import { routeGenEnabled } from '$lib/routes/route_gen_flag';
 	import {
 		requestRouteConstraints,
 		RouteRequestError,
@@ -56,6 +57,11 @@
 	// (when `largestLoopM` is present), accept this achievable out-and-back
 	// distance, or try a different start.
 	let generateShortfall = $state<{ achievedM: number; largestLoopM?: number } | null>(null);
+	// Set when the server declined generation with 403 pro_required (free-tier
+	// caller; the in-browser heuristic served the loop instead). Gated on the
+	// routeGenEnabled flag so a deploy that isn't advertising the perk never
+	// shows the upsell even if a misconfigured backend 403s.
+	let showGenerateProUpsell = $state(false);
 	let showSaveModal = $state(false);
 	let showHelp = $state(false);
 	// Mirrors the builder's internal isRouting so the Generate button
@@ -439,8 +445,11 @@
 	}
 
 	async function handleGenerateLoop() {
-		// Clear any prior shortfall affordance — this run decides anew.
+		// Clear any prior shortfall + Pro-upsell affordances — this run decides
+		// anew (a later attempt that 400s/502s/succeeds must not keep showing
+		// an upsell from an earlier 403).
 		generateShortfall = null;
+		showGenerateProUpsell = false;
 		// Pass startPoint through verbatim (or undefined when the user
 		// hasn't picked one). The builder's own zoom-sanity guard
 		// refuses with a pan-first message when start is undefined AND
@@ -838,6 +847,12 @@
 								: m('routeNew.generateLoop', { distance: `${targetDisplayValue.toFixed(1)} ${unitLabel}` })}
 						</button>
 					{/if}
+					{#if showGenerateProUpsell}
+						<p class="pro-upsell" role="note">
+							{m('routeNew.generateProUpsell')}
+							<a href="/settings/upgrade">{m('routeNew.generateProUpsellCta')}</a>
+						</p>
+					{/if}
 				</div>
 			{/if}
 
@@ -904,6 +919,7 @@
 			onbusy={(b) => (builderBusy = b)}
 			ongeneratemismatch={(achievedM, _targetM, largestLoopM) =>
 				(generateShortfall = { achievedM, largestLoopM })}
+			onprorequired={() => (showGenerateProUpsell = routeGenEnabled())}
 			onrequestclear={handleClear}
 		/>
 
@@ -1542,6 +1558,16 @@
 		width: auto;
 		flex-shrink: 0;
 		accent-color: var(--color-primary);
+	}
+
+	.pro-upsell {
+		margin: var(--space-xs) 0 0;
+		font-size: 0.72rem;
+		color: var(--color-text-secondary);
+	}
+	.pro-upsell a {
+		color: var(--color-primary);
+		font-weight: 600;
 	}
 
 	.target-btn {

@@ -21,6 +21,7 @@
 	} from '$lib/routes/route_loop';
 	import { nearestInsertIndex } from '$lib/routes/insert_index';
 	import type { RoutePreference } from '$lib/routes/generate/graphhopper';
+	import { supabase } from '$lib/core/supabase';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { searchPlaces } from '$lib/routes/geocoding';
@@ -63,6 +64,7 @@
 		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
 		onbusy = (_busy: boolean) => {},
 		ongeneratemismatch = (_achievedM: number, _targetM: number, _largestLoopM?: number) => {},
+		onprorequired = () => {},
 		onrequestclear = (): boolean => false
 	}: {
 		mode?: 'road' | 'trail';
@@ -107,6 +109,13 @@
 		 * explicit "generate that real loop" choice.
 		 */
 		ongeneratemismatch?: (achievedM: number, targetM: number, largestLoopM?: number) => void;
+		/**
+		 * Called when the server declined generation with 403 pro_required —
+		 * server-side generation is a Pro perk and this caller is free tier.
+		 * The builder still falls back to the in-browser heuristic (the free
+		 * path); the parent uses this to surface the upgrade affordance.
+		 */
+		onprorequired?: () => void;
 		/**
 		 * Called when the Escape keyboard shortcut requests a clear. Return
 		 * `true` to signal the parent has taken ownership (e.g. opened a
@@ -1302,11 +1311,25 @@
 		startVersion: number,
 		preference?: RoutePreference,
 	): Promise<boolean> {
+		// Server generation is a Pro perk: the endpoint wants the user JWT in
+		// `x-supabase-authorization` (CloudFront's OAC owns `Authorization`).
+		// A failed session read just sends no header — the server answers 401
+		// and the heuristic fallback takes over, same as any other non-200.
+		let token: string | undefined;
+		try {
+			token = (await supabase.auth.getSession()).data.session?.access_token;
+		} catch {
+			token = undefined;
+		}
+		if (routeVersion !== startVersion) return false;
 		let res: Response;
 		try {
 			res = await fetch('/api/routes/generate', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: {
+					'content-type': 'application/json',
+					...(token ? { 'X-Supabase-Authorization': `Bearer ${token}` } : {}),
+				},
 				body: JSON.stringify(
 					preference ? { start, targetDistanceM, preference } : { start, targetDistanceM },
 				),
@@ -1314,7 +1337,21 @@
 		} catch {
 			return false;
 		}
-		if (routeVersion !== startVersion || !res.ok) return false;
+		if (routeVersion !== startVersion) return false;
+		if (res.status === 403) {
+			// Free tier — tell the parent so it can offer the upgrade, then let
+			// the in-browser heuristic serve the route (the free path).
+			try {
+				const body = (await res.json()) as { error?: unknown };
+				// Re-check after the async body read: a stale request must not pop
+				// the upsell for a route the user has already abandoned.
+				if (routeVersion === startVersion && body?.error === 'pro_required') onprorequired();
+			} catch {
+				/* malformed body — treat as a plain failed request */
+			}
+			return false;
+		}
+		if (!res.ok) return false;
 		let data: { coordinates?: unknown; distanceM?: unknown; largestLoopM?: unknown };
 		try {
 			data = await res.json();
