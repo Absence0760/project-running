@@ -18,6 +18,12 @@ variable "aliases" {
   default     = []
 }
 
+variable "redirect_www_to_apex" {
+  description = "When true, attach a viewer-request CloudFront Function that 301-redirects any www.* host to the bare apex (SEO: consolidates the duplicate www/apex host onto one canonical). Enable only in envs that actually serve a www alias (prod); preview has none."
+  type        = bool
+  default     = false
+}
+
 variable "acm_certificate_arn" {
   description = "ACM cert ARN in us-east-1, covering domain_name + aliases. Output of the `dns` stack."
   type        = string

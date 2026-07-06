@@ -1424,6 +1424,27 @@ resource "aws_cloudfront_origin_request_policy" "generate_route" {
   }
 }
 
+# Viewer-request function: 301 www.* -> apex (SEO duplicate-content
+# consolidation). Gated on redirect_www_to_apex so only envs that
+# serve a www alias (prod) create + associate it; preview has no www
+# host, so the count is 0 and no behavior references it.
+resource "aws_cloudfront_function" "www_redirect" {
+  count   = var.redirect_www_to_apex ? 1 : 0
+  name    = "${local.resource_prefix}-www-redirect"
+  runtime = "cloudfront-js-2.0"
+  comment = "301 redirect www.* to the bare apex host"
+  publish = true
+  code    = file("${path.module}/functions/www_redirect.js")
+}
+
+# Association list is empty (no www redirect) or a single-element list
+# (associate the function). Consumed by a `dynamic "function_association"`
+# in every cache behavior so the redirect applies to ALL paths, not just
+# the default (a www link to /share/run/* must consolidate too).
+locals {
+  www_redirect_associations = var.redirect_www_to_apex ? [aws_cloudfront_function.www_redirect[0].arn] : []
+}
+
 # Trivy AWS-0010 (CloudFront access logging) is suppressed in
 # .trivyignore at the repo root. Rationale: real-time CloudWatch
 # metrics + per-Lambda alarms in alarms.tf already cover the
@@ -1532,6 +1553,14 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = true
     cache_policy_id            = aws_cloudfront_cache_policy.static.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   ordered_cache_behavior {
@@ -1544,6 +1573,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Generate-route Lambda: server-side round-trip route generation for
@@ -1561,6 +1598,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.lambda_passthrough.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.generate_route.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Share-run Lambda: per-request SSR for share-link HTML so brand-
@@ -1577,6 +1622,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_run.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_run.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Per-run og:image PNG, same Lambda. Pre-fix this stayed adapter-
@@ -1597,6 +1650,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_run.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_run.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Share-route Lambda: per-request SSR for route share-link HTML +
@@ -1613,6 +1674,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_route.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_route.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Per-route og:image PNG, same Lambda. Pre-fix this stayed adapter-
@@ -1632,6 +1701,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_route.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_route.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Share-recap Lambda: per-request SSR for the Year-in-Running
@@ -1649,6 +1726,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_recap.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_recap.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Per-recap og:image PNG, same Lambda. Routing /og/recap/* to the
@@ -1665,6 +1750,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_recap.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_recap.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Share-badge Lambda: per-request SSR for the per-badge achievement
@@ -1682,6 +1775,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_badge.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_badge.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # Per-badge og:image PNG, same Lambda. Routing /og/badge/* to the
@@ -1698,6 +1799,14 @@ resource "aws_cloudfront_distribution" "this" {
     cache_policy_id            = aws_cloudfront_cache_policy.share_badge.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_badge.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
   }
 
   # SPA fallback — SvelteKit static fallback is index.html.

@@ -70,6 +70,11 @@ module "web" {
   domain_name = var.apex_domain
   aliases     = ["www.${var.apex_domain}"]
 
+  # Prod serves both www + apex on this distribution; 301 www -> apex so
+  # search engines consolidate onto one canonical host (SEO). Preview
+  # has no www alias, so it leaves this at the default false.
+  redirect_www_to_apex = true
+
   acm_certificate_arn = data.terraform_remote_state.dns.outputs.certificate_arn
   route53_zone_id     = data.terraform_remote_state.dns.outputs.zone_id
 
