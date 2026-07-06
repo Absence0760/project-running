@@ -1,7 +1,8 @@
 /// Per-badge `<head>` meta-tag builder for the share-badge page. Pure string
 /// helpers — shared between the SvelteKit +page.svelte (dev-server SSR) and the
 /// production share-badge Lambda. Reuses the generic `ShareRunMeta` shape +
-/// `injectShareRunMeta` (title/description/ogUrl/ogImageUrl is run-agnostic).
+/// `injectShareRunMeta` (title/description/canonical/ogImageUrl is run-agnostic).
+/// The badge page carries no JSON-LD node yet, so `jsonLd` is left unset.
 
 import { englishBadge, type AchievementTier } from '../social/badges';
 import type { ShareRunMeta } from './share_run_meta';
@@ -28,7 +29,7 @@ export function buildShareBadgeMeta(input: ShareBadgeMetaInput): ShareRunMeta {
 	return {
 		title,
 		description,
-		ogUrl: `${base}/share/badge/${id}`,
+		canonical: `${base}/share/badge/${id}`,
 		ogImageUrl: `${base}/og/badge/${id}.png`,
 	};
 }

@@ -3,6 +3,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
+		buildRunJsonLd,
+		buildRunShareCanonical,
 		buildRunShareDescription,
 		buildRunShareTitle,
 		formatKmStable,
@@ -13,6 +15,21 @@
 
 	let title = $derived(buildRunShareTitle(data.run, data.displayName));
 	let description = $derived(buildRunShareDescription(data.run, data.displayName));
+	// Absolute canonical so search engines fold the in-app /runs/[id]
+	// surface (which canonicals here) onto this single public page —
+	// parity with share/route, which already does both this + JSON-LD.
+	let canonicalUrl = $derived(buildRunShareCanonical(data.siteUrl, data.id));
+	// JSON-LD WebPage + breadcrumb. Injected via {@html} because a
+	// literal <script> in Svelte markup would be hoisted/compiled; the
+	// builder pre-escapes < / > / & so a malicious caption can't
+	// terminate the script element.
+	let jsonLd = $derived(
+		buildRunJsonLd(data.run, {
+			id: data.id,
+			base: data.siteUrl,
+			displayName: data.displayName,
+		})
+	);
 
 	let heroDistance = $derived(formatKmStable(data.run?.distance_m));
 	let heroDate = $derived(formatDateStable(data.run?.started_at));
@@ -29,9 +46,11 @@
 <svelte:head>
 	<title>{title}</title>
 	<meta name="description" content={description} />
+	<link rel="canonical" href={canonicalUrl} />
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<meta property="og:type" content="article" />
+	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:site_name" content="Threkir" />
 	<meta property="og:image" content="/og/run/{data.id}.png" />
 	<meta property="og:image:width" content="1200" />
@@ -40,6 +59,7 @@
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
 	<meta name="twitter:image" content="/og/run/{data.id}.png" />
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <div class="share-page">

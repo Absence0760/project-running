@@ -164,12 +164,13 @@ test('injectShareRunMeta — uses per-env site URL for og:url + og:image', () =>
 	});
 	const out = injectShareRunMeta(SHELL, previewMeta);
 	// The per-env origin flows through to the builder output verbatim...
-	assert.equal(previewMeta.ogUrl, 'https://preview.threkir.com/share/run/r-preview');
+	assert.equal(previewMeta.canonical, 'https://preview.threkir.com/share/run/r-preview');
 	assert.equal(previewMeta.ogImageUrl, 'https://preview.threkir.com/og/run/r-preview.png');
 	// ...and the injected shell carries those exact og tags. Match the full
 	// `content="..."` attribute built from the meta (not a bare host
 	// substring) so this stays an injection assertion, not a URL-prefix check
 	// that CodeQL reads as an incomplete-sanitization guard.
-	assert.ok(out.includes(`<meta property="og:url" content="${previewMeta.ogUrl}">`));
+	assert.ok(out.includes(`<meta property="og:url" content="${previewMeta.canonical}">`));
+	assert.ok(out.includes(`<link rel="canonical" href="${previewMeta.canonical}">`));
 	assert.ok(out.includes(`<meta property="og:image" content="${previewMeta.ogImageUrl}">`));
 });

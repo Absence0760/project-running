@@ -38,6 +38,21 @@ export function injectShareRunMeta(
 		/<meta\s+(?:property|name)="(?:og:[^"]+|twitter:[^"]+|description)"[^>]*>/gi,
 		'',
 	);
+	// Strip any existing canonical link + JSON-LD block so the per-run
+	// ones don't sit alongside a stale default (a duplicate canonical or
+	// second WebPage node confuses crawlers). Mirror of the route shell:
+	// the JSON-LD strip repeats until the string stops changing so a
+	// crafted/overlapping `<script ...><script>…</script>` can't leave a
+	// residual `<script` behind (js/incomplete-multi-character-sanitization).
+	out = out.replace(/<link\s+rel="canonical"[^>]*>/gi, '');
+	let prev: string;
+	do {
+		prev = out;
+		out = out.replace(
+			/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/gi,
+			'',
+		);
+	} while (out !== prev);
 	// Splice the new tags in just before </head>. Case-insensitive
 	// match against the closing tag.
 	const insertedAt = out.search(/<\/head>/i);

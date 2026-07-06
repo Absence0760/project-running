@@ -116,6 +116,47 @@ test.describe('/share/run/[id] — anon', () => {
 		);
 	});
 
+	test('anon visitor gets a canonical link + JSON-LD structured data', async ({ page }) => {
+		// SEO parity with /share/route: the public run share page is the
+		// single canonical, crawlable surface for a run (the in-app
+		// /runs/[id] page canonicals here), and it carries schema.org
+		// JSON-LD so search engines get a WebPage + breadcrumb trail. Pin
+		// both so a refactor can't silently drop the indexing signals.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+
+		// Canonical + og:url are baked at load() time — assert the path
+		// tail so the test is independent of PUBLIC_SITE_URL.
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/run/${RUNNER_PUBLIC_RUN_ID}$`)
+		);
+		await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+			'content',
+			new RegExp(`/share/run/${RUNNER_PUBLIC_RUN_ID}$`)
+		);
+
+		const ld = await page
+			.locator('script[type="application/ld+json"]')
+			.first()
+			.textContent();
+		expect(ld, 'expected a JSON-LD script block').toBeTruthy();
+		const obj = JSON.parse(ld!);
+		expect(obj['@type']).toBe('WebPage');
+		expect(obj.url).toMatch(new RegExp(`/share/run/${RUNNER_PUBLIC_RUN_ID}$`));
+		expect(obj.primaryImageOfPage.url).toMatch(
+			new RegExp(`/og/run/${RUNNER_PUBLIC_RUN_ID}.png$`)
+		);
+		expect(obj.breadcrumb['@type']).toBe('BreadcrumbList');
+		expect(obj.breadcrumb.itemListElement).toHaveLength(2);
+	});
+
 	test('per-run og:image renders a real PNG of correct dimensions', async ({ request }) => {
 		// The prerendered /og/run/[id].png endpoint must return a
 		// 1200×630 PNG (Twitter / Facebook recommended unfurl size).

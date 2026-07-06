@@ -5,6 +5,8 @@ import {
 	buildRouteShareCanonical,
 	buildRouteShareDescription,
 	buildRouteShareTitle,
+	buildRunJsonLd,
+	buildRunShareCanonical,
 	buildRunShareDescription,
 	buildRunShareTitle,
 	cleanShareTitle,
@@ -267,5 +269,75 @@ test('buildRouteJsonLd escapes angle brackets so a route name cannot break out o
 	assert.ok(!json.includes('<'), 'expected no literal < in the JSON-LD string');
 	assert.ok(!json.includes('>'), 'expected no literal > in the JSON-LD string');
 	// It still round-trips to the original name once parsed.
+	assert.equal(JSON.parse(json).name, '</script><img src=x onerror=alert(1)>');
+});
+
+// ---------------- buildRunShareCanonical ----------------
+
+test('buildRunShareCanonical — absolute share/run URL', () => {
+	assert.equal(
+		buildRunShareCanonical('https://threkir.com', 'run-1'),
+		'https://threkir.com/share/run/run-1'
+	);
+});
+
+test('buildRunShareCanonical — trailing slash on base is normalised', () => {
+	assert.equal(
+		buildRunShareCanonical('https://threkir.com/', 'run-1'),
+		'https://threkir.com/share/run/run-1'
+	);
+});
+
+test('buildRunShareCanonical — null base yields a root-relative path', () => {
+	assert.equal(buildRunShareCanonical(null, 'run-1'), '/share/run/run-1');
+});
+
+// ---------------- buildRunJsonLd ----------------
+
+test('buildRunJsonLd — WebPage + breadcrumb, canonical + og image, no geo', () => {
+	const obj = JSON.parse(
+		buildRunJsonLd(
+			{ distance_m: 10_000, started_at: '2026-05-11T07:00:00Z' },
+			{ id: 'run-1', base: 'https://threkir.com', displayName: 'Jane' }
+		)
+	);
+	assert.equal(obj['@type'], 'WebPage');
+	assert.equal(obj.url, 'https://threkir.com/share/run/run-1');
+	assert.equal(obj.primaryImageOfPage.url, 'https://threkir.com/og/run/run-1.png');
+	// Name carries the distance/date phrase WITHOUT the " — Threkir"
+	// site suffix (that belongs on <title>, not the schema name).
+	assert.equal(obj.name, '10.0 km run by Jane on 11 May 2026');
+	assert.equal(obj.name.includes('Threkir'), false);
+	const crumbs = obj.breadcrumb.itemListElement;
+	assert.equal(crumbs.length, 2);
+	assert.equal(crumbs[0].item, 'https://threkir.com/');
+	assert.equal(crumbs[1].name, '10.0 km run by Jane on 11 May 2026');
+	assert.equal(crumbs[1].item, undefined);
+	// No location must leak — the track is privacy-clipped server-side.
+	assert.equal('geo' in obj, false);
+});
+
+test('buildRunJsonLd — a run caption becomes the schema name', () => {
+	const obj = JSON.parse(
+		buildRunJsonLd(
+			{ distance_m: 10_000, started_at: '2026-05-11T07:00:00Z', title: 'Sunrise long run' },
+			{ id: 'run-1', base: 'https://threkir.com', displayName: 'Jane' }
+		)
+	);
+	assert.equal(obj.name, 'Sunrise long run');
+});
+
+test('buildRunJsonLd — null run falls back to a generic name', () => {
+	const obj = JSON.parse(buildRunJsonLd(null, { id: 'run-2', base: 'https://threkir.com' }));
+	assert.equal(obj.name, 'Run');
+});
+
+test('buildRunJsonLd — escapes angle brackets so a caption cannot break out of the script tag', () => {
+	const json = buildRunJsonLd(
+		{ distance_m: 5000, title: '</script><img src=x onerror=alert(1)>' },
+		{ id: 'run-3', base: 'https://threkir.com' }
+	);
+	assert.ok(!json.includes('<'), 'expected no literal < in the JSON-LD string');
+	assert.ok(!json.includes('>'), 'expected no literal > in the JSON-LD string');
 	assert.equal(JSON.parse(json).name, '</script><img src=x onerror=alert(1)>');
 });

@@ -106,6 +106,70 @@ export function buildRunShareDescription(
 	return `${lead} Map, splits, and elevation on Threkir.`.trim();
 }
 
+/// Absolute canonical URL for a public run share page. Mirrors
+/// buildRouteShareCanonical — the in-app /runs/[id] surface points its
+/// canonical here so search engines consolidate ranking signals onto
+/// the single public, unfurl-ready page rather than splitting them
+/// across the app URL and the share URL for the same run.
+export function buildRunShareCanonical(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/share/run/${id}`;
+}
+
+/// The run's display name without the trailing " — Threkir" site suffix
+/// buildRunShareTitle appends — used as the JSON-LD `name` / breadcrumb
+/// leaf (which shouldn't carry the site tagline).
+function runShareName(
+	run: ShareRunMeta | null | undefined,
+	displayName?: string | null,
+): string {
+	const full = buildRunShareTitle(run, displayName);
+	const suffix = ` — ${SITE_NAME}`;
+	return full.endsWith(suffix) ? full.slice(0, -suffix.length) : full;
+}
+
+/// schema.org JSON-LD for a public run share page, serialized ready to
+/// drop inside a `<script type="application/ld+json">`. Mirrors
+/// buildRouteJsonLd: a `WebPage` node names + describes the run and
+/// points at the og:image, with a `BreadcrumbList` (Home → run) for
+/// breadcrumb rich results. There is no dedicated schema.org type for a
+/// recorded run, so `WebPage` + breadcrumb is the honest, broadly
+/// supported choice — and we deliberately omit any geo / start
+/// coordinate: the track is privacy-clipped server-side and a precise
+/// location must never leak into structured data.
+///
+/// The run caption + display name are user-controlled, so the output is
+/// run through `escapeJsonLd` before it reaches the DOM.
+export function buildRunJsonLd(
+	run: ShareRunMeta | null | undefined,
+	opts: { id: string; base: string | null | undefined; displayName?: string | null },
+): string {
+	const base = normaliseSiteUrl(opts.base);
+	const canonical = `${base}/share/run/${opts.id}`;
+	const name = runShareName(run, opts.displayName);
+	const graph = {
+		'@context': 'https://schema.org',
+		'@type': 'WebPage',
+		name,
+		description: buildRunShareDescription(run, opts.displayName),
+		url: canonical,
+		primaryImageOfPage: {
+			'@type': 'ImageObject',
+			url: `${base}/og/run/${opts.id}.png`,
+		},
+		breadcrumb: {
+			'@type': 'BreadcrumbList',
+			itemListElement: [
+				{ '@type': 'ListItem', position: 1, name: SITE_NAME, item: `${base}/` },
+				{ '@type': 'ListItem', position: 2, name },
+			],
+		},
+	};
+	return escapeJsonLd(JSON.stringify(graph));
+}
+
 export function buildRouteShareTitle(route: ShareRouteMeta | null | undefined): string {
 	if (!route?.name) return `Route — ${SITE_NAME}`;
 	return `${route.name} — ${SITE_NAME}`;
