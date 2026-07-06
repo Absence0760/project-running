@@ -155,6 +155,20 @@ void main() {
     expect(find.byIcon(Icons.cloud_download), findsNothing);
   });
 
+  testWidgets(
+      'Runs sub-tab titles itself "Runs" and moves the range status into '
+      'the filter header', (tester) async {
+    await pump(tester, runs: [runRow('r1')]);
+    await tester.tap(find.text('Runs').first);
+    await tester.pumpAndSettle();
+    // "Runs" appears twice: the hub's tab label + the sub-tab's static
+    // AppBar title (matching the Gym / Nutrition siblings).
+    expect(find.text('Runs'), findsNWidgets(2));
+    // The range + count status the title otherwise carries renders as the
+    // filter header's leading row instead (default range = This week).
+    expect(find.text('This week · 1 run'), findsOneWidget);
+  });
+
   testWidgets('Gym sub-tab hosts GymScreen with its empty-onboarding state',
       (tester) async {
     await pump(tester, runs: [runRow('r1')]);

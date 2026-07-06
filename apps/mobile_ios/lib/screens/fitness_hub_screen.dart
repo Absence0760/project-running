@@ -153,6 +153,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
             onOpenRoutes: _openRoutes,
             onOpenPlans: _openPlans,
             showSyncActions: false,
+            titleText: l10n.fitnessTabRuns,
           ),
           GymScreen(
             key: const PageStorageKey('fitness-gym'),

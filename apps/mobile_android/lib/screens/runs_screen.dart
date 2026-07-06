@@ -81,6 +81,13 @@ class RunsScreen extends StatefulWidget {
   /// duplicating the cloud slot both clutters and overflows the Runs AppBar.
   final bool showSyncActions;
 
+  /// Static AppBar title. The Fitness hub's Runs sub-tab passes "Runs" so its
+  /// title matches the Gym / Nutrition sibling tabs; the range + count status
+  /// the title otherwise carries then renders as a row in the filter header
+  /// instead (its pre-polish home), so the active date filter stays visible.
+  /// Null keeps the range + count title (the All tab + standalone mounts).
+  final String? titleText;
+
   const RunsScreen({
     super.key,
     this.apiClient,
@@ -94,6 +101,7 @@ class RunsScreen extends StatefulWidget {
     this.onOpenRoutes,
     this.onOpenPlans,
     this.showSyncActions = true,
+    this.titleText,
   });
 
   @override
@@ -1038,10 +1046,14 @@ class _RunsScreenState extends State<RunsScreen> {
     // title row composes the range ("This week") with a small
     // count chip ("12 runs") next to it.
     return AppBar(
-      // In timeline mode the range / count title is run-specific noise — show
-      // a neutral History title instead (the run toolbar returns on the Runs
-      // chip).
-      title: _timelineMode
+      // A hub-supplied static title wins (the Runs sub-tab reads "Runs" like
+      // its Gym / Nutrition siblings; the range + count status renders in the
+      // filter header instead). In timeline mode the range / count title is
+      // run-specific noise — show a neutral History title (the run toolbar
+      // returns on the Runs chip).
+      title: widget.titleText != null
+          ? Text(widget.titleText!)
+          : _timelineMode
           ? Text(l10n.navHistory)
           : Row(
               mainAxisSize: MainAxisSize.min,
@@ -1414,6 +1426,7 @@ class _RunsScreenState extends State<RunsScreen> {
             l10n: l10n,
             rangeLabel: _activeRangeLabel(l10n),
             visibleCount: _visible.length,
+            showRangeRow: widget.titleText != null,
             summary: summariseRuns(_filtered),
             unit: unit,
             activityFilter: _activityFilter,
@@ -1821,8 +1834,13 @@ class _EmptyRuns extends StatelessWidget {
 /// itself is contained.
 class _RunsFilterHeader extends StatelessWidget {
   final AppLocalizations l10n;
+  /// Active date-range label + visible-run count. Rendered as the header's
+  /// leading row only when [showRangeRow] is set — on mounts where the AppBar
+  /// title carries them instead (range + count anchor the title by default)
+  /// they stay out of the body so the status isn't shown twice.
   final String rangeLabel;
   final int visibleCount;
+  final bool showRangeRow;
   /// Aggregate over the *full filtered set* (not the paginated slice).
   /// Drives the small stats chip under the range label so a user can
   /// see "47 km · 5h" without scrolling — and the chip updates live
@@ -1845,6 +1863,7 @@ class _RunsFilterHeader extends StatelessWidget {
     required this.l10n,
     required this.rangeLabel,
     required this.visibleCount,
+    this.showRangeRow = false,
     required this.summary,
     required this.unit,
     required this.activityFilter,
@@ -1910,12 +1929,22 @@ class _RunsFilterHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Range label + run count used to live here as a dedicated
-        // row; they now anchor the AppBar title (filling the
-        // previously-empty left half of the bar). Only the summary
-        // line ("47 km · 5h 12m") remains — it's the metric that
-        // actually changes as filter chips toggle, so it earns the
-        // body slot.
+        // Range label + run count anchor the AppBar title by default (filling
+        // the previously-empty left half of the bar); on static-title mounts
+        // (the hub's Runs sub-tab) they return to this, their pre-polish home.
+        if (showRangeRow)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '$rangeLabel · ${l10n.historyCount(visibleCount)}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        // Summary line ("47 km · 5h 12m") — the metric that actually
+        // changes as filter chips toggle, so it earns the body slot.
         if (summary.runCount > 0)
           Padding(
             padding: const EdgeInsets.only(top: 0, bottom: 4),
