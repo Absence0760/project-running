@@ -95,6 +95,41 @@ test.describe('/ (landing)', () => {
 		expect((desc ?? '').length).toBeGreaterThan(0);
 	});
 
+	test('canonical, Open Graph, and Organization/WebSite JSON-LD are present', async ({
+		page,
+	}) => {
+		await page.goto('/');
+
+		// Canonical must be the apex root — the single home for the brand
+		// so the www/apex CloudFront duplicate can't split ranking signal.
+		const canonicalHref = await page
+			.locator('link[rel="canonical"]')
+			.getAttribute('href');
+		expect(canonicalHref).toMatch(/^https?:\/\/[^/]+\/$/);
+
+		expect(
+			await page.locator('meta[property="og:title"]').getAttribute('content')
+		).toBeTruthy();
+		expect(await page.locator('meta[property="og:type"]').getAttribute('content')).toBe(
+			'website'
+		);
+		expect(
+			await page.locator('meta[property="og:image"]').getAttribute('content')
+		).toBeTruthy();
+		expect(await page.locator('meta[name="twitter:card"]').getAttribute('content')).toBe(
+			'summary_large_image'
+		);
+
+		// The two site-wide nodes must both be emitted + parse as valid
+		// JSON — the brand-query knowledge-panel / sitelinks signal.
+		const ldBlocks = await page
+			.locator('script[type="application/ld+json"]')
+			.allTextContents();
+		const types = ldBlocks.map((t) => JSON.parse(t)['@type']);
+		expect(types).toContain('Organization');
+		expect(types).toContain('WebSite');
+	});
+
 	test('closing CTA section points anon users at /login', async ({ page }) => {
 		await page.goto('/');
 		// The "Ready to log your next run?" closing CTA has its own

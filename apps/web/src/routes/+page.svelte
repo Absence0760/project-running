@@ -3,6 +3,21 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import SeoHead from '$lib/components/SeoHead.svelte';
+	import { buildOrganizationJsonLd, buildWebSiteJsonLd } from '$lib/share/site_meta';
+	import { normaliseSiteUrl } from '$lib/share/share_meta';
+
+	let { data } = $props();
+
+	// The apex root is the single canonical home for the brand — set it
+	// so the www/apex duplicate (both served by CloudFront) can't split
+	// ranking signal, and so localized client-side variants of the
+	// landing copy all fold onto one URL.
+	const canonical = $derived(`${normaliseSiteUrl(data.siteUrl)}/`);
+	const jsonLd = $derived([
+		buildOrganizationJsonLd(data.siteUrl),
+		buildWebSiteJsonLd(data.siteUrl),
+	]);
 
 	$effect(() => {
 		if (browser && !auth.loading && auth.loggedIn) {
@@ -48,13 +63,12 @@
 	]);
 </script>
 
-<svelte:head>
-	<title>{m('landing.pageTitle')}</title>
-	<meta
-		name="description"
-		content={m('landing.pageDescription')}
-	/>
-</svelte:head>
+<SeoHead
+	title={m('landing.pageTitle')}
+	description={m('landing.pageDescription')}
+	{canonical}
+	{jsonLd}
+/>
 
 {#if !showLanding}
 	<div class="landing-loading">
