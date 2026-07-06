@@ -97,10 +97,14 @@ e2e-tested without standing up the Lambda.
   backstop, so a NEW anon read can't silently leak), while owner/admins
   keep visibility; and (2) the SEO surfaces still carry their own explicit
   `shadow_hidden = false` filter (club/sitemap directly; event/sitemap via
-  the parent club) as belt-and-braces. Profiles are covered because
-  `public_profile_by_id` already filters it. The RLS backstop means adding
-  a new club/event read is safe by default, but keep filtering explicitly
-  on any new public surface for defense in depth.
+  the parent club) as belt-and-braces. Profiles are covered at both layers
+  too: `public_profile_by_id` filters it, and since migration 20270329_001
+  the `user_profiles` base SELECT policy + the `public_profiles` view do as
+  well; routes' direct-by-id paths (`is_route_visible_to` /
+  `clip_route_for_viewer`, which back the route share/detail reads) are
+  filtered by the same migration. The RLS backstop means adding a new
+  club/event/profile/route read is safe by default, but keep filtering
+  explicitly on any new public surface for defense in depth.
 
 ## Shared marketing/brand pieces
 

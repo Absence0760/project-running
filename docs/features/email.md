@@ -151,9 +151,16 @@ Dashboard → Auth → Hooks in prod):
   `SEND_EMAIL_HOOK_SECRET`; `|`-separated secrets for rotation). The function
   is `verify_jwt = false` (GoTrue sends no Supabase JWT), so the signature
   check is the entire gate and it fails closed: missing secret → 503, missing
-  or invalid signature / >5-min-stale timestamp → 401, 64 KB body cap. Pinned
-  by `lib.test.ts` + `handler.test.ts` (40 deno tests) and three wire-level
-  cases in `_shared/handler_envelope.test.ts`.
+  or invalid signature / >5-min-stale timestamp → 401, 64 KB body cap.
+  Hook-supplied recipients (`user.email` / `user.new_email`) pass
+  `isValidRecipient` before reaching the MIME `To:` header or the SMTP
+  `RCPT TO` command (no control chars / brackets / delimiters, single `@`,
+  RFC 5321 length cap — header/command-injection defence in depth on top of
+  GoTrue's own format validation); an invalid recipient is a 400
+  `invalid_recipient`, never a silent skip, and `smtpSend` re-checks at the
+  wire as a last-line guard. Pinned by `lib.test.ts` + `handler.test.ts`
+  (45 deno tests) and three wire-level cases in
+  `_shared/handler_envelope.test.ts`.
 - **Locale** — `user_settings.prefs.locale` (service-role read, the same
   §120 pref the worker uses) → signup-time `user_metadata.locale` → `en`. The
   settings read is auxiliary: if it fails the mail still goes out in the
