@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { getAdminClient } from '../fixtures/local-supabase';
 
 /**
  * `/share/event/[id]` — the public, anon, SSR event share page.
@@ -66,5 +67,35 @@ test.describe('/share/event/[id] — anon', () => {
 		const obj = JSON.parse(ld as string);
 		expect(['Event', 'SportsEvent']).toContain(obj['@type']);
 		expect(obj.url).toMatch(/\/share\/event\/00000000-0000-0000-0000-000000000000$/);
+	});
+});
+
+/**
+ * Moderation: an event under a shadow-hidden (auto-hidden) club must also
+ * drop from the public /share/event surface (migration 20270218_001) —
+ * events have no shadow_hidden of their own, so the parent club's flag
+ * governs. We hide the seeded club via service-role and always revert.
+ */
+test.describe('/share/event/[id] — shadow-hidden parent club (anon)', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	const SLUG = 'richmond-run-club';
+	const SEED_EVENT = 'e1111111-0000-0000-0000-000000000001';
+
+	test.afterEach(async () => {
+		const admin = getAdminClient();
+		await admin.from('clubs').update({ shadow_hidden: false }).eq('slug', SLUG);
+	});
+
+	test('event under a hidden club renders the not-found page, not its data', async ({ page }) => {
+		const admin = getAdminClient();
+		const { error } = await admin.from('clubs').update({ shadow_hidden: true }).eq('slug', SLUG);
+		expect(error).toBeNull();
+
+		await page.goto(`/share/event/${SEED_EVENT}`);
+
+		await expect(page).toHaveTitle('Event — Threkir');
+		await expect(page.getByRole('heading', { name: 'Event not found.' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Sunday Long Run' })).toHaveCount(0);
 	});
 });
