@@ -3373,6 +3373,7 @@ export const en = {
 	"personalHeatmap.errorBody": "Something went wrong loading your runs. Check your connection and try again.",
 	"personalHeatmap.retry": "Try again",
 	"personalHeatmap.legendTitle": "Your heatmap",
+	"personalHeatmap.srAltData": "The heatmap canvas itself is not readable by screen readers. Every run shown here is also available as a list in your run history.",
 	"personalHeatmap.legendSummaryOne": "{n} mapped run — brighter where you run most.",
 	"personalHeatmap.legendSummaryMany": "{n} mapped runs — brighter where you run most.",
 	"personalHeatmap.scaleLess": "less",

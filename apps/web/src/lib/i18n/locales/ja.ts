@@ -3356,6 +3356,7 @@ export const messages = {
 	"personalHeatmap.errorBody": "ランの読み込み中に問題が発生しました。接続を確認してもう一度お試しください。",
 	"personalHeatmap.retry": "再試行",
 	"personalHeatmap.legendTitle": "あなたのヒートマップ",
+	"personalHeatmap.srAltData": "ヒートマップの地図自体はスクリーンリーダーでは読み取れません。ここに表示されるすべてのランは、ラン履歴の一覧でも確認できます。",
 	"personalHeatmap.legendSummaryOne": "地図に{n}件のラン — よく走る場所ほど明るく表示されます。",
 	"personalHeatmap.legendSummaryMany": "地図に{n}件のラン — よく走る場所ほど明るく表示されます。",
 	"personalHeatmap.scaleLess": "少ない",

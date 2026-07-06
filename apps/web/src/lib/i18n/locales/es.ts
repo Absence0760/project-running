@@ -3360,6 +3360,7 @@ export const messages = {
 	"personalHeatmap.errorBody": "Algo salió mal al cargar tus carreras. Comprueba tu conexión e inténtalo de nuevo.",
 	"personalHeatmap.retry": "Reintentar",
 	"personalHeatmap.legendTitle": "Tu mapa de calor",
+	"personalHeatmap.srAltData": "El mapa de calor en sí no es legible por los lectores de pantalla. Cada carrera mostrada aquí también está disponible como lista en tu historial de carreras.",
 	"personalHeatmap.legendSummaryOne": "{n} carrera en el mapa: más brillante donde más corres.",
 	"personalHeatmap.legendSummaryMany": "{n} carreras en el mapa: más brillante donde más corres.",
 	"personalHeatmap.scaleLess": "menos",

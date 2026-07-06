@@ -3360,6 +3360,7 @@ export const messages = {
 	"personalHeatmap.errorBody": "Une erreur s'est produite lors du chargement de tes courses. Vérifie ta connexion et réessaie.",
 	"personalHeatmap.retry": "Réessayer",
 	"personalHeatmap.legendTitle": "Ta carte de chaleur",
+	"personalHeatmap.srAltData": "La carte de chaleur elle-même n'est pas lisible par les lecteurs d'écran. Chaque course affichée ici est aussi disponible sous forme de liste dans votre historique de courses.",
 	"personalHeatmap.legendSummaryOne": "{n} course cartographiée — plus lumineux là où tu cours le plus.",
 	"personalHeatmap.legendSummaryMany": "{n} courses cartographiées — plus lumineux là où tu cours le plus.",
 	"personalHeatmap.scaleLess": "moins",

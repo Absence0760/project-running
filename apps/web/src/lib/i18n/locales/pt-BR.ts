@@ -3359,6 +3359,7 @@ export const messages = {
 	"personalHeatmap.errorBody": "Algo deu errado ao carregar suas corridas. Verifique sua conexão e tente novamente.",
 	"personalHeatmap.retry": "Tentar novamente",
 	"personalHeatmap.legendTitle": "Seu mapa de calor",
+	"personalHeatmap.srAltData": "O mapa de calor em si não é legível por leitores de tela. Cada corrida exibida aqui também está disponível como lista no seu histórico de corridas.",
 	"personalHeatmap.legendSummaryOne": "{n} corrida no mapa — mais brilhante onde você corre mais.",
 	"personalHeatmap.legendSummaryMany": "{n} corridas no mapa — mais brilhante onde você corre mais.",
 	"personalHeatmap.scaleLess": "menos",

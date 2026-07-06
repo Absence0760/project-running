@@ -3360,6 +3360,7 @@ export const messages = {
 	"personalHeatmap.errorBody": "Beim Laden deiner Läufe ist etwas schiefgelaufen. Prüfe deine Verbindung und versuche es erneut.",
 	"personalHeatmap.retry": "Erneut versuchen",
 	"personalHeatmap.legendTitle": "Deine Heatmap",
+	"personalHeatmap.srAltData": "Die Heatmap-Karte selbst ist für Screenreader nicht lesbar. Jeder hier angezeigte Lauf ist auch als Liste in deinem Laufverlauf verfügbar.",
 	"personalHeatmap.legendSummaryOne": "{n} Lauf auf der Karte — heller, wo du am meisten läufst.",
 	"personalHeatmap.legendSummaryMany": "{n} Läufe auf der Karte — heller, wo du am meisten läufst.",
 	"personalHeatmap.scaleLess": "weniger",

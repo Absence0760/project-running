@@ -340,6 +340,7 @@
 		<aside class="heat-legend" data-testid="personal-heatmap-legend">
 			<strong>{m('personalHeatmap.legendTitle')}</strong>
 			<p>{trackCount === 1 ? m('personalHeatmap.legendSummaryOne', { n: trackCount }) : m('personalHeatmap.legendSummaryMany', { n: trackCount })}</p>
+			<p class="visually-hidden">{m('personalHeatmap.srAltData')}</p>
 			<span class="legend-scale" aria-hidden="true"></span>
 			<span class="legend-scale-labels"><span>{m('personalHeatmap.scaleLess')}</span><span>{m('personalHeatmap.scaleMore')}</span></span>
 		</aside>
