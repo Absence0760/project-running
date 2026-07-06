@@ -116,6 +116,7 @@ src/
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)
     learn/          # Public, no-auth, PRERENDERED Learn/guides surface (decisions §161, features/learn.md). /learn hub + /learn/[slug] articles (mdsvex .md bodies) + /learn/category/[category]. All prerender=true (+ entries()); SEO mirrors share/route (canonical / OG / Article+BreadcrumbList JSON-LD via lib/learn/learn_meta.ts). Shell-less + anon in +layout.svelte (path.startsWith('/learn')). Content authored in lib/learn/guides/*.md, indexed by import.meta.glob in lib/learn/guides.ts. Web-only (no twin).
+    share/event/[id]/ share/profile/[id]/ share/club/[slug]/ share/race/[id]/ # Public, anon, shell-less entity share pages (prerender=false), served in prod by the ONE shared lambda/share-entity Lambda. Per-entity canonical/OG/JSON-LD via lib/share/share_{event,profile,club,race}_meta.ts over anon-readable rows. See docs/features/seo.md + decisions §205.
     share/badge/[id]/ # Public achievement-badge share page (no auth). Mirrors share/run: +page.ts SSR via lib/share/share_badge_lookup (public-row-safe columns only, is_public=true), og/badge/[id].png renders the card via lib/share/og_badge_png; the lambda/share-badge/ handler owns it in prod. Badge catalogue + thresholds live in lib/social/badges.ts (the TS source of truth the SQL award fn duplicates). See features/achievements.md + decisions §164.
     live/[id]/      # Live spectator tracking. Real Go live-hub WebSocket path via lib/runs/live_hub.ts when PUBLIC_LIVE_HUB_URL is set; Supabase Realtime channel as fallback when unset; the demo animation is only the no-signal filler. WS path e2e-tested by tests-e2e/live/spectator_websocket.spec.ts (dedicated playwright.livehub.config.ts — boots the real hub binary).
     login/          # Email/password + OAuth sign-in
@@ -160,6 +161,18 @@ lambda/
                     # (prerender=false) own the path in dev. infra/ CloudFront+OIDC+release
                     # wiring landed (mirrors share-run/share-route/share-recap); only
                     # terraform apply + first deploy remain. See lambda/share-badge/README.md.
+  share-entity/     # ONE HTML-only Lambda dispatching the four public entity share
+                    # paths /share/{event,profile,club,race} (no og:image PNG — OG is the
+                    # branded card or an avatar URL, so no @resvg; 256MB). Each path:
+                    # share_<x>_lookup (anon rows only) → build<X>Head/render<X>HeadTags →
+                    # generic injectEntityHead (entity_spa_shell.ts). SportsEvent/Event
+                    # (events+races), ProfilePage+Person (profiles), SportsOrganization
+                    # (clubs) JSON-LD. Privacy: coarse club location only (never the meet
+                    # point, §147); profiles NOT in the sitemap. SvelteKit
+                    # /share/{event,profile,club,race}/[…] routes (prerender=false) own the
+                    # path in dev. infra landed + deploy-gated. Chosen over cloning the
+                    # share-badge stack 4x (decisions §205). See lambda/share-entity/README.md
+                    # + docs/features/seo.md.
 ```
 
 ## Development
