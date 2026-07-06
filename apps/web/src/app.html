@@ -10,6 +10,15 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- Declares the page adapts to both schemes so the user agent
+		     paints the correct default background (and form-control /
+		     scrollbar colours) BEFORE app.css loads. This is the earliest,
+		     CSP-safe mitigation for the dark/auto first-paint flash: the
+		     hash-based CSP (svelte.config.js) forbids a hand-written inline
+		     bootstrap <script>, so this meta is the tool that runs before
+		     paint. The theme reconciles to the persisted [data-theme] on
+		     first mount (settings/theme.ts). -->
+		<meta name="color-scheme" content="light dark" />
 		<link rel="icon" type="image/png" href="%sveltekit.assets%/favicon.png" />
 		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />

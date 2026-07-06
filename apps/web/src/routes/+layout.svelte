@@ -24,11 +24,29 @@
 	import { m, initLocale } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import { coachEnabled } from '$lib/coach/coach_flag';
+	import { env } from '$env/dynamic/public';
 
-	// Apply the persisted theme on first client mount. Users with a
-	// saved non-auto preference may see a brief flash on first paint —
-	// that's the cost of not using a blocking script tag in app.html;
-	// acceptable for now.
+	// Warm the connection to the Supabase origin every page hits on
+	// mount (the auth-session check + all data fetches). A preconnect
+	// pays down the DNS + TLS round-trip before the first request, so
+	// first data lands sooner (LCP on data-driven pages). CSP-safe —
+	// it's a <link>, not a script. Guarded so a missing/garbage env var
+	// can't throw during render.
+	const supabaseOrigin = (() => {
+		try {
+			return env.PUBLIC_SUPABASE_URL ? new URL(env.PUBLIC_SUPABASE_URL).origin : '';
+		} catch {
+			return '';
+		}
+	})();
+
+	// Apply the persisted theme on first client mount. A blocking
+	// bootstrap <script> in app.html would kill the first-paint flash
+	// entirely, but the hash-based CSP (svelte.config.js) forbids a
+	// hand-written inline script; the `<meta name="color-scheme">` in
+	// app.html is the CSP-safe partial mitigation (correct UA default
+	// background before CSS), and this reconciles to the exact
+	// [data-theme] on mount.
 	onMount(() => {
 		initTheme();
 	});
@@ -303,6 +321,12 @@
 		goto('/login');
 	}
 </script>
+
+<svelte:head>
+	{#if supabaseOrigin}
+		<link rel="preconnect" href={supabaseOrigin} crossorigin="anonymous" />
+	{/if}
+</svelte:head>
 
 <ToastContainer />
 <CookieConsentBanner />

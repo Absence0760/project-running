@@ -130,6 +130,18 @@ test.describe('/ (landing)', () => {
 		expect(types).toContain('WebSite');
 	});
 
+	test('first-paint hints: color-scheme meta + Supabase preconnect', async ({ page }) => {
+		await page.goto('/');
+		// color-scheme lets the UA paint the right default background
+		// before CSS loads (CSP-safe flash mitigation).
+		await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute(
+			'content',
+			'light dark'
+		);
+		// Preconnect to the Supabase origin every page hits on mount.
+		expect(await page.locator('link[rel="preconnect"]').count()).toBeGreaterThan(0);
+	});
+
 	test('closing CTA section points anon users at /login', async ({ page }) => {
 		await page.goto('/');
 		// The "Ready to log your next run?" closing CTA has its own
