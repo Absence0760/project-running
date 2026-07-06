@@ -49,6 +49,35 @@
 			if (e.key === 'Escape') {
 				e.stopPropagation();
 				onclose();
+				return;
+			}
+			// Trap Tab inside the dialog while open: the page behind is
+			// still in the DOM (no inert), so without this a keyboard user
+			// tabs out of the last control straight into the obscured page.
+			if (e.key !== 'Tab' || !dialogEl) return;
+			const focusable = [
+				...dialogEl.querySelectorAll<HTMLElement>(
+					'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
+						'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+				),
+			].filter((el) => el.getClientRects().length > 0);
+			if (focusable.length === 0) {
+				e.preventDefault();
+				dialogEl.focus();
+				return;
+			}
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			const inside = active != null && dialogEl.contains(active);
+			if (e.shiftKey) {
+				if (!inside || active === first || active === dialogEl) {
+					e.preventDefault();
+					last.focus();
+				}
+			} else if (!inside || active === last) {
+				e.preventDefault();
+				first.focus();
 			}
 		};
 		window.addEventListener('keydown', onKey);
