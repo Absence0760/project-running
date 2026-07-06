@@ -172,7 +172,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     // Compose
-    val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
@@ -192,11 +192,11 @@ dependencies {
     // builders); the `tooling-preview` artefact is the side-loadable
     // tile preview Studio uses, kept off the release classpath via
     // `debugImplementation`.
-    implementation("androidx.wear.tiles:tiles:1.6.0")
-    implementation("androidx.wear.protolayout:protolayout:1.4.0")
-    implementation("androidx.wear.protolayout:protolayout-material:1.4.0")
-    implementation("androidx.wear.protolayout:protolayout-expression:1.4.0")
-    debugImplementation("androidx.wear.tiles:tiles-renderer:1.6.0")
+    implementation("androidx.wear.tiles:tiles:1.6.1")
+    implementation("androidx.wear.protolayout:protolayout:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout-material:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout-expression:1.4.1")
+    debugImplementation("androidx.wear.tiles:tiles-renderer:1.6.1")
 
     // Health Services (live HR). 1.1.0-rc01 is the latest pre-stable; 1.0.0
     // is the last stable tag but lacks the flow helpers we want. Move to
@@ -233,5 +233,5 @@ dependencies {
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:8.46.0")
+    implementation("io.sentry:sentry-android:8.47.0")
 }
