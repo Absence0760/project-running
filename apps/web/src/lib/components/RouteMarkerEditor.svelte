@@ -372,6 +372,7 @@
 								type="button"
 								class="icon-btn"
 								title={m('routeMarker.edit')}
+								aria-label={m('routeMarker.edit')}
 								onclick={() => openEdit(mk)}
 							>
 								<span class="material-symbols">edit</span>
@@ -380,6 +381,7 @@
 								type="button"
 								class="icon-btn"
 								title={m('routeMarker.delete')}
+								aria-label={m('routeMarker.delete')}
 								onclick={() => (confirmDeleteId = mk.id)}
 							>
 								<span class="material-symbols">delete</span>

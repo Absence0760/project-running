@@ -2116,7 +2116,7 @@
 				type="text"
 				placeholder={t('routeBuilder.searchPlaceholder')}
 			/>
-			<button class="locate-btn" onclick={goToMyLocation} title={t('routeBuilder.goToMyLocation')}>
+			<button class="locate-btn" onclick={goToMyLocation} title={t('routeBuilder.goToMyLocation')} aria-label={t('routeBuilder.goToMyLocation')}>
 				<span class="material-symbols">my_location</span>
 			</button>
 		</div>
