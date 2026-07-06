@@ -72,7 +72,7 @@
 	</header>
 
 	<article class="learn-article">
-		<nav class="breadcrumb" aria-label="Breadcrumb">
+		<nav class="breadcrumb" aria-label={m('learn.breadcrumbNav')}>
 			<a href="/">{m('learn.breadcrumbHome')}</a>
 			<span class="sep">/</span>
 			<a href="/learn">{m('learn.breadcrumbLearn')}</a>

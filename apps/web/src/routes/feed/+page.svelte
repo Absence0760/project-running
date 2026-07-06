@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/i18n/store.svelte';
 
 	// /feed is now the Feed tab under /social. Kept as a thin redirect
 	// so the sitemap entry, the bell-popover "Browse the feed" CTA, and
@@ -12,11 +13,11 @@
 </script>
 
 <svelte:head>
-	<title>Feed — Threkir</title>
+	<title>{m('shell.redirecting')}</title>
 </svelte:head>
 
 <div class="page">
-	<p class="muted">Loading…</p>
+	<p class="muted">{m('shell.loading')}</p>
 </div>
 
 <style>

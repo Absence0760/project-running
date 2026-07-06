@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/i18n/store.svelte';
 	import { page } from '$app/stores';
 
 	// /clubs is now hosted under /social as the third tab. Kept as a
@@ -17,11 +18,11 @@
 </script>
 
 <svelte:head>
-	<title>Clubs — Threkir</title>
+	<title>{m('shell.redirecting')}</title>
 </svelte:head>
 
 <div class="page">
-	<p class="muted">Loading…</p>
+	<p class="muted">{m('shell.loading')}</p>
 </div>
 
 <style>

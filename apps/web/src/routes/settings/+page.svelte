@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/i18n/store.svelte';
 
 	// `/settings` has no content of its own — it just bounces to the first
 	// tab. A client-side redirect (mirroring /clubs, /feed, /explore) keeps
@@ -16,12 +17,12 @@
 </script>
 
 <svelte:head>
-	<title>Redirecting…</title>
+	<title>{m('shell.redirecting')}</title>
 	<meta http-equiv="refresh" content="0;url=/settings/account" />
 </svelte:head>
 
 <div class="page">
-	<p class="muted">Loading…</p>
+	<p class="muted">{m('shell.loading')}</p>
 </div>
 
 <style>
