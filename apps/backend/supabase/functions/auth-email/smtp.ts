@@ -154,8 +154,15 @@ export async function smtpSend(
       await smtp.cmd(`AUTH PLAIN ${plain}`, 235);
     }
 
+    // The handler validates recipients up front (isValidRecipient); this
+    // is the last-line guard so no future caller can smuggle a CR/LF or
+    // bracket into the command stream through this seam.
+    const rcpt = to.trim();
+    if (/[\r\n<>]/.test(rcpt) || rcpt.length === 0) {
+      throw new Error('smtp: unsafe recipient');
+    }
     await smtp.cmd(`MAIL FROM:<${extractAddr(opts.from)}>`, 250);
-    await smtp.cmd(`RCPT TO:<${to.trim()}>`, 250);
+    await smtp.cmd(`RCPT TO:<${rcpt}>`, 250);
     await smtp.cmd('DATA', 354);
     await smtp.write(dotStuff(mime));
     if (!mime.endsWith('\r\n')) await smtp.write('\r\n');

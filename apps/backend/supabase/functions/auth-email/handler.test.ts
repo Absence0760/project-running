@@ -195,6 +195,42 @@ Deno.test('handler — SMTP failure surfaces as 500 so GoTrue never thinks it se
   assertEquals((await res.json()).error, 'send_failed');
 });
 
+Deno.test('handler — CR/LF-bearing recipient is 400, nothing sent', async () => {
+  const { deps, sent } = makeDeps({});
+  const payload = {
+    ...SIGNUP_PAYLOAD,
+    user: {
+      ...SIGNUP_PAYLOAD.user,
+      email: 'runner@test.com\r\nBcc: victim@example.com',
+    },
+  };
+  const res = await makeAuthEmailHandler(deps)(await signedRequest(payload));
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, 'invalid_recipient');
+  assertEquals(sent.length, 0);
+});
+
+Deno.test('handler — secure email change with one bad address sends neither mail', async () => {
+  const { deps, sent } = makeDeps({});
+  const payload = {
+    user: {
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'runner@test.com',
+      new_email: 'evil@example.com>\r\nRCPT TO:<other@example.com',
+    },
+    email_data: {
+      token: '111111',
+      token_hash: 'hash_a',
+      token_new: '222222',
+      token_hash_new: 'hash_b',
+      email_action_type: 'email_change',
+    },
+  };
+  const res = await makeAuthEmailHandler(deps)(await signedRequest(payload));
+  assertEquals(res.status, 400);
+  assertEquals(sent.length, 0);
+});
+
 Deno.test('handler — payload without a recipient is a 200 skip', async () => {
   const { deps, sent } = makeDeps({});
   const res = await makeAuthEmailHandler(deps)(

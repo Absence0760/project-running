@@ -15,6 +15,7 @@ import {
   buildVerifyUrl,
   encodeHeaderWord,
   extractAddr,
+  isValidRecipient,
   normalizeEmailLocale,
   planSends,
   renderAuthEmail,
@@ -237,6 +238,37 @@ Deno.test('catalogue — every locale carries every key, non-empty', () => {
     }
     assert(authEmailShared[locale].footer.length > 0);
     assert(authEmailShared[locale].altCode.length > 0);
+  }
+});
+
+Deno.test('isValidRecipient — plain addresses pass, injection shapes fail', () => {
+  for (
+    const good of [
+      'runner@test.com',
+      'first.last+tag@sub.example.co.uk',
+      'admin@localhost',
+    ]
+  ) {
+    assert(isValidRecipient(good), `expected valid: ${good}`);
+  }
+  for (
+    const bad of [
+      '',
+      'runner@test.com\r\nBcc: victim@example.com',
+      'runner@test.com\nX-Injected: 1',
+      'a@b.com>\r\nRCPT TO:<c@d.com',
+      '<runner@test.com>',
+      'two words@example.com',
+      'a,b@example.com',
+      'a;b@example.com',
+      'no-at-sign.example.com',
+      'double@@example.com',
+      'trailing@',
+      '@leading.com',
+      'x'.repeat(250) + '@e.com',
+    ]
+  ) {
+    assert(!isValidRecipient(bad), `expected invalid: ${JSON.stringify(bad)}`);
   }
 });
 

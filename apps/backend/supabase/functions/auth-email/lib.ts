@@ -196,6 +196,22 @@ export interface PlannedSend {
   tokenHash: string;
 }
 
+/// Wire-safety gate for a hook-supplied recipient before it reaches the
+/// MIME `To:` header and the SMTP `RCPT TO` command. GoTrue validates
+/// email format at signup, but the hook is its own trust boundary
+/// (anything holding the signing secret chooses the field), so header /
+/// command injection is rejected here rather than assumed away: no
+/// control characters (CR/LF folding), no angle brackets / comma /
+/// semicolon / whitespace (RCPT and address-list delimiters), exactly
+/// one @ with a non-empty local part and domain, RFC 5321 length cap.
+export function isValidRecipient(addr: string): boolean {
+  if (addr.length === 0 || addr.length > 254) return false;
+  // deno-lint-ignore no-control-regex
+  if (/[\x00-\x1f\x7f<>,;\s]/.test(addr)) return false;
+  const at = addr.indexOf('@');
+  return at > 0 && at === addr.lastIndexOf('@') && at < addr.length - 1;
+}
+
 const LINK_ACTIONS: Record<string, string> = {
   signup: 'signup',
   invite: 'invite',

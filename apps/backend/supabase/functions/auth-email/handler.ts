@@ -14,6 +14,7 @@ import {
   type HookEmailData,
   type HookUser,
   buildMime,
+  isValidRecipient,
   planSends,
   renderAuthEmail,
   resolveAuthEmailLocale,
@@ -76,6 +77,13 @@ export function makeAuthEmailHandler(
     const sends = planSends(user, emailData);
     if (sends.length === 0) {
       return Response.json({ ok: true, skipped: 'no_recipient' });
+    }
+
+    // 4xx, not a silent skip: a dropped auth email would strand the flow
+    // that triggered it, and GoTrue surfaces the hook failure to its
+    // caller. The address itself stays out of the log (PII rule).
+    if (sends.some((s) => !isValidRecipient(s.to))) {
+      return Response.json({ error: 'invalid_recipient' }, { status: 400 });
     }
 
     // Locale lookup is auxiliary — a failed settings read must not block
