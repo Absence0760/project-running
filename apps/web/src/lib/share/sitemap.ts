@@ -121,6 +121,47 @@ export function composeEntries(
 	return entries;
 }
 
+/// Sitemap entries for the public entity share pages served by the
+/// entity-SSR Lambda: club events, public clubs, and race-calendar
+/// listings. Deliberately excludes public PROFILES — enumerating every
+/// runner in a sitemap is an aggressive people-directory the app doesn't
+/// want; profiles are discoverable via links, not a crawl manifest.
+/// Pure — the caller passes the anon-readable rows.
+export function entityEntries(
+	base: string,
+	events: Array<{ id: string; updated_at?: string | null }>,
+	clubs: Array<{ slug: string; updated_at?: string | null }>,
+	races: Array<{ id: string; updated_at?: string | null }>,
+): SitemapEntry[] {
+	const b = normaliseBase(base);
+	const entries: SitemapEntry[] = [];
+	for (const e of events) {
+		entries.push({
+			loc: `${b}/share/event/${e.id}`,
+			lastmod: e.updated_at ?? undefined,
+			changefreq: 'weekly',
+			priority: 0.6,
+		});
+	}
+	for (const c of clubs) {
+		entries.push({
+			loc: `${b}/share/club/${c.slug}`,
+			lastmod: c.updated_at ?? undefined,
+			changefreq: 'weekly',
+			priority: 0.6,
+		});
+	}
+	for (const r of races) {
+		entries.push({
+			loc: `${b}/share/race/${r.id}`,
+			lastmod: r.updated_at ?? undefined,
+			changefreq: 'weekly',
+			priority: 0.6,
+		});
+	}
+	return entries;
+}
+
 /// Learn-hub sitemap entries: the hub, one per category, one per guide.
 /// Pure — the caller passes plain `{ slug, updated, category }` rows (the
 /// build-time guide index from `$lib/learn/guides`) + the category ids so

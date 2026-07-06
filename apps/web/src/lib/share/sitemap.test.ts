@@ -5,6 +5,7 @@ import {
 	buildSitemap,
 	changefreqForRunCount,
 	composeEntries,
+	entityEntries,
 	learnEntries,
 	normaliseBase,
 	priorityForRunCount,
@@ -283,4 +284,36 @@ test('learnEntries → buildSitemap emits the guide lastmod', () => {
 	);
 	assert.ok(xml.includes('<loc>https://threkir.com/learn/road-running-101</loc>'));
 	assert.ok(xml.includes('<lastmod>2026-06-15</lastmod>'));
+});
+
+// ---------------- entityEntries ----------------
+
+test('entityEntries — emits share/event, share/club (by slug), share/race', () => {
+	const entries = entityEntries(
+		'https://threkir.com',
+		[{ id: 'e-1', updated_at: '2026-05-01T00:00:00Z' }],
+		[{ slug: 'hampstead-runners', updated_at: '2026-04-01T00:00:00Z' }],
+		[{ id: 'r-1', updated_at: '2026-03-01T00:00:00Z' }]
+	);
+	const locs = entries.map((e) => e.loc);
+	assert.deepEqual(locs, [
+		'https://threkir.com/share/event/e-1',
+		'https://threkir.com/share/club/hampstead-runners',
+		'https://threkir.com/share/race/r-1',
+	]);
+	assert.equal(entries[0].lastmod, '2026-05-01T00:00:00Z');
+});
+
+test('entityEntries — never emits a profile URL (no people enumeration)', () => {
+	const entries = entityEntries(
+		'https://threkir.com',
+		[{ id: 'e-1' }],
+		[{ slug: 'c' }],
+		[{ id: 'r' }]
+	);
+	assert.ok(entries.every((e) => !e.loc.includes('/share/profile/')));
+});
+
+test('entityEntries — empty inputs yield no entries', () => {
+	assert.deepEqual(entityEntries('https://threkir.com', [], [], []), []);
 });

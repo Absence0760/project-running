@@ -6,6 +6,7 @@ import {
 	buildRunCountByRouteId,
 	buildSitemap,
 	composeEntries,
+	entityEntries,
 	learnEntries,
 } from '$lib/share/sitemap';
 import { listGuides } from '$lib/learn/guides';
@@ -33,6 +34,7 @@ const DEFAULT_SITE_URL = 'https://threkir.com';
 // the static bundle.
 const MAX_ROUTES = 10_000;
 const MAX_RUNS = 10_000;
+const MAX_ENTITIES = 10_000;
 
 export const GET: RequestHandler = async () => {
 	const base = env.PUBLIC_SITE_URL || DEFAULT_SITE_URL;
@@ -49,12 +51,20 @@ export const GET: RequestHandler = async () => {
 	// Popularity map: route_id -> # of public_runs that ran it. Bumps
 	// <priority> + <changefreq> on routes the community actually uses.
 	let runCountByRouteId: Map<string, number> | undefined;
+	// Public entity share surfaces served by the entity-SSR Lambda.
+	// All three tables are anon-readable (events inherit public-club
+	// RLS, clubs filter is_public, race_listings is public discovery
+	// data); profiles are intentionally NOT enumerated here.
+	let events: Array<{ id: string; updated_at: string | null }> = [];
+	let clubs: Array<{ slug: string; updated_at: string | null }> = [];
+	let races: Array<{ id: string; updated_at: string | null }> = [];
 	if (PUBLIC_SUPABASE_URL && PUBLIC_SUPABASE_ANON_KEY) {
 		try {
 			const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 				auth: { persistSession: false },
 			});
-			const [routesRes, runsRes, popularityRes] = await Promise.all([
+			const [routesRes, runsRes, popularityRes, eventsRes, clubsRes, racesRes] =
+				await Promise.all([
 				supabase
 					.from('public_routes')
 					.select('id, updated_at')
@@ -75,6 +85,25 @@ export const GET: RequestHandler = async () => {
 					.select('route_id')
 					.not('route_id', 'is', null)
 					.limit(MAX_RUNS),
+				// Public entity share pages. Events inherit public-club
+				// visibility via RLS, clubs filter is_public, race_listings
+				// is anon-readable public discovery data.
+				supabase
+					.from('events')
+					.select('id, updated_at')
+					.order('updated_at', { ascending: false })
+					.limit(MAX_ENTITIES),
+				supabase
+					.from('clubs')
+					.select('slug, updated_at')
+					.eq('is_public', true)
+					.order('updated_at', { ascending: false })
+					.limit(MAX_ENTITIES),
+				supabase
+					.from('race_listings')
+					.select('id, updated_at')
+					.order('race_date', { ascending: false })
+					.limit(MAX_ENTITIES),
 			]);
 			if (routesRes.error) {
 				console.warn('sitemap: public_routes fetch failed', routesRes.error);
@@ -85,6 +114,9 @@ export const GET: RequestHandler = async () => {
 			if (popularityRes.error) {
 				console.warn('sitemap: popularity fetch failed', popularityRes.error);
 			}
+			if (eventsRes.error) console.warn('sitemap: events fetch failed', eventsRes.error);
+			if (clubsRes.error) console.warn('sitemap: clubs fetch failed', clubsRes.error);
+			if (racesRes.error) console.warn('sitemap: race_listings fetch failed', racesRes.error);
 			routes = routesRes.data ?? [];
 			runs = (runsRes.data ?? []).map((r) => ({
 				id: r.id,
@@ -92,6 +124,9 @@ export const GET: RequestHandler = async () => {
 				started_at: r.started_at,
 			}));
 			runCountByRouteId = buildRunCountByRouteId(popularityRes.data ?? []);
+			events = eventsRes.data ?? [];
+			clubs = clubsRes.data ?? [];
+			races = racesRes.data ?? [];
 		} catch (err) {
 			console.warn('sitemap: supabase fetch failed; emitting top-level-only', err);
 		}
@@ -106,6 +141,7 @@ export const GET: RequestHandler = async () => {
 	);
 	const body = buildSitemap([
 		...composeEntries(base, routes, runs, runCountByRouteId),
+		...entityEntries(base, events, clubs, races),
 		...learn,
 	]);
 	return new Response(body, {
