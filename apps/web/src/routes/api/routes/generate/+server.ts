@@ -9,6 +9,7 @@
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { handleGenerate } from '$lib/routes/generate/handler';
 
 export const prerender = false;
@@ -38,16 +39,29 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json(400, { error: 'invalid JSON' });
 	}
 
+	// Same dev-only bypass gates as /api/coach (defence-in-depth — this
+	// file is dropped from the static prod build):
+	//   1. NODE_ENV must NOT be production.
+	//   2. Supabase URL MUST point at the local stack.
+	//   3. BYPASS_PAYWALL must be the literal string 'true'.
+	const isLocalSupabase =
+		PUBLIC_SUPABASE_URL.includes('127.0.0.1') || PUBLIC_SUPABASE_URL.includes('localhost');
+	const isProdEnv = env.NODE_ENV === 'production';
+	const bypassPaywallEnabled = !isProdEnv && isLocalSupabase && env.BYPASS_PAYWALL === 'true';
+
 	// GRAPH_CYCLE_URL + GRAPHHOPPER_URL are server-only envs (never PUBLIC_): the
 	// browser routes generation through this endpoint, so user start-coordinates
 	// never reach an engine directly. Both unset → the handler returns 501 and
 	// the client falls back to its in-browser OSRM heuristic.
-	const result = await handleGenerate(rawBody, {
+	const result = await handleGenerate(request.headers.get('x-supabase-authorization'), rawBody, {
 		// graph_cycle sidecar — the v3 graph-cycle generator, tried FIRST.
 		graphCycleUrl: env.GRAPH_CYCLE_URL,
 		graphCycleApiKey: env.GRAPH_CYCLE_API_KEY,
 		graphhopperUrl: env.GRAPHHOPPER_URL,
 		graphhopperApiKey: env.GRAPHHOPPER_API_KEY,
+		publicSupabaseUrl: PUBLIC_SUPABASE_URL,
+		publicSupabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY,
+		bypassPaywallEnabled,
 	});
 	return json(result.status, result.body);
 };

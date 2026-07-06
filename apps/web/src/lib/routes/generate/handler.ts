@@ -18,8 +18,19 @@
  *
  * Fail-closed: no engine URL → 501 (operator config); an engine that's down or
  * can't build a loop → 502; bad input → 400.
+ *
+ * Server-side generation is a Pro perk (decisions §204): after validation the
+ * handler requires a user JWT and a true `is_pro()`, mirroring the
+ * route_describe handler. The 501 is checked BEFORE the tier gate so an
+ * unconfigured deploy (rock-bottom / Lean, engines deferred) answers "not
+ * available" rather than "upgrade" — the client must never see an upsell for a
+ * perk the deploy can't deliver. Free and unauthenticated callers fall back to
+ * the in-browser OSRM heuristic, which stays the free tier.
  */
 
+import { createClient } from '@supabase/supabase-js';
+
+import { parseAuthHeader } from '../../coach/limits';
 import {
 	fetchRoundTrip,
 	GraphHopperError,
@@ -56,10 +67,51 @@ export interface GenerateConfig {
 	/// Shared secret forwarded to the engine as `X-Engine-Key` (see
 	/// RoundTripRequest.apiKey). Undefined in dev when the guard is permissive.
 	graphhopperApiKey?: string;
+	publicSupabaseUrl: string;
+	publicSupabaseAnonKey: string;
+	/** Dev-only escape hatch — see the +server.ts / Lambda gates. */
+	bypassPaywallEnabled: boolean;
 }
+
+/// Outcome of the tier gate. `'error'` covers every fail-closed branch
+/// (missing Supabase config, is_pro RPC failure) — the caller answers 500
+/// and the client falls back to the heuristic rather than being granted
+/// the perk.
+export type ProCheckVerdict = 'pro' | 'free' | 'unauthenticated' | 'error';
 
 export interface GenerateDeps {
 	fetcher?: Fetcher;
+	/// Test seam for the tier gate (same pattern as `fetcher`). Defaults to a
+	/// real Supabase auth.getUser + is_pro() round trip.
+	proChecker?: (accessToken: string) => Promise<ProCheckVerdict>;
+}
+
+function supabaseProChecker(config: GenerateConfig) {
+	return async (accessToken: string): Promise<ProCheckVerdict> => {
+		if (!config.publicSupabaseUrl || !config.publicSupabaseAnonKey) {
+			console.error('[generate] missing Supabase config — tier gate cannot run');
+			return 'error';
+		}
+		const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
+			global: { headers: { Authorization: `Bearer ${accessToken}` } },
+		});
+		const userRes = await supabase.auth.getUser(accessToken);
+		if (!userRes.data.user) {
+			// Mirror the coach handler: log the detail, return a generic
+			// verdict so the GoTrue error can't be used as a token-shape oracle.
+			console.error('[generate] auth failed', {
+				tokenPrefix: accessToken.slice(0, 20) + '...',
+				error: userRes.error?.message ?? 'no user returned',
+			});
+			return 'unauthenticated';
+		}
+		const proRes = await supabase.rpc('is_pro');
+		if (proRes.error) {
+			console.error('[generate] is_pro lookup failed', proRes.error);
+			return 'error';
+		}
+		return proRes.data === true ? 'pro' : 'free';
+	};
 }
 
 export type GenerateResult =
@@ -76,7 +128,8 @@ export type GenerateResult =
 				largestLoopM?: number;
 			};
 	  }
-	| { status: 400 | 501 | 502; body: { error: string } };
+	| { status: 400 | 401 | 500 | 501 | 502; body: { error: string } }
+	| { status: 403; body: { error: 'pro_required'; upgrade: true } };
 
 /// Seeds raced at EACH request multiplier (so total round_trip calls is
 /// seeds × REQUEST_MULTIPLIERS). round_trip's actual distance varies wildly per
@@ -174,6 +227,7 @@ export function parseGenerateRequest(raw: unknown): GenerateRequest | null {
 }
 
 export async function handleGenerate(
+	authHeader: string | null,
 	raw: unknown,
 	config: GenerateConfig,
 	deps: GenerateDeps = {},
@@ -186,6 +240,21 @@ export async function handleGenerate(
 	}
 	if (!config.graphCycleUrl && !config.graphhopperUrl) {
 		return { status: 501, body: { error: 'route generation is not configured' } };
+	}
+
+	// Pro gate — checked only once an engine is configured (see the header
+	// comment: 501 must win so a deploy without engines never upsells). The
+	// bypass is honoured only when the wrapper computed it from the dev-only
+	// env gates; auth is still required under bypass, mirroring route-describe.
+	const accessToken = parseAuthHeader(authHeader);
+	if (!accessToken) return { status: 401, body: { error: 'not authenticated' } };
+	if (!config.bypassPaywallEnabled) {
+		const verdict = await (deps.proChecker ?? supabaseProChecker(config))(accessToken);
+		if (verdict === 'unauthenticated') return { status: 401, body: { error: 'not authenticated' } };
+		// Fail-closed: an unanswerable tier check denies the perk (the client
+		// falls back to the heuristic) — it never silently grants it.
+		if (verdict === 'error') return { status: 500, body: { error: 'tier check failed' } };
+		if (verdict === 'free') return { status: 403, body: { error: 'pro_required', upgrade: true } };
 	}
 
 	const fetcher: Fetcher = deps.fetcher ?? ((u, i) => fetch(u, i));

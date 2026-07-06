@@ -9,9 +9,15 @@
 //   1. Parses the Function-URL event body (string, maybe base64).
 //   2. Reads GRAPH_CYCLE_URL + GRAPH_CYCLE_API_KEY (graph-cycle sidecar, tried
 //      FIRST) and GRAPHHOPPER_URL + GRAPHHOPPER_API_KEY (round_trip fallback)
-//      from process.env (Terraform sets them).
-//   3. Calls the shared core, which searches the foot graph (graph-cycle) and
-//      falls back to round_trip seeds, returning a finished loop polyline.
+//      from process.env (Terraform sets them), plus PUBLIC_SUPABASE_URL +
+//      PUBLIC_SUPABASE_ANON_KEY for the Pro gate's is_pro() check.
+//   3. Calls the shared core, which verifies the caller's tier (server-side
+//      generation is a Pro perk — decisions §204; `bypassPaywallEnabled` is
+//      hardcoded false here, exactly like the coach Lambda), then searches the
+//      foot graph (graph-cycle) and falls back to round_trip seeds, returning
+//      a finished loop polyline. The viewer JWT arrives in
+//      `x-supabase-authorization` — CloudFront's OAC owns `Authorization` for
+//      its sigv4 signature, so the client JWT rides the custom header.
 //
 // Non-streaming JSON (unlike the coach Lambda) — the response is one small
 // GeoJSON line, so the simple LambdaFunctionURLResult shape is enough.
@@ -52,14 +58,25 @@ export const handler = async (
 			return json(400, { error: 'invalid JSON' });
 		}
 
-		const result = await handleGenerate(rawBody, {
-			// graph_cycle sidecar — the v3 graph-cycle generator, tried FIRST.
-			// Server-only env, parity with the SvelteKit wrapper.
-			graphCycleUrl: process.env.GRAPH_CYCLE_URL,
-			graphCycleApiKey: process.env.GRAPH_CYCLE_API_KEY,
-			graphhopperUrl: process.env.GRAPHHOPPER_URL,
-			graphhopperApiKey: process.env.GRAPHHOPPER_API_KEY,
-		});
+		const result = await handleGenerate(
+			event.headers?.['x-supabase-authorization'] ??
+				event.headers?.['X-Supabase-Authorization'] ??
+				null,
+			rawBody,
+			{
+				// graph_cycle sidecar — the v3 graph-cycle generator, tried FIRST.
+				// Server-only env, parity with the SvelteKit wrapper.
+				graphCycleUrl: process.env.GRAPH_CYCLE_URL,
+				graphCycleApiKey: process.env.GRAPH_CYCLE_API_KEY,
+				graphhopperUrl: process.env.GRAPHHOPPER_URL,
+				graphhopperApiKey: process.env.GRAPHHOPPER_API_KEY,
+				// Missing envs fail closed inside the handler (500 tier-check
+				// error), so a partial Terraform apply can't skip the gate.
+				publicSupabaseUrl: process.env.PUBLIC_SUPABASE_URL ?? '',
+				publicSupabaseAnonKey: process.env.PUBLIC_SUPABASE_ANON_KEY ?? '',
+				bypassPaywallEnabled: false,
+			},
+		);
 		if (result.status === 502) {
 			// Engine unreachable / failing. A 502 here is a CLEAN handled
 			// response, not a Lambda throw, so the Errors metric never sees

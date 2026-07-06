@@ -235,23 +235,99 @@ test('parseGenerateRequest accepts a well-formed body', () => {
 	assert.deepEqual(got, { start: { lat: 1, lng: 2 }, targetDistanceM: 5000, seeds: 3 });
 });
 
-const OK_CFG = { graphhopperUrl: BASE };
+const OK_CFG = {
+	graphhopperUrl: BASE,
+	publicSupabaseUrl: 'http://127.0.0.1:54321',
+	publicSupabaseAnonKey: 'sb_publishable_fake_local_anon_key',
+	bypassPaywallEnabled: false,
+};
+const AUTH = 'Bearer test-token';
+const VALID_BODY = { start: { lat: 0, lng: 0 }, targetDistanceM: 5000 };
+/// Tier-gate seam: the engine-behaviour tests below run as a Pro caller so
+/// they exercise the generator chain, not the gate. The gate's own branches
+/// have dedicated tests; the Supabase-backed default checker needs a real
+/// local stack and is exercised by the Playwright generate-loop spec.
+const asPro = async () => 'pro' as const;
 
 test('handleGenerate → 400 on invalid input', async () => {
-	assert.equal((await handleGenerate(null, OK_CFG)).status, 400);
-	assert.equal((await handleGenerate({ start: { lat: 999, lng: 0 }, targetDistanceM: 5000 }, OK_CFG)).status, 400);
-	assert.equal((await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: -5 }, OK_CFG)).status, 400);
-	assert.equal((await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5_000_000 }, OK_CFG)).status, 400);
+	assert.equal((await handleGenerate(AUTH, null, OK_CFG)).status, 400);
+	assert.equal((await handleGenerate(AUTH, { start: { lat: 999, lng: 0 }, targetDistanceM: 5000 }, OK_CFG)).status, 400);
+	assert.equal((await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: -5 }, OK_CFG)).status, 400);
+	assert.equal((await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: 5_000_000 }, OK_CFG)).status, 400);
 });
 
-test('handleGenerate → 501 when the engine URL is unset', async () => {
-	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, { graphhopperUrl: undefined });
+test('handleGenerate → 501 when the engine URL is unset, even for an anonymous caller', async () => {
+	// Rock-bottom / Lean: engines deferred. The unconfigured answer must win
+	// over auth/tier so the client never shows a Pro upsell for a perk the
+	// deploy can't deliver — an anonymous caller gets 501 here, not 401.
+	const res = await handleGenerate(null, VALID_BODY, { ...OK_CFG, graphhopperUrl: undefined });
 	assert.equal(res.status, 501);
+});
+
+test('handleGenerate → 401 when engines are configured but the caller is anonymous', async () => {
+	const res = await handleGenerate(null, VALID_BODY, OK_CFG);
+	assert.equal(res.status, 401);
+});
+
+test('handleGenerate → 401 when the token does not resolve to a user', async () => {
+	const res = await handleGenerate(AUTH, VALID_BODY, OK_CFG, {
+		proChecker: async () => 'unauthenticated' as const,
+	});
+	assert.equal(res.status, 401);
+});
+
+test('handleGenerate → 403 pro_required for a free caller, engines never contacted', async () => {
+	let engineCalled = false;
+	const fetcher: Fetcher = async () => {
+		engineCalled = true;
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(AUTH, VALID_BODY, OK_CFG, {
+		fetcher,
+		proChecker: async () => 'free' as const,
+	});
+	assert.equal(res.status, 403);
+	if (res.status === 403) {
+		assert.equal(res.body.error, 'pro_required');
+		assert.equal(res.body.upgrade, true);
+	}
+	assert.equal(engineCalled, false, 'a free caller must not consume engine capacity');
+});
+
+test('handleGenerate → 500 fail-closed when the tier check errors (never granted)', async () => {
+	let engineCalled = false;
+	const fetcher: Fetcher = async () => {
+		engineCalled = true;
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(AUTH, VALID_BODY, OK_CFG, {
+		fetcher,
+		proChecker: async () => 'error' as const,
+	});
+	assert.equal(res.status, 500);
+	assert.equal(engineCalled, false, 'an unanswerable tier check must deny, not grant');
+});
+
+test('handleGenerate skips the tier check under the dev bypass but still requires auth', async () => {
+	const fetcher: Fetcher = async () => ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	const cfg = { ...OK_CFG, bypassPaywallEnabled: true };
+	const anon = await handleGenerate(null, VALID_BODY, cfg, { fetcher });
+	assert.equal(anon.status, 401, 'bypass must not waive authentication');
+	let checked = false;
+	const res = await handleGenerate(AUTH, VALID_BODY, cfg, {
+		fetcher,
+		proChecker: async () => {
+			checked = true;
+			return 'free' as const;
+		},
+	});
+	assert.equal(res.status, 200);
+	assert.equal(checked, false, 'bypass must not consult the tier check');
 });
 
 test('handleGenerate → 502 when every seed fails upstream', async () => {
 	const fetcher: Fetcher = async () => new Response('down', { status: 503 });
-	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher });
+	const res = await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher, proChecker: asPro });
 	assert.equal(res.status, 502);
 });
 
@@ -267,9 +343,10 @@ test('handleGenerate races N seeds and returns the best-shaped loop', async () =
 		return ghResponse(coords, 5000);
 	};
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seeds: 4 },
 		OK_CFG,
-		{ fetcher },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(calls, 4 * REQUEST_MULTIPLIERS.length); // one request per seed per multiplier
 	assert.equal(res.status, 200);
@@ -286,7 +363,7 @@ test('handleGenerate defaults to DEFAULT_SEEDS when none requested', async () =>
 		calls++;
 		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	};
-	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher });
+	const res = await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher, proChecker: asPro });
 	assert.equal(res.status, 200);
 	assert.equal(DEFAULT_SEEDS, 5); // seeds raced per request multiplier
 	assert.equal(calls, DEFAULT_SEEDS * REQUEST_MULTIPLIERS.length); // omitted `seeds` → DEFAULT_SEEDS × multipliers
@@ -299,9 +376,10 @@ test('handleGenerate tolerates partial seed failures', async () => {
 		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	};
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seeds: 4 },
 		OK_CFG,
-		{ fetcher },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 });
@@ -312,7 +390,7 @@ test('handleGenerate clamps the seed count to MAX_SEEDS', async () => {
 		calls++;
 		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	};
-	await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seeds: 99 }, OK_CFG, { fetcher });
+	await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: 5000, seeds: 99 }, OK_CFG, { fetcher, proChecker: asPro });
 	assert.equal(calls, 8 * REQUEST_MULTIPLIERS.length); // clamped to MAX_SEEDS, raced at each multiplier
 });
 
@@ -325,7 +403,7 @@ test('handleGenerate races request multipliers and keeps the result closest to t
 		const reqDist = Number(new URL(url).searchParams.get('round_trip.distance'));
 		return ghResponse(squareLoop(0, 0, 0.0056), reqDist * 1.3);
 	};
-	const res = await handleGenerate({ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher });
+	const res = await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher, proChecker: asPro });
 	assert.equal(res.status, 200);
 	if (res.status === 200) {
 		// 0.8 × 5000 × 1.3 = 5200, the sole in-band candidate across the spread.
@@ -429,9 +507,10 @@ test('handleGenerate with a preference POSTs a custom model and skips graph-cycl
 		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	};
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet', seeds: 1 },
-		{ graphCycleUrl: 'http://gc.local', graphhopperUrl: BASE },
-		{ fetcher },
+		{ ...OK_CFG, graphCycleUrl: 'http://gc.local' },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	assert.equal(sawGraphCycle, false, 'preference path must skip the graph-cycle sidecar');
@@ -451,9 +530,10 @@ test('handleGenerate falls back to plain generation when the preference race fin
 		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
 	};
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet', seeds: 2 },
 		OK_CFG,
-		{ fetcher },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200, 'a rejected preference must never deny a buildable route');
 	assert.ok(plainServed, 'fallback must retry without the preference');

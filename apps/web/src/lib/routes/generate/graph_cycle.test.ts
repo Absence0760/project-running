@@ -14,6 +14,16 @@ import type { Fetcher } from './graphhopper';
 const GC = 'http://gc.local';
 const GH = 'http://gh.local';
 
+// Tier-gate fixtures (same shape as generate.test.ts): these tests exercise
+// the engine chain, so they run as a Pro caller via the proChecker seam.
+const AUTH = 'Bearer test-token';
+const GATE_CFG = {
+	publicSupabaseUrl: 'http://127.0.0.1:54321',
+	publicSupabaseAnonKey: 'sb_publishable_fake_local_anon_key',
+	bypassPaywallEnabled: false,
+};
+const asPro = async () => 'pro' as const;
+
 function squareLoop(cx: number, cy: number, half: number): [number, number][] {
 	return [
 		[cx - half, cy - half],
@@ -189,9 +199,10 @@ test('handleGenerate uses graph-cycle first and skips round_trip on a clean loop
 		},
 	);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: GH },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	if (res.status === 200) assert.equal(res.body.distanceM, 5050);
@@ -208,9 +219,10 @@ test('handleGenerate falls back to round_trip when graph-cycle is loop-poor', as
 		},
 	);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: GH },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	assert.equal(rtCalled, true, 'round_trip must run when graph-cycle is loop-poor');
@@ -225,9 +237,10 @@ test('handleGenerate threads largestLoopM into the round_trip fallback body', as
 		async () => ghResponse(squareLoop(0, 0, 0.0056), 5000),
 	);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: GH },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	if (res.status === 200) assert.equal(res.body.largestLoopM, 12822);
@@ -241,9 +254,10 @@ test('handleGenerate omits largestLoopM when it is not meaningfully larger than 
 		async () => ghResponse(squareLoop(0, 0, 0.0056), 5000),
 	);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: GH },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	if (res.status === 200) assert.equal(res.body.largestLoopM, undefined);
@@ -255,9 +269,10 @@ test('handleGenerate omits largestLoopM when graph-cycle serves a clean loop dir
 		async () => ghResponse(squareLoop(0, 0, 0.0056), 5000),
 	);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: GH },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	// graph-cycle's own in-band loop is served — no fallback, no shortfall choice.
@@ -277,9 +292,10 @@ test('handleGenerate falls back to round_trip when the sidecar errors', async ()
 		},
 	);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: GH },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: GH },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	assert.equal(rtCalled, true, 'an unreachable sidecar must fall back, not fail the request');
@@ -288,9 +304,10 @@ test('handleGenerate falls back to round_trip when the sidecar errors', async ()
 test('handleGenerate → 502 when graph-cycle is loop-poor and no fallback engine is configured', async () => {
 	const fetcher: Fetcher = async () => gcResponse(false);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: undefined },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: undefined },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 502);
 });
@@ -301,9 +318,10 @@ test('handleGenerate → 502 when the sidecar THROWS and no fallback engine is c
 	// GraphHopper to fall back to the handler must still 502 (not crash).
 	const fetcher: Fetcher = async () => new Response('down', { status: 503 });
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: undefined },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: undefined },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 502);
 });
@@ -311,9 +329,10 @@ test('handleGenerate → 502 when the sidecar THROWS and no fallback engine is c
 test('handleGenerate serves graph-cycle alone (no GraphHopper) on a clean loop', async () => {
 	const fetcher: Fetcher = async () => gcResponse(true, squareLoop(0, 0, 0.0056), 4990);
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphCycleUrl: GC, graphhopperUrl: undefined },
-		{ fetcher },
+		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: undefined },
+		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
 	if (res.status === 200) assert.equal(res.body.distanceM, 4990);
@@ -321,8 +340,9 @@ test('handleGenerate serves graph-cycle alone (no GraphHopper) on a clean loop',
 
 test('handleGenerate → 501 when neither engine is configured', async () => {
 	const res = await handleGenerate(
+		AUTH,
 		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000 },
-		{ graphhopperUrl: undefined },
+		{ ...GATE_CFG, graphhopperUrl: undefined },
 	);
 	assert.equal(res.status, 501);
 });
