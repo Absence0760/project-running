@@ -109,6 +109,32 @@ redirect are **landed but deploy-gated** — they need a `terraform apply`
 share Lambdas shipped under. Until then the SvelteKit dev/build path serves
 the routes; prod serves the SPA shell for the new `/share/*` paths.
 
+### Fit with the minimal (Lean / Rock-bottom) deploy
+
+All of this rides **every** cost tier, including Rock-bottom (~$10–11/mo,
+web-only, Supabase Free) — see [deployment_lean.md](../ops/deployment_lean.md):
+
+- The `share-entity` Lambda is an **unconditional** resource in the
+  web-stack module, exactly like `share-run/route/badge/recap` — it
+  deploys on the same first `terraform apply` and costs **~nothing idle**
+  (Lambda is pay-per-invocation; no provisioned/idle cost). Until the first
+  `web@*` release swaps in real code it runs the placeholder zip (same as
+  every share/coach Lambda on first apply).
+- It needs **no deferred service** — only the anon key + the public
+  views/RLS, all present on Supabase Free. So the four `/share/*` surfaces
+  work at Rock-bottom even with the worker, engines, and coach all off.
+- The **www→apex CloudFront Function** is prod-only (`redirect_www_to_apex`)
+  and CloudFront Functions bill per-invocation at negligible cost.
+- The **sitemap** is a build-time static artifact; its entity fetches sit
+  in the same try/catch as the route/run fetches, so a paused Supabase Free
+  instance at build time degrades to a top-level-only sitemap rather than
+  failing the build.
+- Reserved concurrency: `share-entity` uses the shared
+  `lambda_reserved_concurrency` cap (prod 20), so the six reserved-
+  concurrency Lambdas total 120 in prod — far under the account's
+  keep-100-unreserved floor. Worth a glance only if that account limit is
+  ever lowered.
+
 ## Adding a new indexable surface
 
 1. Prerenderable (finite, evergreen)? Add `prerender = true` + `entries()`
