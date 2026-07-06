@@ -91,14 +91,16 @@ e2e-tested without standing up the Lambda.
   manifest; profiles are link-discoverable only.
 - **Shadow-hidden (moderation auto-hidden) targets must not surface.**
   `shadow_hidden` (migration 20270218_001) drops a target from every
-  public/search/discovery surface. Enforcement is per-query, NOT in the
-  base-table RLS, so every anon read here must filter it: the club lookup
-  + sitemap filter `shadow_hidden = false` on `clubs`; events have no such
-  column, so the event lookup + sitemap gate on the parent club's flag;
-  profiles are covered because `public_profile_by_id` already filters it.
-  Adding a new club/event read? Filter `shadow_hidden` or it leaks. (The
-  durable fix — an RLS backstop `AND not shadow_hidden` on the public
-  club/event policies — is an open backend follow-up.)
+  public/search/discovery surface. This is now enforced at **two layers**:
+  (1) the base-table RLS SELECT policies for `clubs` + `events` exclude
+  shadow-hidden rows for anon/non-members (migration 20270328_001 — the
+  backstop, so a NEW anon read can't silently leak), while owner/admins
+  keep visibility; and (2) the SEO surfaces still carry their own explicit
+  `shadow_hidden = false` filter (club/sitemap directly; event/sitemap via
+  the parent club) as belt-and-braces. Profiles are covered because
+  `public_profile_by_id` already filters it. The RLS backstop means adding
+  a new club/event read is safe by default, but keep filtering explicitly
+  on any new public surface for defense in depth.
 
 ## Shared marketing/brand pieces
 
