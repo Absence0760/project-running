@@ -44,7 +44,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 	}
 	.editor-wrap {

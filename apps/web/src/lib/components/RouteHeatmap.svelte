@@ -1660,7 +1660,7 @@
 		color: var(--color-text);
 	}
 	.search-input-row input:focus {
-		outline: 2px solid var(--color-accent);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 1px;
 	}
 	.filters-btn {
@@ -1719,7 +1719,7 @@
 		cursor: pointer;
 	}
 	.search-results li button:hover {
-		background: var(--color-surface-hover);
+		background: var(--color-bg-tertiary);
 	}
 
 	/* Advanced filters: lens + race-distance bands + map layers. */
@@ -1880,7 +1880,7 @@
 	}
 	.result-row:hover,
 	.result-row.hovered {
-		background: var(--color-surface-hover);
+		background: var(--color-bg-tertiary);
 	}
 	/* A kept route gets a violet left rail + a filled pin glyph in the name
 	 * so the list mirrors the violet line drawn on the map. */
@@ -1909,7 +1909,7 @@
 		transition: color var(--transition-fast), background var(--transition-fast);
 	}
 	.result-view:hover {
-		background: var(--color-surface-hover);
+		background: var(--color-bg-tertiary);
 	}
 	.result-view .material-symbols {
 		font-size: 1rem;
@@ -2148,7 +2148,7 @@
 		cursor: pointer;
 	}
 	:global(.heatmap-cluster-popup .cluster-route:hover) {
-		background: var(--color-surface-hover);
+		background: var(--color-bg-tertiary);
 	}
 	:global(.heatmap-cluster-popup .cluster-route-main) {
 		display: flex;

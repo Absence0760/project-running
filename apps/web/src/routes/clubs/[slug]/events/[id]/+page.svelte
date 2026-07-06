@@ -2947,8 +2947,8 @@
 
 	.att-btn.attended.active {
 		background: var(--color-success-light, var(--color-bg-secondary));
-		border-color: var(--color-success, var(--color-accent));
-		color: var(--color-success, var(--color-accent));
+		border-color: var(--color-success);
+		color: var(--color-success);
 	}
 
 	.att-btn.no-show.active {
@@ -2967,7 +2967,7 @@
 
 	.attendance-badge.attended {
 		background: var(--color-success-light, var(--color-bg-secondary));
-		color: var(--color-success, var(--color-accent));
+		color: var(--color-success);
 	}
 
 	.attendance-badge.no_show {

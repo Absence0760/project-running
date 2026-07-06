@@ -327,7 +327,7 @@
 		vertical-align: top;
 	}
 	th {
-		background: var(--color-bg-elev-1);
+		background: var(--color-surface);
 		font-weight: 600;
 	}
 </style>

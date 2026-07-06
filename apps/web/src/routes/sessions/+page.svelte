@@ -92,11 +92,11 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 	}
 	.muted {
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.empty {
 		padding: var(--space-2xl);
@@ -125,7 +125,7 @@
 		white-space: nowrap;
 	}
 	.plan-meta {
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 	}
 </style>

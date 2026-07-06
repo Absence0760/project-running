@@ -2810,7 +2810,7 @@
 	.edit-dnf-hint {
 		font-weight: 400;
 		font-size: 0.75rem;
-		color: var(--color-text-muted);
+		color: var(--color-text-tertiary);
 		line-height: 1.4;
 	}
 
@@ -2827,7 +2827,7 @@
 	}
 
 	.edit-public-hint-muted {
-		color: var(--color-text-muted);
+		color: var(--color-text-tertiary);
 	}
 
 	.btn-sm {
@@ -2864,7 +2864,7 @@
 
 	.hr-disclaimer {
 		font-size: 0.78rem;
-		color: var(--color-text-muted);
+		color: var(--color-text-tertiary);
 		line-height: 1.5;
 		margin: var(--space-sm) 0 0;
 	}

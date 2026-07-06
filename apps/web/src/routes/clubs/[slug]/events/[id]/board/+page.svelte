@@ -369,7 +369,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		text-decoration: none;
 		margin-bottom: var(--space-md);
 	}
@@ -386,7 +386,7 @@
 	}
 	.board-sub {
 		margin: 0.25rem 0 0;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.board-scroll {
 		overflow-x: auto;
@@ -400,7 +400,7 @@
 	.board td {
 		text-align: start;
 		padding: 0.5rem 0.6rem;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--color-border);
 		vertical-align: top;
 		white-space: nowrap;
 	}
@@ -408,21 +408,21 @@
 		font-size: 0.78rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.col-runner {
 		position: sticky;
 		inset-inline-start: 0;
-		background: var(--surface);
+		background: var(--color-surface);
 	}
 	.bib-tag {
 		margin-inline-start: 0.4rem;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-weight: 400;
 	}
 	tr.dnf .col-runner strong {
 		text-decoration: line-through;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.leg-time {
 		display: block;
@@ -455,8 +455,8 @@
 		font-weight: 700;
 	}
 	.status-racing {
-		background: var(--surface-2);
-		color: var(--text);
+		background: var(--color-bg-secondary);
+		color: var(--color-text);
 	}
 	.status-finished {
 		background: color-mix(in srgb, var(--success, #16a34a) 16%, transparent);

@@ -164,10 +164,10 @@
 	}
 	.rp-sub {
 		margin: 0.25rem 0 0;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.rp-count {
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 	}
 	.board-scroll {
@@ -182,27 +182,27 @@
 	.results td {
 		text-align: start;
 		padding: 0.5rem 0.6rem;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--color-border);
 		white-space: nowrap;
 	}
 	.results th {
 		font-size: 0.78rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.rank {
 		font-weight: 700;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.bib-tag {
 		margin-inline-start: 0.4rem;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-weight: 400;
 	}
 	tr.dnf strong {
 		text-decoration: line-through;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.status-chip {
 		display: inline-block;
@@ -212,8 +212,8 @@
 		font-weight: 700;
 	}
 	.status-racing {
-		background: var(--surface-2);
-		color: var(--text);
+		background: var(--color-bg-secondary);
+		color: var(--color-text);
 	}
 	.status-finished {
 		background: color-mix(in srgb, var(--success, #16a34a) 16%, transparent);

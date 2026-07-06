@@ -440,7 +440,7 @@
 	}
 	.back {
 		display: inline-block;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		text-decoration: none;
 		font-size: 0.9rem;
 		margin-bottom: 2px;
@@ -461,42 +461,42 @@
 		flex-direction: column;
 		gap: 2px;
 		font-size: 0.85rem;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 	}
 	.rb-controls input {
 		padding: 6px 8px;
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-border);
 		border-radius: 6px;
-		background: var(--surface);
-		color: var(--text-primary);
+		background: var(--color-surface);
+		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 	}
 	.model-toggle {
 		display: inline-flex;
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-border);
 		border-radius: 6px;
 		overflow: hidden;
 	}
 	.model-toggle button {
 		border: none;
-		background: var(--surface);
-		color: var(--text-secondary);
+		background: var(--color-surface);
+		color: var(--color-text-secondary);
 		padding: 7px 12px;
 		cursor: pointer;
 		font-size: 0.85rem;
 	}
 	.model-toggle button.active {
-		background: var(--accent, #4f46e5);
+		background: var(--color-primary);
 		color: #fff;
 	}
 	.rb-summary {
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		margin: 0 0 var(--space-sm);
 	}
 	.link-btn {
 		background: none;
 		border: none;
-		color: var(--accent, #4f46e5);
+		color: var(--color-primary);
 		cursor: pointer;
 		padding: 0 0 0 8px;
 		font: inherit;
@@ -510,7 +510,7 @@
 	.rb-table td {
 		text-align: start;
 		padding: 8px 10px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--color-border);
 		vertical-align: top;
 	}
 	.rb-table th.num,
@@ -528,15 +528,15 @@
 		vertical-align: middle;
 	}
 	.vert .up {
-		color: #c2410c;
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 	}
 	.vert .down {
-		color: #2563eb;
+		color: color-mix(in srgb, var(--color-accent-cyan) 50%, var(--color-text));
 		margin-inline-start: 4px;
 	}
 	.clock {
 		display: block;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		font-size: 0.8rem;
 	}
 	.cut {
@@ -551,21 +551,21 @@
 		opacity: 0.85;
 	}
 	.cut-safe {
-		background: rgba(34, 197, 94, 0.15);
-		color: #15803d;
+		background: var(--color-success-light);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.cut-tight {
-		background: rgba(245, 158, 11, 0.18);
-		color: #b45309;
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 	}
 	.cut-miss {
-		background: rgba(239, 68, 68, 0.18);
-		color: #b91c1c;
+		background: var(--color-danger-light);
+		color: color-mix(in srgb, var(--color-danger) 65%, var(--color-text));
 	}
 	.services .svc {
 		display: inline-block;
-		background: var(--surface-2, #f1f5f9);
-		color: var(--text-secondary);
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
 		border-radius: 4px;
 		padding: 1px 6px;
 		margin: 0 4px 2px 0;
@@ -576,7 +576,7 @@
 	}
 	.carry-hint {
 		display: block;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		font-size: 0.75rem;
 		white-space: nowrap;
 	}

@@ -114,11 +114,11 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 	}
 	.head-sub {
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		margin: var(--space-2xs) 0 0;
 	}
 	.routine-list {
@@ -141,7 +141,7 @@
 	.row-main {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-3xs);
+		gap: var(--space-2xs);
 		min-width: 0;
 	}
 	.row-title {
@@ -151,7 +151,7 @@
 		white-space: nowrap;
 	}
 	.row-date {
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
 	}
 	.row-stats {
@@ -168,7 +168,7 @@
 		font-weight: 600;
 	}
 	.chevron {
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.empty-card {
 		display: flex;
@@ -180,7 +180,7 @@
 	}
 	.empty-icon {
 		font-size: 2.5rem;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.empty-title {
 		font-weight: 600;

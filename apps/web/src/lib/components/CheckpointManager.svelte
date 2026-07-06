@@ -283,7 +283,7 @@
 	}
 	.cm-head .sub {
 		margin: 0.25rem 0 0;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
 		max-width: 48ch;
 	}
@@ -300,7 +300,7 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--border);
+		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 	}
 	.cp-ordinal {
@@ -309,7 +309,7 @@
 		display: grid;
 		place-items: center;
 		border-radius: 50%;
-		background: var(--surface-2);
+		background: var(--color-bg-secondary);
 		font-weight: 700;
 		font-size: 0.85rem;
 	}
@@ -326,7 +326,7 @@
 		gap: 0.4rem;
 		align-items: center;
 		font-size: 0.82rem;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.cp-badge {
 		padding: 0.05rem 0.4rem;
@@ -339,8 +339,8 @@
 		color: var(--warning, #b45309);
 	}
 	.cp-badge.weigh {
-		background: var(--surface-2);
-		color: var(--text);
+		background: var(--color-bg-secondary);
+		color: var(--color-text);
 	}
 	.cp-actions {
 		display: flex;
@@ -357,11 +357,11 @@
 		background: transparent;
 		border-radius: var(--radius-sm);
 		cursor: pointer;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.icon-btn:hover:not(:disabled) {
-		background: var(--surface-2);
-		color: var(--text);
+		background: var(--color-bg-secondary);
+		color: var(--color-text);
 	}
 	.icon-btn:disabled {
 		opacity: 0.35;
@@ -374,7 +374,7 @@
 		display: block;
 		font-weight: 400;
 		font-size: 0.82rem;
-		color: var(--text-muted);
+		color: var(--color-text-tertiary);
 	}
 	.form-actions {
 		display: flex;

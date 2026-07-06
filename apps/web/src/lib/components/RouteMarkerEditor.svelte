@@ -511,7 +511,7 @@
 	}
 	.markers-empty {
 		margin: 0;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 	}
 	.markers-list {
@@ -534,7 +534,7 @@
 		height: 0.75rem;
 		border-radius: 999px;
 		margin-top: 0.3rem;
-		box-shadow: 0 0 0 2px var(--surface);
+		box-shadow: 0 0 0 2px var(--color-surface);
 	}
 	.marker-body {
 		flex: 1 1 auto;
@@ -550,7 +550,7 @@
 		font-weight: 600;
 	}
 	.marker-dist {
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
 		font-size: 0.85rem;
 	}
@@ -559,7 +559,7 @@
 		gap: var(--space-xs);
 		flex-wrap: wrap;
 		font-size: 0.85rem;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 	}
 	.marker-kind {
 		text-transform: capitalize;
@@ -575,21 +575,21 @@
 		background: none;
 		border: none;
 		cursor: pointer;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		padding: 2px;
 		display: inline-flex;
 	}
 	.icon-btn:hover {
-		color: var(--text-primary);
+		color: var(--color-text);
 	}
 	.marker-form {
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--color-border);
 		padding-top: var(--space-sm);
 	}
 	.marker-hint {
 		margin: 0 0 var(--space-xs);
 		font-size: 0.85rem;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		display: flex;
 		align-items: center;
 		gap: var(--space-2xs);
@@ -613,7 +613,7 @@
 		align-items: center;
 		gap: var(--space-2xs);
 		font-size: 0.8rem;
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 	}
 	.markers-drag-hint .material-symbols {
 		font-size: 1rem;

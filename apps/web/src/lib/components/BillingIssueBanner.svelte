@@ -57,7 +57,7 @@
 		font-size: 0.95rem;
 	}
 	.msg .sub {
-		color: var(--color-text-muted);
+		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
 	}
 	.cta {

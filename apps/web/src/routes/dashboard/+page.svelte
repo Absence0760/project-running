@@ -2694,7 +2694,7 @@
 	.welcome-back-body p {
 		margin: 0;
 		font-size: 0.9rem;
-		color: var(--color-text-muted);
+		color: var(--color-text-tertiary);
 	}
 
 	/* Goals empty state — full card surface to mirror the plan-promo
