@@ -7,6 +7,8 @@
 	import { hashHue } from '$lib/format/avatar';
 	import { page } from '$app/stores';
 	import { goto, afterNavigate } from '$app/navigation';
+	import { env } from '$env/dynamic/public';
+	import { buildClubShareCanonical } from '$lib/share/share_club_meta';
 	import { supabase } from '$lib/core/supabase';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
@@ -59,6 +61,12 @@
 	} from '$lib/types';
 
 	let slug = $derived($page.params.slug as string);
+	// Fold this in-app (CSR) club page onto the public, crawlable
+	// /share/club/[slug] twin so search engines consolidate ranking
+	// signal there rather than splitting it across two URLs.
+	let canonicalUrl = $derived(
+		buildClubShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', slug)
+	);
 	let club = $state<ClubWithMeta | null>(null);
 	let upcoming = $state<EventWithMeta[]>([]);
 	let past = $state<EventWithMeta[]>([]);
@@ -688,6 +696,10 @@
 
 
 </script>
+
+<svelte:head>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 {#if loading}
 	<div class="page">

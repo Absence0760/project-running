@@ -34,6 +34,8 @@
 	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { env } from '$env/dynamic/public';
+	import { buildProfileShareCanonical } from '$lib/share/share_profile_meta';
 	import RunShareView from '$lib/components/RunShareView.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import NotificationsList from '$lib/components/NotificationsList.svelte';
@@ -44,6 +46,12 @@
 	import type { Run } from '$lib/types';
 
 	let userId = $derived($page.params.id as string);
+	// Fold this in-app (CSR, often login-gated) profile onto the public,
+	// crawlable /share/profile/[id] twin so search engines consolidate
+	// ranking signal there rather than splitting it across two URLs.
+	let canonicalUrl = $derived(
+		buildProfileShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', userId)
+	);
 	let profile = $state<ProfileSummary | null>(null);
 	let loadError = $state<string | null>(null);
 	let runs = $state<Run[]>([]);
@@ -486,6 +494,7 @@
 
 <svelte:head>
 	<title>{profile?.display_name ?? m('profile.runnerFallback')} — Threkir</title>
+	<link rel="canonical" href={canonicalUrl} />
 </svelte:head>
 
 <div class="page">

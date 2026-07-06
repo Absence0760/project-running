@@ -20,6 +20,19 @@ import { USER_A, USER_B } from '../fixtures/users';
 test.describe('/u/[id] — viewing another user', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('canonical folds the in-app profile onto its public /share/profile twin', async ({
+		page,
+	}) => {
+		// SEO consolidation: the in-app (login-gated) profile page points
+		// its canonical at the crawlable /share/profile/[id] twin so search
+		// engines don't split ranking signal across the two URLs.
+		await page.goto(`/u/${USER_B.id}`);
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/profile/${USER_B.id}$`)
+		);
+	});
+
 	test('a failed profile load shows an error + retry, and retry recovers', async ({ page }) => {
 		// Abort (not 500) so the supabase call rejects → the page would
 		// otherwise hang on its skeleton forever. Pins the loadError + retry.

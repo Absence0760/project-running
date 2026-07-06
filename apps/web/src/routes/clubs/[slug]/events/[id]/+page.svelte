@@ -5,6 +5,7 @@
 	import { formatDuration as baseDuration, activeFormatLocale } from '$lib/format/time';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
+	import { buildEventShareCanonical } from '$lib/share/share_event_meta';
 	import { supabase } from '$lib/core/supabase';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
@@ -90,6 +91,12 @@
 
 	let slug = $derived($page.params.slug as string);
 	let eventId = $derived($page.params.id as string);
+	// Fold this in-app (CSR) event page onto the public, crawlable
+	// /share/event/[id] twin so search engines consolidate ranking signal
+	// there rather than splitting it across two URLs.
+	let canonicalUrl = $derived(
+		buildEventShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', eventId)
+	);
 
 	let club = $state<ClubWithMeta | null>(null);
 	let event = $state<EventWithMeta | null>(null);
@@ -1277,6 +1284,10 @@
 
 
 </script>
+
+<svelte:head>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 {#if loading}
 	<div class="page" aria-busy="true" aria-label={m('clubEvent.loadingEvent')}>
