@@ -368,18 +368,18 @@
       "apps/web": {
         "packageJson": {
           "dependencies": [
-            "npm:@anthropic-ai/sdk@0.106",
-            "npm:@iconify-json/material-symbols@1.2.81",
+            "npm:@anthropic-ai/sdk@0.110",
+            "npm:@iconify-json/material-symbols@1.2.82",
             "npm:@playwright/test@^1.61.1",
             "npm:@resvg/resvg-js@^2.6.2",
-            "npm:@sentry/sveltekit@^10.62.0",
+            "npm:@sentry/sveltekit@^10.63.0",
             "npm:@supabase/ssr@0.12",
-            "npm:@supabase/supabase-js@^2.108.2",
+            "npm:@supabase/supabase-js@^2.110.0",
             "npm:@sveltejs/adapter-static@3.0.10",
-            "npm:@sveltejs/kit@2.68.0",
+            "npm:@sveltejs/kit@2.69.1",
             "npm:@sveltejs/vite-plugin-svelte@7.1.2",
             "npm:@types/aws-lambda@8.10.162",
-            "npm:@types/node@^26.0.1",
+            "npm:@types/node@^26.1.0",
             "npm:@zip.js/zip.js@^2.7.45",
             "npm:esbuild@0.28.1",
             "npm:fit-file-parser@^3.0.2",
@@ -388,15 +388,15 @@
             "npm:jszip@^3.10.1",
             "npm:maplibre-gl@^5.24.0",
             "npm:marked@^18.0.5",
-            "npm:material-symbols@~0.45.4",
+            "npm:material-symbols@~0.45.5",
             "npm:mdsvex@~0.12.7",
             "npm:normalize.css@8.0.1",
-            "npm:oauth2-mock-server@9.0.0",
+            "npm:oauth2-mock-server@9.1.0",
             "npm:svelte-check@4.7.1",
             "npm:svelte@5.56.4",
             "npm:typescript@6.0.3",
             "npm:unplugin-icons@23.0.1",
-            "npm:vite@8.1.0"
+            "npm:vite@8.1.3"
           ]
         }
       }
