@@ -652,16 +652,24 @@ export async function insertAchievement(opts: {
 	value_num?: number;
 	is_public?: boolean;
 }): Promise<string> {
+	// Upsert on the (user_id, badge_key, tier) unique key: the award triggers
+	// derive badges from the shared user's runs / PRs / plans, so another
+	// spec's data can auto-award the same slot first (run 28864778110, shard
+	// 14). The upsert keeps the seed deterministic either way — the row ends
+	// up with exactly the value/visibility this test asked for.
 	const { data, error } = await getAdminClient()
 		.from('achievements')
-		.insert({
-			user_id: opts.user_id,
-			badge_key: opts.badge_key,
-			tier: opts.tier ?? 'bronze',
-			source_kind: opts.source_kind ?? 'distance',
-			value_num: opts.value_num ?? null,
-			is_public: opts.is_public ?? true
-		})
+		.upsert(
+			{
+				user_id: opts.user_id,
+				badge_key: opts.badge_key,
+				tier: opts.tier ?? 'bronze',
+				source_kind: opts.source_kind ?? 'distance',
+				value_num: opts.value_num ?? null,
+				is_public: opts.is_public ?? true
+			},
+			{ onConflict: 'user_id,badge_key,tier' }
+		)
 		.select('id')
 		.single();
 	if (error) throw new Error(`simulate.insertAchievement failed: ${error.message}`);

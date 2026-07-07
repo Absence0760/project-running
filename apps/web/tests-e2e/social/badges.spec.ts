@@ -17,9 +17,10 @@ test.describe('Achievements — profile, share page, cross-user privacy', () => 
 	let privateBadgeId: string | null = null;
 
 	test.beforeAll(async () => {
-		// Use tier slots the seed back-fill leaves free for USER_A (the seed
-		// runner already holds distance_single up to silver + pr up to silver),
-		// so these inserts don't collide on (user_id, badge_key, tier).
+		// insertAchievement upserts on (user_id, badge_key, tier): the award
+		// triggers derive badges from USER_A's runs/PRs, so a sibling spec's
+		// data can auto-award these slots first — the upsert pins the row to
+		// the value/visibility asserted below either way.
 		publicBadgeId = await insertAchievement({
 			user_id: USER_A.id,
 			badge_key: 'distance_single',
