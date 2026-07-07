@@ -2313,6 +2313,30 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeBuilderCancelDrag => 'ドラッグをキャンセル';
 
   @override
+  String get routeBuilderPointList => 'ルートのポイント';
+
+  @override
+  String routeBuilderPointMovedTo(int from, int to) {
+    return 'ポイント$fromを$to番目に移動しました';
+  }
+
+  @override
+  String routeBuilderPointRemoved(int number) {
+    return 'ポイント$numberを削除しました';
+  }
+
+  @override
+  String routeBuilderReorderPoint(int number) {
+    return 'ポイント$numberを並べ替え';
+  }
+
+  @override
+  String get routeBuilderPointStart => 'スタート';
+
+  @override
+  String get routeBuilderPointEnd => 'ゴール';
+
+  @override
   String get routeBuilderModeTrail => 'トレイル';
 
   @override

@@ -484,6 +484,30 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     await _rerouteThrough(next);
   }
 
+  /// Bottom-sheet list of every waypoint — reorder via drag handle or
+  /// delete per row, no map gestures needed. The pins stay the pointer
+  /// path (long-press + tap-to-move needs precise pointer work); this
+  /// is the accessible / precision alternative, mirroring the web
+  /// builder's sidebar waypoint list.
+  Future<void> _openWaypointList() async {
+    if (_waypoints.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => WaypointListSheet(
+        waypoints: List.of(_waypoints),
+        onApply: (next) {
+          if (_saving) return;
+          // A list edit shifts indices — a lifted pin's _dragIndex
+          // would point at the wrong waypoint afterwards.
+          if (_dragIndex != null) setState(() => _dragIndex = null);
+          unawaited(_rerouteThrough(next));
+        },
+        announce: _announceA11yState,
+      ),
+    );
+  }
+
   /// Generate a loop by target distance. Ports web's iterative
   /// bisection approach (`apps/web/src/lib/components/
   /// RouteBuilder.svelte:generateLoop`) — the previous mobile
@@ -833,6 +857,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     final canClear = _waypoints.isNotEmpty && !_routing && !_saving;
     final canGenerate = !_routing && !_saving;
     final canSave = _polyline.length >= 2 && !_routing && !_saving;
+    // The list stays usable while routing — _rerouteThrough's
+    // generation counter cancels a stale in-flight pass, same as
+    // placing another pin mid-route.
+    final canListPoints = _waypoints.isNotEmpty && !_saving;
     final compactActions = _searchFocused;
     return Scaffold(
       appBar: AppBar(
@@ -863,6 +891,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                     switch (a) {
                       case 'loop':
                         if (canGenerate) _generateLoop();
+                      case 'points':
+                        if (canListPoints) _openWaypointList();
                       case 'undo':
                         if (canUndo) _undo();
                       case 'clear':
@@ -877,6 +907,15 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.all_inclusive),
                         title: Text(l10n.routeBuilderGenerateLoop),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'points',
+                      enabled: canListPoints,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.format_list_numbered),
+                        title: Text(l10n.routeBuilderPointList),
                       ),
                     ),
                     PopupMenuItem(
@@ -908,6 +947,11 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   // / reload button. Icons.all_inclusive reads as
                   // "build a circular route" at a glance.
                   icon: const Icon(Icons.all_inclusive),
+                ),
+                IconButton(
+                  tooltip: l10n.routeBuilderPointList,
+                  onPressed: canListPoints ? _openWaypointList : null,
+                  icon: const Icon(Icons.format_list_numbered),
                 ),
                 IconButton(
                   tooltip: l10n.routeBuilderUndo,
@@ -1288,6 +1332,132 @@ class _StatusPill extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom-sheet listing every waypoint as a reorderable row — the
+/// accessible alternative to the map-only pin gestures. Reordering
+/// (explicit drag handle, so TalkBack exposes a semantics action) or
+/// deleting a row applies immediately through [onApply]; the sheet
+/// keeps its own ordered copy so back-to-back edits don't wait on the
+/// parent's OSRM re-route. Each mutation is narrated via [announce]
+/// (WCAG 4.1.3 — mirrors the screen's `_announceA11yState` pattern).
+class WaypointListSheet extends StatefulWidget {
+  const WaypointListSheet({
+    super.key,
+    required this.waypoints,
+    required this.onApply,
+    required this.announce,
+  });
+
+  final List<cm.Waypoint> waypoints;
+  final ValueChanged<List<cm.Waypoint>> onApply;
+  final ValueChanged<String> announce;
+
+  @override
+  State<WaypointListSheet> createState() => _WaypointListSheetState();
+}
+
+class _WaypointListSheetState extends State<WaypointListSheet> {
+  late final List<cm.Waypoint> _items = List.of(widget.waypoints);
+  // Row identity for ReorderableListView keys. Coordinates can't key
+  // the rows — a closed loop carries the same lat/lng at both ends.
+  late final List<int> _ids =
+      List.generate(widget.waypoints.length, (i) => i);
+
+  void _onReorder(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex == oldIndex) return;
+    setState(() {
+      _items.insert(newIndex, _items.removeAt(oldIndex));
+      _ids.insert(newIndex, _ids.removeAt(oldIndex));
+    });
+    widget.onApply(List.of(_items));
+    widget.announce(
+      AppLocalizations.of(context)
+          .routeBuilderPointMovedTo(oldIndex + 1, newIndex + 1),
+    );
+  }
+
+  void _removeAt(int index) {
+    setState(() {
+      _items.removeAt(index);
+      _ids.removeAt(index);
+    });
+    widget.onApply(List.of(_items));
+    widget.announce(
+      AppLocalizations.of(context).routeBuilderPointRemoved(index + 1),
+    );
+    if (_items.isEmpty) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: Text(
+              l10n.routeBuilderPointList,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          Flexible(
+            child: ReorderableListView.builder(
+              shrinkWrap: true,
+              buildDefaultDragHandles: false,
+              itemCount: _items.length,
+              onReorder: _onReorder,
+              itemBuilder: (context, i) {
+                final w = _items[i];
+                final tag = i == 0
+                    ? l10n.routeBuilderPointStart
+                    : (i == _items.length - 1 && i > 0
+                        ? l10n.routeBuilderPointEnd
+                        : null);
+                return ListTile(
+                  key: ValueKey(_ids[i]),
+                  leading: CircleAvatar(
+                    radius: 14,
+                    child: Text('${i + 1}'),
+                  ),
+                  title: Text(
+                    '${w.lat.toStringAsFixed(5)}, ${w.lng.toStringAsFixed(5)}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  subtitle: tag == null ? null : Text(tag),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: l10n.routeBuilderDeletePoint(i + 1),
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _removeAt(i),
+                      ),
+                      ReorderableDragStartListener(
+                        index: i,
+                        child: Semantics(
+                          label: l10n.routeBuilderReorderPoint(i + 1),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(Icons.drag_handle),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

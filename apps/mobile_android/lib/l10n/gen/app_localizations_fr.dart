@@ -2466,6 +2466,30 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeBuilderCancelDrag => 'Annuler le déplacement';
 
   @override
+  String get routeBuilderPointList => 'Points du parcours';
+
+  @override
+  String routeBuilderPointMovedTo(int from, int to) {
+    return 'Point $from déplacé à la position $to';
+  }
+
+  @override
+  String routeBuilderPointRemoved(int number) {
+    return 'Point $number supprimé';
+  }
+
+  @override
+  String routeBuilderReorderPoint(int number) {
+    return 'Réordonner le point $number';
+  }
+
+  @override
+  String get routeBuilderPointStart => 'Départ';
+
+  @override
+  String get routeBuilderPointEnd => 'Arrivée';
+
+  @override
   String get routeBuilderModeTrail => 'Sentier';
 
   @override

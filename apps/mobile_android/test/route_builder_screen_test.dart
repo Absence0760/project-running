@@ -1058,5 +1058,138 @@ void _registerOfflineSaveTests() {
       },
     );
   });
-}
 
+  group('WaypointListSheet', () {
+    final wps = [
+      cm.Waypoint(lat: 51.5, lng: -0.12),
+      cm.Waypoint(lat: 51.51, lng: -0.13),
+      cm.Waypoint(lat: 51.52, lng: -0.14),
+    ];
+
+    Widget host({
+      required List<cm.Waypoint> waypoints,
+      required void Function(List<cm.Waypoint>) onApply,
+      required void Function(String) announce,
+    }) {
+      return MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: WaypointListSheet(
+            waypoints: waypoints,
+            onApply: onApply,
+            announce: announce,
+          ),
+        ),
+      );
+    }
+
+    testWidgets('renders one numbered row per waypoint with start/end tags',
+        (tester) async {
+      await tester.pumpWidget(
+        host(waypoints: wps, onApply: (_) {}, announce: (_) {}),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Route points'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      expect(find.text('Start'), findsOneWidget);
+      expect(find.text('End'), findsOneWidget);
+      expect(find.text('51.50000, -0.12000'), findsOneWidget);
+      // One delete button + one drag handle per row.
+      expect(find.byIcon(Icons.delete_outline), findsNWidgets(3));
+      expect(find.byIcon(Icons.drag_handle), findsNWidgets(3));
+    });
+
+    testWidgets('delete applies the shrunk list and announces the removal',
+        (tester) async {
+      List<cm.Waypoint>? applied;
+      final announced = <String>[];
+      await tester.pumpWidget(host(
+        waypoints: wps,
+        onApply: (l) => applied = l,
+        announce: announced.add,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Delete point 2'));
+      await tester.pumpAndSettle();
+
+      expect(applied, isNotNull);
+      expect(applied!.length, 2);
+      expect(applied![0].lat, 51.5);
+      expect(applied![1].lat, 51.52);
+      expect(announced, contains('Point 2 removed'));
+      // Rows renumber 1..2 and the numbering has no gap.
+      expect(find.text('3'), findsNothing);
+    });
+
+    testWidgets('drag-handle reorder applies the new order and announces it',
+        (tester) async {
+      List<cm.Waypoint>? applied;
+      final announced = <String>[];
+      await tester.pumpWidget(host(
+        waypoints: wps,
+        onApply: (l) => applied = l,
+        announce: announced.add,
+      ));
+      await tester.pumpAndSettle();
+
+      // Drag the first row's handle below the second row. Stepped
+      // moves with pumps in between so the reorderable list's drag
+      // proxy tracks the pointer past the next row's midpoint.
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.drag_handle).first),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      for (var step = 0; step < 3; step++) {
+        await gesture.moveBy(const Offset(0, 20));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(applied, isNotNull, reason: 'reorder must call onApply');
+      expect(applied!.length, 3);
+      expect(applied![0].lat, 51.51, reason: 'old row 2 is now first');
+      expect(applied![1].lat, 51.5, reason: 'old row 1 moved to slot 2');
+      expect(announced, contains('Point 1 moved to position 2'));
+    });
+
+    testWidgets('deleting the last remaining row closes the sheet',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: ctx,
+                    builder: (_) => WaypointListSheet(
+                      waypoints: [cm.Waypoint(lat: 51.5, lng: -0.12)],
+                      onApply: (_) {},
+                      announce: (_) {},
+                    ),
+                  ),
+                  child: const Text('Open sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open sheet'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WaypointListSheet), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Delete point 1'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WaypointListSheet), findsNothing);
+    });
+  });
+}

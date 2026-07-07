@@ -3305,6 +3305,48 @@
   "@routeBuilderCancelDrag": {
     "description": "Tooltip on the cancel-drag button in the status pill"
   },
+  "routeBuilderPointList": "Route points",
+  "@routeBuilderPointList": {
+    "description": "Title of the waypoint-list bottom sheet + tooltip on the AppBar action that opens it"
+  },
+  "routeBuilderPointMovedTo": "Point {from} moved to position {to}",
+  "@routeBuilderPointMovedTo": {
+    "description": "Screen-reader announcement after reordering a waypoint in the list sheet",
+    "placeholders": {
+      "from": {
+        "type": "int"
+      },
+      "to": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderPointRemoved": "Point {number} removed",
+  "@routeBuilderPointRemoved": {
+    "description": "Screen-reader announcement after deleting a waypoint from the list sheet",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderReorderPoint": "Reorder point {number}",
+  "@routeBuilderReorderPoint": {
+    "description": "Semantics label on the per-row drag handle in the waypoint-list sheet",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderPointStart": "Start",
+  "@routeBuilderPointStart": {
+    "description": "Subtitle tag on the first waypoint row in the list sheet"
+  },
+  "routeBuilderPointEnd": "End",
+  "@routeBuilderPointEnd": {
+    "description": "Subtitle tag on the last waypoint row in the list sheet"
+  },
   "routeBuilderModeTrail": "Trail",
   "@routeBuilderModeTrail": {
     "description": "Mode-toggle label for the trail (foot) routing profile"

@@ -4133,6 +4133,42 @@ abstract class AppLocalizations {
   /// **'Cancel drag'**
   String get routeBuilderCancelDrag;
 
+  /// Title of the waypoint-list bottom sheet + tooltip on the AppBar action that opens it
+  ///
+  /// In en, this message translates to:
+  /// **'Route points'**
+  String get routeBuilderPointList;
+
+  /// Screen-reader announcement after reordering a waypoint in the list sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Point {from} moved to position {to}'**
+  String routeBuilderPointMovedTo(int from, int to);
+
+  /// Screen-reader announcement after deleting a waypoint from the list sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Point {number} removed'**
+  String routeBuilderPointRemoved(int number);
+
+  /// Semantics label on the per-row drag handle in the waypoint-list sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Reorder point {number}'**
+  String routeBuilderReorderPoint(int number);
+
+  /// Subtitle tag on the first waypoint row in the list sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get routeBuilderPointStart;
+
+  /// Subtitle tag on the last waypoint row in the list sheet
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get routeBuilderPointEnd;
+
   /// Mode-toggle label for the trail (foot) routing profile
   ///
   /// In en, this message translates to:

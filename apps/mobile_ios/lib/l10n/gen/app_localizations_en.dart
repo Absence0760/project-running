@@ -2440,6 +2440,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeBuilderCancelDrag => 'Cancel drag';
 
   @override
+  String get routeBuilderPointList => 'Route points';
+
+  @override
+  String routeBuilderPointMovedTo(int from, int to) {
+    return 'Point $from moved to position $to';
+  }
+
+  @override
+  String routeBuilderPointRemoved(int number) {
+    return 'Point $number removed';
+  }
+
+  @override
+  String routeBuilderReorderPoint(int number) {
+    return 'Reorder point $number';
+  }
+
+  @override
+  String get routeBuilderPointStart => 'Start';
+
+  @override
+  String get routeBuilderPointEnd => 'End';
+
+  @override
   String get routeBuilderModeTrail => 'Trail';
 
   @override

@@ -2458,6 +2458,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeBuilderCancelDrag => 'Cancelar arrasto';
 
   @override
+  String get routeBuilderPointList => 'Pontos da rota';
+
+  @override
+  String routeBuilderPointMovedTo(int from, int to) {
+    return 'Ponto $from movido para a posição $to';
+  }
+
+  @override
+  String routeBuilderPointRemoved(int number) {
+    return 'Ponto $number removido';
+  }
+
+  @override
+  String routeBuilderReorderPoint(int number) {
+    return 'Reordenar o ponto $number';
+  }
+
+  @override
+  String get routeBuilderPointStart => 'Início';
+
+  @override
+  String get routeBuilderPointEnd => 'Fim';
+
+  @override
   String get routeBuilderModeTrail => 'Trilha';
 
   @override
@@ -13319,6 +13343,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeBuilderCancelDrag => 'Cancelar arrasto';
+
+  @override
+  String get routeBuilderPointList => 'Pontos da rota';
+
+  @override
+  String routeBuilderPointMovedTo(int from, int to) {
+    return 'Ponto $from movido para a posição $to';
+  }
+
+  @override
+  String routeBuilderPointRemoved(int number) {
+    return 'Ponto $number removido';
+  }
+
+  @override
+  String routeBuilderReorderPoint(int number) {
+    return 'Reordenar o ponto $number';
+  }
+
+  @override
+  String get routeBuilderPointStart => 'Início';
+
+  @override
+  String get routeBuilderPointEnd => 'Fim';
 
   @override
   String get routeBuilderModeTrail => 'Trilha';
