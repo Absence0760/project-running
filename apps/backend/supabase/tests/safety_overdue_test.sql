@@ -8,7 +8,7 @@
 
 begin;
 
-select plan(12);
+select plan(14);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -146,6 +146,18 @@ select is(
 
 -- ─────────── stub→saved UPDATE fires the finish email exactly then ───────────
 
+-- A follower, so the run_completed notifier's transition path is
+-- observable too (and pins the 20261212_001 activity_kind/activity_id
+-- pair the bare-body rewrite must preserve).
+insert into user_follows (follower_id, followee_id)
+values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa6d02', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa6d01');
+
+select is(
+  (select count(*)::int from notifications
+   where kind = 'run_completed'
+     and run_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb6d01'),
+  0, 'the live-broadcast stub INSERT fires no run_completed notification');
+
 delete from public.jobs;
 
 update runs
@@ -159,6 +171,15 @@ select is(
      and payload->>'run_id' = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb6d01'
      and (payload->>'duration_s')::int = 2400),
   1, 'the stub→saved transition enqueues the finish email with the saved stats');
+
+select is(
+  (select count(*)::int from notifications
+   where kind = 'run_completed'
+     and run_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb6d01'
+     and user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa6d02'
+     and activity_kind = 'run'
+     and activity_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb6d01'),
+  1, 'the transition fires run_completed once, carrying the polymorphic activity pair (20261212_001)');
 
 -- An ordinary edit after save must not re-alert.
 update runs set distance_m = 8100

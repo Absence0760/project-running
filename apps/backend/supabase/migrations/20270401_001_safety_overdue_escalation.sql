@@ -68,6 +68,10 @@ create trigger runs_enqueue_safety_finish
 
 -- ─────────────────── 1b. follower run_completed: same transition fix ───────────────────
 
+-- Base body is 20261212_001 (which added the polymorphic
+-- activity_kind/activity_id pair to the insert), NOT the original
+-- 20261101_001 — per the bare-body create-or-replace rule, only the
+-- stub-transition guards are new.
 create or replace function notify_run_completed()
 returns trigger
 language plpgsql
@@ -88,8 +92,8 @@ begin
     return new;
   end if;
 
-  insert into notifications (user_id, actor_id, kind, run_id)
-  select f.follower_id, new.user_id, 'run_completed', new.id
+  insert into notifications (user_id, actor_id, kind, run_id, activity_kind, activity_id)
+  select f.follower_id, new.user_id, 'run_completed', new.id, 'run', new.id
   from user_follows f
   where f.followee_id = new.user_id
   on conflict do nothing;
