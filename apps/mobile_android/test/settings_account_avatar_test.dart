@@ -118,6 +118,18 @@ Future<void> _pump(WidgetTester tester, _AvatarApi api) async {
   await tester.pumpAndSettle();
 }
 
+// Scope icon finders to the Profile-photo tile: the same screen carries a red
+// Icons.delete_outline on the Delete-account tile, and whether that tile is
+// built depends on how much fits the lazy ListView's test viewport (removing
+// an unrelated tile above it broke the unscoped finders in run 28864778110).
+Finder _avatarTileIcon(IconData icon) => find.descendant(
+      of: find.ancestor(
+        of: find.text('Profile photo'),
+        matching: find.byType(ListTile),
+      ),
+      matching: find.byIcon(icon),
+    );
+
 void main() {
   setUpAll(() => HttpOverrides.global = _ImageHttpOverrides());
 
@@ -133,8 +145,8 @@ void main() {
 
     expect(find.text('Profile photo'), findsOneWidget);
     // A set avatar surfaces the remove (delete) affordance.
-    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
-    expect(find.byIcon(Icons.photo_camera_outlined), findsNothing);
+    expect(_avatarTileIcon(Icons.delete_outline), findsOneWidget);
+    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsNothing);
   });
 
   testWidgets('Remove prompts a confirm before calling removeAvatar',
@@ -142,7 +154,7 @@ void main() {
     final api = _AvatarApi(avatar: 'https://example.invalid/u1/avatar.png');
     await _pump(tester, api);
 
-    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.tap(_avatarTileIcon(Icons.delete_outline));
     await tester.pumpAndSettle(); // open the confirm dialog
 
     // The confirm dialog is shown; nothing deleted yet.
@@ -161,8 +173,8 @@ void main() {
 
     expect(api.removeCalls, 1);
     // Once removed the tile falls back to the pick (camera) affordance.
-    expect(find.byIcon(Icons.delete_outline), findsNothing);
-    expect(find.byIcon(Icons.photo_camera_outlined), findsOneWidget);
+    expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
+    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
 
     // Drain the showTopBanner auto-dismiss timer so no pending-timer error.
     await tester.pump(const Duration(seconds: 4));
@@ -172,7 +184,7 @@ void main() {
     final api = _AvatarApi(avatar: 'https://example.invalid/u1/avatar.png');
     await _pump(tester, api);
 
-    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.tap(_avatarTileIcon(Icons.delete_outline));
     await tester.pumpAndSettle();
 
     await tester.tap(find.descendant(
@@ -183,7 +195,7 @@ void main() {
 
     expect(api.removeCalls, 0);
     // The remove affordance is still present — nothing was deleted.
-    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    expect(_avatarTileIcon(Icons.delete_outline), findsOneWidget);
   });
 
   testWidgets('avatar tile shows the pick control when no avatar is set',
@@ -192,7 +204,7 @@ void main() {
     await _pump(tester, api);
 
     expect(find.text('Profile photo'), findsOneWidget);
-    expect(find.byIcon(Icons.photo_camera_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.delete_outline), findsNothing);
+    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
+    expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
   });
 }
