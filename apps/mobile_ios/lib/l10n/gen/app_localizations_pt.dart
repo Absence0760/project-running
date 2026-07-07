@@ -682,6 +682,42 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetyUnknownRunner => 'Um corredor do Threkir';
 
   @override
+  String get safetyOverdueTitle => 'Alerta de atraso';
+
+  @override
+  String get safetyOverdueIntro =>
+      'Se uma corrida compartilhada ao vivo ficar em silêncio por mais tempo que isso, seus contatos confirmados recebem um e-mail com seu link ao vivo.';
+
+  @override
+  String get safetyOverdueLabel => 'Avisar após silêncio de';
+
+  @override
+  String get safetyOverdueOff => 'Desativado';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'Vale para qualquer corrida com compartilhamento ao vivo ativo. O silêncio também pode ser perda de sinal — o e-mail deixa isso claro. Os contatos recebem um único aviso por corrida; concluir envia a confirmação habitual.';
+
+  @override
+  String get safetyOverdueSaved => 'Alerta de atraso atualizado';
+
+  @override
+  String get safetyAutoLiveShareTitle => 'Compartilhamento ao vivo automático';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link.';
+
+  @override
+  String get runAutoLiveShareStarted =>
+      'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
+
+  @override
   String get activitySedentary =>
       'Maior parte sentado (trabalho de escritório)';
 
@@ -11568,6 +11604,42 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get safetyUnknownRunner => 'Um corredor do Threkir';
+
+  @override
+  String get safetyOverdueTitle => 'Alerta de atraso';
+
+  @override
+  String get safetyOverdueIntro =>
+      'Se uma corrida compartilhada ao vivo ficar em silêncio por mais tempo que isso, seus contatos confirmados recebem um e-mail com seu link ao vivo.';
+
+  @override
+  String get safetyOverdueLabel => 'Avisar após silêncio de';
+
+  @override
+  String get safetyOverdueOff => 'Desativado';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'Vale para qualquer corrida com compartilhamento ao vivo ativo. O silêncio também pode ser perda de sinal — o e-mail deixa isso claro. Os contatos recebem um único aviso por corrida; concluir envia a confirmação habitual.';
+
+  @override
+  String get safetyOverdueSaved => 'Alerta de atraso atualizado';
+
+  @override
+  String get safetyAutoLiveShareTitle => 'Compartilhamento ao vivo automático';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link.';
+
+  @override
+  String get runAutoLiveShareStarted =>
+      'Ao vivo ativado — envie o link em “Compartilhar link ao vivo”';
 
   @override
   String get activitySedentary =>

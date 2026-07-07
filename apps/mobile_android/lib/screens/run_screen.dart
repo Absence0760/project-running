@@ -938,48 +938,10 @@ class _RunScreenState extends State<RunScreen> {
     final base = _liveLinkBase();
     final url = '$base/live/${_runId!}';
 
-    // Pre-create the parent runs row + flip the broadcaster on so the
-    // first ping after _begin() lands successfully. The runs row is
-    // marked is_public=true here (this is the user's opt-in to sharing);
-    // saveRun on stop preserves it via a follow-up makeRunPublic call
-    // in _stop. Best-effort — sharing the URL must succeed even if the
+    // Best-effort — sharing the URL must succeed even if the
     // server-side stub create fails (offline tap, transient 5xx). The
-    // user can re-tap once back online. Skipped on anonymous sessions —
-    // only signed-in users can broadcast.
-    final api = widget.apiClient;
-    if (api != null && api.userId != null) {
-      // LiveHubClient stays nil-effect when `LIVE_HUB_URL` is unset
-      // — the broadcaster falls back to the legacy
-      // `live_run_pings` Supabase path. Once the Go hub is deployed
-      // and the env var lands in the build, the broadcaster swaps to
-      // the hub without any further client change.
-      final hubUrl = dotenv.env['LIVE_HUB_URL'] ?? '';
-      _liveBroadcaster ??= LiveBroadcaster(
-        api,
-        hubClient: hubUrl.isNotEmpty
-            ? LiveHubClient(baseUrl: hubUrl)
-            : null,
-        // Re-evaluated on every pushPing so a mid-run "add privacy
-        // zone" save in Settings takes effect immediately. Without
-        // this wire, the Go-hub transport leaks in-zone pings to
-        // anonymous spectators — the Supabase trigger
-        // `live_run_pings_drop_in_zone` only protects the legacy
-        // path. See decisions §33.
-        privacyZonesProvider: () => _currentPrivacyZones(),
-      );
-      try {
-        await api
-            .beginLiveBroadcast(
-              runId: _runId!,
-              startedAt: _runStartedAtWall ?? DateTime.now(),
-              activityType: _activityType.name,
-            )
-            .timeout(kBackendLoadTimeout);
-        _liveBroadcaster!.attach(_runId!);
-      } catch (e) {
-        debugPrint('beginLiveBroadcast failed: $e');
-      }
-    }
+    // user can re-tap once back online.
+    await _startLiveBroadcast();
 
     try {
       await Share.share(url, subject: _l10n.runShareSubject);
@@ -989,6 +951,70 @@ class _RunScreenState extends State<RunScreen> {
       // logs without us reproducing the user's exact moment.
       debugPrint('Share.share live link failed: $e');
       if (mounted) _showTopBanner(_l10n.runCouldNotShareLink('$e'));
+    }
+  }
+
+  /// Pre-create the parent runs row + flip the broadcaster on so the
+  /// first ping after _begin() lands successfully. The runs row is
+  /// marked is_public=true (the opt-in to sharing — either the user's
+  /// "Share live link" tap or the auto_live_share device pref);
+  /// saveRun on stop preserves it via a follow-up makeRunPublic call
+  /// in _stop. Skipped on anonymous sessions — only signed-in users
+  /// can broadcast. Returns whether the broadcaster is attached.
+  Future<bool> _startLiveBroadcast() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return false;
+    _runId ??= _uuid.v4();
+    // LiveHubClient stays nil-effect when `LIVE_HUB_URL` is unset
+    // — the broadcaster falls back to the legacy
+    // `live_run_pings` Supabase path. Once the Go hub is deployed
+    // and the env var lands in the build, the broadcaster swaps to
+    // the hub without any further client change.
+    final hubUrl = dotenv.env['LIVE_HUB_URL'] ?? '';
+    _liveBroadcaster ??= LiveBroadcaster(
+      api,
+      hubClient: hubUrl.isNotEmpty
+          ? LiveHubClient(baseUrl: hubUrl)
+          : null,
+      // Re-evaluated on every pushPing so a mid-run "add privacy
+      // zone" save in Settings takes effect immediately. Without
+      // this wire, the Go-hub transport leaks in-zone pings to
+      // anonymous spectators — the Supabase trigger
+      // `live_run_pings_drop_in_zone` only protects the legacy
+      // path. See decisions §33.
+      privacyZonesProvider: () => _currentPrivacyZones(),
+    );
+    try {
+      await api
+          .beginLiveBroadcast(
+            runId: _runId!,
+            startedAt: _runStartedAtWall ?? DateTime.now(),
+            activityType: _activityType.name,
+          )
+          .timeout(kBackendLoadTimeout);
+      _liveBroadcaster!.attach(_runId!);
+      return true;
+    } catch (e) {
+      debugPrint('beginLiveBroadcast failed: $e');
+      return false;
+    }
+  }
+
+  /// The auto_live_share device pref (docs/features/safety.md). False
+  /// when settings aren't available (signed out, sync not wired) —
+  /// fail-closed: no silent broadcast without the explicit opt-in.
+  bool get _autoLiveShareEnabled {
+    final service = widget.settingsSync?.service;
+    if (service == null) return false;
+    try {
+      return service.effective<bool>(
+            SettingsKeys.autoLiveShare,
+            fallback: false,
+          ) ==
+          true;
+    } catch (e) {
+      debugPrint('auto_live_share read failed: $e');
+      return false;
     }
   }
 
@@ -1027,6 +1053,22 @@ class _RunScreenState extends State<RunScreen> {
     // copied stays valid.
     _runId ??= _uuid.v4();
     _runStartedAtWall = DateTime.now();
+
+    // Auto-live-share (docs/features/safety.md): the device pref starts
+    // the broadcast on every run start, so the overdue escalation has a
+    // telemetry stream to watch and a partner has a link to follow. L4 —
+    // fire-and-forget in its own catch path; a failed share must never
+    // touch the recording. A manual "Share live link" before GO already
+    // attached the broadcaster — skip the duplicate begin.
+    if (_autoLiveShareEnabled && !(_liveBroadcaster?.isActive ?? false)) {
+      unawaited(_startLiveBroadcast().then((attached) {
+        if (attached && mounted) {
+          _showTopBanner(_l10n.runAutoLiveShareStarted);
+        }
+      }).catchError((Object e) {
+        debugPrint('auto live share failed: $e');
+      }));
+    }
 
     // Reset the pedometer baseline so steps taken during the countdown
     // don't count toward the run.

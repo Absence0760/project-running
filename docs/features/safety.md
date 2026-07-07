@@ -78,7 +78,8 @@ safety contacts a "may be overdue" alert with the live link — once.
    silent run train contacts to ignore them. The saved-run finish email is
    the all-clear; if the run never finishes, one alert stands.
 5. **Auto-live-share is a per-device pref, default OFF** (`auto_live_share`,
-   UD scope). It makes every run publicly viewable mid-run (the stub is
+   D scope — a property of the phone that records, like
+   `voice_feedback_enabled`). It makes every run publicly viewable mid-run (the stub is
    `is_public=true` — that's what makes the spectator link work for a
    logged-out partner), so it must be an explicit opt-in. The escalation
    applies to ANY live broadcast (auto or manually shared) — the overdue scan

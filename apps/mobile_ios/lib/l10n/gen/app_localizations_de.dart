@@ -683,6 +683,42 @@ class AppLocalizationsDe extends AppLocalizations {
   String get safetyUnknownRunner => 'Ein Threkir-Läufer';
 
   @override
+  String get safetyOverdueTitle => 'Überfällig-Alarm';
+
+  @override
+  String get safetyOverdueIntro =>
+      'Meldet sich ein live geteilter Lauf länger als hier eingestellt nicht, erhalten deine bestätigten Kontakte eine E-Mail mit deinem Live-Link.';
+
+  @override
+  String get safetyOverdueLabel => 'Alarm nach Stille von';
+
+  @override
+  String get safetyOverdueOff => 'Aus';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes Min.';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'Gilt für jeden Lauf mit aktivem Live-Teilen. Stille kann auch fehlender Empfang sein — das steht so in der E-Mail. Kontakte werden pro Lauf einmal alarmiert; das Beenden sendet die übliche Entwarnung.';
+
+  @override
+  String get safetyOverdueSaved => 'Überfällig-Alarm aktualisiert';
+
+  @override
+  String get safetyAutoLiveShareTitle => 'Automatisches Live-Teilen';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'Startet auf diesem Telefon automatisch ein Live-Teilen, wenn ein Lauf beginnt. Der laufende Lauf ist für alle mit dem Link sichtbar.';
+
+  @override
+  String get runAutoLiveShareStarted =>
+      'Live-Teilen ist aktiv — sende den Link über „Live-Link teilen“';
+
+  @override
   String get activitySedentary => 'Überwiegend sitzend (Bürojob)';
 
   @override

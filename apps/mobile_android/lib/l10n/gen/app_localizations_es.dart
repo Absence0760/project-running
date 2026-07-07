@@ -684,6 +684,42 @@ class AppLocalizationsEs extends AppLocalizations {
   String get safetyUnknownRunner => 'Una persona de Threkir';
 
   @override
+  String get safetyOverdueTitle => 'Alerta de retraso';
+
+  @override
+  String get safetyOverdueIntro =>
+      'Si una carrera compartida en directo queda en silencio más de este tiempo, tus contactos confirmados reciben un correo con tu enlace en directo.';
+
+  @override
+  String get safetyOverdueLabel => 'Avisar tras un silencio de';
+
+  @override
+  String get safetyOverdueOff => 'Desactivado';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'Se aplica a cualquier carrera con el directo activado. El silencio también puede ser pérdida de señal; el correo lo aclara. Los contactos reciben un solo aviso por carrera; al terminar llega la confirmación habitual.';
+
+  @override
+  String get safetyOverdueSaved => 'Alerta de retraso actualizada';
+
+  @override
+  String get safetyAutoLiveShareTitle => 'Directo automático';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'Inicia automáticamente el directo cuando empieza una carrera en este teléfono. La carrera en curso es visible para cualquiera con el enlace.';
+
+  @override
+  String get runAutoLiveShareStarted =>
+      'Directo activado: envía el enlace con «Compartir enlace en directo»';
+
+  @override
   String get activitySedentary => 'Mayormente sentado (trabajo de oficina)';
 
   @override

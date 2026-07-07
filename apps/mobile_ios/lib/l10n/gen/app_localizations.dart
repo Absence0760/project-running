@@ -1217,6 +1217,66 @@ abstract class AppLocalizations {
   /// **'A Threkir runner'**
   String get safetyUnknownRunner;
 
+  /// Heading of the overdue-alert section on Settings → Safety contacts
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue alert'**
+  String get safetyOverdueTitle;
+
+  /// Explainer under the overdue-alert heading
+  ///
+  /// In en, this message translates to:
+  /// **'If a live-shared run goes quiet for longer than this, your confirmed contacts get one email with your live link.'**
+  String get safetyOverdueIntro;
+
+  /// Label on the overdue silence-window dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Alert after silence of'**
+  String get safetyOverdueLabel;
+
+  /// Dropdown choice that disables the overdue escalation
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get safetyOverdueOff;
+
+  /// Dropdown choice for an overdue window
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String safetyOverdueMinutesOption(int minutes);
+
+  /// Fine print under the overdue controls (signal-loss caveat, once per run)
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to any run with live sharing on. Silence can also mean loss of phone signal — the email says so. Contacts are alerted once per run; finishing sends the usual all-clear.'**
+  String get safetyOverdueNote;
+
+  /// Banner after the overdue window persists
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue alert updated'**
+  String get safetyOverdueSaved;
+
+  /// Title of the auto-live-share device toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Auto live share'**
+  String get safetyAutoLiveShareTitle;
+
+  /// Subtitle of the auto-live-share device toggle (public-by-link disclosure)
+  ///
+  /// In en, this message translates to:
+  /// **'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.'**
+  String get safetyAutoLiveShareSubtitle;
+
+  /// Banner on the run screen when the auto-live-share pref attached the broadcaster
+  ///
+  /// In en, this message translates to:
+  /// **'Live sharing is on — use Share live link to send it'**
+  String get runAutoLiveShareStarted;
+
   /// Nutrition activity level: little exercise
   ///
   /// In en, this message translates to:

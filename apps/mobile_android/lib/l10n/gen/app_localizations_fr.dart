@@ -684,6 +684,42 @@ class AppLocalizationsFr extends AppLocalizations {
   String get safetyUnknownRunner => 'Un coureur Threkir';
 
   @override
+  String get safetyOverdueTitle => 'Alerte de retard';
+
+  @override
+  String get safetyOverdueIntro =>
+      'Si une course partagée en direct reste silencieuse plus longtemps que cette durée, vos contacts confirmés reçoivent un e-mail avec votre lien en direct.';
+
+  @override
+  String get safetyOverdueLabel => 'Alerter après un silence de';
+
+  @override
+  String get safetyOverdueOff => 'Désactivé';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'S\'applique à toute course avec partage en direct actif. Le silence peut aussi être une perte de signal — l\'e-mail le précise. Les contacts sont alertés une fois par course ; terminer la course envoie le message rassurant habituel.';
+
+  @override
+  String get safetyOverdueSaved => 'Alerte de retard mise à jour';
+
+  @override
+  String get safetyAutoLiveShareTitle => 'Partage en direct automatique';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'Démarre automatiquement un partage en direct au début d\'une course sur ce téléphone. La course en cours est visible par toute personne ayant le lien.';
+
+  @override
+  String get runAutoLiveShareStarted =>
+      'Partage en direct actif — envoyez le lien via « Partager le lien en direct »';
+
+  @override
   String get activitySedentary => 'Surtout assis (travail de bureau)';
 
   @override

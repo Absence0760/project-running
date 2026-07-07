@@ -662,6 +662,41 @@ class AppLocalizationsJa extends AppLocalizations {
   String get safetyUnknownRunner => 'Threkir のランナー';
 
   @override
+  String get safetyOverdueTitle => '遅延アラート';
+
+  @override
+  String get safetyOverdueIntro =>
+      'ライブ共有中のランがこの時間以上更新されない場合、確認済みの連絡先にライブリンク付きのメールが1通送られます。';
+
+  @override
+  String get safetyOverdueLabel => '無応答がこの時間続いたら通知';
+
+  @override
+  String get safetyOverdueOff => 'オフ';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes分';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'ライブ共有をオンにしたランに適用されます。無応答は電波が届かないだけの場合もあり、メールにもその旨が記載されます。通知はラン1回につき1度だけで、完了すると通常の完了通知が届きます。';
+
+  @override
+  String get safetyOverdueSaved => '遅延アラートを更新しました';
+
+  @override
+  String get safetyAutoLiveShareTitle => '自動ライブ共有';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'この端末でランを開始すると自動的にライブ共有を開始します。進行中のランはリンクを知っている人なら誰でも見られます。';
+
+  @override
+  String get runAutoLiveShareStarted => 'ライブ共有中 — 「ライブリンクを共有」でリンクを送れます';
+
+  @override
   String get activitySedentary => 'ほとんど座っている（デスクワーク）';
 
   @override

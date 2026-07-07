@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../settings_sync.dart';
 import '../widgets/top_banner.dart';
 
 /// Settings → Safety contacts (decisions §131). Mirror of the web
@@ -16,8 +17,9 @@ import '../widgets/top_banner.dart';
 /// The data layer lives in `ApiClient` (mirrors web `core/data.ts`).
 class SettingsSafetyScreen extends StatefulWidget {
   final ApiClient? api;
+  final SettingsSyncService? settingsSync;
 
-  const SettingsSafetyScreen({super.key, required this.api});
+  const SettingsSafetyScreen({super.key, required this.api, this.settingsSync});
 
   @override
   State<SettingsSafetyScreen> createState() => _SettingsSafetyScreenState();
@@ -38,10 +40,60 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
   List<SafetyContact> _contacts = const [];
   List<PendingSafetyRequest> _pending = const [];
 
+  // Overdue escalation (docs/features/safety.md): the universal pref
+  // holding the silence window in minutes; null = escalation off
+  // (fail-closed — the backend scan requires the pref). Plus the
+  // device-scoped auto-live-share opt-in.
+  static const List<int> _overdueChoices = [15, 30, 60, 120];
+  int? _overdueMinutes;
+  bool _autoLiveShare = false;
+
   @override
   void initState() {
     super.initState();
+    _loadPrefs();
     _load();
+  }
+
+  /// Mirrors the preferences screen's gating: bag-backed controls are
+  /// editable once the sync service reports usable bags (server-loaded,
+  /// or cache-backed offline).
+  bool get _prefsEditable => widget.settingsSync?.synced == true;
+
+  void _loadPrefs() {
+    final service = widget.settingsSync?.service;
+    if (service == null) return;
+    final overdue = service.effective<num>(SettingsKeys.safetyOverdueMinutes);
+    final auto = service.effective<bool>(
+      SettingsKeys.autoLiveShare,
+      fallback: false,
+    );
+    _overdueMinutes =
+        overdue != null && overdue.isFinite && overdue > 0 ? overdue.toInt() : null;
+    _autoLiveShare = auto == true;
+  }
+
+  Future<void> _setOverdueMinutes(int? minutes) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _overdueMinutes = minutes);
+    try {
+      await widget.settingsSync
+          ?.updateUniversal({SettingsKeys.safetyOverdueMinutes: minutes});
+      _banner(l10n.safetyOverdueSaved);
+    } catch (e) {
+      _banner(l10n.safetyAddFailed(e.toString()));
+    }
+  }
+
+  Future<void> _setAutoLiveShare(bool value) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _autoLiveShare = value);
+    try {
+      await widget.settingsSync
+          ?.updateDevice({SettingsKeys.autoLiveShare: value});
+    } catch (e) {
+      _banner(l10n.safetyAddFailed(e.toString()));
+    }
   }
 
   @override
@@ -235,6 +287,55 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                         ),
                       ),
                     ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  child: Text(
+                    l10n.safetyOverdueTitle,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    l10n.safetyOverdueIntro,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                ListTile(
+                  title: Text(l10n.safetyOverdueLabel),
+                  trailing: DropdownButton<int?>(
+                    value: _overdueMinutes,
+                    onChanged: _prefsEditable ? (v) => _setOverdueMinutes(v) : null,
+                    items: [
+                      DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text(l10n.safetyOverdueOff),
+                      ),
+                      for (final minutes in _overdueChoices)
+                        DropdownMenuItem<int?>(
+                          value: minutes,
+                          child: Text(l10n.safetyOverdueMinutesOption(minutes)),
+                        ),
+                    ],
+                  ),
+                ),
+                SwitchListTile(
+                  title: Text(l10n.safetyAutoLiveShareTitle),
+                  subtitle: Text(l10n.safetyAutoLiveShareSubtitle),
+                  value: _autoLiveShare,
+                  onChanged: _prefsEditable ? _setAutoLiveShare : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Text(
+                    l10n.safetyOverdueNote,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
                 if (_pending.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Divider(height: 1),

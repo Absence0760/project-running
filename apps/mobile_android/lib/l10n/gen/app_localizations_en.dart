@@ -677,6 +677,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyUnknownRunner => 'A Threkir runner';
 
   @override
+  String get safetyOverdueTitle => 'Overdue alert';
+
+  @override
+  String get safetyOverdueIntro =>
+      'If a live-shared run goes quiet for longer than this, your confirmed contacts get one email with your live link.';
+
+  @override
+  String get safetyOverdueLabel => 'Alert after silence of';
+
+  @override
+  String get safetyOverdueOff => 'Off';
+
+  @override
+  String safetyOverdueMinutesOption(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get safetyOverdueNote =>
+      'Applies to any run with live sharing on. Silence can also mean loss of phone signal — the email says so. Contacts are alerted once per run; finishing sends the usual all-clear.';
+
+  @override
+  String get safetyOverdueSaved => 'Overdue alert updated';
+
+  @override
+  String get safetyAutoLiveShareTitle => 'Auto live share';
+
+  @override
+  String get safetyAutoLiveShareSubtitle =>
+      'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.';
+
+  @override
+  String get runAutoLiveShareStarted =>
+      'Live sharing is on — use Share live link to send it';
+
+  @override
   String get activitySedentary => 'Mostly sitting (desk job)';
 
   @override

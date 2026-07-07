@@ -128,8 +128,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.health_and_safety_outlined,
               label: l10n.safetyTitle,
               subtitle: l10n.safetyTileSubtitle,
-              onTap: () => _openAfterSignIn(
-                  (_) => SettingsSafetyScreen(api: widget.apiClient)),
+              onTap: () => _openAfterSignIn((_) => SettingsSafetyScreen(
+                    api: widget.apiClient,
+                    settingsSync: widget.settingsSync,
+                  )),
             ),
             _tab(
               icon: Icons.groups_outlined,

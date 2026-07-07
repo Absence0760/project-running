@@ -159,3 +159,74 @@ test.describe('/settings/safety', () => {
 		}
 	});
 });
+
+test.describe('/settings/safety — overdue alert pref', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test.afterEach(async () => {
+		const admin = getAdminClient();
+		const { data } = await admin
+			.from('user_settings')
+			.select('prefs')
+			.eq('user_id', USER_A.id)
+			.maybeSingle();
+		const prefs = (data?.prefs as Record<string, unknown> | null) ?? {};
+		delete prefs.safety_overdue_minutes;
+		await admin
+			.from('user_settings')
+			.upsert({ user_id: USER_A.id, prefs });
+	});
+
+	test('overdue alert: picking a window persists the pref, Off clears it', async ({
+		page,
+	}) => {
+		// The pref is the backend scan's opt-in gate (fail-closed:
+		// null/absent = no escalation) — docs/features/safety.md.
+		await page.goto('/settings/safety');
+		const select = page.getByTestId('safety-overdue-select');
+		await expect(select).toBeVisible({ timeout: 10_000 });
+
+		await select.selectOption('30');
+		const admin = getAdminClient();
+		await expect
+			.poll(async () => {
+				const { data } = await admin
+					.from('user_settings')
+					.select('prefs')
+					.eq('user_id', USER_A.id)
+					.maybeSingle();
+				return (data?.prefs as Record<string, unknown> | null)?.safety_overdue_minutes ?? null;
+			}, { timeout: 10_000 })
+			.toBe(30);
+
+		// Off writes null — the scan's predicate no longer matches.
+		await select.selectOption('off');
+		await expect
+			.poll(async () => {
+				const { data } = await admin
+					.from('user_settings')
+					.select('prefs')
+					.eq('user_id', USER_A.id)
+					.maybeSingle();
+				return (data?.prefs as Record<string, unknown> | null)?.safety_overdue_minutes ?? null;
+			}, { timeout: 10_000 })
+			.toBe(null);
+
+		// Reload renders the persisted value, not the default.
+		await select.selectOption('60');
+		await expect
+			.poll(async () => {
+				const { data } = await admin
+					.from('user_settings')
+					.select('prefs')
+					.eq('user_id', USER_A.id)
+					.maybeSingle();
+				return (data?.prefs as Record<string, unknown> | null)?.safety_overdue_minutes ?? null;
+			}, { timeout: 10_000 })
+			.toBe(60);
+		await page.reload();
+		await expect(page.getByTestId('safety-overdue-select')).toHaveValue('60', {
+			timeout: 10_000,
+		});
+	});
+});

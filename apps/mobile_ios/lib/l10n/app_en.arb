@@ -944,6 +944,51 @@
   "@safetyUnknownRunner": {
     "description": "Fallback name when an incoming request's owner has no display name"
   },
+  "safetyOverdueTitle": "Overdue alert",
+  "@safetyOverdueTitle": {
+    "description": "Heading of the overdue-alert section on Settings → Safety contacts"
+  },
+  "safetyOverdueIntro": "If a live-shared run goes quiet for longer than this, your confirmed contacts get one email with your live link.",
+  "@safetyOverdueIntro": {
+    "description": "Explainer under the overdue-alert heading"
+  },
+  "safetyOverdueLabel": "Alert after silence of",
+  "@safetyOverdueLabel": {
+    "description": "Label on the overdue silence-window dropdown"
+  },
+  "safetyOverdueOff": "Off",
+  "@safetyOverdueOff": {
+    "description": "Dropdown choice that disables the overdue escalation"
+  },
+  "safetyOverdueMinutesOption": "{minutes} min",
+  "@safetyOverdueMinutesOption": {
+    "description": "Dropdown choice for an overdue window",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "safetyOverdueNote": "Applies to any run with live sharing on. Silence can also mean loss of phone signal — the email says so. Contacts are alerted once per run; finishing sends the usual all-clear.",
+  "@safetyOverdueNote": {
+    "description": "Fine print under the overdue controls (signal-loss caveat, once per run)"
+  },
+  "safetyOverdueSaved": "Overdue alert updated",
+  "@safetyOverdueSaved": {
+    "description": "Banner after the overdue window persists"
+  },
+  "safetyAutoLiveShareTitle": "Auto live share",
+  "@safetyAutoLiveShareTitle": {
+    "description": "Title of the auto-live-share device toggle"
+  },
+  "safetyAutoLiveShareSubtitle": "Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.",
+  "@safetyAutoLiveShareSubtitle": {
+    "description": "Subtitle of the auto-live-share device toggle (public-by-link disclosure)"
+  },
+  "runAutoLiveShareStarted": "Live sharing is on — use Share live link to send it",
+  "@runAutoLiveShareStarted": {
+    "description": "Banner on the run screen when the auto-live-share pref attached the broadcaster"
+  },
   "activitySedentary": "Mostly sitting (desk job)",
   "@activitySedentary": {
     "description": "Nutrition activity level: little exercise"

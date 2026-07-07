@@ -42,6 +42,48 @@ void main() {
       source = File('lib/screens/run_screen.dart').readAsStringSync();
     });
 
+    test('auto-live-share hook is opt-in, L4-isolated, and duplicate-safe', () {
+      // Reason: docs/features/safety.md — the auto_live_share device pref
+      // starts a broadcast at _begin(). Three load-bearing properties:
+      // (1) fail-closed opt-in (the pref gate, default false), (2) a manual
+      // pre-GO share must not double-begin (isActive guard), and (3) the
+      // whole thing is fire-and-forget with its own error path so a share
+      // failure can never touch the L0/L1 recording.
+      expect(
+        source.contains(
+            '_autoLiveShareEnabled && !(_liveBroadcaster?.isActive ?? false)'),
+        isTrue,
+        reason: 'the _begin() hook must gate on the pref AND skip an '
+            'already-attached broadcaster',
+      );
+      final hookIdx = source.indexOf(
+          '_autoLiveShareEnabled && !(_liveBroadcaster?.isActive ?? false)');
+      final hookWindow = source.substring(hookIdx, hookIdx + 500);
+      expect(
+        hookWindow.contains('unawaited(_startLiveBroadcast()'),
+        isTrue,
+        reason: 'the auto share is fire-and-forget — _begin() must not '
+            'await the network before starting the clock',
+      );
+      expect(
+        hookWindow.contains('catchError'),
+        isTrue,
+        reason: 'the auto share needs its own error path (L4) so a '
+            'failure cannot surface as an unhandled zone error mid-start',
+      );
+      // The manual share path reuses the same broadcast starter, so the
+      // stub/broadcaster semantics cannot drift between the two.
+      final shareBody = _extractMethodBody(
+        source,
+        r'Future<void> _shareLiveLink\(\) async\s*\{',
+      );
+      expect(
+        shareBody.contains('_startLiveBroadcast()'),
+        isTrue,
+        reason: '_shareLiveLink must route through _startLiveBroadcast',
+      );
+    });
+
     test('_onSnapshot never calls setState', () {
       // Reason: the per-snapshot handler fires at >=1 Hz (GPS rate). A
       // setState at the top level of _RunScreenState rebuilds the whole

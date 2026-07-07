@@ -34,6 +34,12 @@ class SettingsKeys {
   /// deferred; this key just gives the data a stable home so
   /// runners can populate their list ahead of the feature.
   static const trustedContacts = 'trusted_contacts';
+  /// Overdue-escalation silence window in minutes (docs/features/safety.md).
+  /// Absent = escalation off (fail-closed). Read SERVER-SIDE by the
+  /// `enqueue_safety_overdue_emails()` pg_cron scan (migration 20270401_001);
+  /// the clients only edit it (web /settings/safety + mobile Settings →
+  /// Safety contacts).
+  static const safetyOverdueMinutes = 'safety_overdue_minutes';
   static const coachPersonality = 'coach_personality';
   /// Which notification kinds are also delivered by email — `'all'` |
   /// `'important'` (default) | `'off'`. Read server-side by the Go
@@ -110,6 +116,12 @@ class SettingsKeys {
   static const voiceFeedbackIntervalKm = 'voice_feedback_interval_km';
   static const hapticFeedbackEnabled = 'haptic_feedback_enabled';
   static const keepScreenOn = 'keep_screen_on';
+  /// Start a live broadcast automatically when a run starts on THIS
+  /// device (docs/features/safety.md). Default off — a live share makes
+  /// the in-progress run publicly viewable by link, so it must be an
+  /// explicit opt-in. Read by run_screen at _begin(); L4 (a failed share
+  /// never blocks the recording).
+  static const autoLiveShare = 'auto_live_share';
 }
 
 /// Pluggable on-device cache for the two prefs bags. The mobile app

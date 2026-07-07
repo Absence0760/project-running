@@ -14,6 +14,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { effective, loadSettings, updateUniversal } from '$lib/settings/settings';
 
 	let contacts = $state<SafetyContact[]>([]);
 	let pending = $state<PendingSafetyRequest[]>([]);
@@ -36,12 +37,32 @@
 		]);
 	}
 
+	// Overdue escalation (docs/features/safety.md): a universal pref holding
+	// the silence window in minutes; null/'off' = escalation disabled
+	// (fail-closed — the backend scan requires the pref).
+	let overdueMinutes = $state('off');
+	const OVERDUE_CHOICES = ['15', '30', '60', '120'];
+
 	onMount(async () => {
 		await auth.ready();
 		if (!auth.user) return;
-		await reload();
+		const [, settings] = await Promise.all([reload(), loadSettings(auth.user.id)]);
+		const v = effective<number>(settings, 'safety_overdue_minutes');
+		overdueMinutes = v && Number.isFinite(v) ? String(v) : 'off';
 		loading = false;
 	});
+
+	async function saveOverdue() {
+		if (!auth.user) return;
+		try {
+			await updateUniversal(auth.user.id, {
+				safety_overdue_minutes: overdueMinutes === 'off' ? null : Number(overdueMinutes),
+			});
+			showToast(m('safety.overdueSaved'), 'success');
+		} catch (e) {
+			showToast(m('safety.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		}
+	}
 
 	async function handleAdd() {
 		const value = email.trim();
@@ -180,6 +201,23 @@
 				{/each}
 			</ul>
 		{/if}
+	</section>
+
+	<section class="card" data-testid="safety-overdue-card">
+		<header class="section-head">
+			<h2>{m('safety.overdueTitle')}</h2>
+			<p class="tagline">{m('safety.overdueIntro')}</p>
+		</header>
+		<label class="field overdue-field">
+			<span class="label-text">{m('safety.overdueLabel')}</span>
+			<select bind:value={overdueMinutes} onchange={saveOverdue} data-testid="safety-overdue-select">
+				<option value="off">{m('safety.overdueOff')}</option>
+				{#each OVERDUE_CHOICES as minutes (minutes)}
+					<option value={minutes}>{m('safety.overdueMinutesOption', { minutes })}</option>
+				{/each}
+			</select>
+		</label>
+		<p class="overdue-note">{m('safety.overdueNote')}</p>
 	</section>
 
 	{#if pending.length > 0}
@@ -347,6 +385,22 @@
 	}
 	.empty-title { margin: 0; font-weight: 600; color: var(--color-text); }
 	.empty-hint { margin: 0; font-size: 0.86rem; line-height: 1.5; max-width: 30rem; }
+
+	.overdue-field { max-width: 20rem; }
+	.overdue-field select {
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-size: 0.9rem;
+		background: var(--color-bg);
+		color: var(--color-text);
+	}
+	.overdue-note {
+		margin: var(--space-md) 0 0;
+		font-size: 0.82rem;
+		line-height: 1.5;
+		color: var(--color-text-secondary);
+	}
 
 	.section-head { margin-bottom: var(--space-md); }
 	.section-head h2 { margin: 0 0 var(--space-2xs); font-size: 1.05rem; }
