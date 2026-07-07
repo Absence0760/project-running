@@ -392,6 +392,8 @@ Full pipeline defined in `.github/workflows/ci.yml`. Seventeen jobs run on every
 | `e2e-web-livehub` | ubuntu-latest | Playwright against the real Go live-hub WebSocket binary (unsharded) |
 | `e2e-web-sso` | ubuntu-latest | Playwright over the OAuth / SSO login path against a local mock OIDC server (unsharded) |
 
+Branch protection requires a single status check — the **`CI gate`** aggregator job, which `needs:` every job above (so adding a job auto-gates merges once it's listed); `ci-gate-docs.yml` reports an equivalently-named `CI gate` for docs-only PRs.
+
 iOS builds + Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag, not on PR. See [releasing.md](../ops/releasing.md) for the release-time pipeline.
 
 ---

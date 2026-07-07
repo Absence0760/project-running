@@ -70,11 +70,13 @@ A persistent tile cache was a "deferred from Phase 1" item. The first pass was i
 
 ---
 
-## 6. `main` is the working branch; PRs are still the path for review-needed work
+## 6. `main` is sealed; every change reaches it through a CI-gated PR (no direct pushes)
 
-**Decided:** updated 2026-05-28 (was: `dev` is the working branch / `main` is the PR target)
+**Decided:** updated 2026-05-28 (was: `dev` is the working branch / `main` is the PR target); **amended 2026-07-07** (see below)
 
 All day-to-day work happens directly on `main`. PRs to `main` are still the path for anything that needs review (security work, schema migrations, recording-stack changes, ultrareview-bound batches), but most persona-hunt / unit / docs / refactor work lands as a sequence of per-piece commits on `main`. **Never push without an explicit ask** — the local commit is the deliverable, pushing is a separate ask.
+
+**Amended 2026-07-07 — `origin/main` is now protected; the "direct push for non-review work" path above is superseded.** Local per-piece commit cadence is unchanged, but `origin/main` no longer accepts direct pushes from anyone (the rule is enforced on admins, including the owner). Every change now reaches `origin/main` through a PR that must pass the **single required status check, "CI gate"** — an aggregator job in `.github/workflows/ci.yml` that `needs:` every CI job (paired with `ci-gate-docs.yml` so docs-only PRs still report the check). There are **0 required approvals**: a green CI is the merge gate, not a human sign-off. Human review (the `code-reviewer` agent, `/safe-edit`) stays a quality practice for the review-needed categories named above, not a merge requirement. History is linear, and force-pushes, branch deletion, and unresolved conversations are all blocked. The original rationale below is kept as superseded history.
 
 **Why the change.** The earlier `dev → main` PR setup added a round-trip step that didn't earn its keep when the user is driving the work in-session. Per-piece-commits on `main` give the same bisectability + revertability with one fewer branch to keep in sync. The "never push without being asked" rule is the safety valve: nothing leaves the workstation until the user says so.
 

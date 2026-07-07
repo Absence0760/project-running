@@ -529,7 +529,7 @@ Keep the `href` — it is the deep-link / hard-load fallback and the link's sema
 
 ## Commit and PR conventions
 
-- Branch: `main` is the working branch. PRs to `main` are still the path for anything that needs review; direct commits to `main` are fine when the user has asked for a sequence of work and wants each piece individually landable.
+- Branch: commit locally per-piece, but `origin/main` is protected — changes land only via a PR that passes the single required **CI gate** status check (0 required approvals, a green CI is the merge gate; PR mandatory and admin-enforced; no direct pushes; linear history; conversation resolution required).
 - Commits use conventional commit prefixes — `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `build:`, `test:`, `ci:`. Scope optional: `feat(web): ...`, `fix(backend): ...`, `chore(android): ...`.
 - Commit message body: one short sentence focused on the *why*, not the *what* — the diff already says what.
 - No AI attribution of any kind. No `Co-Authored-By: Claude ...`, no "Generated with Claude Code" footer, no robot/sparkle emoji trailer. Re-read the message before `git commit` and strip these if a skill template tried to add them.

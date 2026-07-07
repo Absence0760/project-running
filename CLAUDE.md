@@ -119,7 +119,7 @@ A legal / CISO / counsel sign-off (privacy-boundary changes, Art 9 health-data c
 
 ## Branches & PRs
 
-- `main` is the working branch. Commits land directly on `main` when the user has asked for the work; PRs to `main` are still the path for anything that needs review.
+- `main` is the working branch locally, but `origin/main` is protected: every change reaches it through a PR that must pass the single required **CI gate** status check. No human approval is required (a green CI is the merge gate, review is a quality practice not a gate), but a PR is mandatory and enforced even for admins — no direct pushes. Force-pushes and branch deletion are blocked; history is linear and conversation resolution is required.
 - **Commit after each discrete piece of work** — don't batch a multi-step session into one mega-commit at the end. New module + tests is one commit; bug fix + pinning test is one commit; docs sweep is one commit (after the code commit it documents). Self-check: "I'll commit at the end after I verify" is a smell — commit each piece as you go. Tests for a piece go in the **same commit** as the piece. Full enumeration of "what counts as a piece" in [docs/architecture/conventions.md § Commit cadence](docs/architecture/conventions.md#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump).
 - "Never commit without being asked" still applies: don't proactively commit speculative work, ad-hoc workstation tweaks, or partially-aborted attempts. Once the user has asked for a piece (or a sequence), the per-piece commit cadence above is implicitly authorized.
 - Never `git push` without an explicit ask. The commit is the deliverable; pushing is a separate ask.
@@ -218,9 +218,10 @@ infra/               → Terraform stacks for AWS web hosting (decisions §53)
 scripts/
   gen_dart_models.dart  → Dart row-class generator
 .github/workflows/
-  ci.yml             → PR: test-packages, build-web, parity-types
-                       Push to main: + build-ios, build-android, build-watch-swift
-                       Release: deploy-functions
+  ci.yml             → the same ~19 CI jobs run on every PR and push to main
+                       (no PR-only/push-only split); the single required status
+                       check is the "CI gate" aggregator that needs: all of them
+                       Release: per-app deploy workflows run on `<app>@<version>` tags
 ```
 
 ## If something in this file is wrong
