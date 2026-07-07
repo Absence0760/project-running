@@ -55,7 +55,7 @@ git rev-list --count HEAD..origin/main
 git rev-list --count origin/main..HEAD
 ```
 
-Both `0` → green. Behind → red. Ahead → red ("local main has unpushed commits — push first, wait for CI, then re-run").
+Both `0` → green. Behind → red. Ahead → red ("local main has commits not on origin/main — main is protected, so these can't be pushed directly; open a PR, land it once the CI gate is green, then re-run").
 
 #### 3c. Latest CI run on main is green
 

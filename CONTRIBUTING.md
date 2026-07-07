@@ -56,10 +56,19 @@ Or, if Claude Code is available: `/check` runs all of the above in sequence and 
 - Mark as **Draft** while CI is still running; flip to ready when checks are green.
 - Don't squash on merge unless you're cleaning up a noisy WIP series — preserving meaningful commits in `main` makes `git blame` more useful.
 
+## Merge requirements
+
+`main` is protected. To merge you need:
+
+- **An open PR** — direct pushes to `main` are blocked, including for admins. Every change reaches `main` through a PR.
+- **A green `CI gate` status check** — this single required check is an aggregator that fans in on the full CI job set (and is reported for docs-only PRs too). It, not a human, is the merge gate.
+
+There are **no required approvals** — review is encouraged but not a merge gate. History is linear (rebase / merge-commit, not force-push), and all PR conversations must be resolved before merge.
+
 ## Reviewing a PR
 
 - Pull the branch locally, run the test suite, exercise the change manually if it's user-visible.
-- The `/code-reviewer` agent (in `.claude/agents/`) can produce a first-pass review. Use it as a starting point, not a substitute for human eyes.
+- The `/code-reviewer` agent (in `.claude/agents/`) can produce a first-pass review. Review is a quality practice here, not a merge gate (see Merge requirements above) — a human read is still valuable, especially for security, schema, or recording-stack changes.
 
 ## Security findings
 
