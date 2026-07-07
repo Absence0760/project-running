@@ -84,7 +84,7 @@ function clusterAt(offsetDays: number, hour = 12, minute = 0): string {
 
 /**
  * Planted dataset (all in TARGET_YEAR):
- *   - Cluster Mon/Tue/Wed (one Monday-start week): one run each (10k, 8k, half)
+ *   - Cluster Mon/Tue/Wed (one Monday-start week): one run each (10k, 8.6k, half)
  *     → a 3-day best streak (recap.ts#computeRunStreaks over local days) AND
  *     the top week, since all three share a Monday bucket.
  *   - The Wednesday run is the half-marathon at 06:30 → longest run +
@@ -93,20 +93,20 @@ function clusterAt(offsetDays: number, hour = 12, minute = 0): string {
  *   - Jun 1, Sep 1: two more isolated runs in distinct months → 3 active
  *     months total (Mar, Jun, Sep). The two routes give uniqueRouteCount = 2.
  *
- * Longest run = 21097 m (the half). Total = 10000 + 8000 + 21097 + 6000 +
- * 7000 = 52097 m. Top week = the cluster (10000 + 8000 + 21097 = 39097 m).
+ * Longest run = 21097 m (the half). Total = 10000 + 8600 + 21097 + 6000 +
+ * 7000 = 52697 m. Top week = the cluster (10000 + 8600 + 21097 = 39697 m).
  * Active months = 3.
  */
 const HALF = 21097;
 const RUNS: Array<{ at: string; distance_m: number; duration_s: number; route?: 0 | 1 }> = [
 	{ at: clusterAt(0), distance_m: 10000, duration_s: 3000, route: 0 },
-	{ at: clusterAt(1), distance_m: 8000, duration_s: 2520 },
+	{ at: clusterAt(1), distance_m: 8600, duration_s: 2520 },
 	{ at: clusterAt(2, 6, 30), distance_m: HALF, duration_s: 7200 }, // 06:30 → earliest start
 	{ at: dayAt(6, 1), distance_m: 6000, duration_s: 1980, route: 1 },
 	{ at: dayAt(9, 1), distance_m: 7000, duration_s: 2310 }
 ];
-const TOTAL_M = RUNS.reduce((s, r) => s + r.distance_m, 0); // 52097
-const TOP_WEEK_M = 10000 + 8000 + HALF; // 39097
+const TOTAL_M = RUNS.reduce((s, r) => s + r.distance_m, 0); // 52697
+const TOP_WEEK_M = 10000 + 8600 + HALF; // 39697
 const PR_COUNT = 2;
 const PHOTO_COUNT = 1;
 
@@ -152,12 +152,29 @@ test.describe('recap year-in-running data journey', () => {
 		// achieved_at falls in the UTC year (data.ts#fetchRecapExtras). These
 		// are trigger-maintained: inserting the runs above already fired
 		// refresh_personal_records_for_user, which bracketed the 10000 m run as
-		// '10k' and the 21097 m run as 'half_marathon' (migration 20261021_001:
-		// 10k = 9800-10200 m, half = 20675-21519 m), each with achieved_at = the
-		// run's started_at (in TARGET_YEAR). The other distances (8/6/7 km) fall
-		// between brackets, so the cache holds exactly PR_COUNT = 2 in-year rows
-		// — no manual insert (which would dup-key the trigger's '10k' row). The
-		// PR card + 'New PR' trophy read this count.
+		// '10k' and the 21097 m run as 'half_marathon', each with achieved_at =
+		// the run's started_at (in TARGET_YEAR). The other distances (8.6/6/7
+		// km) sit outside every ±2% bracket (1 mile, 5k, 8k, 10k, 12k, half,
+		// marathon as of 20270330_001), so the cache holds exactly PR_COUNT = 2
+		// in-year rows — no manual insert (which would dup-key the trigger's
+		// '10k' row). The PR card + 'New PR' trophy read this count. Guard it
+		// here so a future bracket addition (which is what turned the original
+		// 8000 m run into a third PR — run 28864778110, shard 9) fails at the
+		// source with a pointed message, not as a card-text mismatch.
+		const { data: prRows, error: prErr } = await admin
+			.from('personal_records')
+			.select('distance')
+			.eq('user_id', user.id);
+		if (prErr) throw new Error(`recap setup: PR count check failed: ${prErr.message}`);
+		const prCount = prRows?.length ?? 0;
+		if (prCount !== PR_COUNT) {
+			throw new Error(
+				`recap setup: expected the planted runs to yield exactly ${PR_COUNT} ` +
+					`personal_records rows, got ${prCount}. A PR bracket probably now ` +
+					`covers one of the planted distances — move that run outside every ` +
+					`bracket (see refresh_personal_records_for_user).`
+			);
+		}
 
 		// One run photo on the half-marathon run → Photos card = 1, 'Documented'
 		// trophy fires. fetchRecapExtras joins run_photos!inner(runs.started_at)
@@ -206,7 +223,7 @@ test.describe('recap year-in-running data journey', () => {
 				await expect(page.getByText(`My ${TARGET_YEAR} in running`).first()).toBeVisible({
 					timeout: 15_000
 				});
-				// bignum = fmtKm(totalDistanceM). 52.097 km → "52.1 km".
+				// bignum = fmtKm(totalDistanceM). 52.697 km → "52.7 km".
 				await expect(page.locator('.bignum')).toHaveText(km1(TOTAL_M));
 				await expect(page.getByText(`across ${RUNS.length} runs`)).toBeVisible();
 				// Active months chip: Mar/Jun/Sep = 3 (recap.activeInMonthsMany).
@@ -223,7 +240,7 @@ test.describe('recap year-in-running data journey', () => {
 				const streak = page.locator('.card', { hasText: 'Best streak' });
 				await expect(streak.locator('.card-value')).toContainText('3');
 
-				// Top week = fmtKm(39097 m) → "39.1 km" (the Mar 10-12 week).
+				// Top week = fmtKm(39697 m) → "39.7 km" (the Mar 10-12 week).
 				const topWeek = page.locator('.card', { hasText: 'Top week' });
 				await expect(topWeek.locator('.card-value')).toHaveText(km1(TOP_WEEK_M));
 
@@ -264,7 +281,7 @@ test.describe('recap year-in-running data journey', () => {
 				// 9 of 12 months are empty (bar-empty); 3 (Mar/Jun/Sep) are filled.
 				await expect(page.locator('.bar:not(.bar-empty)')).toHaveCount(3);
 				await expect(page.locator('.bar.bar-empty')).toHaveCount(9);
-				// Peak label = the busiest month's distance (March = 39097 m).
+				// Peak label = the busiest month's distance (March = 39697 m).
 				await expect(page.getByText(`Peak ${km1(TOP_WEEK_M)}`)).toBeVisible();
 			});
 
