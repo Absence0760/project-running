@@ -44,34 +44,48 @@
 	onMount(async () => {
 		// Wait for auth so the RLS-scoped fetches return the right rows.
 		await auth.ready();
+		if (!auth.user) loaded = true;
+	});
+
+	// The signed-in init re-fires when auth.user settles, not one-shot in
+	// onMount: ready() resolves on its safety timeout even when the
+	// session hasn't settled yet (slow device / loaded CI runner), and a
+	// mount-time `if (auth.user)` gate then strands the page on the
+	// loading state forever.
+	let initRequested = false;
+	$effect(() => {
+		if (!auth.user || initRequested) return;
+		initRequested = true;
+		void initForUser();
+	});
+
+	async function initForUser() {
 		// Read the consent timestamp BEFORE anything that could fan out
 		// to Anthropic. The chat component is render-gated on
 		// `coachConsentDecided`, so a missing row keeps the disclosure
 		// modal in front of the user until they accept.
-		if (auth.user) {
-			try {
-				// user_profiles.coach_consent_at is not in the public-
-				// safe column grant list (migration 20260707_001), so a
-				// direct `.select('coach_consent_at')` returns null for
-				// authenticated callers. Go through the SECURITY DEFINER
-				// `get_my_profile()` RPC instead — same pattern as the
-				// other self-row reads.
-				// `.maybeSingle()` on a SetofOptions RPC return narrows to
-				// `{}` in supabase-js v2.106's generated types — cast to
-				// the shape we know `get_my_profile` produces.
-				const { data: prof } = await supabase
-					.rpc('get_my_profile')
-					.maybeSingle();
-				const row = prof as { coach_consent_at: string | null } | null;
-				coachConsentAt = row?.coach_consent_at ?? null;
-			} catch (_) {
-				// Failed to read consent state — fail closed so we
-				// never accidentally render the chat without an
-				// affirmative grant.
-				coachConsentAt = null;
-			}
-			coachConsentChecked = true;
+		try {
+			// user_profiles.coach_consent_at is not in the public-
+			// safe column grant list (migration 20260707_001), so a
+			// direct `.select('coach_consent_at')` returns null for
+			// authenticated callers. Go through the SECURITY DEFINER
+			// `get_my_profile()` RPC instead — same pattern as the
+			// other self-row reads.
+			// `.maybeSingle()` on a SetofOptions RPC return narrows to
+			// `{}` in supabase-js v2.106's generated types — cast to
+			// the shape we know `get_my_profile` produces.
+			const { data: prof } = await supabase
+				.rpc('get_my_profile')
+				.maybeSingle();
+			const row = prof as { coach_consent_at: string | null } | null;
+			coachConsentAt = row?.coach_consent_at ?? null;
+		} catch (_) {
+			// Failed to read consent state — fail closed so we
+			// never accidentally render the chat without an
+			// affirmative grant.
+			coachConsentAt = null;
 		}
+		coachConsentChecked = true;
 		try {
 			plans = await fetchMyPlans();
 		} catch (_) {
@@ -79,7 +93,7 @@
 		}
 		await resolvePlanId();
 		loaded = true;
-	});
+	}
 
 	async function acceptCoachConsent() {
 		if (!auth.user || coachConsentSaving) return;

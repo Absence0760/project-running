@@ -18,6 +18,20 @@
 			status = 'not-authed';
 			return;
 		}
+		void redeem();
+	});
+
+	// ready() resolves on its safety timeout even when the session check
+	// hasn't landed yet (slow device / loaded CI runner), which parks an
+	// actually-signed-in athlete on the sign-in card with no way forward.
+	// Recover the moment auth settles logged-in.
+	$effect(() => {
+		if (status !== 'not-authed' || !auth.loggedIn) return;
+		status = 'joining';
+		void redeem();
+	});
+
+	async function redeem() {
 		try {
 			await redeemCoachInvite(token);
 			goto('/coaching');
@@ -36,7 +50,7 @@
 						: '';
 			errorMsg = raw.trim() !== '' ? raw : m('coachingAccept.inviteInvalidOrExpired');
 		}
-	});
+	}
 
 	let returnTo = $derived(encodeURIComponent($page.url.pathname));
 </script>

@@ -46,6 +46,15 @@ export function createReadyGate(opts: {
 }) {
 	const setTimeoutFn = opts.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms));
 	let waiters: Array<() => void> = [];
+	/// Bumped by every auth lifecycle event that fires while still
+	/// unsettled (e.g. the session check landed but the profile fetch is
+	/// in flight). A pending waiter whose timeout fires re-arms instead
+	/// of resolving when the epoch moved — so `timeoutMs` bounds a
+	/// WEDGED init (no events at all), not a slow-but-progressing one.
+	/// A gate that bails mid-progress hands pages an unsettled auth
+	/// state their mount-time `if (auth.user)` fetch gates then treat as
+	/// anon forever (the recurring CI flake class, e.g. run 28689014328).
+	let progressEpoch = 0;
 
 	function flush() {
 		if (waiters.length === 0) return;
@@ -60,20 +69,34 @@ export function createReadyGate(opts: {
 	/// settlement at the call site — only a genuinely-settled state
 	/// flushes waiters.
 	function markSettled() {
-		if (opts.isSettled()) flush();
+		if (opts.isSettled()) {
+			flush();
+			return;
+		}
+		progressEpoch++;
 	}
 
 	function ready(): Promise<void> {
 		if (opts.isSettled()) return Promise.resolve();
 		return new Promise<void>((resolve) => {
 			waiters.push(resolve);
-			setTimeoutFn(() => {
-				// Drop this waiter from the queue (so a later flush
-				// can't double-resolve — harmless, but tidy) and resolve.
-				const idx = waiters.indexOf(resolve);
-				if (idx !== -1) waiters.splice(idx, 1);
-				resolve();
-			}, opts.timeoutMs);
+			const arm = () => {
+				const armedAt = progressEpoch;
+				setTimeoutFn(() => {
+					// Already flushed by a genuine settle — nothing to do.
+					const idx = waiters.indexOf(resolve);
+					if (idx === -1) return;
+					// Lifecycle progress since this timer was armed —
+					// extend the deadline instead of bailing unsettled.
+					if (progressEpoch !== armedAt) {
+						arm();
+						return;
+					}
+					waiters.splice(idx, 1);
+					resolve();
+				}, opts.timeoutMs);
+			};
+			arm();
 		});
 	}
 
