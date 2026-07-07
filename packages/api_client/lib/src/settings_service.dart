@@ -28,11 +28,12 @@ class SettingsKeys {
   /// `search_user_profiles` RPC (migration 20261015_001) reads
   /// this key.
   static const discoverableInSearch = 'discoverable_in_search';
-  /// Persona-hunt Round 3 finding Woman #4. Array of
-  /// `TrustedContact` rows (see `lib/trusted_contacts.dart` shape).
-  /// The notify-on-overdue / panic-button delivery logic is
-  /// deferred; this key just gives the data a stable home so
-  /// runners can populate their list ahead of the feature.
+  /// DEPRECATED (2026-07-06, docs/features/safety.md): the inert
+  /// trusted-contacts scaffold was removed — `safety_contacts` (double
+  /// opt-in, real delivery) is the single contact list, and the overdue
+  /// escalation is [safetyOverdueMinutes]. The key stays registered so
+  /// existing bag data remains readable/exportable; no surface writes
+  /// or reads it any more — don't add new uses.
   static const trustedContacts = 'trusted_contacts';
   /// Overdue-escalation silence window in minutes (docs/features/safety.md).
   /// Absent = escalation off (fail-closed). Read SERVER-SIDE by the

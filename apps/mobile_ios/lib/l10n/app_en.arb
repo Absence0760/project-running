@@ -1,88 +1,5 @@
 {
   "@@locale": "en",
-  "trustedContactsClearedBanner": "Trusted contacts cleared.",
-  "@trustedContactsClearedBanner": {
-    "description": "Confirmation banner shown after saving an empty trusted-contacts list"
-  },
-  "trustedContactsSavedBanner": "{count, plural, one{1 trusted contact saved.} other{{count} trusted contacts saved.}}",
-  "@trustedContactsSavedBanner": {
-    "description": "Confirmation banner with the count of trusted contacts saved",
-    "placeholders": {
-      "count": {
-        "type": "num"
-      }
-    }
-  },
-  "trustedContactsSaveFailedBanner": "Save failed: {error}",
-  "@trustedContactsSaveFailedBanner": {
-    "description": "Error banner shown when saving trusted contacts fails",
-    "placeholders": {
-      "error": {
-        "type": "Object"
-      }
-    }
-  },
-  "trustedContactsTitle": "Trusted contacts",
-  "@trustedContactsTitle": {
-    "description": "App bar title for the trusted-contacts settings screen"
-  },
-  "trustedContactsIntro": "Designate one or more trusted contacts. The scaffold stores the list with your account so the planned \"overdue run\" + panic-button surfaces have somewhere to send notifications. Up to {max}.",
-  "@trustedContactsIntro": {
-    "description": "Intro paragraph explaining what trusted contacts are used for",
-    "placeholders": {
-      "max": {
-        "type": "Object"
-      }
-    }
-  },
-  "trustedContactsAddButton": "Add contact",
-  "@trustedContactsAddButton": {
-    "description": "Button label to add a new trusted contact row"
-  },
-  "trustedContactsSavingButton": "Saving…",
-  "@trustedContactsSavingButton": {
-    "description": "Save button label while a save is in progress"
-  },
-  "trustedContactsSaveButton": "Save",
-  "@trustedContactsSaveButton": {
-    "description": "Save button label for the trusted-contacts list"
-  },
-  "trustedContactsNameLabel": "Name",
-  "@trustedContactsNameLabel": {
-    "description": "Text field label for a trusted contact's name"
-  },
-  "trustedContactsNameHint": "e.g. Alex Chen",
-  "@trustedContactsNameHint": {
-    "description": "Placeholder hint for the trusted-contact name field"
-  },
-  "trustedContactsPhoneLabel": "Phone",
-  "@trustedContactsPhoneLabel": {
-    "description": "Text field label for a trusted contact's phone number"
-  },
-  "trustedContactsPhoneHint": "+1 555 123 4567",
-  "@trustedContactsPhoneHint": {
-    "description": "Placeholder hint for the trusted-contact phone field"
-  },
-  "trustedContactsEmailLabel": "Email",
-  "@trustedContactsEmailLabel": {
-    "description": "Text field label for a trusted contact's email address"
-  },
-  "trustedContactsEmailHint": "alex@example.com",
-  "@trustedContactsEmailHint": {
-    "description": "Placeholder hint for the trusted-contact email field"
-  },
-  "trustedContactsRelationshipLabel": "Relationship",
-  "@trustedContactsRelationshipLabel": {
-    "description": "Text field label for a trusted contact's relationship"
-  },
-  "trustedContactsRelationshipHint": "partner / parent / run buddy",
-  "@trustedContactsRelationshipHint": {
-    "description": "Placeholder hint for the trusted-contact relationship field"
-  },
-  "trustedContactsRemoveButton": "Remove",
-  "@trustedContactsRemoveButton": {
-    "description": "Button to remove a trusted contact from the list"
-  },
   "clubInviteEnterCodeError": "Enter the invite code from your link.",
   "@clubInviteEnterCodeError": {
     "description": "Inline error when the invite-code field is empty on submit"
@@ -7343,14 +7260,6 @@
   "settingsAccountPrivacyZonesSubtitle": "Clip start/end of public tracks near home",
   "@settingsAccountPrivacyZonesSubtitle": {
     "description": "Subtitle of the Privacy zones tile"
-  },
-  "settingsAccountTrustedContacts": "Trusted contacts",
-  "@settingsAccountTrustedContacts": {
-    "description": "Tile title for trusted contacts"
-  },
-  "settingsAccountTrustedContactsSubtitle": "Designated people for the planned overdue-run / panic surface",
-  "@settingsAccountTrustedContactsSubtitle": {
-    "description": "Subtitle of the Trusted contacts tile"
   },
   "settingsAccountSendErrorReports": "Send error reports",
   "@settingsAccountSendErrorReports": {

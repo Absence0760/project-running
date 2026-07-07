@@ -9,69 +9,6 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get trustedContactsClearedBanner => 'Trusted contacts cleared.';
-
-  @override
-  String trustedContactsSavedBanner(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count trusted contacts saved.',
-      one: '1 trusted contact saved.',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String trustedContactsSaveFailedBanner(Object error) {
-    return 'Save failed: $error';
-  }
-
-  @override
-  String get trustedContactsTitle => 'Trusted contacts';
-
-  @override
-  String trustedContactsIntro(Object max) {
-    return 'Designate one or more trusted contacts. The scaffold stores the list with your account so the planned \"overdue run\" + panic-button surfaces have somewhere to send notifications. Up to $max.';
-  }
-
-  @override
-  String get trustedContactsAddButton => 'Add contact';
-
-  @override
-  String get trustedContactsSavingButton => 'Saving…';
-
-  @override
-  String get trustedContactsSaveButton => 'Save';
-
-  @override
-  String get trustedContactsNameLabel => 'Name';
-
-  @override
-  String get trustedContactsNameHint => 'e.g. Alex Chen';
-
-  @override
-  String get trustedContactsPhoneLabel => 'Phone';
-
-  @override
-  String get trustedContactsPhoneHint => '+1 555 123 4567';
-
-  @override
-  String get trustedContactsEmailLabel => 'Email';
-
-  @override
-  String get trustedContactsEmailHint => 'alex@example.com';
-
-  @override
-  String get trustedContactsRelationshipLabel => 'Relationship';
-
-  @override
-  String get trustedContactsRelationshipHint => 'partner / parent / run buddy';
-
-  @override
-  String get trustedContactsRemoveButton => 'Remove';
-
-  @override
   String get clubInviteEnterCodeError =>
       'Enter the invite code from your link.';
 
@@ -5402,13 +5339,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsAccountPrivacyZonesSubtitle =>
       'Clip start/end of public tracks near home';
-
-  @override
-  String get settingsAccountTrustedContacts => 'Trusted contacts';
-
-  @override
-  String get settingsAccountTrustedContactsSubtitle =>
-      'Designated people for the planned overdue-run / panic surface';
 
   @override
   String get settingsAccountSendErrorReports => 'Send error reports';

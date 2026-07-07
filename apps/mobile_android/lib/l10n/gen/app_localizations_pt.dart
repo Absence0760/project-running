@@ -9,70 +9,6 @@ class AppLocalizationsPt extends AppLocalizations {
   AppLocalizationsPt([String locale = 'pt']) : super(locale);
 
   @override
-  String get trustedContactsClearedBanner => 'Contatos de confiança removidos.';
-
-  @override
-  String trustedContactsSavedBanner(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count contatos de confiança salvos.',
-      one: '1 contato de confiança salvo.',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String trustedContactsSaveFailedBanner(Object error) {
-    return 'Falha ao salvar: $error';
-  }
-
-  @override
-  String get trustedContactsTitle => 'Contatos de confiança';
-
-  @override
-  String trustedContactsIntro(Object max) {
-    return 'Defina um ou mais contatos de confiança. A estrutura armazena a lista junto à sua conta para que os recursos planejados de \"corrida atrasada\" e botão de pânico tenham para onde enviar notificações. Até $max.';
-  }
-
-  @override
-  String get trustedContactsAddButton => 'Adicionar contato';
-
-  @override
-  String get trustedContactsSavingButton => 'Salvando…';
-
-  @override
-  String get trustedContactsSaveButton => 'Salvar';
-
-  @override
-  String get trustedContactsNameLabel => 'Nome';
-
-  @override
-  String get trustedContactsNameHint => 'ex.: Alex Chen';
-
-  @override
-  String get trustedContactsPhoneLabel => 'Telefone';
-
-  @override
-  String get trustedContactsPhoneHint => '+55 11 91234 5678';
-
-  @override
-  String get trustedContactsEmailLabel => 'E-mail';
-
-  @override
-  String get trustedContactsEmailHint => 'alex@exemplo.com';
-
-  @override
-  String get trustedContactsRelationshipLabel => 'Relação';
-
-  @override
-  String get trustedContactsRelationshipHint =>
-      'parceiro(a) / pai ou mãe / parceiro(a) de corrida';
-
-  @override
-  String get trustedContactsRemoveButton => 'Remover';
-
-  @override
   String get clubInviteEnterCodeError =>
       'Digite o código de convite do seu link.';
 
@@ -5455,13 +5391,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsAccountPrivacyZonesSubtitle =>
       'Corta o início/fim de trajetos públicos perto de casa';
-
-  @override
-  String get settingsAccountTrustedContacts => 'Contatos de confiança';
-
-  @override
-  String get settingsAccountTrustedContactsSubtitle =>
-      'Pessoas designadas para o recurso planejado de corrida atrasada / pânico';
 
   @override
   String get settingsAccountSendErrorReports => 'Enviar relatórios de erro';
@@ -10933,70 +10862,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   AppLocalizationsPtBr() : super('pt_BR');
 
   @override
-  String get trustedContactsClearedBanner => 'Contatos de confiança removidos.';
-
-  @override
-  String trustedContactsSavedBanner(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count contatos de confiança salvos.',
-      one: '1 contato de confiança salvo.',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String trustedContactsSaveFailedBanner(Object error) {
-    return 'Falha ao salvar: $error';
-  }
-
-  @override
-  String get trustedContactsTitle => 'Contatos de confiança';
-
-  @override
-  String trustedContactsIntro(Object max) {
-    return 'Defina um ou mais contatos de confiança. A estrutura armazena a lista junto à sua conta para que os recursos planejados de \"corrida atrasada\" e botão de pânico tenham para onde enviar notificações. Até $max.';
-  }
-
-  @override
-  String get trustedContactsAddButton => 'Adicionar contato';
-
-  @override
-  String get trustedContactsSavingButton => 'Salvando…';
-
-  @override
-  String get trustedContactsSaveButton => 'Salvar';
-
-  @override
-  String get trustedContactsNameLabel => 'Nome';
-
-  @override
-  String get trustedContactsNameHint => 'ex.: Alex Chen';
-
-  @override
-  String get trustedContactsPhoneLabel => 'Telefone';
-
-  @override
-  String get trustedContactsPhoneHint => '+55 11 91234 5678';
-
-  @override
-  String get trustedContactsEmailLabel => 'E-mail';
-
-  @override
-  String get trustedContactsEmailHint => 'alex@exemplo.com';
-
-  @override
-  String get trustedContactsRelationshipLabel => 'Relação';
-
-  @override
-  String get trustedContactsRelationshipHint =>
-      'parceiro(a) / pai ou mãe / parceiro(a) de corrida';
-
-  @override
-  String get trustedContactsRemoveButton => 'Remover';
-
-  @override
   String get clubInviteEnterCodeError =>
       'Digite o código de convite do seu link.';
 
@@ -16378,13 +16243,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get settingsAccountPrivacyZonesSubtitle =>
       'Corta o início/fim de trajetos públicos perto de casa';
-
-  @override
-  String get settingsAccountTrustedContacts => 'Contatos de confiança';
-
-  @override
-  String get settingsAccountTrustedContactsSubtitle =>
-      'Pessoas designadas para o recurso planejado de corrida atrasada / pânico';
 
   @override
   String get settingsAccountSendErrorReports => 'Enviar relatórios de erro';

@@ -9,71 +9,6 @@ class AppLocalizationsEs extends AppLocalizations {
   AppLocalizationsEs([String locale = 'es']) : super(locale);
 
   @override
-  String get trustedContactsClearedBanner =>
-      'Contactos de confianza eliminados.';
-
-  @override
-  String trustedContactsSavedBanner(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count contactos de confianza guardados.',
-      one: '1 contacto de confianza guardado.',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String trustedContactsSaveFailedBanner(Object error) {
-    return 'Error al guardar: $error';
-  }
-
-  @override
-  String get trustedContactsTitle => 'Contactos de confianza';
-
-  @override
-  String trustedContactsIntro(Object max) {
-    return 'Designa uno o más contactos de confianza. La estructura guarda la lista con tu cuenta para que las funciones previstas de «carrera con retraso» y botón de pánico tengan a dónde enviar las notificaciones. Hasta $max.';
-  }
-
-  @override
-  String get trustedContactsAddButton => 'Añadir contacto';
-
-  @override
-  String get trustedContactsSavingButton => 'Guardando…';
-
-  @override
-  String get trustedContactsSaveButton => 'Guardar';
-
-  @override
-  String get trustedContactsNameLabel => 'Nombre';
-
-  @override
-  String get trustedContactsNameHint => 'p. ej. Alex Chen';
-
-  @override
-  String get trustedContactsPhoneLabel => 'Teléfono';
-
-  @override
-  String get trustedContactsPhoneHint => '+1 555 123 4567';
-
-  @override
-  String get trustedContactsEmailLabel => 'Correo electrónico';
-
-  @override
-  String get trustedContactsEmailHint => 'alex@ejemplo.com';
-
-  @override
-  String get trustedContactsRelationshipLabel => 'Relación';
-
-  @override
-  String get trustedContactsRelationshipHint =>
-      'pareja / familiar / compañero de carrera';
-
-  @override
-  String get trustedContactsRemoveButton => 'Quitar';
-
-  @override
   String get clubInviteEnterCodeError =>
       'Introduce el código de invitación de tu enlace.';
 
@@ -5455,13 +5390,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get settingsAccountPrivacyZonesSubtitle =>
       'Recorta el inicio/fin de los trazados públicos cerca de casa';
-
-  @override
-  String get settingsAccountTrustedContacts => 'Contactos de confianza';
-
-  @override
-  String get settingsAccountTrustedContactsSubtitle =>
-      'Personas designadas para la función prevista de carrera vencida / pánico';
 
   @override
   String get settingsAccountSendErrorReports => 'Enviar informes de errores';

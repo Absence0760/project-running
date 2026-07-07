@@ -9,68 +9,6 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
-  String get trustedContactsClearedBanner => '信頼できる連絡先をクリアしました。';
-
-  @override
-  String trustedContactsSavedBanner(num count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count件の信頼できる連絡先を保存しました。',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String trustedContactsSaveFailedBanner(Object error) {
-    return '保存できませんでした: $error';
-  }
-
-  @override
-  String get trustedContactsTitle => '信頼できる連絡先';
-
-  @override
-  String trustedContactsIntro(Object max) {
-    return '信頼できる連絡先を1人以上指定してください。リストはアカウントとともに保存され、今後の「ラン遅延」通知や緊急ボタンの通知先として使われます。最大$max件まで。';
-  }
-
-  @override
-  String get trustedContactsAddButton => '連絡先を追加';
-
-  @override
-  String get trustedContactsSavingButton => '保存中…';
-
-  @override
-  String get trustedContactsSaveButton => '保存';
-
-  @override
-  String get trustedContactsNameLabel => '名前';
-
-  @override
-  String get trustedContactsNameHint => '例: アレックス・チェン';
-
-  @override
-  String get trustedContactsPhoneLabel => '電話番号';
-
-  @override
-  String get trustedContactsPhoneHint => '+1 555 123 4567';
-
-  @override
-  String get trustedContactsEmailLabel => 'メールアドレス';
-
-  @override
-  String get trustedContactsEmailHint => 'alex@example.com';
-
-  @override
-  String get trustedContactsRelationshipLabel => '続柄';
-
-  @override
-  String get trustedContactsRelationshipHint => 'パートナー / 親 / ランニング仲間';
-
-  @override
-  String get trustedContactsRemoveButton => '削除';
-
-  @override
   String get clubInviteEnterCodeError => 'リンクの招待コードを入力してください。';
 
   @override
@@ -5139,13 +5077,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsAccountPrivacyZonesSubtitle => '自宅付近で公開トラックの開始・終了を切り取る';
-
-  @override
-  String get settingsAccountTrustedContacts => '信頼できる連絡先';
-
-  @override
-  String get settingsAccountTrustedContactsSubtitle =>
-      '予定の遅延ラン／緊急通知のために指定する連絡先';
 
   @override
   String get settingsAccountSendErrorReports => 'エラーレポートを送信';

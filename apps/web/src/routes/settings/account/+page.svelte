@@ -26,14 +26,6 @@
 		getCurrentSubscription,
 	} from '$lib/util/push';
 	import { cloudExport } from '$lib/backup/cloud_export';
-	import {
-		MAX_TRUSTED_CONTACTS,
-		TRUSTED_CONTACTS_KEY,
-		hasReachableChannel,
-		normaliseTrustedContacts,
-		type TrustedContact,
-	} from '$lib/social/trusted_contacts';
-	import { updateUniversal } from '$lib/settings/settings';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let displayName = $state(auth.user?.display_name ?? '');
@@ -77,46 +69,6 @@
 	let passwordError = $state<string | null>(null);
 
 	let parkrunImporting = $state(false);
-
-	// Persona-hunt Round 3 finding Woman #4. Trusted-contact scaffold:
-	// a runner heading out for a solo long run designates one or more
-	// contacts who would be notified if the run goes wrong. Storage
-	// shape lives in `lib/trusted_contacts.ts`. The actual notify-on-
-	// overdue / panic-button delivery is deferred; this surface just
-	// gives the data a home.
-	let trustedContacts = $state<TrustedContact[]>([]);
-	let trustedContactsSaving = $state(false);
-
-	function addTrustedContact() {
-		if (trustedContacts.length >= MAX_TRUSTED_CONTACTS) return;
-		trustedContacts = [...trustedContacts, { name: '' }];
-	}
-
-	function removeTrustedContact(idx: number) {
-		trustedContacts = trustedContacts.filter((_, i) => i !== idx);
-	}
-
-	async function saveTrustedContacts() {
-		if (!auth.user || trustedContactsSaving) return;
-		trustedContactsSaving = true;
-		try {
-			const cleaned = normaliseTrustedContacts(trustedContacts);
-			await updateUniversal(auth.user.id, { [TRUSTED_CONTACTS_KEY]: cleaned });
-			trustedContacts = cleaned;
-			showToast(
-				cleaned.length === 0
-					? m('settingsAccount.contactsCleared')
-					: cleaned.length === 1
-						? m('settingsAccount.contactSavedOne')
-						: m('settingsAccount.contactsSaved', { n: cleaned.length }),
-				'success',
-			);
-		} catch (e) {
-			showToast(m('settingsAccount.saveFailed', { error: (e as Error).message }), 'error');
-		} finally {
-			trustedContactsSaving = false;
-		}
-	}
 
 	/// Kick the existing `parkrun-import` Edge Function with the
 	/// user's stashed athlete number. The function does the scrape +
@@ -179,9 +131,6 @@
 			dateOfBirth = (p.date_of_birth as string) ?? '';
 			restingHr = (p.resting_hr_bpm as number)?.toString() ?? '';
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
-			trustedContacts = normaliseTrustedContacts(
-				p[TRUSTED_CONTACTS_KEY] as TrustedContact[] | null | undefined,
-			);
 		}
 		// Self-read goes through the get_my_profile() SECURITY DEFINER RPC:
 		// health_data_consent_at is deny-by-default for direct authenticated
@@ -880,87 +829,19 @@
 		</button>
 	</section>
 
-	<!-- Safety — trusted contacts. Persona-hunt Round 3 Woman #4. -->
-	<section class="card">
+	<!-- Safety — points at the real, double-opt-in safety-contacts surface.
+	     The old inline editor here persisted a trusted_contacts prefs list
+	     that nothing ever read (persona-woman CRITICAL: two conflated
+	     Safety surfaces, one inert) — replaced per docs/features/safety.md. -->
+	<section class="card" data-testid="account-safety-pointer">
 		<h2>{m('settingsAccount.safetyHeading')}</h2>
 		<p class="section-desc">
-			{m('settingsAccount.safetyDesc', { max: MAX_TRUSTED_CONTACTS })}
+			{m('settingsAccount.safetyPointerDesc')}
 		</p>
-		<div class="contact-list">
-			{#each trustedContacts as contact, idx (idx)}
-				<div class="contact-row">
-					<div class="contact-fields">
-						<label class="field">
-							<span class="label-text">{m('settingsAccount.contactName')}</span>
-							<input
-								type="text"
-								placeholder={m('settingsAccount.contactNamePlaceholder')}
-								bind:value={contact.name}
-								maxlength="80"
-							/>
-						</label>
-						<label class="field">
-							<span class="label-text">{m('settingsAccount.contactPhone')}</span>
-							<input
-								type="tel"
-								placeholder="+1 555 123 4567"
-								bind:value={contact.phone}
-								maxlength="40"
-							/>
-						</label>
-						<label class="field">
-							<span class="label-text">{m('settingsAccount.email')}</span>
-							<input
-								type="email"
-								placeholder="alex@example.com"
-								bind:value={contact.email}
-								maxlength="120"
-							/>
-						</label>
-						<label class="field">
-							<span class="label-text">{m('settingsAccount.contactRelationship')}</span>
-							<input
-								type="text"
-								placeholder={m('settingsAccount.contactRelationshipPlaceholder')}
-								bind:value={contact.relationship}
-								maxlength="40"
-							/>
-						</label>
-					</div>
-					{#if !hasReachableChannel(contact) && contact.name?.trim()}
-						<p class="warn-text">
-							{m('settingsAccount.contactNeedsChannel')}
-						</p>
-					{/if}
-					<button
-						type="button"
-						class="btn btn-outline btn-sm"
-						onclick={() => removeTrustedContact(idx)}
-					>
-						{m('settingsAccount.remove')}
-					</button>
-				</div>
-			{/each}
-		</div>
-		<div class="btn-row">
-			<button
-				type="button"
-				class="btn btn-outline"
-				onclick={addTrustedContact}
-				disabled={trustedContacts.length >= MAX_TRUSTED_CONTACTS}
-			>
-				<span class="material-symbols">person_add</span>
-				{m('settingsAccount.addContact')}
-			</button>
-			<button
-				type="button"
-				class="btn btn-primary"
-				onclick={saveTrustedContacts}
-				disabled={trustedContactsSaving}
-			>
-				{trustedContactsSaving ? m('settingsAccount.saving') : m('settingsAccount.saveContacts')}
-			</button>
-		</div>
+		<a class="btn btn-outline" href="/settings/safety">
+			<span class="material-symbols" aria-hidden="true">health_and_safety</span>
+			{m('settingsAccount.safetyPointerCta')}
+		</a>
 	</section>
 
 	<!-- Notifications -->
@@ -1178,28 +1059,6 @@
 	.consent-recorded { font-size: 0.8rem; }
 	.btn-save { width: auto; }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
-
-	.contact-list { display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-md); }
-	.contact-row {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-		padding: var(--space-md);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-bg-secondary);
-	}
-	.contact-fields {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-		gap: var(--space-sm);
-	}
-	.warn-text {
-		margin: 0;
-		font-size: 0.78rem;
-		color: var(--color-warning, #b06000);
-		line-height: 1.4;
-	}
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: #66bb6a; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.danger-heading { color: var(--color-danger); }

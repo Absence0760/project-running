@@ -107,108 +107,6 @@ abstract class AppLocalizations {
     Locale('pt', 'BR'),
   ];
 
-  /// Confirmation banner shown after saving an empty trusted-contacts list
-  ///
-  /// In en, this message translates to:
-  /// **'Trusted contacts cleared.'**
-  String get trustedContactsClearedBanner;
-
-  /// Confirmation banner with the count of trusted contacts saved
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, one{1 trusted contact saved.} other{{count} trusted contacts saved.}}'**
-  String trustedContactsSavedBanner(num count);
-
-  /// Error banner shown when saving trusted contacts fails
-  ///
-  /// In en, this message translates to:
-  /// **'Save failed: {error}'**
-  String trustedContactsSaveFailedBanner(Object error);
-
-  /// App bar title for the trusted-contacts settings screen
-  ///
-  /// In en, this message translates to:
-  /// **'Trusted contacts'**
-  String get trustedContactsTitle;
-
-  /// Intro paragraph explaining what trusted contacts are used for
-  ///
-  /// In en, this message translates to:
-  /// **'Designate one or more trusted contacts. The scaffold stores the list with your account so the planned \"overdue run\" + panic-button surfaces have somewhere to send notifications. Up to {max}.'**
-  String trustedContactsIntro(Object max);
-
-  /// Button label to add a new trusted contact row
-  ///
-  /// In en, this message translates to:
-  /// **'Add contact'**
-  String get trustedContactsAddButton;
-
-  /// Save button label while a save is in progress
-  ///
-  /// In en, this message translates to:
-  /// **'Saving…'**
-  String get trustedContactsSavingButton;
-
-  /// Save button label for the trusted-contacts list
-  ///
-  /// In en, this message translates to:
-  /// **'Save'**
-  String get trustedContactsSaveButton;
-
-  /// Text field label for a trusted contact's name
-  ///
-  /// In en, this message translates to:
-  /// **'Name'**
-  String get trustedContactsNameLabel;
-
-  /// Placeholder hint for the trusted-contact name field
-  ///
-  /// In en, this message translates to:
-  /// **'e.g. Alex Chen'**
-  String get trustedContactsNameHint;
-
-  /// Text field label for a trusted contact's phone number
-  ///
-  /// In en, this message translates to:
-  /// **'Phone'**
-  String get trustedContactsPhoneLabel;
-
-  /// Placeholder hint for the trusted-contact phone field
-  ///
-  /// In en, this message translates to:
-  /// **'+1 555 123 4567'**
-  String get trustedContactsPhoneHint;
-
-  /// Text field label for a trusted contact's email address
-  ///
-  /// In en, this message translates to:
-  /// **'Email'**
-  String get trustedContactsEmailLabel;
-
-  /// Placeholder hint for the trusted-contact email field
-  ///
-  /// In en, this message translates to:
-  /// **'alex@example.com'**
-  String get trustedContactsEmailHint;
-
-  /// Text field label for a trusted contact's relationship
-  ///
-  /// In en, this message translates to:
-  /// **'Relationship'**
-  String get trustedContactsRelationshipLabel;
-
-  /// Placeholder hint for the trusted-contact relationship field
-  ///
-  /// In en, this message translates to:
-  /// **'partner / parent / run buddy'**
-  String get trustedContactsRelationshipHint;
-
-  /// Button to remove a trusted contact from the list
-  ///
-  /// In en, this message translates to:
-  /// **'Remove'**
-  String get trustedContactsRemoveButton;
-
   /// Inline error when the invite-code field is empty on submit
   ///
   /// In en, this message translates to:
@@ -9018,18 +8916,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clip start/end of public tracks near home'**
   String get settingsAccountPrivacyZonesSubtitle;
-
-  /// Tile title for trusted contacts
-  ///
-  /// In en, this message translates to:
-  /// **'Trusted contacts'**
-  String get settingsAccountTrustedContacts;
-
-  /// Subtitle of the Trusted contacts tile
-  ///
-  /// In en, this message translates to:
-  /// **'Designated people for the planned overdue-run / panic surface'**
-  String get settingsAccountTrustedContactsSubtitle;
 
   /// Toggle title for Sentry error reporting
   ///
