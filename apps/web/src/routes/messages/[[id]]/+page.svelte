@@ -22,6 +22,7 @@
 	let sending = $state(false);
 	let loadingThread = $state(false);
 	let sendError = $state<string | null>(null);
+	let threadsError = $state(false);
 
 	let activeId = $derived($page.params.id ?? null);
 	let me = $derived(auth.user?.id ?? null);
@@ -30,8 +31,27 @@
 	onMount(async () => {
 		await auth.ready();
 		ready = true;
-		if (auth.user) threads = await fetchDmThreads();
 	});
+
+	// Load the thread list whenever a user is present, not one-shot in
+	// onMount: ready() resolves on its safety timeout even when the
+	// session hasn't settled yet (slow device / loaded CI runner), and a
+	// mount-time `if (auth.user)` gate would then skip the fetch forever.
+	let threadsRequested = false;
+	$effect(() => {
+		if (!auth.user || threadsRequested) return;
+		threadsRequested = true;
+		void loadThreads();
+	});
+
+	async function loadThreads() {
+		threadsError = false;
+		try {
+			threads = await fetchDmThreads();
+		} catch {
+			threadsError = true;
+		}
+	}
 
 	// Load the open conversation whenever the route param changes.
 	$effect(() => {
@@ -64,7 +84,13 @@
 			const msg = await sendDm(id, draft);
 			messages = [...messages, msg];
 			draft = '';
-			threads = await fetchDmThreads();
+			try {
+				threads = await fetchDmThreads();
+			} catch {
+				// The send itself succeeded and already renders; a failed
+				// list refresh must not claim "send failed" — stale
+				// previews are fine until the next load.
+			}
 		} catch (e) {
 			sendError = e instanceof Error ? e.message : tr('messages.sendFailed');
 		} finally {
@@ -102,7 +128,14 @@
 		<div class="layout">
 			<aside class="threads" class:has-active={activeId}>
 				<header class="pane-head"><h2>{tr('messages.heading')}</h2></header>
-				{#if threads.length === 0}
+				{#if threadsError}
+					<p class="muted empty" role="alert">
+						{tr('messages.threadsLoadFailed')}
+						<button type="button" class="btn btn-secondary btn-sm" onclick={() => void loadThreads()}>
+							{tr('messages.retry')}
+						</button>
+					</p>
+				{:else if threads.length === 0}
 					<p class="muted empty">{tr('messages.emptyThreads')}</p>
 				{:else}
 					<ul>

@@ -2163,6 +2163,8 @@ export const en = {
 	"messages.composerPlaceholder": "Message…",
 	"messages.send": "Send",
 	"messages.sendFailed": "Send failed",
+	"messages.threadsLoadFailed": "Couldn’t load your conversations.",
+	"messages.retry": "Retry",
 	"periodSummary.previous": "Previous",
 	"periodSummary.next": "Next",
 	"periodSummary.week": "Week",

@@ -39,6 +39,39 @@ test.describe('/messages — direct messages', () => {
 		await expect(page.locator('.thread', { hasText: /You:/ }).first()).toBeVisible();
 	});
 
+	test('a failed thread-list load surfaces a retry instead of "no conversations"', async ({
+		page
+	}) => {
+		// Pin the unswallowed-failure contract: a transient dm_threads RPC
+		// failure must render the error + Retry state, NOT the empty-inbox
+		// copy (which stranded users — and flaked CI, run 28838002281 —
+		// when fetchDmThreads returned [] on error). First call 500s, the
+		// retry goes through.
+		let failedOnce = false;
+		await page.route('**/rest/v1/rpc/dm_threads*', async (route) => {
+			if (!failedOnce) {
+				failedOnce = true;
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated transient failure' })
+				});
+			} else {
+				await route.continue();
+			}
+		});
+
+		await page.goto('/messages');
+		const errorNote = page.locator('.threads [role="alert"]');
+		await expect(errorNote).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText('No conversations yet', { exact: false })).toHaveCount(0);
+
+		await errorNote.getByRole('button', { name: 'Retry' }).click();
+		// The retry hits the real RPC: either threads render or the honest
+		// empty state does — the error note is gone either way.
+		await expect(errorNote).toHaveCount(0, { timeout: 10_000 });
+	});
+
 	test('anon is prompted to sign in', async ({ page, context }) => {
 		await context.clearCookies();
 		await page.context().addInitScript(() => {

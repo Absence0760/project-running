@@ -2154,6 +2154,8 @@ export const messages = {
 	"messages.composerPlaceholder": "Message…",
 	"messages.send": "Envoyer",
 	"messages.sendFailed": "Échec de l'envoi",
+	"messages.threadsLoadFailed": "Impossible de charger vos conversations.",
+	"messages.retry": "Réessayer",
 	"periodSummary.previous": "Précédent",
 	"periodSummary.next": "Suivant",
 	"periodSummary.week": "Semaine",

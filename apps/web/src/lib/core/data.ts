@@ -7335,7 +7335,11 @@ export async function fetchDmThreads(): Promise<DmThread[]> {
 	const me = auth.user?.id;
 	if (!me) return [];
 	const { data, error } = await supabase.rpc('dm_threads');
-	if (error || !data) return [];
+	// Throw rather than returning [] — the caller can't tell a transient
+	// RPC failure from a genuinely empty inbox, and rendering "no
+	// conversations" on a blip strands the user until a manual reload.
+	if (error) throw new Error(`dm_threads failed: ${error.message}`);
+	if (!data) return [];
 	const threads: DmThread[] = (data as {
 		partner_id: string;
 		last_body: string;
