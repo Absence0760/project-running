@@ -100,6 +100,32 @@ class L10nResourceParityTest {
     }
 
     @Test
+    fun `every apostrophe is escaped for aapt`() {
+        // An apostrophe is legal XML, so the DOM-based checks above sail past
+        // it — but aapt2 rejects it at mergeDebugResources with a misleading
+        // "Invalid unicode escape sequence" error, red only in the Wear OS CI
+        // job (run 28864778110: values-fr cd_route_preview_change). aapt
+        // accepts `\'`, or a value wrapped entirely in double quotes.
+        val valueRegex = Regex("<(?:string|item)[^>]*>(.*?)</(?:string|item)>", RegexOption.DOT_MATCHES_ALL)
+        val offenders = mutableListOf<String>()
+        for (dir in (listOf("values") + localeDirs)) {
+            val file = stringsFile(dir)
+            for (m in valueRegex.findAll(file.readText())) {
+                val value = m.groupValues[1]
+                if (value.startsWith("\"") && value.endsWith("\"")) continue
+                if (Regex("(?<!\\\\)'").containsMatchIn(value)) {
+                    offenders += "$dir: ${m.value.take(80)}"
+                }
+            }
+        }
+        assertEquals(
+            "Unescaped apostrophe(s) — aapt needs \\' (see offenders)",
+            emptyList<String>(),
+            offenders,
+        )
+    }
+
+    @Test
     fun `placeholder arg positions match the default for every locale`() {
         // A translation that drops or renumbers a %1$s / %2$d arg would
         // throw IllegalFormatException at runtime on that locale. Pin that
