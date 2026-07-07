@@ -476,6 +476,33 @@ func renderSafetyEmail(p SafetyEmailPayload, baseURL, locale string) (Email, boo
 			ctaURL:   base + "/safety/confirm?token=" + p.ConfirmToken,
 			footer:   shared.footerSafety,
 		}), true
+	case "overdue":
+		// body[0] = variant with a last-seen time, body[1] = variant when
+		// no ping ever landed (started_at is the only fact), body[2] = the
+		// loss-of-signal caveat + what-to-do line. Times only, never
+		// coordinates — the live page (the CTA) does the privacy-clipped
+		// rendering. docs/features/safety.md.
+		s := lookupEmailStrings(loc, "safety_overdue")
+		var first string
+		if p.LastSeenAt != "" {
+			first = fmt.Sprintf(s.body[0], owner, formatTimeUTC(p.StartedAt), formatTimeUTC(p.LastSeenAt))
+		} else {
+			first = fmt.Sprintf(s.body[1], owner, formatTimeUTC(p.StartedAt))
+		}
+		ctaURL := base
+		if p.RunID != nil && *p.RunID != "" {
+			ctaURL = base + "/live/" + *p.RunID
+		}
+		return composeEmail(emailContent{
+			lang:      loc,
+			subject:   fmt.Sprintf(s.subject, owner),
+			preheader: s.preheader,
+			heading:   fmt.Sprintf(s.heading, owner),
+			body:      []string{first, s.body[2]},
+			ctaLabel:  s.cta,
+			ctaURL:    ctaURL,
+			footer:    shared.footerSafety,
+		}), true
 	default:
 		return Email{}, false
 	}
@@ -611,6 +638,18 @@ func digestStatsLine(s DigestSummary, shared emailShared) string {
 // templates). A safety alert favours an unambiguous metric figure.
 func formatDistanceKm(metres float64) string {
 	return fmt.Sprintf("%.2f km", metres/1000)
+}
+
+// formatTimeUTC renders an ISO timestamp as "15:04 UTC on 2 Jan". The
+// recipient's timezone is unknown (they may not be a user at all), so an
+// explicitly-labelled UTC wall clock is the honest rendering. Unparseable
+// input falls back to the raw string rather than dropping the fact.
+func formatTimeUTC(iso string) string {
+	t, err := time.Parse(time.RFC3339, iso)
+	if err != nil {
+		return iso
+	}
+	return t.UTC().Format("15:04 UTC on 2 Jan")
 }
 
 // formatDurationHM renders seconds as "Hh MMm" (or "Mm" under an hour).

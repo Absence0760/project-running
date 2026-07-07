@@ -230,6 +230,12 @@ type LifecycleEmailPayload struct {
 //   - "finish": the finish alert, enqueued by the runs AFTER INSERT trigger
 //     for every CONFIRMED contact regardless of is_public; carries the run
 //     facts (distance/time).
+//   - "overdue": the overdue-runner escalation, enqueued once per run by the
+//     enqueue_safety_overdue_emails() pg_cron scan (migration 20270401_001,
+//     docs/features/safety.md) when a live-broadcast run goes silent past
+//     the owner's safety_overdue_minutes window; carries started_at and,
+//     when at least one ping landed, last_seen_at — times only, never
+//     coordinates (the live page applies privacy-zone clipping).
 //
 // ContactEmail is always set (the address the alert goes to). ContactUserID
 // is set only for a contact linked to an app account — used purely to
@@ -245,6 +251,8 @@ type SafetyEmailPayload struct {
 	DistanceM     float64 `json:"distance_m"`
 	DurationS     int     `json:"duration_s"`
 	ConfirmToken  string  `json:"confirm_token"`
+	StartedAt     string  `json:"started_at,omitempty"`
+	LastSeenAt    string  `json:"last_seen_at,omitempty"`
 }
 
 // WeeklyDigestPayload is the payload for `kind='weekly_digest'` jobs

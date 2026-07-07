@@ -29,13 +29,19 @@ drive the worker:
   `lifecycle_email_log`. `decisions.md § 119` + `§ 121`.
 - **`safety_email`** — safety-contact mail. Neither of the above: no
   `notifications` row, and the recipient may be a **non-user identified only by
-  an email**, with per-finish context in the copy. Two templates — `confirm`
-  (the opt-in request, enqueued by the `safety_contacts` AFTER INSERT trigger)
-  and `finish` (the finish alert, enqueued by a `runs` AFTER INSERT trigger for
-  every **confirmed** contact **regardless of `is_public`**, with the same 24h
-  recency guard `run_completed` uses). Crucially **not** gated on the runner's
-  `email_notifications` preference — a safety contact opted in explicitly and
-  must not be silenced by the runner's social-email setting. `decisions.md § 131`.
+  an email**, with per-finish context in the copy. Three templates — `confirm`
+  (the opt-in request, enqueued by the `safety_contacts` AFTER INSERT trigger),
+  `finish` (the finish alert, enqueued for every **confirmed** contact
+  **regardless of `is_public`**, with the same 24h recency guard `run_completed`
+  uses; since `20270401_001` it fires on the live-stub→saved transition too,
+  never on the stub INSERT), and `overdue` (the overdue-runner escalation —
+  enqueued once per run by the `enqueue_safety_overdue_emails()` pg_cron scan
+  when a live-broadcast run goes silent past the owner's
+  `safety_overdue_minutes` window; carries started/last-seen **times + the
+  `/live/{run_id}` link, never coordinates**; docs/features/safety.md).
+  Crucially **not** gated on the runner's `email_notifications` preference — a
+  safety contact opted in explicitly and must not be silenced by the runner's
+  social-email setting. `decisions.md § 131`.
 - **`weekly_digest`** — the opt-in weekly engagement summary
   (`{user_id}`). Enqueued by a Monday pg_cron over opted-in recipients;
   the handler gates on the opt-IN `email_weekly_digest` pref + the
@@ -124,7 +130,8 @@ Shared pieces:
 | **Pro-purchase receipt** | `lifecycle_email` (`pro_welcome`) | `user_profiles` AFTER UPDATE, `subscription_tier` → paid | ✓ | §121 |
 | **Payment-failed dunning** | `lifecycle_email` (`payment_failed`) | `user_profiles` AFTER UPDATE, `billing_issue_at` null→non-null | ✓ | §121 |
 | **Safety-contact confirm** (opt-in request) | `safety_email` (`confirm`) | `safety_contacts` AFTER INSERT | ✓ | §131 |
-| **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` AFTER INSERT, per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
+| **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` INSERT or live-stub→saved UPDATE (never the stub INSERT — `20270401_001`), per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
+| **Safety-contact overdue escalation** (live run gone silent) | `safety_email` (`overdue`) | `enqueue_safety_overdue_emails()` pg_cron (5 min) — in-progress live run silent past the owner's `safety_overdue_minutes` pref, once per run (`metadata.safety_escalated_at` stamp), per confirmed contact | ✓ | safety.md |
 | **Account-deletion receipt** | `lifecycle_email` (`account_deleted`) | `delete-account` EF enqueues it **inline** (address + locale in payload, no `user_id`) AFTER the cascade; send-once via the non-cascading `account_deletion_receipts` table | ✓ | §121 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | **Native push** (locked-phone FCM/APNs, same notification rows) | `native_push` | `notifications` AFTER INSERT, gated on an enabled `device_tokens` row + the same `push_notifications` pref | gated on operator FCM/APNs creds (title/body from the shared catalogue) | §166 |

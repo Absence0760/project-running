@@ -4905,6 +4905,7 @@ export type Database = {
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_lifecycle_drip: { Args: never; Returns: number }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
+      enqueue_safety_overdue_emails: { Args: never; Returns: undefined }
       enqueue_weekly_digests: { Args: never; Returns: number }
       event_is_athletic: { Args: { target_event: string }; Returns: boolean }
       event_next_instance_going_counts: {
