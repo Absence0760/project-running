@@ -1,11 +1,16 @@
 # Safety net — auto-live-share on start + overdue-runner escalation
 
-> **STATUS: P1 in build (2026-07-06).** Spec written against the
+> **STATUS: shipped (2026-07-06).** Built as specced against the
 > `reviews/persona-woman.md` CRITICAL finding ("the two safety-contact surfaces
 > either fire too late or don't fire at all — no real safety net exists despite
-> the UI implying one"). The product decisions below were taken during the
-> build; the "Open decisions" section records what was chosen and why so a
-> future session can revisit deliberately rather than re-litigate silently.
+> the UI implying one"): backend scan + worker template (migration
+> `20270401_001`, commit c1bc5f9c), settings + the mobile auto-live-share hook
+> (31888fcb), surface convergence (209ba17b). ADR §207; parity row in
+> parity.md. **Pre-prod checklist item outstanding:** CISO/counsel review of
+> the overdue email copy + the consent posture below — the feature is
+> fail-closed (both prefs default off) until users opt in, so shipping the
+> code exposed no one. The "Open decisions" section records what was chosen
+> and why so a future session can revisit deliberately.
 
 ## Context / why
 
