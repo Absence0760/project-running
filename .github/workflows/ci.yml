@@ -1231,3 +1231,58 @@ jobs:
           name: watch-ios-xcresult
           path: WatchAppTests.xcresult
           retention-days: 7
+
+  # Single required status check for branch protection. `main` requires
+  # only this context; it fans in on every job above so adding a new CI
+  # job automatically gates merges once it's listed under `needs` —
+  # without having to touch the branch-protection config each time.
+  #
+  # `if: always()` so the gate still runs when an upstream job fails
+  # (a failed dependency would otherwise skip it, leaving the required
+  # check pending forever and blocking the PR). A skipped upstream job
+  # counts as passing — GitHub's own required-check semantics — so a
+  # `needs`-cascade skip behind a genuine failure still fails here via
+  # the failing job itself.
+  #
+  # Docs-only / *.md / .claude-only PRs skip this whole workflow via the
+  # top-level `paths-ignore`; `ci-gate-docs.yml` reports an identically
+  # named "CI gate" context as passing for those so the required check
+  # is always satisfied. Keep the two job names in lock-step.
+  ci-gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - test-packages
+      - test-worker
+      - test-graph-cycle
+      - parity-types
+      - build-web
+      - parity-matrix
+      - build-watch-wear
+      - build-firmware
+      - build-mobile-android
+      - twin-parity
+      - schema-codegen-drift
+      - api-client-integration
+      - cross-client-roundtrip
+      - edge-functions
+      - pgtap-rls
+      - e2e-web
+      - e2e-web-livehub
+      - e2e-web-sso
+      - test-watch-ios
+    steps:
+      - name: Require every upstream job to have passed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS_JSON"
+          bad=$(echo "$NEEDS_JSON" | jq -r \
+            'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key)=\(.value.result)"')
+          if [ -n "$bad" ]; then
+            echo "::error::CI gate failing — upstream jobs did not pass:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "All upstream jobs passed."
