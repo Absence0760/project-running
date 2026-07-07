@@ -545,6 +545,7 @@ func renderWeeklyDigest(s DigestSummary, baseURL, locale, unsubURL string) Email
 // (migration 20270223_001).
 var dripTemplates = map[string]bool{
 	"drip_onboarding":   true,
+	"drip_first_week":   true,
 	"drip_reengagement": true,
 	"drip_streak":       true,
 }

@@ -28,8 +28,9 @@ import (
 //  2. suppression — the resolved address MUST NOT be on email_suppressions
 //     (bounce / complaint / prior unsubscribe of ANY stream).
 //
-// The job payload carries the template (drip_onboarding / drip_reengagement /
-// drip_streak) the SQL enqueue function chose for the recipient's cohort. The
+// The job payload carries the template (drip_onboarding / drip_first_week /
+// drip_reengagement / drip_streak) the SQL enqueue function chose for the
+// recipient's cohort. The
 // handler doesn't re-derive the cohort — the cohort math is the enqueue
 // function's job; an opted-in + un-suppressed recipient gets the template they
 // were enqueued with. No notifications row, no send-once log: at-least-once

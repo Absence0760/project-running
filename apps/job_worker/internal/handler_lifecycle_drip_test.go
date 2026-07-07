@@ -53,7 +53,7 @@ func TestLifecycleDrip_OptedInSends(t *testing.T) {
 }
 
 func TestLifecycleDrip_EachTemplateRenders(t *testing.T) {
-	for _, tmpl := range []string{"drip_onboarding", "drip_reengagement", "drip_streak"} {
+	for _, tmpl := range []string{"drip_onboarding", "drip_first_week", "drip_reengagement", "drip_streak"} {
 		be := dripBackend()
 		sender := &fakeEmailSender{}
 		w := newEmailTestWorker(be, sender)
