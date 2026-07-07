@@ -44,6 +44,22 @@ description: >
      the reservation), and the gate treats a stranded stack network as a
      holder the `ss` probe can't see, so it is cleaned + verified rather
      than silently carried into the next attempt.
+
+  3. An outbound connection's ephemeral source port. CI run 28864778110
+     (e2e shard 7) hit the identical 54322 bind error on BOTH attempts
+     of a FRESH runner: no stack container existed (the post-failure
+     `docker ps -a` printed zero rows), no stack network, nothing in
+     LISTEN. The stack's host ports sit inside Linux's default ephemeral
+     range (net.ipv4.ip_local_port_range = 32768-60999), and
+     `supabase start` runs exactly when the job is busiest with outbound
+     sockets (the ghcr.io image pulls), so a pull connection can land on
+     source port 54322 and docker-proxy's bind fails. LISTEN-only
+     probes are blind to it, and no container/network cleanup can free a
+     live outbound socket — which is why the existing retry + cleanup
+     machinery couldn't help. The fix is preventive: reserve the stack
+     ports via net.ipv4.ip_local_reserved_ports before the first start,
+     so the kernel never hands them out as ephemeral source ports
+     (explicit binds are unaffected; the sysctl also covers IPv6).
 runs:
   using: composite
   steps:
@@ -57,6 +73,18 @@ runs:
         # on 54327. 54322 is the one that actually collides, but a
         # partial start can strand any of them, so clear them all.
         PORTS="54321 54322 54323 54324 54327"
+
+        # Keep the kernel from handing any stack port out as an outbound
+        # connection's ephemeral source port (incident 3 above) — they
+        # all sit inside the default 32768-60999 ephemeral range. Gate
+        # on the reservation actually taking so a runner-image change
+        # (no sudo, read-only /proc) fails here with a pointed message,
+        # not later as the cryptic bind error.
+        sudo sysctl -qw net.ipv4.ip_local_reserved_ports=54321-54327 || true
+        if ! grep -q '54321-54327' /proc/sys/net/ipv4/ip_local_reserved_ports; then
+          echo "::error::could not reserve stack ports 54321-54327 from the ephemeral range (net.ipv4.ip_local_reserved_ports=$(cat /proc/sys/net/ipv4/ip_local_reserved_ports 2>/dev/null)) — an outbound socket may steal 54322 and fail the db bind"
+          exit 1
+        fi
 
         busy_ports() {
           # Column 4 of `ss -ltn` is the local address (e.g. 0.0.0.0:54322,
@@ -132,7 +160,9 @@ runs:
             busy=$(stack_holders)
             if [ -n "$busy" ]; then
               echo "::error::stack ports/network still in use after cleanup:$busy"
-              ss -ltnp 2>/dev/null | grep -E '5432[0-9]' || true
+              # All socket states, not just LISTEN — an outbound socket
+              # holding a stack port as its source port shows up here.
+              ss -tnp 2>/dev/null | grep -E '5432[0-9]' || true
               docker network ls --filter "name=supabase_network_" || true
               exit 1
             fi
@@ -148,6 +178,7 @@ runs:
           if [ "$attempt" = "2" ]; then
             echo "::error::supabase start failed twice"
             docker ps -a --format '{{.Names}} {{.Status}} {{.Ports}}' || true
+            ss -tnp 2>/dev/null | grep -E '5432[0-9]' || true
             exit 1
           fi
         done
