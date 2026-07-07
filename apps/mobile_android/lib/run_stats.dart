@@ -170,16 +170,20 @@ Map<String, Duration> bestEffortsFromPersonalRecords(
   const labels = <String, String>{
     '1_mile': 'Mile',
     '5k': '5 km',
+    '8k': '8 km',
     '10k': '10 km',
+    '12k': '12 km',
     'half_marathon': 'Half Marathon',
     'marathon': 'Marathon',
   };
   const order = <String, int>{
     '1_mile': 0,
     '5k': 1,
-    '10k': 2,
-    'half_marathon': 3,
-    'marathon': 4,
+    '8k': 2,
+    '10k': 3,
+    '12k': 4,
+    'half_marathon': 5,
+    'marathon': 6,
   };
   final known = records.where((r) => labels.containsKey(r.distance)).toList()
     ..sort(

@@ -103,7 +103,9 @@
 	const PR_KEY_DISTANCE_M: Record<string, number> = {
 		'1_mile': 1609.344,
 		'5k': 5000,
+		'8k': 8000,
 		'10k': 10000,
+		'12k': 12000,
 		half_marathon: 21097.5,
 		marathon: 42195,
 	};

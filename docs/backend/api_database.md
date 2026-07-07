@@ -970,8 +970,10 @@ this table doesn't carry, so it isn't auto-flagged).
 
 #### `personal_records`
 
-Cache table for per-distance PBs (`1_mile` / `5k` / `10k` / `half_marathon` /
-`marathon`; the mile bracket was added in `20261021_001`). Backed by triggers on `runs` so reads are a single indexed
+Cache table for per-distance PBs (`1_mile` / `5k` / `8k` / `10k` / `12k` /
+`half_marathon` / `marathon`; the mile bracket was added in `20261021_001`,
+8k + 12k in `20270330_001` — all whole-run brackets are ±2% of the canonical
+distance). Backed by triggers on `runs` so reads are a single indexed
 lookup instead of the full aggregation that
 [`personal_records()`](#personal_records-1) does. Shipped in migration
 `20260508_001_personal_records_cache.sql`. The existing
@@ -981,7 +983,7 @@ haven't migrated.
 ```sql
 create table personal_records (
   user_id       uuid not null references auth.users(id) on delete cascade,
-  distance      text not null check (distance in ('1_mile', '5k', '10k', 'half_marathon', 'marathon')),
+  distance      text not null check (distance in ('1_mile', '5k', '8k', '10k', '12k', 'half_marathon', 'marathon')),
   best_time_s   integer not null,
   run_id        uuid references runs(id) on delete set null,
   achieved_at   timestamptz not null,

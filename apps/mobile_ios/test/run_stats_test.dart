@@ -222,12 +222,14 @@ void main() {
       final efforts = bestEffortsFromPersonalRecords([
         pr('marathon', 12000),
         pr('5k', 1200),
+        pr('12k', 3100),
         pr('1_mile', 360),
         pr('half_marathon', 5400),
+        pr('8k', 2000),
         pr('10k', 2500),
       ]);
       expect(efforts.keys.toList(),
-          ['Mile', '5 km', '10 km', 'Half Marathon', 'Marathon']);
+          ['Mile', '5 km', '8 km', '10 km', '12 km', 'Half Marathon', 'Marathon']);
       expect(efforts['5 km'], const Duration(seconds: 1200));
       expect(efforts['Marathon'], const Duration(seconds: 12000));
     });
