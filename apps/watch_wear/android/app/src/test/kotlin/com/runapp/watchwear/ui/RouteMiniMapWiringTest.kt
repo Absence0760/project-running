@@ -119,10 +119,17 @@ class RouteMiniMapWiringTest {
         // selectedRouteWaypoints non-empty (free-form runs render
         // nothing). If the conditional gets dropped, the preview
         // either always renders an empty box or never renders at all.
+        // The gate may wrap RouteMiniMap in a clickable/semantics Box
+        // (the tap-to-change-route affordance is announced as a
+        // Role.Button) — that intervening `.semantics { }` lambda
+        // contributes its own closing brace, so tolerate nested braces
+        // between the gate and the mount rather than forbidding them;
+        // the lazy bound keeps the match anchored to the preview's own
+        // RouteMiniMap and not a later in-run one.
         val src = read("ui/RunWatchApp.kt")
         assertTrue(
             "PreRunScreen must gate RouteMiniMap on selectedRouteWaypoints.isNotEmpty()",
-            Regex("""selectedRouteWaypoints\.isNotEmpty\(\)\s*\)\s*\{[^}]*RouteMiniMap""", RegexOption.DOT_MATCHES_ALL)
+            Regex("""selectedRouteWaypoints\.isNotEmpty\(\)\s*\)\s*\{[\s\S]{0,800}?RouteMiniMap""", RegexOption.DOT_MATCHES_ALL)
                 .containsMatchIn(src),
         )
     }
