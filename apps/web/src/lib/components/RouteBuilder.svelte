@@ -59,6 +59,7 @@
 			elevations: number[];
 			coordinates: [number, number][];
 			routed: boolean;
+			waypointList: TrackPoint[];
 		}) => {},
 		onmapclick = (_lngLat: { lng: number; lat: number }): boolean => false,
 		onerror = (_message: string | null, _severity: 'error' | 'warning' = 'error') => {},
@@ -81,6 +82,10 @@
 			/// Save without having to guess from coordinate counts (which
 			/// can match either preview or snapped polyline).
 			routed: boolean;
+			/// Snapshot of the freehand waypoints themselves (not just the
+			/// count) so the parent can render a focusable, keyboard-
+			/// operable waypoint list — the map markers are mouse-only.
+			waypointList: TrackPoint[];
 		}) => void;
 		onmapclick?: (lngLat: { lng: number; lat: number }) => boolean;
 		/**
@@ -257,6 +262,20 @@
 		searchResults = [];
 		showResults = false;
 		searchInput?.blur();
+	}
+
+	// map.getSource throws (rather than returning undefined) while the
+	// style is still loading — a waypoint added before the style fetch
+	// resolves, or a style that never loads at all (bad/missing tile
+	// key), reaches the source reads in that window. The sources simply
+	// don't exist yet, so treat the throw as "no source" and let the
+	// caller's optional-chaining skip the draw.
+	function getGeoJSONSource(id: string): maplibregl.GeoJSONSource | undefined {
+		try {
+			return map.getSource(id) as maplibregl.GeoJSONSource | undefined;
+		} catch {
+			return undefined;
+		}
 	}
 
 	// --- Waypoint markers ---
@@ -860,7 +879,7 @@
 			updateRouteLine();
 			clearPreviewLine();
 			// Clear the straight-line preview now that we have the real route
-			const wpSrc = map.getSource('waypoint-lines') as maplibregl.GeoJSONSource | undefined;
+			const wpSrc = getGeoJSONSource('waypoint-lines');
 			wpSrc?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
 			updateDistanceMarkers();
 			emitUpdate();
@@ -911,8 +930,8 @@
 	}
 
 	function updateRouteLine() {
-		const routeSource = map.getSource('route') as maplibregl.GeoJSONSource | undefined;
-		const overlapSource = map.getSource('route-overlap') as maplibregl.GeoJSONSource | undefined;
+		const routeSource = getGeoJSONSource('route');
+		const overlapSource = getGeoJSONSource('route-overlap');
 		if (!routeSource || !overlapSource) return;
 
 		// Render the full route as a single line — no overlap splitting
@@ -923,7 +942,7 @@
 	// --- Preview line ---
 
 	function updatePreviewLine(lngLat: { lng: number; lat: number }) {
-		const source = map.getSource('preview-line') as maplibregl.GeoJSONSource | undefined;
+		const source = getGeoJSONSource('preview-line');
 		if (!source || waypoints.length === 0) return;
 		// Don't show cursor preview if route is already calculated
 		if (routeCoordinates.length > 0) return;
@@ -935,7 +954,7 @@
 	}
 
 	function clearPreviewLine() {
-		const source = map.getSource('preview-line') as maplibregl.GeoJSONSource | undefined;
+		const source = getGeoJSONSource('preview-line');
 		if (!source) return;
 		source.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
 	}
@@ -987,6 +1006,7 @@
 			waypoints: waypoints.length, distance, elevation: gain,
 			elevations: routeElevations, coordinates: routeCoordinates,
 			routed: routeCoordinates.length >= 2,
+			waypointList: waypoints.map((w) => ({ ...w })),
 		});
 	}
 
@@ -1066,6 +1086,12 @@
 	}
 
 	export function removeWaypoint(index: number) {
+		// Mutating waypoints mid-routing bumps routeVersion and bails the
+		// in-flight iteration half-done — the same hazard the marker
+		// contextmenu handler guards against. Guard here too so the
+		// keyboard delete path (parent waypoint list) can't hit it.
+		if (isRouting) return;
+		if (index < 0 || index >= waypoints.length) return;
 		if (waypoints.length <= 1 && index === 0) {
 			clearWaypoints();
 			return;
@@ -1076,6 +1102,25 @@
 		const marker = markers.splice(index, 1)[0];
 		marker?.remove();
 		updateMarkerStyles();
+		updateStraightLine();
+		emitUpdate();
+		scheduleAutoRoute();
+	}
+
+	/**
+	 * Programmatic equivalent of dragging a marker — the keyboard path
+	 * (arrow-nudge from the parent's waypoint list) has no drag events,
+	 * so it moves the point through here. Mirrors the dragend handler:
+	 * invalidate the snapped polyline, reposition the marker, redraw
+	 * the preview, re-route.
+	 */
+	export function moveWaypoint(index: number, lngLat: { lng: number; lat: number }) {
+		if (isRouting) return;
+		if (index < 0 || index >= waypoints.length) return;
+		invalidateCalculatedRoute();
+		clearImplicatedMarkers();
+		waypoints[index] = { lat: lngLat.lat, lng: lngLat.lng };
+		markers[index]?.setLngLat([lngLat.lng, lngLat.lat]);
 		updateStraightLine();
 		emitUpdate();
 		scheduleAutoRoute();
@@ -1385,7 +1430,7 @@
 
 		updateRouteLine();
 		clearPreviewLine();
-		const wpSrc = map.getSource('waypoint-lines') as maplibregl.GeoJSONSource | undefined;
+		const wpSrc = getGeoJSONSource('waypoint-lines');
 		wpSrc?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
 		updateDistanceMarkers();
 		// Collapse to start + two sampled midpoints + close so a later
@@ -1778,7 +1823,7 @@
 	 * Show straight dashed lines between waypoints as a preview before routing.
 	 */
 	function updateStraightLine() {
-		const wpSource = map.getSource('waypoint-lines') as maplibregl.GeoJSONSource | undefined;
+		const wpSource = getGeoJSONSource('waypoint-lines');
 		if (!wpSource) return;
 
 		// If we have a calculated route, hide the straight-line preview
@@ -1788,8 +1833,8 @@
 		}
 
 		// No calculated route — clear route/overlap and show straight-line preview
-		const routeSource = map.getSource('route') as maplibregl.GeoJSONSource | undefined;
-		const overlapSource = map.getSource('route-overlap') as maplibregl.GeoJSONSource | undefined;
+		const routeSource = getGeoJSONSource('route');
+		const overlapSource = getGeoJSONSource('route-overlap');
 		if (routeSource) {
 			routeSource.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
 		}
@@ -1822,6 +1867,7 @@
 			// stay disabled until the user actually calculates or
 			// generates a route.
 			routed: false,
+			waypointList: waypoints.map((w) => ({ ...w })),
 		});
 	}
 

@@ -221,21 +221,21 @@ test.describe('/routes/new — Route Builder control surface', () => {
 		await expect(page.getByRole('button', { name: 'GPX' })).toBeDisabled();
 	});
 
-	test('Undo + Clear + Out-and-back disabled at zero waypoints', async ({ page }) => {
+	test('Undo + Clear + Out-and-back disabled at zero waypoints; Add point enabled', async ({
+		page
+	}) => {
 		await page.goto('/routes/new');
 		// Needed: next read is .count() (snapshot — no auto-retry).
 		// Without the wait, a 0 here loops zero times and the test
 		// passes vacuously without actually asserting disabled state.
 		await page.waitForLoadState('networkidle');
-		// All three editor toolbar buttons gate on waypointCount.
-		const toolbar = page.locator('.btn.btn-ghost');
-		// At least three .btn-ghost buttons exist; iterate and assert
-		// the first three are disabled. Don't pin by name — the buttons
-		// are icon-only.
-		const count = Math.min(3, await toolbar.count());
-		for (let i = 0; i < count; i++) {
-			await expect(toolbar.nth(i)).toBeDisabled();
+		// The three mutation buttons gate on waypointCount; the keyboard
+		// add path (Add point at map centre) must stay reachable at zero
+		// waypoints — it is how a keyboard user drops the first point.
+		for (const label of ['Undo', 'Out & back', 'Clear']) {
+			await expect(page.locator('.toolbar-group .btn', { hasText: label })).toBeDisabled();
 		}
+		await expect(page.locator('.toolbar-group .btn', { hasText: 'Add point' })).toBeEnabled();
 	});
 
 	test('Clear with 2+ waypoints confirms; cancel keeps them, confirm clears', async ({
@@ -1631,5 +1631,166 @@ test.describe('/routes/new — save flow', () => {
 		await expect(page.getByRole('heading', { level: 1, name })).toBeVisible({
 			timeout: 10_000,
 		});
+	});
+});
+
+test.describe('/routes/new — keyboard waypoint list (WCAG 2.1.1)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	// The map markers are mouse-only (click to add, drag to move,
+	// right-click to delete). The sidebar waypoint list is the keyboard
+	// path to the same mutations: a roving-tabindex list where arrows
+	// rove, Alt+arrows nudge the point geographically, Delete removes,
+	// and an aria-live region narrates each mutation.
+
+	test('Add point button drops a waypoint at the map centre + renders the list', async ({
+		page,
+	}) => {
+		await page.route('**/route/v1/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+
+		// No waypoints → no list.
+		await expect(page.getByTestId('waypoint-list')).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Add point', exact: true }).click();
+
+		const points = page.locator('.builder-stat-value').nth(2);
+		await expect(points).toHaveText('1', { timeout: 5_000 });
+		const list = page.getByTestId('waypoint-list');
+		await expect(list).toBeVisible();
+		await expect(list.locator('.waypoint-item')).toHaveCount(1);
+		// The live region narrated the add.
+		await expect(page.getByTestId('waypoint-announce')).toContainText(/Point 1 added/i);
+
+		// The dropped point sits at the map centre.
+		const centre = await page.evaluate(() =>
+			(
+				window as unknown as {
+					__routeBuilder: { getMapCenter: () => { lat: number; lng: number } | null };
+				}
+			).__routeBuilder.getMapCenter(),
+		);
+		const wp = await page.evaluate(
+			() =>
+				(
+					window as unknown as {
+						__routeBuilder: { getRouteData: () => { waypoints: { lat: number; lng: number }[] } };
+					}
+				).__routeBuilder.getRouteData().waypoints,
+		);
+		expect(wp.length).toBe(1);
+		expect(wp[0].lat).toBeCloseTo(centre!.lat, 6);
+		expect(wp[0].lng).toBeCloseTo(centre!.lng, 6);
+	});
+
+	test('arrows rove focus through the list; Alt+ArrowUp nudges the point north', async ({
+		page,
+	}) => {
+		await page.route('**/route/v1/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: 0.02, dLng: 0.02 },
+			{ dLat: 0.04, dLng: 0 },
+		]);
+
+		const rows = page.getByTestId('waypoint-list').locator('.waypoint-item');
+		await expect(rows).toHaveCount(3, { timeout: 5_000 });
+
+		// Roving tabindex: exactly one row is tabbable.
+		await expect(rows.nth(0)).toHaveAttribute('tabindex', '0');
+		await expect(rows.nth(1)).toHaveAttribute('tabindex', '-1');
+
+		await rows.nth(0).focus();
+		await page.keyboard.press('ArrowDown');
+		await expect(rows.nth(1)).toBeFocused();
+		await expect(rows.nth(1)).toHaveAttribute('tabindex', '0');
+		await page.keyboard.press('End');
+		await expect(rows.nth(2)).toBeFocused();
+		// Wraparound.
+		await page.keyboard.press('ArrowDown');
+		await expect(rows.nth(0)).toBeFocused();
+
+		// Alt+ArrowUp moves the focused point ~10 m north in the model.
+		const before = await page.evaluate(
+			() =>
+				(
+					window as unknown as {
+						__routeBuilder: { getRouteData: () => { waypoints: { lat: number; lng: number }[] } };
+					}
+				).__routeBuilder.getRouteData().waypoints,
+		);
+		await page.keyboard.press('Alt+ArrowUp');
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() =>
+							(
+								window as unknown as {
+									__routeBuilder: {
+										getRouteData: () => { waypoints: { lat: number; lng: number }[] };
+									};
+								}
+							).__routeBuilder.getRouteData().waypoints[0].lat,
+					),
+				{ timeout: 5_000 },
+			)
+			.toBeGreaterThan(before[0].lat);
+		// ~10 m ≈ 9e-5 deg of latitude; assert the step is small, not a jump.
+		const after = await page.evaluate(
+			() =>
+				(
+					window as unknown as {
+						__routeBuilder: { getRouteData: () => { waypoints: { lat: number; lng: number }[] } };
+					}
+				).__routeBuilder.getRouteData().waypoints,
+		);
+		expect(after[0].lat - before[0].lat).toBeLessThan(0.001);
+		expect(after[0].lng).toBeCloseTo(before[0].lng, 9);
+		// Longitude of the OTHER rows untouched.
+		expect(after[1]).toEqual(before[1]);
+		await expect(page.getByTestId('waypoint-announce')).toContainText(/moved 10 m north/i);
+	});
+
+	test('Delete removes the focused waypoint; focus stays in the list', async ({ page }) => {
+		await page.route('**/route/v1/**', (route) =>
+			route.fulfill({ status: 503, body: '{}' }),
+		);
+		await page.goto('/routes/new');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await waitForRouteBuilder(page);
+		await addWaypointsNearMapCenter(page, [
+			{ dLat: 0, dLng: 0 },
+			{ dLat: 0.02, dLng: 0.02 },
+			{ dLat: 0.04, dLng: 0 },
+		]);
+
+		const rows = page.getByTestId('waypoint-list').locator('.waypoint-item');
+		await expect(rows).toHaveCount(3, { timeout: 5_000 });
+
+		await rows.nth(1).focus();
+		await page.keyboard.press('Delete');
+
+		await expect(rows).toHaveCount(2);
+		await expect(page.locator('.builder-stat-value').nth(2)).toHaveText('2');
+		await expect(page.getByTestId('waypoint-announce')).toContainText(/Point 2 removed/i);
+		// Focus lands on the row that took the deleted row's place.
+		await expect(rows.nth(1)).toBeFocused();
+
+		// The per-row delete button is the pointer path to the same removal.
+		await page.getByRole('button', { name: 'Delete point 1' }).click();
+		await expect(rows).toHaveCount(1);
+		// Map pins renumber to match the surviving list.
+		const labels = (await page.locator('.waypoint-marker-label').allTextContents()).map(Number);
+		expect(labels).toEqual([1]);
 	});
 });

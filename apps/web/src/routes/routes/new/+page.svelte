@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { tick } from 'svelte';
 	import { smartBack } from '$lib/util/smart_back';
+	import { nudgeLatLng, waypointKeyAction } from '$lib/routes/waypoint_keyboard';
+	import type { TrackPoint } from '$lib/types';
 	import { page } from '$app/stores';
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
@@ -129,12 +132,14 @@
 		elevations: number[];
 		coordinates: [number, number][];
 		routed: boolean;
+		waypointList: TrackPoint[];
 	}) {
 		waypointCount = data.waypoints;
 		distance = data.distance;
 		elevation = data.elevation;
 		elevations = data.elevations;
 		coordinates = data.coordinates;
+		waypointList = data.waypointList;
 		// The builder tells us explicitly whether the emitted
 		// `coordinates` is an OSRM-snapped polyline (Save-eligible) or
 		// the straight-line preview between dropped waypoints. Reading
@@ -177,6 +182,82 @@
 	function handleUndo() {
 		builder?.undoWaypoint();
 		routed = false;
+	}
+
+	// --- Keyboard waypoint list (WCAG 2.1.1) ---
+	// The map markers are mouse-only (click to add, drag to move,
+	// right-click to delete), so the sidebar mirrors them as a roving-
+	// tabindex list of focusable rows. Key → action mapping and the
+	// nudge geodesy live in the pure waypoint_keyboard.ts helper.
+	let waypointList = $state<TrackPoint[]>([]);
+	let activeWaypointIdx = $state(0);
+	let waypointEls = $state<(HTMLButtonElement | undefined)[]>([]);
+	let wpAnnounce = $state('');
+
+	$effect(() => {
+		if (activeWaypointIdx >= waypointList.length) {
+			activeWaypointIdx = Math.max(0, waypointList.length - 1);
+		}
+	});
+
+	// Clearing before re-setting forces the live region to re-announce
+	// even when two consecutive messages are identical (e.g. deleting
+	// two points both named "Point 3").
+	async function announce(msg: string) {
+		wpAnnounce = '';
+		await tick();
+		wpAnnounce = msg;
+	}
+
+	function handleAddAtCentre() {
+		const centre = builder?.getMapCenter();
+		if (!centre) return;
+		builder.addWaypoint({ lng: centre.lng, lat: centre.lat });
+		announce(m('routeNew.pointAdded', { n: String(waypointList.length) }));
+	}
+
+	async function handleWaypointRemove(i: number) {
+		if (builderBusy) return;
+		builder?.removeWaypoint(i);
+		announce(m('routeNew.pointRemoved', { n: String(i + 1) }));
+		const next = Math.min(i, waypointList.length - 1);
+		if (next >= 0) {
+			activeWaypointIdx = next;
+			await tick();
+			waypointEls[next]?.focus();
+		}
+	}
+
+	function nudgeDirectionLabel(dNorthM: number, dEastM: number): string {
+		if (dNorthM > 0) return m('routeNew.directionNorth');
+		if (dNorthM < 0) return m('routeNew.directionSouth');
+		if (dEastM > 0) return m('routeNew.directionEast');
+		return m('routeNew.directionWest');
+	}
+
+	function handleWaypointKeydown(e: KeyboardEvent, i: number) {
+		const action = waypointKeyAction(e, i, waypointList.length);
+		if (!action) return;
+		e.preventDefault();
+		if (action.type === 'focus') {
+			activeWaypointIdx = action.index;
+			waypointEls[action.index]?.focus();
+		} else if (action.type === 'remove') {
+			handleWaypointRemove(i);
+		} else if (action.type === 'activate') {
+			builder?.flyTo(waypointList[i]);
+			announce(m('routeNew.pointShown', { n: String(i + 1) }));
+		} else if (action.type === 'nudge') {
+			if (builderBusy) return;
+			builder?.moveWaypoint(i, nudgeLatLng(waypointList[i], action.dNorthM, action.dEastM));
+			announce(
+				m('routeNew.pointMoved', {
+					n: String(i + 1),
+					metres: String(Math.abs(action.dNorthM) + Math.abs(action.dEastM)),
+					direction: nudgeDirectionLabel(action.dNorthM, action.dEastM),
+				}),
+			);
+		}
 	}
 
 	let showClearConfirm = $state(false);
@@ -671,6 +752,10 @@
 			</div>
 
 			<div class="toolbar-group" role="toolbar" aria-label={m('routeNew.waypointActions')}>
+				<button class="btn btn-ghost btn-sm" disabled={builderBusy} onclick={handleAddAtCentre} title={m('routeNew.addPointAtCentreTitle')}>
+					<span class="material-symbols" aria-hidden="true">add_location_alt</span>
+					{m('routeNew.addPointAtCentre')}
+				</button>
 				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0 || builderBusy} onclick={handleUndo} title={m('routeNew.undoTitle')}>
 					<span class="material-symbols">undo</span>
 					{m('routeNew.undo')}
@@ -684,6 +769,45 @@
 					{m('routeNew.clear')}
 				</button>
 			</div>
+
+			{#if waypointList.length > 0}
+				<div class="waypoint-list-block">
+					<span class="section-label" id="waypoint-list-label">{m('routeNew.waypointListLabel')}</span>
+					<ul class="waypoint-list" aria-labelledby="waypoint-list-label" data-testid="waypoint-list">
+						{#each waypointList as wp, i (i)}
+							<li class="waypoint-row">
+								<button
+									class="waypoint-item"
+									tabindex={i === activeWaypointIdx ? 0 : -1}
+									bind:this={waypointEls[i]}
+									onkeydown={(e) => handleWaypointKeydown(e, i)}
+									onclick={() => {
+										activeWaypointIdx = i;
+										builder?.flyTo(wp);
+									}}
+									onfocus={() => (activeWaypointIdx = i)}
+								>
+									<span class="waypoint-num" aria-hidden="true">{i + 1}</span>
+									<span class="waypoint-coords">{m('routeNew.pointRowLabel', { n: i + 1 })} · {wp.lat.toFixed(5)}, {wp.lng.toFixed(5)}</span>
+									{#if i === 0}
+										<span class="waypoint-tag">{m('routeNew.start')}</span>
+									{/if}
+								</button>
+								<button
+									class="waypoint-delete"
+									aria-label={m('routeNew.deletePoint', { n: i + 1 })}
+									disabled={builderBusy}
+									onclick={() => handleWaypointRemove(i)}
+								>
+									<span class="material-symbols" aria-hidden="true">close</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+					<p class="waypoint-list-hint">{m('routeNew.waypointListHint')}</p>
+				</div>
+			{/if}
+			<div class="visually-hidden" aria-live="polite" role="status" data-testid="waypoint-announce">{wpAnnounce}</div>
 
 			<button
 				class="target-btn"
@@ -903,6 +1027,8 @@
 				<li><kbd>{m('routeNew.kbdRightClick')}</kbd> {m('routeNew.tipRightClick')}</li>
 				<li><kbd>{m('routeNew.kbdCtrl')}</kbd>+<kbd>Z</kbd> {m('routeNew.tipUndo')}</li>
 				<li><kbd>{m('routeNew.kbdEsc')}</kbd> {m('routeNew.tipEsc')}</li>
+				<li><kbd>Alt</kbd>+<kbd>←→↑↓</kbd> {m('routeNew.tipListNudge')}</li>
+				<li><kbd>{m('routeNew.kbdDelete')}</kbd> {m('routeNew.tipListDelete')}</li>
 			</ul>
 		</details>
 	</aside>
@@ -1623,6 +1749,103 @@
 	}
 	.toolbar-group .material-symbols {
 		font-size: 1rem;
+	}
+
+	.waypoint-list-block {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.waypoint-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		max-height: 14rem;
+		overflow-y: auto;
+	}
+	.waypoint-row {
+		display: flex;
+		align-items: stretch;
+		gap: 2px;
+	}
+	.waypoint-item {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		padding: var(--space-2xs) var(--space-xs);
+		background: var(--color-bg-secondary);
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--color-text);
+		font-size: 0.8rem;
+		text-align: start;
+		cursor: pointer;
+	}
+	.waypoint-item:hover {
+		background: var(--color-surface);
+	}
+	.waypoint-item:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+	.waypoint-num {
+		flex-shrink: 0;
+		width: 1.25rem;
+		height: 1.25rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-primary);
+		color: white;
+		border-radius: 50%;
+		font-size: 0.7rem;
+		font-weight: 600;
+	}
+	.waypoint-coords {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+	.waypoint-tag {
+		flex-shrink: 0;
+		font-size: 0.65rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-secondary);
+	}
+	.waypoint-delete {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		background: var(--color-bg-secondary);
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+	.waypoint-delete:hover:not(:disabled) {
+		background: var(--color-surface);
+		color: var(--color-danger, #ef4444);
+	}
+	.waypoint-delete:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+	.waypoint-delete .material-symbols {
+		font-size: 1rem;
+	}
+	.waypoint-list-hint {
+		margin: 0;
+		font-size: 0.7rem;
+		color: var(--color-text-secondary);
 	}
 
 	.btn-ghost {
