@@ -127,6 +127,19 @@ jobs:
       - uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4
         with:
           languages: actions
+          # unnecessary-use-of-advanced-config suggests replacing this
+          # workflow with GitHub's settings-configured "default setup".
+          # The advanced config here is deliberate: explicit language
+          # selection (Swift excluded for macOS-runner cost — see the
+          # header), a pinned Go toolchain + explicit build, the JDK-17
+          # Gradle prebuild for the Kotlin extractor, SHA-pinned actions,
+          # and the Trivy SARIF upload — none of which default setup can
+          # express. Filter the note out instead of dismissing four
+          # alerts by hand every time an init step moves.
+          config: |
+            query-filters:
+              - exclude:
+                  id: actions/unnecessary-use-of-advanced-config
       - uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4
         with:
           category: '/language:actions'
