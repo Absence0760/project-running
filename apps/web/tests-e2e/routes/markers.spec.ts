@@ -225,8 +225,11 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(rows).toHaveCount(1);
 
 		await rows.first().getByTitle('Delete').click();
-		// ConfirmDialog → confirm.
-		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		// ConfirmDialog → confirm. Scope to the dialog: the row's icon button
+		// carries the same "Delete" accessible name (a11y label, 56d956f4).
+		const dialog = page.locator('.modal', { hasText: 'Delete marker?' });
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
 		await expect(page.locator('.markers-list')).toHaveCount(0);
 		await expect(page.locator('.markers-empty')).toBeVisible();
