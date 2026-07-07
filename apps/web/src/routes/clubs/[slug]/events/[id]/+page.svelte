@@ -64,7 +64,7 @@
 	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
-	import { workoutDraftFromTemplate } from '$lib/social/event_gym_template';
+	import { workoutDraftFromTemplate, workoutDraftFromSession } from '$lib/social/event_gym_template';
 	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { formatPrice } from '$lib/format/format_price';
@@ -266,8 +266,8 @@
 	let showAttach = $state(false);
 	let attachChoice = $state<string>('');
 	let isClass = $derived(!!event && event.category === 'class');
-	let sessionSteps = $derived.by(() => {
-		if (!sessionPlan) return [];
+	let sessionExpansion = $derived.by(() => {
+		if (!sessionPlan) return null;
 		const input: SessionPlanInput = {
 			blocks: sessionPlan.blocks.map((b) => ({ id: b.id, position: b.position, name: b.name })),
 			items: sessionPlan.items.map((it) => ({
@@ -283,7 +283,23 @@
 				cue: it.cue
 			}))
 		};
-		return expandSessionSteps(input).steps;
+		return expandSessionSteps(input);
+	});
+	let sessionSteps = $derived(sessionExpansion?.steps ?? []);
+
+	// Log-as-workout prefill: with an attached session plan the attendee logs
+	// the class CONTENT (one row per expanded step, workoutDraftFromSession);
+	// otherwise just the flat gym_template title.
+	let logWorkoutPrefill = $derived.by(() => {
+		if (!event) return null;
+		const base = workoutDraftFromTemplate(event.gym_template, event.title);
+		if (!sessionPlan || !sessionExpansion) return { title: base.title };
+		const draft = workoutDraftFromSession(
+			sessionExpansion,
+			sessionPlan.title,
+			event.discipline ?? null
+		);
+		return { title: draft.title ?? base.title, sets: draft.sets };
 	});
 
 	async function loadSessionPlan() {
@@ -2241,7 +2257,7 @@
 		onclose={() => (showLogWorkout = false)}
 	>
 		<GymEditor
-			prefill={{ title: workoutDraftFromTemplate(event.gym_template, event.title).title }}
+			prefill={logWorkoutPrefill}
 			oncreated={() => {
 				showLogWorkout = false;
 				showToast(m('clubEvent.logAsWorkoutSaved'), 'success');

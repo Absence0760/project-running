@@ -150,6 +150,8 @@ The shipped `events.gym_template` (jsonb `{discipline, duration_min}`) is the **
 
 Do **not** remove `gym_template` — it stays the zero-effort path for a host who doesn't want to author a full sequence. `workoutDraftFromSession` should fall back to `workoutDraftFromTemplate` when there's no plan.
 
+> **Shipped on web (2026-07-06):** the event-detail "Log as workout" now does exactly this — with a `session_plan_id` attached it seeds `GymEditor` from `workoutDraftFromSession` (title from the class discipline, one exercise row per expanded step), falling back to the flat `workoutDraftFromTemplate` title when no plan is attached. Pinned by `tests-e2e/gym/class-instructor-depth.spec.ts`. Mobile's `event_detail_screen` still prefills the flat template title only — tracked in [followups.md](../product/followups.md).
+
 ## Persistence
 
 - **Backend:** the three tables + `events.session_plan_id`, with RLS mirroring club-owned routes (author / public / club-member-read / club-admin-write).

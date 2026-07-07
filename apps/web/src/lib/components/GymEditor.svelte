@@ -19,7 +19,14 @@
 		/// Seed for a NEW workout (used by the class -> gym seam). Pre-fills the
 		/// title; sets stay empty for the user to fill. Ignored when `existing`
 		/// is set (an edit owns its own values).
-		prefill?: { title?: string | null } | null;
+		prefill?: {
+			title?: string | null;
+			/// Session-plan-derived rows (class -> gym seam,
+			/// workoutDraftFromSession): pre-populate the exercise blocks of a
+			/// NEW log so an attendee logs the class content, not just its
+			/// title. Ignored when `existing` / `seed` carries real sets.
+			sets?: { exercise_name: string; reps: number | null; duration_s: number | null }[];
+		} | null;
 		/// Prefill the editor with these sets/title but save as a NEW workout
 		/// (the "Repeat last" / "Start routine" path) — distinct from `existing`,
 		/// which edits an existing row. Ignored when `existing` is set.
@@ -147,6 +154,26 @@
 		return blocks;
 	}
 
+	function initFromPrefillSets(
+		sets: { exercise_name: string; reps: number | null; duration_s: number | null }[] | undefined,
+	): EditExercise[] {
+		if (!sets || sets.length === 0) return [{ name: '', sets: [emptySet()] }];
+		const blocks: EditExercise[] = [];
+		for (const s of sets) {
+			const row: EditSet = {
+				reps: s.reps == null ? '' : String(s.reps),
+				weight: '',
+				rpe: '',
+				duration: s.duration_s == null ? '' : String(s.duration_s),
+				setType: 'working',
+			};
+			const last = blocks[blocks.length - 1];
+			if (last && last.name === s.exercise_name) last.sets.push(row);
+			else blocks.push({ name: s.exercise_name, sets: [row] });
+		}
+		return blocks;
+	}
+
 	// The editor is mounted fresh each time the host modal opens, so the
 	// prop is read once at construction to seed local state. untrack keeps
 	// that one-time read from registering a (never-changing) dependency.
@@ -157,7 +184,9 @@
 	const seedPrefill = untrack(() => prefill);
 	let title = $state(seed?.workout.title ?? seedPrefill?.title ?? '');
 	let isPublic = $state(untrack(() => existing?.workout.is_public ?? false));
-	let exercises = $state<EditExercise[]>(initExercises(seed));
+	let exercises = $state<EditExercise[]>(
+		seed ? initExercises(seed) : initFromPrefillSets(seedPrefill?.sets),
+	);
 	let saving = $state(false);
 	let error = $state('');
 
