@@ -3567,6 +3567,8 @@ export const messages = {
 	"prefs.autoPushStrava": "Enviar corridas automaticamente para o Strava",
 	"prefs.showInSearch": "Exibir-me na busca por nome",
 	"prefs.showInSearchHint": "Quando desativado, sua conta não aparecerá quando outros corredores pesquisarem pelo nome de exibição. Suas corridas públicas e seu perfil continuam acessíveis a qualquer pessoa que tenha o link.",
+	"prefs.showCalories": "Mostrar estimativas de calorias",
+	"prefs.showCaloriesHint": "Estimadas a partir da distância e do peso corporal (padrão de 70 kg quando não definido). Desative para ocultar as calorias nas páginas de corrida.",
 	"prefs.excludeGymFromReadiness": "Excluir a carga da musculação do preparo para correr",
 	"prefs.excludeGymFromReadinessHint": "Por padrão, as sessões de musculação aumentam sua fadiga e reduzem seu preparo, como uma corrida. Ative isto para que seu condicionamento, fadiga e forma se baseiem apenas nas corridas.",
 	"prefs.demographicsHeading": "Dados demográficos e corporais",

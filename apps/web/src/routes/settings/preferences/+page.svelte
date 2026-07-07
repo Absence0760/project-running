@@ -82,6 +82,7 @@
 	// Opt-out: drop gym load from the run fitness/fatigue/form curve so the
 	// dashboard readiness stays run-only. Default off (gym counts).
 	let excludeGymFromReadiness = $state(false);
+	let showCalories = $state(true);
 
 	// Theme — persisted to localStorage, not the cross-device settings
 	// bag. Intentionally per-browser: a dark laptop + a light iPad is a
@@ -299,6 +300,7 @@
 			).toString();
 			discoverableInSearch = effective(settings, 'discoverable_in_search', true) ?? true;
 			excludeGymFromReadiness = effective<boolean>(settings, 'exclude_gym_from_readiness', false) === true;
+			showCalories = effective<boolean>(settings, 'show_calories', true) !== false;
 
 			restingHr = (effective<number>(settings, 'resting_hr_bpm') ?? '')?.toString() ?? '';
 			maxHr = (effective<number>(settings, 'max_hr_bpm') ?? '')?.toString() ?? '';
@@ -588,6 +590,13 @@
 					</div>
 				</div>
 			</div>
+			<label class="checkbox-row">
+				<input type="checkbox" bind:checked={showCalories} onchange={() => autoSave({ show_calories: showCalories })} />
+				<span>
+					{m('prefs.showCalories')}
+					<span class="hint">{m('prefs.showCaloriesHint')}</span>
+				</span>
+			</label>
 		</section>
 
 		<!-- Activity & Recording -->

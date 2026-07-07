@@ -3564,6 +3564,8 @@ export const messages = {
 	"prefs.autoPushStrava": "ランを自動的にStravaへ送信",
 	"prefs.showInSearch": "名前検索に表示する",
 	"prefs.showInSearchHint": "オフにすると、他のランナーが表示名で検索してもアカウントが表示されません。公開したランとプロフィールは、URLを知っている人なら誰でも引き続きアクセスできます。",
+	"prefs.showCalories": "カロリー推定を表示",
+	"prefs.showCaloriesHint": "距離と体重から推定します（未設定の場合は70 kgを使用）。オフにするとラン詳細ページのカロリー表示を非表示にします。",
 	"prefs.excludeGymFromReadiness": "ジムの負荷をランの準備度から除外する",
 	"prefs.excludeGymFromReadinessHint": "デフォルトでは、ジムのセッションはランと同様に疲労を増やし準備度を下げます。フィットネス・疲労・フォームをランのみに基づかせるにはこれをオンにしてください。",
 	"prefs.demographicsHeading": "属性情報・身体データ",

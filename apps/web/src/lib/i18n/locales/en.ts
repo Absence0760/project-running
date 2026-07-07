@@ -3581,6 +3581,8 @@ export const en = {
 	"prefs.autoPushStrava": "Auto-push runs to Strava",
 	"prefs.showInSearch": "Show me in name search",
 	"prefs.showInSearchHint": "When off, your account won't appear when other runners search by display name. Your public runs and profile remain reachable to anyone with the URL.",
+	"prefs.showCalories": "Show calorie estimates",
+	"prefs.showCaloriesHint": "Estimated from distance and body weight (a 70 kg default when unset). Turn off to hide the calorie figure on run pages.",
 	"prefs.excludeGymFromReadiness": "Exclude gym load from run readiness",
 	"prefs.excludeGymFromReadinessHint": "By default, gym sessions add to your fatigue and lower your readiness, like a run. Turn this on to keep your fitness, fatigue and form based on runs only.",
 	"prefs.demographicsHeading": "Demographics & body metrics",

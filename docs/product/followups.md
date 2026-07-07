@@ -84,6 +84,8 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 
 - [ ] **Mobile mirror: session-derived Log-as-workout prefill on event detail** — web's event-detail Log-as-workout now seeds the gym composer from `workoutDraftFromSession` when the class carries a `session_plan_id` (2026-07-06); mobile's `event_detail_screen._logAsWorkout` still passes only the flat `workoutDraftFromTemplate` title (it never fetches the attached session plan). Mirror by loading the plan + expanding + passing `seedSets` to `showGymComposeSheet`. The Dart helper already exists (`workoutDraftFromSession` in `event_gym_template.dart`).
 
+- [ ] **Mobile mirror: honour `show_calories` on run detail** — web's run-detail calorie cell is now gated on the universal `show_calories` pref (default on, Settings → Preferences → Units & Display, 2026-07-06); mobile's `run_detail_screen` calorie tile ignores it and mobile Preferences has no toggle. Read the pref via `SettingsSyncService.effective` + add the toggle row.
+
 ## Testing gaps
 
 - [ ] **Device-instrumented `integration_test` harness** — none today; would cover tile-cache / foreground-service / background-sync on real Android primitives. New infrastructure.

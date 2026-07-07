@@ -115,6 +115,9 @@
 	let shareConfirmHasZones = $state(false);
 	let shareBusy = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
+	// Hide-calories opt-out (universal `show_calories` pref, default on) —
+	// hunt-newrunner: a weight-conscious runner can suppress the estimate.
+	let showCalories = $state(true);
 	// HR-zone fallback inputs, read from the universal settings bag on
 	// mount. Used only when explicit `hr_zones` is unset (Older #8).
 	let maxHrBpm = $state<number | null>(null);
@@ -215,6 +218,7 @@
 				}
 				const bw = effective<number>(settings, 'body_weight_kg');
 				if (typeof bw === 'number' && bw > 0) bodyWeightKg = bw;
+				showCalories = effective<boolean>(settings, 'show_calories', true) !== false;
 			}
 			// Read viewer gender for the calorie cross-formula
 			// calibration (persona-hunt Round 3 finding Woman #5).
@@ -1413,7 +1417,7 @@
 				<span class="key-stat-value">{realElevationGain} m</span>
 				<span class="key-stat-label">{m('runDetail.elevation')}</span>
 			</div>
-			{#if estimatedCalories > 0}
+			{#if showCalories && estimatedCalories > 0}
 				<div class="key-stat">
 					<span class="key-stat-value">{estimatedCalories}</span>
 					<span class="key-stat-label">{calorieLabel}</span>

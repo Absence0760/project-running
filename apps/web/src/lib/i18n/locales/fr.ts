@@ -3568,6 +3568,8 @@ export const messages = {
 	"prefs.autoPushStrava": "Envoyer automatiquement les courses vers Strava",
 	"prefs.showInSearch": "M'afficher dans la recherche par nom",
 	"prefs.showInSearchHint": "Si désactivé, ton compte n'apparaîtra pas lorsque d'autres coureurs recherchent par nom affiché. Tes courses publiques et ton profil restent accessibles à toute personne disposant du lien.",
+	"prefs.showCalories": "Afficher les estimations de calories",
+	"prefs.showCaloriesHint": "Estimées à partir de la distance et du poids corporel (70 kg par défaut si non renseigné). Désactivez pour masquer les calories sur les pages de course.",
 	"prefs.excludeGymFromReadiness": "Exclure la charge de muscu de la forme à la course",
 	"prefs.excludeGymFromReadinessHint": "Par défaut, les séances de muscu augmentent ta fatigue et réduisent ta forme, comme une course. Active ceci pour que ta forme, ta fatigue et ta fraîcheur ne reposent que sur les courses.",
 	"prefs.demographicsHeading": "Données démographiques et corporelles",

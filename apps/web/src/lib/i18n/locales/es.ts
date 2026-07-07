@@ -3568,6 +3568,8 @@ export const messages = {
 	"prefs.autoPushStrava": "Enviar carreras automáticamente a Strava",
 	"prefs.showInSearch": "Mostrarme en la búsqueda por nombre",
 	"prefs.showInSearchHint": "Si está desactivado, tu cuenta no aparecerá cuando otros corredores busquen por nombre visible. Tus carreras públicas y tu perfil seguirán siendo accesibles para cualquiera que tenga el enlace.",
+	"prefs.showCalories": "Mostrar estimaciones de calorías",
+	"prefs.showCaloriesHint": "Estimadas a partir de la distancia y el peso corporal (70 kg por defecto si no se ha configurado). Desactívalo para ocultar las calorías en las páginas de carrera.",
 	"prefs.excludeGymFromReadiness": "Excluir la carga del gimnasio de la preparación para correr",
 	"prefs.excludeGymFromReadinessHint": "De forma predeterminada, las sesiones de gimnasio aumentan tu fatiga y reducen tu preparación, igual que una carrera. Actívalo para que tu forma, fatiga y frescura se basen solo en las carreras.",
 	"prefs.demographicsHeading": "Datos demográficos y corporales",

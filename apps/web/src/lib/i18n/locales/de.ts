@@ -3568,6 +3568,8 @@ export const messages = {
 	"prefs.autoPushStrava": "Läufe automatisch an Strava senden",
 	"prefs.showInSearch": "Mich in der Namenssuche anzeigen",
 	"prefs.showInSearchHint": "Wenn deaktiviert, erscheint dein Konto nicht, wenn andere Läufer nach dem Anzeigenamen suchen. Deine öffentlichen Läufe und dein Profil bleiben für jeden mit dem Link erreichbar.",
+	"prefs.showCalories": "Kalorienschätzungen anzeigen",
+	"prefs.showCaloriesHint": "Geschätzt aus Distanz und Körpergewicht (Standard 70 kg, wenn nicht gesetzt). Deaktivieren, um die Kalorienangabe auf Laufseiten auszublenden.",
 	"prefs.excludeGymFromReadiness": "Gym-Belastung von der Lauf-Bereitschaft ausschließen",
 	"prefs.excludeGymFromReadinessHint": "Standardmäßig erhöhen Gym-Einheiten deine Ermüdung und senken deine Bereitschaft, wie ein Lauf. Aktiviere dies, um Fitness, Ermüdung und Form nur auf Läufen basieren zu lassen.",
 	"prefs.demographicsHeading": "Demografische Daten & Körpermaße",
