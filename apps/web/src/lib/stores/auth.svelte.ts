@@ -4,10 +4,11 @@ import { dropUserCache } from '$lib/settings/settings';
 import { setUnit } from '$lib/format/units.svelte';
 import { createReadyGate, isAuthSettled } from './auth_ready';
 
-/// Upper bound a `ready()` waiter will block before resolving anyway,
-/// matching the longest of the old per-page poll loops (~1–3 s). It is a
-/// safety net for a wedged initial session check — settlement normally
-/// flushes waiters far sooner.
+/// Longest QUIET gap a `ready()` waiter tolerates before resolving
+/// anyway — the deadline re-arms on every unsettled auth lifecycle
+/// event, so a slow-but-progressing init (session landed, profile fetch
+/// in flight) keeps waiting while a genuinely wedged session check
+/// still bails in ~one gap. Matches the old per-page poll loops (~1–3 s).
 const AUTH_READY_TIMEOUT_MS = 3000;
 
 interface User {
