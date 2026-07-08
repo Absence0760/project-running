@@ -26,6 +26,17 @@ pub fn altitude_m(pressure_pa: f32, sea_level_pa: f32) -> f32 {
     BARO_SCALE_M * (1.0 - libm::powf(pressure_pa / sea_level_pa, BARO_EXPONENT))
 }
 
+/// A barometric elevation snapshot the `app/` baro task publishes for the
+/// face and phone link: the latest altitude plus the run's cumulative ascent
+/// and descent. All `f32` to match [`crate::fix::Fix::alt_m`] and the
+/// [`VertAccumulator`] totals it is assembled from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Reading {
+    pub alt_m: f32,
+    pub gain_m: f32,
+    pub loss_m: f32,
+}
+
 /// Movement smaller than this from the last committed altitude is treated as
 /// barometric noise rather than real vertical and left uncommitted. Sized to
 /// swallow BMP581 short-term noise and the metre-scale oscillation a level
@@ -86,6 +97,16 @@ impl VertAccumulator {
         self.loss_m
     }
 
+    /// Bundle the current cumulative totals with `alt_m` into a [`Reading`]
+    /// for publication to the face and phone link.
+    pub fn reading(&self, alt_m: f32) -> Reading {
+        Reading {
+            alt_m,
+            gain_m: self.gain_m,
+            loss_m: self.loss_m,
+        }
+    }
+
     pub fn reset(&mut self) {
         *self = Self::new();
     }
@@ -142,6 +163,18 @@ mod tests {
         }
         assert!((acc.gain_m() - 100.0).abs() <= DEADBAND_M);
         assert_eq!(acc.loss_m(), 0.0);
+    }
+
+    #[test]
+    fn reading_bundles_altitude_with_current_totals() {
+        let mut acc = VertAccumulator::new();
+        acc.push(0.0);
+        acc.push(50.0);
+        acc.push(30.0);
+        let r = acc.reading(30.0);
+        assert_eq!(r.alt_m, 30.0);
+        assert!((r.gain_m - 50.0).abs() < 1e-3);
+        assert!((r.loss_m - 20.0).abs() < 1e-3);
     }
 
     #[test]

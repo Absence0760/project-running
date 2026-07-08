@@ -15,7 +15,9 @@ use crate::state;
 #[embassy_executor::task]
 pub async fn run(mut tx: UarteTx<'static>) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
+    let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut latest = None;
+    let mut elev = None;
     let mut ticker = Ticker::every(Duration::from_secs(1));
     info!("phone: status frames on UARTE1");
     loop {
@@ -23,7 +25,14 @@ pub async fn run(mut tx: UarteTx<'static>) {
         if let Some(fix) = fix_rx.try_changed() {
             latest = Some(fix);
         }
-        let frame = link::status_frame(latest.as_ref(), Instant::now().as_secs() as u32);
+        if let Some(reading) = elev_rx.try_changed() {
+            elev = Some(reading);
+        }
+        let frame = link::status_frame(
+            latest.as_ref(),
+            elev.as_ref(),
+            Instant::now().as_secs() as u32,
+        );
         if let Err(e) = tx.write(frame.as_bytes()).await {
             warn!("phone: uart write error {:?}", e);
         }

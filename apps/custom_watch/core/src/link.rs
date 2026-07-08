@@ -10,19 +10,29 @@
 //! Schema (`"v": 1`):
 //! `{"v":1,"uptime_s":42,"fix":{"lat":..,"lon":..,"speed_mps":..,
 //!   "course_deg":..|null,"sats":..,"alt_m":..|null,"tod_s":..|null,
-//!   "age_s":..}}` — `"fix"` is `null` before the first fix.
+//!   "age_s":..},"elev":{"alt_m":..,"gain_m":..,"loss_m":..}}` — `"fix"` is
+//! `null` before the first fix, and `"elev"` is `null` until the barometer
+//! streams. `"elev"` is additive: it was introduced after `"v":1` shipped, so
+//! it stays within schema v1 and a decoder that ignores it (or tolerates its
+//! absence) keeps working.
 
 use core::fmt::Write;
 
+use crate::elevation;
 use crate::fix::Fix;
 
 pub const PROTOCOL_VERSION: u8 = 1;
 
-/// Generous over the ~160-char worst case; an overflowing write would
-/// truncate the frame and the trailing-newline test below would catch it.
-pub type Frame = heapless::String<192>;
+/// Generous over the ~215-char worst case (fix + elev objects); an overflowing
+/// write would truncate the frame and the trailing-newline test below would
+/// catch it.
+pub type Frame = heapless::String<256>;
 
-pub fn status_frame(fix: Option<&Fix>, uptime_s: u32) -> Frame {
+pub fn status_frame(
+    fix: Option<&Fix>,
+    elev: Option<&elevation::Reading>,
+    uptime_s: u32,
+) -> Frame {
     let mut out = Frame::new();
     let _ = write!(
         out,
@@ -60,6 +70,19 @@ pub fn status_frame(fix: Option<&Fix>, uptime_s: u32) -> Frame {
             );
         }
     }
+    let _ = write!(out, ",\"elev\":");
+    match elev {
+        None => {
+            let _ = write!(out, "null");
+        }
+        Some(e) => {
+            let _ = write!(
+                out,
+                "{{\"alt_m\":{:.1},\"gain_m\":{:.1},\"loss_m\":{:.1}}}",
+                e.alt_m, e.gain_m, e.loss_m
+            );
+        }
+    }
     let _ = writeln!(out, "}}");
     out
 }
@@ -81,9 +104,17 @@ mod tests {
         }
     }
 
+    fn elev() -> elevation::Reading {
+        elevation::Reading {
+            alt_m: 1600.5,
+            gain_m: 540.0,
+            loss_m: 120.0,
+        }
+    }
+
     #[test]
     fn frame_is_valid_json_with_expected_fields() {
-        let frame = status_frame(Some(&fix()), 42);
+        let frame = status_frame(Some(&fix()), None, 42);
         let v: serde_json::Value = serde_json::from_str(frame.trim_end()).expect("valid JSON");
         assert_eq!(v["v"], 1);
         assert_eq!(v["uptime_s"], 42);
@@ -96,7 +127,7 @@ mod tests {
 
     #[test]
     fn no_fix_is_null_not_absent() {
-        let frame = status_frame(None, 7);
+        let frame = status_frame(None, None, 7);
         let v: serde_json::Value = serde_json::from_str(frame.trim_end()).unwrap();
         assert!(v["fix"].is_null());
         assert_eq!(v["uptime_s"], 7);
@@ -108,11 +139,34 @@ mod tests {
         f.course_deg = None;
         f.alt_m = None;
         f.time_of_day = None;
-        let frame = status_frame(Some(&f), 42);
+        let frame = status_frame(Some(&f), None, 42);
         let v: serde_json::Value = serde_json::from_str(frame.trim_end()).unwrap();
         assert!(v["fix"]["course_deg"].is_null());
         assert!(v["fix"]["alt_m"].is_null());
         assert!(v["fix"]["tod_s"].is_null());
+    }
+
+    #[test]
+    fn elevation_is_an_additive_object_when_present() {
+        let frame = status_frame(Some(&fix()), Some(&elev()), 42);
+        let v: serde_json::Value = serde_json::from_str(frame.trim_end()).expect("valid JSON");
+        assert_eq!(v["v"], 1);
+        assert!((v["elev"]["alt_m"].as_f64().unwrap() - 1600.5).abs() < 1e-6);
+        assert!((v["elev"]["gain_m"].as_f64().unwrap() - 540.0).abs() < 1e-6);
+        assert!((v["elev"]["loss_m"].as_f64().unwrap() - 120.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn elevation_is_null_when_absent_not_omitted() {
+        // Absence must be tolerated by a decoder: the key is present as null,
+        // and it is null whether or not there is a fix.
+        let with_fix = status_frame(Some(&fix()), None, 42);
+        let v: serde_json::Value = serde_json::from_str(with_fix.trim_end()).unwrap();
+        assert!(v["elev"].is_null());
+        let no_fix = status_frame(None, None, 7);
+        let v: serde_json::Value = serde_json::from_str(no_fix.trim_end()).unwrap();
+        assert!(v["elev"].is_null());
+        assert!(v["fix"].is_null());
     }
 
     #[test]
@@ -128,7 +182,12 @@ mod tests {
             time_of_day: Some(86399),
             uptime_s: 0,
         };
-        let frame = status_frame(Some(&f), u32::MAX);
+        let e = elevation::Reading {
+            alt_m: -9999.9,
+            gain_m: 99999.9,
+            loss_m: 99999.9,
+        };
+        let frame = status_frame(Some(&f), Some(&e), u32::MAX);
         assert!(frame.ends_with('\n'));
         serde_json::from_str::<serde_json::Value>(frame.trim_end()).expect("valid JSON");
     }

@@ -12,6 +12,7 @@ use embassy_nrf::spim::Spim;
 use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, SharpMip};
+use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face;
 use watch_core::fix::Fix;
 use watch_core::record::Snapshot;
@@ -42,9 +43,11 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut hr_rx = unwrap!(state::HR.receiver());
     let mut rec_rx = unwrap!(state::RECORD.receiver());
+    let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr_bpm: Option<u16> = None;
     let mut rec: Option<Snapshot> = None;
+    let mut elev: Option<ElevationReading> = None;
 
     if let Err(e) = display.clear_all() {
         warn!("ui: display clear failed: {:?}", e);
@@ -60,8 +63,12 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         if let Some(snap) = rec_rx.try_changed() {
             rec = Some(snap);
         }
+        if let Some(reading) = elev_rx.try_changed() {
+            elev = Some(reading);
+        }
         let uptime_s = Instant::now().as_secs() as u32;
-        let rows = face::face_rows(latest.as_ref(), hr_bpm, rec.as_ref(), uptime_s);
+        let rows =
+            face::face_rows(latest.as_ref(), hr_bpm, rec.as_ref(), elev.as_ref(), uptime_s);
         for (row, text) in rows.iter().enumerate() {
             fb.draw_text_row(row, text);
         }
