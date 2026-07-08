@@ -140,7 +140,7 @@ Root-level `pnpm` shortcuts wrap the per-app commands so the common cases are on
 - `dev:db:*` — supabase local stack (`up`, `down`, `reset`, `status`, `studio`, `mailpit`, `psql`, `logs`)
 - `dev:run:*` — `web`, `web:preview`, `fns`, `android`, `ios`, `worker`, `osrm`
 - `emu:android:*` / `emu:ios:*` — Android emulator / iOS simulator helpers (`emu:ios:*` are macOS-only)
-- `watch:*` — custom-watch firmware (`doctor`, `build`, `test`, `flash`, `logs`, `sim` — thin aliases for `bin/watch-*.sh`; `test` and `sim` need no board)
+- `watch:*` — custom-watch firmware (`doctor`, `build`, `test`, `flash`, `logs`, `sim`, `sim:gui` — thin aliases for `bin/watch-*.sh`; `test` and `sim` need no board)
 - `build:*` — `web`, `android`, `ios`, `worker`
 - `check:*` / `gen:*` / `test:*` — analyzers, type generators, test runners
 - `setup:install` / `setup:flutter` — first-time bootstrap
@@ -202,6 +202,7 @@ pnpm watch:doctor           # once per machine: verify toolchain + board detecti
 pnpm watch:flash            # build + flash a connected nRF52840 DK + stream defmt logs
 pnpm watch:test             # host-side unit tests, no board
 pnpm watch:sim              # boot the firmware on an emulated DK (Renode), no board
+pnpm watch:sim:gui          # same, plus the live watch-screen window
 ```
 
 Full walkthrough in [apps/custom_watch/local_testing.md](../../apps/custom_watch/local_testing.md).

@@ -73,6 +73,7 @@
     "watch:flash": "bin/watch-flash.sh",
     "watch:logs": "bin/watch-logs.sh",
     "watch:sim": "bin/watch-sim.sh",
+    "watch:sim:gui": "bin/watch-sim.sh --gui",
 
     "//-- gen --": "Schema codegen — run gen:all after every migration; both outputs are committed and CI's parity-types job fails on drift (docs/architecture/schema_codegen.md).",
     "gen:all": "pnpm gen:types && pnpm gen:dart",
