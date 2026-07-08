@@ -117,6 +117,7 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     final busy = _state == _LinkState.connecting;
     final status = _status;
     final fix = status?.fix;
+    final elev = status?.elev;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.simWatchTitle)),
       body: ListView(
@@ -201,6 +202,23 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
                 dense: true,
                 title: Text(l10n.simWatchFixAge),
                 trailing: Text(l10n.simWatchSeconds(fix.ageS)),
+              ),
+            ],
+            if (elev != null) ...[
+              ListTile(
+                dense: true,
+                title: Text(l10n.simWatchBaroAltitude),
+                trailing: Text('${elev.altM.toStringAsFixed(0)} m'),
+              ),
+              ListTile(
+                dense: true,
+                title: Text(l10n.simWatchAscent),
+                trailing: Text('+${elev.gainM.toStringAsFixed(0)} m'),
+              ),
+              ListTile(
+                dense: true,
+                title: Text(l10n.simWatchDescent),
+                trailing: Text('-${elev.lossM.toStringAsFixed(0)} m'),
               ),
             ],
           ],

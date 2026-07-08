@@ -10399,6 +10399,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get simWatchAltitude => '高度';
 
   @override
+  String get simWatchBaroAltitude => '気圧高度';
+
+  @override
+  String get simWatchAscent => '上昇';
+
+  @override
+  String get simWatchDescent => '下降';
+
+  @override
   String get simWatchFixAge => '測位からの経過';
 
   @override

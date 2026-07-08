@@ -3134,6 +3134,9 @@
   "simWatchSpeed": "速度",
   "simWatchSatellites": "衛星数",
   "simWatchAltitude": "高度",
+  "simWatchBaroAltitude": "気圧高度",
+  "simWatchAscent": "上昇",
+  "simWatchDescent": "下降",
   "simWatchFixAge": "測位からの経過",
   "simWatchSeconds": "{seconds} 秒"
 }

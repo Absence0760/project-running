@@ -10933,6 +10933,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get simWatchAltitude => 'Altitude';
 
   @override
+  String get simWatchBaroAltitude => 'Altitude barométrique';
+
+  @override
+  String get simWatchAscent => 'Montée';
+
+  @override
+  String get simWatchDescent => 'Descente';
+
+  @override
   String get simWatchFixAge => 'Âge de la position';
 
   @override

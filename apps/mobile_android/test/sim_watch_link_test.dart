@@ -11,6 +11,10 @@ const _fixFrame =
     '"speed_mps":3.00,"course_deg":90.0,"sats":8,"alt_m":1624.0,'
     '"tod_s":27015,"age_s":1}}';
 const _noFixFrame = '{"v":1,"uptime_s":1,"fix":null}';
+const _elevFrame =
+    '{"v":1,"uptime_s":50,"fix":null,'
+    '"elev":{"alt_m":1600.5,"gain_m":540.0,"loss_m":120.0}}';
+const _elevNullFrame = '{"v":1,"uptime_s":50,"fix":null,"elev":null}';
 
 void main() {
   test('parses a full status frame', () {
@@ -43,6 +47,24 @@ void main() {
     expect(fix.courseDeg, isNull);
     expect(fix.altM, isNull);
     expect(fix.todS, isNull);
+  });
+
+  test('parses the elevation object when present', () {
+    final elev = SimWatchStatus.fromJsonLine(_elevFrame)!.elev!;
+    expect(elev.altM, closeTo(1600.5, 1e-9));
+    expect(elev.gainM, closeTo(540.0, 1e-9));
+    expect(elev.lossM, closeTo(120.0, 1e-9));
+  });
+
+  test('null elevation stays null, not a zeroed reading', () {
+    expect(SimWatchStatus.fromJsonLine(_elevNullFrame)!.elev, isNull);
+  });
+
+  test('a frame with no elev key (older firmware) still parses, elev null', () {
+    // Backward compat: _fixFrame predates the additive elev field.
+    final status = SimWatchStatus.fromJsonLine(_fixFrame)!;
+    expect(status.fix, isNotNull);
+    expect(status.elev, isNull);
   });
 
   test('garbage lines return null instead of throwing', () {

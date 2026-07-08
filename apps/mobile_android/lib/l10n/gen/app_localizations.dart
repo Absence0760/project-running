@@ -18270,6 +18270,24 @@ abstract class AppLocalizations {
   /// **'Altitude'**
   String get simWatchAltitude;
 
+  /// No description provided for @simWatchBaroAltitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Barometric altitude'**
+  String get simWatchBaroAltitude;
+
+  /// No description provided for @simWatchAscent.
+  ///
+  /// In en, this message translates to:
+  /// **'Ascent'**
+  String get simWatchAscent;
+
+  /// No description provided for @simWatchDescent.
+  ///
+  /// In en, this message translates to:
+  /// **'Descent'**
+  String get simWatchDescent;
+
   /// No description provided for @simWatchFixAge.
   ///
   /// In en, this message translates to:

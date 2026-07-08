@@ -52,6 +52,8 @@ const _fix = SimWatchFix(
   altM: 1624.0,
 );
 
+const _elev = SimWatchElevation(altM: 1600.0, gainM: 540.0, lossM: 120.0);
+
 void main() {
   testWidgets('connect renders live frames as they arrive', (tester) async {
     final controller = StreamController<SimWatchStatus>();
@@ -74,6 +76,36 @@ void main() {
     expect(find.text('3.0 m/s'), findsOneWidget);
     expect(find.text('8'), findsOneWidget);
     expect(find.text('1624 m'), findsOneWidget);
+
+    await controller.close();
+    await tester.pump();
+  });
+
+  testWidgets('renders the barometric elevation block when present',
+      (tester) async {
+    final controller = StreamController<SimWatchStatus>();
+    final link = _FakeLink(controller);
+    await _pumpScreen(tester, link);
+
+    await tester.tap(find.text('Connect'));
+    await tester.pump();
+
+    // Baro streams without a GPS fix — the elev tiles still render.
+    controller.add(
+      const SimWatchStatus(version: 1, uptimeS: 50, fix: null, elev: _elev),
+    );
+    await tester.pump();
+    expect(find.text('Barometric altitude'), findsOneWidget);
+    expect(find.text('1600 m'), findsOneWidget);
+    expect(find.text('Ascent'), findsOneWidget);
+    expect(find.text('+540 m'), findsOneWidget);
+    expect(find.text('Descent'), findsOneWidget);
+    expect(find.text('-120 m'), findsOneWidget);
+
+    // A later frame without elev drops the block (no stale carry-over).
+    controller.add(const SimWatchStatus(version: 1, uptimeS: 51, fix: null));
+    await tester.pump();
+    expect(find.text('Barometric altitude'), findsNothing);
 
     await controller.close();
     await tester.pump();

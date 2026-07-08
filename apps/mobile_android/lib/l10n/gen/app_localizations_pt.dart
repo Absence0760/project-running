@@ -10908,6 +10908,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get simWatchAltitude => 'Altitude';
 
   @override
+  String get simWatchBaroAltitude => 'Altitude barométrica';
+
+  @override
+  String get simWatchAscent => 'Subida';
+
+  @override
+  String get simWatchDescent => 'Descida';
+
+  @override
   String get simWatchFixAge => 'Idade do sinal';
 
   @override
@@ -21817,6 +21826,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get simWatchAltitude => 'Altitude';
+
+  @override
+  String get simWatchBaroAltitude => 'Altitude barométrica';
+
+  @override
+  String get simWatchAscent => 'Subida';
+
+  @override
+  String get simWatchDescent => 'Descida';
 
   @override
   String get simWatchFixAge => 'Idade do sinal';

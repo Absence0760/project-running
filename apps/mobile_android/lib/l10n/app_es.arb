@@ -3134,6 +3134,9 @@
   "simWatchSpeed": "Velocidad",
   "simWatchSatellites": "Satélites",
   "simWatchAltitude": "Altitud",
+  "simWatchBaroAltitude": "Altitud barométrica",
+  "simWatchAscent": "Ascenso",
+  "simWatchDescent": "Descenso",
   "simWatchFixAge": "Antigüedad de la señal",
   "simWatchSeconds": "{seconds} s"
 }

@@ -77,15 +77,40 @@ class SimWatchFix {
   }
 }
 
+class SimWatchElevation {
+  final double altM;
+  final double gainM;
+  final double lossM;
+
+  const SimWatchElevation({
+    required this.altM,
+    required this.gainM,
+    required this.lossM,
+  });
+
+  static SimWatchElevation? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final alt = json['alt_m'];
+    if (alt is! num) return null;
+    return SimWatchElevation(
+      altM: alt.toDouble(),
+      gainM: (json['gain_m'] as num?)?.toDouble() ?? 0,
+      lossM: (json['loss_m'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class SimWatchStatus {
   final int version;
   final int uptimeS;
   final SimWatchFix? fix;
+  final SimWatchElevation? elev;
 
   const SimWatchStatus({
     required this.version,
     required this.uptimeS,
     this.fix,
+    this.elev,
   });
 
   /// Returns null on anything that isn't a valid frame — a UART stream can
@@ -101,6 +126,9 @@ class SimWatchStatus {
         version: version.toInt(),
         uptimeS: uptime.toInt(),
         fix: SimWatchFix.fromJson(decoded['fix']),
+        // Additive since v1 — a frame without "elev" (older firmware) parses
+        // fine, elev just stays null.
+        elev: SimWatchElevation.fromJson(decoded['elev']),
       );
     } catch (_) {
       return null;
