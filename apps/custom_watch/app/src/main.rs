@@ -18,13 +18,17 @@
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
+use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::{bind_interrupts, peripherals, spim, twim, uarte};
+use embassy_sync::mutex::Mutex;
 use nrf52840_dk::Board;
+use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 #[cfg(feature = "ble")]
 use nrf_softdevice::Softdevice;
 
+mod run_flash;
 mod state;
 mod tasks;
 
@@ -123,13 +127,21 @@ async fn main(spawner: Spawner) {
     let btn1 = Input::new(board.buttons.btn1, Pull::Up);
     let btn2 = Input::new(board.buttons.btn2, Pull::Up);
 
+    // Shared flash run store: `record` commits finished runs, `ble` reads them
+    // back for sync. Probes for the NVMC controller at construction and no-ops
+    // if it is absent (the sim), so recording is never blocked on flash.
+    static STORE: StaticCell<run_flash::SharedStore> = StaticCell::new();
+    let store = STORE.init(Mutex::new(run_flash::RunStore::new(Nvmc::new(
+        board.flash.nvmc,
+    ))));
+
     spawner.spawn(unwrap!(tasks::ui::blink_task(board.leds.led1)));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
     spawner.spawn(unwrap!(tasks::button::run(btn1, btn2)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
-    spawner.spawn(unwrap!(tasks::record::run()));
+    spawner.spawn(unwrap!(tasks::record::run(store)));
 
     // Phone link. Default build: UARTE1 → Renode TCP bridge, plus the BLE
     // stub. BLE build: the S140 SoftDevice owns the link over the radio and
