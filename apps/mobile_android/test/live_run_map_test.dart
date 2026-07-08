@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -390,4 +393,136 @@ void main() {
               'target.');
     });
   });
+
+  group('latLngAtFractionalIndex', () {
+    final line = [
+      const LatLng(51.5, -0.1),
+      const LatLng(51.5, -0.099),
+      const LatLng(51.501, -0.099),
+    ];
+
+    test('returns null for an empty line', () {
+      expect(latLngAtFractionalIndex(const [], 0), isNull);
+    });
+
+    test('an integer index returns that exact vertex', () {
+      expect(latLngAtFractionalIndex(line, 1), line[1]);
+    });
+
+    test('a fractional index lerps between the adjacent vertices', () {
+      final p = latLngAtFractionalIndex(line, 0.5)!;
+      expect(p.latitude, closeTo(51.5, 1e-12));
+      expect(p.longitude, closeTo(-0.0995, 1e-12));
+    });
+
+    test('clamps below zero and above the last index', () {
+      expect(latLngAtFractionalIndex(line, -3), line.first);
+      expect(latLngAtFractionalIndex(line, 99), line.last);
+    });
+
+    test('NaN falls back to the first vertex', () {
+      expect(latLngAtFractionalIndex(line, double.nan), line.first);
+    });
+  });
+
+  // ─── Replay dot ─────────────────────────────────────────────────
+  //
+  // The run-detail replay drives `currentPositionIndex` up to once
+  // per frame. The dot must animate ALONG the smoothed polyline —
+  // the old lat/lng chord tween chased the fast-moving target across
+  // straight lines that cut corners, visibly off the rendered line.
+
+  group('replay dot', () {
+    // Right-angle track: east along a constant latitude, then north.
+    // A chord-tweened dot cuts this corner; an index-space dot cannot.
+    final cornerTrack = <Waypoint>[
+      for (int i = 0; i <= 10; i++) _w(51.5, -0.1 + i * 0.001),
+      for (int i = 1; i <= 10; i++) _w(51.5 + i * 0.001, -0.09),
+    ];
+
+    Future<void> pumpReplay(
+      WidgetTester tester,
+      List<Waypoint> track,
+      int? replayIdx,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 600,
+              child: LiveRunMap(
+                track: track,
+                currentPosition: replayIdx != null ? track[replayIdx] : null,
+                currentPositionIndex: replayIdx,
+                followRunner: false,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    LatLng dotOf(WidgetTester tester) => tester
+        .widget<MarkerLayer>(
+            find.byKey(const ValueKey('current-position-marker')))
+        .markers
+        .single
+        .point;
+
+    testWidgets('stays on the smoothed polyline while the index advances',
+        (tester) async {
+      final smoothed = smoothTrack(smoothTrack(
+          [for (final w in cornerTrack) LatLng(w.lat, w.lng)]));
+      for (int idx = 0; idx < cornerTrack.length; idx++) {
+        await pumpReplay(tester, cornerTrack, idx);
+        final dot = dotOf(tester);
+        expect(
+          _distToPolyline(dot, smoothed),
+          lessThan(1e-9),
+          reason: 'At replay index $idx the dot must sit on the rendered '
+              '(smoothed) polyline — the chord tween used to cut the corner.',
+        );
+      }
+    });
+
+    testWidgets('entering replay snaps to the start instead of gliding',
+        (tester) async {
+      final smoothed = smoothTrack(smoothTrack(
+          [for (final w in cornerTrack) LatLng(w.lat, w.lng)]));
+      // Resting state: no replay, dot sits at the end of the track.
+      await pumpReplay(tester, cornerTrack, null);
+      // Press play: the very next frame must render the dot at the
+      // start vertex, not tweening a chord across the map from the end.
+      await pumpReplay(tester, cornerTrack, 0);
+      final dot = dotOf(tester);
+      expect(dot.latitude, closeTo(smoothed.first.latitude, 1e-12));
+      expect(dot.longitude, closeTo(smoothed.first.longitude, 1e-12));
+    });
+  });
+}
+
+double _distToSegment(LatLng p, LatLng a, LatLng b) {
+  final ax = a.longitude, ay = a.latitude;
+  final dx = b.longitude - ax, dy = b.latitude - ay;
+  final len2 = dx * dx + dy * dy;
+  var t = len2 == 0
+      ? 0.0
+      : ((p.longitude - ax) * dx + (p.latitude - ay) * dy) / len2;
+  t = t.clamp(0.0, 1.0).toDouble();
+  final cx = ax + dx * t, cy = ay + dy * t;
+  final ddx = p.longitude - cx, ddy = p.latitude - cy;
+  return math.sqrt(ddx * ddx + ddy * ddy);
+}
+
+double _distToPolyline(LatLng p, List<LatLng> line) {
+  var best = double.infinity;
+  for (int i = 0; i < line.length - 1; i++) {
+    final d = _distToSegment(p, line[i], line[i + 1]);
+    if (d < best) best = d;
+  }
+  return best;
 }

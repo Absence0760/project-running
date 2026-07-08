@@ -153,6 +153,28 @@ String currentTileUrl() {
   }
 }
 
+/// Point at a fractional [index] along [line], linearly interpolated
+/// between the two adjacent vertices (clamped to the line's range).
+/// The replay dot animates through this instead of tweening raw
+/// lat/lng chords: every interpolated position lies exactly on the
+/// polyline segment it falls in, so the dot can never leave the
+/// rendered line. Returns null for an empty line.
+LatLng? latLngAtFractionalIndex(List<LatLng> line, double index) {
+  if (line.isEmpty) return null;
+  final maxIdx = (line.length - 1).toDouble();
+  final fi = index.isNaN ? 0.0 : index.clamp(0.0, maxIdx).toDouble();
+  final lo = fi.floor();
+  final hi = fi.ceil();
+  if (lo == hi) return line[lo];
+  final t = fi - lo;
+  final a = line[lo];
+  final b = line[hi];
+  return LatLng(
+    a.latitude + (b.latitude - a.latitude) * t,
+    a.longitude + (b.longitude - a.longitude) * t,
+  );
+}
+
 /// A course marker (aid station, cutoff, …) to paint on the map. `color`
 /// is the shared hex from `routeMarkerKinds` so a pin matches the web twin
 /// and the schedule list.
@@ -341,6 +363,14 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   LatLng? _tweenStart;
   LatLng? _tweenEnd;
 
+  // Replay (authoritative-index) tween state. The replay path animates
+  // the dot in INDEX space along the smoothed polyline instead of the
+  // lat/lng chord tween above — see didUpdateWidget for the why. Null
+  // whenever the caller isn't driving `currentPositionIndex`.
+  double? _animatedIdx;
+  double? _idxTweenStart;
+  double? _idxTweenEnd;
+
   // Cached smoothed track polyline. The tween controller drives ~1 Hz
   // rebuilds of LiveRunMap. A naive resmooth is two O(n) passes over the
   // full track; during a recording the length grows every GPS fix, so a
@@ -398,6 +428,22 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   }
 
   void _onPositionTick() {
+    final idxStart = _idxTweenStart;
+    final idxEnd = _idxTweenEnd;
+    if (idxStart != null && idxEnd != null) {
+      final t = _positionController.value;
+      final fi = idxStart + (idxEnd - idxStart) * t;
+      _animatedIdx = fi;
+      final next =
+          latLngAtFractionalIndex(_smoothedTrackFor(widget.track), fi);
+      if (next == null) return;
+      setState(() => _animatedLatLng = next);
+      if (widget.followRunner && !_userPanned) {
+        _moveCamera(next);
+      }
+      return;
+    }
+
     final start = _tweenStart;
     final end = _tweenEnd;
     if (start == null || end == null) return;
@@ -633,6 +679,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       _animatedLatLng = null;
       _tweenStart = null;
       _tweenEnd = null;
+      _animatedIdx = null;
+      _idxTweenStart = null;
+      _idxTweenEnd = null;
       _userPanned = false;
       _cachedSmoothedTrack = null;
       _cachedSmoothedForLength = -1;
@@ -644,6 +693,49 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       _cachedHaloPolylines = null;
       _cachedHaloForLength = -1;
     }
+
+    // Replay path — the only caller that passes currentPositionIndex.
+    // Animate in INDEX space along the smoothed polyline rather than
+    // the lat/lng chord tween below: the replay controller advances
+    // the index up to once per frame, so the 900 ms chord tween never
+    // caught up — the dot chased a moving target across straight-line
+    // chords that cut every corner, visibly off the rendered line.
+    // Interpolating a fractional index between adjacent smoothed
+    // vertices keeps every intermediate position ON the drawn
+    // polyline by construction.
+    final replayIdx = widget.currentPositionIndex;
+    if (replayIdx != null && widget.track.isNotEmpty) {
+      final target = replayIdx
+          .toDouble()
+          .clamp(0.0, (widget.track.length - 1).toDouble())
+          .toDouble();
+      if (_animatedIdx == null) {
+        // Entering replay: snap. Tweening from the dot's resting spot
+        // (usually the end of the track) would glide a chord across
+        // the whole map to the start.
+        _positionController.stop();
+        _animatedIdx = target;
+        _idxTweenStart = target;
+        _idxTweenEnd = target;
+        final snapped =
+            latLngAtFractionalIndex(_smoothedTrackFor(widget.track), target);
+        if (snapped != null) _animatedLatLng = snapped;
+        return;
+      }
+      if (_idxTweenEnd == target) return;
+      _idxTweenStart = _animatedIdx;
+      _idxTweenEnd = target;
+      _positionController
+        ..stop()
+        ..value = 0
+        ..forward();
+      return;
+    }
+    // Not (or no longer) replaying — drop the index-space state so the
+    // lat/lng tween below owns the dot again.
+    _animatedIdx = null;
+    _idxTweenStart = null;
+    _idxTweenEnd = null;
 
     final pos = _latestPosition;
     if (pos == null) return;
@@ -990,6 +1082,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             // the raw latest fix as a fallback on the very first frame.
             if (currentLatLng != null)
               MarkerLayer(
+                key: const ValueKey('current-position-marker'),
                 markers: [
                   Marker(
                     point: currentLatLng,
