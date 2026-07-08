@@ -1,16 +1,25 @@
-//! Driver for Sharp Memory LCD displays (LS013B4DN04 family).
+//! Driver for Sharp Memory LCD displays (LS013B4DN04 family, 168x144).
 //!
-//! Communicates over SPI. Supports per-line updates so partial-refresh power
-//! draw stays near the display's ~10 µA static current — see
+//! Layered so everything above the SPI bus is host-testable:
+//!
+//! - [`font`] — generated 8x16 ASCII bitmap table (see `scripts/gen_font.py`)
+//! - [`framebuffer`] — pixel + text-cell drawing with per-line dirty tracking
+//! - [`display`] — the wire protocol: encodes dirty lines into the panel's
+//!   line-update packets over an `embedded-hal` SPI bus
+//!
+//! Per-line updates are the perf win: static draw stays near the panel's
+//! ~10 uA while only changed lines cost SPI traffic — see
 //! `docs/custom_watch/performance_path.md` "Display partial updates".
 //!
-//! Tier 1 stub. Real implementation lands in step 4 of
-//! `apps/custom_watch/README.md`. References:
+//! References:
 //! - Sharp application note: <https://www.sharpsma.com/documents/1468207/1485624/LS013B4DN04_application+info.pdf>
 //! - Adafruit C++ reference: <https://github.com/adafruit/Adafruit_SHARP_Memory_Display>
 
 #![no_std]
 
-// TODO step 4: define `SharpMip<SPI, CS, DISP>` struct holding the SPI bus,
-// chip-select pin, and display-enable pin; implement `init`, `clear`,
-// `set_pixel`, `flush_lines`. Per-line updates are the perf win.
+pub mod display;
+pub mod font;
+pub mod framebuffer;
+
+pub use display::SharpMip;
+pub use framebuffer::{Framebuffer, HEIGHT, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH};
