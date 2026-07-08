@@ -2,7 +2,7 @@
 
 How to build, flash, test, and debug the watch firmware on a connected Nordic nRF52840 DK. Optimised for "plug in the board, type one command, see GPS fixes streaming in the terminal within 60 seconds."
 
-## TL;DR — the three commands you'll actually run
+## TL;DR — the four commands you'll actually run
 
 Once parts have arrived and you've done the first-time setup below:
 
@@ -10,7 +10,10 @@ Once parts have arrived and you've done the first-time setup below:
 bin/watch-doctor.sh    # verify toolchain + board detection; run once per machine
 bin/watch-flash.sh     # build + flash + stream defmt logs (the inner loop)
 bin/watch-test.sh      # host-side unit tests, no board required
+bin/watch-sim.sh       # boot the firmware on an emulated nRF52840 DK (Renode), no board required
 ```
+
+No parts yet? `bin/watch-test.sh` and `bin/watch-sim.sh` work today with zero hardware — see [Simulating without a board](#simulating-without-a-board-renode).
 
 All three are thin wrappers around `cargo` and `probe-rs`. If you prefer the unwrapped form, `cd apps/custom_watch && cargo run --release` is what `bin/watch-flash.sh` actually does — same outcome, more typing.
 
@@ -22,6 +25,7 @@ Embedded firmware has a sharper split:
 
 - **Host tests** run on your development machine via `cargo test`. They cover any logic that doesn't touch a peripheral — NMEA parsers, recording state machines, signal-processing helpers, anything in the `drivers/` crates that's pure data manipulation. These give you instant feedback (sub-second), run in CI without any hardware, and are the same workflow you already know from web/backend.
 - **On-target tests** run on the actual nRF52840 DK. Anything that reads a sensor, drives the display, talks to the radio, or relies on hardware timers belongs here. They're slower (you have to flash the board before running) and require a board plugged in. They're the embedded equivalent of mobile e2e tests.
+- **Simulator runs** sit between the two: `bin/watch-sim.sh` boots the real firmware ELF on an emulated nRF52840 DK (Renode). Not a test tier with assertions (yet) — an interactive bring-up and debugging surface for the peripheral-touching paths host tests can't reach, minus what Renode can't model (BLE radio, sensor analog, power). See [Simulating without a board](#simulating-without-a-board-renode).
 
 The line between the two is enforced architecturally: pure-logic crates in `apps/custom_watch/drivers/` build for the host (`x86_64-unknown-linux-gnu`) and `cargo test` normally. The `app/` and `boards/` crates build for `thumbv7em-none-eabihf` and need a board. Aim to keep 60–70% of firmware code host-testable — it's the single most effective lever for keeping the inner loop fast.
 
@@ -34,6 +38,7 @@ The line between the two is enforced architecturally: pure-logic crates in `apps
 3. **probe-rs** — `cargo install probe-rs-tools --locked`. Open-source replacement for Segger's J-Link tools. Includes `probe-rs run` (flash + run + stream logs) and `probe-rs attach` (stream logs from an already-running board). (The older `cargo install probe-rs --features cli` form still works, but `probe-rs-tools` is the current canonical name.)
 4. **udev rules for USB access on Linux** — copy [the official probe-rs rules](https://probe.rs/docs/getting-started/probe-setup/#udev-rules) into `/etc/udev/rules.d/` and `sudo udevadm control --reload`. Without these, non-root users can't talk to the debug probe and `probe-rs list` will report nothing even when the board is plugged in.
 5. **`cargo-watch` (optional but nice)** — `cargo install cargo-watch`. Lets you auto-reflash on file save with `cargo watch -x 'run --release'`.
+6. **Renode + `defmt-print` (optional, for `bin/watch-sim.sh`)** — Renode installs machine-wide from the GitHub-releases rpm (`sudo dnf install -y ./renode-<version>-1.x86_64.rpm`; the workstation-level CLAUDE.md records the version pin + rationale); `defmt-print` decodes the sim's RTT byte stream: `cargo install defmt-print --locked`. Neither is checked by `bin/watch-doctor.sh` — `bin/watch-sim.sh` verifies both itself and says what's missing.
 
 ## First-time setup, after the workspace is scaffolded
 
@@ -57,6 +62,7 @@ All commands assume you're in `apps/custom_watch/` unless prefixed with `bin/`. 
 | Compile-check the whole workspace | `cargo build` | `bin/watch-build.sh` | No |
 | Build a release binary | `cargo build --release` | `bin/watch-build.sh` | No |
 | Run host-side unit tests | `cargo test` | `bin/watch-test.sh` | No |
+| Boot the firmware on an emulated DK + stream defmt logs | — | `bin/watch-sim.sh` | No |
 | Build + flash + stream logs (inner loop) | `cargo run --release` | `bin/watch-flash.sh` | Yes |
 | Flash a specific binary | `cargo run --release --bin sensor_smoke` | `bin/watch-flash.sh --bin sensor_smoke` | Yes |
 | Auto-reflash on file save | `cargo watch -x 'run --release'` | — | Yes |
@@ -132,13 +138,40 @@ If the nRF52840 DK is plugged into your other laptop, in the post, or otherwise 
 - Run lint + format (`cargo clippy --all-targets`, `cargo fmt --check`)
 - Build the release binary for `thumbv7em-none-eabihf` and inspect the size (`cargo size --release --bin app`)
 
+- Boot the whole firmware on an emulated nRF52840 DK (`bin/watch-sim.sh` — next section)
+
 You **cannot**:
 
 - Run `cargo run` (it requires a board to flash to)
-- Test the display, GPS, optical-HR, BLE, or any peripheral driver
+- Test BLE (nrf-softdevice needs the real radio — Renode doesn't model it faithfully)
+- Test real sensor/display behaviour (the emulated peripherals exist, but nothing answers on the other end until we write Renode peripheral models for the breakouts)
 - Measure actual power consumption
 
-For hardware-less integration testing of peripheral-touching code, the long-term answer is [Renode](https://renode.io/) — an open-source MCU emulator that supports the nRF52 family. Setup is non-trivial (~half a day) and out of scope for tier 1; it becomes worth doing if/when we add a CI job that runs on-target integration tests.
+## Simulating without a board (Renode)
+
+`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the **exact** `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes (nothing is compiled differently for the simulator), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
+
+```
+bin/watch-sim.sh                      # build + boot the default binary
+bin/watch-sim.sh --bin sensor_smoke   # boot a specific binary
+bin/watch-sim.sh --nmea my_route.nmea # substitute the GPS fixture
+```
+
+What runs for real in the sim: the Embassy executor and RTC1 time driver, GPIO (LED1 toggles are logged at INFO as `gpio0.led0: LED1 on/off` — the scheduler-liveness signal), and UARTE RX/TX. What doesn't: BLE, power, and any peripheral that needs a device model on the far side of the bus (display, HR sensor — the emulated SPI/I²C controllers exist but nothing answers yet).
+
+Moving parts, all inside [`sim/`](sim/):
+
+- **`watch.resc`** — the Renode script: loads the stock `nrf52840dk_nrf52840` platform, loads the ELF, arms the defmt drain, logs LED1 state changes, exposes the GPS UART as a pty.
+- **`defmt_rtt.py`** — gets defmt logs out. Renode's bundled `segger-rtt.py` hooks the SEGGER *C library's* function symbols, which the pure-Rust `defmt-rtt` crate doesn't have; this script instead polls the `_SEGGER_RTT` control block in emulated RAM, appends new bytes to a capture file, and advances the read offset. The wrapper tails that file through `defmt-print -e <elf>` for live decoded output.
+- **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever. Until step 3 (GNSS bring-up) enables the UARTE receiver, the firmware ignores it — Renode logs `uart0: Received a character, but the receiver is disabled`, which is expected, not a bug. Once step 3 lands, the parser + recording state machine can be exercised end-to-end against this deterministic feed.
+
+Sim artifacts (Renode log, raw defmt capture) are kept in a `/tmp/watch-sim.XXXXXX` dir printed on exit. Each run picks a random monitor telnet port (look for "Monitor available in telnet mode on port N" in the Renode log) — `ncat localhost <port>` gets you an interactive Renode monitor to poke registers, pause the machine, or inspect peripherals mid-run.
+
+Gotchas, learned the slow way:
+
+- **`sim/defmt_rtt.py` must stay ASCII-only and Python-2 compatible.** Renode embeds IronPython 2: one em dash in a comment aborts the include (`Non-ASCII character '\xe2'`), and the failure is only visible on the monitor console, not in the Renode log. The wrapper guards this (pty-as-sentinel + a grep for "defmt-rtt drain active"), but if you edit the file, keep it plain ASCII.
+- **Monitor errors never reach the Renode log file.** If `watch-sim.sh` dies with "Renode never created the GPS pty", re-run the include interactively to see the real error: `renode --console -e "include @apps/custom_watch/sim/watch.resc"`.
+- **The UICR warning at boot is expected.** embassy-nrf checks the UICR region to configure the reset pin; Renode doesn't model UICR, the read returns zeros, and the firmware logs a WARN about not being able to reprogram it. Harmless in the sim; it does not appear on real hardware.
 
 ## CI parity
 
@@ -169,5 +202,11 @@ All of those run on a stock Ubuntu CI runner with no hardware, with Cargo regist
 **"Mass storage interface error"** — the J-Link mass-storage interface is enabled and conflicting with probe-rs. Disable it via the [J-Link Commander](https://www.segger.com/downloads/jlink/) command `MSDDisable`, then power-cycle the board. Persists across reboots once disabled.
 
 **`cargo` complains about thumbv7em features it doesn't recognise** — your Rust toolchain is too old. `rustup update stable` and try again.
+
+**`watch-sim.sh`: "defmt-print not on PATH"** — `cargo install defmt-print --locked`. It's a host-side cargo tool, so it rides `cargo install-update` afterwards.
+
+**`watch-sim.sh`: "Renode never created the GPS pty" or "defmt-rtt drain did not arm"** — a monitor-level error aborted `sim/watch.resc`, and those errors don't reach the Renode log. Re-run the include under `renode --console` to see it (see § Simulating without a board). The commonest cause is a non-ASCII character introduced into `sim/defmt_rtt.py`.
+
+**`watch-sim.sh`: Renode aborts with `AddressAlreadyInUse`** — a stale Renode instance is holding a port. The wrapper picks a random monitor port per run and kills its own instance via pid-file on exit, so this normally means a Renode from some other context is lingering: `pgrep -f '^dotnet /opt/renode'` and kill what you find. (Note when hunting: `pkill -f Renode.dll` matches *your own shell's* command line — anchor the pattern as above.)
 
 **Successful flash but no LED blink, no defmt logs, or immediate chip reset.** Probable cause: the chip variant string in `apps/custom_watch/.cargo/config.toml` doesn't match the actual silicon on the DK. The scaffold uses `nRF52840_xxAA` (the standard variant in PCA10056); some boards or chip revisions ship as `nRF52840_xxAA-B` or other variants whose flash base addresses + ROM layouts differ slightly. probe-rs picks its flash algorithm from the chip string — a mismatch can "flash successfully" but the binary then references hardware that doesn't exist in that variant, causing immediate reset or silent no-op. **Diagnostic:** `probe-rs list` to see what probe-rs detects, `probe-rs chip list nRF52` to see known variants. **Fix:** update the `--chip` argument in the `.cargo/config.toml` runner line to match. `bin/watch-doctor.sh` prints the configured chip string on every run so you can spot a mismatch before it bites.
