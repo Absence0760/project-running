@@ -24,6 +24,7 @@ dependencies = [
  "embassy-nrf",
  "embassy-sync",
  "embassy-time",
+ "embedded-hal 1.0.0",
  "max86177",
  "nrf52840_dk",
  "panic-probe",

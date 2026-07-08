@@ -14,7 +14,7 @@
 #![no_std]
 
 use embassy_nrf::gpio::AnyPin;
-use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI3, UARTE0, UARTE1};
+use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI3, TWISPI0, UARTE0, UARTE1};
 use embassy_nrf::{Peri, Peripherals};
 
 /// u-blox MAX-M10S breakout on UARTE0. NMEA flows watch<-GPS on `rx`;
@@ -45,6 +45,14 @@ pub struct PhonePort {
     pub rx: Peri<'static, AnyPin>,
 }
 
+/// MAX86177 optical-HR breakout on the TWISPI0 I²C bus. Pins are the DK's
+/// header I²C pair (P0.26 SDA / P0.27 SCL); breadboard plan, bench-verify.
+pub struct HrPort {
+    pub twim: Peri<'static, TWISPI0>,
+    pub sda: Peri<'static, AnyPin>,
+    pub scl: Peri<'static, AnyPin>,
+}
+
 pub struct Leds {
     /// LED1 (P0.13, active-low) — the 1 Hz liveness blinker.
     pub led1: Peri<'static, AnyPin>,
@@ -58,6 +66,7 @@ pub struct Board {
     pub gps: GpsPort,
     pub display: DisplayPort,
     pub phone: PhonePort,
+    pub hr: HrPort,
 }
 
 impl Board {
@@ -84,6 +93,11 @@ impl Board {
                 uarte: p.UARTE1,
                 tx: p.P1_03.into(),
                 rx: p.P1_04.into(),
+            },
+            hr: HrPort {
+                twim: p.TWISPI0,
+                sda: p.P0_26.into(),
+                scl: p.P0_27.into(),
             },
         }
     }

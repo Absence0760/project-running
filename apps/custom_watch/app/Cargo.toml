@@ -29,6 +29,9 @@ embassy-futures  = "0.1"
 cortex-m         = { version = "0.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt      = "0.7"
 
+# I²C Operation type for the timeout-bounded sensor presence probes
+embedded-hal     = "1.0"
+
 # Logging: defmt over RTT, panic-probe so panics print + halt cleanly
 defmt        = "1.1"
 defmt-rtt    = "1.2"
