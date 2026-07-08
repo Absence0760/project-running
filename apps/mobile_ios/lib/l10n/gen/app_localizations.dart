@@ -18173,6 +18173,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Riegel equivalence from your best recent effort, recency-weighted. Closer distances are more reliable.'**
   String get racePredictorFootnote;
+
+  /// No description provided for @settingsSectionDeveloper.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer'**
+  String get settingsSectionDeveloper;
+
+  /// No description provided for @settingsTabSimWatchSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Live status from the simulated custom watch'**
+  String get settingsTabSimWatchSubtitle;
+
+  /// No description provided for @simWatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sim watch link'**
+  String get simWatchTitle;
+
+  /// No description provided for @simWatchHostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get simWatchHostLabel;
+
+  /// No description provided for @simWatchPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get simWatchPortLabel;
+
+  /// No description provided for @simWatchConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get simWatchConnect;
+
+  /// No description provided for @simWatchConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get simWatchConnecting;
+
+  /// No description provided for @simWatchDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get simWatchDisconnect;
+
+  /// No description provided for @simWatchConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed: {error}'**
+  String simWatchConnectionFailed(String error);
+
+  /// No description provided for @simWatchWaitingFrames.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected — waiting for frames…'**
+  String get simWatchWaitingFrames;
+
+  /// No description provided for @simWatchUptime.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch uptime'**
+  String get simWatchUptime;
+
+  /// No description provided for @simWatchNoFix.
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS fix yet'**
+  String get simWatchNoFix;
+
+  /// No description provided for @simWatchPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Position'**
+  String get simWatchPosition;
+
+  /// No description provided for @simWatchSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get simWatchSpeed;
+
+  /// No description provided for @simWatchSatellites.
+  ///
+  /// In en, this message translates to:
+  /// **'Satellites'**
+  String get simWatchSatellites;
+
+  /// No description provided for @simWatchAltitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Altitude'**
+  String get simWatchAltitude;
+
+  /// No description provided for @simWatchFixAge.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix age'**
+  String get simWatchFixAge;
+
+  /// No description provided for @simWatchSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String simWatchSeconds(int seconds);
 }
 
 class _AppLocalizationsDelegate

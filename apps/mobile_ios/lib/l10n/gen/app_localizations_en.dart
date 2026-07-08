@@ -10748,4 +10748,63 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get racePredictorFootnote =>
       'Riegel equivalence from your best recent effort, recency-weighted. Closer distances are more reliable.';
+
+  @override
+  String get settingsSectionDeveloper => 'Developer';
+
+  @override
+  String get settingsTabSimWatchSubtitle =>
+      'Live status from the simulated custom watch';
+
+  @override
+  String get simWatchTitle => 'Sim watch link';
+
+  @override
+  String get simWatchHostLabel => 'Host';
+
+  @override
+  String get simWatchPortLabel => 'Port';
+
+  @override
+  String get simWatchConnect => 'Connect';
+
+  @override
+  String get simWatchConnecting => 'Connecting…';
+
+  @override
+  String get simWatchDisconnect => 'Disconnect';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return 'Connection failed: $error';
+  }
+
+  @override
+  String get simWatchWaitingFrames => 'Connected — waiting for frames…';
+
+  @override
+  String get simWatchUptime => 'Watch uptime';
+
+  @override
+  String get simWatchNoFix => 'No GPS fix yet';
+
+  @override
+  String get simWatchPosition => 'Position';
+
+  @override
+  String get simWatchSpeed => 'Speed';
+
+  @override
+  String get simWatchSatellites => 'Satellites';
+
+  @override
+  String get simWatchAltitude => 'Altitude';
+
+  @override
+  String get simWatchFixAge => 'Fix age';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds s';
+  }
 }

@@ -10857,4 +10857,63 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get racePredictorFootnote =>
       'Equivalencia de Riegel a partir de tu mejor esfuerzo reciente, ponderada por recencia. Las distancias cercanas son más fiables.';
+
+  @override
+  String get settingsSectionDeveloper => 'Desarrollador';
+
+  @override
+  String get settingsTabSimWatchSubtitle =>
+      'Estado en vivo del reloj personalizado simulado';
+
+  @override
+  String get simWatchTitle => 'Enlace del reloj simulado';
+
+  @override
+  String get simWatchHostLabel => 'Host';
+
+  @override
+  String get simWatchPortLabel => 'Puerto';
+
+  @override
+  String get simWatchConnect => 'Conectar';
+
+  @override
+  String get simWatchConnecting => 'Conectando…';
+
+  @override
+  String get simWatchDisconnect => 'Desconectar';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return 'Error de conexión: $error';
+  }
+
+  @override
+  String get simWatchWaitingFrames => 'Conectado — esperando tramas…';
+
+  @override
+  String get simWatchUptime => 'Tiempo encendido del reloj';
+
+  @override
+  String get simWatchNoFix => 'Aún sin señal GPS';
+
+  @override
+  String get simWatchPosition => 'Posición';
+
+  @override
+  String get simWatchSpeed => 'Velocidad';
+
+  @override
+  String get simWatchSatellites => 'Satélites';
+
+  @override
+  String get simWatchAltitude => 'Altitud';
+
+  @override
+  String get simWatchFixAge => 'Antigüedad de la señal';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds s';
+  }
 }

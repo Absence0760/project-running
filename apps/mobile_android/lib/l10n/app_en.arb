@@ -14132,5 +14132,25 @@
   "racePredictorFootnote": "Riegel equivalence from your best recent effort, recency-weighted. Closer distances are more reliable.",
   "@racePredictorFootnote": {
     "description": "Race predictor explanatory footnote"
-  }
+  },
+  "settingsSectionDeveloper": "Developer",
+  "settingsTabSimWatchSubtitle": "Live status from the simulated custom watch",
+  "simWatchTitle": "Sim watch link",
+  "simWatchHostLabel": "Host",
+  "simWatchPortLabel": "Port",
+  "simWatchConnect": "Connect",
+  "simWatchConnecting": "Connecting…",
+  "simWatchDisconnect": "Disconnect",
+  "simWatchConnectionFailed": "Connection failed: {error}",
+  "@simWatchConnectionFailed": {"placeholders": {"error": {"type": "String"}}},
+  "simWatchWaitingFrames": "Connected — waiting for frames…",
+  "simWatchUptime": "Watch uptime",
+  "simWatchNoFix": "No GPS fix yet",
+  "simWatchPosition": "Position",
+  "simWatchSpeed": "Speed",
+  "simWatchSatellites": "Satellites",
+  "simWatchAltitude": "Altitude",
+  "simWatchFixAge": "Fix age",
+  "simWatchSeconds": "{seconds} s",
+  "@simWatchSeconds": {"placeholders": {"seconds": {"type": "int"}}}
 }
