@@ -13,9 +13,9 @@ path add $ORIGIN
 mach create "watch"
 machine LoadPlatformDescription @platforms/boards/nrf52840dk_nrf52840.repl
 
-# Sharp Memory LCD on SPIM2, chip-select on P1.12 (matches the pin map in
+# Sharp Memory LCD on SPIM3, chip-select on P1.12 (matches the pin map in
 # boards/nrf52840_dk). The model is runtime-compiled C#; `showAnalyzer
-# sysbus.spi2.display` (watch-sim.sh --gui) opens the live panel window.
+# sysbus.spi3.display` (watch-sim.sh --gui) opens the live panel window.
 include @SharpMipDisplay.cs
 machine LoadPlatformDescriptionFromString
 """
