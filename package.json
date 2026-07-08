@@ -60,9 +60,19 @@
     "dev:tiles:fetch": "bin/protomaps-dev.sh fetch",
     "dev:tiles:env": "bin/protomaps-dev.sh env",
 
-    "//-- emu --": "Android emulator helpers.",
+    "//-- emu --": "Android emulator + iOS simulator helpers. emu:ios:* need macOS — xcrun and the iOS simulator don't exist on Linux.",
     "emu:android:list": "flutter emulators",
     "emu:android:launch": "flutter emulators --launch",
+    "emu:ios:list": "xcrun simctl list devices available",
+    "emu:ios:launch": "flutter emulators --launch apple_ios_simulator",
+
+    "//-- watch --": "Custom-watch firmware (research-tier, decisions §71/§80): thin aliases for bin/watch-*.sh — cargo, probe-rs, Renode. watch:test and watch:sim need no board.",
+    "watch:doctor": "bin/watch-doctor.sh",
+    "watch:build": "bin/watch-build.sh",
+    "watch:test": "bin/watch-test.sh",
+    "watch:flash": "bin/watch-flash.sh",
+    "watch:logs": "bin/watch-logs.sh",
+    "watch:sim": "bin/watch-sim.sh",
 
     "//-- gen --": "Schema codegen — run gen:all after every migration; both outputs are committed and CI's parity-types job fails on drift (docs/architecture/schema_codegen.md).",
     "gen:all": "pnpm gen:types && pnpm gen:dart",
