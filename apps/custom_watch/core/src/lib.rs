@@ -7,6 +7,7 @@
 //! the same core ports unchanged to tier-2 silicon (decisions.md § 90).
 //!
 //! - [`fix`] — the GPS fix domain model + the RMC/GGA accumulator
+//! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`face`] — watch-face layout: state in, text rows out
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
@@ -14,6 +15,7 @@
 
 #![cfg_attr(not(test), no_std)]
 
+pub mod elevation;
 pub mod face;
 pub mod fix;
 pub mod link;
