@@ -7,6 +7,7 @@
 
 pub mod baro;
 pub mod ble;
+pub mod button;
 pub mod gps;
 pub mod hr;
 pub mod phone;

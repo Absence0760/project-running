@@ -4,10 +4,11 @@
 # (Renode, no hardware) and stream decoded defmt logs until Ctrl-C, feeding
 # the canned NMEA fixture into the emulated GPS UART on a loop.
 #
-# The ELF is the exact thumbv7em build that watch-flash.sh flashes — nothing
-# is compiled differently for the simulator. What you can't simulate: BLE
-# (nrf-softdevice needs the real radio), power draw, GPS/HR analog behaviour.
-# See apps/custom_watch/local_testing.md § Simulating without a board.
+# The ELF is the same thumbv7em build watch-flash.sh flashes, plus the
+# `sim-autostart` feature: the sim can't inject a button press, so it needs the
+# record task to start on the first fix (on hardware BTN1 does this). What you
+# can't simulate: BLE (nrf-softdevice needs the real radio), power draw, GPS/HR
+# analog behaviour. See apps/custom_watch/local_testing.md § Simulating without a board.
 #
 # Usage:
 #   bin/watch-sim.sh                      # build + simulate the default binary
@@ -47,8 +48,11 @@ command -v defmt-print >/dev/null || \
 	fatal "defmt-print not on PATH — install with: cargo install defmt-print --locked"
 [[ -f "$NMEA_FILE" ]] || fatal "NMEA fixture not found: $NMEA_FILE"
 
-step "Building firmware (release)"
-(cd "$WORKSPACE" && cargo build --release --bin "$BIN")
+# sim-autostart: the sim has no button injection, so without this the record
+# task never leaves Idle and no distance accrues. On real hardware BTN1 starts
+# the run and this feature is off — see apps/custom_watch/app/src/tasks/record.rs.
+step "Building firmware (release, --features sim-autostart)"
+(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart)
 ELF="$WORKSPACE/target/thumbv7em-none-eabihf/release/$BIN"
 [[ -f "$ELF" ]] || fatal "build produced no ELF at $ELF"
 

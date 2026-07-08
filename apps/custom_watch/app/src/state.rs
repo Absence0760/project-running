@@ -5,8 +5,10 @@
 //! subscriber count — bump it when a new consumer subscribes.
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use embassy_sync::watch::Watch;
 use max86177::peak_detect::Reading as HrReading;
+use watch_core::button::RecordCommand;
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::fix::Fix;
 use watch_core::record::Snapshot;
@@ -17,9 +19,14 @@ pub static FIX: Watch<CriticalSectionRawMutex, Fix, 3> = Watch::new();
 /// Latest heart-rate estimate: `hr` publishes, the `ui` face subscribes.
 pub static HR: Watch<CriticalSectionRawMutex, HrReading, 1> = Watch::new();
 
-/// Live recording totals: `record` publishes once a second, the `ui` face
-/// subscribes.
-pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 1> = Watch::new();
+/// Live recording totals: `record` publishes once a second, the `ui` face and
+/// the `button` task (for the state its toggle keys off) subscribe.
+pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 2> = Watch::new();
+
+/// Recording control commands: the `button` task sends, `record` receives and
+/// drives its state machine. A small buffer so a quick double-press (e.g.
+/// pause then stop) is never dropped.
+pub static RECORD_CMD: Channel<CriticalSectionRawMutex, RecordCommand, 4> = Channel::new();
 
 /// Barometric elevation snapshot: `baro` publishes each sample, the `ui` face
 /// and `phone` link subscribe.

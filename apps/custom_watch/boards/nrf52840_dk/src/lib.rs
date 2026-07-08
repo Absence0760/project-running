@@ -69,8 +69,24 @@ pub struct Leds {
     pub led4: Peri<'static, P0_16>,
 }
 
+/// The four user buttons. Active-LOW with the pin idle-high: a press pulls the
+/// line to GND, so each needs an internal pull-up and reads pressed as low.
+/// Pins per [`buttons`]. BTN1/BTN2 drive recording control today (see the
+/// `button` task); BTN3/BTN4 are exposed but unassigned.
+pub struct Buttons {
+    /// BTN1 — P0.11.
+    pub btn1: Peri<'static, AnyPin>,
+    /// BTN2 — P0.12.
+    pub btn2: Peri<'static, AnyPin>,
+    /// BTN3 — P0.24.
+    pub btn3: Peri<'static, AnyPin>,
+    /// BTN4 — P0.25.
+    pub btn4: Peri<'static, AnyPin>,
+}
+
 pub struct Board {
     pub leds: Leds,
+    pub buttons: Buttons,
     pub gps: GpsPort,
     pub display: DisplayPort,
     pub phone: PhonePort,
@@ -86,6 +102,12 @@ impl Board {
                 led2: p.P0_14,
                 led3: p.P0_15,
                 led4: p.P0_16,
+            },
+            buttons: Buttons {
+                btn1: p.P0_11.into(),
+                btn2: p.P0_12.into(),
+                btn3: p.P0_24.into(),
+                btn4: p.P0_25.into(),
             },
             gps: GpsPort {
                 uarte: p.UARTE0,

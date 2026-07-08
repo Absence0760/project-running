@@ -149,7 +149,9 @@ You **cannot**:
 
 ## Simulating without a board (Renode)
 
-`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the **exact** `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes (nothing is compiled differently for the simulator), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
+`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with **one** difference — the `sim-autostart` Cargo feature (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
+
+**The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). Renode has no way to inject a button press, so the sim would sit in `Idle` forever and never accrue distance. The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with `--features sim-autostart` so the sim keeps recording, while a hardware flash (default features) needs a real BTN1 press. This is the one place the sim ELF differs from the flashed one.
 
 ```
 bin/watch-sim.sh                      # build + boot the default binary, headless

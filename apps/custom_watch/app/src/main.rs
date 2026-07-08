@@ -12,7 +12,7 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
+use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::{bind_interrupts, peripherals, spim, twim, uarte};
 use nrf52840_dk::Board;
 use {defmt_rtt as _, panic_probe as _};
@@ -99,8 +99,14 @@ async fn main(spawner: Spawner) {
         unsafe { &mut *core::ptr::addr_of_mut!(BARO_TWIM_RAM) },
     );
 
+    // Buttons are active-LOW with the line idle-high, so pull up and treat a
+    // press as a falling edge (see the `button` task).
+    let btn1 = Input::new(board.buttons.btn1, Pull::Up);
+    let btn2 = Input::new(board.buttons.btn2, Pull::Up);
+
     spawner.spawn(unwrap!(tasks::ui::blink_task(board.leds.led1)));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
+    spawner.spawn(unwrap!(tasks::button::run(btn1, btn2)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
     spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
 
