@@ -171,6 +171,6 @@ async fn main(spawner: Spawner) {
         let server = SERVER.init(unwrap!(tasks::ble::Server::new(sd)));
         let sd: &'static Softdevice = sd;
         spawner.spawn(unwrap!(tasks::ble::softdevice_task(sd)));
-        spawner.spawn(unwrap!(tasks::ble::run(sd, server)));
+        spawner.spawn(unwrap!(tasks::ble::run(sd, server, store)));
     }
 }
