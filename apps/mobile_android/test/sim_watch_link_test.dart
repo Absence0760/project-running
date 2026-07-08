@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/sim_watch_link.dart';
@@ -70,6 +71,17 @@ void main() {
     expect(collected.length, 2);
     expect(collected[0].fix, isNull);
     expect(collected[1].fix!.sats, 8);
+  });
+
+  test('decodes a Uint8List-typed stream, the shape a real Socket has', () async {
+    // Pins the bind-not-transform choice: Socket reifies as
+    // Stream<Uint8List>, which transform(Utf8Decoder) rejects at runtime.
+    final controller = StreamController<Uint8List>();
+    final done = simWatchFrames(controller.stream).toList();
+    controller.add(Uint8List.fromList(utf8.encode('$_fixFrame\n')));
+    await controller.close();
+    final collected = await done;
+    expect(collected.single.fix!.sats, 8);
   });
 
   test('default host targets the emulator alias on Android only', () {

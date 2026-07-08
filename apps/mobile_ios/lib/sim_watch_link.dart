@@ -110,9 +110,11 @@ class SimWatchStatus {
 
 /// Decode a raw byte stream into status frames, skipping malformed lines.
 Stream<SimWatchStatus> simWatchFrames(Stream<List<int>> bytes) async* {
-  final lines = bytes
-      .transform(const Utf8Decoder(allowMalformed: true))
-      .transform(const LineSplitter());
+  // bind, not transform: a real Socket reifies as Stream<Uint8List>, and
+  // transform's runtime StreamTransformer<Uint8List, String> check rejects
+  // Utf8Decoder even though the element type is compatible.
+  final lines = const LineSplitter()
+      .bind(const Utf8Decoder(allowMalformed: true).bind(bytes));
   await for (final line in lines) {
     final status = SimWatchStatus.fromJsonLine(line);
     if (status != null) yield status;
