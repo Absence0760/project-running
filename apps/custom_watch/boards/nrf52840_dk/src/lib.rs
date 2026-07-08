@@ -14,7 +14,7 @@
 #![no_std]
 
 use embassy_nrf::gpio::AnyPin;
-use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI2, UARTE0, UARTE1};
+use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI3, UARTE0, UARTE1};
 use embassy_nrf::{Peri, Peripherals};
 
 /// u-blox MAX-M10S breakout on UARTE0. NMEA flows watch<-GPS on `rx`;
@@ -25,12 +25,13 @@ pub struct GpsPort {
     pub tx: Peri<'static, AnyPin>,
 }
 
-/// Sharp Memory LCD breakout on SPIM2 (the SPI instance Renode also
-/// models, so sim and bench share an address map). CS is a plain GPIO
-/// because the panel's SCS is active-HIGH — the inverse of what an
-/// SPI controller's hardware CS assumes.
+/// Sharp Memory LCD breakout on SPIM3 — the dedicated high-speed SPIM
+/// instance (no SPIS/TWI sharing, and its 0x4002F000 slot is undeclared
+/// in Renode's stock platform, so the sim can construct it with EasyDMA
+/// enabled). CS is a plain GPIO because the panel's SCS is active-HIGH —
+/// the inverse of what an SPI controller's hardware CS assumes.
 pub struct DisplayPort {
-    pub spim: Peri<'static, SPI2>,
+    pub spim: Peri<'static, SPI3>,
     pub sck: Peri<'static, AnyPin>,
     pub mosi: Peri<'static, AnyPin>,
     pub cs: Peri<'static, AnyPin>,
@@ -74,7 +75,7 @@ impl Board {
                 tx: p.P1_02.into(),
             },
             display: DisplayPort {
-                spim: p.SPI2,
+                spim: p.SPI3,
                 sck: p.P1_13.into(),
                 mosi: p.P1_14.into(),
                 cs: p.P1_12.into(),

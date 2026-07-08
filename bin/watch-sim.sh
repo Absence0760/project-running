@@ -11,6 +11,7 @@
 #
 # Usage:
 #   bin/watch-sim.sh                      # build + simulate the default binary
+#   bin/watch-sim.sh --gui                # also open the live watch-screen window
 #   bin/watch-sim.sh --bin sensor_smoke   # simulate a specific binary
 #   bin/watch-sim.sh --nmea path/to.nmea  # substitute the GPS fixture
 #
@@ -23,12 +24,14 @@ set -euo pipefail
 WORKSPACE="$REPO_ROOT/apps/custom_watch"
 BIN=app
 NMEA_FILE="$WORKSPACE/sim/nmea/bench_jog.nmea"
+GUI=0
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
+		--gui)  GUI=1; shift ;;
 		--bin)  BIN="${2:?--bin needs a value}"; shift 2 ;;
 		--nmea) NMEA_FILE="${2:?--nmea needs a value}"; shift 2 ;;
-		*) fatal "unknown argument: $1 (supported: --bin <name>, --nmea <file>)" ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --nmea <file>)" ;;
 	esac
 done
 
@@ -68,17 +71,27 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-step "Starting Renode (headless)"
 # Per-run monitor port: the default (1234) collides across concurrent or
-# stale sim instances and Renode aborts on AddressAlreadyInUse.
+# stale sim instances and Renode aborts on AddressAlreadyInUse. The telnet
+# monitor also lets you poke the machine mid-run:
+#   ncat localhost <port>   then e.g.:  sysbus.spi3.display DumpFrame "/tmp/f.ppm"
 MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
-renode --disable-xwt --hide-analyzers -P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid" \
-	-e "\$elf=@$ELF; \$defmt_out=@$DEFMT_RAW; \$gps_pty=@$GPS_PTY; include @$WORKSPACE/sim/watch.resc" \
-	>"$RENODE_LOG" 2>&1 &
+RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
+RENODE_CMDS="\$elf=@$ELF; \$defmt_out=@$DEFMT_RAW; \$gps_pty=@$GPS_PTY; include @$WORKSPACE/sim/watch.resc"
+if [[ "$GUI" == 1 ]]; then
+	step "Starting Renode (GUI — watch screen in a window)"
+	RENODE_CMDS+="; showAnalyzer sysbus.spi3.display"
+else
+	step "Starting Renode (headless)"
+	RENODE_FLAGS+=(--disable-xwt --hide-analyzers)
+fi
+renode "${RENODE_FLAGS[@]}" -e "$RENODE_CMDS" >"$RENODE_LOG" 2>&1 &
 RENODE_PID=$!
 
 # The pty symlink appearing means the emulation script ran to completion.
-for _ in $(seq 1 100); do
+# Generous timeout: the first run in a Renode process also compiles the C#
+# display model, which adds several seconds.
+for _ in $(seq 1 150); do
 	[[ -e "$GPS_PTY" ]] && break
 	if ! kill -0 "$RENODE_PID" 2>/dev/null; then
 		tail -n 30 "$RENODE_LOG" >&2
@@ -89,7 +102,7 @@ done
 [[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them)"
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
-ok "Renode up — log: $RENODE_LOG"
+ok "Renode up — log: $RENODE_LOG, monitor: ncat localhost $MONITOR_PORT"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the

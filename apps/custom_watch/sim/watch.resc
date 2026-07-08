@@ -12,6 +12,26 @@ path add $ORIGIN
 mach create "watch"
 machine LoadPlatformDescription @platforms/boards/nrf52840dk_nrf52840.repl
 
+# Sharp Memory LCD on SPIM2, chip-select on P1.12 (matches the pin map in
+# boards/nrf52840_dk). The model is runtime-compiled C#; `showAnalyzer
+# sysbus.spi2.display` (watch-sim.sh --gui) opens the live panel window.
+include @SharpMipDisplay.cs
+machine LoadPlatformDescriptionFromString
+"""
+// SPIM3: the stock platform declares spi0..2 without EasyDMA and repl
+// overlays can't change a constructor argument, but the 0x4002F000 slot
+// (the dedicated high-speed SPIM the firmware uses for the display) is
+// free to declare fresh with EasyDMA on. IRQ 47 per the datasheet.
+spi3: SPI.NRF52840_SPI @ sysbus 0x4002F000
+    easyDMA: true
+    -> nvic@47
+
+display: Video.SharpMipDisplay @ spi3
+
+gpio1:
+    12 -> display@0
+"""
+
 macro reset
 """
     sysbus LoadELF $elf
