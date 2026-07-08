@@ -13,6 +13,7 @@
 //!   characteristic payload at step 6)
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
 //! - [`button`] — the pure button-press → record-command mapping
+//! - [`run_store`] — on-device run wire format + BLE sync framing
 
 #![cfg_attr(not(test), no_std)]
 
@@ -22,3 +23,4 @@ pub mod face;
 pub mod fix;
 pub mod link;
 pub mod record;
+pub mod run_store;
