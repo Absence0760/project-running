@@ -14,7 +14,7 @@
 #![no_std]
 
 use embassy_nrf::gpio::AnyPin;
-use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI3, TWISPI0, UARTE0, UARTE1};
+use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI3, TWISPI0, TWISPI1, UARTE0, UARTE1};
 use embassy_nrf::{Peri, Peripherals};
 
 /// u-blox MAX-M10S breakout on UARTE0. NMEA flows watch<-GPS on `rx`;
@@ -53,6 +53,14 @@ pub struct HrPort {
     pub scl: Peri<'static, AnyPin>,
 }
 
+/// BMP581 barometer on a separate TWISPI1 I²C bus (P1.10 SDA / P1.11 SCL) so
+/// it never contends with the HR AFE's traffic; breadboard plan, bench-verify.
+pub struct BaroPort {
+    pub twim: Peri<'static, TWISPI1>,
+    pub sda: Peri<'static, AnyPin>,
+    pub scl: Peri<'static, AnyPin>,
+}
+
 pub struct Leds {
     /// LED1 (P0.13, active-low) — the 1 Hz liveness blinker.
     pub led1: Peri<'static, AnyPin>,
@@ -67,6 +75,7 @@ pub struct Board {
     pub display: DisplayPort,
     pub phone: PhonePort,
     pub hr: HrPort,
+    pub baro: BaroPort,
 }
 
 impl Board {
@@ -98,6 +107,11 @@ impl Board {
                 twim: p.TWISPI0,
                 sda: p.P0_26.into(),
                 scl: p.P0_27.into(),
+            },
+            baro: BaroPort {
+                twim: p.TWISPI1,
+                sda: p.P1_10.into(),
+                scl: p.P1_11.into(),
             },
         }
     }

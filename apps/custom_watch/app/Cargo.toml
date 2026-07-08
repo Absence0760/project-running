@@ -42,4 +42,5 @@ watch_core  = { path = "../core",               features = ["defmt"] }
 sharp_mip   = { path = "../drivers/sharp_mip",  features = ["defmt"] }
 ublox_nmea  = { path = "../drivers/ublox_nmea", features = ["defmt"] }
 max86177    = { path = "../drivers/max86177",   features = ["defmt"] }
+bmp581      = { path = "../drivers/bmp581",     features = ["defmt"] }
 nrf52840_dk = { path = "../boards/nrf52840_dk" }

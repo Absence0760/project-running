@@ -25,6 +25,7 @@ bind_interrupts!(struct Irqs {
     UARTE1 => uarte::InterruptHandler<peripherals::UARTE1>;
     SPIM3 => spim::InterruptHandler<peripherals::SPI3>;
     TWISPI0 => twim::InterruptHandler<peripherals::TWISPI0>;
+    TWISPI1 => twim::InterruptHandler<peripherals::TWISPI1>;
 });
 
 #[embassy_executor::main]
@@ -84,13 +85,27 @@ async fn main(spawner: Spawner) {
         unsafe { &mut *core::ptr::addr_of_mut!(HR_TWIM_RAM) },
     );
 
+    static mut BARO_TWIM_RAM: [u8; 16] = [0; 16];
+    let mut baro_i2c_config = twim::Config::default();
+    baro_i2c_config.frequency = twim::Frequency::K400;
+    baro_i2c_config.sda_pullup = true;
+    baro_i2c_config.scl_pullup = true;
+    let baro_twim = twim::Twim::new(
+        board.baro.twim,
+        Irqs,
+        board.baro.sda,
+        board.baro.scl,
+        baro_i2c_config,
+        unsafe { &mut *core::ptr::addr_of_mut!(BARO_TWIM_RAM) },
+    );
+
     spawner.spawn(unwrap!(tasks::ui::blink_task(board.leds.led1)));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
     spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
 
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
-    spawner.spawn(unwrap!(tasks::baro::run()));
+    spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
     spawner.spawn(unwrap!(tasks::ble::run()));
     spawner.spawn(unwrap!(tasks::record::run()));
 }

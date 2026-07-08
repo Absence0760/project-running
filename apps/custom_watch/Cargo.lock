@@ -15,6 +15,7 @@ dependencies = [
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "bmp581",
  "cortex-m",
  "cortex-m-rt",
  "defmt",
