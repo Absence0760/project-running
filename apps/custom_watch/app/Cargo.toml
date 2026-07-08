@@ -36,7 +36,7 @@ sim-autostart = []
 # sim (Renode has no SoftDevice) — build with:
 #   cargo build --release --no-default-features --features ble
 # UNVERIFIED pending the dev kit; see apps/custom_watch/README.md step 6.
-ble = ["dep:nrf-softdevice", "dep:nrf-softdevice-s140", "dep:static_cell", "dep:heapless"]
+ble = ["dep:nrf-softdevice", "dep:nrf-softdevice-s140"]
 
 # Versions pinned to crates.io latest as of 2026-05-28 (post-scaffold audit).
 # When bumping, check the relevant CHANGELOG — Embassy's executor / time / nrf
@@ -61,6 +61,15 @@ cortex-m-rt      = "0.7"
 
 # I²C Operation type for the timeout-bounded sensor presence probes
 embedded-hal     = "1.0"
+# NorFlash traits for the on-device run store over embassy-nrf's NVMC (step 7)
+embedded-storage = "0.3"
+
+# Run-store staging buffer + FlashSink + the BLE notify characteristics' Vec<u8, N>
+# (matches the heapless 0.9 the workspace + nrf-softdevice use, so the GattValue
+# impl applies). Not optional: the default build's flash run store needs it too.
+heapless         = "0.9"
+# &'static init for the shared run store (both builds) + the BLE Server (ble build).
+static_cell      = "2"
 
 # Logging: defmt over RTT, panic-probe so panics print + halt cleanly
 defmt        = "1.1"
@@ -82,7 +91,3 @@ nrf52840_dk = { path = "../boards/nrf52840_dk" }
 # without hardware) build.
 nrf-softdevice      = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true, features = ["nrf52840", "s140", "ble-peripheral", "ble-gatt-server", "critical-section-impl", "defmt"] }
 nrf-softdevice-s140 = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true }
-static_cell         = { version = "2", optional = true }
-# Same heapless 0.9 the workspace + nrf-softdevice use, so the notify
-# characteristic's `Vec<u8, N>` matches nrf-softdevice's GattValue impl.
-heapless            = { version = "0.9", optional = true }

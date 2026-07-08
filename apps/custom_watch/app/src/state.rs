@@ -16,8 +16,9 @@ use watch_core::record::Snapshot;
 /// Merged GPS fixes: `gps` publishes; `ui`, `phone`, and `record` subscribe.
 pub static FIX: Watch<CriticalSectionRawMutex, Fix, 3> = Watch::new();
 
-/// Latest heart-rate estimate: `hr` publishes, the `ui` face subscribes.
-pub static HR: Watch<CriticalSectionRawMutex, HrReading, 1> = Watch::new();
+/// Latest heart-rate estimate: `hr` publishes; the `ui` face and `record`
+/// (to stamp each stored track point's bpm) subscribe.
+pub static HR: Watch<CriticalSectionRawMutex, HrReading, 2> = Watch::new();
 
 /// Live recording totals: `record` publishes once a second, the `ui` face and
 /// the `button` task (for the state its toggle keys off) subscribe.
@@ -28,6 +29,7 @@ pub static RECORD: Watch<CriticalSectionRawMutex, Snapshot, 2> = Watch::new();
 /// pause then stop) is never dropped.
 pub static RECORD_CMD: Channel<CriticalSectionRawMutex, RecordCommand, 4> = Channel::new();
 
-/// Barometric elevation snapshot: `baro` publishes each sample, the `ui` face
-/// and `phone` link subscribe.
-pub static ELEVATION: Watch<CriticalSectionRawMutex, ElevationReading, 2> = Watch::new();
+/// Barometric elevation snapshot: `baro` publishes each sample; the `ui` face,
+/// the `phone`/`ble` link, and `record` (to stamp each stored track point's
+/// altitude) subscribe.
+pub static ELEVATION: Watch<CriticalSectionRawMutex, ElevationReading, 3> = Watch::new();

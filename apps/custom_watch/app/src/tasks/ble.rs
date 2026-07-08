@@ -17,11 +17,17 @@
 //! bench-verification notes in README step 6 — RAM origin, interrupt
 //! priorities, and connection params all need confirming against hardware).
 //!
-//! Out of scope for step 6 and still open (README step 7): handing a *finished
-//! run* to the phone as a chunked file (`run_manifest` / `run_chunk` per
-//! firmware.md). That needs an on-device run-storage layer (LittleFS) that
-//! tier 1 doesn't have yet; the live status-frame notify below is the
-//! foundation it will build on.
+//! Run sync (README step 7) rides the SAME service via two more
+//! characteristics, backed by the on-device flash run store (`run_flash`):
+//! - `run_manifest` (read + notify): a `run_store::ManifestHeader` + one
+//!   `ManifestEntry` per finished run, refreshed each second.
+//! - `run_chunk` (write + notify): the phone WRITES a `run_store::ChunkRequest`
+//!   `{run_seq, offset, len}`; the watch notifies back exactly that byte slice
+//!   of the run's blob (clamped to the notify MTU and the blob end).
+//!
+//! Also UNVERIFIED, and additionally: with the SoftDevice enabled, flash
+//! access must be SoftDevice-coordinated — see the `run_flash` hardware caveat
+//! (the NVMC backend must become `nrf_softdevice::Flash` before hardware use).
 
 #[cfg(not(feature = "ble"))]
 #[embassy_executor::task]
@@ -34,10 +40,17 @@ pub use imp::{config, run, softdevice_task, Server};
 
 #[cfg(feature = "ble")]
 mod imp {
+    // The gatt_server macro names every characteristic event `<Name>...Write`,
+    // so the generated LinkServiceEvent trips enum_variant_names once there is
+    // more than one characteristic. The names are the macro's, not ours.
+    #![allow(clippy::enum_variant_names)]
+
     use core::cell::Cell;
 
     use defmt::*;
     use embassy_futures::select::{select, Either};
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::signal::Signal;
     use embassy_time::{Duration, Instant, Ticker, Timer};
     use heapless::Vec;
     use nrf_softdevice::ble::advertisement_builder::{
@@ -45,8 +58,12 @@ mod imp {
     };
     use nrf_softdevice::ble::{gatt_server, peripheral};
     use nrf_softdevice::{raw, Softdevice};
-    use watch_core::link;
+    use watch_core::run_store::{
+        ChunkRequest, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
+    };
+    use watch_core::{flash_store, link};
 
+    use crate::run_flash::SharedStore;
     use crate::state;
 
     /// Custom 128-bit service + characteristic UUIDs for the Threkir watch
@@ -59,13 +76,26 @@ mod imp {
     /// One notify carries a whole `link::Frame`. A single ATT notification
     /// tops out at `ATT_MTU - 3` bytes; with the 256-byte MTU below that's
     /// 253, so 244 leaves margin and comfortably fits every real frame (the
-    /// worst-case frame is ~160 bytes; see `link.rs`).
+    /// worst-case frame is ~160 bytes; see `link.rs`). Also the run-chunk
+    /// notify payload cap — a chunk reply never exceeds one notification.
     const FRAME_CAP: usize = 244;
+
+    /// Manifest characteristic value: a `ManifestHeader` + one `ManifestEntry`
+    /// per slot. `flash_store::SLOT_COUNT` runs fit in one read/notify.
+    const MANIFEST_CAP: usize = MANIFEST_HEADER_LEN + flash_store::SLOT_COUNT * MANIFEST_ENTRY_LEN;
 
     #[nrf_softdevice::gatt_service(uuid = "d1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f")]
     pub struct LinkService {
         #[characteristic(uuid = "d1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f", read, notify)]
         frame: Vec<u8, FRAME_CAP>,
+        /// Finished-run manifest (README step 7). Read for the list; notified
+        /// each second so a connected phone sees a run appear live.
+        #[characteristic(uuid = "d1f6a7e2-5b2c-4e9a-9c3d-1a2b3c4d5e6f", read, notify)]
+        run_manifest: Vec<u8, MANIFEST_CAP>,
+        /// Run-chunk pull (README step 7). The phone WRITES a `ChunkRequest`;
+        /// the watch notifies back that byte slice of the run blob.
+        #[characteristic(uuid = "d1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write, notify)]
+        run_chunk: Vec<u8, FRAME_CAP>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -128,11 +158,33 @@ mod imp {
         .services_128(ServiceList::Complete, &[LINK_SERVICE_UUID.to_le_bytes()])
         .build();
 
+    /// Build the manifest characteristic value: header (run count + the watch
+    /// uptime anchor) followed by one entry per finished run.
+    async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
+        let entries = store.lock().await.manifest();
+        let mut buf: Vec<u8, MANIFEST_CAP> = Vec::new();
+        let header = ManifestHeader {
+            run_count: entries.len() as u8,
+            watch_uptime_s: uptime_s,
+        };
+        let _ = buf.extend_from_slice(&header.encode());
+        for e in entries.iter() {
+            let _ = buf.extend_from_slice(&e.encode());
+        }
+        buf
+    }
+
     /// Advertise → serve → re-advertise on disconnect, forever. While
     /// connected, push one status frame per second (only once the phone has
-    /// subscribed to notifications, tracked via the CCCD write event).
+    /// subscribed, tracked via the CCCD write event); keep the run manifest
+    /// characteristic fresh; and answer each `run_chunk` write with the
+    /// requested slice of the run blob (README step 7).
     #[embassy_executor::task]
-    pub async fn run(sd: &'static Softdevice, server: &'static Server) -> ! {
+    pub async fn run(
+        sd: &'static Softdevice,
+        server: &'static Server,
+        store: &'static SharedStore,
+    ) -> ! {
         // Receivers are acquired ONCE: a `Watch` hands out a fixed number and
         // re-subscribing on every reconnect would exhaust it. `latest`/`elev`
         // persist across reconnects so a fresh connection sees last-known data.
@@ -159,44 +211,90 @@ mod imp {
                 };
             info!("ble: phone connected");
 
-            // Shared between the GATT event handler (sets it on CCCD write) and
-            // the notify loop (reads it). Single-threaded executor, so a Cell
-            // is enough — no atomics needed.
+            // Shared between the GATT event handler (sets them on CCCD write /
+            // signals a chunk request) and the serve loop (reads them). The
+            // executor is single-threaded, so a Cell + a Signal suffice.
             let notifications = Cell::new(false);
+            let manifest_notify = Cell::new(false);
+            let chunk_req: Signal<CriticalSectionRawMutex, ChunkRequest> = Signal::new();
 
             let gatt = gatt_server::run(&conn, server, |e| match e {
-                ServerEvent::Link(LinkServiceEvent::FrameCccdWrite { notifications: on }) => {
-                    info!("ble: notifications {}", on);
-                    notifications.set(on);
-                }
+                ServerEvent::Link(e) => match e {
+                    LinkServiceEvent::FrameCccdWrite { notifications: on } => {
+                        info!("ble: link notifications {}", on);
+                        notifications.set(on);
+                    }
+                    LinkServiceEvent::RunManifestCccdWrite { notifications: on } => {
+                        info!("ble: manifest notifications {}", on);
+                        manifest_notify.set(on);
+                    }
+                    LinkServiceEvent::RunChunkWrite(bytes) => match ChunkRequest::decode(&bytes) {
+                        Some(req) => chunk_req.signal(req),
+                        None => warn!("ble: bad chunk request ({=usize} B)", bytes.len()),
+                    },
+                    LinkServiceEvent::RunChunkCccdWrite { notifications: on } => {
+                        debug!("ble: chunk notifications {}", on);
+                    }
+                },
             });
 
             let stream = async {
                 let mut ticker = Ticker::every(Duration::from_secs(1));
                 loop {
-                    ticker.next().await;
-                    if let Some(fix) = fix_rx.try_changed() {
-                        latest = Some(fix);
-                    }
-                    if let Some(reading) = elev_rx.try_changed() {
-                        elev = Some(reading);
-                    }
-                    if !notifications.get() {
-                        continue;
-                    }
-                    let frame = link::status_frame(
-                        latest.as_ref(),
-                        elev.as_ref(),
-                        Instant::now().as_secs() as u32,
-                    );
-                    let bytes = frame.as_bytes();
-                    let mut buf: Vec<u8, FRAME_CAP> = Vec::new();
-                    // Frames fit FRAME_CAP; the clamp is belt-and-braces so a
-                    // future wider frame truncates rather than refuses to build.
-                    let n = bytes.len().min(FRAME_CAP);
-                    let _ = buf.extend_from_slice(&bytes[..n]);
-                    if let Err(e) = server.link.frame_notify(&conn, &buf) {
-                        debug!("ble: notify failed {:?}", e);
+                    match select(ticker.next(), chunk_req.wait()).await {
+                        Either::First(()) => {
+                            let now_s = Instant::now().as_secs() as u32;
+                            if let Some(fix) = fix_rx.try_changed() {
+                                latest = Some(fix);
+                            }
+                            if let Some(reading) = elev_rx.try_changed() {
+                                elev = Some(reading);
+                            }
+
+                            // Refresh the manifest value so a read returns the
+                            // current list; notify it too if the phone subscribed.
+                            let manifest = build_manifest(store, now_s).await;
+                            if let Err(e) = server.link.run_manifest_set(&manifest) {
+                                debug!("ble: manifest set failed {:?}", e);
+                            }
+                            if manifest_notify.get() {
+                                if let Err(e) = server.link.run_manifest_notify(&conn, &manifest) {
+                                    debug!("ble: manifest notify failed {:?}", e);
+                                }
+                            }
+
+                            if notifications.get() {
+                                let frame =
+                                    link::status_frame(latest.as_ref(), elev.as_ref(), now_s);
+                                let bytes = frame.as_bytes();
+                                let mut buf: Vec<u8, FRAME_CAP> = Vec::new();
+                                // Frames fit FRAME_CAP; the clamp is belt-and-braces
+                                // so a future wider frame truncates rather than
+                                // refuses to build.
+                                let n = bytes.len().min(FRAME_CAP);
+                                let _ = buf.extend_from_slice(&bytes[..n]);
+                                if let Err(e) = server.link.frame_notify(&conn, &buf) {
+                                    debug!("ble: notify failed {:?}", e);
+                                }
+                            }
+                        }
+                        Either::Second(req) => {
+                            // Clamp to the notify MTU; read_chunk further clamps
+                            // to the blob end. An empty reply means unknown run
+                            // or past-the-end, so the phone isn't left waiting.
+                            let want = (req.len as usize).min(FRAME_CAP);
+                            let mut scratch = [0u8; FRAME_CAP];
+                            let n = store.lock().await.read_chunk(
+                                req.run_seq,
+                                req.offset,
+                                &mut scratch[..want],
+                            );
+                            let mut out: Vec<u8, FRAME_CAP> = Vec::new();
+                            let _ = out.extend_from_slice(&scratch[..n]);
+                            if let Err(e) = server.link.run_chunk_notify(&conn, &out) {
+                                debug!("ble: chunk notify failed {:?}", e);
+                            }
+                        }
                     }
                 }
             };

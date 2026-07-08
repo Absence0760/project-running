@@ -14,6 +14,7 @@
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
 //! - [`button`] — the pure button-press → record-command mapping
 //! - [`run_store`] — on-device run wire format + BLE sync framing
+//! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
 
 #![cfg_attr(not(test), no_std)]
 
@@ -21,6 +22,7 @@ pub mod button;
 pub mod elevation;
 pub mod face;
 pub mod fix;
+pub mod flash_store;
 pub mod link;
 pub mod record;
 pub mod run_store;

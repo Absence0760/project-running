@@ -143,7 +143,8 @@ If the nRF52840 DK is plugged into your other laptop, in the post, or otherwise 
 You **cannot**:
 
 - Run `cargo run` (it requires a board to flash to)
-- Test BLE (nrf-softdevice needs the real radio — Renode doesn't model it faithfully; the phone link's sim transport below is the stand-in)
+- Test BLE (nrf-softdevice needs the real radio — Renode doesn't model it faithfully; the phone link's sim transport below is the stand-in). This includes the step-7 run-sync `run_manifest` / `run_chunk` GATT characteristics, which only exist on the `--features ble` build.
+- Test the on-device flash run store's write path end to end (see the note in the Renode section: the store *arms* in the sim but the sim has no stop button, so a run is never committed to flash there)
 - Test real sensor analog behaviour (the HR/baro breakouts have no Renode device models yet — the display does)
 - Measure actual power consumption
 
@@ -162,6 +163,8 @@ bin/watch-sim.sh --phone-port 9900    # move the phone-link TCP port (default 77
 ```
 
 What runs for real in the sim, end to end: the Embassy executor and RTC1 time driver; GPIO (LED1 toggles logged at INFO as `gpio0.led0: LED1 on/off`); the GPS pipeline (canned NMEA → UARTE0 → `ublox_nmea` parser → `watch_core` fix accumulator); the Sharp MIP display (SPIM3 → the C# panel model — `--gui` shows the live screen, or dump a frame from the monitor: `sysbus.spi3.display DumpFrame "/tmp/frame.ppm"`); and the phone link (status frames on UARTE1 → TCP, the mobile app's dev Sim Watch screen connects here). What doesn't: BLE, power, and the HR/baro sensor analog side.
+
+**The flash run store in the sim.** At boot you'll see `run_flash: NVMC present, run store armed at 0xfc000` — Renode *does* model the nRF52840 NVMC, so the store's controller probe passes and it arms. But the store only writes to flash on a run **stop**, and the sim has no button injection to stop a run (`sim-autostart` only *starts* one on the first fix), so `commit` is never exercised there and no blob is written — the write path is a hardware-only test. Points still stage in RAM as the run records; after the tier-1 253-point cap (~4 min at 1 Hz) you'll see a one-shot `record: run N hit tier-1 flash point cap` warning and further points stop staging while the recording totals keep accruing. On a board without an NVMC (or a Renode platform lacking one) the probe would instead log `run_flash: no NVMC controller (sim?) — run store disabled` and every store op no-ops; recording is unaffected either way (L4 best-effort). The `run_manifest` / `run_chunk` sync characteristics are `--features ble`-only and can't run in the sim at all (no SoftDevice).
 
 Moving parts, all inside [`sim/`](sim/):
 

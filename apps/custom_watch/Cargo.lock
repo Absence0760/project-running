@@ -32,6 +32,7 @@ dependencies = [
  "embassy-sync",
  "embassy-time",
  "embedded-hal 1.0.0",
+ "embedded-storage",
  "heapless",
  "max86177",
  "nrf-softdevice",

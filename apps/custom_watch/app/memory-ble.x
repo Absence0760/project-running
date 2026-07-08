@@ -4,7 +4,10 @@
  * SoftDevice occupies the bottom 156 KiB of flash and a run-time-determined
  * slice of the bottom of RAM, so the application is linked above both.
  *
- *   FLASH: app starts at 0x00027000 (156 KiB), the S140 7.3.0 code region.
+ *   FLASH: app starts at 0x00027000 (156 KiB), the S140 7.3.0 code region,
+ *          and ends 16 KiB below the top: the same top-of-flash run-store
+ *          region memory.x reserves (watch_core::flash_store::REGION_LEN),
+ *          at absolute 0xFC000, above the SoftDevice-relative app.
  *   RAM  : app starts 31 KiB up. This RAM reservation is the SoftDevice's
  *          *maximum* footprint for our connection config; the actual required
  *          start address is printed by `Softdevice::enable` at boot
@@ -23,6 +26,7 @@
 MEMORY
 {
   /* NOTE 1 K = 1 KiBi = 1024 bytes */
-  FLASH : ORIGIN = 0x00000000 + 156K, LENGTH = 1024K - 156K
-  RAM   : ORIGIN = 0x20000000 + 31K,  LENGTH = 256K - 31K
+  FLASH     : ORIGIN = 0x00000000 + 156K, LENGTH = 1024K - 156K - 16K
+  RUN_STORE : ORIGIN = 0x00000000 + 1024K - 16K, LENGTH = 16K
+  RAM       : ORIGIN = 0x20000000 + 31K,  LENGTH = 256K - 31K
 }
