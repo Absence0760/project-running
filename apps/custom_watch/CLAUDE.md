@@ -68,10 +68,15 @@ no longer applies.
   product-page work, App Store / Play Store metadata, customer-facing
   documentation. The repo has none of that for this directory and
   shouldn't acquire any until §71 triggers flip.
-- Schema-synced row types. Watch-to-Supabase sync is tier-2+ integration
-  work per [`../../docs/custom_watch/firmware.md`](../../docs/custom_watch/firmware.md);
-  no `generated/db_rows.rs` exists yet and shouldn't until that sync
-  ships.
+- Schema-synced row types. No `generated/db_rows.rs` exists — the watch
+  never writes Supabase rows directly. **Note (2026-07-08, [§ 211](../../docs/architecture/decisions.md)):**
+  the owner overrode the tier-2 gate to build the finished-run sync
+  vertical now (watch flash store → BLE `run_manifest`/`run_chunk` →
+  phone reformats the `watch_core::run_store` wire blob → the existing
+  `WatchIngestQueue`/`runFromWatchPayload` → `api.saveRun`). That reuses
+  the shipped phone→Supabase path with **zero backend/schema change**, so
+  it still needs no generated row types on the watch. The BLE side stays
+  behind the `ble` feature and is compile-verified only.
 - Anything that pioneers a product feature not yet on web. Per
   [`../../docs/architecture/decisions.md` § 24](../../docs/architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive),
   web is the canonical feature surface for the product. Firmware here
