@@ -180,6 +180,30 @@ Gotchas, learned the slow way:
 - **Monitor errors never reach the Renode log file.** If `watch-sim.sh` dies with "Renode never created the GPS pty", re-run the include interactively to see the real error: `renode --console -e "include @apps/custom_watch/sim/watch.resc"`.
 - **The UICR warning at boot is expected.** embassy-nrf checks the UICR region to configure the reset pin; Renode doesn't model UICR, the read returns zeros, and the firmware logs a WARN about not being able to reprogram it. Harmless in the sim; it does not appear on real hardware.
 
+## Building + flashing the BLE (SoftDevice) firmware
+
+README step 6 (the real phone radio) lives behind the **`ble` Cargo feature** and is **not** part of the default or sim build — the Renode sim can't run it (the Nordic S140 SoftDevice is proprietary firmware Renode doesn't model), and CI never builds it. It is **compile-and-link-verified only**; nothing on this path has run on hardware yet.
+
+Build it:
+
+```
+cargo build --release --no-default-features --features ble
+```
+
+`--no-default-features` is required: it drops the default `single-core-cs` feature so the SoftDevice owns `critical-section` instead of cortex-m (two impls is a link error). `build.rs` sees `CARGO_FEATURE_BLE` and swaps `memory.x` for `memory-ble.x`, linking the app above the SoftDevice's flash + RAM region. The default build's memory map is unchanged.
+
+Flashing needs the SoftDevice programmed **once** alongside the app (the app expects it present at boot):
+
+1. Download the S140 7.3.0 SoftDevice hex from Nordic (bundled in the nRF5 SDK / DK download).
+2. `probe-rs download s140_nrf52_7.3.0_softdevice.hex --binary-format hex --chip nRF52840_xxAA`
+3. Flash the app as usual (`bin/watch-flash.sh` / `cargo run --release --no-default-features --features ble`).
+
+Bench-verification checklist (none of this is confirmed yet):
+
+- **RAM origin.** `memory-ble.x` over-reserves 31 KiB of RAM. On boot the SoftDevice logs the actual required RAM start (`sd_ble_enable: app RAM start should be 0x200...`). Tune `RAM : ORIGIN` down to that; over-reserving only wastes RAM, it doesn't misbehave.
+- **Interrupt priorities.** The SoftDevice reserves NVIC priorities 0/1/4; `main` puts GPIOTE, the RTC time driver, and every peripheral IRQ on P2. Confirm nothing faults or gets starved.
+- **Advertising + notify.** Scan for "Threkir", connect, subscribe to the `d1f6a7e1-…` characteristic, and confirm one NDJSON status frame per second — the same bytes the UART/sim transport emits. The phone-side BLE decoder (flutter_blue_plus) is not built yet; the sim's TCP Sim Watch screen remains the read surface until it is.
+
 ## CI parity
 
 The CI workflow at `.github/workflows/ci.yml` has a `build-firmware` job (per [decisions.md § 80](../../docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)) that runs on every PR:
