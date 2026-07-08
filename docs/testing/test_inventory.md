@@ -136,6 +136,14 @@ Cross-language wire-format compatibility test. The Go service at `apps/job_worke
 
 **Regression (1 test):** end-to-end mixed-source backup — 3 runs (2 with tracks), 2 routes, profile + prefs — restores fully. Caught the bug where offline restore was silently dropping `is_starred` / `description` / `club_id` from route rows; fixed in `apps/mobile_android/lib/backup.dart` by plumbing the missing keys through.
 
+### `apps/mobile_android/test/sim_watch_link_test.dart` — 6 tests
+
+Decoder for the custom-watch phone-link status frames (schema v1 from `watch_core::link`, `apps/custom_watch/core/src/link.rs` — the sim's TCP bridge today, the step-6 BLE characteristic later). Pins: a full frame parses field-for-field (fixture strings captured from the live sim); `"fix": null` stays null rather than becoming a zeroed fix; null optional fields (`course_deg`/`alt_m`/`tod_s`) survive; garbage lines return null instead of throwing; the byte-stream decoder skips malformed lines and reassembles frames split across chunk boundaries (a UART bridge gives no framing guarantees); the default host is the loopback on non-Android hosts.
+
+### `apps/mobile_android/test/sim_watch_screen_test.dart` — 5 tests
+
+The dev-only Sim Watch screen (Settings → Developer) against a fake link. Pins: connect renders frames as they arrive (uptime, then position/speed/sats/altitude when a fix lands); a failed connection surfaces the error text rather than silently idling; disconnect closes the link and returns to the connect affordance; and the settings gate both ways — the tile shows against a loopback backend URL and is absent against a production-shaped one (same `isLocalSupabaseUrl` rail as the seed auto-login). Test gotcha pinned in-file: never `await controller.close()` on a single-subscription stream whose listener was cancelled — the done future only completes once a listener consumes it, and the test hangs forever.
+
 ### `apps/mobile_android/test/wear_routes_fixture_test.dart` — 4 tests
 
 Cross-platform contract test for the phone→watch routes payload. Reads the canonical fixture at `fixtures/wear_routes_payload.json` (shared with the Wear OS Kotlin test `WearRoutesFixtureTest.kt`, 13 tests on the watch side). Pins: encoder produces the wire format byte-equivalent to the fixture's `expected_payload_json`; the JSON round-trips through `jsonEncode`/`jsonDecode` without loss; Unicode + emoji in route names survive; the pipeline filters out non-starred routes via `pickRoutesForWatchPush`. If you change the fixture, update both platform tests in the same commit.

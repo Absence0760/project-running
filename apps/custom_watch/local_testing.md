@@ -143,8 +143,8 @@ If the nRF52840 DK is plugged into your other laptop, in the post, or otherwise 
 You **cannot**:
 
 - Run `cargo run` (it requires a board to flash to)
-- Test BLE (nrf-softdevice needs the real radio — Renode doesn't model it faithfully)
-- Test real sensor/display behaviour (the emulated peripherals exist, but nothing answers on the other end until we write Renode peripheral models for the breakouts)
+- Test BLE (nrf-softdevice needs the real radio — Renode doesn't model it faithfully; the phone link's sim transport below is the stand-in)
+- Test real sensor analog behaviour (the HR/baro breakouts have no Renode device models yet — the display does)
 - Measure actual power consumption
 
 ## Simulating without a board (Renode)
@@ -152,20 +152,25 @@ You **cannot**:
 `bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the **exact** `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes (nothing is compiled differently for the simulator), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
 
 ```
-bin/watch-sim.sh                      # build + boot the default binary
+bin/watch-sim.sh                      # build + boot the default binary, headless
+bin/watch-sim.sh --gui                # also open the live watch-screen window
 bin/watch-sim.sh --bin sensor_smoke   # boot a specific binary
 bin/watch-sim.sh --nmea my_route.nmea # substitute the GPS fixture
+bin/watch-sim.sh --phone-port 9900    # move the phone-link TCP port (default 7788)
 ```
 
-What runs for real in the sim: the Embassy executor and RTC1 time driver, GPIO (LED1 toggles are logged at INFO as `gpio0.led0: LED1 on/off` — the scheduler-liveness signal), and UARTE RX/TX. What doesn't: BLE, power, and any peripheral that needs a device model on the far side of the bus (display, HR sensor — the emulated SPI/I²C controllers exist but nothing answers yet).
+What runs for real in the sim, end to end: the Embassy executor and RTC1 time driver; GPIO (LED1 toggles logged at INFO as `gpio0.led0: LED1 on/off`); the GPS pipeline (canned NMEA → UARTE0 → `ublox_nmea` parser → `watch_core` fix accumulator); the Sharp MIP display (SPIM3 → the C# panel model — `--gui` shows the live screen, or dump a frame from the monitor: `sysbus.spi3.display DumpFrame "/tmp/frame.ppm"`); and the phone link (status frames on UARTE1 → TCP, the mobile app's dev Sim Watch screen connects here). What doesn't: BLE, power, and the HR/baro sensor analog side.
 
 Moving parts, all inside [`sim/`](sim/):
 
-- **`watch.resc`** — the Renode script: loads the stock `nrf52840dk_nrf52840` platform, loads the ELF, arms the defmt drain, logs LED1 state changes, exposes the GPS UART as a pty.
+- **`watch.resc`** — the Renode script: loads the stock `nrf52840dk_nrf52840` platform, declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, bridges the phone-link UART to TCP, exposes the GPS UART as a pty.
 - **`defmt_rtt.py`** — gets defmt logs out. Renode's bundled `segger-rtt.py` hooks the SEGGER *C library's* function symbols, which the pure-Rust `defmt-rtt` crate doesn't have; this script instead polls the `_SEGGER_RTT` control block in emulated RAM, appends new bytes to a capture file, and advances the read offset. The wrapper tails that file through `defmt-print -e <elf>` for live decoded output.
-- **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever. Until step 3 (GNSS bring-up) enables the UARTE receiver, the firmware ignores it — Renode logs `uart0: Received a character, but the receiver is disabled`, which is expected, not a bug. Once step 3 lands, the parser + recording state machine can be exercised end-to-end against this deterministic feed.
+- **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer. `showAnalyzer sysbus.spi3.display` is the window `--gui` opens; `DumpFrame` writes a PPM for headless checks.
+- **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever; the GPS task parses it into fixes that drive both the on-screen face and the phone-link frames, so the whole data path is exercised against a deterministic feed.
 
-Sim artifacts (Renode log, raw defmt capture) are kept in a `/tmp/watch-sim.XXXXXX` dir printed on exit. Each run picks a random monitor telnet port (look for "Monitor available in telnet mode on port N" in the Renode log) — `ncat localhost <port>` gets you an interactive Renode monitor to poke registers, pause the machine, or inspect peripherals mid-run.
+The phone link mirrors the step-6 BLE design without the radio: the firmware's `phone` task writes one `watch_core::link` NDJSON status frame per second to UARTE1, Renode serves it as a TCP socket (`tcp://localhost:7788`; the Android emulator reaches it at `10.0.2.2:7788`), and the mobile app's dev-only **Settings → Developer → Sim watch link** screen (loopback-backend gate) renders the live values. `ncat localhost 7788` shows the raw frames.
+
+Sim artifacts (Renode log, raw defmt capture) are kept in a `/tmp/watch-sim.XXXXXX` dir printed on exit. Each run picks a random monitor telnet port (printed in the "Renode up" line) — `ncat localhost <port>` gets you an interactive Renode monitor to poke registers, pause the machine, or dump display frames mid-run.
 
 Gotchas, learned the slow way:
 
