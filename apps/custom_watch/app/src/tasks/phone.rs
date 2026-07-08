@@ -1,9 +1,11 @@
-//! Phone-link task — streams `watch_core::link` status frames to the phone.
+//! Phone-link task — streams `watch_core::link` status frames over UARTE1,
+//! which the simulator bridges to a TCP socket the mobile app's dev screen
+//! connects to.
 //!
-//! Transport today: UARTE1, which the simulator bridges to a TCP socket the
-//! mobile app's dev screen connects to. At step 6 (BLE GATT bring-up on
-//! real hardware) the same frames become the notify characteristic payload
-//! — this task swaps its writer, the frame layout doesn't change.
+//! This is the default / sim transport. On real hardware the `ble` feature
+//! (README step 6) carries the SAME frames over a GATT notify characteristic
+//! instead (`tasks::ble`), and `main` spawns that task in place of this one —
+//! the frame layout is identical, only the pipe differs.
 
 use defmt::*;
 use embassy_nrf::uarte::UarteTx;

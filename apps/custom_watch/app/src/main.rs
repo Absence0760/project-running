@@ -5,6 +5,11 @@
 //! are thin peripheral glue; the logic they drive lives in the host-tested
 //! `watch_core` + driver crates.
 //!
+//! The `ble` feature (README step 6) enables the Nordic S140 SoftDevice and
+//! carries the phone link over the radio instead of UARTE1. It is mutually
+//! exclusive with the default `single-core-cs` feature and CANNOT run under
+//! the Renode sim — build it with `--no-default-features --features ble`.
+//!
 //! See `apps/custom_watch/README.md` for the per-step bring-up plan.
 
 #![no_std]
@@ -16,6 +21,9 @@ use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::{bind_interrupts, peripherals, spim, twim, uarte};
 use nrf52840_dk::Board;
 use {defmt_rtt as _, panic_probe as _};
+
+#[cfg(feature = "ble")]
+use nrf_softdevice::Softdevice;
 
 mod state;
 mod tasks;
@@ -30,7 +38,27 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    // The SoftDevice reserves interrupt priorities 0, 1 and 4 for the radio.
+    // The app must keep every interrupt it enables off those levels, so the
+    // BLE build raises Embassy's GPIOTE + RTC time-driver priorities and then
+    // lowers each peripheral IRQ below the reserved band. The default build
+    // has the whole NVIC to itself and uses the stock config.
+    #[cfg(feature = "ble")]
+    let p = {
+        use embassy_nrf::interrupt::{self, InterruptExt, Priority};
+        let mut config = embassy_nrf::config::Config::default();
+        config.gpiote_interrupt_priority = Priority::P2;
+        config.time_interrupt_priority = Priority::P2;
+        let p = embassy_nrf::init(config);
+        interrupt::UARTE0.set_priority(Priority::P2);
+        interrupt::SPIM3.set_priority(Priority::P2);
+        interrupt::TWISPI0.set_priority(Priority::P2);
+        interrupt::TWISPI1.set_priority(Priority::P2);
+        p
+    };
+    #[cfg(not(feature = "ble"))]
     let p = embassy_nrf::init(Default::default());
+
     let board = Board::split(p);
     info!("custom_watch firmware booting (tier 1)");
 
@@ -59,15 +87,6 @@ async fn main(spawner: Spawner) {
     );
     // Active-HIGH chip select: idle low.
     let display_cs = Output::new(board.display.cs, Level::Low, OutputDrive::Standard);
-
-    let phone_uart = uarte::Uarte::new(
-        board.phone.uarte,
-        board.phone.rx,
-        board.phone.tx,
-        Irqs,
-        uarte::Config::default(),
-    );
-    let (phone_tx, _phone_rx) = phone_uart.split();
 
     // EasyDMA can't source a write from flash, so the TWIM needs a RAM buffer
     // for its outgoing bytes; the driver's writes are 2 bytes, 16 is ample.
@@ -108,10 +127,38 @@ async fn main(spawner: Spawner) {
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
     spawner.spawn(unwrap!(tasks::button::run(btn1, btn2)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
-    spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
-
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
-    spawner.spawn(unwrap!(tasks::ble::run()));
     spawner.spawn(unwrap!(tasks::record::run()));
+
+    // Phone link. Default build: UARTE1 → Renode TCP bridge, plus the BLE
+    // stub. BLE build: the S140 SoftDevice owns the link over the radio and
+    // UARTE1 is left free.
+    #[cfg(not(feature = "ble"))]
+    {
+        let phone_uart = uarte::Uarte::new(
+            board.phone.uarte,
+            board.phone.rx,
+            board.phone.tx,
+            Irqs,
+            uarte::Config::default(),
+        );
+        let (phone_tx, _phone_rx) = phone_uart.split();
+        spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
+        spawner.spawn(unwrap!(tasks::ble::run()));
+    }
+
+    #[cfg(feature = "ble")]
+    {
+        use static_cell::StaticCell;
+        // `enable` hands back &'static mut; `Server::new` needs the &mut to
+        // register attributes, after which we reborrow it as a shared &'static
+        // for the two tasks that share the stack.
+        let sd = Softdevice::enable(&tasks::ble::config());
+        static SERVER: StaticCell<tasks::ble::Server> = StaticCell::new();
+        let server = SERVER.init(unwrap!(tasks::ble::Server::new(sd)));
+        let sd: &'static Softdevice = sd;
+        spawner.spawn(unwrap!(tasks::ble::softdevice_task(sd)));
+        spawner.spawn(unwrap!(tasks::ble::run(sd, server)));
+    }
 }
