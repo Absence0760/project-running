@@ -70,7 +70,11 @@ impl Default for Parser {
 
 impl Parser {
     pub const fn new() -> Self {
-        Self { buf: [0; BUF_LEN], len: 0, in_sentence: false }
+        Self {
+            buf: [0; BUF_LEN],
+            len: 0,
+            in_sentence: false,
+        }
     }
 
     /// Feed one byte; returns a parsed sentence when this byte completes one.
@@ -135,7 +139,14 @@ fn parse_rmc(f: &mut Fields) -> Option<RmcData> {
     let lon_deg = parse_coord(f.next()?, f.next()?, 3);
     let speed_mps = parse_f32(f.next()?).map(|kn| kn * 0.514_444);
     let course_deg = parse_f32(f.next()?);
-    Some(RmcData { time, valid, lat_deg, lon_deg, speed_mps, course_deg })
+    Some(RmcData {
+        time,
+        valid,
+        lat_deg,
+        lon_deg,
+        speed_mps,
+        course_deg,
+    })
 }
 
 fn parse_gga(f: &mut Fields) -> Option<GgaData> {
@@ -146,7 +157,14 @@ fn parse_gga(f: &mut Fields) -> Option<GgaData> {
     let sats = parse_u32(f.next()?).unwrap_or(0) as u8;
     let _hdop = f.next()?;
     let alt_m = parse_f32(f.next()?);
-    Some(GgaData { time, lat_deg, lon_deg, quality, sats, alt_m })
+    Some(GgaData {
+        time,
+        lat_deg,
+        lon_deg,
+        quality,
+        sats,
+        alt_m,
+    })
 }
 
 /// Comma-separated field iterator over the payload after the type field.
@@ -157,7 +175,10 @@ struct Fields<'a> {
 
 impl<'a> Fields<'a> {
     fn new(payload: &'a [u8]) -> Self {
-        Self { rest: payload, done: false }
+        Self {
+            rest: payload,
+            done: false,
+        }
     }
 
     #[allow(clippy::should_implement_trait)]
