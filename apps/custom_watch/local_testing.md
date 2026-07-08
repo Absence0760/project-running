@@ -54,7 +54,7 @@ If step 3 hangs at "Flashing", unplug the board, wait 5 seconds, plug it back in
 
 ## Day-to-day commands
 
-All commands assume you're in `apps/custom_watch/` unless prefixed with `bin/`. The `bin/` wrappers all `cd` into the workspace internally and forward extra args through to the underlying tool.
+All commands assume you're in `apps/custom_watch/` unless prefixed with `bin/`. The `bin/` wrappers all `cd` into the workspace internally and forward extra args through to the underlying tool. Each wrapper also has a root pnpm alias (`pnpm watch:doctor`, `pnpm watch:flash`, `pnpm watch:test`, `pnpm watch:sim`, ...) — same scripts, listed under the `//-- watch --` group in the root `package.json`.
 
 | What | From the workspace | From the repo root | Hardware? |
 |---|---|---|---|

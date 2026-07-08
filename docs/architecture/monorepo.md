@@ -139,7 +139,8 @@ Root-level `pnpm` shortcuts wrap the per-app commands so the common cases are on
 - `dev:full` — the full backend in one shot (the `dev:core` stack **plus** the Go job worker, backgrounded, and the OSRM / GraphHopper engines when their graphs are built); then run a `dev:run:*` for your platform. `dev:full:status` / `:logs` / `:down` manage it
 - `dev:db:*` — supabase local stack (`up`, `down`, `reset`, `status`, `studio`, `mailpit`, `psql`, `logs`)
 - `dev:run:*` — `web`, `web:preview`, `fns`, `android`, `ios`, `worker`, `osrm`
-- `emu:android:list` / `emu:android:launch <name>` — Flutter emulators
+- `emu:android:*` / `emu:ios:*` — Android emulator / iOS simulator helpers (`emu:ios:*` are macOS-only)
+- `watch:*` — custom-watch firmware (`doctor`, `build`, `test`, `flash`, `logs`, `sim` — thin aliases for `bin/watch-*.sh`; `test` and `sim` need no board)
 - `build:*` — `web`, `android`, `ios`, `worker`
 - `check:*` / `gen:*` / `test:*` — analyzers, type generators, test runners
 - `setup:install` / `setup:flutter` — first-time bootstrap
@@ -152,8 +153,9 @@ The per-app recipes below show what each shortcut wraps, plus the device-targeti
 # From the repo root:
 pnpm dev:run:ios            # wraps `cd apps/mobile_ios && flutter run`
 
-# Or target a specific simulator:
-open -a Simulator
+# Or target a specific simulator (macOS-only):
+pnpm emu:ios:list           # wraps `xcrun simctl list devices available`
+pnpm emu:ios:launch         # wraps `flutter emulators --launch apple_ios_simulator`
 cd apps/mobile_ios && flutter devices
 cd apps/mobile_ios && flutter run -d {device-id}
 ```
@@ -190,6 +192,19 @@ Native Kotlin + Compose-for-Wear, not Flutter — open in Android Studio:
 # Start a Wear OS emulator (Device Manager → Create → Wear OS Large Round, API 34)
 # Then in Android Studio: open apps/watch_wear and Run.
 ```
+
+### Custom watch firmware
+
+Rust + Embassy, research-tier ([decisions.md § 71/§ 80](decisions.md)) — no Melos, no npm workspace, just cargo behind the `bin/watch-*.sh` wrappers:
+
+```bash
+pnpm watch:doctor           # once per machine: verify toolchain + board detection
+pnpm watch:flash            # build + flash a connected nRF52840 DK + stream defmt logs
+pnpm watch:test             # host-side unit tests, no board
+pnpm watch:sim              # boot the firmware on an emulated DK (Renode), no board
+```
+
+Full walkthrough in [apps/custom_watch/local_testing.md](../../apps/custom_watch/local_testing.md).
 
 ### Web app
 
