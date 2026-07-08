@@ -1,17 +1,24 @@
 //! Recording task — drives the host-tested `watch_core::record` state machine
-//! from the live fix stream and publishes a snapshot of the run totals.
+//! from the button command stream and the live fix stream, and publishes a
+//! snapshot of the run totals.
 //!
 //! Thin glue by design: distance, moving time, pace, the point-acceptance
-//! filter, and the auto-pause all live in `watch_core::record` (host-tested).
-//! This task moves fixes into the `Recorder` on a 1 Hz cadence and republishes
-//! its snapshot.
+//! filter, and the auto-pause all live in `watch_core::record` (host-tested);
+//! the button-press → command mapping lives in `watch_core::button`. This task
+//! selects over three sources — a 1 Hz tick (advances the wall clock),
+//! incoming fixes (fed to the recorder), and incoming commands (drive the
+//! start/pause/resume/stop transitions) — and republishes the snapshot after
+//! each.
 //!
-//! Tier-1 stand-in: the run auto-starts on the first fix. A button-driven
-//! start/stop belongs to the (not-yet-built) button handler; wiring that in is
-//! the remaining half of README step 7.
+//! Start path: on real hardware BTN1 starts the run (nothing auto-starts).
+//! The `sim-autostart` Cargo feature (default OFF) restores a "start on first
+//! fix" fallback for the Renode sim, which has no button injection — see
+//! `apps/custom_watch/local_testing.md § Simulating without a board`.
 
 use defmt::*;
+use embassy_futures::select::{select3, Either3};
 use embassy_time::{Duration, Instant, Ticker};
+use watch_core::button::RecordCommand;
 use watch_core::record::{RecordState, Recorder};
 
 use crate::state;
@@ -31,19 +38,33 @@ pub async fn run() {
     let sender = state::RECORD.sender();
     let mut recorder = Recorder::new();
     let mut ticker = Ticker::every(Duration::from_secs(1));
-    info!("record: waiting for first fix to auto-start");
+    #[cfg(feature = "sim-autostart")]
+    info!("record: sim-autostart on — starts on first fix");
+    #[cfg(not(feature = "sim-autostart"))]
+    info!("record: waiting for BTN1 to start");
     loop {
-        ticker.next().await;
-        let now_s = Instant::now().as_secs() as u32;
-        match fix_rx.try_changed() {
-            Some(fix) => {
+        match select3(ticker.next(), fix_rx.changed(), state::RECORD_CMD.receive()).await {
+            Either3::First(()) => {
+                recorder.tick(Instant::now().as_secs() as u32);
+            }
+            Either3::Second(fix) => {
+                #[cfg(feature = "sim-autostart")]
                 if recorder.state() == RecordState::Idle {
-                    recorder.start(now_s);
-                    info!("record: auto-started on first fix");
+                    recorder.start(Instant::now().as_secs() as u32);
+                    info!("record: sim-autostart on first fix");
                 }
                 recorder.on_fix(&fix);
             }
-            None => recorder.tick(now_s),
+            Either3::Third(cmd) => {
+                let now_s = Instant::now().as_secs() as u32;
+                match cmd {
+                    RecordCommand::Start => recorder.start(now_s),
+                    RecordCommand::Pause => recorder.pause(now_s),
+                    RecordCommand::Resume => recorder.resume(now_s),
+                    RecordCommand::Stop => recorder.stop(now_s),
+                }
+                info!("record: command {} -> {}", cmd, state_str(recorder.state()));
+            }
         }
         let snap = recorder.snapshot();
         debug!(

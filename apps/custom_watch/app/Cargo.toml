@@ -10,6 +10,15 @@ path = "src/main.rs"
 test = false
 bench = false
 
+[features]
+default = []
+# Restores the pre-button "auto-start the run on the first GPS fix" path in the
+# record task. OFF by default: on real hardware BTN1 is the only start path.
+# The Renode sim (bin/watch-sim.sh) has no way to inject a button press, so it
+# builds with this feature to keep showing distance accrue — see
+# apps/custom_watch/local_testing.md § Simulating without a board.
+sim-autostart = []
+
 # Versions pinned to crates.io latest as of 2026-05-28 (post-scaffold audit).
 # When bumping, check the relevant CHANGELOG — Embassy's executor / time / nrf
 # crates ship breaking changes between minor versions (the 0.6→0.10 jump in
@@ -21,7 +30,7 @@ bench = false
 # Embassy async runtime + nRF52 HAL + time driver
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread", "defmt"] }
 embassy-time     = { version = "0.5",  features = ["tick-hz-32_768", "defmt", "defmt-timestamp-uptime"] }
-embassy-nrf      = { version = "0.10", features = ["nrf52840", "time-driver-rtc1", "defmt"] }
+embassy-nrf      = { version = "0.10", features = ["nrf52840", "time-driver-rtc1", "gpiote", "defmt"] }
 embassy-sync     = { version = "0.8",  features = ["defmt"] }
 embassy-futures  = "0.1"
 
