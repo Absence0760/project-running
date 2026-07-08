@@ -1,0 +1,72 @@
+:name: custom_watch tier-1 sim
+:description: Boots the custom_watch firmware ELF on an emulated nRF52840 DK — no hardware needed. Normally started via bin/watch-sim.sh, which builds the ELF, decodes the defmt stream, and feeds the canned NMEA fixture into the GPS UART. The ELF is the exact thumbv7em build that watch-flash.sh flashes; nothing is compiled differently for the simulator.
+
+using sysbus
+
+$elf ?= @apps/custom_watch/target/thumbv7em-none-eabihf/release/app
+$defmt_out ?= @/tmp/watch-sim/defmt.raw
+$gps_pty ?= @/tmp/watch-sim/gps-pty
+$phone_port ?= 7788
+
+path add $ORIGIN
+
+mach create "watch"
+machine LoadPlatformDescription @platforms/boards/nrf52840dk_nrf52840.repl
+
+# Sharp Memory LCD on SPIM3, chip-select on P1.12 (matches the pin map in
+# boards/nrf52840_dk). The model is runtime-compiled C#; `showAnalyzer
+# sysbus.spi3.display` (watch-sim.sh --gui) opens the live panel window.
+include @SharpMipDisplay.cs
+machine LoadPlatformDescriptionFromString
+"""
+// SPIM3: the stock platform declares spi0..2 without EasyDMA and repl
+// overlays can't change a constructor argument, but the 0x4002F000 slot
+// (the dedicated high-speed SPIM the firmware uses for the display) is
+// free to declare fresh with EasyDMA on. IRQ 47 per the datasheet.
+spi3: SPI.NRF52840_SPI @ sysbus 0x4002F000
+    easyDMA: true
+    -> nvic@47
+
+display: Video.SharpMipDisplay @ spi3
+
+gpio1:
+    12 -> display@0
+"""
+
+macro reset
+"""
+    sysbus LoadELF $elf
+"""
+runMacro $reset
+
+include @defmt_rtt.py
+setup_defmt_rtt $defmt_out
+
+# LED1 (P0.13) blinks at 1 Hz from ui::blink_task — echo each state change
+# into the Renode log as a scheduler-liveness signal.
+python
+"""
+led = monitor.Machine["sysbus.gpio0.led0"]
+
+def led_changed(led, state):
+    led.InfoLog("LED1 %s" % ("on" if state else "off"))
+
+led.StateChanged += led_changed
+"""
+
+# Phone-link rail: the firmware's status frames leave on uart1 (UARTE1);
+# a TCP server socket exposes them to the host. The mobile app's dev
+# screen connects here (Android emulator: host 10.0.2.2).
+emulation CreateServerSocketTerminal $phone_port "phone" false
+connector Connect sysbus.uart1 phone
+
+# GPS rail: the u-blox breakout's NMEA stream arrives on uart0 (UARTE0).
+# The pty end is where the host feeder writes canned sentences. The firmware
+# consumes them once step 3 of README.md (GNSS bring-up) lands; until then
+# the emulated UARTE discards them. Kept as the LAST setup command: monitor
+# errors don't reach the Renode log file, so bin/watch-sim.sh treats the pty
+# symlink appearing as proof the whole script executed.
+emulation CreateUartPtyTerminal "gps" $gps_pty true
+connector Connect sysbus.uart0 gps
+
+start

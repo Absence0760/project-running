@@ -10347,4 +10347,92 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get racePredictorFootnote =>
       '最近のベストな走りからリーゲルの換算式で算出し、新しさで重み付けしています。近い距離ほど信頼できます。';
+
+  @override
+  String get settingsSectionDeveloper => '開発者';
+
+  @override
+  String get settingsTabSimWatchSubtitle => 'シミュレーション中のカスタムウォッチのライブ状態';
+
+  @override
+  String get simWatchTitle => 'シミュレータウォッチ接続';
+
+  @override
+  String get simWatchHostLabel => 'ホスト';
+
+  @override
+  String get simWatchPortLabel => 'ポート';
+
+  @override
+  String get simWatchConnect => '接続';
+
+  @override
+  String get simWatchConnecting => '接続中…';
+
+  @override
+  String get simWatchDisconnect => '切断';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return '接続に失敗しました: $error';
+  }
+
+  @override
+  String get simWatchSyncAction => '時計からランを同期';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return '同期中… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '時計から $total 件中 $synced 件のランを同期しました';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return '時計の同期に失敗しました: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => '同期する時計のランがありません';
+
+  @override
+  String get simWatchWaitingFrames => '接続済み — フレーム待機中…';
+
+  @override
+  String get simWatchUptime => '稼働時間';
+
+  @override
+  String get simWatchNoFix => 'GPS未測位';
+
+  @override
+  String get simWatchPosition => '位置';
+
+  @override
+  String get simWatchSpeed => '速度';
+
+  @override
+  String get simWatchSatellites => '衛星数';
+
+  @override
+  String get simWatchAltitude => '高度';
+
+  @override
+  String get simWatchBaroAltitude => '気圧高度';
+
+  @override
+  String get simWatchAscent => '上昇';
+
+  @override
+  String get simWatchDescent => '下降';
+
+  @override
+  String get simWatchFixAge => '測位からの経過';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds 秒';
+  }
 }

@@ -1,0 +1,126 @@
+//! Button → recording-command decision — the pure half of the button task.
+//!
+//! The `app/` button task owns only the hardware it can't test on the host:
+//! edge detection and debounce. *Which* command a press should issue, given
+//! the run's current state, is this pure reducer — host-tested here, exactly
+//! like [`crate::record`] holds the state machine the record task drives.
+
+use crate::record::RecordState;
+
+/// A control command for the recording state machine, produced by a button
+/// press and consumed by the record task. One variant per [`crate::record`]
+/// method: `start` / `pause` / `resume` / `stop`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum RecordCommand {
+    Start,
+    Pause,
+    Resume,
+    Stop,
+}
+
+/// The physical buttons wired to recording control on the nRF52840 DK.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Button {
+    /// BTN1 — a context-sensitive start / pause / resume toggle.
+    Primary,
+    /// BTN2 — stop.
+    Stop,
+}
+
+/// Map a button press, given the current recorder state, to the command it
+/// should issue — or `None` when the press is a no-op in that state.
+///
+/// BTN1 is a single context toggle: it starts an idle run, pauses a running
+/// one, and resumes a paused one. BTN2 stops whenever a run is in progress.
+/// Both are inert once the run is finished (a new run needs a fresh recorder).
+///
+/// The state comes from the published [`crate::record::Snapshot`], which does
+/// not distinguish a manual pause from a speed-derived auto-pause — so a
+/// `Primary` press during an auto-pause maps to `Resume`, which the recorder
+/// treats as inert (an auto-pause only resumes from the next moving fix). That
+/// is the intended, safe behaviour: a physical press never corrupts the run.
+pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> {
+    match (button, state) {
+        (Button::Primary, RecordState::Idle) => Some(RecordCommand::Start),
+        (Button::Primary, RecordState::Recording) => Some(RecordCommand::Pause),
+        (Button::Primary, RecordState::Paused) => Some(RecordCommand::Resume),
+        (Button::Stop, RecordState::Recording | RecordState::Paused) => Some(RecordCommand::Stop),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn primary_is_a_start_pause_resume_toggle() {
+        assert_eq!(
+            command_for(Button::Primary, RecordState::Idle),
+            Some(RecordCommand::Start)
+        );
+        assert_eq!(
+            command_for(Button::Primary, RecordState::Recording),
+            Some(RecordCommand::Pause)
+        );
+        assert_eq!(
+            command_for(Button::Primary, RecordState::Paused),
+            Some(RecordCommand::Resume)
+        );
+    }
+
+    #[test]
+    fn stop_only_acts_while_a_run_is_in_progress() {
+        assert_eq!(
+            command_for(Button::Stop, RecordState::Recording),
+            Some(RecordCommand::Stop)
+        );
+        assert_eq!(
+            command_for(Button::Stop, RecordState::Paused),
+            Some(RecordCommand::Stop)
+        );
+        assert_eq!(command_for(Button::Stop, RecordState::Idle), None);
+        assert_eq!(command_for(Button::Stop, RecordState::Finished), None);
+    }
+
+    #[test]
+    fn everything_is_inert_once_finished() {
+        assert_eq!(command_for(Button::Primary, RecordState::Finished), None);
+        assert_eq!(command_for(Button::Stop, RecordState::Finished), None);
+    }
+
+    // Driving the emitted commands through a real Recorder proves the mapping
+    // matches what the state machine actually accepts — start, pause, resume,
+    // stop advance the state as the toggle promises.
+    #[test]
+    fn commands_drive_the_recorder_through_a_full_cycle() {
+        use crate::record::Recorder;
+
+        let mut r = Recorder::new();
+        let apply = |b: Button, now: u32, r: &mut Recorder| {
+            if let Some(cmd) = command_for(b, r.state()) {
+                match cmd {
+                    RecordCommand::Start => r.start(now),
+                    RecordCommand::Pause => r.pause(now),
+                    RecordCommand::Resume => r.resume(now),
+                    RecordCommand::Stop => r.stop(now),
+                }
+            }
+        };
+
+        apply(Button::Primary, 0, &mut r);
+        assert_eq!(r.state(), RecordState::Recording);
+        apply(Button::Primary, 1, &mut r);
+        assert_eq!(r.state(), RecordState::Paused);
+        apply(Button::Primary, 2, &mut r);
+        assert_eq!(r.state(), RecordState::Recording);
+        apply(Button::Stop, 3, &mut r);
+        assert_eq!(r.state(), RecordState::Finished);
+        // Post-finish presses are inert.
+        apply(Button::Primary, 4, &mut r);
+        apply(Button::Stop, 5, &mut r);
+        assert_eq!(r.state(), RecordState::Finished);
+    }
+}

@@ -10855,6 +10855,95 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get racePredictorFootnote =>
       'Equivalência de Riegel a partir do seu melhor esforço recente, ponderada pela recência. Distâncias mais próximas são mais confiáveis.';
+
+  @override
+  String get settingsSectionDeveloper => 'Programador';
+
+  @override
+  String get settingsTabSimWatchSubtitle =>
+      'Estado em direto do relógio personalizado simulado';
+
+  @override
+  String get simWatchTitle => 'Ligação do relógio simulado';
+
+  @override
+  String get simWatchHostLabel => 'Anfitrião';
+
+  @override
+  String get simWatchPortLabel => 'Porta';
+
+  @override
+  String get simWatchConnect => 'Ligar';
+
+  @override
+  String get simWatchConnecting => 'A ligar…';
+
+  @override
+  String get simWatchDisconnect => 'Desligar';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return 'Falha na ligação: $error';
+  }
+
+  @override
+  String get simWatchSyncAction => 'Sincronizar corridas do relógio';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Sincronizando… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced de $total corrida(s) sincronizada(s) do relógio';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Falha na sincronização do relógio: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Nenhuma corrida no relógio para sincronizar';
+
+  @override
+  String get simWatchWaitingFrames => 'Ligado — a aguardar tramas…';
+
+  @override
+  String get simWatchUptime => 'Tempo de atividade do relógio';
+
+  @override
+  String get simWatchNoFix => 'Ainda sem sinal GPS';
+
+  @override
+  String get simWatchPosition => 'Posição';
+
+  @override
+  String get simWatchSpeed => 'Velocidade';
+
+  @override
+  String get simWatchSatellites => 'Satélites';
+
+  @override
+  String get simWatchAltitude => 'Altitude';
+
+  @override
+  String get simWatchBaroAltitude => 'Altitude barométrica';
+
+  @override
+  String get simWatchAscent => 'Subida';
+
+  @override
+  String get simWatchDescent => 'Descida';
+
+  @override
+  String get simWatchFixAge => 'Idade do sinal';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds s';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -21707,4 +21796,93 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get racePredictorFootnote =>
       'Equivalência de Riegel a partir do seu melhor esforço recente, ponderada pela recência. Distâncias mais próximas são mais confiáveis.';
+
+  @override
+  String get settingsSectionDeveloper => 'Desenvolvedor';
+
+  @override
+  String get settingsTabSimWatchSubtitle =>
+      'Status ao vivo do relógio personalizado simulado';
+
+  @override
+  String get simWatchTitle => 'Conexão do relógio simulado';
+
+  @override
+  String get simWatchHostLabel => 'Host';
+
+  @override
+  String get simWatchPortLabel => 'Porta';
+
+  @override
+  String get simWatchConnect => 'Conectar';
+
+  @override
+  String get simWatchConnecting => 'Conectando…';
+
+  @override
+  String get simWatchDisconnect => 'Desconectar';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return 'Falha na conexão: $error';
+  }
+
+  @override
+  String get simWatchSyncAction => 'Sincronizar corridas do relógio';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Sincronizando… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced de $total corrida(s) sincronizada(s) do relógio';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Falha na sincronização do relógio: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Nenhuma corrida no relógio para sincronizar';
+
+  @override
+  String get simWatchWaitingFrames => 'Conectado — aguardando quadros…';
+
+  @override
+  String get simWatchUptime => 'Tempo de atividade do relógio';
+
+  @override
+  String get simWatchNoFix => 'Ainda sem sinal de GPS';
+
+  @override
+  String get simWatchPosition => 'Posição';
+
+  @override
+  String get simWatchSpeed => 'Velocidade';
+
+  @override
+  String get simWatchSatellites => 'Satélites';
+
+  @override
+  String get simWatchAltitude => 'Altitude';
+
+  @override
+  String get simWatchBaroAltitude => 'Altitude barométrica';
+
+  @override
+  String get simWatchAscent => 'Subida';
+
+  @override
+  String get simWatchDescent => 'Descida';
+
+  @override
+  String get simWatchFixAge => 'Idade do sinal';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds s';
+  }
 }

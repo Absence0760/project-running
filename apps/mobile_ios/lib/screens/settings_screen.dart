@@ -7,8 +7,10 @@ import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../dev_auto_login.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../sim_watch_link.dart';
 import '../widgets/top_banner.dart';
 import 'coaching_screen.dart';
 import 'devices_screen.dart';
@@ -20,6 +22,7 @@ import 'settings_preferences_screen.dart';
 import 'settings_pro_screen.dart';
 import 'settings_safety_screen.dart';
 import 'sign_in_screen.dart';
+import 'sim_watch_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -31,6 +34,11 @@ class SettingsScreen extends StatefulWidget {
   final BleTreadmill treadmill;
   final SettingsSyncService? settingsSync;
 
+  /// Backend URL used to gate the developer section. Defaults to the
+  /// runtime SUPABASE_URL; only a loopback backend shows the section,
+  /// same isolation rail as the seed auto-login.
+  final String? devBackendUrl;
+
   const SettingsScreen({
     super.key,
     this.apiClient,
@@ -41,6 +49,7 @@ class SettingsScreen extends StatefulWidget {
     this.routeStore,
     this.gearStore,
     this.settingsSync,
+    this.devBackendUrl,
   });
 
   @override
@@ -193,6 +202,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: l10n.settingsTabLicensesSubtitle,
               onTap: () => _open((_) => const SettingsLicensesScreen()),
             ),
+            if (isLocalSupabaseUrl(
+                widget.devBackendUrl ?? maybeDevBackendUrl())) ...[
+              _SectionHeader(l10n.settingsSectionDeveloper),
+              _tab(
+                icon: Icons.watch_outlined,
+                label: l10n.simWatchTitle,
+                subtitle: l10n.settingsTabSimWatchSubtitle,
+                onTap: () => _open((_) => const SimWatchScreen()),
+              ),
+            ],
           ],
         ),
       ),

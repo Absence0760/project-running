@@ -10880,4 +10880,93 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get racePredictorFootnote =>
       'Équivalence de Riegel à partir de votre meilleur effort récent, pondérée par la récence. Les distances proches sont plus fiables.';
+
+  @override
+  String get settingsSectionDeveloper => 'Développeur';
+
+  @override
+  String get settingsTabSimWatchSubtitle =>
+      'État en direct de la montre personnalisée simulée';
+
+  @override
+  String get simWatchTitle => 'Liaison montre simulée';
+
+  @override
+  String get simWatchHostLabel => 'Hôte';
+
+  @override
+  String get simWatchPortLabel => 'Port';
+
+  @override
+  String get simWatchConnect => 'Se connecter';
+
+  @override
+  String get simWatchConnecting => 'Connexion…';
+
+  @override
+  String get simWatchDisconnect => 'Se déconnecter';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return 'Échec de la connexion : $error';
+  }
+
+  @override
+  String get simWatchSyncAction => 'Synchroniser les courses de la montre';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Synchronisation… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced course(s) sur $total synchronisée(s) depuis la montre';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Échec de la synchronisation de la montre : $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Aucune course à synchroniser sur la montre';
+
+  @override
+  String get simWatchWaitingFrames => 'Connecté — en attente de trames…';
+
+  @override
+  String get simWatchUptime => 'Temps de fonctionnement';
+
+  @override
+  String get simWatchNoFix => 'Pas encore de position GPS';
+
+  @override
+  String get simWatchPosition => 'Position';
+
+  @override
+  String get simWatchSpeed => 'Vitesse';
+
+  @override
+  String get simWatchSatellites => 'Satellites';
+
+  @override
+  String get simWatchAltitude => 'Altitude';
+
+  @override
+  String get simWatchBaroAltitude => 'Altitude barométrique';
+
+  @override
+  String get simWatchAscent => 'Montée';
+
+  @override
+  String get simWatchDescent => 'Descente';
+
+  @override
+  String get simWatchFixAge => 'Âge de la position';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds s';
+  }
 }

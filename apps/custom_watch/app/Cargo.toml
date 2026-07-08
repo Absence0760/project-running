@@ -10,6 +10,34 @@ path = "src/main.rs"
 test = false
 bench = false
 
+[features]
+default = ["single-core-cs"]
+
+# Provides the `critical-section` implementation for ordinary (no-SoftDevice)
+# builds, via cortex-m. ON by default. The `ble` build MUST turn this off
+# (`--no-default-features --features ble`) because the SoftDevice owns
+# critical-section instead — two impls is a link error. Kept as an invertible
+# default because Cargo features are additive: a `ble` feature can't *remove*
+# `cortex-m/critical-section-single-core`, so the CS provider has to live in a
+# default feature the BLE build opts out of.
+single-core-cs = ["cortex-m/critical-section-single-core"]
+
+# Restores the pre-button "auto-start the run on the first GPS fix" path in the
+# record task. OFF by default: on real hardware BTN1 is the only start path.
+# The Renode sim (bin/watch-sim.sh) has no way to inject a button press, so it
+# builds with this feature to keep showing distance accrue — see
+# apps/custom_watch/local_testing.md § Simulating without a board.
+sim-autostart = []
+
+# README step 6 — real BLE radio via the Nordic S140 SoftDevice. Pulls in
+# nrf-softdevice (git; never published to crates.io) and reorganises the flash
+# + RAM layout (see build.rs / memory-ble.x). MUTUALLY EXCLUSIVE with
+# single-core-cs. This is the ON-HARDWARE build and CANNOT run under the Renode
+# sim (Renode has no SoftDevice) — build with:
+#   cargo build --release --no-default-features --features ble
+# UNVERIFIED pending the dev kit; see apps/custom_watch/README.md step 6.
+ble = ["dep:nrf-softdevice", "dep:nrf-softdevice-s140"]
+
 # Versions pinned to crates.io latest as of 2026-05-28 (post-scaffold audit).
 # When bumping, check the relevant CHANGELOG — Embassy's executor / time / nrf
 # crates ship breaking changes between minor versions (the 0.6→0.10 jump in
@@ -21,13 +49,27 @@ bench = false
 # Embassy async runtime + nRF52 HAL + time driver
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread", "defmt"] }
 embassy-time     = { version = "0.5",  features = ["tick-hz-32_768", "defmt", "defmt-timestamp-uptime"] }
-embassy-nrf      = { version = "0.10", features = ["nrf52840", "time-driver-rtc1", "defmt"] }
+embassy-nrf      = { version = "0.10", features = ["nrf52840", "time-driver-rtc1", "gpiote", "defmt"] }
 embassy-sync     = { version = "0.8",  features = ["defmt"] }
 embassy-futures  = "0.1"
 
-# Cortex-M runtime + interrupt vectors
-cortex-m         = { version = "0.7", features = ["inline-asm", "critical-section-single-core"] }
+# Cortex-M runtime + interrupt vectors. `critical-section-single-core` is NOT
+# listed here: it's pulled by the default `single-core-cs` feature so the `ble`
+# build can opt out and let the SoftDevice own critical-section (see [features]).
+cortex-m         = { version = "0.7", features = ["inline-asm"] }
 cortex-m-rt      = "0.7"
+
+# I²C Operation type for the timeout-bounded sensor presence probes
+embedded-hal     = "1.0"
+# NorFlash traits for the on-device run store over embassy-nrf's NVMC (step 7)
+embedded-storage = "0.3"
+
+# Run-store staging buffer + FlashSink + the BLE notify characteristics' Vec<u8, N>
+# (matches the heapless 0.9 the workspace + nrf-softdevice use, so the GattValue
+# impl applies). Not optional: the default build's flash run store needs it too.
+heapless         = "0.9"
+# &'static init for the shared run store (both builds) + the BLE Server (ble build).
+static_cell      = "2"
 
 # Logging: defmt over RTT, panic-probe so panics print + halt cleanly
 defmt        = "1.1"
@@ -35,7 +77,17 @@ defmt-rtt    = "1.2"
 panic-probe  = { version = "1.0", features = ["print-defmt"] }
 
 # Workspace crates
+watch_core  = { path = "../core",               features = ["defmt"] }
 sharp_mip   = { path = "../drivers/sharp_mip",  features = ["defmt"] }
 ublox_nmea  = { path = "../drivers/ublox_nmea", features = ["defmt"] }
 max86177    = { path = "../drivers/max86177",   features = ["defmt"] }
+bmp581      = { path = "../drivers/bmp581",     features = ["defmt"] }
 nrf52840_dk = { path = "../boards/nrf52840_dk" }
+
+# BLE via the Nordic S140 SoftDevice — only compiled under the `ble` feature.
+# nrf-softdevice is git-only (not on crates.io) and pins embassy-sync 0.8 +
+# embassy-futures 0.1, which match this workspace's crates.io pins. Rev is
+# pinned so a future upstream break can't silently change our (unverifiable
+# without hardware) build.
+nrf-softdevice      = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true, features = ["nrf52840", "s140", "ble-peripheral", "ble-gatt-server", "critical-section-impl", "defmt"] }
+nrf-softdevice-s140 = { git = "https://github.com/embassy-rs/nrf-softdevice", rev = "47d6121c", optional = true }

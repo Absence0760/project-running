@@ -10864,4 +10864,93 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get racePredictorFootnote =>
       'Riegel-Äquivalenz aus deinem besten aktuellen Lauf, aktualitätsgewichtet. Näher liegende Distanzen sind verlässlicher.';
+
+  @override
+  String get settingsSectionDeveloper => 'Entwickler';
+
+  @override
+  String get settingsTabSimWatchSubtitle =>
+      'Live-Status der simulierten Custom Watch';
+
+  @override
+  String get simWatchTitle => 'Sim-Watch-Verbindung';
+
+  @override
+  String get simWatchHostLabel => 'Host';
+
+  @override
+  String get simWatchPortLabel => 'Port';
+
+  @override
+  String get simWatchConnect => 'Verbinden';
+
+  @override
+  String get simWatchConnecting => 'Verbinde …';
+
+  @override
+  String get simWatchDisconnect => 'Trennen';
+
+  @override
+  String simWatchConnectionFailed(String error) {
+    return 'Verbindung fehlgeschlagen: $error';
+  }
+
+  @override
+  String get simWatchSyncAction => 'Läufe von der Uhr synchronisieren';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Synchronisiere… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced von $total Lauf/Läufen von der Uhr synchronisiert';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Uhr-Synchronisierung fehlgeschlagen: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Keine Läufe auf der Uhr zum Synchronisieren';
+
+  @override
+  String get simWatchWaitingFrames => 'Verbunden — warte auf Frames …';
+
+  @override
+  String get simWatchUptime => 'Laufzeit der Watch';
+
+  @override
+  String get simWatchNoFix => 'Noch kein GPS-Fix';
+
+  @override
+  String get simWatchPosition => 'Position';
+
+  @override
+  String get simWatchSpeed => 'Geschwindigkeit';
+
+  @override
+  String get simWatchSatellites => 'Satelliten';
+
+  @override
+  String get simWatchAltitude => 'Höhe';
+
+  @override
+  String get simWatchBaroAltitude => 'Barometrische Höhe';
+
+  @override
+  String get simWatchAscent => 'Anstieg';
+
+  @override
+  String get simWatchDescent => 'Abstieg';
+
+  @override
+  String get simWatchFixAge => 'Alter des Fix';
+
+  @override
+  String simWatchSeconds(int seconds) {
+    return '$seconds s';
+  }
 }
