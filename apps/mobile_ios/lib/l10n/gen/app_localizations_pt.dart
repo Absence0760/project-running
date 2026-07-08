@@ -10887,6 +10887,27 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get simWatchSyncAction => 'Sincronizar corridas do relógio';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Sincronizando… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced de $total corrida(s) sincronizada(s) do relógio';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Falha na sincronização do relógio: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Nenhuma corrida no relógio para sincronizar';
+
+  @override
   String get simWatchWaitingFrames => 'Ligado — a aguardar tramas…';
 
   @override
@@ -21805,6 +21826,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String simWatchConnectionFailed(String error) {
     return 'Falha na conexão: $error';
   }
+
+  @override
+  String get simWatchSyncAction => 'Sincronizar corridas do relógio';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Sincronizando… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced de $total corrida(s) sincronizada(s) do relógio';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Falha na sincronização do relógio: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Nenhuma corrida no relógio para sincronizar';
 
   @override
   String get simWatchWaitingFrames => 'Conectado — aguardando quadros…';

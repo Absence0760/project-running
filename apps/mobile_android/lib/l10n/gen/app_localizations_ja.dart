@@ -10378,6 +10378,27 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get simWatchSyncAction => '時計からランを同期';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return '同期中… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '時計から $total 件中 $synced 件のランを同期しました';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return '時計の同期に失敗しました: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => '同期する時計のランがありません';
+
+  @override
   String get simWatchWaitingFrames => '接続済み — フレーム待機中…';
 
   @override

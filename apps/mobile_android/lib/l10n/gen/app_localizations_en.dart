@@ -10780,6 +10780,27 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get simWatchSyncAction => 'Sync runs from watch';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Syncing… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return 'Synced $synced of $total run(s) from the watch';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Watch sync failed: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'No runs on the watch to sync';
+
+  @override
   String get simWatchWaitingFrames => 'Connected — waiting for frames…';
 
   @override

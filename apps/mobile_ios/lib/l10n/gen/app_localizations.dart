@@ -18228,6 +18228,36 @@ abstract class AppLocalizations {
   /// **'Connection failed: {error}'**
   String simWatchConnectionFailed(String error);
 
+  /// Button that pulls recorded runs off the custom watch over BLE
+  ///
+  /// In en, this message translates to:
+  /// **'Sync runs from watch'**
+  String get simWatchSyncAction;
+
+  /// No description provided for @simWatchSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing… {done}/{total}'**
+  String simWatchSyncing(int done, int total);
+
+  /// No description provided for @simWatchResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced {synced} of {total} run(s) from the watch'**
+  String simWatchResult(int synced, int total);
+
+  /// No description provided for @simWatchSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch sync failed: {error}'**
+  String simWatchSyncFailed(String error);
+
+  /// No description provided for @simWatchNoRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'No runs on the watch to sync'**
+  String get simWatchNoRuns;
+
   /// No description provided for @simWatchWaitingFrames.
   ///
   /// In en, this message translates to:

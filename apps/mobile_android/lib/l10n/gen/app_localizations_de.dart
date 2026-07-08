@@ -10896,6 +10896,27 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get simWatchSyncAction => 'Läufe von der Uhr synchronisieren';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Synchronisiere… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced von $total Lauf/Läufen von der Uhr synchronisiert';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Uhr-Synchronisierung fehlgeschlagen: $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Keine Läufe auf der Uhr zum Synchronisieren';
+
+  @override
   String get simWatchWaitingFrames => 'Verbunden — warte auf Frames …';
 
   @override

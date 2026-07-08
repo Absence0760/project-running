@@ -11,6 +11,45 @@ import '../lib/preferences.dart';
 import '../lib/screens/settings_screen.dart';
 import '../lib/screens/sim_watch_screen.dart';
 import '../lib/sim_watch_link.dart';
+import '../lib/sim_watch_sync.dart';
+
+/// The golden run blob from `watch_core::run_store` (pinned identically in
+/// `sim_watch_sync_test.dart`), served in chunks so the screen's Sync action
+/// can be exercised without a BLE radio.
+final _goldenBlob = _hex(
+  '54524b31010000000700000029000000b8ced91718ff40c100000000703f7800'
+  'e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000'
+  '454e4431d2040000580200006c02000077fdfebd',
+);
+
+List<int> _hex(String s) => [
+      for (var i = 0; i < s.length; i += 2) int.parse(s.substring(i, i + 2), radix: 16),
+    ];
+
+class _FakeSyncTransport implements WatchBleTransport {
+  final _chunks = StreamController<List<int>>.broadcast();
+  @override
+  Future<void> scan() async {}
+  @override
+  Future<void> disconnect() async {}
+  @override
+  Stream<List<int>> get chunkStream => _chunks.stream;
+  @override
+  Future<List<int>> readManifest() async => [
+        0x4d, 0x41, 0x4e, 0x31, 0x01, 0x01, 0x00, 0x00, // MAN1 v1 count=1
+        0x81, 0x02, 0x00, 0x00, // watch_uptime = 641
+        0x07, 0x00, 0x00, 0x00, // run_seq 7
+        0x54, 0x00, 0x00, 0x00, // size 84
+        0x29, 0x00, 0x00, 0x00, // start_uptime 41
+      ];
+  @override
+  Future<void> writeChunkRequest(List<int> request) async {
+    final offset = request[4] | request[5] << 8 | request[6] << 16 | request[7] << 24;
+    final len = request[8] | request[9] << 8;
+    final end = (offset + len).clamp(0, _goldenBlob.length);
+    _chunks.add(_goldenBlob.sublist(offset, end));
+  }
+}
 
 class _FakeLink extends SimWatchLink {
   final StreamController<SimWatchStatus> controller;
@@ -188,6 +227,36 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, -2000));
       await tester.pump();
       expect(find.text('Sim watch link'), findsNothing);
+    });
+  });
+
+  group('run sync', () {
+    testWidgets('Sync action pulls the golden run and delivers it',
+        (tester) async {
+      final delivered = <Map<String, dynamic>>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SimWatchScreen(
+            transportFactory: _FakeSyncTransport.new,
+            runSink: (p) async => delivered.add(p),
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.sync));
+      await tester.pump();
+      // The pull is real-async (broadcast stream + completers); let the event
+      // loop drain it (pumpAndSettle would hang on the sync spinner).
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      expect(delivered, hasLength(1));
+      expect(delivered.first['source'], 'watch');
+      expect((delivered.first['track'] as List), hasLength(3));
+      expect(find.textContaining('Synced 1 of 1'), findsOneWidget);
     });
   });
 }

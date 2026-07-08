@@ -11,15 +11,41 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../reactive_ble_watch_transport.dart';
 import '../sim_watch_link.dart';
+import '../sim_watch_sync.dart';
+import '../watch_ingest_queue.dart';
 
 class SimWatchScreen extends StatefulWidget {
   final SimWatchLink Function(String host, int port) linkFactory;
 
-  const SimWatchScreen({super.key, this.linkFactory = _defaultLinkFactory});
+  /// Injectable so a widget test can drive the run-sync path with a fake BLE
+  /// transport (the real one needs a paired watch + a SoftDevice radio).
+  final WatchBleTransport Function() transportFactory;
+
+  /// Where a decoded watch run is delivered. Defaults to the existing
+  /// [WatchIngestQueue] (drains to `api.saveRun` on the next sign-in), so this
+  /// dev screen needs no `ApiClient` of its own.
+  final WatchRunSink runSink;
+
+  const SimWatchScreen({
+    super.key,
+    this.linkFactory = _defaultLinkFactory,
+    this.transportFactory = _defaultTransportFactory,
+    this.runSink = _defaultRunSink,
+  });
 
   static SimWatchLink _defaultLinkFactory(String host, int port) =>
       SimWatchLink(host: host, port: port);
+
+  static WatchBleTransport _defaultTransportFactory() =>
+      ReactiveBleWatchTransport();
+
+  static Future<void> _defaultRunSink(Map<String, dynamic> payload) async {
+    final queue = WatchIngestQueue();
+    await queue.init();
+    await queue.enqueue(payload);
+  }
 
   @override
   State<SimWatchScreen> createState() => _SimWatchScreenState();
@@ -35,6 +61,8 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
   _LinkState _state = _LinkState.idle;
   String? _error;
   SimWatchStatus? _status;
+  bool _syncing = false;
+  String? _syncMessage;
 
   @override
   void initState() {
@@ -102,6 +130,39 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     });
   }
 
+  Future<void> _syncRuns() async {
+    if (_syncing) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _syncing = true;
+      _syncMessage = l10n.simWatchSyncing(0, 0);
+    });
+    try {
+      final client = WatchSyncClient(
+        transport: widget.transportFactory(),
+        onRun: widget.runSink,
+      );
+      final result = await client.sync(
+        onProgress: (done, total) {
+          if (mounted) {
+            setState(() => _syncMessage = l10n.simWatchSyncing(done, total));
+          }
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _syncMessage = result.total == 0
+            ? l10n.simWatchNoRuns
+            : l10n.simWatchResult(result.synced, result.total);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchSyncFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
   String _hms(int totalSeconds) {
     final h = totalSeconds ~/ 3600;
     final m = (totalSeconds ~/ 60) % 60;
@@ -119,10 +180,29 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     final fix = status?.fix;
     final elev = status?.elev;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.simWatchTitle)),
+      appBar: AppBar(
+        title: Text(l10n.simWatchTitle),
+        actions: [
+          IconButton(
+            tooltip: l10n.simWatchSyncAction,
+            icon: _syncing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            onPressed: _syncing ? null : _syncRuns,
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_syncMessage != null) ...[
+            Text(_syncMessage!, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Expanded(

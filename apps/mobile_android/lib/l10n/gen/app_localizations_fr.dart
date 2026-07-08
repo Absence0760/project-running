@@ -10912,6 +10912,27 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get simWatchSyncAction => 'Synchroniser les courses de la montre';
+
+  @override
+  String simWatchSyncing(int done, int total) {
+    return 'Synchronisation… $done/$total';
+  }
+
+  @override
+  String simWatchResult(int synced, int total) {
+    return '$synced course(s) sur $total synchronisée(s) depuis la montre';
+  }
+
+  @override
+  String simWatchSyncFailed(String error) {
+    return 'Échec de la synchronisation de la montre : $error';
+  }
+
+  @override
+  String get simWatchNoRuns => 'Aucune course à synchroniser sur la montre';
+
+  @override
   String get simWatchWaitingFrames => 'Connecté — en attente de trames…';
 
   @override
