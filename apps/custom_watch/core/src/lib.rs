@@ -10,9 +10,11 @@
 //! - [`face`] — watch-face layout: state in, text rows out
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
+//! - [`record`] — recording state machine: commands + fixes in, run totals out
 
 #![cfg_attr(not(test), no_std)]
 
 pub mod face;
 pub mod fix;
 pub mod link;
+pub mod record;
