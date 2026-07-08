@@ -25,13 +25,15 @@ WORKSPACE="$REPO_ROOT/apps/custom_watch"
 BIN=app
 NMEA_FILE="$WORKSPACE/sim/nmea/bench_jog.nmea"
 GUI=0
+PHONE_PORT=7788
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
-		--gui)  GUI=1; shift ;;
-		--bin)  BIN="${2:?--bin needs a value}"; shift 2 ;;
-		--nmea) NMEA_FILE="${2:?--nmea needs a value}"; shift 2 ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --nmea <file>)" ;;
+		--gui)        GUI=1; shift ;;
+		--bin)        BIN="${2:?--bin needs a value}"; shift 2 ;;
+		--nmea)       NMEA_FILE="${2:?--nmea needs a value}"; shift 2 ;;
+		--phone-port) PHONE_PORT="${2:?--phone-port needs a value}"; shift 2 ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --nmea <file>, --phone-port <port>)" ;;
 	esac
 done
 
@@ -77,7 +79,7 @@ trap cleanup INT TERM EXIT
 #   ncat localhost <port>   then e.g.:  sysbus.spi3.display DumpFrame "/tmp/f.ppm"
 MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
 RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
-RENODE_CMDS="\$elf=@$ELF; \$defmt_out=@$DEFMT_RAW; \$gps_pty=@$GPS_PTY; include @$WORKSPACE/sim/watch.resc"
+RENODE_CMDS="\$elf=@$ELF; \$defmt_out=@$DEFMT_RAW; \$gps_pty=@$GPS_PTY; \$phone_port=$PHONE_PORT; include @$WORKSPACE/sim/watch.resc"
 if [[ "$GUI" == 1 ]]; then
 	step "Starting Renode (GUI — watch screen in a window)"
 	RENODE_CMDS+="; showAnalyzer sysbus.spi3.display"
@@ -118,7 +120,8 @@ ok "Renode up — log: $RENODE_LOG, monitor: ncat localhost $MONITOR_PORT"
 ) 2>/dev/null &
 
 step "Streaming defmt logs (Ctrl-C to stop)"
-dim "NMEA feed: $NMEA_FILE -> sysbus.uart0 (consumed once GNSS bring-up lands)"
+dim "NMEA feed: $NMEA_FILE -> sysbus.uart0 at 1 Hz"
+dim "phone link: tcp://localhost:$PHONE_PORT (Android emulator: 10.0.2.2:$PHONE_PORT) — try: ncat localhost $PHONE_PORT"
 # Backgrounded + wait rather than a foreground pipeline: bash defers traps
 # while a foreground job runs, so Ctrl-C/TERM would never reach cleanup and
 # Renode would outlive the script.

@@ -6,6 +6,7 @@ using sysbus
 $elf ?= @apps/custom_watch/target/thumbv7em-none-eabihf/release/app
 $defmt_out ?= @/tmp/watch-sim/defmt.raw
 $gps_pty ?= @/tmp/watch-sim/gps-pty
+$phone_port ?= 7788
 
 path add $ORIGIN
 
@@ -52,6 +53,12 @@ def led_changed(led, state):
 
 led.StateChanged += led_changed
 """
+
+# Phone-link rail: the firmware's status frames leave on uart1 (UARTE1);
+# a TCP server socket exposes them to the host. The mobile app's dev
+# screen connects here (Android emulator: host 10.0.2.2).
+emulation CreateServerSocketTerminal $phone_port "phone" false
+connector Connect sysbus.uart1 phone
 
 # GPS rail: the u-blox breakout's NMEA stream arrives on uart0 (UARTE0).
 # The pty end is where the host feeder writes canned sentences. The firmware

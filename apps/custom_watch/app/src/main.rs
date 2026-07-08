@@ -22,6 +22,7 @@ mod tasks;
 
 bind_interrupts!(struct Irqs {
     UARTE0 => uarte::InterruptHandler<peripherals::UARTE0>;
+    UARTE1 => uarte::InterruptHandler<peripherals::UARTE1>;
     SPIM3 => spim::InterruptHandler<peripherals::SPI3>;
 });
 
@@ -57,9 +58,19 @@ async fn main(spawner: Spawner) {
     // Active-HIGH chip select: idle low.
     let display_cs = Output::new(board.display.cs, Level::Low, OutputDrive::Standard);
 
+    let phone_uart = uarte::Uarte::new(
+        board.phone.uarte,
+        board.phone.rx,
+        board.phone.tx,
+        Irqs,
+        uarte::Config::default(),
+    );
+    let (phone_tx, _phone_rx) = phone_uart.split();
+
     spawner.spawn(unwrap!(tasks::ui::blink_task(board.leds.led1)));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
+    spawner.spawn(unwrap!(tasks::phone::run(phone_tx)));
 
     spawner.spawn(unwrap!(tasks::hr::run()));
     spawner.spawn(unwrap!(tasks::baro::run()));
