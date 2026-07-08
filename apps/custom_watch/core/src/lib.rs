@@ -12,9 +12,11 @@
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
+//! - [`button`] — the pure button-press → record-command mapping
 
 #![cfg_attr(not(test), no_std)]
 
+pub mod button;
 pub mod elevation;
 pub mod face;
 pub mod fix;
