@@ -136,9 +136,9 @@ Cross-language wire-format compatibility test. The Go service at `apps/job_worke
 
 **Regression (1 test):** end-to-end mixed-source backup — 3 runs (2 with tracks), 2 routes, profile + prefs — restores fully. Caught the bug where offline restore was silently dropping `is_starred` / `description` / `club_id` from route rows; fixed in `apps/mobile_android/lib/backup.dart` by plumbing the missing keys through.
 
-### `apps/mobile_android/test/sim_watch_link_test.dart` — 6 tests
+### `apps/mobile_android/test/sim_watch_link_test.dart` — 8 tests
 
-Decoder for the custom-watch phone-link status frames (schema v1 from `watch_core::link`, `apps/custom_watch/core/src/link.rs` — the sim's TCP bridge today, the step-6 BLE characteristic later). Pins: a full frame parses field-for-field (fixture strings captured from the live sim); `"fix": null` stays null rather than becoming a zeroed fix; null optional fields (`course_deg`/`alt_m`/`tod_s`) survive; garbage lines return null instead of throwing; the byte-stream decoder skips malformed lines and reassembles frames split across chunk boundaries (a UART bridge gives no framing guarantees); the default host is the loopback on non-Android hosts.
+Decoder for the custom-watch phone-link status frames (schema v1 from `watch_core::link`, `apps/custom_watch/core/src/link.rs` — the sim's TCP bridge today, the step-6 BLE characteristic later). Pins: a full frame parses field-for-field (fixture strings captured from the live sim); `"fix": null` stays null rather than becoming a zeroed fix; null optional fields (`course_deg`/`alt_m`/`tod_s`) survive; garbage lines return null instead of throwing; the byte-stream decoder skips malformed lines and reassembles frames split across chunk boundaries (a UART bridge gives no framing guarantees); the decoder consumes a `Uint8List`-typed stream (the shape a real `Socket` emits — the bind-not-transform choice); a socket that lands after `close()` (screen disposed mid-connect) is destroyed rather than leaked; the default host is the loopback on non-Android hosts.
 
 ### `apps/mobile_android/test/sim_watch_screen_test.dart` — 5 tests
 

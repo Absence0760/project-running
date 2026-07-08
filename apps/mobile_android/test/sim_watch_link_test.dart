@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -82,6 +83,23 @@ void main() {
     await controller.close();
     final collected = await done;
     expect(collected.single.fix!.sats, 8);
+  });
+
+  test('a socket landing after close() is destroyed, not leaked', () async {
+    // The screen disposes mid-connect: close() runs while Socket.connect is
+    // still dialling, so the socket arrives with no owner. connect() must
+    // destroy it (the server sees the connection drop) instead of leaking it.
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final clientSeen = Completer<Socket>();
+    server.listen(clientSeen.complete);
+
+    final link = SimWatchLink(host: '127.0.0.1', port: server.port);
+    await link.close();
+    await expectLater(link.connect(), throwsA(isA<SocketException>()));
+
+    final client = await clientSeen.future;
+    await expectLater(client.drain<void>(), completes);
+    await server.close();
   });
 
   test('default host targets the emulator alias on Android only', () {

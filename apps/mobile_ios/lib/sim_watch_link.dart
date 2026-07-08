@@ -125,6 +125,7 @@ class SimWatchLink {
   final String host;
   final int port;
   Socket? _socket;
+  bool _closed = false;
 
   SimWatchLink({required this.host, this.port = simWatchDefaultPort});
 
@@ -134,11 +135,18 @@ class SimWatchLink {
       port,
       timeout: const Duration(seconds: 5),
     );
+    if (_closed) {
+      // close() raced the dial (screen disposed mid-connect): the socket
+      // arrived with no owner left to close it, so destroy it here.
+      socket.destroy();
+      throw const SocketException('link closed during connect');
+    }
     _socket = socket;
     return simWatchFrames(socket);
   }
 
   Future<void> close() async {
+    _closed = true;
     final socket = _socket;
     _socket = null;
     socket?.destroy();
