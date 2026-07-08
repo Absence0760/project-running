@@ -79,6 +79,10 @@ pub struct Recorder {
     /// Last fix accepted for distance — the anchor the next segment measures
     /// from. Cleared on start / resume so a pause gap is never one huge hop.
     last: Option<Fix>,
+    /// Whether the most recent [`on_fix`](Recorder::on_fix) call adopted the
+    /// fix as a new anchor (the run's first fix or an accepted move). Read-only
+    /// signal for the app's flash run-store; see [`last_fix_stored`](Recorder::last_fix_stored).
+    last_fix_stored: bool,
 }
 
 impl Default for Recorder {
@@ -98,11 +102,23 @@ impl Recorder {
             distance_m: 0.0,
             current_speed_mps: 0.0,
             last: None,
+            last_fix_stored: false,
         }
     }
 
     pub fn state(&self) -> RecordState {
         self.state
+    }
+
+    /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
+    /// point — the run's first anchor, or an accepted move that accrued
+    /// distance. `false` after any call that rejected the fix (corrupt / too
+    /// fast), treated it as jitter, or was gated out by state (idle, finished,
+    /// or manually paused). The app's flash run-store keys its `push_point` off
+    /// this, so the stored track mirrors the recorder's accepted fixes exactly
+    /// rather than duplicating the acceptance filter.
+    pub fn last_fix_stored(&self) -> bool {
+        self.last_fix_stored
     }
 
     /// Begin a run. Only valid from `Idle`; a second call is inert so a
@@ -171,6 +187,7 @@ impl Recorder {
     /// unless recording or auto-paused — a manual pause gates fixes out
     /// entirely, mirroring `run_recorder`'s `if (_paused) return`.
     pub fn on_fix(&mut self, fix: &Fix) {
+        self.last_fix_stored = false;
         match self.state {
             RecordState::Recording => {}
             RecordState::Paused if !self.manual_paused => {}
@@ -183,6 +200,7 @@ impl Recorder {
             None => {
                 self.last = Some(*fix);
                 self.current_speed_mps = fix.speed_mps.max(0.0);
+                self.last_fix_stored = true;
                 return;
             }
         };
@@ -215,6 +233,7 @@ impl Recorder {
             self.state = RecordState::Paused;
         }
         self.last = Some(*fix);
+        self.last_fix_stored = true;
     }
 
     pub fn snapshot(&self) -> Snapshot {
@@ -479,6 +498,36 @@ mod tests {
         r.resume(3);
         r.on_fix(&fix(40.0005, -105.0, 4.0, 4));
         assert_eq!(r.snapshot().distance_m, 0.0);
+    }
+
+    #[test]
+    fn last_fix_stored_marks_only_anchor_adopting_fixes() {
+        let mut r = Recorder::new();
+        // Idle: a fix is gated out, nothing stored.
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        assert!(!r.last_fix_stored());
+
+        r.start(0);
+        // First fix in a run is the anchor — stored.
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        assert!(r.last_fix_stored());
+
+        // A jitter fix within the movement threshold stores nothing.
+        r.on_fix(&fix(40.000005, -105.0, 0.0, 1));
+        assert!(!r.last_fix_stored());
+
+        // An accepted move is stored.
+        r.on_fix(&fix(40.00008, -105.0, 4.0, 2));
+        assert!(r.last_fix_stored());
+
+        // An implausible (over-speed) fix is rejected, not stored.
+        r.on_fix(&fix(40.01, -105.0, 4.0, 3));
+        assert!(!r.last_fix_stored());
+
+        // A fix during a manual pause is gated out.
+        r.pause(4);
+        r.on_fix(&fix(40.0005, -105.0, 4.0, 5));
+        assert!(!r.last_fix_stored());
     }
 
     #[test]
