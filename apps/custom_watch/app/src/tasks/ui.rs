@@ -67,8 +67,13 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             elev = Some(reading);
         }
         let uptime_s = Instant::now().as_secs() as u32;
-        let rows =
-            face::face_rows(latest.as_ref(), hr_bpm, rec.as_ref(), elev.as_ref(), uptime_s);
+        let rows = face::face_rows(
+            latest.as_ref(),
+            hr_bpm,
+            rec.as_ref(),
+            elev.as_ref(),
+            uptime_s,
+        );
         for (row, text) in rows.iter().enumerate() {
             fb.draw_text_row(row, text);
         }

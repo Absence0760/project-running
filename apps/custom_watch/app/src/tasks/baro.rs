@@ -9,11 +9,11 @@
 //! task rather than wedging it. Vert is an auxiliary layer over the L1 GPS
 //! distance the recorder already owns.
 
+use bmp581::{Bmp581, I2C_ADDR};
 use defmt::*;
-use embedded_hal::i2c::Operation;
 use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Ticker};
-use bmp581::{Bmp581, I2C_ADDR};
+use embedded_hal::i2c::Operation;
 use watch_core::elevation::{altitude_m, VertAccumulator, STANDARD_SEA_LEVEL_PA};
 
 use crate::state;

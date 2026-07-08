@@ -28,11 +28,7 @@ pub const PROTOCOL_VERSION: u8 = 1;
 /// catch it.
 pub type Frame = heapless::String<256>;
 
-pub fn status_frame(
-    fix: Option<&Fix>,
-    elev: Option<&elevation::Reading>,
-    uptime_s: u32,
-) -> Frame {
+pub fn status_frame(fix: Option<&Fix>, elev: Option<&elevation::Reading>, uptime_s: u32) -> Frame {
     let mut out = Frame::new();
     let _ = write!(
         out,

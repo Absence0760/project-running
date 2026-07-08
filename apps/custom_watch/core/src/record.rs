@@ -260,7 +260,7 @@ fn to_rad(deg: f64) -> f64 {
 
 /// Newton–Raphson square root — `core` has no `f64::sqrt` without a math dep.
 fn sqrt(x: f64) -> f64 {
-    if !(x > 0.0) {
+    if x <= 0.0 || x.is_nan() {
         return 0.0;
     }
     let mut g = x;

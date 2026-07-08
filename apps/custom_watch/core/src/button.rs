@@ -99,7 +99,7 @@ mod tests {
         use crate::record::Recorder;
 
         let mut r = Recorder::new();
-        let mut apply = |b: Button, now: u32, r: &mut Recorder| {
+        let apply = |b: Button, now: u32, r: &mut Recorder| {
             if let Some(cmd) = command_for(b, r.state()) {
                 match cmd {
                     RecordCommand::Start => r.start(now),
