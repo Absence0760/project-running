@@ -4,20 +4,88 @@
 //! specific. When we migrate to a custom PCB in tier 2+, only this crate
 //! changes — the task code in `app/src/tasks/` stays untouched.
 //!
+//! [`Board::split`] consumes the HAL's `Peripherals` and hands back named
+//! per-subsystem bundles, so `main.rs` reads as "give the GPS task the GPS
+//! port", not as a list of pin numbers. Breakout wiring below is the
+//! breadboard plan; revisit against the physical build at bench time.
+//!
 //! Reference: <https://infocenter.nordicsemi.com/topic/ug_nrf52840_dk/UG/dk/intro.html>
 
 #![no_std]
 
-/// User LEDs on the DK (active-low to ground).
-pub mod leds {
-    /// LED1 — `P0.13`.
-    pub const LED1_PIN: u8 = 13;
-    /// LED2 — `P0.14`.
-    pub const LED2_PIN: u8 = 14;
-    /// LED3 — `P0.15`.
-    pub const LED3_PIN: u8 = 15;
-    /// LED4 — `P0.16`.
-    pub const LED4_PIN: u8 = 16;
+use embassy_nrf::gpio::AnyPin;
+use embassy_nrf::peripherals::{P0_14, P0_15, P0_16, SPI2, UARTE0, UARTE1};
+use embassy_nrf::{Peri, Peripherals};
+
+/// u-blox MAX-M10S breakout on UARTE0. NMEA flows watch<-GPS on `rx`;
+/// `tx` is only used for UBX config commands (none at tier 1).
+pub struct GpsPort {
+    pub uarte: Peri<'static, UARTE0>,
+    pub rx: Peri<'static, AnyPin>,
+    pub tx: Peri<'static, AnyPin>,
+}
+
+/// Sharp Memory LCD breakout on SPIM2 (the SPI instance Renode also
+/// models, so sim and bench share an address map). CS is a plain GPIO
+/// because the panel's SCS is active-HIGH — the inverse of what an
+/// SPI controller's hardware CS assumes.
+pub struct DisplayPort {
+    pub spim: Peri<'static, SPI2>,
+    pub sck: Peri<'static, AnyPin>,
+    pub mosi: Peri<'static, AnyPin>,
+    pub cs: Peri<'static, AnyPin>,
+}
+
+/// Phone-link transport on UARTE1. Simulator-era stand-in for the
+/// step-6 BLE GATT service: same status frames, different pipe.
+pub struct PhonePort {
+    pub uarte: Peri<'static, UARTE1>,
+    pub tx: Peri<'static, AnyPin>,
+    pub rx: Peri<'static, AnyPin>,
+}
+
+pub struct Leds {
+    /// LED1 (P0.13, active-low) — the 1 Hz liveness blinker.
+    pub led1: Peri<'static, AnyPin>,
+    pub led2: Peri<'static, P0_14>,
+    pub led3: Peri<'static, P0_15>,
+    pub led4: Peri<'static, P0_16>,
+}
+
+pub struct Board {
+    pub leds: Leds,
+    pub gps: GpsPort,
+    pub display: DisplayPort,
+    pub phone: PhonePort,
+}
+
+impl Board {
+    pub fn split(p: Peripherals) -> Self {
+        Self {
+            leds: Leds {
+                led1: p.P0_13.into(),
+                led2: p.P0_14,
+                led3: p.P0_15,
+                led4: p.P0_16,
+            },
+            gps: GpsPort {
+                uarte: p.UARTE0,
+                rx: p.P1_01.into(),
+                tx: p.P1_02.into(),
+            },
+            display: DisplayPort {
+                spim: p.SPI2,
+                sck: p.P1_13.into(),
+                mosi: p.P1_14.into(),
+                cs: p.P1_12.into(),
+            },
+            phone: PhonePort {
+                uarte: p.UARTE1,
+                tx: p.P1_03.into(),
+                rx: p.P1_04.into(),
+            },
+        }
+    }
 }
 
 /// User buttons on the DK (active-low, need internal pullup).
@@ -31,7 +99,3 @@ pub mod buttons {
     /// Button4 — `P0.25`.
     pub const BTN4_PIN: u8 = 25;
 }
-
-// TODO step 4+: add SPI pin assignments for the Sharp MIP, I²C for the
-// MAX86177 + BMP581 (per decisions.md § 90), UART for the GPS, etc. as drivers
-// come online.

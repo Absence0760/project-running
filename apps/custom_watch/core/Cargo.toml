@@ -1,0 +1,20 @@
+[package]
+name = "watch_core"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ublox_nmea = { path = "../drivers/ublox_nmea" }
+heapless   = "0.9"
+defmt      = { version = "1.1", optional = true }
+
+[features]
+default = []
+defmt   = ["dep:defmt", "ublox_nmea/defmt"]
+
+# Host-testable, so no embedded dev-deps. `cargo test --target <host>` works.
+# serde_json only compiles into host test builds — link.rs uses it to prove
+# every emitted frame is real JSON, not to produce frames.
+[dev-dependencies]
+serde_json = "1"
