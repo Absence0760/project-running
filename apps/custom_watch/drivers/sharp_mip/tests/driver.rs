@@ -136,7 +136,11 @@ fn external_vcom_skips_the_clean_flush_entirely() {
     d.flush(&mut fb).unwrap();
     d.flush(&mut fb).unwrap();
     let (spi, cs) = d.into_parts();
-    assert_eq!(spi.written.len(), painted, "clean external-vcom flush sent bytes");
+    assert_eq!(
+        spi.written.len(),
+        painted,
+        "clean external-vcom flush sent bytes"
+    );
     // And no chip-select toggles for the skipped frames (only the first frame).
     assert_eq!(cs.transitions, vec![true, false]);
 }
