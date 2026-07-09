@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -203,6 +203,24 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             interaction_rx.changed(),
             Timer::after(tick),
         );
-        select(sensors, controls).await;
+        // Apply the value the winning `changed()` yields. `changed()` advances
+        // the receiver's seen-marker when it resolves, so the top-of-loop
+        // `try_changed()` will NOT re-observe it — a one-shot change (a PAGE
+        // switch, an INTERACTION stamp) would be lost if we discarded it here.
+        // Continuously-updated signals (FIX/RECORD) happen to self-heal on the
+        // next tick, but PAGE only changes on a button press. The losing
+        // futures are dropped un-consumed, so `try_changed()` still coalesces
+        // any other simultaneous changes on the next iteration.
+        match select(sensors, controls).await {
+            Either::First(Either4::First(fix)) => latest = Some(fix),
+            Either::First(Either4::Second(reading)) => {
+                hr_bpm = reading.valid.then_some(reading.bpm)
+            }
+            Either::First(Either4::Third(snap)) => rec = Some(snap),
+            Either::First(Either4::Fourth(reading)) => elev = Some(reading),
+            Either::Second(Either3::First(p)) => page = p,
+            Either::Second(Either3::Second(t)) => last_interaction_s = t,
+            Either::Second(Either3::Third(())) => {}
+        }
     }
 }
