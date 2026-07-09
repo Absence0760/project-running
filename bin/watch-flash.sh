@@ -5,6 +5,8 @@
 #
 # Thin wrapper around: cd apps/custom_watch && cargo run --release "$@"
 # Forwards extra args to cargo (e.g. --bin sensor_smoke, or --features=foo).
+# Builds with the `dev-blink` feature so the bench liveness LED (LED1 @ 2 Hz)
+# is on — it's default-OFF in the crate so a plain `cargo build` stays lean.
 #
 # Requires: thumbv7em-none-eabihf target, probe-rs, nRF52840 DK plugged in.
 # Run bin/watch-doctor.sh first if anything fails.
@@ -24,4 +26,4 @@ fi
 
 need_cmd cargo
 cd "$WORKSPACE"
-exec cargo run --release "$@"
+exec cargo run --release --features dev-blink "$@"

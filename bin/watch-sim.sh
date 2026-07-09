@@ -52,7 +52,7 @@ command -v defmt-print >/dev/null || \
 # task never leaves Idle and no distance accrues. On real hardware BTN1 starts
 # the run and this feature is off — see apps/custom_watch/app/src/tasks/record.rs.
 step "Building firmware (release, --features sim-autostart)"
-(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart)
+(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart,dev-blink)
 ELF="$WORKSPACE/target/thumbv7em-none-eabihf/release/$BIN"
 [[ -f "$ELF" ]] || fatal "build produced no ELF at $ELF"
 

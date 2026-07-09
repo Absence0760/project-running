@@ -136,6 +136,9 @@ async fn main(spawner: Spawner) {
         board.flash.nvmc,
     ))));
 
+    // The liveness LED is a debug affordance behind the default-OFF `dev-blink`
+    // feature — a free-running 2 Hz waker has no place in the lean build.
+    #[cfg(feature = "dev-blink")]
     spawner.spawn(unwrap!(tasks::ui::blink_task(board.leds.led1)));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
     spawner.spawn(unwrap!(tasks::button::run(btn1, btn2, btn3)));
