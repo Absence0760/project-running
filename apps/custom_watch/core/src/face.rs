@@ -24,6 +24,7 @@ use core::fmt::Write;
 
 use crate::elevation;
 use crate::fix::Fix;
+use crate::page::Page;
 use crate::record::{RecordState, Snapshot};
 
 pub const COLS: usize = 21;
@@ -122,6 +123,136 @@ pub fn hero_line(rec: Option<&Snapshot>) -> Option<Row> {
     let mut row = Row::new();
     let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
     Some(row)
+}
+
+/// Page-aware entry point: the 1x rows for `page`. A run in progress draws the
+/// selected page (the full dashboard or a single-metric glance); idle always
+/// draws the status face regardless of page. Pair with [`page_icons`] +
+/// [`page_hero`]. The bare [`face_rows`] is the `Dashboard`-page equivalent.
+pub fn page_rows(
+    page: Page,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    rec: Option<&Snapshot>,
+    elev: Option<&elevation::Reading>,
+    uptime_s: u32,
+) -> [Row; ROWS] {
+    match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
+        None => status_face(fix, hr_bpm, elev, uptime_s),
+        Some((snap, tag)) => match page {
+            Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s),
+            Page::Distance => glance(GlanceMetric::Distance, fix, hr_bpm, snap, tag, uptime_s),
+            Page::Pace => glance(GlanceMetric::Pace, fix, hr_bpm, snap, tag, uptime_s),
+        },
+    }
+}
+
+/// Gutter icons for `page`. Only the dashboard carries them; the glance pages
+/// are text + a single 2x hero, so every slot is `None`.
+pub fn page_icons(
+    page: Page,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    rec: Option<&Snapshot>,
+    uptime_s: u32,
+) -> [Option<FaceIcon>; ROWS] {
+    match page {
+        Page::Dashboard => face_icons(fix, hr_bpm, rec, uptime_s),
+        Page::Distance | Page::Pace => [None; ROWS],
+    }
+}
+
+/// The 2x hero string for `page`: elapsed time on the dashboard, the page's
+/// headline metric on a glance page, or `None` when no run is under way.
+pub fn page_hero(page: Page, rec: Option<&Snapshot>) -> Option<Row> {
+    let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
+    Some(match page {
+        Page::Dashboard => {
+            let (h, m, s) = hms(snap.elapsed_s);
+            let mut row = Row::new();
+            let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
+            row
+        }
+        Page::Distance => glance_hero(GlanceMetric::Distance, snap),
+        Page::Pace => glance_hero(GlanceMetric::Pace, snap),
+    })
+}
+
+#[derive(Clone, Copy)]
+enum GlanceMetric {
+    Distance,
+    Pace,
+}
+
+/// A single-metric glance page: the metric up large in the rows-0-1 hero (drawn
+/// by the app from [`page_hero`]), a unit label, then time / the other metric /
+/// HR / GPS as 1x context — the "one big number" view for a mid-run glance.
+fn glance(
+    metric: GlanceMetric,
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the blinking state tag rides row 0.
+    let tag_shown = tag != "REC" || uptime_s % 2 == 0;
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    let label = match metric {
+        GlanceMetric::Distance => "DISTANCE  KM",
+        GlanceMetric::Pace => "AVG PACE  /KM",
+    };
+    let _ = write!(rows[2], "{}", label);
+
+    let (h, m, s) = hms(snap.elapsed_s);
+    let _ = write!(rows[4], "{:<5}{}:{:02}:{:02}", "TIME", h.min(999), m, s);
+
+    // The metric NOT already up large fills the secondary line.
+    match metric {
+        GlanceMetric::Distance => write_pace(&mut rows[5], "PACE", snap.avg_pace_s_per_km),
+        GlanceMetric::Pace => {
+            let km = (snap.distance_m / 1000.0).min(9999.99);
+            let _ = write!(rows[5], "{:<5}{:.2} KM", "DIST", km);
+        }
+    }
+
+    match hr_bpm {
+        Some(bpm) => {
+            let _ = write!(rows[6], "{:<5}{} BPM", "HR", bpm);
+        }
+        None => {
+            let _ = write!(rows[6], "{:<5}--", "HR");
+        }
+    }
+
+    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    rows
+}
+
+/// The big headline value for a glance page's hero (no unit — the label row
+/// carries it): distance to two decimals, or `M:SS` average pace / `--:--`.
+fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
+    let mut row = Row::new();
+    match metric {
+        GlanceMetric::Distance => {
+            let km = (snap.distance_m / 1000.0).min(9999.99);
+            let _ = write!(row, "{:.2}", km);
+        }
+        GlanceMetric::Pace => match snap.avg_pace_s_per_km {
+            Some(p) => {
+                let _ = write!(row, "{}:{:02}", (p / 60).min(99), p % 60);
+            }
+            None => {
+                let _ = write!(row, "--:--");
+            }
+        },
+    }
+    row
 }
 
 /// The HR gutter frame: a ~1 Hz liveness pulse (big/small heart) while a pulse
@@ -583,6 +714,84 @@ mod tests {
         let rows = face_rows(None, None, Some(&snapshot(RecordState::Finished, 42_195.0)), None, 3);
         assert_eq!(rows[0].as_str().trim(), "FIN");
         assert_eq!(rows[2].as_str(), "     42.20 KM");
+    }
+
+    #[test]
+    fn page_dashboard_matches_the_bare_dashboard_entry_points() {
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.elapsed_s = 3 * 3600 + 24 * 60 + 7;
+        let e = elev(1600.0, 540.0, 120.0);
+        // The Dashboard page delegates to face_rows / face_icons / hero_line.
+        assert_eq!(
+            page_rows(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), Some(&e), 42),
+            face_rows(Some(&fix()), Some(152), Some(&rec), Some(&e), 42)
+        );
+        assert_eq!(
+            page_icons(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), 42),
+            face_icons(Some(&fix()), Some(152), Some(&rec), 42)
+        );
+        assert_eq!(
+            page_hero(Page::Dashboard, Some(&rec)),
+            hero_line(Some(&rec))
+        );
+    }
+
+    #[test]
+    fn distance_glance_puts_distance_up_large() {
+        let mut rec = snapshot(RecordState::Recording, 42_190.0);
+        rec.elapsed_s = 3 * 3600 + 24 * 60 + 7;
+        rec.avg_pace_s_per_km = Some(5 * 60 + 12);
+        let rows = page_rows(Page::Distance, Some(&fix()), Some(152), Some(&rec), None, 42);
+        assert_eq!(page_hero(Page::Distance, Some(&rec)).unwrap().as_str(), "42.19");
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "DISTANCE  KM");
+        assert_eq!(rows[4].as_str(), "TIME 3:24:07");
+        assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
+        assert_eq!(rows[6].as_str(), "HR   152 BPM");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        // Glance pages carry no gutter icons.
+        assert!(page_icons(Page::Distance, Some(&fix()), Some(152), Some(&rec), 42)
+            .iter()
+            .all(Option::is_none));
+    }
+
+    #[test]
+    fn pace_glance_puts_pace_up_large_with_distance_secondary() {
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.avg_pace_s_per_km = Some(5 * 60 + 12);
+        let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42);
+        assert_eq!(page_hero(Page::Pace, Some(&rec)).unwrap().as_str(), "5:12");
+        assert_eq!(rows[2].as_str(), "AVG PACE  /KM");
+        assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
+        assert_eq!(rows[6].as_str(), "HR   --");
+        // No pace yet -> the hero placeholder, never a bogus number.
+        let fresh = snapshot(RecordState::Recording, 5.0);
+        assert_eq!(page_hero(Page::Pace, Some(&fresh)).unwrap().as_str(), "--:--");
+    }
+
+    #[test]
+    fn every_page_falls_back_to_the_status_face_when_idle() {
+        for page in [Page::Dashboard, Page::Distance, Page::Pace] {
+            let rows = page_rows(page, Some(&fix()), None, None, None, 42);
+            assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
+            assert!(page_hero(page, None).is_none());
+            assert!(page_icons(page, Some(&fix()), None, None, 42)
+                .iter()
+                .all(Option::is_none));
+        }
+    }
+
+    #[test]
+    fn glance_rows_fit_the_grid_at_extremes() {
+        let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
+        rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
+        rec.avg_pace_s_per_km = Some(99 * 60 + 59);
+        for page in [Page::Distance, Page::Pace] {
+            for row in page_rows(page, Some(&fix()), Some(220), Some(&rec), None, 43) {
+                assert!(row.len() <= COLS, "glance row too wide: {:?}", row);
+            }
+            assert!(page_hero(page, Some(&rec)).unwrap().len() <= COLS);
+        }
     }
 
     #[test]
