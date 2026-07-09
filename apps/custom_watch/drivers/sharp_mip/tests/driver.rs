@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 use embedded_hal::digital::{ErrorType as PinErrorType, OutputPin};
 use embedded_hal::spi::{ErrorType as SpiErrorType, SpiBus};
-use sharp_mip::{font, Framebuffer, SharpMip, HEIGHT, LINE_BYTES, TEXT_COLS};
+use sharp_mip::{font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS};
 
 #[derive(Default)]
 struct MockSpi {
@@ -161,6 +161,54 @@ fn draw_text_row_clears_leftover_cells() {
     for dy in 0..font::GLYPH_HEIGHT {
         assert_eq!(fb.line(dy)[4], 0);
     }
+}
+
+#[test]
+fn draw_icon_blits_the_bitmap_cell_aligned() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_icon(4, 2, Icon::Heart);
+    let bitmap = Icon::Heart.bitmap();
+    let y0 = 2 * font::GLYPH_HEIGHT;
+    for (dy, cells) in bitmap.iter().enumerate() {
+        assert_eq!(fb.line(y0 + dy)[4], cells[0]);
+        assert_eq!(fb.line(y0 + dy)[5], cells[1]);
+    }
+    // Every dirtied line sits inside the icon's one-row band.
+    assert!(fb.dirty_count() > 0);
+    assert!((0..HEIGHT)
+        .filter(|&y| fb.is_dirty(y))
+        .all(|y| (y0..y0 + ICON_SIZE).contains(&y)));
+}
+
+#[test]
+fn draw_icon_overwrites_prior_cell_content() {
+    let mut fb = Framebuffer::new();
+    // A glyph then an icon over the same cells: the icon fully replaces it.
+    fb.draw_text(4, 2, "HR");
+    fb.draw_icon(4, 2, Icon::Heart);
+    let bitmap = Icon::Heart.bitmap();
+    let y0 = 2 * font::GLYPH_HEIGHT;
+    for (dy, cells) in bitmap.iter().enumerate() {
+        assert_eq!(fb.line(y0 + dy)[4], cells[0]);
+        assert_eq!(fb.line(y0 + dy)[5], cells[1]);
+    }
+}
+
+#[test]
+fn redrawing_identical_icon_dirties_nothing() {
+    let mut fb = Framebuffer::new();
+    fb.draw_icon(0, 0, Icon::Satellite);
+    fb.clear_dirty();
+    fb.draw_icon(0, 0, Icon::Satellite);
+    assert_eq!(fb.dirty_count(), 0);
+}
+
+#[test]
+fn draw_icon_out_of_bounds_is_clipped_not_panics() {
+    let mut fb = Framebuffer::new();
+    fb.draw_icon(0, 99, Icon::Vert);
+    fb.draw_icon(TEXT_COLS - 1, 0, Icon::Vert); // second cell falls off the right
 }
 
 #[test]

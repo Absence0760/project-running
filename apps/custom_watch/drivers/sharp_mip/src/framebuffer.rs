@@ -8,6 +8,11 @@
 //! [`display`]: crate::display
 
 use crate::font;
+use crate::icons::{Icon, ICON_SIZE};
+
+// An icon is exactly one text row tall and `ICON_BYTES_PER_ROW` cells wide, so
+// `draw_icon` can blit it cell-aligned like a glyph. These asserts pin that.
+const _: () = assert!(ICON_SIZE == font::GLYPH_HEIGHT);
 
 pub const WIDTH: usize = 168;
 pub const HEIGHT: usize = 144;
@@ -105,6 +110,33 @@ impl Framebuffer {
                 let y = y0 + dy;
                 if y < HEIGHT && self.lines[y][cell] != 0 {
                     self.lines[y][cell] = 0;
+                    self.dirty[y] = true;
+                }
+            }
+        }
+    }
+
+    /// Blit a 16x16 [`Icon`] at a text-grid cell — one row tall, two cells
+    /// wide. Overwrites those cells (the icon carries its own whitespace as 0
+    /// bits, so it also clears prior content), clipping at the right and bottom
+    /// edges. Redrawing the same icon dirties nothing.
+    pub fn draw_icon(&mut self, col: usize, row: usize, icon: Icon) {
+        if row >= TEXT_ROWS {
+            return;
+        }
+        let y0 = row * font::GLYPH_HEIGHT;
+        for (dy, cells) in icon.bitmap().iter().enumerate() {
+            let y = y0 + dy;
+            if y >= HEIGHT {
+                break;
+            }
+            for (bx, &bits) in cells.iter().enumerate() {
+                let cell = col + bx;
+                if cell >= TEXT_COLS {
+                    break;
+                }
+                if self.lines[y][cell] != bits {
+                    self.lines[y][cell] = bits;
                     self.dirty[y] = true;
                 }
             }

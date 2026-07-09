@@ -20,6 +20,8 @@
 pub mod display;
 pub mod font;
 pub mod framebuffer;
+pub mod icons;
 
 pub use display::SharpMip;
 pub use framebuffer::{Framebuffer, HEIGHT, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH};
+pub use icons::{Icon, ICON_BYTES_PER_ROW, ICON_SIZE};
