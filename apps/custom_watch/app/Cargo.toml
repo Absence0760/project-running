@@ -24,10 +24,19 @@ single-core-cs = ["cortex-m/critical-section-single-core"]
 
 # Restores the pre-button "auto-start the run on the first GPS fix" path in the
 # record task. OFF by default: on real hardware BTN1 is the only start path.
-# The Renode sim (bin/watch-sim.sh) has no way to inject a button press, so it
-# builds with this feature to keep showing distance accrue — see
+# Kept on for the sim so a run records without needing a button — see
 # apps/custom_watch/local_testing.md § Simulating without a board.
 sim-autostart = []
+
+# Sim-only button task: poll the DK button pin levels instead of waiting on a
+# hardware edge. OFF by default. embassy-nrf's `wait_for_falling_edge` is driven
+# by the nRF52840 GPIO SENSE/DETECT + PORT-event path, which Renode's GPIO model
+# does not implement (it models the IN register but not SENSE), so the edge
+# future never wakes under the sim. This feature swaps the button task for a
+# level-polling variant that Renode CAN drive via the sim/watch.resc btn1/btn2/
+# btn3 monitor macros. The hardware build keeps the low-power SENSE path
+# untouched (docs/custom_watch/performance_path.md — "every wake justifiable").
+sim-buttons = []
 
 # Bench/sim liveness LED (LED1 @ 2 Hz). OFF by default so the lean build carries
 # no gratuitous always-on waker (docs/custom_watch/performance_path.md — "every

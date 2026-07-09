@@ -14,6 +14,7 @@
 //! command — it just advances `state::PAGE`, which the `ui` face reads.
 
 use defmt::*;
+#[cfg(not(feature = "sim-buttons"))]
 use embassy_futures::select::{select3, Either3};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
@@ -26,8 +27,10 @@ use crate::state;
 /// Settle time after an edge before the level is trusted — long enough to ride
 /// out contact bounce on the DK's tactile switches, short enough to feel
 /// instant.
+#[cfg(not(feature = "sim-buttons"))]
 const DEBOUNCE: Duration = Duration::from_millis(20);
 
+#[cfg(not(feature = "sim-buttons"))]
 #[embassy_executor::task]
 pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>, mut btn3: Input<'static>) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
@@ -83,6 +86,71 @@ pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>, mut btn3: I
         if let Some(cmd) = command_for(button, state) {
             info!("button: {} -> {}", button, cmd);
             state::RECORD_CMD.send(cmd).await;
+        }
+    }
+}
+
+/// Sim-only button task — polls the DK button pin levels instead of waiting on
+/// a hardware falling edge.
+///
+/// The hardware `run` above waits on `wait_for_falling_edge`, which the
+/// nRF52840 drives from the GPIO SENSE/DETECT + PORT-event mechanism. Renode's
+/// nRF52840 GPIO model implements the IN register (pin level) but not
+/// SENSE/DETECT, so that edge future never wakes under the sim. This variant
+/// samples the pin levels on a short timer and detects the falling edge in
+/// software, so the `btn1`/`btn2`/`btn3` monitor macros in `sim/watch.resc`
+/// drive the SAME `command_for` / page logic the real task uses. The mapping is
+/// identical (BTN1 start/pause/resume, BTN2 stop, BTN3 page). Renode has no
+/// contact bounce, so a clean edge needs no debounce confirm.
+///
+/// Feature-gated to the sim build; the hardware task keeps the low-power SENSE
+/// path (docs/custom_watch/performance_path.md — "every wake justifiable").
+#[cfg(feature = "sim-buttons")]
+#[embassy_executor::task]
+pub async fn run(btn1: Input<'static>, btn2: Input<'static>, btn3: Input<'static>) {
+    /// Poll cadence. The `click` macro holds a press ~0.3 s, so any interval
+    /// well under that catches the edge; short enough to feel instant.
+    const POLL: Duration = Duration::from_millis(10);
+
+    let mut record_rx = unwrap!(state::RECORD.receiver());
+    let page_tx = state::PAGE.sender();
+    let interaction_tx = state::INTERACTION.sender();
+    let mut page = Page::default();
+
+    // Active-low: pressed pulls the line low. Track the previous level per
+    // button so a release→press transition (high→low) fires exactly once.
+    let btns = [btn1, btn2, btn3];
+    let mut prev = [btns[0].is_low(), btns[1].is_low(), btns[2].is_low()];
+    info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page");
+
+    loop {
+        Timer::after(POLL).await;
+        for (i, b) in btns.iter().enumerate() {
+            let pressed = b.is_low();
+            let falling = pressed && !prev[i];
+            prev[i] = pressed;
+            if !falling {
+                continue;
+            }
+            // A press is an interaction whether or not it issues a command —
+            // it wakes the face's animation window, same as the hardware task.
+            interaction_tx.send(Instant::now().as_secs() as u32);
+            if i == 2 {
+                // BTN3 is its own concern — no recording command, just a page.
+                page = page.next();
+                info!("button: BTN3 -> page {}", page);
+                page_tx.send(page);
+                continue;
+            }
+            let button = if i == 0 { Button::Primary } else { Button::Stop };
+            let state = record_rx
+                .try_get()
+                .map(|snap| snap.state)
+                .unwrap_or(RecordState::Idle);
+            if let Some(cmd) = command_for(button, state) {
+                info!("button: {} -> {}", button, cmd);
+                state::RECORD_CMD.send(cmd).await;
+            }
         }
     }
 }
