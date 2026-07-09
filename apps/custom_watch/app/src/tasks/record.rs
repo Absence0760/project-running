@@ -6,10 +6,13 @@
 //! Thin glue by design: distance, moving time, pace, the point-acceptance
 //! filter, and the auto-pause all live in `watch_core::record` (host-tested);
 //! the button-press → command mapping lives in `watch_core::button`; the flash
-//! slot layout in `watch_core::flash_store`. This task selects over three
-//! sources — a 1 Hz tick (advances the wall clock), incoming fixes (fed to the
-//! recorder), and incoming commands (drive start/pause/resume/stop) — and
-//! republishes the snapshot after each.
+//! slot layout in `watch_core::flash_store`. This task selects over incoming
+//! fixes (fed to the recorder) and commands (drive start/pause/resume/stop),
+//! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
+//! the wall clock between fixes. Idle and Finished have no clock to advance, so
+//! the tick is dropped there and the task waits purely on events. It publishes
+//! a snapshot only when it actually changed, so a resting recorder wakes no
+//! downstream consumer (the ui face, the button task) on a heartbeat.
 //!
 //! Track capture: on start it opens a `run_store::RunWriter` over a slot-sized
 //! RAM staging buffer; each fix the recorder accepts as a new anchor
@@ -25,7 +28,7 @@
 //! `apps/custom_watch/local_testing.md § Simulating without a board`.
 
 use defmt::*;
-use embassy_futures::select::{select3, Either3};
+use embassy_futures::select::{select, select3, Either, Either3};
 use embassy_time::{Duration, Instant, Ticker};
 use heapless::Vec;
 use max86177::peak_detect::Reading as HrReading;
@@ -159,16 +162,32 @@ pub async fn run(store: &'static SharedStore) {
     let mut open: Option<OpenRun> = None;
     let mut latest_bpm: Option<u8> = None;
     let mut latest_baro_alt_m: Option<f32> = None;
+    // Seed with the initial idle snapshot so it is never published — consumers
+    // treat "no RECORD value yet" as idle, which is exactly right.
+    let mut last_published = recorder.snapshot();
     #[cfg(feature = "sim-autostart")]
     info!("record: sim-autostart on — starts on first fix");
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
     loop {
-        match select3(ticker.next(), fix_rx.changed(), state::RECORD_CMD.receive()).await {
-            Either3::First(()) => {
-                recorder.tick(Instant::now().as_secs() as u32);
+        // A tick only means something while a run is advancing a clock. Idle and
+        // Finished don't, so drop the ticker there and wait purely on events.
+        let event = if is_active(recorder.state()) {
+            match select3(ticker.next(), fix_rx.changed(), state::RECORD_CMD.receive()).await {
+                Either3::First(()) => Event::Tick,
+                Either3::Second(fix) => Event::Fix(fix),
+                Either3::Third(cmd) => Event::Cmd(cmd),
             }
-            Either3::Second(fix) => {
+        } else {
+            match select(fix_rx.changed(), state::RECORD_CMD.receive()).await {
+                Either::First(fix) => Event::Fix(fix),
+                Either::Second(cmd) => Event::Cmd(cmd),
+            }
+        };
+
+        match event {
+            Event::Tick => recorder.tick(Instant::now().as_secs() as u32),
+            Event::Fix(fix) => {
                 if let Some(r) = hr_rx.try_changed() {
                     latest_bpm = bpm_of(&r);
                 }
@@ -179,6 +198,7 @@ pub async fn run(store: &'static SharedStore) {
                 if recorder.state() == RecordState::Idle {
                     let now_s = Instant::now().as_secs() as u32;
                     recorder.start(now_s);
+                    ticker.reset(); // fresh clock — no catch-up burst of ticks
                     open = open_run(&mut next_seq, now_s);
                     info!("record: sim-autostart on first fix");
                 }
@@ -189,7 +209,7 @@ pub async fn run(store: &'static SharedStore) {
                     }
                 }
             }
-            Either3::Third(cmd) => {
+            Event::Cmd(cmd) => {
                 let now_s = Instant::now().as_secs() as u32;
                 let prev = recorder.state();
                 match cmd {
@@ -199,8 +219,11 @@ pub async fn run(store: &'static SharedStore) {
                     RecordCommand::Stop => recorder.stop(now_s),
                 }
                 let now = recorder.state();
-                if prev == RecordState::Idle && now == RecordState::Recording && open.is_none() {
-                    open = open_run(&mut next_seq, now_s);
+                if prev == RecordState::Idle && now == RecordState::Recording {
+                    ticker.reset(); // entering the active clock — avoid a burst
+                    if open.is_none() {
+                        open = open_run(&mut next_seq, now_s);
+                    }
                 }
                 if now == RecordState::Finished {
                     if let Some(o) = open.take() {
@@ -210,13 +233,31 @@ pub async fn run(store: &'static SharedStore) {
                 info!("record: command {} -> {}", cmd, state_str(now));
             }
         }
+
+        // Publish only on change: a resting recorder must not wake the ui face
+        // or the button task on a heartbeat.
         let snap = recorder.snapshot();
-        debug!(
-            "record: {} dist={}m moving={}s",
-            state_str(snap.state),
-            snap.distance_m,
-            snap.moving_s
-        );
-        sender.send(snap);
+        if snap != last_published {
+            debug!(
+                "record: {} dist={}m moving={}s",
+                state_str(snap.state),
+                snap.distance_m,
+                snap.moving_s
+            );
+            last_published = snap;
+            sender.send(snap);
+        }
     }
+}
+
+/// A run advances its wall clock only while Recording or Paused; Idle and
+/// Finished are inert, so the 1 Hz tick is dropped in those states.
+fn is_active(state: RecordState) -> bool {
+    matches!(state, RecordState::Recording | RecordState::Paused)
+}
+
+enum Event {
+    Tick,
+    Fix(Fix),
+    Cmd(RecordCommand),
 }

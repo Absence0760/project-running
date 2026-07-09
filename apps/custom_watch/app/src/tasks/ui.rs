@@ -7,6 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
+use embassy_futures::select::{select, select3, select4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -32,6 +33,14 @@ const _: () = core::assert!(face::ROWS == sharp_mip::TEXT_ROWS);
 // steady frame, so an idle wrist stops paying the per-second display redraw on
 // a reflective panel where dark pixels save nothing — only fewer updates do.
 const ANIM_WINDOW_S: u32 = 8;
+
+// The screen task is event-driven: it re-renders when a state Watch changes and
+// otherwise sleeps. A short tick still fires while there's a *time-based* reason
+// to refresh — an animation frame to advance, or a fresh GPS fix that needs to
+// flip to STALE once fixes stop. With none of those, it falls back to a long
+// heartbeat so a truly idle wrist wakes the CPU seconds apart, not every second.
+const TICK_ACTIVE: Duration = Duration::from_secs(1);
+const TICK_IDLE: Duration = Duration::from_secs(30);
 
 /// Bench/sim liveness blinker — toggles LED1 at 2 Hz so you can see the
 /// firmware is alive before the display or defmt tells you. Gated behind the
@@ -170,6 +179,30 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
         }
-        Timer::after(Duration::from_secs(1)).await;
+
+        // Sleep until a state change or the next time-based refresh. Recording
+        // wakes us via RECORD snapshots each second; a moving GPS fix wakes us
+        // via FIX; a button press via INTERACTION. The only refreshes with no
+        // event behind them are the animation frame and the fresh→stale flip.
+        let fix_fresh = latest
+            .as_ref()
+            .is_some_and(|f| uptime_s.saturating_sub(f.uptime_s) <= face::STALE_AFTER_S);
+        let tick = if animate || fix_fresh {
+            TICK_ACTIVE
+        } else {
+            TICK_IDLE
+        };
+        let sensors = select4(
+            fix_rx.changed(),
+            hr_rx.changed(),
+            rec_rx.changed(),
+            elev_rx.changed(),
+        );
+        let controls = select3(
+            page_rx.changed(),
+            interaction_rx.changed(),
+            Timer::after(tick),
+        );
+        select(sensors, controls).await;
     }
 }
