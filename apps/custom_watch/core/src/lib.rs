@@ -9,6 +9,7 @@
 //! - [`fix`] — the GPS fix domain model + the RMC/GGA accumulator
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`face`] — watch-face layout: state in, text rows out
+//! - [`page`] — which run-view screen shows + the page-button cycle order
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
@@ -24,5 +25,6 @@ pub mod face;
 pub mod fix;
 pub mod flash_store;
 pub mod link;
+pub mod page;
 pub mod record;
 pub mod run_store;
