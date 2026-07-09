@@ -374,8 +374,12 @@ fn dashboard(
     rows
 }
 
-/// The idle / bench layout — uptime clock, GPS status, last-known position,
-/// speed, altitude, HR, and vert (falling back to the UTC clock with no baro).
+/// The idle / bench layout — brand, GPS status, last-known position, speed,
+/// altitude, HR, and vert (falling back to the UTC clock with no baro). The
+/// title row is deliberately static (no ticking uptime): the screen task is
+/// event-driven, so a resting idle face with no per-second element lets the CPU
+/// sleep instead of waking every second to advance a cosmetic clock. Time of
+/// day still shows on the bottom row from the GPS fix, updating on each fix.
 fn status_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -384,8 +388,7 @@ fn status_face(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    let (h, m, s) = hms(uptime_s);
-    let _ = write!(rows[0], "THREKIR     {:02}:{:02}:{:02}", h.min(99), m, s);
+    let _ = write!(rows[0], "THREKIR");
 
     match fix {
         None => {
@@ -531,7 +534,9 @@ mod tests {
     #[test]
     fn idle_renders_the_status_face() {
         let rows = face_rows(Some(&fix()), None, None, None, 42);
-        assert_eq!(rows[0].as_str(), "THREKIR     00:00:42");
+        // Title row is static (no ticking uptime) so the idle screen doesn't
+        // force a per-second wake; time of day still shows on the UTC row.
+        assert_eq!(rows[0].as_str(), "THREKIR");
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
         assert_eq!(rows[4].as_str(), "LON   -105.27050");
