@@ -81,7 +81,7 @@ pub fn face_rows(
     uptime_s: u32,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
-        Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s),
+        Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true),
         None => status_face(fix, hr_bpm, elev, uptime_s),
     }
 }
@@ -101,14 +101,24 @@ pub fn face_icons(
     rec: Option<&Snapshot>,
     uptime_s: u32,
 ) -> [Option<FaceIcon>; ROWS] {
+    dashboard_icons(fix, hr_bpm, rec, uptime_s, true)
+}
+
+fn dashboard_icons(
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    rec: Option<&Snapshot>,
+    uptime_s: u32,
+    animate: bool,
+) -> [Option<FaceIcon>; ROWS] {
     let mut icons = [None; ROWS];
     if rec.and_then(|snap| rec_tag(snap.state)).is_some() {
         // Rows 0-1 are the 2x time hero (no gutter icon). Row 2 down carry them.
         icons[2] = Some(FaceIcon::Footsteps);
-        icons[5] = Some(heart_icon(hr_bpm, uptime_s));
+        icons[5] = Some(heart_icon(hr_bpm, uptime_s, animate));
         icons[6] = Some(FaceIcon::Mountain);
         icons[7] = Some(FaceIcon::Vert);
-        icons[8] = Some(gps_icon(fix, uptime_s));
+        icons[8] = Some(gps_icon(fix, uptime_s, animate));
     }
     icons
 }
@@ -127,8 +137,10 @@ pub fn hero_line(rec: Option<&Snapshot>) -> Option<Row> {
 
 /// Page-aware entry point: the 1x rows for `page`. A run in progress draws the
 /// selected page (the full dashboard or a single-metric glance); idle always
-/// draws the status face regardless of page. Pair with [`page_icons`] +
-/// [`page_hero`]. The bare [`face_rows`] is the `Dashboard`-page equivalent.
+/// draws the status face regardless of page. `animate` gates the ~1 Hz REC
+/// blink — off, the tag holds steady-on so it costs no per-second redraw. Pair
+/// with [`page_icons`] + [`page_hero`]. The bare [`face_rows`] is the
+/// always-animated `Dashboard`-page equivalent.
 pub fn page_rows(
     page: Page,
     fix: Option<&Fix>,
@@ -136,28 +148,33 @@ pub fn page_rows(
     rec: Option<&Snapshot>,
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
+    animate: bool,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
         None => status_face(fix, hr_bpm, elev, uptime_s),
         Some((snap, tag)) => match page {
-            Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s),
-            Page::Distance => glance(GlanceMetric::Distance, fix, hr_bpm, snap, tag, uptime_s),
-            Page::Pace => glance(GlanceMetric::Pace, fix, hr_bpm, snap, tag, uptime_s),
+            Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate),
+            Page::Distance => {
+                glance(GlanceMetric::Distance, fix, hr_bpm, snap, tag, uptime_s, animate)
+            }
+            Page::Pace => glance(GlanceMetric::Pace, fix, hr_bpm, snap, tag, uptime_s, animate),
         },
     }
 }
 
 /// Gutter icons for `page`. Only the dashboard carries them; the glance pages
-/// are text + a single 2x hero, so every slot is `None`.
+/// are text + a single 2x hero, so every slot is `None`. `animate` gates the
+/// heart pulse + GPS-search cycle (see [`dashboard_icons`]).
 pub fn page_icons(
     page: Page,
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     rec: Option<&Snapshot>,
     uptime_s: u32,
+    animate: bool,
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
-        Page::Dashboard => face_icons(fix, hr_bpm, rec, uptime_s),
+        Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
         Page::Distance | Page::Pace => [None; ROWS],
     }
 }
@@ -194,11 +211,13 @@ fn glance(
     snap: &Snapshot,
     tag: &str,
     uptime_s: u32,
+    animate: bool,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Rows 0-1 hold the 2x hero; only the blinking state tag rides row 0.
-    let tag_shown = tag != "REC" || uptime_s % 2 == 0;
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s % 2 == 0;
     if tag_shown {
         let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
     }
@@ -257,21 +276,25 @@ fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
 
 /// The HR gutter frame: a ~1 Hz liveness pulse (big/small heart) while a pulse
 /// is detected — a "still recording, still beating" cue, not a beat-accurate
-/// BPM sync. Steady when HR is absent. Note: continuous pulsing redraws one
-/// cell each second; harmless on the bench, a power line-item on real silicon.
-fn heart_icon(hr_bpm: Option<u16>, uptime_s: u32) -> FaceIcon {
+/// BPM sync. Steady when HR is absent, or when `animate` is off (the app gates
+/// animation to the seconds after an interaction to spare the display the
+/// per-second redraw an idle wrist would otherwise pay all run long).
+fn heart_icon(hr_bpm: Option<u16>, uptime_s: u32, animate: bool) -> FaceIcon {
     match hr_bpm {
-        Some(_) if uptime_s % 2 == 1 => FaceIcon::HeartSmall,
+        Some(_) if animate && uptime_s % 2 == 1 => FaceIcon::HeartSmall,
         _ => FaceIcon::Heart,
     }
 }
 
 /// The GPS gutter frame: the full satellite once a fresh fix is locked, else a
-/// once-per-second growing-arc search cycle so a lost or not-yet-acquired fix
-/// reads as actively hunting rather than frozen.
-fn gps_icon(fix: Option<&Fix>, uptime_s: u32) -> FaceIcon {
+/// growing-arc search cycle so a lost or not-yet-acquired fix reads as actively
+/// hunting. When `animate` is off the search holds one steady frame instead of
+/// cycling — the fix state still shows, without the per-second redraw.
+fn gps_icon(fix: Option<&Fix>, uptime_s: u32, animate: bool) -> FaceIcon {
     if gps_fresh(fix, uptime_s) {
         FaceIcon::Satellite
+    } else if !animate {
+        FaceIcon::SatSearch1
     } else {
         match uptime_s % 3 {
             0 => FaceIcon::SatSearch0,
@@ -298,6 +321,7 @@ fn dashboard(
     tag: &str,
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
+    animate: bool,
 ) -> [Row; ROWS] {
     const GUTTER: &str = "     ";
     let mut rows: [Row; ROWS] = Default::default();
@@ -305,8 +329,8 @@ fn dashboard(
     // Rows 0-1 hold the 2x elapsed-time hero (drawn by the app). Only the
     // recording-state tag lives here, pinned top-right clear of the hero digits.
     // Blink it at ~1 Hz for REC so a live recording is unmistakable; PAU / FIN
-    // stay steady (a blink reads as "in progress").
-    let tag_shown = tag != "REC" || uptime_s % 2 == 0;
+    // (and any state once `animate` is off) stay steady-on.
+    let tag_shown = tag != "REC" || !animate || uptime_s % 2 == 0;
     if tag_shown {
         let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
     }
@@ -721,13 +745,13 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 12_340.0);
         rec.elapsed_s = 3 * 3600 + 24 * 60 + 7;
         let e = elev(1600.0, 540.0, 120.0);
-        // The Dashboard page delegates to face_rows / face_icons / hero_line.
+        // The Dashboard page (animated) delegates to face_rows / face_icons.
         assert_eq!(
-            page_rows(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), Some(&e), 42),
+            page_rows(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), Some(&e), 42, true),
             face_rows(Some(&fix()), Some(152), Some(&rec), Some(&e), 42)
         );
         assert_eq!(
-            page_icons(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), 42),
+            page_icons(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), 42, true),
             face_icons(Some(&fix()), Some(152), Some(&rec), 42)
         );
         assert_eq!(
@@ -741,7 +765,7 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 42_190.0);
         rec.elapsed_s = 3 * 3600 + 24 * 60 + 7;
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
-        let rows = page_rows(Page::Distance, Some(&fix()), Some(152), Some(&rec), None, 42);
+        let rows = page_rows(Page::Distance, Some(&fix()), Some(152), Some(&rec), None, 42, true);
         assert_eq!(page_hero(Page::Distance, Some(&rec)).unwrap().as_str(), "42.19");
         assert_eq!(rows[0].as_str().trim(), "REC");
         assert_eq!(rows[2].as_str(), "DISTANCE  KM");
@@ -750,7 +774,7 @@ mod tests {
         assert_eq!(rows[6].as_str(), "HR   152 BPM");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS");
         // Glance pages carry no gutter icons.
-        assert!(page_icons(Page::Distance, Some(&fix()), Some(152), Some(&rec), 42)
+        assert!(page_icons(Page::Distance, Some(&fix()), Some(152), Some(&rec), 42, true)
             .iter()
             .all(Option::is_none));
     }
@@ -759,7 +783,7 @@ mod tests {
     fn pace_glance_puts_pace_up_large_with_distance_secondary() {
         let mut rec = snapshot(RecordState::Recording, 12_340.0);
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
-        let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42);
+        let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42, true);
         assert_eq!(page_hero(Page::Pace, Some(&rec)).unwrap().as_str(), "5:12");
         assert_eq!(rows[2].as_str(), "AVG PACE  /KM");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
@@ -770,12 +794,48 @@ mod tests {
     }
 
     #[test]
+    fn gating_animation_off_freezes_every_animated_element() {
+        // Odd second, HR present, no fresh fix: with animation ON everything is
+        // on its alternate frame; with it OFF each holds a steady frame so the
+        // display pays no per-second redraw for them.
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let odd = 41 + STALE_AFTER_S + 5; // odd, and past STALE so GPS is searching
+        assert_eq!(odd % 2, 1);
+
+        // REC tag: blinks off when animating, steady-on when gated.
+        assert_eq!(
+            page_rows(Page::Dashboard, None, Some(150), Some(&rec), None, odd, true)[0].as_str(),
+            ""
+        );
+        assert_eq!(
+            page_rows(Page::Dashboard, None, Some(150), Some(&rec), None, odd, false)[0]
+                .as_str()
+                .trim(),
+            "REC"
+        );
+
+        // Heart: HeartSmall frame when animating, steady Heart when gated.
+        let on = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), odd, true);
+        let off = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), odd, false);
+        assert_eq!(on[5], Some(FaceIcon::HeartSmall));
+        assert_eq!(off[5], Some(FaceIcon::Heart));
+
+        // GPS search: cycles a frame when animating, one steady frame when gated.
+        assert_eq!(off[8], Some(FaceIcon::SatSearch1));
+        // A fresh fix locks the full satellite either way (nothing to gate).
+        let fresh_on = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), 42, true);
+        let fresh_off = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), 42, false);
+        assert_eq!(fresh_on[8], Some(FaceIcon::Satellite));
+        assert_eq!(fresh_off[8], Some(FaceIcon::Satellite));
+    }
+
+    #[test]
     fn every_page_falls_back_to_the_status_face_when_idle() {
         for page in [Page::Dashboard, Page::Distance, Page::Pace] {
-            let rows = page_rows(page, Some(&fix()), None, None, None, 42);
+            let rows = page_rows(page, Some(&fix()), None, None, None, 42, true);
             assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
             assert!(page_hero(page, None).is_none());
-            assert!(page_icons(page, Some(&fix()), None, None, 42)
+            assert!(page_icons(page, Some(&fix()), None, None, 42, true)
                 .iter()
                 .all(Option::is_none));
         }
@@ -787,7 +847,7 @@ mod tests {
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
         rec.avg_pace_s_per_km = Some(99 * 60 + 59);
         for page in [Page::Distance, Page::Pace] {
-            for row in page_rows(page, Some(&fix()), Some(220), Some(&rec), None, 43) {
+            for row in page_rows(page, Some(&fix()), Some(220), Some(&rec), None, 43, true) {
                 assert!(row.len() <= COLS, "glance row too wide: {:?}", row);
             }
             assert!(page_hero(page, Some(&rec)).unwrap().len() <= COLS);

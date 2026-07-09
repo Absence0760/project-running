@@ -38,3 +38,9 @@ pub static ELEVATION: Watch<CriticalSectionRawMutex, ElevationReading, 3> = Watc
 /// Current run-view page: the `button` task advances it on each BTN3 press, the
 /// `ui` face reads it to pick the layout. One receiver (the `ui` task).
 pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
+
+/// Uptime (seconds) of the last button press — any button. The `button` task
+/// stamps it on every confirmed press; the `ui` task reads it to gate the
+/// face's ~1 Hz animations to a short window after an interaction, so an idle
+/// wrist stops paying the per-second animation redraw. One receiver (the `ui`).
+pub static INTERACTION: Watch<CriticalSectionRawMutex, u32, 1> = Watch::new();
