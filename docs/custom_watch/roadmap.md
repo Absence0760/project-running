@@ -13,6 +13,7 @@ The big-picture sequencing for the ultra-marathon watch research effort. Separat
 - **Vector 1 (Connect IQ app)**: not started — runs parallel to tier-1 per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware).
 - **Vector 2 (Wear OS app)**: `apps/watch_wear/` ships product features but isn't framed as a "Garmin alternative for sub-12hr runners" play.
 - **Vector 3 (ODM partnership)**: no vendor conversations; no outreach.
+- **Feature parity:** the software feature surface an ultra runner expects from a Garmin / COROS flagship — recording, navigation, training metrics, safety — is enumerated in [§ Feature parity backlog](#feature-parity-backlog-garmin--coros-table-stakes) below. Nothing built yet; most on-run-guidance + metric items already have a pure-logic helper in the main app to port, so parity is largely a firmware port, not a fresh design.
 
 ## Tier 1 — bench prototype (active, owner-personal)
 
@@ -83,6 +84,80 @@ Per [decisions.md § 82](../architecture/decisions.md#82-tier-1-firmware-is-done
 **Budget.** $300–600k cash + 18–24 months calendar + a small team (1 EE, 1 ID, 1 mech-E, 1 RF consultant, 1 firmware lead).
 
 **Triggers.** Same as tier 2 + a working tier-2 wearable prototype.
+
+## Feature parity backlog (Garmin + COROS table stakes)
+
+Everything above sequences the *hardware* build-out. This section tracks the *software feature surface* — the on-watch capabilities an ultra runner relies on today from a Garmin Fenix / Enduro or COROS Vertix, and would notice missing the day they switch. [`vision.md`](vision.md) covers the hardware table stakes (battery, GNSS, MIP display, buttons, maps, baro, HR); [`competitive_landscape.md`](competitive_landscape.md) covers where we go *beyond* parity (map UX, AI coach, social, update cadence). This is the middle layer: the features we have to match just to not feel like a downgrade.
+
+**Framing.** Parity here means "an ultra runner doesn't lose a feature they relied on." It explicitly does **not** mean matching Garmin's full daily-smartwatch surface — per [`vision.md`](vision.md) the device is "a tool for the run, not a tool for the rest of the day," so the daily / lifestyle features are deliberately deprioritised (last table).
+
+**Big lever.** Most on-run-guidance and training-metric items already have a pure-logic helper in the main app (the TS↔Dart parity pairs enumerated in [`CLAUDE.md`](../../CLAUDE.md)). For those, watch parity is a *firmware port* of an already-tested algorithm — the third language-level parity surface per [`firmware.md`](firmware.md) — not a fresh design; noted `(port: <helper>)` below. Items with no helper are new firmware design work.
+
+Nothing in this section is built. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
+
+### Recording & on-run guidance
+
+- [ ] **Activity profiles** — at minimum Run / Trail Run / Ultra / Hike, each with its own data screens + defaults. **T2.**
+- [ ] **Auto-lap / manual lap / auto-pause.** Auto-pause is already specced in [`run_recording.md`](../features/run_recording.md); direct firmware port. **T1.**
+- [ ] **Customisable data screens / fields** — which metrics show, how many per page. Ties to the data-screen customisation open question ([`firmware.md`](firmware.md) #4). **T3.**
+- [ ] **Grade-adjusted pace on-watch.** `(port: grade_adjusted_pace)` — the same helper the Connect IQ Vector-1 field already surfaces. **T1.**
+- [ ] **Structured / interval workout execution** — run the planned workout (warmup → reps → recovery → cooldown) with per-step alerts. The main app's runner state machine ([`workout_execution.md`](../features/workout_execution.md)) is the reference. **T2.**
+- [ ] **Pacing guidance (even / adaptive / target-time)** — Garmin PacePro, COROS pace alerts, a virtual-partner ahead/behind vs a goal. **T2.**
+- [ ] **On-run alerts** — HR-zone, pace, distance, time, and **drink / eat / nutrition reminders** (the ultra-critical one). `(port: fuel_plan for the nutrition cadence)`. **T1/T2.**
+- [ ] **Metronome / cadence target** — audible or vibration cadence pacer. **T2.**
+- [ ] **Race / finish-time predictor on-watch.** `(port: race_predictor)`. **T2.**
+- [ ] **Climb detection / ClimbPro-style ascent view** — live "X m of climb remaining in this ascent," per-climb grade. A headline Garmin ultra feature; COROS has an equivalent. Per-leg vert exists in `roadbook`; live climb segmentation is new firmware work. **T2/T3.**
+
+### Navigation & maps
+
+- [ ] **Breadcrumb course following + off-course alert.** `(port: route_overlay off-route detection)` — already called out in [`firmware.md`](firmware.md). **T1** (breadcrumb) / **T2** (alert).
+- [ ] **Offline vector maps.** The hardware + renderer commitment is [`vision.md`](vision.md) req #5 + [§ 85](../architecture/decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash); this is the *feature* row. **T2/T3.**
+- [ ] **Turn-by-turn on a routable map** — beyond breadcrumb, actual routing. **T3.**
+- [ ] **Course elevation profile + aid-station / checkpoint markers.** `(port: route_markers, roadbook)`. **T2.**
+- [ ] **TrackBack / back-to-start** — retrace the recorded track to the start. **T2.**
+- [ ] **Round-trip / loop route generation** pushed from the phone. The app already generates loops (the `graph_cycle` sidecar); parity is surfacing one to the watch. **T3.**
+- [ ] **Compass / bearing** — needs a magnetometer in the BOM (check [`bom.md`](bom.md)). **T2/T3.**
+
+### Training & physiology metrics
+
+- [ ] **HR zones + in-zone time.** **T1.**
+- [ ] **Training load / acute-chronic balance (CTL / ATL / TSB).** `(port: training_load, fitness)`. **T2.**
+- [ ] **VO2max / fitness estimate.** `(port: fitness / race_predictor inputs)`. **T2.**
+- [ ] **Training status / readiness / recovery time** — Garmin Training Readiness, COROS equivalent. New synthesis on top of the load helpers. **T3.**
+- [ ] **Running dynamics** — cadence (have), plus stride length, vertical oscillation, ground-contact time, running power. Some need extra sensor fusion or an accessory. **T3.**
+- [ ] **Resting HR / HRV status.** **T2/T3.**
+- [ ] **SpO2 / pulse-ox** (altitude acclimatisation — mountain ultras). Needs AFE support; check the HR-sensor choice in [`vision.md`](vision.md) req #8. **T3.**
+- [ ] **Sleep / stress / "body-battery"-style energy** — explicitly low-priority; these are daily-wear metrics, not run metrics. **T3 or deferred.**
+
+### Safety & live tracking
+
+- [ ] **Live spectator tracking** — watch → phone → the existing live pipeline. Already specced as a firmware stretch in [`firmware.md`](firmware.md). `(reuses live_freshness)`. **T2.**
+- [ ] **Cutoff / barrier ETA alerts** — "you're 8 min ahead of the next cutoff." `(port: live_cutoff_eta, roadbook)` — a genuine ultra differentiator, not just parity. **T2.**
+- [ ] **Incident detection + emergency-contact alert** (fall / stop detection → notify). Needs an accelerometer + the phone bridge. **T3.**
+- [ ] **Satellite SOS.** Garmin's inReach integration is the backcountry safety killer feature — **and a COROS gap** ([`competitive_landscape.md`](competitive_landscape.md)) — so it is parity-with-Garmin *and* a wedge against COROS. Needs satellite hardware + service → real BOM + partnership cost. **T3+ / stretch.**
+
+### Sensors & connectivity
+
+- [ ] **BLE sensor pairing** — external HR strap, foot pod. **T1/T2.**
+- [ ] **ANT+ sensor pairing** — gated on the ANT+ adoption question ([`firmware.md`](firmware.md) #2; vendor layers in [§ 88](../architecture/decisions.md#88-vendor-engagement-is-tiered-across-project-maturity)). **T2.**
+- [ ] **HR broadcast** — rebroadcast wrist HR to another device / the phone. **T2.**
+- [ ] **Selectable GNSS / battery modes** — single-band vs dual-band vs max-accuracy, each with a battery estimate. The power-manager surface every ultra watch ships. Firmware power management. **T2.**
+- [ ] **Phone smart-notifications** — read-only notification mirroring. Low priority per the "tool for the run" framing. **T3.**
+
+### Platform & lifecycle
+
+- [ ] **OTA firmware updates** — already an architectural obligation ([§ 84](../architecture/decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default), tier-2 dual-bank bootloader). **T2.**
+- [ ] **Companion-app sync** — BLE GATT run / course sync, specced in [`firmware.md`](firmware.md). **T1.**
+- [ ] **Watch-face / data-screen customisation** — [`firmware.md`](firmware.md) #4; Garmin's Connect IQ face marketplace is part of their moat. Design the hook now, ship later. **T3.**
+
+### Daily / smartwatch — deliberately deferred (out of the ultra thesis)
+
+Per [`vision.md`](vision.md) the watch is a tool for the run, not the day. These are Garmin / COROS features we are **choosing not to chase** for v1; listed so the decision is explicit, not an oversight. Music + payments are also COROS gaps, so skipping them costs no ground against COROS specifically.
+
+- [ ] **On-watch music storage + BLE-headphone playback** — deferred. (COROS lacks this too.)
+- [ ] **Contactless payments (Garmin Pay-style)** — deferred. (COROS lacks this too.)
+- [ ] **Weather / storm alerts** — partial: baro-driven storm detection is cheap ([`vision.md`](vision.md) req #7) and worth it; full forecast sync is deferred.
+- [ ] **Alarms / timer / stopwatch / find-my-phone** — trivial; ship opportunistically. **T3.**
 
 ## Strategic vectors — alternatives to building our own
 
