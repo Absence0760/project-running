@@ -142,7 +142,11 @@ pub async fn run(btn1: Input<'static>, btn2: Input<'static>, btn3: Input<'static
                 page_tx.send(page);
                 continue;
             }
-            let button = if i == 0 { Button::Primary } else { Button::Stop };
+            let button = if i == 0 {
+                Button::Primary
+            } else {
+                Button::Stop
+            };
             let state = record_rx
                 .try_get()
                 .map(|snap| snap.state)

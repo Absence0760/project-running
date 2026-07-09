@@ -154,10 +154,24 @@ pub fn page_rows(
         None => status_face(fix, hr_bpm, elev, uptime_s),
         Some((snap, tag)) => match page {
             Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate),
-            Page::Distance => {
-                glance(GlanceMetric::Distance, fix, hr_bpm, snap, tag, uptime_s, animate)
-            }
-            Page::Pace => glance(GlanceMetric::Pace, fix, hr_bpm, snap, tag, uptime_s, animate),
+            Page::Distance => glance(
+                GlanceMetric::Distance,
+                fix,
+                hr_bpm,
+                snap,
+                tag,
+                uptime_s,
+                animate,
+            ),
+            Page::Pace => glance(
+                GlanceMetric::Pace,
+                fix,
+                hr_bpm,
+                snap,
+                tag,
+                uptime_s,
+                animate,
+            ),
         },
     }
 }
@@ -217,7 +231,7 @@ fn glance(
 
     // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
     // REC while `animate` is on, steady-on otherwise.
-    let tag_shown = tag != "REC" || !animate || uptime_s % 2 == 0;
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
     if tag_shown {
         let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
     }
@@ -330,7 +344,7 @@ fn dashboard(
     // recording-state tag lives here, pinned top-right clear of the hero digits.
     // Blink it at ~1 Hz for REC so a live recording is unmistakable; PAU / FIN
     // (and any state once `animate` is off) stay steady-on.
-    let tag_shown = tag != "REC" || !animate || uptime_s % 2 == 0;
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
     if tag_shown {
         let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
     }
@@ -671,11 +685,21 @@ mod tests {
     fn rec_tag_blinks_but_pause_and_finish_stay_steady() {
         let rec = snapshot(RecordState::Recording, 100.0);
         // REC visible on even seconds, hidden on odd.
-        assert_eq!(face_rows(None, None, Some(&rec), None, 10)[0].as_str().trim(), "REC");
+        assert_eq!(
+            face_rows(None, None, Some(&rec), None, 10)[0]
+                .as_str()
+                .trim(),
+            "REC"
+        );
         assert_eq!(face_rows(None, None, Some(&rec), None, 11)[0].as_str(), "");
         // Paused / finished tags never blink.
         let paused = snapshot(RecordState::Paused, 100.0);
-        assert_eq!(face_rows(None, None, Some(&paused), None, 11)[0].as_str().trim(), "PAU");
+        assert_eq!(
+            face_rows(None, None, Some(&paused), None, 11)[0]
+                .as_str()
+                .trim(),
+            "PAU"
+        );
     }
 
     #[test]
@@ -736,11 +760,23 @@ mod tests {
 
     #[test]
     fn paused_and_finished_runs_keep_the_dashboard() {
-        let rows = face_rows(None, None, Some(&snapshot(RecordState::Paused, 5_000.0)), None, 3);
+        let rows = face_rows(
+            None,
+            None,
+            Some(&snapshot(RecordState::Paused, 5_000.0)),
+            None,
+            3,
+        );
         assert_eq!(rows[0].as_str().trim(), "PAU");
         assert_eq!(rows[2].as_str(), "     5.00 KM");
 
-        let rows = face_rows(None, None, Some(&snapshot(RecordState::Finished, 42_195.0)), None, 3);
+        let rows = face_rows(
+            None,
+            None,
+            Some(&snapshot(RecordState::Finished, 42_195.0)),
+            None,
+            3,
+        );
         assert_eq!(rows[0].as_str().trim(), "FIN");
         assert_eq!(rows[2].as_str(), "     42.20 KM");
     }
@@ -752,11 +788,26 @@ mod tests {
         let e = elev(1600.0, 540.0, 120.0);
         // The Dashboard page (animated) delegates to face_rows / face_icons.
         assert_eq!(
-            page_rows(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), Some(&e), 42, true),
+            page_rows(
+                Page::Dashboard,
+                Some(&fix()),
+                Some(152),
+                Some(&rec),
+                Some(&e),
+                42,
+                true
+            ),
             face_rows(Some(&fix()), Some(152), Some(&rec), Some(&e), 42)
         );
         assert_eq!(
-            page_icons(Page::Dashboard, Some(&fix()), Some(152), Some(&rec), 42, true),
+            page_icons(
+                Page::Dashboard,
+                Some(&fix()),
+                Some(152),
+                Some(&rec),
+                42,
+                true
+            ),
             face_icons(Some(&fix()), Some(152), Some(&rec), 42)
         );
         assert_eq!(
@@ -770,8 +821,19 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 42_190.0);
         rec.elapsed_s = 3 * 3600 + 24 * 60 + 7;
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
-        let rows = page_rows(Page::Distance, Some(&fix()), Some(152), Some(&rec), None, 42, true);
-        assert_eq!(page_hero(Page::Distance, Some(&rec)).unwrap().as_str(), "42.19");
+        let rows = page_rows(
+            Page::Distance,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(
+            page_hero(Page::Distance, Some(&rec)).unwrap().as_str(),
+            "42.19"
+        );
         assert_eq!(rows[0].as_str().trim(), "REC");
         assert_eq!(rows[2].as_str(), "DISTANCE  KM");
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
@@ -779,9 +841,16 @@ mod tests {
         assert_eq!(rows[6].as_str(), "HR   152 BPM");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS");
         // Glance pages carry no gutter icons.
-        assert!(page_icons(Page::Distance, Some(&fix()), Some(152), Some(&rec), 42, true)
-            .iter()
-            .all(Option::is_none));
+        assert!(page_icons(
+            Page::Distance,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            42,
+            true
+        )
+        .iter()
+        .all(Option::is_none));
     }
 
     #[test]
@@ -795,7 +864,10 @@ mod tests {
         assert_eq!(rows[6].as_str(), "HR   --");
         // No pace yet -> the hero placeholder, never a bogus number.
         let fresh = snapshot(RecordState::Recording, 5.0);
-        assert_eq!(page_hero(Page::Pace, Some(&fresh)).unwrap().as_str(), "--:--");
+        assert_eq!(
+            page_hero(Page::Pace, Some(&fresh)).unwrap().as_str(),
+            "--:--"
+        );
     }
 
     #[test]
@@ -809,27 +881,72 @@ mod tests {
 
         // REC tag: blinks off when animating, steady-on when gated.
         assert_eq!(
-            page_rows(Page::Dashboard, None, Some(150), Some(&rec), None, odd, true)[0].as_str(),
+            page_rows(
+                Page::Dashboard,
+                None,
+                Some(150),
+                Some(&rec),
+                None,
+                odd,
+                true
+            )[0]
+            .as_str(),
             ""
         );
         assert_eq!(
-            page_rows(Page::Dashboard, None, Some(150), Some(&rec), None, odd, false)[0]
-                .as_str()
-                .trim(),
+            page_rows(
+                Page::Dashboard,
+                None,
+                Some(150),
+                Some(&rec),
+                None,
+                odd,
+                false
+            )[0]
+            .as_str()
+            .trim(),
             "REC"
         );
 
         // Heart: HeartSmall frame when animating, steady Heart when gated.
-        let on = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), odd, true);
-        let off = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), odd, false);
+        let on = page_icons(
+            Page::Dashboard,
+            Some(&fix()),
+            Some(150),
+            Some(&rec),
+            odd,
+            true,
+        );
+        let off = page_icons(
+            Page::Dashboard,
+            Some(&fix()),
+            Some(150),
+            Some(&rec),
+            odd,
+            false,
+        );
         assert_eq!(on[5], Some(FaceIcon::HeartSmall));
         assert_eq!(off[5], Some(FaceIcon::Heart));
 
         // GPS search: cycles a frame when animating, one steady frame when gated.
         assert_eq!(off[8], Some(FaceIcon::SatSearch1));
         // A fresh fix locks the full satellite either way (nothing to gate).
-        let fresh_on = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), 42, true);
-        let fresh_off = page_icons(Page::Dashboard, Some(&fix()), Some(150), Some(&rec), 42, false);
+        let fresh_on = page_icons(
+            Page::Dashboard,
+            Some(&fix()),
+            Some(150),
+            Some(&rec),
+            42,
+            true,
+        );
+        let fresh_off = page_icons(
+            Page::Dashboard,
+            Some(&fix()),
+            Some(150),
+            Some(&rec),
+            42,
+            false,
+        );
         assert_eq!(fresh_on[8], Some(FaceIcon::Satellite));
         assert_eq!(fresh_off[8], Some(FaceIcon::Satellite));
     }
@@ -861,7 +978,13 @@ mod tests {
 
     #[test]
     fn idle_recorder_shows_the_status_face_not_the_dashboard() {
-        let rows = face_rows(Some(&fix()), None, Some(&snapshot(RecordState::Idle, 0.0)), None, 42);
+        let rows = face_rows(
+            Some(&fix()),
+            None,
+            Some(&snapshot(RecordState::Idle, 0.0)),
+            None,
+            42,
+        );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[1].as_str(), "");
     }

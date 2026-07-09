@@ -163,7 +163,14 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             uptime_s,
             animate,
         );
-        let icons = face::page_icons(page, latest.as_ref(), hr_bpm, rec.as_ref(), uptime_s, animate);
+        let icons = face::page_icons(
+            page,
+            latest.as_ref(),
+            hr_bpm,
+            rec.as_ref(),
+            uptime_s,
+            animate,
+        );
         for (row, text) in rows.iter().enumerate() {
             fb.draw_text_row(row, text);
             if let Some(icon) = icons[row] {
