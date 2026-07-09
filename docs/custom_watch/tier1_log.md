@@ -1,0 +1,61 @@
+# Tier-1 development log — custom_watch
+
+The dated milestone record of the tier-1 bench-prototype firmware effort. Tier 1's stated deliverable is "knowledge + a credible technical story for ODM conversations" ([roadmap.md § Tier 1](roadmap.md#tier-1--bench-prototype-active-owner-personal)); this log is that story in writing — what was built, when, and where the evidence lives — so the knowledge doesn't stay in one person's head. One entry per milestone, newest last. Current per-step status lives in [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md); this file is the history, not the status.
+
+**Photos / video:** every entry gains a photo or short clip slot once parts arrive (dev kit, breakouts, bench setup, first wearable jog). Everything to date is simulator work, so the visual record so far is Renode screenshots (`bin/watch-sim.sh --gui` shows the live emulated panel).
+
+## 2026-05-28 — Workspace scaffold (step 2)
+
+Cargo workspace landed at [`apps/custom_watch/`](../../apps/custom_watch/README.md): Embassy executor + blink stub on the nRF52840 DK target, `no_std` driver-crate stubs (`sharp_mip`, `ublox_nmea`, `max86177`), board crate with DK pin assignments, probe-rs runner config, VS Code debug wiring. Same day as the planning sweep that locked the stack ([decisions.md § 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance), § 81–§ 92) and this roadmap. Deps bumped to Embassy 0.10 + lockfile committed 2026-05-29. No parts ordered.
+
+## 2026-07-08 — Renode simulator bring-up
+
+`bin/watch-sim.sh` boots the exact release ELF the flash script would program, on Renode's emulated nRF52840 DK — no dev kit needed. defmt logs drain via a custom RTT poller + host-side `defmt-print`; a canned NMEA fixture feeds the emulated UART at a realistic 1 Hz fix rate; the Sharp MIP panel is emulated at the wire-protocol level (`sim/SharpMipDisplay.cs`, `--gui` opens the live screen); and the phone-link frames bridge over TCP to a dev-gated Sim Watch screen in the mobile app. [decisions.md § 208](../architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain) + § 209. This unblocked every subsequent milestone pre-parts.
+
+## 2026-07-08 — GNSS bring-up (step 3), sim-verified
+
+`ublox_nmea` streaming RMC/GGA parser (checksummed, 10 host tests) + the `gps` task on UARTE0 publishing merged fixes through `watch_core::fix`. Fixes flow end-to-end from the sim's `bench_jog.nmea` fixture. Bench verification pending parts.
+
+## 2026-07-08 — Display bring-up (step 4), sim-verified
+
+`sharp_mip` driver (framebuffer, dirty-line tracking, generated 8x16 font, 16x16 icon table, Sharp line-update wire protocol; 13 host tests) on SPIM3, plus the host-tested `watch_core::face` layouts: an idle status face and a paged run dashboard (2x elapsed-time hero, per-metric gutter icons, BTN3-cycled Dashboard / Distance-glance / Pace-glance pages). Icons are SVG-authored and rasterised to a committed 1-bit table by `scripts/gen_icons.py`. Three ~1 Hz animations (REC blink, heart pulse, GPS search arcs) ride the render tick as pure functions of uptime. Bench verification pending parts.
+
+## 2026-07-08 — Optical HR driver + peak detector (step 5), sim-verified wiring
+
+`max86177` register driver (soft-reset → PPG channel → FIFO drain) + a float-free integer PPG→BPM peak detector (10 host tests). The `hr` task drives it over TWISPI0 and publishes to the face's HR row; an async timeout-bounded presence probe parks the task cleanly when the sensor is absent (the sim, an unwired bench) instead of stalling the executor. The licensed Maxim algorithm stays post-tier-1. Bench verification pending parts.
+
+## 2026-07-08 — Barometer + elevation (BMP581)
+
+`bmp581` register driver (5 host tests) on TWISPI1 through the same probe guard, feeding `watch_core::elevation` (barometric altitude + cumulative-vert accumulator). Surfaced end-to-end: the face's ALT row prefers baro altitude and gains a VERT line; the phone-link frame carries an additive optional `elev` object the Sim Watch screen decodes. Per the [§ 90 BOM refresh](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified).
+
+## 2026-07-08 — Recorder port with auto-pause (step 7 core), sim-verified
+
+`watch_core::record` ports the Dart `run_recorder` state machine (Idle → Recording → Paused → Finished) to host-tested `no_std` Rust: haversine distance, elapsed/moving time, pace, the point-acceptance filter (min-move 3 m, max-jump 100 m, max-speed 10 m/s), and the derived moving-time **auto-pause** (0.5 m/s gate); 7 host tests. The `record` task selects over tick / fix / command and publishes snapshots the face renders. Sim run shows distance accruing and auto-pause holding moving time.
+
+## 2026-07-08 — Button control
+
+The `button` task debounces the DK buttons and feeds the host-tested `watch_core::button` press→command logic (4 host tests): BTN1 start/pause/resume, BTN2 stop, BTN3 page cycle. On hardware BTN1 is the only start path; the sim's fix-triggered auto-start lives behind the default-OFF `sim-autostart` feature.
+
+## 2026-07-08 — Flash run store
+
+The record task captures the GPS *track*, not just totals: each accepted fix is staged through a `run_store::RunWriter` (compact binary wire format — 16-byte points, CRC32, golden-vector host tests) stamped with the latest HR + baro altitude, and committed to internal flash on stop. `app/src/run_flash.rs` drives the NVMC over the host-tested `watch_core::flash_store` slot layout: **4 slots × one 4 KiB erase page** reserved at the top of flash, a **253-point-per-run cap** — a bench-prototype foundation, not shipping capacity (a real ultra needs the tier-2 external QSPI flash). Best-effort / L4: flash errors only warn, recording is never blocked on storage. [decisions.md § 211](../architecture/decisions.md#211-owner-override-build-the-full-watchphonesupabase-run-sync-vertical-now-despite-the-tier-2-gate).
+
+## 2026-07-08 — BLE GATT + run-sync protocol (step 6 + step 7 sync), compile-verified only
+
+Behind the default-OFF `ble` feature: the S140 SoftDevice via `nrf-softdevice`, a custom 128-bit "Threkir" GATT service notifying the same link frames the UART/sim transport emits, a ~1 s connection interval for idle-radio power, and the `run_manifest` / `run_chunk` characteristics implementing the chunked run-sync protocol from [`firmware.md`](firmware.md). The Renode sim cannot run the proprietary SoftDevice and there is no dev kit, so this whole path is **compile-and-link-verified only** — deliberately, per [§ 210](../architecture/decisions.md#210-tier-1-ble-s140-softdevice-is-a-compile-verified-feature-gated-build--mutually-exclusive-with-the-sim-off-by-default): it proves the dependency stack is viable and leaves only on-hardware validation.
+
+## 2026-07-08 — Phone-side sim watch sync
+
+The mobile app's half of the § 211 vertical: `sim_watch_sync.dart` mirrors `run_store` (manifest pull, chunk reassembly, CRC verify — pinned to the same golden vector as the Rust test so the decoders can't drift), reshapes the blob into the payload the existing `WatchIngestQueue` → `api.saveRun` path already uploads, behind an injectable transport seam over the sanctioned `flutter_reactive_ble` ([§ 212](../architecture/decisions.md#212-watch-run-sync-phone-ble-stack-is-flutter_reactive_ble-and-the-blob-crc-covers-headerpoints-footer-totals-recomputable)). A dev-gated "Sync runs" action drives it; the pull→decode→verify→deliver path is unit-tested without a radio.
+
+## 2026-07-08 — Power-discipline pass
+
+Tier-1's power job is architecture, not measured numbers ([`performance_path.md`](performance_path.md)); this pass landed the firmware-side levers: partial display updates (dirty lines only), burst-buffered GPS UART reads (one wake per ~32 bytes), face animations gated to an ~8 s post-interaction window, the liveness LED behind a default-OFF `dev-blink` feature, hardware EXTCOMIN VCOM (a clean framebuffer flushes zero SPI), an event-driven screen task + gated record tick (idle CPU sleeps seconds apart), and GPS fix-publication de-rate while no run is active. Each sim-verified where the sim can observe it; the EXTCOMIN wiring itself is bench-gated. Detail in [`apps/custom_watch/README.md` § Power discipline](../../apps/custom_watch/README.md).
+
+## 2026-07-09 — Sim button injection + page-render fix
+
+Renode's nRF52840 GPIO model doesn't implement the SENSE/DETECT path the low-power hardware button task rides, so buttons were bench-only. A default-OFF `sim-buttons` feature swaps in a level-polling variant driven from `sim/watch.resc` monitor macros (`runMacro $btn1/2/3`), leaving the hardware SENSE path byte-for-byte untouched ([§ 213](../architecture/decisions.md#213-sim-button-injection-uses-a-poll-in-the-sim-feature-not-a-firmware-wide-change--renode-doesnt-model-the-nrf-gpio-sense-path)). Exercising BTN3 in the sim immediately surfaced and fixed a real render bug: the screen task's `select(...changed())` wait consumed one-shot page-state changes before the render loop could apply them, so pages never switched on screen. Page cycling and sim-driven stop (BTN2 → `Finished` → flash commit path) are now sim-verified. A clippy (`is_multiple_of`) + rustfmt sweep closed out the day.
+
+## Next entry expected
+
+Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
