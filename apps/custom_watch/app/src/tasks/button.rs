@@ -8,14 +8,17 @@
 //! Mapping (see `watch_core::button::command_for`):
 //!   BTN1 — start / pause / resume toggle
 //!   BTN2 — stop
+//!   BTN3 — cycle the run-view page (dashboard / distance / pace)
 //! The buttons are active-LOW (idle high, press pulls low), so a press is a
-//! falling edge and a held press reads `is_low()`.
+//! falling edge and a held press reads `is_low()`. BTN3 carries no recording
+//! command — it just advances `state::PAGE`, which the `ui` face reads.
 
 use defmt::*;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{select3, Either3};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Timer};
 use watch_core::button::{command_for, Button};
+use watch_core::page::Page;
 use watch_core::record::RecordState;
 
 use crate::state;
@@ -26,15 +29,33 @@ use crate::state;
 const DEBOUNCE: Duration = Duration::from_millis(20);
 
 #[embassy_executor::task]
-pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>) {
+pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>, mut btn3: Input<'static>) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
-    info!("button: BTN1 start/pause, BTN2 stop");
+    let page_tx = state::PAGE.sender();
+    let mut page = Page::default();
+    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page");
     loop {
         // Wait for whichever button is pressed first (falling edge = press).
-        let button = match select(btn1.wait_for_falling_edge(), btn2.wait_for_falling_edge()).await
+        let button = match select3(
+            btn1.wait_for_falling_edge(),
+            btn2.wait_for_falling_edge(),
+            btn3.wait_for_falling_edge(),
+        )
+        .await
         {
-            Either::First(()) => Button::Primary,
-            Either::Second(()) => Button::Stop,
+            Either3::First(()) => Button::Primary,
+            Either3::Second(()) => Button::Stop,
+            Either3::Third(()) => {
+                // The page button is its own concern — no recording command.
+                // Debounce, confirm the press held, then advance the page.
+                Timer::after(DEBOUNCE).await;
+                if btn3.is_low() {
+                    page = page.next();
+                    info!("button: BTN3 -> page {}", page);
+                    page_tx.send(page);
+                }
+                continue;
+            }
         };
 
         // Debounce: let the contacts settle, then confirm the press held. A
