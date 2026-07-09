@@ -62,20 +62,20 @@ Per [decisions.md § 82](../architecture/decisions.md#82-tier-1-firmware-is-done
 
 ### Vendor engagement (tiered per [§ 88](../architecture/decisions.md#88-vendor-engagement-is-tiered-across-project-maturity))
 
-**Layer 1 — active now (free public research, zero commercial commitment):**
+**Layer 1 — active now (free public research, zero commercial commitment):** **all three completed 2026-07-09** — findings + sources in [`vendor_research.md`](vendor_research.md).
 
-- [ ] ANT+ Alliance public adopter list → confirm competitors (COROS, Polar, Suunto, Apple Watch) are granted adoption. Closes most of the "would Garmin refuse?" uncertainty without writing a check.
-- [ ] Sony CXD5610 public family briefs → power consumption, mode breakdowns, package options. Enough for BOM planning.
-- [ ] ADI MAX86177 public datasheet → register set + power-state characteristics for the tier-1 driver work.
+- [x] ANT+ Alliance public adopter list → confirm competitors (COROS, Polar, Suunto, Apple Watch) are granted adoption. Closes most of the "would Garmin refuse?" uncertainty without writing a check. **Done 2026-07-09 — closed twice over: COROS APEX (+ Wahoo, Polar sensors) is publicly ANT+ Certified, and the adopter program itself was discontinued by Garmin in 2025 (fees ended, cert submissions closed 2025-03-31, docs now free, new profiles frozen — new metrics go BLE-only).**
+- [x] Sony CXD5610 public family briefs → power consumption, mode breakdowns, package options. Enough for BOM planning. **Done 2026-07-09 — public brief is quantitative (9 mW L1+L5 tracking, −167 dBm, XFBGA-54); acquisition-mode + duty-cycled power are NOT public, so the Layer-2 NDA stays justified. No public teardown places the CXD5610 in any shipping watch; the Airoha AG3335M alternate is upgraded to co-equal (see `bom.md`).**
+- [x] ADI MAX86177 public datasheet → register set + power-state characteristics for the tier-1 driver work. **Done 2026-07-09 — the "already public" premise was wrong: the full datasheet (register map included) is NDA-gated. Public sources confirm the AFE topology but not shutdown current. Tier-1 step-5 options: pull the ADI NDA forward, or bench on the MAX86171 (full datasheet public, same family idioms).**
 
 **Layer 2 — active when tier-1 has a working bench prototype to point at:**
 
-- [ ] Email Sony FAE with project brief + request for CXD5610 NDA datasheet + sampling conversation (~4 weeks for NDA paperwork; no commercial commitment).
-- [ ] Email ADI Maxim for HR-algorithm licensing terms at projected volume (real quote, non-binding until signed).
+- [ ] Email Sony FAE with project brief + request for CXD5610 NDA datasheet + sampling conversation (~4 weeks for NDA paperwork; no commercial commitment). Ask specifically for acquisition-mode + duty-cycled power figures (not in the public brief) and for shipping-watch design-win references.
+- [ ] Email ADI Maxim for HR-algorithm licensing terms at projected volume (real quote, non-binding until signed) — and the MAX86177 NDA datasheet, which turns out to be gated too (see `vendor_research.md`).
 
 **Layer 3 — active at tier-2 greenlight (one of § 71's triggers fires):**
 
-- [ ] ANT+ Alliance Adopter membership application ($2–5k/year + Garmin review). Commitment-grade; paying the fee + tipping our hand only makes sense once we've committed to ship hardware.
+- ~~ANT+ Alliance Adopter membership application ($2–5k/year + Garmin review).~~ **Obsolete 2026-07-09:** Garmin discontinued the adopter program in 2025 — no fees, no certification submissions, documentation free ([`vendor_research.md`](vendor_research.md)). There is nothing left to apply for. Consequence for the parity backlog: BLE sensor pairing is the primary rail; ANT+ reception is best-effort legacy compat against a frozen protocol.
 
 ## Tier 3 — production-intent unit (gated)
 
