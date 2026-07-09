@@ -11,9 +11,9 @@ use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::spim::Spim;
 use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
-use sharp_mip::{Framebuffer, SharpMip};
+use sharp_mip::{Framebuffer, Icon, SharpMip};
 use watch_core::elevation::Reading as ElevationReading;
-use watch_core::face;
+use watch_core::face::{self, FaceIcon};
 use watch_core::fix::Fix;
 use watch_core::record::Snapshot;
 
@@ -33,6 +33,20 @@ pub async fn blink_task(pin: Peri<'static, AnyPin>) {
     loop {
         led.toggle();
         Timer::after(Duration::from_millis(500)).await;
+    }
+}
+
+/// Map a display-agnostic [`FaceIcon`] (decided in host-tested `watch_core`)
+/// onto the panel driver's own [`Icon`]. Exhaustive on purpose: adding a
+/// `FaceIcon` variant without a glyph here is a compile error, not a blank row.
+fn driver_icon(icon: FaceIcon) -> Icon {
+    match icon {
+        FaceIcon::Stopwatch => Icon::Stopwatch,
+        FaceIcon::Footsteps => Icon::Footsteps,
+        FaceIcon::Heart => Icon::Heart,
+        FaceIcon::Mountain => Icon::Mountain,
+        FaceIcon::Vert => Icon::Vert,
+        FaceIcon::Satellite => Icon::Satellite,
     }
 }
 
@@ -74,8 +88,12 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             elev.as_ref(),
             uptime_s,
         );
+        let icons = face::face_icons(rec.as_ref());
         for (row, text) in rows.iter().enumerate() {
             fb.draw_text_row(row, text);
+            if let Some(icon) = icons[row] {
+                fb.draw_icon(0, row, driver_icon(icon));
+            }
         }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
