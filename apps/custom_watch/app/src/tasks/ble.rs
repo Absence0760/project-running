@@ -211,6 +211,22 @@ mod imp {
                 };
             info!("ble: phone connected");
 
+            // Request a long connection interval. The default is 7.5 ms (built
+            // for HID); a watch that streams one status frame per second and
+            // otherwise syncs every few minutes wants ~1 s, which cuts idle
+            // radio power by ~100x (performance_path.md "BLE connection-interval
+            // tuning"). Best-effort — the central may renegotiate. Units:
+            // interval 1.25 ms, supervision timeout 10 ms; timeout must exceed
+            // (1 + latency) * max_interval * 2 (2 s here), 6 s clears it.
+            if let Err(e) = conn.set_conn_params(raw::ble_gap_conn_params_t {
+                min_conn_interval: 320, // 400 ms
+                max_conn_interval: 800, // 1000 ms
+                slave_latency: 0,
+                conn_sup_timeout: 600, // 6000 ms
+            }) {
+                warn!("ble: set_conn_params failed {:?}", e);
+            }
+
             // Shared between the GATT event handler (sets them on CCCD write /
             // signals a chunk request) and the serve loop (reads them). The
             // executor is single-threaded, so a Cell + a Signal suffice.
