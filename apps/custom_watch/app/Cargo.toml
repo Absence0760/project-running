@@ -29,6 +29,12 @@ single-core-cs = ["cortex-m/critical-section-single-core"]
 # apps/custom_watch/local_testing.md § Simulating without a board.
 sim-autostart = []
 
+# Bench/sim liveness LED (LED1 @ 2 Hz). OFF by default so the lean build carries
+# no gratuitous always-on waker (docs/custom_watch/performance_path.md — "every
+# wake justifiable"). bin/watch-sim.sh and bin/watch-flash.sh enable it so the
+# interactive bench/sim experience keeps the "is it alive?" blink.
+dev-blink = []
+
 # README step 6 — real BLE radio via the Nordic S140 SoftDevice. Pulls in
 # nrf-softdevice (git; never published to crates.io) and reorganises the flash
 # + RAM layout (see build.rs / memory-ble.x). MUTUALLY EXCLUSIVE with

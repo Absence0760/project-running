@@ -7,8 +7,11 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
+#[cfg(feature = "dev-blink")]
+use embassy_nrf::gpio::{AnyPin, Level, OutputDrive};
+use embassy_nrf::gpio::Output;
 use embassy_nrf::spim::Spim;
+#[cfg(feature = "dev-blink")]
 use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
@@ -31,6 +34,15 @@ const _: () = core::assert!(face::ROWS == sharp_mip::TEXT_ROWS);
 // a reflective panel where dark pixels save nothing — only fewer updates do.
 const ANIM_WINDOW_S: u32 = 8;
 
+/// Bench/sim liveness blinker — toggles LED1 at 2 Hz so you can see the
+/// firmware is alive before the display or defmt tells you. Gated behind the
+/// default-OFF `dev-blink` feature: a free-running 2 Hz waker + LED current is
+/// exactly the kind of unjustified always-on draw the power path warns against
+/// (`docs/custom_watch/performance_path.md` — "every wake justifiable"), so it
+/// is a debug affordance the lean default build omits and the sim/flash helpers
+/// opt back in. The dev-board's own LEDs dominate tier-1 draw regardless; this
+/// keeps the *firmware* honest for the tier-2 port.
+#[cfg(feature = "dev-blink")]
 #[embassy_executor::task]
 pub async fn blink_task(pin: Peri<'static, AnyPin>) {
     // LEDs on the nRF52840 DK are active-low (cathode tied to MCU pin, anode
