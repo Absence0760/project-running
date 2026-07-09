@@ -44,9 +44,12 @@ fn driver_icon(icon: FaceIcon) -> Icon {
         FaceIcon::Stopwatch => Icon::Stopwatch,
         FaceIcon::Footsteps => Icon::Footsteps,
         FaceIcon::Heart => Icon::Heart,
+        FaceIcon::HeartSmall => Icon::HeartSmall,
         FaceIcon::Mountain => Icon::Mountain,
         FaceIcon::Vert => Icon::Vert,
         FaceIcon::Satellite => Icon::Satellite,
+        FaceIcon::SatSearch0 => Icon::SatSearch0,
+        FaceIcon::SatSearch1 => Icon::SatSearch1,
     }
 }
 
@@ -88,7 +91,7 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             elev.as_ref(),
             uptime_s,
         );
-        let icons = face::face_icons(rec.as_ref());
+        let icons = face::face_icons(latest.as_ref(), hr_bpm, rec.as_ref(), uptime_s);
         for (row, text) in rows.iter().enumerate() {
             fb.draw_text_row(row, text);
             if let Some(icon) = icons[row] {

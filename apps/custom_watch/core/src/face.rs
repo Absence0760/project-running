@@ -44,9 +44,15 @@ pub enum FaceIcon {
     Stopwatch,
     Footsteps,
     Heart,
+    /// The small-heart frame of the ~1 Hz HR pulse; alternates with [`Heart`].
+    HeartSmall,
     Mountain,
     Vert,
     Satellite,
+    /// GPS-searching frames — arcs grow `SatSearch0` -> `SatSearch1` ->
+    /// [`Satellite`] once per second while no fresh fix is locked.
+    SatSearch0,
+    SatSearch1,
 }
 
 fn rec_tag(state: RecordState) -> Option<&'static str> {
@@ -83,17 +89,57 @@ pub fn face_rows(
 /// Only the run dashboard carries icons — the idle status face is all text, so
 /// every slot is `None` there. The dashboard's icon rows leave their gutter (the
 /// first five cells) blank so the blitted 16x16 glyph never collides with text.
-pub fn face_icons(rec: Option<&Snapshot>) -> [Option<FaceIcon>; ROWS] {
+///
+/// Two gutter icons animate off `uptime_s` (so the choice stays a pure,
+/// host-tested function of the inputs, not a hidden timer): the HR heart pulses
+/// while a pulse is detected, and the GPS satellite cycles its search arcs while
+/// no fresh fix is locked.
+pub fn face_icons(
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    rec: Option<&Snapshot>,
+    uptime_s: u32,
+) -> [Option<FaceIcon>; ROWS] {
     let mut icons = [None; ROWS];
     if rec.and_then(|snap| rec_tag(snap.state)).is_some() {
         icons[1] = Some(FaceIcon::Stopwatch);
         icons[2] = Some(FaceIcon::Footsteps);
-        icons[5] = Some(FaceIcon::Heart);
+        icons[5] = Some(heart_icon(hr_bpm, uptime_s));
         icons[6] = Some(FaceIcon::Mountain);
         icons[7] = Some(FaceIcon::Vert);
-        icons[8] = Some(FaceIcon::Satellite);
+        icons[8] = Some(gps_icon(fix, uptime_s));
     }
     icons
+}
+
+/// The HR gutter frame: a ~1 Hz liveness pulse (big/small heart) while a pulse
+/// is detected — a "still recording, still beating" cue, not a beat-accurate
+/// BPM sync. Steady when HR is absent. Note: continuous pulsing redraws one
+/// cell each second; harmless on the bench, a power line-item on real silicon.
+fn heart_icon(hr_bpm: Option<u16>, uptime_s: u32) -> FaceIcon {
+    match hr_bpm {
+        Some(_) if uptime_s % 2 == 1 => FaceIcon::HeartSmall,
+        _ => FaceIcon::Heart,
+    }
+}
+
+/// The GPS gutter frame: the full satellite once a fresh fix is locked, else a
+/// once-per-second growing-arc search cycle so a lost or not-yet-acquired fix
+/// reads as actively hunting rather than frozen.
+fn gps_icon(fix: Option<&Fix>, uptime_s: u32) -> FaceIcon {
+    if gps_fresh(fix, uptime_s) {
+        FaceIcon::Satellite
+    } else {
+        match uptime_s % 3 {
+            0 => FaceIcon::SatSearch0,
+            1 => FaceIcon::SatSearch1,
+            _ => FaceIcon::Satellite,
+        }
+    }
+}
+
+fn gps_fresh(fix: Option<&Fix>, uptime_s: u32) -> bool {
+    matches!(fix, Some(f) if uptime_s.saturating_sub(f.uptime_s) <= STALE_AFTER_S)
 }
 
 /// The active-run layout. Rows 1/2/5/6/7/8 carry a gutter icon (see
@@ -111,7 +157,14 @@ fn dashboard(
     const GUTTER: &str = "     ";
     let mut rows: [Row; ROWS] = Default::default();
 
-    let _ = write!(rows[0], "{:<18}{}", "THREKIR", tag);
+    // Blink the REC tag at ~1 Hz so a live recording is unmistakable at a
+    // glance; PAU / FIN stay steady (a blink reads as "in progress").
+    let tag_shown = tag != "REC" || uptime_s % 2 == 0;
+    if tag_shown {
+        let _ = write!(rows[0], "{:<18}{}", "THREKIR", tag);
+    } else {
+        let _ = write!(rows[0], "THREKIR");
+    }
 
     let (h, m, s) = hms(snap.elapsed_s);
     let _ = write!(rows[1], "{}{}:{:02}:{:02}", GUTTER, h.min(999), m, s);
@@ -359,7 +412,9 @@ mod tests {
     #[test]
     fn dashboard_icons_pair_with_the_iconned_rows() {
         let rec = snapshot(RecordState::Recording, 12_340.0);
-        let icons = face_icons(Some(&rec));
+        // Fresh fix (uptime 42 vs fix uptime 41) + HR present + even uptime, so
+        // both animated icons sit on their steady frame.
+        let icons = face_icons(Some(&fix()), Some(152), Some(&rec), 42);
         assert_eq!(icons[0], None); // title row
         assert_eq!(icons[1], Some(FaceIcon::Stopwatch));
         assert_eq!(icons[2], Some(FaceIcon::Footsteps));
@@ -371,9 +426,79 @@ mod tests {
         assert_eq!(icons[8], Some(FaceIcon::Satellite));
 
         // The idle status face is all text — no gutter icons.
-        assert!(face_icons(None).iter().all(Option::is_none));
+        assert!(face_icons(None, None, None, 0).iter().all(Option::is_none));
         let idle = snapshot(RecordState::Idle, 0.0);
-        assert!(face_icons(Some(&idle)).iter().all(Option::is_none));
+        assert!(face_icons(None, None, Some(&idle), 0)
+            .iter()
+            .all(Option::is_none));
+    }
+
+    #[test]
+    fn heart_icon_pulses_once_per_second_while_hr_is_present() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        // HR present: big heart on even seconds, small on odd.
+        assert_eq!(
+            face_icons(Some(&fix()), Some(150), Some(&rec), 42)[5],
+            Some(FaceIcon::Heart)
+        );
+        assert_eq!(
+            face_icons(Some(&fix()), Some(150), Some(&rec), 43)[5],
+            Some(FaceIcon::HeartSmall)
+        );
+        // No HR: steady big heart, no pulse.
+        assert_eq!(
+            face_icons(Some(&fix()), None, Some(&rec), 43)[5],
+            Some(FaceIcon::Heart)
+        );
+    }
+
+    #[test]
+    fn gps_icon_cycles_search_arcs_until_a_fresh_fix_locks() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        // No fix: arcs grow 0 -> 1 -> 2 with uptime % 3.
+        assert_eq!(
+            face_icons(None, None, Some(&rec), 0)[8],
+            Some(FaceIcon::SatSearch0)
+        );
+        assert_eq!(
+            face_icons(None, None, Some(&rec), 1)[8],
+            Some(FaceIcon::SatSearch1)
+        );
+        assert_eq!(
+            face_icons(None, None, Some(&rec), 2)[8],
+            Some(FaceIcon::Satellite)
+        );
+        // A stale fix still reads as searching, not locked.
+        let stale_uptime = 41 + STALE_AFTER_S + 3;
+        assert!(matches!(
+            face_icons(Some(&fix()), None, Some(&rec), stale_uptime)[8],
+            Some(FaceIcon::SatSearch0 | FaceIcon::SatSearch1 | FaceIcon::Satellite)
+        ));
+        // A fresh fix locks the full satellite regardless of the second.
+        assert_eq!(
+            face_icons(Some(&fix()), None, Some(&rec), 43)[8],
+            Some(FaceIcon::Satellite)
+        );
+    }
+
+    #[test]
+    fn rec_tag_blinks_but_pause_and_finish_stay_steady() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        // REC visible on even seconds, hidden on odd.
+        assert_eq!(
+            face_rows(None, None, Some(&rec), None, 10)[0].as_str(),
+            "THREKIR           REC"
+        );
+        assert_eq!(
+            face_rows(None, None, Some(&rec), None, 11)[0].as_str(),
+            "THREKIR"
+        );
+        // Paused / finished tags never blink.
+        let paused = snapshot(RecordState::Paused, 100.0);
+        assert_eq!(
+            face_rows(None, None, Some(&paused), None, 11)[0].as_str(),
+            "THREKIR           PAU"
+        );
     }
 
     #[test]
@@ -386,7 +511,7 @@ mod tests {
         rec.current_pace_s_per_km = Some(280);
         let e = elev(1600.0, 540.0, 120.0);
         let rows = face_rows(Some(&fix()), Some(152), Some(&rec), Some(&e), 42);
-        let icons = face_icons(Some(&rec));
+        let icons = face_icons(Some(&fix()), Some(152), Some(&rec), 42);
         for (row, icon) in icons.iter().enumerate() {
             if icon.is_some() {
                 assert!(
@@ -401,9 +526,10 @@ mod tests {
 
     #[test]
     fn dashboard_shows_placeholders_before_metrics_are_available() {
-        // Recording, but no pace yet, no HR sensor, no baro.
+        // Recording, but no pace yet, no HR sensor, no baro. Even second so
+        // the blinking REC tag is on its visible frame.
         let rec = snapshot(RecordState::Recording, 0.0);
-        let rows = face_rows(None, None, Some(&rec), None, 3);
+        let rows = face_rows(None, None, Some(&rec), None, 2);
         assert_eq!(rows[0].as_str(), "THREKIR           REC");
         assert_eq!(rows[1].as_str(), "     0:00:00");
         assert_eq!(rows[2].as_str(), "     0.00 KM");
