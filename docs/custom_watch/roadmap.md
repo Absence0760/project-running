@@ -4,16 +4,16 @@ The big-picture sequencing for the ultra-marathon watch research effort. Separat
 
 **This doc is live.** Update the per-tier checkboxes + status snapshot as work progresses; resolve open questions into `decisions.md` entries as they're decided.
 
-## Status snapshot (2026-05-28)
+## Status snapshot (2026-07-09)
 
 - **Long-term goal: [§ 92](../architecture/decisions.md#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) — build the best watch ever** (full Phase 0–5 optimal-road timeline in § 92's table). Tier-2+ decisions optimise for the tier-3 shipped product without effort or scope as valid counter-arguments.
-- **Tier 1 (bench prototype)**: workspace scaffolded; no parts ordered; no on-board verification yet. **Stays on nRF52840 per [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)** — deliberate first-prototype compromise per the [§ 92 Resolution](../architecture/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise) ("keep costs down and get a working version first").
+- **Tier 1 (bench prototype)**: all bring-up steps 3–7 are **code-done** — steps 3–5 and step 7's recording core are sim-verified on Renode (2026-07-08), step 6 (BLE) + the run-sync BLE leg are compile-and-link-verified only (the sim can't run the SoftDevice) — but **no parts ordered and no on-board verification yet**; bench verification of everything pends the dev kit. Milestone history in [`tier1_log.md`](tier1_log.md); per-step detail in [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md). **Stays on nRF52840 per [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)** — deliberate first-prototype compromise per the [§ 92 Resolution](../architecture/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise) ("keep costs down and get a working version first").
 - **Tier 2 (wearable prototype)**: gated on the three [§ 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) triggers; not active. Migrates to Apollo510B silicon per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified); MCUboot lands per [§ 84](../architecture/decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default); ANT+ Alliance per [§ 88](../architecture/decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3.
 - **Tier 3 (production-intent unit)**: gated on same triggers; not active. The full Phase 0–5 vision per § 92.
 - **Vector 1 (Connect IQ app)**: not started — runs parallel to tier-1 per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware).
 - **Vector 2 (Wear OS app)**: `apps/watch_wear/` ships product features but isn't framed as a "Garmin alternative for sub-12hr runners" play.
 - **Vector 3 (ODM partnership)**: no vendor conversations; no outreach.
-- **Feature parity:** the software feature surface an ultra runner expects from a Garmin / COROS flagship — recording, navigation, training metrics, safety — is enumerated in [§ Feature parity backlog](#feature-parity-backlog-garmin--coros-table-stakes) below. Nothing built yet; most on-run-guidance + metric items already have a pure-logic helper in the main app to port, so parity is largely a firmware port, not a fresh design.
+- **Feature parity:** the software feature surface an ultra runner expects from a Garmin / COROS flagship — recording, navigation, training metrics, safety — is enumerated in [§ Feature parity backlog](#feature-parity-backlog-garmin--coros-table-stakes) below. Almost nothing built yet (auto-pause and the sync protocol are the partial exceptions — see the annotated lines); most on-run-guidance + metric items already have a pure-logic helper in the main app to port, so parity is largely a firmware port, not a fresh design.
 
 ## Tier 1 — bench prototype (active, owner-personal)
 
@@ -29,11 +29,11 @@ Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order
 
 - [ ] **Step 1 — Order parts.** See [`parts.md`](parts.md). ~$300 silicon + $200–900 bench tools.
 - [x] **Step 2 — Scaffold Cargo workspace.** DONE 2026-05-28. Embassy + nRF52840 stub.
-- [ ] **Step 3 — GNSS bring-up.** u-blox MAX-M10S NMEA parse, log fixes via defmt over RTT.
-- [ ] **Step 4 — Display bring-up.** Sharp Memory LCD over SPI, render current GPS fix.
-- [ ] **Step 5 — Optical HR bring-up.** MAX86177 over I²C, raw sample → naive peak-detect.
-- [ ] **Step 6 — BLE GATT bring-up.** Phone pairs via `nrf-softdevice`, custom service.
-- [ ] **Step 7 — Integration.** Wire steps 3–6 into a single recording state machine (port of Dart `run_recorder`).
+- [ ] **Step 3 — GNSS bring-up.** u-blox MAX-M10S NMEA parse, log fixes via defmt over RTT. — Code done, sim-verified 2026-07-08; bench verification pending parts.
+- [ ] **Step 4 — Display bring-up.** Sharp Memory LCD over SPI, render current GPS fix. — Code done (driver + face + paged run dashboard + icons), sim-verified 2026-07-08; bench verification pending parts.
+- [ ] **Step 5 — Optical HR bring-up.** MAX86177 over I²C, raw sample → naive peak-detect. — Code done incl. app-task wiring, sim-verified 2026-07-08 (absent-sensor probe parks cleanly); bench verification pending parts.
+- [ ] **Step 6 — BLE GATT bring-up.** Phone pairs via `nrf-softdevice`, custom service. — Code done behind the `ble` feature ([§ 210](../architecture/decisions.md#210-tier-1-ble-s140-softdevice-is-a-compile-verified-feature-gated-build--mutually-exclusive-with-the-sim-off-by-default)), compile-and-link-verified only — the sim can't run the SoftDevice; needs the dev kit.
+- [ ] **Step 7 — Integration.** Wire steps 3–6 into a single recording state machine (port of Dart `run_recorder`). — Recorder (with auto-pause) + button control + baro/elevation + flash run store + BLE run-sync firmware half all wired; recording sim-verified 2026-07-08, BLE sync compile-only ([§ 211](../architecture/decisions.md#211-owner-override-build-the-full-watchphonesupabase-run-sync-vertical-now-despite-the-tier-2-gate)); bench verification pending parts.
 
 ### Power instrumentation
 
@@ -93,12 +93,12 @@ Everything above sequences the *hardware* build-out. This section tracks the *so
 
 **Big lever.** Most on-run-guidance and training-metric items already have a pure-logic helper in the main app (the TS↔Dart parity pairs enumerated in [`CLAUDE.md`](../../CLAUDE.md)). For those, watch parity is a *firmware port* of an already-tested algorithm — the third language-level parity surface per [`firmware.md`](firmware.md) — not a fresh design; noted `(port: <helper>)` below. Items with no helper are new firmware design work.
 
-Nothing in this section is built. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
+Nothing in this section is complete; the two partial exceptions (auto-pause, companion-app sync) are annotated on their lines and stay unticked until bench-verified. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
 
 ### Recording & on-run guidance
 
 - [ ] **Activity profiles** — at minimum Run / Trail Run / Ultra / Hike, each with its own data screens + defaults. **T2.**
-- [ ] **Auto-lap / manual lap / auto-pause.** Auto-pause is already specced in [`run_recording.md`](../features/run_recording.md); direct firmware port. **T1.**
+- [ ] **Auto-lap / manual lap / auto-pause.** Auto-pause is already specced in [`run_recording.md`](../features/run_recording.md); direct firmware port. **Auto-pause is implemented** in the tier-1 recorder (`watch_core::record`, the 0.5 m/s moving-time gate, sim-verified 2026-07-08); auto-lap / manual lap remain. **T1.**
 - [ ] **Customisable data screens / fields** — which metrics show, how many per page. Ties to the data-screen customisation open question ([`firmware.md`](firmware.md) #4). **T3.**
 - [ ] **Grade-adjusted pace on-watch.** `(port: grade_adjusted_pace)` — the same helper the Connect IQ Vector-1 field already surfaces. **T1.**
 - [ ] **Structured / interval workout execution** — run the planned workout (warmup → reps → recovery → cooldown) with per-step alerts. The main app's runner state machine ([`workout_execution.md`](../features/workout_execution.md)) is the reference. **T2.**
@@ -147,7 +147,7 @@ Nothing in this section is built. Tier tags show where each item realistically l
 ### Platform & lifecycle
 
 - [ ] **OTA firmware updates** — already an architectural obligation ([§ 84](../architecture/decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default), tier-2 dual-bank bootloader). **T2.**
-- [ ] **Companion-app sync** — BLE GATT run / course sync, specced in [`firmware.md`](firmware.md). **T1.**
+- [ ] **Companion-app sync** — BLE GATT run / course sync, specced in [`firmware.md`](firmware.md). Both halves are built ([§ 211](../architecture/decisions.md#211-owner-override-build-the-full-watchphonesupabase-run-sync-vertical-now-despite-the-tier-2-gate)): the firmware's `run_manifest`/`run_chunk` GATT protocol + flash run store, and the phone's pull→verify→`api.saveRun` client — compile-only on the radio side, bench verification pending parts. **T1.**
 - [ ] **Watch-face / data-screen customisation** — [`firmware.md`](firmware.md) #4; Garmin's Connect IQ face marketplace is part of their moat. Design the hook now, ship later. **T3.**
 
 ### Daily / smartwatch — deliberately deferred (out of the ultra thesis)
@@ -215,8 +215,8 @@ These are real but lower-leverage. Worth tracking; not blocking.
 
 - **Privacy posture for the watch.** Watch records GPS, HR, biometrics. The rest of the product takes data minimization + retention + export seriously; the watch inherits nothing yet. Pull in the patterns from the main app (`docs/backend/api_database.md`, `docs/testing/dev_prod_isolation.md`) when tier 2 starts.
 - **Tier-1 budget cap formalization.** § 71 amendment lifts the spend cap but doesn't say "tier-1 spend over $X requires re-asking." Easy to drift past $1–2k without noticing.
-- **Local-store overflow behaviour.** Tier-1 records to LittleFS — but how big does the local store get before we start dropping runs? Architectural choice; matters for ultra runners who go off-grid for days.
-- **Tier-1 development log + showcase plan.** Tier 1's stated deliverable is "knowledge + a credible technical story for ODM conversations." Without a written log + photos/video, that knowledge stays in your head. Suggested: `docs/custom_watch/tier1_log.md`, photographed at each milestone.
+- **Local-store overflow behaviour.** Current tier-1 answer (per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md) step 7): the run store is **4 × 4 KiB internal-flash slots** with a **253-point-per-run cap** — a few minutes of track per run, a bench-prototype foundation, not shipping capacity. Real capacity (an ultra's 360k points, days off-grid) needs the tier-2 external QSPI flash; the overflow/retention policy for that store is still an open architectural choice.
+- **Tier-1 development log + showcase plan.** Tier 1's stated deliverable is "knowledge + a credible technical story for ODM conversations." The log exists: [`tier1_log.md`](tier1_log.md), one dated entry per milestone (started 2026-07-09, reconstructed back to the 2026-05-28 scaffold). Photo/video slots start when parts arrive.
 - **Watch face customization architecture.** Per [`firmware.md`](firmware.md) open Q#4 — almost certainly out of v1.0 scope but worth designing the UI layer with the customization hook in mind. Decide which Embassy UI primitives stay decoupled.
 - **No external issue tracker.** All planning lives in markdown. Fine while it's one person; gets messy fast if anyone else joins. GitHub Projects board is the cheapest pivot.
 
