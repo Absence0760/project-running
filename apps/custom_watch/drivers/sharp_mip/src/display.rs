@@ -15,12 +15,22 @@
 //! frame — the panel's chip-select is active-HIGH, the inverse of SPI
 //! convention, which is why the driver never uses controller-managed CS.
 //!
-//! VCOM (the liquid-crystal polarity bias) rides bit M1 of every frame and
-//! must alternate at ~1 Hz to prevent DC damage to the glass; the ui task's
-//! once-a-second flush cadence provides that for free. Bench bring-up note:
-//! SCS setup/hold wants ~3 us/1 us of margin around the transfer — revisit
-//! with a DelayNs if the real panel glitches at speed; the simulator model
-//! doesn't care.
+//! VCOM (the liquid-crystal polarity bias) must alternate at >=1 Hz to prevent
+//! DC damage to the glass. Two ways to supply it:
+//!
+//! - **Software VCOM** (EXTMODE=L, [`SharpMip::new`]): the bias rides bit M1 of
+//!   every frame, and the ui task's once-a-second flush — which sends a 2-byte
+//!   VCOM-maintenance frame even when nothing changed — provides the toggle.
+//!   Simple, but the CPU wakes every second and drives SPI just for the bias.
+//! - **Hardware VCOM** (EXTMODE=H, [`SharpMip::new_external_vcom`]): the panel
+//!   takes its bias from the EXTCOMIN pin, driven by a free-running PWM square
+//!   wave (see the app's `vcom_task`). The driver then never toggles the M1 bit
+//!   and never sends a VCOM-maintenance frame, so a static screen costs zero
+//!   SPI — the low-power path (`docs/custom_watch/performance_path.md`).
+//!
+//! Bench bring-up note: SCS setup/hold wants ~3 us/1 us of margin around the
+//! transfer — revisit with a DelayNs if the real panel glitches at speed; the
+//! simulator model doesn't care.
 
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiBus;
@@ -35,14 +45,30 @@ pub struct SharpMip<SPI, CS> {
     spi: SPI,
     cs: CS,
     vcom: bool,
+    external_vcom: bool,
 }
 
 impl<SPI: SpiBus, CS: OutputPin> SharpMip<SPI, CS> {
+    /// Software-VCOM driver (EXTMODE=L): the bias rides the frame's M1 bit and
+    /// the caller's periodic [`flush`](Self::flush) supplies the toggle.
     pub fn new(spi: SPI, cs: CS) -> Self {
         Self {
             spi,
             cs,
             vcom: false,
+            external_vcom: false,
+        }
+    }
+
+    /// Hardware-VCOM driver (EXTMODE=H): the bias comes from the externally
+    /// driven EXTCOMIN pin, so the driver never toggles the M1 bit and
+    /// [`flush`](Self::flush) sends nothing when the framebuffer is clean.
+    pub fn new_external_vcom(spi: SPI, cs: CS) -> Self {
+        Self {
+            spi,
+            cs,
+            vcom: false,
+            external_vcom: true,
         }
     }
 
@@ -53,9 +79,14 @@ impl<SPI: SpiBus, CS: OutputPin> SharpMip<SPI, CS> {
     }
 
     /// Push every dirty framebuffer line to the panel; clears dirty flags on
-    /// success. With nothing dirty this still sends the 2-byte VCOM frame,
-    /// so calling it on a timer keeps the bias alternating.
+    /// success. In software-VCOM mode, a call with nothing dirty still sends the
+    /// 2-byte VCOM frame, so calling it on a timer keeps the bias alternating.
+    /// In hardware-VCOM mode a clean framebuffer sends nothing at all (EXTCOMIN
+    /// carries the bias), so a static screen is free.
     pub fn flush(&mut self, fb: &mut Framebuffer) -> Result<(), SPI::Error> {
+        if self.external_vcom && !(0..HEIGHT).any(|y| fb.is_dirty(y)) {
+            return Ok(());
+        }
         let mode = self.next_mode();
         let result = self.frame(fb, mode);
         if result.is_ok() {
@@ -75,6 +106,11 @@ impl<SPI: SpiBus, CS: OutputPin> SharpMip<SPI, CS> {
     }
 
     fn next_mode(&mut self) -> u8 {
+        if self.external_vcom {
+            // EXTMODE=H: the panel ignores the M1 bit (bias is EXTCOMIN's job),
+            // so hold it low rather than spend a toggle on it.
+            return MODE_WRITE;
+        }
         self.vcom = !self.vcom;
         let vcom_bit = if self.vcom { MODE_VCOM } else { 0 };
         MODE_WRITE | vcom_bit

@@ -120,6 +120,40 @@ fn single_pixel_change_flushes_exactly_one_line() {
 }
 
 #[test]
+fn external_vcom_skips_the_clean_flush_entirely() {
+    let mut fb = Framebuffer::new();
+    let mut d = SharpMip::new_external_vcom(MockSpi::default(), MockCs::default());
+    d.flush(&mut fb).unwrap(); // first flush paints the whole panel
+    let painted = {
+        let mut probe = SharpMip::new_external_vcom(MockSpi::default(), MockCs::default());
+        let mut fb2 = Framebuffer::new();
+        probe.flush(&mut fb2).unwrap();
+        probe.into_parts().0.written.len()
+    };
+    assert!(painted > 0);
+    // Now nothing is dirty: a clean flush must send zero bytes (EXTCOMIN drives
+    // the bias, so there's no VCOM-maintenance frame).
+    d.flush(&mut fb).unwrap();
+    d.flush(&mut fb).unwrap();
+    let (spi, cs) = d.into_parts();
+    assert_eq!(spi.written.len(), painted, "clean external-vcom flush sent bytes");
+    // And no chip-select toggles for the skipped frames (only the first frame).
+    assert_eq!(cs.transitions, vec![true, false]);
+}
+
+#[test]
+fn external_vcom_holds_the_vcom_bit_low() {
+    let mut fb = Framebuffer::new();
+    let mut d = SharpMip::new_external_vcom(MockSpi::default(), MockCs::default());
+    d.flush(&mut fb).unwrap(); // paint: a fresh framebuffer is all-dirty
+    let (spi, _) = d.into_parts();
+    // The mode byte leads the frame. External VCOM keeps it MODE_WRITE with no
+    // M1 bit — where the software path's first flush is MODE_WRITE | MODE_VCOM
+    // (asserted in first_flush_paints_every_line).
+    assert_eq!(spi.written[0], MODE_WRITE);
+}
+
+#[test]
 fn clear_all_sends_clear_frame() {
     let mut d = display();
     d.clear_all().unwrap();
