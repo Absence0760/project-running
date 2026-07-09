@@ -23,7 +23,17 @@ import tempfile
 
 # Order here is the order of the generated `Icon` enum + table. Add a new icon
 # by dropping a NAME.svg in ../icons/ and appending its stem here.
-ICONS = ["stopwatch", "footsteps", "heart", "mountain", "vert", "satellite"]
+ICONS = [
+    "stopwatch",
+    "footsteps",
+    "heart",
+    "heart_small",
+    "mountain",
+    "vert",
+    "satellite",
+    "sat_search0",
+    "sat_search1",
+]
 SIZE = 16
 BYTES_PER_ROW = SIZE // 8
 
