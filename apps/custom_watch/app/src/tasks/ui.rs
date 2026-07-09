@@ -7,11 +7,10 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-#[cfg(feature = "dev-blink")]
-use embassy_nrf::gpio::{AnyPin, Level, OutputDrive};
-use embassy_nrf::gpio::Output;
+use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
+use embassy_nrf::peripherals::PWM0;
+use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
 use embassy_nrf::spim::Spim;
-#[cfg(feature = "dev-blink")]
 use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
@@ -72,9 +71,39 @@ fn driver_icon(icon: FaceIcon) -> Icon {
     }
 }
 
+/// Hardware VCOM: hold EXTMODE high and drive EXTCOMIN with a continuous PWM
+/// square wave so the panel's bias inversion happens in hardware and the CPU
+/// never wakes to toggle it. The screen task can then flush only when content
+/// changes (see [`screen_task`] + `SharpMip::new_external_vcom`) instead of
+/// sending a VCOM frame every second. `>=1 Hz` is the Sharp requirement to
+/// avoid DC bias; ~3.8 Hz is the slowest a single nRF PWM reaches (Div128
+/// prescaler x the max 32767 countertop), which keeps switching power minimal.
+/// The task owns the PWM + EXTMODE pin for the device's lifetime and then
+/// parks — the waveform runs autonomously, no further wakes.
+#[embassy_executor::task]
+pub async fn vcom_task(
+    pwm: Peri<'static, PWM0>,
+    extcomin: Peri<'static, AnyPin>,
+    extmode: Peri<'static, AnyPin>,
+) {
+    let _extmode = Output::new(extmode, Level::High, OutputDrive::Standard);
+    // Div128 prescaler x the max 32767 countertop = 16 MHz / 128 / 32767 ~= 3.8
+    // Hz, the slowest a single PWM reaches; 50% duty.
+    let mut config = SimpleConfig::default();
+    config.prescaler = Prescaler::Div128;
+    config.max_duty = 32767;
+    let mut vcom = SimplePwm::new_1ch(pwm, extcomin, &config);
+    vcom.set_duty(0, DutyCycle::normal(16384));
+    info!("ui::vcom_task started (hardware EXTCOMIN)");
+    // Keep the PWM + EXTMODE pin alive forever; the waveform is autonomous.
+    core::future::pending::<()>().await;
+}
+
 #[embassy_executor::task]
 pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
-    let mut display = SharpMip::new(spim, cs);
+    // Hardware VCOM: EXTCOMIN (driven by vcom_task) carries the bias, so a clean
+    // framebuffer flushes nothing and a static screen costs zero SPI.
+    let mut display = SharpMip::new_external_vcom(spim, cs);
     let mut fb = Framebuffer::new();
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut hr_rx = unwrap!(state::HR.receiver());
