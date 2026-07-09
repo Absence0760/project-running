@@ -98,6 +98,11 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
                 fb.draw_icon(0, row, driver_icon(icon));
             }
         }
+        // The 2x elapsed-time hero overlays rows 0-1 (drawn after them so it
+        // wins); the state tag in row 0 sits top-right, clear of the digits.
+        if let Some(hero) = face::hero_line(rec.as_ref()) {
+            fb.draw_text_2x(0, 0, &hero);
+        }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
         }
