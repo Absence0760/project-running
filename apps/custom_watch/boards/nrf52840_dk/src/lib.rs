@@ -78,8 +78,8 @@ pub struct Leds {
 
 /// The four user buttons. Active-LOW with the pin idle-high: a press pulls the
 /// line to GND, so each needs an internal pull-up and reads pressed as low.
-/// Pins per [`buttons`]. BTN1/BTN2 drive recording control today (see the
-/// `button` task); BTN3/BTN4 are exposed but unassigned.
+/// Pins per [`buttons`]. BTN1/BTN2 drive recording control and BTN3 cycles the
+/// run-view page (see the `button` task); BTN4 is exposed but unassigned.
 pub struct Buttons {
     /// BTN1 — P0.11.
     pub btn1: Peri<'static, AnyPin>,
