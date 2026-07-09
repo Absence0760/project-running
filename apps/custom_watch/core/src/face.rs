@@ -102,7 +102,7 @@ pub fn face_icons(
 ) -> [Option<FaceIcon>; ROWS] {
     let mut icons = [None; ROWS];
     if rec.and_then(|snap| rec_tag(snap.state)).is_some() {
-        icons[1] = Some(FaceIcon::Stopwatch);
+        // Rows 0-1 are the 2x time hero (no gutter icon). Row 2 down carry them.
         icons[2] = Some(FaceIcon::Footsteps);
         icons[5] = Some(heart_icon(hr_bpm, uptime_s));
         icons[6] = Some(FaceIcon::Mountain);
@@ -110,6 +110,18 @@ pub fn face_icons(
         icons[8] = Some(gps_icon(fix, uptime_s));
     }
     icons
+}
+
+/// The elapsed run time for the dashboard's 2x hero band (rows 0-1), or `None`
+/// when no run is under way (the idle status face has no hero). The app draws
+/// this with the `sharp_mip` framebuffer's `draw_text_2x`; keeping the string
+/// here keeps the hero's content host-tested alongside the rest of the face.
+pub fn hero_line(rec: Option<&Snapshot>) -> Option<Row> {
+    let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
+    let (h, m, s) = hms(snap.elapsed_s);
+    let mut row = Row::new();
+    let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
+    Some(row)
 }
 
 /// The HR gutter frame: a ~1 Hz liveness pulse (big/small heart) while a pulse
@@ -142,10 +154,12 @@ fn gps_fresh(fix: Option<&Fix>, uptime_s: u32) -> bool {
     matches!(fix, Some(f) if uptime_s.saturating_sub(f.uptime_s) <= STALE_AFTER_S)
 }
 
-/// The active-run layout. Rows 1/2/5/6/7/8 carry a gutter icon (see
-/// [`face_icons`]) so they leave their first five cells blank; the two pace
-/// rows keep a text label. Every value aligns at column 5 so the numbers stack
-/// in one glanceable column regardless of icon-vs-label gutter.
+/// The active-run layout. Rows 0-1 are the elapsed-time hero — left empty here
+/// and drawn at 2x by the app from [`hero_line`], with only the recording-state
+/// tag riding the top-right corner. Rows 2/5/6/7/8 carry a gutter icon (see
+/// [`face_icons`]) so they leave their first five cells blank; the two pace rows
+/// keep a text label. Every value aligns at column 5 so the numbers stack in one
+/// glanceable column regardless of icon-vs-label gutter.
 fn dashboard(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -157,17 +171,14 @@ fn dashboard(
     const GUTTER: &str = "     ";
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Blink the REC tag at ~1 Hz so a live recording is unmistakable at a
-    // glance; PAU / FIN stay steady (a blink reads as "in progress").
+    // Rows 0-1 hold the 2x elapsed-time hero (drawn by the app). Only the
+    // recording-state tag lives here, pinned top-right clear of the hero digits.
+    // Blink it at ~1 Hz for REC so a live recording is unmistakable; PAU / FIN
+    // stay steady (a blink reads as "in progress").
     let tag_shown = tag != "REC" || uptime_s % 2 == 0;
     if tag_shown {
-        let _ = write!(rows[0], "{:<18}{}", "THREKIR", tag);
-    } else {
-        let _ = write!(rows[0], "THREKIR");
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
     }
-
-    let (h, m, s) = hms(snap.elapsed_s);
-    let _ = write!(rows[1], "{}{}:{:02}:{:02}", GUTTER, h.min(999), m, s);
 
     let km = (snap.distance_m / 1000.0).min(9999.99);
     let _ = write!(rows[2], "{}{:.2} KM", GUTTER, km);
@@ -398,8 +409,11 @@ mod tests {
         rec.current_pace_s_per_km = Some(4 * 60 + 58);
         let e = elev(1600.0, 540.0, 120.0);
         let rows = face_rows(Some(&fix()), Some(152), Some(&rec), Some(&e), 42);
-        assert_eq!(rows[0].as_str(), "THREKIR           REC");
-        assert_eq!(rows[1].as_str(), "     3:24:07");
+        // Rows 0-1 are the hero band: only the tag (top-right), hero drawn 2x.
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert!(rows[0].as_str().ends_with("REC"));
+        assert_eq!(rows[1].as_str(), "");
+        assert_eq!(hero_line(Some(&rec)).unwrap().as_str(), "3:24:07");
         assert_eq!(rows[2].as_str(), "     12.34 KM");
         assert_eq!(rows[3].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[4].as_str(), "NOW  4:58 /KM");
@@ -410,13 +424,25 @@ mod tests {
     }
 
     #[test]
+    fn hero_shows_elapsed_only_while_a_run_is_active() {
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.elapsed_s = 24 * 3600 + 15 * 60 + 30;
+        assert_eq!(hero_line(Some(&rec)).unwrap().as_str(), "24:15:30");
+        // Finished keeps the final time; idle / absent have no hero.
+        let fin = snapshot(RecordState::Finished, 100.0);
+        assert!(hero_line(Some(&fin)).is_some());
+        assert!(hero_line(Some(&snapshot(RecordState::Idle, 0.0))).is_none());
+        assert!(hero_line(None).is_none());
+    }
+
+    #[test]
     fn dashboard_icons_pair_with_the_iconned_rows() {
         let rec = snapshot(RecordState::Recording, 12_340.0);
         // Fresh fix (uptime 42 vs fix uptime 41) + HR present + even uptime, so
         // both animated icons sit on their steady frame.
         let icons = face_icons(Some(&fix()), Some(152), Some(&rec), 42);
-        assert_eq!(icons[0], None); // title row
-        assert_eq!(icons[1], Some(FaceIcon::Stopwatch));
+        assert_eq!(icons[0], None); // hero band
+        assert_eq!(icons[1], None); // hero band
         assert_eq!(icons[2], Some(FaceIcon::Footsteps));
         assert_eq!(icons[3], None); // PACE — text label
         assert_eq!(icons[4], None); // NOW — text label
@@ -485,20 +511,11 @@ mod tests {
     fn rec_tag_blinks_but_pause_and_finish_stay_steady() {
         let rec = snapshot(RecordState::Recording, 100.0);
         // REC visible on even seconds, hidden on odd.
-        assert_eq!(
-            face_rows(None, None, Some(&rec), None, 10)[0].as_str(),
-            "THREKIR           REC"
-        );
-        assert_eq!(
-            face_rows(None, None, Some(&rec), None, 11)[0].as_str(),
-            "THREKIR"
-        );
+        assert_eq!(face_rows(None, None, Some(&rec), None, 10)[0].as_str().trim(), "REC");
+        assert_eq!(face_rows(None, None, Some(&rec), None, 11)[0].as_str(), "");
         // Paused / finished tags never blink.
         let paused = snapshot(RecordState::Paused, 100.0);
-        assert_eq!(
-            face_rows(None, None, Some(&paused), None, 11)[0].as_str(),
-            "THREKIR           PAU"
-        );
+        assert_eq!(face_rows(None, None, Some(&paused), None, 11)[0].as_str().trim(), "PAU");
     }
 
     #[test]
@@ -530,8 +547,9 @@ mod tests {
         // the blinking REC tag is on its visible frame.
         let rec = snapshot(RecordState::Recording, 0.0);
         let rows = face_rows(None, None, Some(&rec), None, 2);
-        assert_eq!(rows[0].as_str(), "THREKIR           REC");
-        assert_eq!(rows[1].as_str(), "     0:00:00");
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[1].as_str(), "");
+        assert_eq!(hero_line(Some(&rec)).unwrap().as_str(), "0:00:00");
         assert_eq!(rows[2].as_str(), "     0.00 KM");
         assert_eq!(rows[3].as_str(), "PACE --");
         assert_eq!(rows[4].as_str(), "NOW  --");
@@ -559,11 +577,11 @@ mod tests {
     #[test]
     fn paused_and_finished_runs_keep_the_dashboard() {
         let rows = face_rows(None, None, Some(&snapshot(RecordState::Paused, 5_000.0)), None, 3);
-        assert_eq!(rows[0].as_str(), "THREKIR           PAU");
+        assert_eq!(rows[0].as_str().trim(), "PAU");
         assert_eq!(rows[2].as_str(), "     5.00 KM");
 
         let rows = face_rows(None, None, Some(&snapshot(RecordState::Finished, 42_195.0)), None, 3);
-        assert_eq!(rows[0].as_str(), "THREKIR           FIN");
+        assert_eq!(rows[0].as_str().trim(), "FIN");
         assert_eq!(rows[2].as_str(), "     42.20 KM");
     }
 
