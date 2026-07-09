@@ -8,6 +8,23 @@ Rust + Embassy firmware for the ultra-marathon watch research effort. This is *o
 
 **Language + framework decided: Rust + Embassy on the Nordic nRF52840.** See [decisions.md §80](../../docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) for why (short version: memory safety + tooling + async ergonomics, *not* perf — Rust vs C is within ±5% on this class of MCU). See [`docs/custom_watch/performance_path.md`](../../docs/custom_watch/performance_path.md) for where the performance levers actually live, and [`docs/custom_watch/competitive_landscape.md`](../../docs/custom_watch/competitive_landscape.md) for the strategic framing of why tier 1 exists at all.
 
+## Power discipline
+
+Per [`performance_path.md`](../../docs/custom_watch/performance_path.md), battery life is decided by **hardware** (Sharp MIP vs AMOLED ~3–4×, Ambiq vs nRF52 MCU ~25×, snapshot GNSS ~2–3×) — all tier-2 chip swaps — and the nRF52840 **dev kit can't measure ultra-watch power at all** (~30 mA idle from the onboard debugger). So tier-1's job is not a measured number; it's getting the **firmware architecture** right so the wins land at tier-2: DMA/interrupt-driven I/O, a tickless async runtime, aggressive sleep where every wake is justifiable, partial display updates, and a clean always-on/screen-on split. What that translates to in this workspace:
+
+**Done:**
+- **Partial display updates** — the `sharp_mip` driver tracks dirty lines and sends only changed ones (+ the VCOM-only frame when idle); a static screen costs near-nothing.
+- **DMA/async, tickless** — every task is Embassy async over EasyDMA (no busy-polling), so the executor sleeps until a real event. **GPS UART reads are burst-buffered** (`gps.rs`, `RX_BURST`) — one CPU wake per ~32 bytes instead of per byte, the doc's DMA-not-polling lever (sim-verified: 53 fixes / 51 s, distance accrues).
+- **Animations gated** — the ~1 Hz face animations freeze outside an ~8 s post-interaction window (`ANIM_WINDOW_S`), so an unattended wrist stops the per-second decorative redraw.
+- **No gratuitous wakers** — the 2 Hz liveness LED is behind the default-OFF `dev-blink` feature (the sim/flash helpers opt it back in); a plain `cargo build` carries no free-running blinker.
+- **BLE long connection interval** — the `ble` build requests a ~1 s interval on connect (`set_conn_params`), vs the 7.5 ms HID default (~100× idle-radio power). Compile-verified only.
+
+**Architecturally owed (tier-1 wins, but hardware-gated or behaviour-changing — not yet built):**
+- **Hardware EXTCOMIN VCOM** — drive the panel's bias-toggle from a low-power PWM/RTC pin so the CPU never wakes just to alternate VCOM; then the idle watch-face clock can freeze and the CPU can sleep for seconds. This is the real idle-power lever (idle is most of the device's life) but needs the EXTCOMIN pin wired + EXTMODE=H and can't be Renode-verified.
+- **Skip the record-task 1 Hz tick while idle/finished** (it's inert there) once hardware VCOM removes the display's own 1 Hz floor.
+- **HR duty-cycling** — sample HR a few seconds per minute rather than 100 Hz continuously (the LED current dominates HR power); a mode/fidelity trade to make deliberately.
+- **Always-on / screen-on split for tier-2** — the sensor tasks are already isolated per subsystem, the boundary a coprocessor (Apollo510B network core / BHI260) slots into at tier-2.
+
 ## Local testing
 
 The watch's developer inner loop is `bin/watch-flash.sh` from the repo root (or `cargo run --release` from this directory): build the firmware, flash it to a connected Nordic nRF52840 DK, stream `defmt` logs back to your terminal until Ctrl-C. Host-side unit tests run via `bin/watch-test.sh` or `cargo test` and don't need a board. Run `bin/watch-doctor.sh` once per machine to verify toolchain + board detection. No board at all? `bin/watch-sim.sh` boots the same release ELF on an emulated nRF52840 DK (Renode) with decoded defmt logs streaming and a canned NMEA fixture feeding the GPS UART — the whole boot + blink + task-scheduling path runs today, pre-parts ([decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain)). See [`local_testing.md`](local_testing.md) for the full setup walkthrough, the host-vs-on-target-vs-sim testing split, and the common-error reference.
