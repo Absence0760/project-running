@@ -11,7 +11,37 @@ $phone_port ?= 7788
 path add $ORIGIN
 
 mach create "watch"
-machine LoadPlatformDescription @platforms/boards/nrf52840dk_nrf52840.repl
+machine LoadPlatformDescription @platforms/cpus/nrf52840.repl
+
+# Board LEDs. We declare these inline instead of loading
+# platforms/boards/nrf52840dk_nrf52840.repl because that repl also declares the
+# four user buttons as Miscellaneous.Button peripherals that drive their pins
+# LOW at reset (active-low, non-inverted) — which the firmware's pulled-up
+# button inputs would read as "pressed". The buttons are injected by driving the
+# GPIO input pins directly (the btnN macros below), so no Button peripheral is
+# needed; leaving the pins to the firmware's internal pull-up keeps them idle
+# high (released) until a macro pulls one low. Only led0 needs a name (the
+# liveness hook), but all four are kept to mirror boards/nrf52840_dk.
+machine LoadPlatformDescriptionFromString
+"""
+gpio0:
+    13 -> led0@0
+    14 -> led1@0
+    15 -> led2@0
+    16 -> led3@0
+
+led0: Miscellaneous.LED @ gpio0 13
+    invert: true
+
+led1: Miscellaneous.LED @ gpio0 14
+    invert: true
+
+led2: Miscellaneous.LED @ gpio0 15
+    invert: true
+
+led3: Miscellaneous.LED @ gpio0 16
+    invert: true
+"""
 
 # Sharp Memory LCD on SPIM3, chip-select on P1.12 (matches the pin map in
 # boards/nrf52840_dk). The model is runtime-compiled C#; `showAnalyzer
@@ -41,6 +71,43 @@ runMacro $reset
 
 include @defmt_rtt.py
 setup_defmt_rtt $defmt_out
+
+# Button injection. The firmware's button task (built with the `sim-buttons`
+# feature by bin/watch-sim.sh) polls the button pins' levels — it can't use a
+# hardware edge because embassy's wait_for_falling_edge rides the nRF GPIO
+# SENSE/DETECT path, which this Renode GPIO model doesn't implement. So `click`
+# drives the input pin directly: pull it LOW (a press, active-low) for a short
+# window — long enough for the ~10 ms poll to catch the falling edge — then
+# drive it back HIGH (release). Driving the pin (OnGPIO) is what moves the IN
+# register the firmware reads; a Miscellaneous.Button's Press does not propagate
+# on these pins. Invoke from the monitor with `runMacro $btn3` (a bare `btn3`
+# does not run a macro). One call = one clean press.
+python
+"""
+import time
+
+def click(pin, hold=0.3):
+    gpio = monitor.Machine["sysbus.gpio0"]
+    gpio.OnGPIO(pin, False)  # press: pull the active-low input down
+    time.sleep(hold)
+    gpio.OnGPIO(pin, True)   # release: back to idle high
+"""
+
+# BTN1 (P0.11) — start / pause / resume the recording.
+macro btn1
+"""
+    python "click(11)"
+"""
+# BTN2 (P0.12) — stop the recording.
+macro btn2
+"""
+    python "click(12)"
+"""
+# BTN3 (P0.24) — cycle the run-view page (dashboard / distance / pace).
+macro btn3
+"""
+    python "click(24)"
+"""
 
 # LED1 (P0.13) blinks at 1 Hz from ui::blink_task — echo each state change
 # into the Renode log as a scheduler-liveness signal.

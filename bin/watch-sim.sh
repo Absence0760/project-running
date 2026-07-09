@@ -4,11 +4,13 @@
 # (Renode, no hardware) and stream decoded defmt logs until Ctrl-C, feeding
 # the canned NMEA fixture into the emulated GPS UART on a loop.
 #
-# The ELF is the same thumbv7em build watch-flash.sh flashes, plus the
-# `sim-autostart` feature: the sim can't inject a button press, so it needs the
-# record task to start on the first fix (on hardware BTN1 does this). What you
-# can't simulate: BLE (nrf-softdevice needs the real radio), power draw, GPS/HR
-# analog behaviour. See apps/custom_watch/local_testing.md § Simulating without a board.
+# The ELF is the same thumbv7em build watch-flash.sh flashes, plus two sim
+# features: `sim-autostart` (start recording on the first fix so a run records
+# without a button) and `sim-buttons` (poll the button pins so the watch.resc
+# btn1/btn2/btn3 monitor macros can drive BTN1 start/pause, BTN2 stop, BTN3
+# page). What you can't simulate: BLE (nrf-softdevice needs the real radio),
+# power draw, GPS/HR analog behaviour. See
+# apps/custom_watch/local_testing.md § Simulating without a board.
 #
 # Usage:
 #   bin/watch-sim.sh                      # build + simulate the default binary
@@ -48,11 +50,13 @@ command -v defmt-print >/dev/null || \
 	fatal "defmt-print not on PATH — install with: cargo install defmt-print --locked"
 [[ -f "$NMEA_FILE" ]] || fatal "NMEA fixture not found: $NMEA_FILE"
 
-# sim-autostart: the sim has no button injection, so without this the record
-# task never leaves Idle and no distance accrues. On real hardware BTN1 starts
-# the run and this feature is off — see apps/custom_watch/app/src/tasks/record.rs.
-step "Building firmware (release, --features sim-autostart)"
-(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart,dev-blink)
+# sim-autostart: start the run on the first fix so distance accrues without a
+# button. sim-buttons: poll the button pins so the watch.resc btn1/btn2/btn3
+# macros work (Renode's GPIO models the IN register but not the SENSE/DETECT
+# edge path the hardware button task waits on). Both are OFF on the hardware
+# build — see apps/custom_watch/app/src/tasks/{record,button}.rs.
+step "Building firmware (release, --features sim-autostart,sim-buttons)"
+(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart,sim-buttons,dev-blink)
 ELF="$WORKSPACE/target/thumbv7em-none-eabihf/release/$BIN"
 [[ -f "$ELF" ]] || fatal "build produced no ELF at $ELF"
 
@@ -109,6 +113,7 @@ done
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: ncat localhost $MONITOR_PORT"
+dim "buttons: in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the
