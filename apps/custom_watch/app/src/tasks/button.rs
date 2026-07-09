@@ -16,7 +16,7 @@
 use defmt::*;
 use embassy_futures::select::{select3, Either3};
 use embassy_nrf::gpio::Input;
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use watch_core::button::{command_for, Button};
 use watch_core::page::Page;
 use watch_core::record::RecordState;
@@ -32,6 +32,7 @@ const DEBOUNCE: Duration = Duration::from_millis(20);
 pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>, mut btn3: Input<'static>) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let page_tx = state::PAGE.sender();
+    let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
     info!("button: BTN1 start/pause, BTN2 stop, BTN3 page");
     loop {
@@ -50,6 +51,7 @@ pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>, mut btn3: I
                 // Debounce, confirm the press held, then advance the page.
                 Timer::after(DEBOUNCE).await;
                 if btn3.is_low() {
+                    interaction_tx.send(Instant::now().as_secs() as u32);
                     page = page.next();
                     info!("button: BTN3 -> page {}", page);
                     page_tx.send(page);
@@ -68,6 +70,9 @@ pub async fn run(mut btn1: Input<'static>, mut btn2: Input<'static>, mut btn3: I
         if !held {
             continue;
         }
+        // A confirmed press is an interaction, whether or not it maps to a
+        // command in the current state — it wakes the face's animation window.
+        interaction_tx.send(Instant::now().as_secs() as u32);
 
         // The toggle keys off the latest published run state. `try_get` never
         // waits: before the first snapshot the run is idle, which is correct.
