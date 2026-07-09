@@ -14,7 +14,9 @@
 #![no_std]
 
 use embassy_nrf::gpio::AnyPin;
-use embassy_nrf::peripherals::{NVMC, P0_14, P0_15, P0_16, SPI3, TWISPI0, TWISPI1, UARTE0, UARTE1};
+use embassy_nrf::peripherals::{
+    NVMC, P0_14, P0_15, P0_16, PWM0, SPI3, TWISPI0, TWISPI1, UARTE0, UARTE1,
+};
 use embassy_nrf::{Peri, Peripherals};
 
 /// u-blox MAX-M10S breakout on UARTE0. NMEA flows watch<-GPS on `rx`;
@@ -35,6 +37,14 @@ pub struct DisplayPort {
     pub sck: Peri<'static, AnyPin>,
     pub mosi: Peri<'static, AnyPin>,
     pub cs: Peri<'static, AnyPin>,
+    /// EXTCOMIN — the panel's VCOM bias-inversion input. Driven by [`pwm`] as a
+    /// free-running square wave so the CPU never wakes to toggle it.
+    pub extcomin: Peri<'static, AnyPin>,
+    /// EXTMODE — held HIGH selects hardware VCOM (bias from EXTCOMIN); LOW would
+    /// select software VCOM (bias in the SPI frame's M1 bit).
+    pub extmode: Peri<'static, AnyPin>,
+    /// PWM instance that generates the EXTCOMIN square wave in hardware.
+    pub pwm: Peri<'static, PWM0>,
 }
 
 /// Phone-link transport on UARTE1. Simulator-era stand-in for the
@@ -127,6 +137,9 @@ impl Board {
                 sck: p.P1_13.into(),
                 mosi: p.P1_14.into(),
                 cs: p.P1_12.into(),
+                extcomin: p.P1_06.into(),
+                extmode: p.P1_07.into(),
+                pwm: p.PWM0,
             },
             phone: PhonePort {
                 uarte: p.UARTE1,

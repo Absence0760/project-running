@@ -140,6 +140,13 @@ async fn main(spawner: Spawner) {
     // feature — a free-running 2 Hz waker has no place in the lean build.
     #[cfg(feature = "dev-blink")]
     spawner.spawn(unwrap!(tasks::ui::blink_task(board.leds.led1)));
+    // Hardware VCOM: a free-running PWM on EXTCOMIN (EXTMODE high) toggles the
+    // panel bias so the screen task never wakes just to maintain it.
+    spawner.spawn(unwrap!(tasks::ui::vcom_task(
+        board.display.pwm,
+        board.display.extcomin,
+        board.display.extmode,
+    )));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
     spawner.spawn(unwrap!(tasks::button::run(btn1, btn2, btn3)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
