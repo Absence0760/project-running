@@ -116,6 +116,46 @@ impl Framebuffer {
         }
     }
 
+    /// Draw a string at 2x scale — each 8x16 glyph pixel-doubled into a 16x32
+    /// block, so a character spans two grid cells wide and two text rows tall.
+    /// Cell-aligned at `(col, row)`; the hero band a glanceable primary metric
+    /// needs, with no separate large font to author. Truncates at the right
+    /// edge and clips at the bottom; non-ASCII renders as '?'. Overwrites the
+    /// covered cells, so redrawing the same text dirties nothing.
+    pub fn draw_text_2x(&mut self, col: usize, row: usize, text: &str) {
+        if row >= TEXT_ROWS {
+            return;
+        }
+        let y0 = row * font::GLYPH_HEIGHT;
+        for (i, ch) in text.chars().enumerate() {
+            let cell = col + i * 2;
+            if cell >= TEXT_COLS {
+                break;
+            }
+            let glyph = glyph_for(ch);
+            for (dy, &bits) in glyph.iter().enumerate() {
+                let (lo, hi) = double_bits(bits);
+                for half in 0..2 {
+                    let y = y0 + dy * 2 + half;
+                    if y >= HEIGHT {
+                        break;
+                    }
+                    self.put_cell_byte(cell, y, lo);
+                    if cell + 1 < TEXT_COLS {
+                        self.put_cell_byte(cell + 1, y, hi);
+                    }
+                }
+            }
+        }
+    }
+
+    fn put_cell_byte(&mut self, cell: usize, y: usize, bits: u8) {
+        if self.lines[y][cell] != bits {
+            self.lines[y][cell] = bits;
+            self.dirty[y] = true;
+        }
+    }
+
     /// Blit a 16x16 [`Icon`] at a text-grid cell — one row tall, two cells
     /// wide. Overwrites those cells (the icon carries its own whitespace as 0
     /// bits, so it also clears prior content), clipping at the right and bottom
@@ -158,6 +198,19 @@ impl Framebuffer {
     pub fn dirty_count(&self) -> usize {
         self.dirty.iter().filter(|&&d| d).count()
     }
+}
+
+/// Pixel-double one 8-bit glyph row into 16 bits (two bytes): source bit `b`
+/// (bit 0 = leftmost) lights destination bits `2b` and `2b+1`, keeping the
+/// framebuffer's LSB-first-is-leftmost convention.
+fn double_bits(src: u8) -> (u8, u8) {
+    let mut out: u16 = 0;
+    for b in 0..8 {
+        if src >> b & 1 != 0 {
+            out |= 0b11 << (b * 2);
+        }
+    }
+    ((out & 0xff) as u8, (out >> 8) as u8)
 }
 
 fn glyph_for(ch: char) -> &'static [u8; font::GLYPH_HEIGHT] {

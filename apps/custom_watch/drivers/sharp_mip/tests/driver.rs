@@ -164,6 +164,51 @@ fn draw_text_row_clears_leftover_cells() {
 }
 
 #[test]
+fn draw_text_2x_pixel_doubles_a_glyph() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_text_2x(2, 0, "1");
+    let glyph = &font::FONT[(b'1' - font::FIRST_CHAR) as usize];
+    // Each source row maps to two dest rows; each source bit b lights dest bits
+    // 2b and 2b+1 across the two-byte-wide doubled cell.
+    for (dy, &bits) in glyph.iter().enumerate() {
+        let mut wide: u16 = 0;
+        for b in 0..8 {
+            if bits >> b & 1 != 0 {
+                wide |= 0b11 << (b * 2);
+            }
+        }
+        let (lo, hi) = ((wide & 0xff) as u8, (wide >> 8) as u8);
+        for half in 0..2 {
+            let y = dy * 2 + half;
+            assert_eq!(fb.line(y)[2], lo, "row {y} lo");
+            assert_eq!(fb.line(y)[3], hi, "row {y} hi");
+        }
+    }
+    // A 2x glyph spans 32 rows; every dirty line is inside that band.
+    assert!((0..HEIGHT)
+        .filter(|&y| fb.is_dirty(y))
+        .all(|y| y < 2 * font::GLYPH_HEIGHT));
+}
+
+#[test]
+fn redrawing_identical_2x_text_dirties_nothing() {
+    let mut fb = Framebuffer::new();
+    fb.draw_text_2x(0, 0, "3:24:07");
+    fb.clear_dirty();
+    fb.draw_text_2x(0, 0, "3:24:07");
+    assert_eq!(fb.dirty_count(), 0);
+}
+
+#[test]
+fn draw_text_2x_clips_at_the_edges_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.draw_text_2x(0, 99, "X"); // past the bottom
+    fb.draw_text_2x(TEXT_COLS - 1, 0, "X"); // second cell falls off the right
+    fb.draw_text_2x(0, 0, &"8".repeat(TEXT_COLS)); // more chars than fit
+}
+
+#[test]
 fn draw_icon_blits_the_bitmap_cell_aligned() {
     let mut fb = Framebuffer::new();
     fb.clear_dirty();
