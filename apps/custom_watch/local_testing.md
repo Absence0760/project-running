@@ -154,7 +154,7 @@ You **cannot**:
 
 **The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press.
 
-**The `sim-buttons` feature — driving BTN1/BTN2/BTN3/BTN4 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Inject presses from the monitor (`ncat localhost <port>`, the port is printed at startup):
+**The `sim-buttons` feature — driving BTN1/BTN2/BTN3/BTN4 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Inject presses from the monitor — run `bin/watch-monitor.sh` in a second terminal (it finds the running sim's monitor port itself; the raw route is `ncat localhost <port>` with the port from the "Renode up" line). Note the monitor is a telnet socket, not a window: even under `--gui` the only window is the watch screen, and the defmt-log terminal is output-only — typing there does nothing:
 
 ```
 runMacro $btn1    # start / pause / resume the recording
@@ -186,7 +186,7 @@ Moving parts, all inside [`sim/`](sim/):
 
 The phone link mirrors the step-6 BLE design without the radio: the firmware's `phone` task writes one `watch_core::link` NDJSON status frame per second to UARTE1, Renode serves it as a TCP socket (`tcp://localhost:7788`; the Android emulator reaches it at `10.0.2.2:7788`), and the mobile app's dev-only **Settings → Developer → Sim watch link** screen (loopback-backend gate) renders the live values. `ncat localhost 7788` shows the raw frames.
 
-Sim artifacts (Renode log, raw defmt capture) are kept in a `/tmp/watch-sim.XXXXXX` dir printed on exit. Each run picks a random monitor telnet port (printed in the "Renode up" line) — `ncat localhost <port>` gets you an interactive Renode monitor to poke registers, pause the machine, or dump display frames mid-run.
+Sim artifacts (Renode log, raw defmt capture) are kept in a `/tmp/watch-sim.XXXXXX` dir printed on exit. Each run picks a random monitor telnet port (recorded in the run dir's `monitor.port`, printed in the "Renode up" line) — `bin/watch-monitor.sh` attaches an interactive Renode monitor to the newest running sim (a `/tmp/watch-sim.latest` symlink points there) to press buttons, poke registers, pause the machine, or dump display frames mid-run; `ncat localhost <port>` is the manual equivalent.
 
 Gotchas, learned the slow way:
 

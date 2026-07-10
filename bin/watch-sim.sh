@@ -61,6 +61,7 @@ ELF="$WORKSPACE/target/thumbv7em-none-eabihf/release/$BIN"
 [[ -f "$ELF" ]] || fatal "build produced no ELF at $ELF"
 
 RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/watch-sim.XXXXXX")"
+LATEST_LINK="${TMPDIR:-/tmp}/watch-sim.latest"
 DEFMT_RAW="$RUN_DIR/defmt.raw"
 GPS_PTY="$RUN_DIR/gps-pty"
 RENODE_LOG="$RUN_DIR/renode.log"
@@ -76,6 +77,7 @@ cleanup() {
 	[[ -n "$RENODE_PID" ]] && kill "$RENODE_PID" 2>/dev/null
 	kill $(jobs -p) 2>/dev/null
 	wait 2>/dev/null
+	[[ "$(readlink -f "$LATEST_LINK" 2>/dev/null)" == "$(readlink -f "$RUN_DIR")" ]] && rm -f "$LATEST_LINK"
 	dim "sim artifacts kept in $RUN_DIR (renode.log, defmt.raw)"
 	exit 0
 }
@@ -85,8 +87,12 @@ trap cleanup INT TERM EXIT
 # stale sim instances and Renode aborts on AddressAlreadyInUse. The telnet
 # monitor also lets you poke the machine mid-run:
 #   ncat localhost <port>   then e.g.:  sysbus.spi3.display DumpFrame "/tmp/f.ppm"
+# bin/watch-monitor.sh attaches here without knowing the port — it follows
+# the watch-sim.latest pointer to this run dir and reads monitor.port.
 MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
 RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
+echo "$MONITOR_PORT" > "$RUN_DIR/monitor.port"
+ln -sfn "$RUN_DIR" "$LATEST_LINK"
 RENODE_CMDS="\$elf=@$ELF; \$defmt_out=@$DEFMT_RAW; \$gps_pty=@$GPS_PTY; \$phone_port=$PHONE_PORT; include @$WORKSPACE/sim/watch.resc"
 if [[ "$GUI" == 1 ]]; then
 	step "Starting Renode (GUI — watch screen in a window)"
@@ -112,8 +118,8 @@ done
 [[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them)"
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
-ok "Renode up — log: $RENODE_LOG, monitor: ncat localhost $MONITOR_PORT"
-dim "buttons: in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page)"
+ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
+dim "buttons: in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page), \$btn4 (lap)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the
