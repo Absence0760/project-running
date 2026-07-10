@@ -24,6 +24,7 @@ use core::fmt::Write;
 
 use crate::elevation;
 use crate::fix::Fix;
+use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::page::Page;
 use crate::record::{RecordState, Snapshot};
 
@@ -173,6 +174,7 @@ pub fn page_rows(
                 animate,
             ),
             Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
+            Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
         },
     }
 }
@@ -190,13 +192,14 @@ pub fn page_icons(
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
         Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
-        Page::Distance | Page::Pace | Page::Lap => [None; ROWS],
+        Page::Distance | Page::Pace | Page::Lap | Page::Zones => [None; ROWS],
     }
 }
 
 /// The 2x hero string for `page`: elapsed time on the dashboard, the page's
-/// headline metric on a glance page, or `None` when no run is under way.
-pub fn page_hero(page: Page, rec: Option<&Snapshot>) -> Option<Row> {
+/// headline metric on a glance page (the live BPM on the zones page, `--`
+/// without a pulse), or `None` when no run is under way.
+pub fn page_hero(page: Page, hr_bpm: Option<u16>, rec: Option<&Snapshot>) -> Option<Row> {
     let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
     Some(match page {
         Page::Dashboard => {
@@ -208,6 +211,18 @@ pub fn page_hero(page: Page, rec: Option<&Snapshot>) -> Option<Row> {
         Page::Distance => glance_hero(GlanceMetric::Distance, snap),
         Page::Pace => glance_hero(GlanceMetric::Pace, snap),
         Page::Lap => split_row(snap.lap_elapsed_s),
+        Page::Zones => {
+            let mut row = Row::new();
+            match hr_bpm {
+                Some(bpm) => {
+                    let _ = write!(row, "{}", bpm.min(999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
     })
 }
 
@@ -258,14 +273,7 @@ fn glance(
         }
     }
 
-    match hr_bpm {
-        Some(bpm) => {
-            let _ = write!(rows[6], "{:<5}{} BPM", "HR", bpm);
-        }
-        None => {
-            let _ = write!(rows[6], "{:<5}--", "HR");
-        }
-    }
+    write_hr(&mut rows[6], "HR", hr_bpm, &snap.zone_cutoffs);
 
     // The pace glance pairs the average-pace hero with the live grade-adjusted
     // pace, so raw and effort-equivalent read side by side on a hill.
@@ -339,12 +347,66 @@ fn lap_glance(
     let km = (snap.lap_distance_m / 1000.0).min(9999.99);
     let _ = write!(rows[5], "{:<5}{:.2} KM", "DIST", km);
 
+    write_hr(&mut rows[6], "HR", hr_bpm, &snap.zone_cutoffs);
+
+    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    rows
+}
+
+/// The zone rows sit on rows 3..=7 under the label; they must fit above the
+/// GPS row.
+const _: () = assert!(3 + ZONE_COUNT < ROWS);
+
+/// Width of a full zone bar, in character cells — the space left on a zone row
+/// after `Zn ` and the nine-cell time field.
+const ZONE_BAR_CELLS: u32 = 8;
+
+/// The HR/zones glance page: the live BPM up large in the rows-0-1 hero (drawn
+/// by the app from [`page_hero`]), the current zone beside the label, then one
+/// row per zone — the moving time banked in that zone plus a bar scaled to the
+/// fullest zone — and the GPS glance. Zone time accrues exactly where moving
+/// time does (see `Recorder`), so a paused / auto-paused / pulse-less stretch
+/// banks nothing and the rows read as "where has this run's effort gone".
+fn zones_glance(
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
     match hr_bpm {
         Some(bpm) => {
-            let _ = write!(rows[6], "{:<5}{} BPM", "HR", bpm);
+            let zone = hr_zones::zone_for_bpm(bpm, &snap.zone_cutoffs);
+            let _ = write!(rows[2], "{:<14}ZONE {}", "HR  BPM", zone);
         }
         None => {
-            let _ = write!(rows[6], "{:<5}--", "HR");
+            let _ = write!(rows[2], "{:<14}ZONE --", "HR  BPM");
+        }
+    }
+
+    // Bars scale to the fullest zone so the dominant effort always reads at
+    // full width; an all-zero run (no HR yet) draws times only, no bars.
+    let max = snap.zone_time_s.iter().copied().max().unwrap_or(0);
+    for (i, &t) in snap.zone_time_s.iter().enumerate() {
+        let row = &mut rows[3 + i];
+        let _ = write!(row, "Z{} {:<9}", i + 1, split_row(t).as_str());
+        let cells = if max == 0 {
+            0
+        } else {
+            ((t as u64 * ZONE_BAR_CELLS as u64 + max as u64 / 2) / max as u64) as usize
+        };
+        for _ in 0..cells {
+            let _ = row.push('#');
         }
     }
 
@@ -433,14 +495,7 @@ fn dashboard(
     write_pace(&mut rows[3], "PACE", snap.avg_pace_s_per_km);
     write_pace(&mut rows[4], "NOW", snap.current_pace_s_per_km);
 
-    match hr_bpm {
-        Some(bpm) => {
-            let _ = write!(rows[5], "{}{} BPM", GUTTER, bpm);
-        }
-        None => {
-            let _ = write!(rows[5], "{}--", GUTTER);
-        }
-    }
+    write_hr(&mut rows[5], "", hr_bpm, &snap.zone_cutoffs);
 
     match elev.map(|e| e.alt_m).or_else(|| fix.and_then(|f| f.alt_m)) {
         Some(alt) => {
@@ -545,6 +600,23 @@ fn write_pace(row: &mut Row, label: &str, pace_s_per_km: Option<u32>) {
     }
 }
 
+/// Write the run-view HR value — `152 BPM Z3`, the BPM with its live zone on
+/// the run's ladder — behind a five-cell label (or the blank icon gutter when
+/// `label` is empty), with the usual `--` placeholder while no pulse is
+/// detected. Only run layouts carry the zone: the idle status face keeps its
+/// plain BPM, since zones frame effort within a recording.
+fn write_hr(row: &mut Row, label: &str, hr_bpm: Option<u16>, cutoffs: &ZoneCutoffs) {
+    match hr_bpm {
+        Some(bpm) => {
+            let zone = hr_zones::zone_for_bpm(bpm, cutoffs);
+            let _ = write!(row, "{:<5}{} BPM Z{}", label, bpm, zone);
+        }
+        None => {
+            let _ = write!(row, "{:<5}--", label);
+        }
+    }
+}
+
 /// The GPS glance shared by both layouts: satellite count, a staleness flag, or
 /// `ACQUIRING` before the first fix. Value only — the caller supplies the label.
 fn gps_value(fix: Option<&Fix>, uptime_s: u32) -> Row {
@@ -600,6 +672,8 @@ mod tests {
             lap_distance_m: 0.0,
             lap_elapsed_s: 0,
             last_lap: None,
+            zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
+            zone_time_s: [0; ZONE_COUNT],
         }
     }
 
@@ -674,7 +748,7 @@ mod tests {
         assert_eq!(rows[2].as_str(), "     12.34 KM");
         assert_eq!(rows[3].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[4].as_str(), "NOW  4:58 /KM");
-        assert_eq!(rows[5].as_str(), "     152 BPM");
+        assert_eq!(rows[5].as_str(), "     152 BPM Z3");
         assert_eq!(rows[6].as_str(), "     1600 M");
         assert_eq!(rows[7].as_str(), "     +540 -120 M");
         assert_eq!(rows[8].as_str(), "     8 SATS");
@@ -894,7 +968,7 @@ mod tests {
             face_icons(Some(&fix()), Some(152), Some(&rec), 42)
         );
         assert_eq!(
-            page_hero(Page::Dashboard, Some(&rec)),
+            page_hero(Page::Dashboard, Some(152), Some(&rec)),
             hero_line(Some(&rec))
         );
     }
@@ -914,14 +988,16 @@ mod tests {
             true,
         );
         assert_eq!(
-            page_hero(Page::Distance, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Distance, Some(152), Some(&rec))
+                .unwrap()
+                .as_str(),
             "42.19"
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
         assert_eq!(rows[2].as_str(), "DISTANCE  KM");
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
         assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
-        assert_eq!(rows[6].as_str(), "HR   152 BPM");
+        assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS");
         // Glance pages carry no gutter icons.
         assert!(page_icons(
@@ -942,7 +1018,10 @@ mod tests {
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
         rec.gap_s_per_km = Some(4 * 60 + 52);
         let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42, true);
-        assert_eq!(page_hero(Page::Pace, Some(&rec)).unwrap().as_str(), "5:12");
+        assert_eq!(
+            page_hero(Page::Pace, None, Some(&rec)).unwrap().as_str(),
+            "5:12"
+        );
         assert_eq!(rows[2].as_str(), "AVG PACE  /KM");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
         assert_eq!(rows[6].as_str(), "HR   --");
@@ -950,7 +1029,7 @@ mod tests {
         // No pace yet -> the hero placeholder, never a bogus number.
         let fresh = snapshot(RecordState::Recording, 5.0);
         assert_eq!(
-            page_hero(Page::Pace, Some(&fresh)).unwrap().as_str(),
+            page_hero(Page::Pace, None, Some(&fresh)).unwrap().as_str(),
             "--:--"
         );
     }
@@ -996,12 +1075,17 @@ mod tests {
             42,
             true,
         );
-        assert_eq!(page_hero(Page::Lap, Some(&rec)).unwrap().as_str(), "2:05");
+        assert_eq!(
+            page_hero(Page::Lap, Some(152), Some(&rec))
+                .unwrap()
+                .as_str(),
+            "2:05"
+        );
         assert_eq!(rows[0].as_str().trim(), "REC");
         assert_eq!(rows[2].as_str(), "LAP 4");
         assert_eq!(rows[4].as_str(), "LAST 4:58");
         assert_eq!(rows[5].as_str(), "DIST 0.42 KM");
-        assert_eq!(rows[6].as_str(), "HR   152 BPM");
+        assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS");
         // Glance pages carry no gutter icons.
         assert!(
@@ -1018,7 +1102,10 @@ mod tests {
         assert_eq!(rows[2].as_str(), "LAP 1");
         assert_eq!(rows[4].as_str(), "LAST --");
         assert_eq!(rows[6].as_str(), "HR   --");
-        assert_eq!(page_hero(Page::Lap, Some(&rec)).unwrap().as_str(), "0:00");
+        assert_eq!(
+            page_hero(Page::Lap, None, Some(&rec)).unwrap().as_str(),
+            "0:00"
+        );
     }
 
     #[test]
@@ -1027,10 +1114,13 @@ mod tests {
         // split format grows rather than wrapping the minutes.
         let mut rec = snapshot(RecordState::Recording, 100.0);
         rec.lap_elapsed_s = 59 * 60 + 59;
-        assert_eq!(page_hero(Page::Lap, Some(&rec)).unwrap().as_str(), "59:59");
+        assert_eq!(
+            page_hero(Page::Lap, None, Some(&rec)).unwrap().as_str(),
+            "59:59"
+        );
         rec.lap_elapsed_s = 3600 + 2 * 60 + 3;
         assert_eq!(
-            page_hero(Page::Lap, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Lap, None, Some(&rec)).unwrap().as_str(),
             "1:02:03"
         );
     }
@@ -1118,10 +1208,16 @@ mod tests {
 
     #[test]
     fn every_page_falls_back_to_the_status_face_when_idle() {
-        for page in [Page::Dashboard, Page::Distance, Page::Pace, Page::Lap] {
+        for page in [
+            Page::Dashboard,
+            Page::Distance,
+            Page::Pace,
+            Page::Lap,
+            Page::Zones,
+        ] {
             let rows = page_rows(page, Some(&fix()), None, None, None, 42, true);
             assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
-            assert!(page_hero(page, None).is_none());
+            assert!(page_hero(page, None, None).is_none());
             assert!(page_icons(page, Some(&fix()), None, None, 42, true)
                 .iter()
                 .all(Option::is_none));
@@ -1143,12 +1239,107 @@ mod tests {
             elapsed_s: 999 * 3600 + 59 * 60 + 59,
             moving_s: 999 * 3600 + 59 * 60 + 59,
         });
-        for page in [Page::Distance, Page::Pace, Page::Lap] {
-            for row in page_rows(page, Some(&fix()), Some(220), Some(&rec), None, 43, true) {
+        rec.zone_time_s = [u32::MAX; ZONE_COUNT];
+        for page in [Page::Distance, Page::Pace, Page::Lap, Page::Zones] {
+            for row in page_rows(
+                page,
+                Some(&fix()),
+                Some(u16::MAX),
+                Some(&rec),
+                None,
+                43,
+                true,
+            ) {
                 assert!(row.len() <= COLS, "glance row too wide: {:?}", row);
             }
-            assert!(page_hero(page, Some(&rec)).unwrap().len() <= COLS);
+            assert!(page_hero(page, Some(u16::MAX), Some(&rec)).unwrap().len() <= COLS);
         }
+    }
+
+    #[test]
+    fn zones_glance_shows_hr_zone_and_the_per_zone_breakdown() {
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        // Z2-dominant run: bars scale to the fullest zone (Z2 = 8 cells).
+        rec.zone_time_s = [10 * 60, 40 * 60, 20 * 60, 5 * 60, 0];
+        let rows = page_rows(
+            Page::Zones,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(
+            page_hero(Page::Zones, Some(152), Some(&rec))
+                .unwrap()
+                .as_str(),
+            "152"
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        // 152 bpm on the default 190 ladder is the Z3 cutoff itself.
+        assert_eq!(rows[2].as_str(), "HR  BPM       ZONE 3");
+        assert_eq!(rows[3].as_str(), "Z1 10:00    ##");
+        assert_eq!(rows[4].as_str(), "Z2 40:00    ########");
+        assert_eq!(rows[5].as_str(), "Z3 20:00    ####");
+        assert_eq!(rows[6].as_str(), "Z4 5:00     #");
+        assert_eq!(rows[7].as_str(), "Z5 0:00     ");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        // Text-only page: no gutter icons.
+        assert!(
+            page_icons(Page::Zones, Some(&fix()), Some(152), Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn zones_glance_without_hr_shows_placeholders_and_no_bars() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let rows = page_rows(Page::Zones, None, None, Some(&rec), None, 2, true);
+        assert_eq!(
+            page_hero(Page::Zones, None, Some(&rec)).unwrap().as_str(),
+            "--"
+        );
+        assert_eq!(rows[2].as_str(), "HR  BPM       ZONE --");
+        // Nothing banked: times at zero, no bars drawn.
+        for row in &rows[3..8] {
+            assert!(row.as_str().ends_with("0:00     "), "row: {:?}", row);
+            assert!(!row.as_str().contains('#'));
+        }
+        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING");
+    }
+
+    #[test]
+    fn zone_times_grow_to_hours_on_the_zones_glance() {
+        // An ultra banks hours per zone; the split format grows like laps do.
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.zone_time_s = [3600 + 2 * 60 + 3, 0, 0, 0, 0];
+        let rows = page_rows(Page::Zones, None, Some(120), Some(&rec), None, 2, true);
+        assert_eq!(rows[3].as_str(), "Z1 1:02:03  ########");
+    }
+
+    #[test]
+    fn run_view_hr_rows_carry_the_zone_from_the_snapshot_ladder() {
+        // The zone beside HR follows the run's own cutoffs, not a fixed
+        // ladder: 135 bpm reads Z3 at max 190 but Z2 at max 200.
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.zone_cutoffs = hr_zones::zone_cutoffs_from_max_hr(200);
+        let rows = face_rows(Some(&fix()), Some(135), Some(&rec), None, 42);
+        assert_eq!(rows[5].as_str(), "     135 BPM Z2");
+        let rows = page_rows(
+            Page::Lap,
+            Some(&fix()),
+            Some(135),
+            Some(&rec),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[6].as_str(), "HR   135 BPM Z2");
+        // The idle status face keeps its plain BPM — zones frame a recording.
+        let rows = face_rows(Some(&fix()), Some(152), None, None, 42);
+        assert_eq!(rows[7].as_str(), "HR   152 BPM");
     }
 
     #[test]

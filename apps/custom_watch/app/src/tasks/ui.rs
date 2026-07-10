@@ -180,7 +180,7 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         // The 2x hero (elapsed time, or the glance page's headline metric)
         // overlays rows 0-1 (drawn after them so it wins); the state tag in
         // row 0 sits top-right, clear of the digits.
-        if let Some(hero) = face::page_hero(page, rec.as_ref()) {
+        if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref()) {
             fb.draw_text_2x(0, 0, &hero);
         }
         if let Err(e) = display.flush(&mut fb) {
