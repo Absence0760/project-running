@@ -193,6 +193,9 @@ pub async fn run(store: &'static SharedStore) {
                 }
                 if let Some(r) = elev_rx.try_changed() {
                     latest_baro_alt_m = Some(r.alt_m);
+                    // The recorder's live-GAP grade prefers the barometric
+                    // altitude, same as the track-point stamping below.
+                    recorder.set_baro_altitude(r.alt_m);
                 }
                 #[cfg(feature = "sim-autostart")]
                 if recorder.state() == RecordState::Idle {

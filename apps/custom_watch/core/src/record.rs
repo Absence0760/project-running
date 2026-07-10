@@ -17,6 +17,7 @@
 //! spacing of successive fixes.
 
 use crate::fix::Fix;
+use crate::grade_adjusted_pace::GapEstimator;
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -88,6 +89,12 @@ pub struct Snapshot {
     /// Pace from the latest fix's speed, seconds per kilometre; `None` when
     /// stopped.
     pub current_pace_s_per_km: Option<u32>,
+    /// Grade-adjusted current pace (the Minetti model over the streaming
+    /// grade estimate — see [`crate::grade_adjusted_pace`]), seconds per
+    /// kilometre; `None` below the walk threshold or when stopped. Equals raw
+    /// pace while no altitude signal has arrived (grade 0), matching the
+    /// Connect IQ field's no-altimeter behaviour.
+    pub gap_s_per_km: Option<u32>,
     /// 1-based number of the lap in progress; 0 before a run starts.
     pub lap: u16,
     /// Ground covered within the current lap so far.
@@ -123,6 +130,14 @@ pub struct Recorder {
     lap_start_elapsed_s: u32,
     lap_start_moving_s: u32,
     last_lap: Option<Lap>,
+    /// Streaming grade estimate for live GAP, fed each accepted fix with the
+    /// baro-preferred altitude.
+    gap: GapEstimator,
+    /// Latest barometric altitude, published by the baro task via
+    /// [`set_baro_altitude`](Recorder::set_baro_altitude). Preferred over the
+    /// fix's GPS altitude for the grade — the same preference the flash
+    /// run-store's point stamping already applies.
+    baro_alt_m: Option<f64>,
 }
 
 impl Default for Recorder {
@@ -148,11 +163,20 @@ impl Recorder {
             lap_start_elapsed_s: 0,
             lap_start_moving_s: 0,
             last_lap: None,
+            gap: GapEstimator::new(),
+            baro_alt_m: None,
         }
     }
 
     pub fn state(&self) -> RecordState {
         self.state
+    }
+
+    /// Latest barometric altitude for the live-GAP grade. Sticky — the baro
+    /// task publishes on change, so the most recent reading stays preferred
+    /// over GPS altitude until the next one arrives.
+    pub fn set_baro_altitude(&mut self, alt_m: f32) {
+        self.baro_alt_m = Some(alt_m as f64);
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -185,6 +209,9 @@ impl Recorder {
         self.lap_start_elapsed_s = 0;
         self.lap_start_moving_s = 0;
         self.last_lap = None;
+        // Fresh grade anchors for the new run; the sticky baro altitude stays —
+        // it's still the current reading, not run state.
+        self.gap.reset();
     }
 
     /// Manually pause. Valid while recording or auto-paused; inert once idle,
@@ -266,6 +293,7 @@ impl Recorder {
                 self.last = Some(*fix);
                 self.current_speed_mps = fix.speed_mps.max(0.0);
                 self.last_fix_stored = true;
+                self.feed_gap(fix);
                 return;
             }
         };
@@ -299,6 +327,7 @@ impl Recorder {
         }
         self.last = Some(*fix);
         self.last_fix_stored = true;
+        self.feed_gap(fix);
 
         // Auto-lap: the fix that carries the current lap past the boundary
         // closes it. A segment is at most MAX_JUMP_M, so one fix can never
@@ -306,6 +335,17 @@ impl Recorder {
         // next lap starts here.
         if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
             self.close_lap();
+        }
+    }
+
+    /// Advance the live-GAP grade estimate with an anchor-adopting fix: the
+    /// run total so far plus the baro-preferred altitude (falling back to the
+    /// fix's GPS altitude, mirroring the flash store's point stamping). No
+    /// altitude at all leaves the grade untouched, exactly like the Connect IQ
+    /// field's `updateGrade` early-out.
+    fn feed_gap(&mut self, fix: &Fix) {
+        if let Some(alt) = self.baro_alt_m.or(fix.alt_m.map(f64::from)) {
+            self.gap.on_sample(self.distance_m, alt);
         }
     }
 
@@ -339,6 +379,7 @@ impl Recorder {
             current_speed_mps: self.current_speed_mps,
             avg_pace_s_per_km: self.avg_pace(),
             current_pace_s_per_km: self.current_pace(),
+            gap_s_per_km: self.gap.gap_s_per_km(self.current_speed_mps as f64),
             lap: self.lap_index,
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
             lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
@@ -432,6 +473,13 @@ mod tests {
             alt_m: None,
             time_of_day: None,
             uptime_s: t,
+        }
+    }
+
+    fn fix_alt(lat: f64, lon: f64, speed: f32, t: u32, alt_m: f32) -> Fix {
+        Fix {
+            alt_m: Some(alt_m),
+            ..fix(lat, lon, speed, t)
         }
     }
 
@@ -759,6 +807,63 @@ mod tests {
         assert_eq!(last.index, 2);
         assert_eq!(last.elapsed_s, 0);
         assert_eq!(last.distance_m, 0.0);
+    }
+
+    #[test]
+    fn gap_reads_the_grade_from_gps_altitude_without_a_baro() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // Northbound ~8.9 m steps at 1 Hz, climbing 10% of the ground covered.
+        for i in 0..=10u32 {
+            let lat = 40.0 + i as f64 * 0.00008;
+            let alt = 1000.0 + i as f32 * 0.89;
+            r.on_fix(&fix_alt(lat, -105.0, 5.0, i, alt));
+        }
+        let s = r.snapshot();
+        // Raw current pace comes from the fix's reported speed (5 m/s)...
+        assert_eq!(s.current_pace_s_per_km, Some(200));
+        // ...and the climb makes the effort-equivalent flat pace faster.
+        assert!(s.gap_s_per_km.unwrap() < 200);
+    }
+
+    #[test]
+    fn gap_prefers_the_baro_altitude_over_the_gps_fix() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for i in 0..=10u32 {
+            let lat = 40.0 + i as f64 * 0.00008;
+            // The GPS altitude claims a 10% climb, but the barometer reads a
+            // 10% descent — the baro wins, same preference as the flash store.
+            r.set_baro_altitude(1000.0 - i as f32 * 0.89);
+            r.on_fix(&fix_alt(lat, -105.0, 5.0, i, 1000.0 + i as f32 * 0.89));
+        }
+        assert!(r.snapshot().gap_s_per_km.unwrap() > 200);
+    }
+
+    #[test]
+    fn gap_equals_raw_pace_with_no_altitude_signal() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for i in 0..=5u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        // No baro, no GPS altitude: grade stays 0 and GAP reads as raw pace —
+        // the live field's no-altimeter behaviour.
+        assert_eq!(r.snapshot().gap_s_per_km, Some(200));
+    }
+
+    #[test]
+    fn gap_gates_out_walking_and_stopped() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 0.3, 0));
+        let s = r.snapshot();
+        // 0.3 m/s: the raw current pace still renders, but GAP is below the
+        // walk threshold where pace-from-speed is noise.
+        assert!(s.current_pace_s_per_km.is_some());
+        assert_eq!(s.gap_s_per_km, None);
+        r.stop(1);
+        assert_eq!(r.snapshot().gap_s_per_km, None);
     }
 
     #[test]
