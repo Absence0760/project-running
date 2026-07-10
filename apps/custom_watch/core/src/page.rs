@@ -16,7 +16,8 @@ pub enum Page {
     Dashboard,
     /// Distance up large, with pace / time / HR as context.
     Distance,
-    /// Average pace up large, with distance / time / HR as context.
+    /// Average pace up large, with distance / time / HR / live
+    /// grade-adjusted pace as context.
     Pace,
     /// Current lap time up large, with lap number / last-lap split / lap
     /// distance / HR as context.

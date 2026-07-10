@@ -219,7 +219,9 @@ enum GlanceMetric {
 
 /// A single-metric glance page: the metric up large in the rows-0-1 hero (drawn
 /// by the app from [`page_hero`]), a unit label, then time / the other metric /
-/// HR / GPS as 1x context — the "one big number" view for a mid-run glance.
+/// HR / GPS as 1x context — the "one big number" view for a mid-run glance. The
+/// pace glance adds the live grade-adjusted pace under HR, so raw and
+/// effort-equivalent pace read together on a hill.
 fn glance(
     metric: GlanceMetric,
     fix: Option<&Fix>,
@@ -263,6 +265,12 @@ fn glance(
         None => {
             let _ = write!(rows[6], "{:<5}--", "HR");
         }
+    }
+
+    // The pace glance pairs the average-pace hero with the live grade-adjusted
+    // pace, so raw and effort-equivalent read side by side on a hill.
+    if matches!(metric, GlanceMetric::Pace) {
+        write_pace(&mut rows[7], "GAP", snap.gap_s_per_km);
     }
 
     let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
@@ -587,6 +595,7 @@ mod tests {
             current_speed_mps: 0.0,
             avg_pace_s_per_km: None,
             current_pace_s_per_km: None,
+            gap_s_per_km: None,
             lap: 1,
             lap_distance_m: 0.0,
             lap_elapsed_s: 0,
@@ -931,17 +940,39 @@ mod tests {
     fn pace_glance_puts_pace_up_large_with_distance_secondary() {
         let mut rec = snapshot(RecordState::Recording, 12_340.0);
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
+        rec.gap_s_per_km = Some(4 * 60 + 52);
         let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42, true);
         assert_eq!(page_hero(Page::Pace, Some(&rec)).unwrap().as_str(), "5:12");
         assert_eq!(rows[2].as_str(), "AVG PACE  /KM");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
         assert_eq!(rows[6].as_str(), "HR   --");
+        assert_eq!(rows[7].as_str(), "GAP  4:52 /KM");
         // No pace yet -> the hero placeholder, never a bogus number.
         let fresh = snapshot(RecordState::Recording, 5.0);
         assert_eq!(
             page_hero(Page::Pace, Some(&fresh)).unwrap().as_str(),
             "--:--"
         );
+    }
+
+    #[test]
+    fn pace_glance_gap_shows_a_placeholder_until_available() {
+        // Stopped / walking / no signal: GAP is None and the row keeps its
+        // fixed slot with the same placeholder the other metrics use; the
+        // distance glance never carries a GAP row.
+        let rec = snapshot(RecordState::Recording, 12_340.0);
+        let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42, true);
+        assert_eq!(rows[7].as_str(), "GAP  --");
+        let rows = page_rows(
+            Page::Distance,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "");
     }
 
     #[test]
@@ -1102,6 +1133,7 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
         rec.avg_pace_s_per_km = Some(99 * 60 + 59);
+        rec.gap_s_per_km = Some(99 * 60 + 59);
         rec.lap = 9999;
         rec.lap_distance_m = 9_999_990.0;
         rec.lap_elapsed_s = 999 * 3600 + 59 * 60 + 59;
