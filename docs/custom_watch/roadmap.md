@@ -13,7 +13,7 @@ The big-picture sequencing for the ultra-marathon watch research effort. Separat
 - **Vector 1 (Connect IQ app)**: not started — runs parallel to tier-1 per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware).
 - **Vector 2 (Wear OS app)**: `apps/watch_wear/` ships product features but isn't framed as a "Garmin alternative for sub-12hr runners" play.
 - **Vector 3 (ODM partnership)**: no vendor conversations; no outreach.
-- **Feature parity:** the software feature surface an ultra runner expects from a Garmin / COROS flagship — recording, navigation, training metrics, safety — is enumerated in [§ Feature parity backlog](#feature-parity-backlog-garmin--coros-table-stakes) below. Almost nothing built yet (auto-pause and the sync protocol are the partial exceptions — see the annotated lines); most on-run-guidance + metric items already have a pure-logic helper in the main app to port, so parity is largely a firmware port, not a fresh design.
+- **Feature parity:** the software feature surface an ultra runner expects from a Garmin / COROS flagship — recording, navigation, training metrics, safety — is enumerated in [§ Feature parity backlog](#feature-parity-backlog-garmin--coros-table-stakes) below. Almost nothing built yet (auto-pause + laps, grade-adjusted pace, HR zones + in-zone time, and the sync protocol are the partial exceptions — see the annotated lines); most on-run-guidance + metric items already have a pure-logic helper in the main app to port, so parity is largely a firmware port, not a fresh design.
 
 ## Tier 1 — bench prototype (active, owner-personal)
 
@@ -93,7 +93,7 @@ Everything above sequences the *hardware* build-out. This section tracks the *so
 
 **Big lever.** Most on-run-guidance and training-metric items already have a pure-logic helper in the main app (the TS↔Dart parity pairs enumerated in [`CLAUDE.md`](../../CLAUDE.md)). For those, watch parity is a *firmware port* of an already-tested algorithm — the third language-level parity surface per [`firmware.md`](firmware.md) — not a fresh design; noted `(port: <helper>)` below. Items with no helper are new firmware design work.
 
-Nothing in this section is complete; the partial exceptions (auto-pause + laps, grade-adjusted pace, companion-app sync) are annotated on their lines and stay unticked until bench-verified. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
+Nothing in this section is complete; the partial exceptions (auto-pause + laps, grade-adjusted pace, HR zones + in-zone time, companion-app sync) are annotated on their lines and stay unticked until bench-verified. Tier tags show where each item realistically lands: **T1** = bench-prototype recording core, **T2** = wearable-prototype guidance / nav, **T3** = production polish.
 
 ### Recording & on-run guidance
 
@@ -120,7 +120,7 @@ Nothing in this section is complete; the partial exceptions (auto-pause + laps, 
 
 ### Training & physiology metrics
 
-- [ ] **HR zones + in-zone time.** **T1.**
+- [ ] **HR zones + in-zone time.** **Implemented** (2026-07-09): `watch_core::hr_zones` mirrors the main app's default zone model rather than inventing one (web `training/hr_zones.ts` canonical, Dart + Wear OS twins) — Z1..Z5 upper bounds at 60/70/80/90/100 % of max HR, inclusive boundaries, the same legacy 190 bpm fallback; the runner's explicit `hr_zones` / Tanaka-from-age precedence stays a phone/web concern, with max HR a plausibility-guarded (80..=240) recorder setter for a future settings sync. Per-zone time banks exactly where moving time accrues — manual pause, auto-pause, and a missing/dropped pulse bank nothing. Run-view HR rows show the live zone (`152 BPM Z3`) and BTN3 gains a fifth Zones glance page after Lap: BPM hero, current zone, per-zone time rows with bars scaled to the fullest zone. Flash run-store wire format unchanged. Host-tested + sim-verified (the sim has no HR sensor, so the honest sim check is the `--` / zero-time rendering on the Zones page); stays unticked until bench-verified. **T1.**
 - [ ] **Training load / acute-chronic balance (CTL / ATL / TSB).** `(port: training_load, fitness)`. **T2.**
 - [ ] **VO2max / fitness estimate.** `(port: fitness / race_predictor inputs)`. **T2.**
 - [ ] **Training status / readiness / recovery time** — Garmin Training Readiness, COROS equivalent. New synthesis on top of the load helpers. **T3.**
