@@ -50,7 +50,7 @@ Wrappers around `cargo` + `probe-rs` (and Renode, for the simulator) for the Rus
 | First-machine setup — verify toolchain + board detection | `bin/watch-doctor.sh` |
 | Inner loop — build, flash, stream `defmt` logs over RTT until Ctrl-C | `bin/watch-flash.sh` |
 | Host-side unit tests (no board required) | `bin/watch-test.sh` |
-| Boot the firmware on an emulated nRF52840 DK + stream decoded `defmt` logs (no board required; `--gui` opens the live watch screen, phone link on TCP 7788) | `bin/watch-sim.sh` |
+| Boot the firmware on an emulated nRF52840 DK + stream decoded `defmt` logs (no board required; `--gui` opens the live watch screen with clickable BTN1-4, phone link on TCP 7788) | `bin/watch-sim.sh` |
 | Attach an interactive Renode monitor to the running sim, from a second terminal (button macros: `runMacro $btn1`…`$btn4` — start/pause, stop, page, lap) | `bin/watch-monitor.sh` |
 | Compile-check / release binary without flashing | `bin/watch-build.sh` |
 | Stream logs from an already-running board (no reflash) | `bin/watch-logs.sh` |
