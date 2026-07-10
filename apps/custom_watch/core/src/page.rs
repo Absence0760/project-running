@@ -18,6 +18,9 @@ pub enum Page {
     Distance,
     /// Average pace up large, with distance / time / HR as context.
     Pace,
+    /// Current lap time up large, with lap number / last-lap split / lap
+    /// distance / HR as context.
+    Lap,
 }
 
 impl Page {
@@ -26,7 +29,8 @@ impl Page {
         match self {
             Page::Dashboard => Page::Distance,
             Page::Distance => Page::Pace,
-            Page::Pace => Page::Dashboard,
+            Page::Pace => Page::Lap,
+            Page::Lap => Page::Dashboard,
         }
     }
 }
@@ -44,13 +48,17 @@ mod tests {
     fn next_cycles_every_page_and_wraps() {
         assert_eq!(Page::Dashboard.next(), Page::Distance);
         assert_eq!(Page::Distance.next(), Page::Pace);
-        assert_eq!(Page::Pace.next(), Page::Dashboard);
-        // Walking `next` from the default visits all three and returns home.
+        assert_eq!(Page::Pace.next(), Page::Lap);
+        assert_eq!(Page::Lap.next(), Page::Dashboard);
+        // Walking `next` from the default visits all four and returns home.
         let mut p = Page::default();
-        let mut seen = [p, p.next(), p.next().next()];
+        let mut seen = [p, p.next(), p.next().next(), p.next().next().next()];
         seen.sort_by_key(|q| *q as u8);
-        assert_eq!(seen, [Page::Dashboard, Page::Distance, Page::Pace]);
-        for _ in 0..3 {
+        assert_eq!(
+            seen,
+            [Page::Dashboard, Page::Distance, Page::Pace, Page::Lap]
+        );
+        for _ in 0..4 {
             p = p.next();
         }
         assert_eq!(p, Page::default());

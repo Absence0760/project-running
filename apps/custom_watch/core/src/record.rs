@@ -2,8 +2,10 @@
 //!
 //! [`Recorder`] reduces control commands (start / pause / resume / stop), a
 //! stream of [`Fix`] samples, and a wall clock into the live run totals a watch
-//! face reads: total distance, elapsed vs moving time, current speed, and
-//! average / current pace. The point-acceptance filter (min-distance,
+//! face reads: total distance, elapsed vs moving time, current speed, average /
+//! current pace, and the lap counters (a 1 km auto-lap plus the manual
+//! [`lap`](Recorder::lap) the Lap button drives — laps live in RAM for the
+//! face's lap page only). The point-acceptance filter (min-distance,
 //! implausible-jump, max-speed) and the moving-time speed gate reproduce the
 //! constants the mobile recorder ships — see each `pub const` below.
 //!
@@ -39,12 +41,34 @@ pub const MIN_MOVING_SPEED_MPS: f64 = 0.5;
 /// the constant in `run_recorder._distanceToSegmentMetres`.
 pub const METRES_PER_DEGREE_LAT: f64 = 111_320.0;
 
+/// Auto-lap boundary: the current lap closes on the first accepted fix that
+/// carries it past this distance. The tier-1 default mirrors the classic
+/// 1 km auto-lap; a manual lap resets the countdown, so the boundary is
+/// always measured from the current lap's start, not from multiples of the
+/// run total.
+pub const AUTO_LAP_DISTANCE_M: f64 = 1000.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordState {
     Idle,
     Recording,
     Paused,
     Finished,
+}
+
+/// One completed lap — closed by the 1 km auto-lap boundary or a manual lap
+/// press, kept in RAM for the face's lap page (laps are display state at
+/// tier 1; the flash run-store wire format does not carry them).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lap {
+    /// 1-based lap number within the run.
+    pub index: u16,
+    /// Ground covered within this lap alone.
+    pub distance_m: f64,
+    /// The lap split: wall-clock seconds from the lap's start to its close.
+    pub elapsed_s: u32,
+    /// Seconds of this lap that cleared the moving gate.
+    pub moving_s: u32,
 }
 
 /// A `Copy` snapshot of the live totals, taken by [`Recorder::snapshot`].
@@ -64,6 +88,14 @@ pub struct Snapshot {
     /// Pace from the latest fix's speed, seconds per kilometre; `None` when
     /// stopped.
     pub current_pace_s_per_km: Option<u32>,
+    /// 1-based number of the lap in progress; 0 before a run starts.
+    pub lap: u16,
+    /// Ground covered within the current lap so far.
+    pub lap_distance_m: f64,
+    /// Wall-clock seconds since the current lap started.
+    pub lap_elapsed_s: u32,
+    /// The most recently completed lap, if any — the face's "last lap split".
+    pub last_lap: Option<Lap>,
 }
 
 pub struct Recorder {
@@ -83,6 +115,14 @@ pub struct Recorder {
     /// fix as a new anchor (the run's first fix or an accepted move). Read-only
     /// signal for the app's flash run-store; see [`last_fix_stored`](Recorder::last_fix_stored).
     last_fix_stored: bool,
+    /// 1-based number of the lap in progress; 0 while idle.
+    lap_index: u16,
+    /// Run totals at the current lap's start — the anchors lap-relative
+    /// distance / elapsed / moving are measured from.
+    lap_start_distance_m: f64,
+    lap_start_elapsed_s: u32,
+    lap_start_moving_s: u32,
+    last_lap: Option<Lap>,
 }
 
 impl Default for Recorder {
@@ -103,6 +143,11 @@ impl Recorder {
             current_speed_mps: 0.0,
             last: None,
             last_fix_stored: false,
+            lap_index: 0,
+            lap_start_distance_m: 0.0,
+            lap_start_elapsed_s: 0,
+            lap_start_moving_s: 0,
+            last_lap: None,
         }
     }
 
@@ -135,6 +180,11 @@ impl Recorder {
         self.distance_m = 0.0;
         self.current_speed_mps = 0.0;
         self.last = None;
+        self.lap_index = 1;
+        self.lap_start_distance_m = 0.0;
+        self.lap_start_elapsed_s = 0;
+        self.lap_start_moving_s = 0;
+        self.last_lap = None;
     }
 
     /// Manually pause. Valid while recording or auto-paused; inert once idle,
@@ -163,8 +213,23 @@ impl Recorder {
         self.last = None;
     }
 
+    /// Close the current lap by hand (the Lap button). Valid whenever a run is
+    /// in progress — recording, auto-paused, or manually paused (a lap taken
+    /// while paused closes at the frozen totals); inert once idle or finished.
+    /// Also resets the auto-lap countdown: the next 1 km boundary is measured
+    /// from here, not from multiples of the run total.
+    pub fn lap(&mut self, now_s: u32) {
+        if matches!(self.state, RecordState::Idle | RecordState::Finished) {
+            return;
+        }
+        self.now_s = now_s.max(self.now_s);
+        self.close_lap();
+    }
+
     /// Finalise the run. Inert once idle or already finished; afterward fixes
-    /// and ticks no longer move any total.
+    /// and ticks no longer move any total. The lap in progress stays open — it
+    /// shows on the face as the (frozen) current lap, and laps are RAM display
+    /// state only, so there is no record to finalise it into.
     pub fn stop(&mut self, now_s: u32) {
         if matches!(self.state, RecordState::Idle | RecordState::Finished) {
             return;
@@ -234,17 +299,50 @@ impl Recorder {
         }
         self.last = Some(*fix);
         self.last_fix_stored = true;
+
+        // Auto-lap: the fix that carries the current lap past the boundary
+        // closes it. A segment is at most MAX_JUMP_M, so one fix can never
+        // cross two boundaries; the overshoot stays in the closed lap, and the
+        // next lap starts here.
+        if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
+            self.close_lap();
+        }
+    }
+
+    /// Record the lap in progress as [`last_lap`](Snapshot::last_lap) and
+    /// anchor the next one at the current totals. Shared by the auto-lap
+    /// boundary and the manual [`lap`](Recorder::lap).
+    fn close_lap(&mut self) {
+        let elapsed = self.elapsed_s();
+        self.last_lap = Some(Lap {
+            index: self.lap_index,
+            distance_m: self.distance_m - self.lap_start_distance_m,
+            elapsed_s: elapsed.saturating_sub(self.lap_start_elapsed_s),
+            moving_s: self.moving_s - self.lap_start_moving_s,
+        });
+        self.lap_index = self.lap_index.saturating_add(1);
+        self.lap_start_distance_m = self.distance_m;
+        self.lap_start_elapsed_s = elapsed;
+        self.lap_start_moving_s = self.moving_s;
+    }
+
+    fn elapsed_s(&self) -> u32 {
+        self.now_s.saturating_sub(self.start_s)
     }
 
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             state: self.state,
             distance_m: self.distance_m,
-            elapsed_s: self.now_s.saturating_sub(self.start_s),
+            elapsed_s: self.elapsed_s(),
             moving_s: self.moving_s,
             current_speed_mps: self.current_speed_mps,
             avg_pace_s_per_km: self.avg_pace(),
             current_pace_s_per_km: self.current_pace(),
+            lap: self.lap_index,
+            lap_distance_m: self.distance_m - self.lap_start_distance_m,
+            lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
+            last_lap: self.last_lap,
         }
     }
 
@@ -528,6 +626,139 @@ mod tests {
         r.pause(4);
         r.on_fix(&fix(40.0005, -105.0, 4.0, 5));
         assert!(!r.last_fix_stored());
+    }
+
+    #[test]
+    fn auto_lap_closes_at_each_kilometre_boundary() {
+        let mut r = Recorder::new();
+        r.start(0);
+        let seg_m = expected_m((40.0, -105.0), (40.00008, -105.0)); // ~8.9 m
+        let fixes_per_lap = (AUTO_LAP_DISTANCE_M / seg_m) as u32 + 1; // first crossing
+        for i in 0..=fixes_per_lap * 2 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+            if i < fixes_per_lap {
+                assert_eq!(r.snapshot().lap, 1, "no lap before the boundary (i={})", i);
+            }
+            if i == fixes_per_lap {
+                let s = r.snapshot();
+                assert_eq!(s.lap, 2, "boundary fix opens lap 2");
+                let last = s.last_lap.unwrap();
+                assert_eq!(last.index, 1);
+                assert_eq!(last.elapsed_s, fixes_per_lap);
+                assert_eq!(last.moving_s, fixes_per_lap);
+                assert!(
+                    last.distance_m >= AUTO_LAP_DISTANCE_M
+                        && last.distance_m < AUTO_LAP_DISTANCE_M + 2.0 * seg_m,
+                    "lap 1 distance {} not just past the boundary",
+                    last.distance_m
+                );
+            }
+        }
+        // The second boundary closed lap 2 with the same one-lap split, and the
+        // in-progress lap restarted at the closing fix.
+        let s = r.snapshot();
+        assert_eq!(s.lap, 3);
+        let last = s.last_lap.unwrap();
+        assert_eq!(last.index, 2);
+        assert_eq!(last.elapsed_s, fixes_per_lap);
+        assert!(last.distance_m >= AUTO_LAP_DISTANCE_M);
+        assert_eq!(s.lap_elapsed_s, 0);
+        assert_eq!(s.lap_distance_m, 0.0);
+    }
+
+    #[test]
+    fn manual_lap_closes_now_and_resets_the_auto_boundary() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // ~445 m in 50 segments.
+        for i in 0..=50 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        let before = r.snapshot();
+        assert_eq!(before.lap, 1);
+        assert!(before.last_lap.is_none());
+
+        r.lap(50);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        let last = s.last_lap.unwrap();
+        assert_eq!(last.index, 1);
+        assert_eq!(last.elapsed_s, 50);
+        assert!((last.distance_m - before.distance_m).abs() < 1e-9);
+        assert_eq!(s.lap_distance_m, 0.0);
+        assert_eq!(s.lap_elapsed_s, 0);
+
+        // The auto boundary measures from the manual lap: the run total passing
+        // 1 km must not close lap 2 — only 1 km within lap 2 would.
+        for i in 51..=120 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        let s = r.snapshot();
+        assert!(s.distance_m > AUTO_LAP_DISTANCE_M);
+        assert!(s.lap_distance_m < AUTO_LAP_DISTANCE_M);
+        assert_eq!(s.lap, 2, "auto-lap must not fire off the run total");
+    }
+
+    #[test]
+    fn lap_splits_measure_the_lap_not_the_run() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for i in 0..=10 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        r.lap(10); // lap 1: 10 s elapsed, 10 s moving
+
+        // Lap 2 spans a 10 s manual pause, then five moving segments.
+        r.pause(12);
+        r.resume(20);
+        for (k, t) in (21..=26).enumerate() {
+            r.on_fix(&fix(40.001 + k as f64 * 0.00008, -105.0, 5.0, t));
+        }
+        r.lap(26);
+        let last = r.snapshot().last_lap.unwrap();
+        assert_eq!(last.index, 2);
+        assert_eq!(
+            last.elapsed_s, 16,
+            "lap split runs 10 -> 26, pause included"
+        );
+        assert_eq!(last.moving_s, 5, "only the five moving segments count");
+        assert!(last.distance_m < 100.0, "previous laps' distance excluded");
+    }
+
+    #[test]
+    fn manual_lap_is_inert_when_idle_or_finished() {
+        let mut r = Recorder::new();
+        r.lap(5);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 0);
+        assert!(s.last_lap.is_none());
+
+        r.start(0);
+        for (i, lat) in [40.0, 40.00005, 40.0001].iter().enumerate() {
+            r.on_fix(&fix(*lat, -105.0, 5.0, i as u32));
+        }
+        r.stop(10);
+        // Stop leaves the lap in progress open (laps are display state only),
+        // and a lap press after finish changes nothing.
+        let frozen = r.snapshot();
+        assert_eq!(frozen.lap, 1);
+        r.lap(20);
+        assert_eq!(r.snapshot(), frozen);
+    }
+
+    #[test]
+    fn back_to_back_manual_laps_record_a_zero_length_lap() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.tick(5);
+        r.lap(5);
+        r.lap(5);
+        let s = r.snapshot();
+        assert_eq!(s.lap, 3);
+        let last = s.last_lap.unwrap();
+        assert_eq!(last.index, 2);
+        assert_eq!(last.elapsed_s, 0);
+        assert_eq!(last.distance_m, 0.0);
     }
 
     #[test]

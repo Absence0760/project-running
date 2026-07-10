@@ -7,7 +7,7 @@
 //! filter, and the auto-pause all live in `watch_core::record` (host-tested);
 //! the button-press → command mapping lives in `watch_core::button`; the flash
 //! slot layout in `watch_core::flash_store`. This task selects over incoming
-//! fixes (fed to the recorder) and commands (drive start/pause/resume/stop),
+//! fixes (fed to the recorder) and commands (drive start/pause/resume/stop/lap),
 //! plus — only while a run is Recording or Paused — a 1 Hz tick that advances
 //! the wall clock between fixes. Idle and Finished have no clock to advance, so
 //! the tick is dropped there and the task waits purely on events. It publishes
@@ -217,6 +217,7 @@ pub async fn run(store: &'static SharedStore) {
                     RecordCommand::Pause => recorder.pause(now_s),
                     RecordCommand::Resume => recorder.resume(now_s),
                     RecordCommand::Stop => recorder.stop(now_s),
+                    RecordCommand::Lap => recorder.lap(now_s),
                 }
                 let now = recorder.state();
                 if prev == RecordState::Idle && now == RecordState::Recording {
