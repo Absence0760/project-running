@@ -21,6 +21,7 @@ use crate::grade_adjusted_pace::GapEstimator;
 use crate::hr_zones::{
     self, ZoneCutoffs, DEFAULT_MAX_HR_BPM, MAX_HR_PLAUSIBLE_MAX, MAX_HR_PLAUSIBLE_MIN, ZONE_COUNT,
 };
+use crate::pacer::{Pacer, PacerStatus};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -106,6 +107,10 @@ pub struct Snapshot {
     pub lap_elapsed_s: u32,
     /// The most recently completed lap, if any — the face's "last lap split".
     pub last_lap: Option<Lap>,
+    /// The virtual-partner delta vs a configured goal (see [`crate::pacer`]);
+    /// `None` while no goal is set or no run is under way — the pacer page
+    /// shows an honest inactive state then, never a fake "on pace at zero".
+    pub pacer: Option<PacerStatus>,
     /// The zone ladder in force for this run — carried so the face can place
     /// the live BPM in a zone without owning a second copy of the max-HR
     /// configuration.
@@ -159,6 +164,9 @@ pub struct Recorder {
     zone_cutoffs: ZoneCutoffs,
     /// Per-zone moving-time accumulators, reset on [`start`](Recorder::start).
     zone_time_s: [u32; ZONE_COUNT],
+    /// Virtual partner vs the configured goal — see
+    /// [`set_pacer_goal`](Recorder::set_pacer_goal).
+    pacer: Pacer,
 }
 
 impl Default for Recorder {
@@ -189,6 +197,7 @@ impl Recorder {
             hr_bpm: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
+            pacer: Pacer::new(),
         }
     }
 
@@ -220,6 +229,14 @@ impl Recorder {
         if (MAX_HR_PLAUSIBLE_MIN..=MAX_HR_PLAUSIBLE_MAX).contains(&max_hr_bpm) {
             self.zone_cutoffs = hr_zones::zone_cutoffs_from_max_hr(max_hr_bpm);
         }
+    }
+
+    /// Arm the virtual partner with a goal distance + time — the same future
+    /// settings-sync hook shape as [`set_max_hr`](Recorder::set_max_hr);
+    /// nothing on-device sets it at tier 1, so the default (unset) keeps the
+    /// pacer inactive. Plausibility guarding lives in [`Pacer::set_goal`].
+    pub fn set_pacer_goal(&mut self, distance_m: u32, time_s: u32) {
+        self.pacer.set_goal(distance_m, time_s);
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -254,8 +271,11 @@ impl Recorder {
         self.last_lap = None;
         self.zone_time_s = [0; ZONE_COUNT];
         // Fresh grade anchors for the new run; the sticky baro altitude and HR
-        // stay — each is still the current reading, not run state.
+        // stay — each is still the current reading, not run state. The pacer
+        // splits the same way: its finish latch is run state and clears, the
+        // configured goal is settings and stays.
         self.gap.reset();
+        self.pacer.reset();
     }
 
     /// Manually pause. Valid while recording or auto-paused; inert once idle,
@@ -378,6 +398,9 @@ impl Recorder {
         self.last = Some(*fix);
         self.last_fix_stored = true;
         self.feed_gap(fix);
+        // Distance only moves here, so this is the one place the partner's
+        // finish crossing can happen.
+        self.pacer.on_distance(self.distance_m, self.elapsed_s());
 
         // Auto-lap: the fix that carries the current lap past the boundary
         // closes it. A segment is at most MAX_JUMP_M, so one fix can never
@@ -434,6 +457,11 @@ impl Recorder {
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
             lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
             last_lap: self.last_lap,
+            pacer: if self.state == RecordState::Idle {
+                None
+            } else {
+                self.pacer.status(self.distance_m, self.elapsed_s())
+            },
             zone_cutoffs: self.zone_cutoffs,
             zone_time_s: self.zone_time_s,
         }
@@ -1035,6 +1063,85 @@ mod tests {
         r.on_fix(&fix(40.0, -105.0, 5.0, 0));
         r.on_fix(&fix(40.00008, -105.0, 5.0, 1));
         assert_eq!(r.snapshot().zone_time_s, [0, 1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn pacer_is_inactive_without_a_goal_and_while_idle() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        assert!(
+            r.snapshot().pacer.is_none(),
+            "no goal: the pacer stays inactive, never a fake on-pace zero"
+        );
+
+        let mut r = Recorder::new();
+        r.set_pacer_goal(10_000, 3_000);
+        assert!(
+            r.snapshot().pacer.is_none(),
+            "a goal alone arms nothing while idle"
+        );
+        r.start(0);
+        assert!(r.snapshot().pacer.is_some());
+    }
+
+    #[test]
+    fn pacer_runs_on_the_elapsed_clock_through_a_manual_pause() {
+        let mut r = Recorder::new();
+        // 1 km goal in 200 s: a 5 m/s partner.
+        r.set_pacer_goal(1_000, 200);
+        r.start(0);
+        // ~8.9 m/s northbound for 10 s: ~89 m vs the partner's 50 m — ahead.
+        for i in 0..=10u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 8.9, i));
+        }
+        let st = r.snapshot().pacer.unwrap();
+        assert!(st.ahead_m > 30.0 && st.ahead_s > 0);
+        assert_eq!(st.verdict, crate::pacer::PaceVerdict::Ahead);
+        assert!(!st.finished);
+
+        // A manual pause freezes distance but not the partner: the race clock
+        // keeps running, so by t=100 the partner is ~500 m out and the runner
+        // has fallen behind — the Garmin virtual-partner elapsed semantics.
+        r.pause(11);
+        r.tick(100);
+        let st = r.snapshot().pacer.unwrap();
+        assert!(st.ahead_m < -300.0 && st.ahead_s < -60);
+        assert_eq!(st.verdict, crate::pacer::PaceVerdict::Behind);
+    }
+
+    #[test]
+    fn pacer_freezes_at_the_goal_crossing() {
+        let mut r = Recorder::new();
+        r.set_pacer_goal(100, 60);
+        r.start(0);
+        let seg_m = expected_m((40.0, -105.0), (40.00008, -105.0)); // ~8.9 m
+        let crossing = (100.0 / seg_m) as u32 + 1; // first fix past 100 m
+        for i in 0..=crossing {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 8.9, i));
+        }
+        let st = r.snapshot().pacer.unwrap();
+        assert!(st.finished);
+        assert_eq!(st.ahead_s, 60 - crossing as i32, "the banked result");
+        assert_eq!(st.projected_finish_s, Some(crossing));
+
+        // Jogging out and ticking on moves nothing — the result is banked.
+        r.on_fix(&fix(40.0 + 20.0 * 0.00008, -105.0, 8.9, crossing + 8));
+        r.tick(500);
+        assert_eq!(r.snapshot().pacer.unwrap(), st);
+    }
+
+    #[test]
+    fn set_pacer_goal_rejects_garbage_like_set_max_hr() {
+        let mut r = Recorder::new();
+        r.set_pacer_goal(0, 0);
+        r.set_pacer_goal(50, 300); // under the 100 m distance floor
+        r.set_pacer_goal(10_000, 30); // under the 60 s time floor
+        r.start(0);
+        assert!(
+            r.snapshot().pacer.is_none(),
+            "garbage must not arm the pacer"
+        );
     }
 
     #[test]

@@ -187,6 +187,15 @@ pub async fn run(store: &'static SharedStore) {
         alerts.set_fuel_intervals(30, 45);
         info!("record: sim fuel cadence 30s drink / 45s eat (moving time)");
     }
+    // Sim-only demo pacer goal: 1 km at 5:00 (a partner slightly faster than
+    // the ~5:33/km bench_jog fixture), so the Pacer page shows a live BEHIND
+    // readout under the sim. Hardware defaults stay unset — the pacer arms
+    // only via the future settings sync (see watch_core::pacer).
+    #[cfg(feature = "sim-autostart")]
+    {
+        recorder.set_pacer_goal(1_000, 300);
+        info!("record: sim demo pacer goal 1 km in 5:00");
+    }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
     loop {
@@ -280,10 +289,11 @@ pub async fn run(store: &'static SharedStore) {
         }
         if snap != last_published {
             debug!(
-                "record: {} dist={}m moving={}s",
+                "record: {} dist={}m moving={}s pacer={}s",
                 state_str(snap.state),
                 snap.distance_m,
-                snap.moving_s
+                snap.moving_s,
+                snap.pacer.map(|p| p.ahead_s)
             );
             last_published = snap;
             sender.send(snap);

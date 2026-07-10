@@ -25,6 +25,7 @@ use core::fmt::Write;
 use crate::elevation;
 use crate::fix::Fix;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
+use crate::pacer::PaceVerdict;
 use crate::page::Page;
 use crate::record::{RecordState, Snapshot};
 
@@ -175,6 +176,7 @@ pub fn page_rows(
             ),
             Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
+            Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate),
         },
     }
 }
@@ -192,7 +194,7 @@ pub fn page_icons(
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
         Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
-        Page::Distance | Page::Pace | Page::Lap | Page::Zones => [None; ROWS],
+        Page::Distance | Page::Pace | Page::Lap | Page::Zones | Page::Pacer => [None; ROWS],
     }
 }
 
@@ -223,6 +225,14 @@ pub fn page_hero(page: Page, hr_bpm: Option<u16>, rec: Option<&Snapshot>) -> Opt
             }
             row
         }
+        Page::Pacer => match snap.pacer {
+            Some(status) => signed_split(status.ahead_s),
+            None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--");
+                row
+            }
+        },
     })
 }
 
@@ -412,6 +422,83 @@ fn zones_glance(
 
     let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
     rows
+}
+
+/// The pacer glance page: the virtual-partner delta up large in the rows-0-1
+/// hero (drawn by the app from [`page_hero`] via [`signed_split`] — `+` is
+/// AHEAD of the partner, `-` is BEHIND, and the verdict word beside the label
+/// spells the sign out so it is never ambiguous), then the goal distance +
+/// target time, the projected finish at the current whole-run average (the
+/// actual crossing time once finished), the distance delta in metres, and the
+/// GPS glance. With no goal configured the page is honestly inactive —
+/// `PACER --` and a how-to-set hint, never zeros pretending to be on pace.
+fn pacer_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.pacer {
+        None => {
+            let _ = write!(rows[2], "PACER --");
+            let _ = write!(rows[4], "NO GOAL SET");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(status) => {
+            let verdict = match status.verdict {
+                PaceVerdict::Ahead => "AHEAD",
+                PaceVerdict::OnPace => "ON PACE",
+                PaceVerdict::Behind => "BEHIND",
+            };
+            let _ = write!(rows[2], "{:<14}{}", "PACER", verdict);
+
+            let goal_km = (status.goal.distance_m as f64 / 1000.0).min(9999.99);
+            let _ = write!(rows[4], "{:<5}{:.2} KM", "GOAL", goal_km);
+            let _ = write!(
+                rows[5],
+                "{:<5}{}",
+                "TGT",
+                split_row(status.goal.time_s).as_str()
+            );
+
+            match status.projected_finish_s {
+                Some(finish_s) => {
+                    let _ = write!(rows[6], "{:<5}{}", "PROJ", split_row(finish_s).as_str());
+                }
+                None => {
+                    let _ = write!(rows[6], "{:<5}--", "PROJ");
+                }
+            }
+
+            let delta_m = status.ahead_m as i64;
+            let clamped = delta_m.clamp(-99_999, 99_999);
+            let sign = if clamped < 0 { '-' } else { '+' };
+            let _ = write!(rows[7], "{:<5}{}{} M", "DIST", sign, clamped.unsigned_abs());
+        }
+    }
+
+    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    rows
+}
+
+/// A signed lap-style split for the pacer hero: `+` = ahead of the partner,
+/// `-` = behind, then the magnitude in the same grow-to-hours format as
+/// [`split_row`]. Zero reads `+0:00` — level with the partner, never blank.
+fn signed_split(delta_s: i32) -> Row {
+    let mut row = Row::new();
+    let _ = row.push(if delta_s < 0 { '-' } else { '+' });
+    let _ = row.push_str(split_row(delta_s.unsigned_abs()).as_str());
+    row
 }
 
 /// A lap split as `M:SS`, growing to `H:MM:SS` past the hour — laps are
@@ -672,6 +759,7 @@ mod tests {
             lap_distance_m: 0.0,
             lap_elapsed_s: 0,
             last_lap: None,
+            pacer: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
         }
@@ -1214,6 +1302,7 @@ mod tests {
             Page::Pace,
             Page::Lap,
             Page::Zones,
+            Page::Pacer,
         ] {
             let rows = page_rows(page, Some(&fix()), None, None, None, 42, true);
             assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
@@ -1240,7 +1329,24 @@ mod tests {
             moving_s: 999 * 3600 + 59 * 60 + 59,
         });
         rec.zone_time_s = [u32::MAX; ZONE_COUNT];
-        for page in [Page::Distance, Page::Pace, Page::Lap, Page::Zones] {
+        rec.pacer = Some(crate::pacer::PacerStatus {
+            goal: crate::pacer::PacerGoal {
+                distance_m: 1_000_000,
+                time_s: 1_000_000,
+            },
+            ahead_m: -9_999_999.0,
+            ahead_s: i32::MIN,
+            projected_finish_s: Some(u32::MAX),
+            verdict: PaceVerdict::OnPace,
+            finished: false,
+        });
+        for page in [
+            Page::Distance,
+            Page::Pace,
+            Page::Lap,
+            Page::Zones,
+            Page::Pacer,
+        ] {
             for row in page_rows(
                 page,
                 Some(&fix()),
@@ -1317,6 +1423,119 @@ mod tests {
         rec.zone_time_s = [3600 + 2 * 60 + 3, 0, 0, 0, 0];
         let rows = page_rows(Page::Zones, None, Some(120), Some(&rec), None, 2, true);
         assert_eq!(rows[3].as_str(), "Z1 1:02:03  ########");
+    }
+
+    fn pacer_status(
+        ahead_m: f64,
+        ahead_s: i32,
+        verdict: PaceVerdict,
+        projected_finish_s: Option<u32>,
+    ) -> crate::pacer::PacerStatus {
+        crate::pacer::PacerStatus {
+            goal: crate::pacer::PacerGoal {
+                distance_m: 10_000,
+                time_s: 3_000,
+            },
+            ahead_m,
+            ahead_s,
+            projected_finish_s,
+            verdict,
+            finished: false,
+        }
+    }
+
+    #[test]
+    fn pacer_glance_shows_the_partner_delta_ahead() {
+        let mut rec = snapshot(RecordState::Recording, 2_100.0);
+        rec.pacer = Some(pacer_status(140.0, 42, PaceVerdict::Ahead, Some(2_857)));
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(
+            page_hero(Page::Pacer, Some(152), Some(&rec))
+                .unwrap()
+                .as_str(),
+            "+0:42"
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "PACER         AHEAD");
+        assert_eq!(rows[4].as_str(), "GOAL 10.00 KM");
+        assert_eq!(rows[5].as_str(), "TGT  50:00");
+        assert_eq!(rows[6].as_str(), "PROJ 47:37");
+        assert_eq!(rows[7].as_str(), "DIST +140 M");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        // Text-only page: no gutter icons.
+        assert!(
+            page_icons(Page::Pacer, Some(&fix()), Some(152), Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn pacer_glance_spells_out_behind_with_the_minus_sign() {
+        let mut rec = snapshot(RecordState::Recording, 1_780.0);
+        rec.pacer = Some(pacer_status(-216.7, -65, PaceVerdict::Behind, Some(3_370)));
+        let rows = page_rows(Page::Pacer, Some(&fix()), None, Some(&rec), None, 42, true);
+        assert_eq!(
+            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            "-1:05"
+        );
+        assert_eq!(rows[2].as_str(), "PACER         BEHIND");
+        assert_eq!(rows[6].as_str(), "PROJ 56:10");
+        assert_eq!(rows[7].as_str(), "DIST -216 M");
+
+        // Level with the partner: an explicit +0:00 ON PACE, never blank.
+        rec.pacer = Some(pacer_status(0.0, 0, PaceVerdict::OnPace, None));
+        let rows = page_rows(Page::Pacer, Some(&fix()), None, Some(&rec), None, 42, true);
+        assert_eq!(
+            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            "+0:00"
+        );
+        assert_eq!(rows[2].as_str(), "PACER         ON PACE");
+        assert_eq!(rows[6].as_str(), "PROJ --");
+        assert_eq!(rows[7].as_str(), "DIST +0 M");
+    }
+
+    #[test]
+    fn pacer_glance_without_a_goal_is_honestly_inactive() {
+        // Recording, no goal configured: the page says so instead of showing
+        // zeros that read as "perfectly on pace".
+        let rec = snapshot(RecordState::Recording, 2_100.0);
+        assert!(rec.pacer.is_none());
+        let rows = page_rows(Page::Pacer, Some(&fix()), None, Some(&rec), None, 2, true);
+        assert_eq!(
+            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            "--"
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "PACER --");
+        assert_eq!(rows[4].as_str(), "NO GOAL SET");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(rows[6].as_str(), "");
+        assert_eq!(rows[7].as_str(), "");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+    }
+
+    #[test]
+    fn pacer_hero_grows_to_hours_and_keeps_the_sign() {
+        let mut rec = snapshot(RecordState::Recording, 50_000.0);
+        rec.pacer = Some(pacer_status(
+            -18_000.0,
+            -(3600 + 2 * 60 + 3),
+            PaceVerdict::Behind,
+            None,
+        ));
+        assert_eq!(
+            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            "-1:02:03"
+        );
     }
 
     #[test]

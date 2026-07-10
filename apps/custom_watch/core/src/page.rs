@@ -25,6 +25,10 @@ pub enum Page {
     /// Current HR up large, with the live zone and the per-zone moving-time
     /// breakdown as context.
     Zones,
+    /// Virtual-partner ahead/behind time up large, with the goal, projected
+    /// finish, and distance delta as context; an honest inactive state while
+    /// no goal is configured.
+    Pacer,
 }
 
 impl Page {
@@ -35,7 +39,8 @@ impl Page {
             Page::Distance => Page::Pace,
             Page::Pace => Page::Lap,
             Page::Lap => Page::Zones,
-            Page::Zones => Page::Dashboard,
+            Page::Zones => Page::Pacer,
+            Page::Pacer => Page::Dashboard,
         }
     }
 }
@@ -55,8 +60,9 @@ mod tests {
         assert_eq!(Page::Distance.next(), Page::Pace);
         assert_eq!(Page::Pace.next(), Page::Lap);
         assert_eq!(Page::Lap.next(), Page::Zones);
-        assert_eq!(Page::Zones.next(), Page::Dashboard);
-        // Walking `next` from the default visits all five and returns home.
+        assert_eq!(Page::Zones.next(), Page::Pacer);
+        assert_eq!(Page::Pacer.next(), Page::Dashboard);
+        // Walking `next` from the default visits all six and returns home.
         let mut p = Page::default();
         let mut seen = [
             p,
@@ -64,6 +70,7 @@ mod tests {
             p.next().next(),
             p.next().next().next(),
             p.next().next().next().next(),
+            p.next().next().next().next().next(),
         ];
         seen.sort_by_key(|q| *q as u8);
         assert_eq!(
@@ -73,10 +80,11 @@ mod tests {
                 Page::Distance,
                 Page::Pace,
                 Page::Lap,
-                Page::Zones
+                Page::Zones,
+                Page::Pacer
             ]
         );
-        for _ in 0..5 {
+        for _ in 0..6 {
             p = p.next();
         }
         assert_eq!(p, Page::default());
