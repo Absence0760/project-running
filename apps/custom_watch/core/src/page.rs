@@ -29,6 +29,9 @@ pub enum Page {
     /// finish, and distance delta as context; an honest inactive state while
     /// no goal is configured.
     Pacer,
+    /// Breadcrumb course view: the loaded course polyline with the current
+    /// position marked, distance-along-course, and the off-course alert.
+    Nav,
 }
 
 impl Page {
@@ -40,7 +43,8 @@ impl Page {
             Page::Pace => Page::Lap,
             Page::Lap => Page::Zones,
             Page::Zones => Page::Pacer,
-            Page::Pacer => Page::Dashboard,
+            Page::Pacer => Page::Nav,
+            Page::Nav => Page::Dashboard,
         }
     }
 }
@@ -61,8 +65,9 @@ mod tests {
         assert_eq!(Page::Pace.next(), Page::Lap);
         assert_eq!(Page::Lap.next(), Page::Zones);
         assert_eq!(Page::Zones.next(), Page::Pacer);
-        assert_eq!(Page::Pacer.next(), Page::Dashboard);
-        // Walking `next` from the default visits all six and returns home.
+        assert_eq!(Page::Pacer.next(), Page::Nav);
+        assert_eq!(Page::Nav.next(), Page::Dashboard);
+        // Walking `next` from the default visits all seven and returns home.
         let mut p = Page::default();
         let mut seen = [
             p,
@@ -71,6 +76,7 @@ mod tests {
             p.next().next().next(),
             p.next().next().next().next(),
             p.next().next().next().next().next(),
+            p.next().next().next().next().next().next(),
         ];
         seen.sort_by_key(|q| *q as u8);
         assert_eq!(
@@ -81,10 +87,11 @@ mod tests {
                 Page::Pace,
                 Page::Lap,
                 Page::Zones,
-                Page::Pacer
+                Page::Pacer,
+                Page::Nav
             ]
         );
-        for _ in 0..6 {
+        for _ in 0..7 {
             p = p.next();
         }
         assert_eq!(p, Page::default());

@@ -22,6 +22,7 @@
 
 use core::fmt::Write;
 
+use crate::course::NavStatus;
 use crate::elevation;
 use crate::fix::Fix;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
@@ -56,6 +57,57 @@ pub enum FaceIcon {
     /// [`Satellite`] once per second while no fresh fix is locked.
     SatSearch0,
     SatSearch1,
+}
+
+/// What the Nav page has to work with — the app's nav task derives it per fix
+/// from whether a course is loaded and whether the position projected onto it,
+/// and publishes it as cross-task state. Layout content stays a pure function
+/// of this, so every Nav state is host-tested.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum NavView {
+    /// No course on the device (no `sim-course` build, no BLE push yet).
+    NoCourse,
+    /// A course is loaded but no position has projected onto it yet.
+    NoFix,
+    /// Live projection of the latest fix onto the course.
+    Status(NavStatus),
+}
+
+/// The text row the app overlays at 2x over the Nav page's map panel while
+/// the off-course alert is latched — the unmissable treatment. Steady, not
+/// blinking: a lost ultra runner must never catch the blank frame.
+pub fn nav_alert_row(nav: NavView) -> Option<Row> {
+    match nav {
+        NavView::Status(s) if s.alerting => {
+            let mut row = Row::new();
+            let _ = write!(row, "OFF COURSE");
+            Some(row)
+        }
+        _ => None,
+    }
+}
+
+/// Text row the 2x [`nav_alert_row`] overlay is anchored on (it spans this row
+/// and the next) — mid-panel, so it sits over the breadcrumb.
+pub const NAV_ALERT_ROW: usize = 3;
+
+/// First text row of the Nav page's map panel; the panel spans
+/// [`NAV_PANEL_ROWS`] rows from here. The app converts rows to pixels with the
+/// panel's own cell height — `core` stays display-agnostic.
+pub const NAV_PANEL_TOP_ROW: usize = 1;
+pub const NAV_PANEL_ROWS: usize = 6;
+
+// The panel must leave the info + GPS rows below it, and the 2x alert overlay
+// (two rows tall) must land wholly inside the panel.
+const _: () = assert!(NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS <= ROWS - 2);
+const _: () = assert!(NAV_ALERT_ROW >= NAV_PANEL_TOP_ROW);
+const _: () = assert!(NAV_ALERT_ROW + 2 <= NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS);
+
+/// Whether the run view is showing — i.e. [`page_rows`] draws a run layout
+/// rather than the idle status face. The app keys page-specific drawing (the
+/// Nav page's map panel) off the same predicate the layout selection uses.
+pub fn run_view(rec: Option<&Snapshot>) -> bool {
+    rec.and_then(|snap| rec_tag(snap.state)).is_some()
 }
 
 fn rec_tag(state: RecordState) -> Option<&'static str> {
@@ -143,12 +195,16 @@ pub fn hero_line(rec: Option<&Snapshot>) -> Option<Row> {
 /// blink — off, the tag holds steady-on so it costs no per-second redraw. Pair
 /// with [`page_icons`] + [`page_hero`]. The bare [`face_rows`] is the
 /// always-animated `Dashboard`-page equivalent.
+// One argument per state source the face renders — a struct would just rename
+// the same eight things.
+#[allow(clippy::too_many_arguments)]
 pub fn page_rows(
     page: Page,
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     rec: Option<&Snapshot>,
     elev: Option<&elevation::Reading>,
+    nav: NavView,
     uptime_s: u32,
     animate: bool,
 ) -> [Row; ROWS] {
@@ -177,6 +233,7 @@ pub fn page_rows(
             Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate),
+            Page::Nav => nav_page(nav, fix, tag, uptime_s, animate),
         },
     }
 }
@@ -194,16 +251,20 @@ pub fn page_icons(
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
         Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
-        Page::Distance | Page::Pace | Page::Lap | Page::Zones | Page::Pacer => [None; ROWS],
+        Page::Distance | Page::Pace | Page::Lap | Page::Zones | Page::Pacer | Page::Nav => {
+            [None; ROWS]
+        }
     }
 }
 
 /// The 2x hero string for `page`: elapsed time on the dashboard, the page's
 /// headline metric on a glance page (the live BPM on the zones page, `--`
-/// without a pulse), or `None` when no run is under way.
+/// without a pulse), or `None` when no run is under way. The Nav page never
+/// has a hero — its map panel owns the rows the hero would cover.
 pub fn page_hero(page: Page, hr_bpm: Option<u16>, rec: Option<&Snapshot>) -> Option<Row> {
     let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
     Some(match page {
+        Page::Nav => return None,
         Page::Dashboard => {
             let (h, m, s) = hms(snap.elapsed_s);
             let mut row = Row::new();
@@ -484,6 +545,52 @@ fn pacer_glance(
             let clamped = delta_m.clamp(-99_999, 99_999);
             let sign = if clamped < 0 { '-' } else { '+' };
             let _ = write!(rows[7], "{:<5}{}{} M", "DIST", sign, clamped.unsigned_abs());
+        }
+    }
+
+    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    rows
+}
+
+/// The Nav page: the breadcrumb map panel on rows [`NAV_PANEL_TOP_ROW`]..+
+/// [`NAV_PANEL_ROWS`] (left empty here — the app draws the course polyline +
+/// position marker into those pixels, and the 2x [`nav_alert_row`] overlay on
+/// top while the off-course alert is latched), with distance-along-course and
+/// the perpendicular offset on the info row and the GPS glance at the bottom.
+/// Without a course (or before the first projected fix) the info row says why,
+/// so the page never reads as a silently-empty map.
+fn nav_page(
+    nav: NavView,
+    fix: Option<&Fix>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Row 0: the page label left, the state tag right — blinking for REC while
+    // `animate` is on like every other run page. No hero: the panel owns rows 1+.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "NAV{:>width$}", tag, width = COLS - 3);
+    } else {
+        let _ = write!(rows[0], "NAV");
+    }
+
+    let info = &mut rows[NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS];
+    match nav {
+        NavView::NoCourse => {
+            let _ = write!(info, "NO COURSE LOADED");
+        }
+        NavView::NoFix => {
+            let _ = write!(info, "AWAITING FIX");
+        }
+        NavView::Status(s) => {
+            // Clamps keep the row inside COLS at any input: 999.99 km along +
+            // a 9999 m offset is exactly 21 cells.
+            let km = (s.along_m / 1000.0).min(999.99);
+            let off = (s.off_m as u32).min(9999);
+            let _ = write!(info, "{:.2} KM  OFF {} M", km, off);
         }
     }
 
@@ -1039,6 +1146,7 @@ mod tests {
                 Some(152),
                 Some(&rec),
                 Some(&e),
+                NavView::NoCourse,
                 42,
                 true
             ),
@@ -1072,6 +1180,7 @@ mod tests {
             Some(152),
             Some(&rec),
             None,
+            NavView::NoCourse,
             42,
             true,
         );
@@ -1105,7 +1214,16 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 12_340.0);
         rec.avg_pace_s_per_km = Some(5 * 60 + 12);
         rec.gap_s_per_km = Some(4 * 60 + 52);
-        let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42, true);
+        let rows = page_rows(
+            Page::Pace,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            42,
+            true,
+        );
         assert_eq!(
             page_hero(Page::Pace, None, Some(&rec)).unwrap().as_str(),
             "5:12"
@@ -1128,7 +1246,16 @@ mod tests {
         // fixed slot with the same placeholder the other metrics use; the
         // distance glance never carries a GAP row.
         let rec = snapshot(RecordState::Recording, 12_340.0);
-        let rows = page_rows(Page::Pace, Some(&fix()), None, Some(&rec), None, 42, true);
+        let rows = page_rows(
+            Page::Pace,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            42,
+            true,
+        );
         assert_eq!(rows[7].as_str(), "GAP  --");
         let rows = page_rows(
             Page::Distance,
@@ -1136,6 +1263,7 @@ mod tests {
             None,
             Some(&rec),
             None,
+            NavView::NoCourse,
             42,
             true,
         );
@@ -1160,6 +1288,7 @@ mod tests {
             Some(152),
             Some(&rec),
             None,
+            NavView::NoCourse,
             42,
             true,
         );
@@ -1186,7 +1315,16 @@ mod tests {
     #[test]
     fn lap_glance_first_lap_has_no_last_split() {
         let rec = snapshot(RecordState::Recording, 100.0);
-        let rows = page_rows(Page::Lap, None, None, Some(&rec), None, 2, true);
+        let rows = page_rows(
+            Page::Lap,
+            None,
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            2,
+            true,
+        );
         assert_eq!(rows[2].as_str(), "LAP 1");
         assert_eq!(rows[4].as_str(), "LAST --");
         assert_eq!(rows[6].as_str(), "HR   --");
@@ -1230,6 +1368,7 @@ mod tests {
                 Some(150),
                 Some(&rec),
                 None,
+                NavView::NoCourse,
                 odd,
                 true
             )[0]
@@ -1243,6 +1382,7 @@ mod tests {
                 Some(150),
                 Some(&rec),
                 None,
+                NavView::NoCourse,
                 odd,
                 false
             )[0]
@@ -1303,8 +1443,18 @@ mod tests {
             Page::Lap,
             Page::Zones,
             Page::Pacer,
+            Page::Nav,
         ] {
-            let rows = page_rows(page, Some(&fix()), None, None, None, 42, true);
+            let rows = page_rows(
+                page,
+                Some(&fix()),
+                None,
+                None,
+                None,
+                NavView::NoCourse,
+                42,
+                true,
+            );
             assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
             assert!(page_hero(page, None, None).is_none());
             assert!(page_icons(page, Some(&fix()), None, None, 42, true)
@@ -1353,6 +1503,7 @@ mod tests {
                 Some(u16::MAX),
                 Some(&rec),
                 None,
+                NavView::NoCourse,
                 43,
                 true,
             ) {
@@ -1373,6 +1524,7 @@ mod tests {
             Some(152),
             Some(&rec),
             None,
+            NavView::NoCourse,
             42,
             true,
         );
@@ -1402,7 +1554,16 @@ mod tests {
     #[test]
     fn zones_glance_without_hr_shows_placeholders_and_no_bars() {
         let rec = snapshot(RecordState::Recording, 100.0);
-        let rows = page_rows(Page::Zones, None, None, Some(&rec), None, 2, true);
+        let rows = page_rows(
+            Page::Zones,
+            None,
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            2,
+            true,
+        );
         assert_eq!(
             page_hero(Page::Zones, None, Some(&rec)).unwrap().as_str(),
             "--"
@@ -1421,7 +1582,16 @@ mod tests {
         // An ultra banks hours per zone; the split format grows like laps do.
         let mut rec = snapshot(RecordState::Recording, 100.0);
         rec.zone_time_s = [3600 + 2 * 60 + 3, 0, 0, 0, 0];
-        let rows = page_rows(Page::Zones, None, Some(120), Some(&rec), None, 2, true);
+        let rows = page_rows(
+            Page::Zones,
+            None,
+            Some(120),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            2,
+            true,
+        );
         assert_eq!(rows[3].as_str(), "Z1 1:02:03  ########");
     }
 
@@ -1552,6 +1722,7 @@ mod tests {
             Some(135),
             Some(&rec),
             None,
+            NavView::NoCourse,
             42,
             true,
         );
@@ -1572,5 +1743,135 @@ mod tests {
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[1].as_str(), "");
+    }
+
+    fn nav_status(along_m: f64, off_m: f64, alerting: bool) -> NavView {
+        NavView::Status(NavStatus {
+            along_m,
+            off_m,
+            alerting,
+        })
+    }
+
+    #[test]
+    fn nav_page_shows_along_and_off_distance() {
+        let rec = snapshot(RecordState::Recording, 12_340.0);
+        let rows = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            nav_status(12_340.0, 23.4, false),
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str(), "NAV               REC");
+        assert_eq!(rows[7].as_str(), "12.34 KM  OFF 23 M");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        // No hero and no gutter icons — the map panel owns rows 1-6.
+        assert!(page_hero(Page::Nav, Some(152), Some(&rec)).is_none());
+        assert!(
+            page_icons(Page::Nav, Some(&fix()), Some(152), Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn nav_page_keeps_the_panel_rows_empty_in_every_state() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        for nav in [
+            NavView::NoCourse,
+            NavView::NoFix,
+            nav_status(1_000.0, 55.0, true),
+        ] {
+            let rows = page_rows(
+                Page::Nav,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                nav,
+                42,
+                true,
+            );
+            for row in &rows[NAV_PANEL_TOP_ROW..NAV_PANEL_TOP_ROW + NAV_PANEL_ROWS] {
+                assert_eq!(row.as_str(), "", "panel row not empty for {:?}", nav);
+            }
+        }
+    }
+
+    #[test]
+    fn nav_page_says_why_the_map_is_empty() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let rows = page_rows(
+            Page::Nav,
+            None,
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            2,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "NO COURSE LOADED");
+        let rows = page_rows(
+            Page::Nav,
+            None,
+            None,
+            Some(&rec),
+            None,
+            NavView::NoFix,
+            2,
+            true,
+        );
+        assert_eq!(rows[7].as_str(), "AWAITING FIX");
+        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING");
+    }
+
+    #[test]
+    fn nav_alert_row_shows_only_while_the_alert_is_latched() {
+        assert!(nav_alert_row(NavView::NoCourse).is_none());
+        assert!(nav_alert_row(NavView::NoFix).is_none());
+        assert!(nav_alert_row(nav_status(500.0, 30.0, false)).is_none());
+        let row = nav_alert_row(nav_status(500.0, 55.0, true)).unwrap();
+        assert_eq!(row.as_str(), "OFF COURSE");
+        // The 2x overlay is two cells per char: it must fit the panel width.
+        assert!(row.chars().count() * 2 <= COLS);
+    }
+
+    #[test]
+    fn nav_rec_tag_blinks_but_the_label_stays() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let nav = nav_status(500.0, 5.0, false);
+        let even = page_rows(Page::Nav, None, None, Some(&rec), None, nav, 10, true);
+        assert_eq!(even[0].as_str(), "NAV               REC");
+        let odd = page_rows(Page::Nav, None, None, Some(&rec), None, nav, 11, true);
+        assert_eq!(odd[0].as_str(), "NAV");
+        // Gated animation holds the tag steady-on.
+        let gated = page_rows(Page::Nav, None, None, Some(&rec), None, nav, 11, false);
+        assert_eq!(gated[0].as_str(), "NAV               REC");
+    }
+
+    #[test]
+    fn nav_rows_fit_the_grid_at_extremes() {
+        let rec = snapshot(RecordState::Recording, 9_999_990.0);
+        let nav = nav_status(9_999_999.0, 99_999.0, true);
+        let rows = page_rows(
+            Page::Nav,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            nav,
+            43,
+            true,
+        );
+        for row in &rows {
+            assert!(row.len() <= COLS, "nav row too wide: {:?}", row);
+        }
+        // Both values clamp rather than overflow the 21-cell info row.
+        assert_eq!(rows[7].as_str(), "999.99 KM  OFF 9999 M");
     }
 }
