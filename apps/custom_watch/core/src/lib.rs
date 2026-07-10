@@ -18,6 +18,8 @@
 //! - [`page`] — which run-view screen shows + the page-button cycle order
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
+//! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
+//!   goal distance + time) the recorder folds into its snapshot
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
 //! - [`button`] — the pure button-press → record-command mapping
 //! - [`run_store`] — on-device run wire format + BLE sync framing
@@ -34,6 +36,7 @@ pub mod flash_store;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
 pub mod link;
+pub mod pacer;
 pub mod page;
 pub mod record;
 pub mod run_store;
