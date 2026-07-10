@@ -196,8 +196,9 @@ pub fn hero_line(rec: Option<&Snapshot>) -> Option<Row> {
 /// blink — off, the tag holds steady-on so it costs no per-second redraw. Pair
 /// with [`page_icons`] + [`page_hero`]. The bare [`face_rows`] is the
 /// always-animated `Dashboard`-page equivalent.
-// One argument per state source the face renders — a struct would just rename
-// the same eight things.
+// One positional slot per live input signal, in the state.rs order — a pure
+// render function of the whole watch state; grouping them into a struct would
+// only move the same list one level down.
 #[allow(clippy::too_many_arguments)]
 pub fn page_rows(
     page: Page,

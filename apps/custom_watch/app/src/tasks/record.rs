@@ -43,6 +43,7 @@ use watch_core::fix::Fix;
 use watch_core::flash_store::{MAX_POINTS_PER_RUN, SLOT_LEN};
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::run_store::{verify_blob, RunWriter, TrackPoint};
+use watch_core::trackback::Trackback;
 
 use crate::run_flash::SharedStore;
 use crate::state;
@@ -163,6 +164,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
+    let trackback_sender = state::TRACKBACK.sender();
     let mut recorder = Recorder::new();
     // On-run alerts ride this task because it already owns the recorder's
     // event cadence; the engine is pure and fed after the recorder updates,
@@ -174,6 +176,8 @@ pub async fn run(store: &'static SharedStore) {
     let mut open: Option<OpenRun> = None;
     let mut latest_bpm: Option<u8> = None;
     let mut latest_baro_alt_m: Option<f32> = None;
+    let mut trackback = Trackback::new();
+    let mut crumb_len: usize = 0;
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
@@ -236,6 +240,8 @@ pub async fn run(store: &'static SharedStore) {
                     recorder.start(now_s);
                     ticker.reset(); // fresh clock — no catch-up burst of ticks
                     open = open_run(&mut next_seq, now_s);
+                    trackback.reset();
+                    crumb_len = 0;
                     info!("record: sim-autostart on first fix");
                 }
                 recorder.on_fix(&fix);
@@ -243,6 +249,23 @@ pub async fn run(store: &'static SharedStore) {
                     if let Some(o) = open.as_mut() {
                         push_point(o, &fix, latest_bpm, latest_baro_alt_m);
                     }
+                    trackback.on_point(fix.lat_deg, fix.lon_deg, fix.uptime_s);
+                    let view = trackback.view();
+                    if view.len < crumb_len {
+                        info!(
+                            "trackback: breadcrumb thinned to {=usize} points (spacing doubled)",
+                            view.len
+                        );
+                    }
+                    crumb_len = view.len;
+                    debug!(
+                        "trackback: crumbs={=usize} to_start={=f32}m brg={=?} hdg={=?}",
+                        view.len,
+                        view.distance_to_start_m,
+                        view.bearing_to_start_deg,
+                        view.heading_deg
+                    );
+                    trackback_sender.send(view);
                 }
             }
             Event::Cmd(cmd) => {
@@ -261,6 +284,12 @@ pub async fn run(store: &'static SharedStore) {
                     if open.is_none() {
                         open = open_run(&mut next_seq, now_s);
                     }
+                    // A new run must never render the previous run's crumb: the
+                    // published empty view holds the page's placeholders until
+                    // the first accepted fix anchors the new start.
+                    trackback.reset();
+                    crumb_len = 0;
+                    trackback_sender.send(trackback.view());
                 }
                 if now == RecordState::Finished {
                     if let Some(o) = open.take() {

@@ -15,6 +15,7 @@ use watch_core::face::NavView;
 use watch_core::fix::Fix;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
+use watch_core::trackback::TrackbackView;
 
 /// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, and `nav`
 /// subscribe.
@@ -53,6 +54,12 @@ pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
 /// (or once at boot when no course is loaded), the `ui` task renders it. One
 /// receiver (the `ui` task).
 pub static NAV: Watch<CriticalSectionRawMutex, NavView, 1> = Watch::new();
+
+/// Back-to-start navigation view (breadcrumb + distance/bearing to start):
+/// `record` publishes one per accepted fix — the same seam the flash track
+/// store consumes, so the crumb mirrors the stored track exactly — and the
+/// `ui` task renders it on the BackToStart page. One receiver (the `ui`).
+pub static TRACKBACK: Watch<CriticalSectionRawMutex, TrackbackView, 1> = Watch::new();
 
 /// Uptime (seconds) of the last button press — any button. The `button` task
 /// stamps it on every confirmed press; the `ui` task reads it to gate the

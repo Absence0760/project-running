@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select3, select4, Either3, Either4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -21,7 +21,8 @@ use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::{self, FaceIcon, NavView};
 use watch_core::fix::Fix;
 use watch_core::page::Page;
-use watch_core::record::Snapshot;
+use watch_core::record::{RecordState, Snapshot};
+use watch_core::trackback::{self, TrackbackView};
 
 use crate::state;
 
@@ -48,6 +49,7 @@ const TICK_IDLE: Duration = Duration::from_secs(30);
 // face-declared text rows tall. `core` speaks rows; only this task knows the
 // panel's 16-px cell height.
 const CELL_H: usize = sharp_mip::HEIGHT / sharp_mip::TEXT_ROWS;
+const CELL_W: usize = sharp_mip::WIDTH / sharp_mip::TEXT_COLS;
 const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
 const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
 const PANEL_ROWS: core::ops::Range<usize> =
@@ -142,10 +144,12 @@ pub async fn screen_task(
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr_bpm: Option<u16> = None;
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
+    let mut tb: Option<TrackbackView> = None;
     let mut page = Page::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
@@ -185,6 +189,9 @@ pub async fn screen_task(
         if let Some(v) = nav_rx.try_changed() {
             nav = v;
         }
+        if let Some(v) = tb_rx.try_changed() {
+            tb = Some(v);
+        }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
@@ -196,6 +203,7 @@ pub async fn screen_task(
             rec.as_ref(),
             elev.as_ref(),
             nav,
+            tb.as_ref(),
             uptime_s,
             animate,
         );
@@ -270,8 +278,21 @@ pub async fn screen_task(
         // only emits during a run, so the idle face never loses its title.
         if let Some(a) = alert {
             fb.draw_text_2x(0, 0, &alerts::banner(a));
-        } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref()) {
+        } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref()) {
             fb.draw_text_2x(0, 0, &hero);
+        }
+        // The BackToStart page's pixel layer rides on top of the text rows
+        // (which reserve the space — see face::NAV_TEXT_COLS): the TrackBack
+        // breadcrumb map on the right of rows 3-7, the relative direction
+        // arrow on the left of rows 5-7. Only while a run is under way — the
+        // idle status face must never carry a stale crumb.
+        let run_active = rec
+            .as_ref()
+            .is_some_and(|snap| snap.state != RecordState::Idle);
+        if page == Page::BackToStart && run_active {
+            if let Some(view) = tb.as_ref() {
+                draw_trackback_overlay(&mut fb, view, uptime_s);
+            }
         }
         if let Err(e) = display.flush(&mut fb) {
             warn!("ui: display flush failed: {:?}", e);
@@ -309,7 +330,13 @@ pub async fn screen_task(
         // next tick, but PAGE only changes on a button press. The losing
         // futures are dropped un-consumed, so `try_changed()` still coalesces
         // any other simultaneous changes on the next iteration.
-        match select3(sensors, controls, Timer::after(tick)).await {
+        match select3(
+            sensors,
+            controls,
+            select(tb_rx.changed(), Timer::after(tick)),
+        )
+        .await
+        {
             Either3::First(Either4::First(fix)) => latest = Some(fix),
             Either3::First(Either4::Second(reading)) => {
                 hr_bpm = reading.valid.then_some(reading.bpm)
@@ -320,7 +347,52 @@ pub async fn screen_task(
             Either3::Second(Either4::Second(t)) => last_interaction_s = t,
             Either3::Second(Either4::Third(a)) => alert = a,
             Either3::Second(Either4::Fourth(v)) => nav = v,
-            Either3::Third(()) => {}
+            Either3::Third(Either::First(v)) => tb = Some(v),
+            Either3::Third(Either::Second(())) => {}
+        }
+    }
+}
+
+/// Draw the BackToStart page's pixel layer: the north-up TrackBack breadcrumb
+/// map (right of the reserved text columns, rows 3-7) with a hollow-box start
+/// marker + filled-dot current position, and the relative back-to-start arrow
+/// (left, rows 5-7) whenever a fresh heading makes it meaningful — the face's
+/// text layer shows `--` in the arrow's spot otherwise, so the two never
+/// overlap.
+fn draw_trackback_overlay(fb: &mut Framebuffer, view: &TrackbackView, uptime_s: u32) {
+    const MAP_X: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W) as i32;
+    const MAP_Y: i32 = (3 * CELL_H) as i32;
+    const MAP_W: u16 = (sharp_mip::WIDTH - face::TRACKBACK_TEXT_COLS * CELL_W) as u16;
+    const MAP_H: u16 = (5 * CELL_H) as u16;
+
+    let mut pts = [(0u16, 0u16); trackback::BREADCRUMB_CAP + 1];
+    if let Some(map) = trackback::project_track(view, MAP_W, MAP_H, &mut pts) {
+        for pair in pts[..map.len].windows(2) {
+            fb.draw_line(
+                MAP_X + pair[0].0 as i32,
+                MAP_Y + pair[0].1 as i32,
+                MAP_X + pair[1].0 as i32,
+                MAP_Y + pair[1].1 as i32,
+                true,
+            );
+        }
+        let (sx, sy) = (MAP_X + map.start.0 as i32, MAP_Y + map.start.1 as i32);
+        fb.draw_line(sx - 2, sy - 2, sx + 2, sy - 2, true);
+        fb.draw_line(sx + 2, sy - 2, sx + 2, sy + 2, true);
+        fb.draw_line(sx + 2, sy + 2, sx - 2, sy + 2, true);
+        fb.draw_line(sx - 2, sy + 2, sx - 2, sy - 2, true);
+        let (cx, cy) = (MAP_X + map.current.0 as i32, MAP_Y + map.current.1 as i32);
+        for dy in -1..=1 {
+            fb.draw_line(cx - 1, cy + dy, cx + 1, cy + dy, true);
+        }
+    }
+
+    if let Some(sector) = view.arrow_sector(uptime_s) {
+        const ARROW_CX: i32 = (face::TRACKBACK_TEXT_COLS * CELL_W / 2) as i32;
+        const ARROW_CY: i32 = (13 * CELL_H / 2) as i32; // centre of rows 5-7
+        const ARROW_R: i32 = (3 * CELL_H) as i32 / 2 - 6;
+        for ((x0, y0), (x1, y1)) in trackback::arrow_lines(sector, ARROW_CX, ARROW_CY, ARROW_R) {
+            fb.draw_line(x0, y0, x1, y1, true);
         }
     }
 }
