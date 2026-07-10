@@ -162,7 +162,7 @@ You **cannot**:
 ```
 runMacro $btn1    # start / pause / resume the recording
 runMacro $btn2    # stop the recording (commits the run to flash)
-runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap -> Zones -> Pacer -> Nav
+runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap -> Zones -> Pacer -> Nav -> BackToStart
 runMacro $btn4    # take a manual lap
 ```
 
@@ -198,6 +198,7 @@ Gotchas, learned the slow way:
 - **`sim/defmt_rtt.py` must stay ASCII-only and Python-2 compatible.** Renode embeds IronPython 2: one em dash in a comment aborts the include (`Non-ASCII character '\xe2'`), and the failure is only visible on the monitor console, not in the Renode log. The wrapper guards this (pty-as-sentinel + a grep for "defmt-rtt drain active"), but if you edit the file, keep it plain ASCII.
 - **Monitor errors never reach the Renode log file.** If `watch-sim.sh` dies with "Renode never created the GPS pty", re-run the include interactively to see the real error: `renode --console -e "include @apps/custom_watch/sim/watch.resc"`.
 - **The UICR warning at boot is expected.** embassy-nrf checks the UICR region to configure the reset pin; Renode doesn't model UICR, the read returns zeros, and the firmware logs a WARN about not being able to reprogram it. Harmless in the sim; it does not appear on real hardware.
+- **Sim uptime wraps to zero at virtual t = 512 s.** RTC1 is a 24-bit counter at 32768 Hz (2^24 / 32768 = 512 s); embassy-time extends it past the wrap via the overflow/compare interrupts, but Renode's nRF RTC model doesn't implement the registers involved (its log fills with `rtc1: Unhandled read from offset 0x104/0x14C`), so under the sim `Instant::now()` — and with it the defmt timestamps, GPS-fix freshness, and the recorder's clock — jumps back to ~0 after 512 virtual seconds. It looks like a reboot in the log (timestamps restart) but isn't: no boot banner, tasks keep running, state is preserved — the clock is simply wrong from then on (uptime-keyed logic like fix staleness and heading freshness misbehaves). Emulation artifact only; real hardware handles the wrap. Keep any sim scenario that asserts on time-derived behaviour under ~8.5 minutes of virtual time, or split it across runs.
 
 ## Building + flashing the BLE (SoftDevice) firmware
 
