@@ -315,3 +315,61 @@ fn non_ascii_renders_as_question_mark() {
         assert_eq!(fb.line(dy)[0], expected.line(dy)[0]);
     }
 }
+
+#[test]
+fn draw_line_horizontal_sets_exactly_the_span() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_line(10, 40, 20, 40, true);
+    for x in 10..=20 {
+        assert!(fb.pixel(x, 40), "missing pixel at x={x}");
+    }
+    assert!(!fb.pixel(9, 40));
+    assert!(!fb.pixel(21, 40));
+    // A horizontal line dirties exactly its one panel line.
+    assert_eq!(fb.dirty_count(), 1);
+    assert!(fb.is_dirty(40));
+}
+
+#[test]
+fn draw_line_vertical_and_diagonal_hit_both_endpoints() {
+    let mut fb = Framebuffer::new();
+    fb.draw_line(5, 10, 5, 30, true);
+    assert!(fb.pixel(5, 10) && fb.pixel(5, 30));
+    fb.draw_line(0, 0, 30, 20, true);
+    assert!(fb.pixel(0, 0) && fb.pixel(30, 20));
+    // The diagonal is connected: every row it crosses has at least one pixel.
+    for y in 0..=20 {
+        assert!((0..=30).any(|x| fb.pixel(x, y)), "gap at row {y}");
+    }
+    // Direction-independent: the reverse line draws the same pixels.
+    let mut rev = Framebuffer::new();
+    rev.draw_line(30, 20, 0, 0, true);
+    for y in 0..=20 {
+        for x in 0..=30 {
+            if fb.pixel(x, y) && !fb.pixel(5, y) {
+                assert_eq!(rev.pixel(x, y), fb.pixel(x, y), "asymmetry at ({x},{y})");
+            }
+        }
+    }
+}
+
+#[test]
+fn draw_line_clips_offscreen_spans_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_line(-20, -10, 10, 5, true); // enters from the top-left
+    assert!(fb.pixel(10, 5));
+    fb.draw_line(160, 140, 400, 300, true); // exits bottom-right
+    fb.draw_line(-5, 50, -1, 60, true); // entirely off-panel
+    assert!(fb.dirty_count() > 0);
+}
+
+#[test]
+fn redrawing_an_identical_line_dirties_nothing() {
+    let mut fb = Framebuffer::new();
+    fb.draw_line(3, 3, 60, 47, true);
+    fb.clear_dirty();
+    fb.draw_line(3, 3, 60, 47, true);
+    assert_eq!(fb.dirty_count(), 0);
+}
