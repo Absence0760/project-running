@@ -22,6 +22,9 @@ pub enum Page {
     /// Current lap time up large, with lap number / last-lap split / lap
     /// distance / HR as context.
     Lap,
+    /// Current HR up large, with the live zone and the per-zone moving-time
+    /// breakdown as context.
+    Zones,
 }
 
 impl Page {
@@ -31,7 +34,8 @@ impl Page {
             Page::Dashboard => Page::Distance,
             Page::Distance => Page::Pace,
             Page::Pace => Page::Lap,
-            Page::Lap => Page::Dashboard,
+            Page::Lap => Page::Zones,
+            Page::Zones => Page::Dashboard,
         }
     }
 }
@@ -50,16 +54,29 @@ mod tests {
         assert_eq!(Page::Dashboard.next(), Page::Distance);
         assert_eq!(Page::Distance.next(), Page::Pace);
         assert_eq!(Page::Pace.next(), Page::Lap);
-        assert_eq!(Page::Lap.next(), Page::Dashboard);
-        // Walking `next` from the default visits all four and returns home.
+        assert_eq!(Page::Lap.next(), Page::Zones);
+        assert_eq!(Page::Zones.next(), Page::Dashboard);
+        // Walking `next` from the default visits all five and returns home.
         let mut p = Page::default();
-        let mut seen = [p, p.next(), p.next().next(), p.next().next().next()];
+        let mut seen = [
+            p,
+            p.next(),
+            p.next().next(),
+            p.next().next().next(),
+            p.next().next().next().next(),
+        ];
         seen.sort_by_key(|q| *q as u8);
         assert_eq!(
             seen,
-            [Page::Dashboard, Page::Distance, Page::Pace, Page::Lap]
+            [
+                Page::Dashboard,
+                Page::Distance,
+                Page::Pace,
+                Page::Lap,
+                Page::Zones
+            ]
         );
-        for _ in 0..4 {
+        for _ in 0..5 {
             p = p.next();
         }
         assert_eq!(p, Page::default());

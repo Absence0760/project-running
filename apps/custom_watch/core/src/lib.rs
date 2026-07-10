@@ -10,6 +10,8 @@
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`grade_adjusted_pace`] — the Minetti GAP model (fourth parity port) +
 //!   the streaming grade estimator the recorder feeds
+//! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
+//!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
 //! - [`page`] — which run-view screen shows + the page-button cycle order
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
@@ -27,6 +29,7 @@ pub mod face;
 pub mod fix;
 pub mod flash_store;
 pub mod grade_adjusted_pace;
+pub mod hr_zones;
 pub mod link;
 pub mod page;
 pub mod record;

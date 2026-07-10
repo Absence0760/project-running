@@ -18,6 +18,9 @@
 
 use crate::fix::Fix;
 use crate::grade_adjusted_pace::GapEstimator;
+use crate::hr_zones::{
+    self, ZoneCutoffs, DEFAULT_MAX_HR_BPM, MAX_HR_PLAUSIBLE_MAX, MAX_HR_PLAUSIBLE_MIN, ZONE_COUNT,
+};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -103,6 +106,15 @@ pub struct Snapshot {
     pub lap_elapsed_s: u32,
     /// The most recently completed lap, if any — the face's "last lap split".
     pub last_lap: Option<Lap>,
+    /// The zone ladder in force for this run — carried so the face can place
+    /// the live BPM in a zone without owning a second copy of the max-HR
+    /// configuration.
+    pub zone_cutoffs: ZoneCutoffs,
+    /// Seconds of moving time spent in each zone (Z1..Z5). Accrues exactly
+    /// where [`Snapshot::moving_s`] does — a paused / auto-paused stretch adds
+    /// nothing — and only while an HR reading is live, so a sensorless run
+    /// keeps all five at zero.
+    pub zone_time_s: [u32; ZONE_COUNT],
 }
 
 pub struct Recorder {
@@ -138,6 +150,15 @@ pub struct Recorder {
     /// fix's GPS altitude for the grade — the same preference the flash
     /// run-store's point stamping already applies.
     baro_alt_m: Option<f64>,
+    /// Latest heart-rate estimate, published by the hr task via
+    /// [`set_hr`](Recorder::set_hr). `None` while the sensor is absent or the
+    /// peak detector has lost the pulse — no zone time accrues then.
+    hr_bpm: Option<u16>,
+    /// Zone upper bounds derived from the configured max HR — see
+    /// [`set_max_hr`](Recorder::set_max_hr).
+    zone_cutoffs: ZoneCutoffs,
+    /// Per-zone moving-time accumulators, reset on [`start`](Recorder::start).
+    zone_time_s: [u32; ZONE_COUNT],
 }
 
 impl Default for Recorder {
@@ -165,6 +186,9 @@ impl Recorder {
             last_lap: None,
             gap: GapEstimator::new(),
             baro_alt_m: None,
+            hr_bpm: None,
+            zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_time_s: [0; ZONE_COUNT],
         }
     }
 
@@ -177,6 +201,25 @@ impl Recorder {
     /// over GPS altitude until the next one arrives.
     pub fn set_baro_altitude(&mut self, alt_m: f32) {
         self.baro_alt_m = Some(alt_m as f64);
+    }
+
+    /// Latest heart-rate estimate for the zone accumulators. `None` clears it
+    /// (the detector lost the pulse), so a stale BPM never keeps banking zone
+    /// time after the sensor goes quiet.
+    pub fn set_hr(&mut self, bpm: Option<u16>) {
+        self.hr_bpm = bpm;
+    }
+
+    /// Rebuild the zone ladder from a configured max HR — the tier-1 hook a
+    /// future settings sync drives; nothing on-device sets it yet. Values
+    /// outside the app's plausibility window (80..=240, the same guard web's
+    /// `defaultZoneCutoffs` applies to an explicit override) are ignored so
+    /// garbage can't flatten the ladder. Zone time already banked is not
+    /// re-bucketed — the ladder applies from now on.
+    pub fn set_max_hr(&mut self, max_hr_bpm: u16) {
+        if (MAX_HR_PLAUSIBLE_MIN..=MAX_HR_PLAUSIBLE_MAX).contains(&max_hr_bpm) {
+            self.zone_cutoffs = hr_zones::zone_cutoffs_from_max_hr(max_hr_bpm);
+        }
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -209,8 +252,9 @@ impl Recorder {
         self.lap_start_elapsed_s = 0;
         self.lap_start_moving_s = 0;
         self.last_lap = None;
-        // Fresh grade anchors for the new run; the sticky baro altitude stays —
-        // it's still the current reading, not run state.
+        self.zone_time_s = [0; ZONE_COUNT];
+        // Fresh grade anchors for the new run; the sticky baro altitude and HR
+        // stay — each is still the current reading, not run state.
         self.gap.reset();
     }
 
@@ -321,6 +365,12 @@ impl Recorder {
         self.distance_m += delta;
         if delta / dt as f64 >= MIN_MOVING_SPEED_MPS {
             self.moving_s += dt;
+            // Zone time banks exactly where moving time does, into the zone of
+            // the HR in force for the segment — no reading, no accrual.
+            if let Some(bpm) = self.hr_bpm {
+                let zone = hr_zones::zone_for_bpm(bpm, &self.zone_cutoffs);
+                self.zone_time_s[(zone - 1) as usize] += dt;
+            }
             self.state = RecordState::Recording;
         } else {
             self.state = RecordState::Paused;
@@ -384,6 +434,8 @@ impl Recorder {
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
             lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
             last_lap: self.last_lap,
+            zone_cutoffs: self.zone_cutoffs,
+            zone_time_s: self.zone_time_s,
         }
     }
 
@@ -864,6 +916,125 @@ mod tests {
         assert_eq!(s.gap_s_per_km, None);
         r.stop(1);
         assert_eq!(r.snapshot().gap_s_per_km, None);
+    }
+
+    #[test]
+    fn zone_time_banks_with_moving_time_into_the_hr_zone() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // 152 bpm on the default 190 ladder is the Z3 cutoff itself.
+        r.set_hr(Some(152));
+        for i in 0..=5u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        let s = r.snapshot();
+        assert_eq!(s.moving_s, 5);
+        assert_eq!(s.zone_time_s, [0, 0, 5, 0, 0]);
+        assert_eq!(s.zone_cutoffs, [114, 133, 152, 171, 190]);
+
+        // The HR moves one beat past the cutoff: further seconds bank in Z4.
+        r.set_hr(Some(153));
+        for i in 6..=8u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        assert_eq!(r.snapshot().zone_time_s, [0, 0, 5, 3, 0]);
+    }
+
+    #[test]
+    fn no_hr_reading_accrues_no_zone_time() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for i in 0..=4u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        let s = r.snapshot();
+        assert_eq!(s.moving_s, 4, "moving time still accrues sensorless");
+        assert_eq!(s.zone_time_s, [0; 5]);
+
+        // A reading that later drops out (detector lost the pulse) stops the
+        // accrual again — a stale BPM never keeps banking.
+        r.set_hr(Some(120));
+        r.on_fix(&fix(40.0004, -105.0, 5.0, 5));
+        assert_eq!(r.snapshot().zone_time_s, [0, 1, 0, 0, 0]);
+        r.set_hr(None);
+        r.on_fix(&fix(40.00048, -105.0, 5.0, 6));
+        let s = r.snapshot();
+        assert_eq!(s.zone_time_s, [0, 1, 0, 0, 0]);
+        assert_eq!(s.moving_s, 6);
+    }
+
+    #[test]
+    fn paused_time_accrues_no_zone_time() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.set_hr(Some(152));
+        for i in 0..=3u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        assert_eq!(r.snapshot().zone_time_s, [0, 0, 3, 0, 0]);
+
+        // Manual pause: fixes are gated out entirely — nothing banks.
+        r.pause(4);
+        r.on_fix(&fix(40.001, -105.0, 5.0, 6));
+        r.tick(10);
+        assert_eq!(r.snapshot().zone_time_s, [0, 0, 3, 0, 0]);
+        r.resume(10);
+
+        // Auto-pause: jitter within the movement gate adds no moving time and
+        // no zone time, even with a live HR.
+        r.on_fix(&fix(40.00024, -105.0, 0.0, 11));
+        r.on_fix(&fix(40.000245, -105.0, 0.0, 13));
+        let s = r.snapshot();
+        assert_eq!(s.state, RecordState::Paused);
+        assert_eq!(s.zone_time_s, [0, 0, 3, 0, 0]);
+
+        // A slow (sub-moving-gate) segment counts distance but neither moving
+        // nor zone time.
+        r.on_fix(&fix(40.00028, -105.0, 0.3, 23));
+        let s = r.snapshot();
+        assert_eq!(s.moving_s, 3);
+        assert_eq!(s.zone_time_s, [0, 0, 3, 0, 0]);
+    }
+
+    #[test]
+    fn start_resets_the_zone_accumulators_but_keeps_the_sticky_hr() {
+        let mut r = Recorder::new();
+        r.start(0);
+        r.set_hr(Some(160));
+        for i in 0..=3u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00008, -105.0, 5.0, i));
+        }
+        r.stop(4);
+        assert_eq!(r.snapshot().zone_time_s, [0, 0, 0, 3, 0]);
+
+        let mut r2 = Recorder::new();
+        r2.set_hr(Some(160));
+        r2.start(0);
+        assert_eq!(r2.snapshot().zone_time_s, [0; 5]);
+        // The sticky HR survives start — the first moving segment banks.
+        r2.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        r2.on_fix(&fix(40.00008, -105.0, 5.0, 1));
+        assert_eq!(r2.snapshot().zone_time_s, [0, 0, 0, 1, 0]);
+    }
+
+    #[test]
+    fn set_max_hr_rebuilds_the_ladder_and_rejects_garbage() {
+        let mut r = Recorder::new();
+        assert_eq!(r.snapshot().zone_cutoffs, [114, 133, 152, 171, 190]);
+        r.set_max_hr(200);
+        assert_eq!(r.snapshot().zone_cutoffs, [120, 140, 160, 180, 200]);
+        // Outside the 80..=240 plausibility window: ignored, ladder kept.
+        r.set_max_hr(40);
+        r.set_max_hr(300);
+        assert_eq!(r.snapshot().zone_cutoffs, [120, 140, 160, 180, 200]);
+
+        // The new ladder rebuckets from now on: 135 bpm is Z3 on the 190
+        // ladder but only Z2 at max 200.
+        r.start(0);
+        r.set_hr(Some(135));
+        r.on_fix(&fix(40.0, -105.0, 5.0, 0));
+        r.on_fix(&fix(40.00008, -105.0, 5.0, 1));
+        assert_eq!(r.snapshot().zone_time_s, [0, 1, 0, 0, 0]);
     }
 
     #[test]

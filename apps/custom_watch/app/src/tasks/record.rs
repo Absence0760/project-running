@@ -190,6 +190,10 @@ pub async fn run(store: &'static SharedStore) {
             Event::Fix(fix) => {
                 if let Some(r) = hr_rx.try_changed() {
                     latest_bpm = bpm_of(&r);
+                    // The recorder's zone-time accumulators bank against the
+                    // same HR the track points are stamped with; a dropped
+                    // pulse (None) stops the accrual.
+                    recorder.set_hr(latest_bpm.map(u16::from));
                 }
                 if let Some(r) = elev_rx.try_changed() {
                     latest_baro_alt_m = Some(r.alt_m);
