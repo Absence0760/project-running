@@ -25,6 +25,8 @@
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
 //!   goal distance + time) the recorder folds into its snapshot
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
+//! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
+//!   the start, the course-over-ground heading + relative direction arrow
 //! - [`button`] — the pure button-press → record-command mapping
 //! - [`run_store`] — on-device run wire format + BLE sync framing
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
@@ -45,3 +47,4 @@ pub mod pacer;
 pub mod page;
 pub mod record;
 pub mod run_store;
+pub mod trackback;
