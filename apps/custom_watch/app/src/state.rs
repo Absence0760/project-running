@@ -8,6 +8,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::watch::Watch;
 use max86177::peak_detect::Reading as HrReading;
+use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::fix::Fix;
@@ -35,6 +36,12 @@ pub static RECORD_CMD: Channel<CriticalSectionRawMutex, RecordCommand, 4> = Chan
 /// the `phone`/`ble` link, and `record` (to stamp each stored track point's
 /// altitude) subscribe.
 pub static ELEVATION: Watch<CriticalSectionRawMutex, ElevationReading, 3> = Watch::new();
+
+/// The on-run alert currently on screen (`None` when the slot is clear):
+/// `record` drives the `watch_core::alerts` engine and publishes on change;
+/// the `ui` face draws the active alert as a 2x banner over the hero band.
+/// One receiver (the `ui` task).
+pub static ALERT: Watch<CriticalSectionRawMutex, Option<Alert>, 1> = Watch::new();
 
 /// Current run-view page: the `button` task advances it on each BTN3 press, the
 /// `ui` face reads it to pick the layout. One receiver (the `ui` task).
