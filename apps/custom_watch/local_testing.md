@@ -162,7 +162,7 @@ You **cannot**:
 ```
 runMacro $btn1    # start / pause / resume the recording
 runMacro $btn2    # stop the recording (commits the run to flash)
-runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap
+runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap -> Zones -> Pacer
 runMacro $btn4    # take a manual lap
 ```
 
