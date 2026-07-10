@@ -1624,6 +1624,7 @@ mod tests {
             Some(152),
             Some(&rec),
             None,
+            NavView::NoCourse,
             42,
             true,
         );
@@ -1652,7 +1653,16 @@ mod tests {
     fn pacer_glance_spells_out_behind_with_the_minus_sign() {
         let mut rec = snapshot(RecordState::Recording, 1_780.0);
         rec.pacer = Some(pacer_status(-216.7, -65, PaceVerdict::Behind, Some(3_370)));
-        let rows = page_rows(Page::Pacer, Some(&fix()), None, Some(&rec), None, 42, true);
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            42,
+            true,
+        );
         assert_eq!(
             page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
             "-1:05"
@@ -1663,7 +1673,16 @@ mod tests {
 
         // Level with the partner: an explicit +0:00 ON PACE, never blank.
         rec.pacer = Some(pacer_status(0.0, 0, PaceVerdict::OnPace, None));
-        let rows = page_rows(Page::Pacer, Some(&fix()), None, Some(&rec), None, 42, true);
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            42,
+            true,
+        );
         assert_eq!(
             page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
             "+0:00"
@@ -1679,7 +1698,16 @@ mod tests {
         // zeros that read as "perfectly on pace".
         let rec = snapshot(RecordState::Recording, 2_100.0);
         assert!(rec.pacer.is_none());
-        let rows = page_rows(Page::Pacer, Some(&fix()), None, Some(&rec), None, 2, true);
+        let rows = page_rows(
+            Page::Pacer,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            2,
+            true,
+        );
         assert_eq!(
             page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
             "--"
