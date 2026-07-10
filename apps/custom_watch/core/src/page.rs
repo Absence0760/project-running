@@ -32,6 +32,9 @@ pub enum Page {
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
+    /// Distance back to the run's start up large, with a relative direction
+    /// arrow, heading/bearing rows, and the TrackBack breadcrumb map.
+    BackToStart,
 }
 
 impl Page {
@@ -44,7 +47,8 @@ impl Page {
             Page::Lap => Page::Zones,
             Page::Zones => Page::Pacer,
             Page::Pacer => Page::Nav,
-            Page::Nav => Page::Dashboard,
+            Page::Nav => Page::BackToStart,
+            Page::BackToStart => Page::Dashboard,
         }
     }
 }
@@ -66,8 +70,9 @@ mod tests {
         assert_eq!(Page::Lap.next(), Page::Zones);
         assert_eq!(Page::Zones.next(), Page::Pacer);
         assert_eq!(Page::Pacer.next(), Page::Nav);
-        assert_eq!(Page::Nav.next(), Page::Dashboard);
-        // Walking `next` from the default visits all seven and returns home.
+        assert_eq!(Page::Nav.next(), Page::BackToStart);
+        assert_eq!(Page::BackToStart.next(), Page::Dashboard);
+        // Walking `next` from the default visits all eight and returns home.
         let mut p = Page::default();
         let mut seen = [
             p,
@@ -77,6 +82,7 @@ mod tests {
             p.next().next().next().next(),
             p.next().next().next().next().next(),
             p.next().next().next().next().next().next(),
+            p.next().next().next().next().next().next().next(),
         ];
         seen.sort_by_key(|q| *q as u8);
         assert_eq!(
@@ -88,10 +94,11 @@ mod tests {
                 Page::Lap,
                 Page::Zones,
                 Page::Pacer,
-                Page::Nav
+                Page::Nav,
+                Page::BackToStart
             ]
         );
-        for _ in 0..7 {
+        for _ in 0..8 {
             p = p.next();
         }
         assert_eq!(p, Page::default());

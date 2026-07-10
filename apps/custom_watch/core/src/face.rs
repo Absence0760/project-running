@@ -29,6 +29,7 @@ use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
 use crate::record::{RecordState, Snapshot};
+use crate::trackback::{self, TrackbackView};
 
 pub const COLS: usize = 21;
 pub const ROWS: usize = 9;
@@ -205,6 +206,7 @@ pub fn page_rows(
     rec: Option<&Snapshot>,
     elev: Option<&elevation::Reading>,
     nav: NavView,
+    tb: Option<&TrackbackView>,
     uptime_s: u32,
     animate: bool,
 ) -> [Row; ROWS] {
@@ -234,6 +236,7 @@ pub fn page_rows(
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate),
             Page::Nav => nav_page(nav, fix, tag, uptime_s, animate),
+            Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate),
         },
     }
 }
@@ -251,9 +254,13 @@ pub fn page_icons(
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
         Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
-        Page::Distance | Page::Pace | Page::Lap | Page::Zones | Page::Pacer | Page::Nav => {
-            [None; ROWS]
-        }
+        Page::Distance
+        | Page::Pace
+        | Page::Lap
+        | Page::Zones
+        | Page::Pacer
+        | Page::Nav
+        | Page::BackToStart => [None; ROWS],
     }
 }
 
@@ -261,7 +268,12 @@ pub fn page_icons(
 /// headline metric on a glance page (the live BPM on the zones page, `--`
 /// without a pulse), or `None` when no run is under way. The Nav page never
 /// has a hero — its map panel owns the rows the hero would cover.
-pub fn page_hero(page: Page, hr_bpm: Option<u16>, rec: Option<&Snapshot>) -> Option<Row> {
+pub fn page_hero(
+    page: Page,
+    hr_bpm: Option<u16>,
+    rec: Option<&Snapshot>,
+    tb: Option<&TrackbackView>,
+) -> Option<Row> {
     let snap = rec.filter(|snap| rec_tag(snap.state).is_some())?;
     Some(match page {
         Page::Nav => return None,
@@ -294,7 +306,27 @@ pub fn page_hero(page: Page, hr_bpm: Option<u16>, rec: Option<&Snapshot>) -> Opt
                 row
             }
         },
+        Page::BackToStart => {
+            let mut row = Row::new();
+            match trackback_distance(tb) {
+                Some(d) if d < 1000.0 => {
+                    let _ = write!(row, "{:.0}", d);
+                }
+                Some(d) => {
+                    let _ = write!(row, "{:.2}", (d / 1000.0).min(9999.99));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
     })
+}
+
+/// The back-to-start distance, or `None` before the run has a start anchor.
+fn trackback_distance(tb: Option<&TrackbackView>) -> Option<f32> {
+    tb.filter(|n| n.active()).map(|n| n.distance_to_start_m)
 }
 
 #[derive(Clone, Copy)]
@@ -606,6 +638,89 @@ fn signed_split(delta_s: i32) -> Row {
     let _ = row.push(if delta_s < 0 { '-' } else { '+' });
     let _ = row.push_str(split_row(delta_s.unsigned_abs()).as_str());
     row
+}
+
+/// Cells (from the left) the back-to-start page's text may occupy on rows 3-7:
+/// the right of those rows is the breadcrumb-map pixel region the app draws
+/// after the text, so a longer row would collide with it.
+pub const TRACKBACK_TEXT_COLS: usize = 10;
+
+/// The back-to-start glance: distance back to the run's start up large in the
+/// rows-0-1 hero (drawn by the app from [`page_hero`] — metres under a
+/// kilometre, km with decimals beyond, the unit named on the label row), then
+/// HDG (course over ground from the last two well-separated accepted fixes —
+/// tier 1 has no magnetometer, so it is only meaningful while moving) and BRG
+/// (great-circle bearing back to the start) as 16-wind names. The app overlays
+/// the left of rows 5-7 with the relative direction arrow and the right of
+/// rows 3-7 with the TrackBack breadcrumb map (see `trackback::project_track`);
+/// this text layer only reserves that space. A missing or stale heading shows
+/// `--` in the arrow's spot — an honest placeholder, never a stale arrow.
+fn back_to_start_glance(
+    fix: Option<&Fix>,
+    tb: Option<&TrackbackView>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match trackback_distance(tb) {
+        Some(d) if d < 1000.0 => {
+            let _ = write!(rows[2], "TO START  M");
+        }
+        Some(_) => {
+            let _ = write!(rows[2], "TO START  KM");
+        }
+        None => {
+            let _ = write!(rows[2], "TO START");
+        }
+    }
+
+    let heading = tb.and_then(|n| n.heading_sector(uptime_s));
+    let bearing = tb.filter(|n| n.active()).and_then(|n| n.bearing_sector());
+    match heading {
+        Some(s) => {
+            let _ = write!(
+                rows[3],
+                "{:<5}{}",
+                "HDG",
+                trackback::SECTOR_NAMES[s as usize]
+            );
+        }
+        None => {
+            let _ = write!(rows[3], "{:<5}--", "HDG");
+        }
+    }
+    match bearing {
+        Some(s) => {
+            let _ = write!(
+                rows[4],
+                "{:<5}{}",
+                "BRG",
+                trackback::SECTOR_NAMES[s as usize]
+            );
+        }
+        None => {
+            let _ = write!(rows[4], "{:<5}--", "BRG");
+        }
+    }
+
+    // The arrow's spot: blank when the app will draw the arrow there, an
+    // honest placeholder when it can't (no or stale heading, or still at the
+    // start) — never a stale arrow.
+    if tb.and_then(|n| n.arrow_sector(uptime_s)).is_none() {
+        let _ = write!(rows[6], "  --");
+    }
+
+    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    rows
 }
 
 /// A lap split as `M:SS`, growing to `H:MM:SS` past the hour — laps are
@@ -1147,6 +1262,7 @@ mod tests {
                 Some(&rec),
                 Some(&e),
                 NavView::NoCourse,
+                None,
                 42,
                 true
             ),
@@ -1164,7 +1280,7 @@ mod tests {
             face_icons(Some(&fix()), Some(152), Some(&rec), 42)
         );
         assert_eq!(
-            page_hero(Page::Dashboard, Some(152), Some(&rec)),
+            page_hero(Page::Dashboard, Some(152), Some(&rec), None),
             hero_line(Some(&rec))
         );
     }
@@ -1181,11 +1297,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Distance, Some(152), Some(&rec))
+            page_hero(Page::Distance, Some(152), Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "42.19"
@@ -1221,11 +1338,14 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Pace, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Pace, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "5:12"
         );
         assert_eq!(rows[2].as_str(), "AVG PACE  /KM");
@@ -1235,7 +1355,9 @@ mod tests {
         // No pace yet -> the hero placeholder, never a bogus number.
         let fresh = snapshot(RecordState::Recording, 5.0);
         assert_eq!(
-            page_hero(Page::Pace, None, Some(&fresh)).unwrap().as_str(),
+            page_hero(Page::Pace, None, Some(&fresh), None)
+                .unwrap()
+                .as_str(),
             "--:--"
         );
     }
@@ -1253,6 +1375,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
@@ -1264,6 +1387,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
@@ -1289,11 +1413,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Lap, Some(152), Some(&rec))
+            page_hero(Page::Lap, Some(152), Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "2:05"
@@ -1322,6 +1447,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             2,
             true,
         );
@@ -1329,7 +1455,9 @@ mod tests {
         assert_eq!(rows[4].as_str(), "LAST --");
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(
-            page_hero(Page::Lap, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Lap, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "0:00"
         );
     }
@@ -1341,12 +1469,16 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 100.0);
         rec.lap_elapsed_s = 59 * 60 + 59;
         assert_eq!(
-            page_hero(Page::Lap, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Lap, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "59:59"
         );
         rec.lap_elapsed_s = 3600 + 2 * 60 + 3;
         assert_eq!(
-            page_hero(Page::Lap, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Lap, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "1:02:03"
         );
     }
@@ -1369,6 +1501,7 @@ mod tests {
                 Some(&rec),
                 None,
                 NavView::NoCourse,
+                None,
                 odd,
                 true
             )[0]
@@ -1383,6 +1516,7 @@ mod tests {
                 Some(&rec),
                 None,
                 NavView::NoCourse,
+                None,
                 odd,
                 false
             )[0]
@@ -1444,6 +1578,7 @@ mod tests {
             Page::Zones,
             Page::Pacer,
             Page::Nav,
+            Page::BackToStart,
         ] {
             let rows = page_rows(
                 page,
@@ -1452,11 +1587,12 @@ mod tests {
                 None,
                 None,
                 NavView::NoCourse,
+                None,
                 42,
                 true,
             );
             assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
-            assert!(page_hero(page, None, None).is_none());
+            assert!(page_hero(page, None, None, None).is_none());
             assert!(page_icons(page, Some(&fix()), None, None, 42, true)
                 .iter()
                 .all(Option::is_none));
@@ -1504,12 +1640,18 @@ mod tests {
                 Some(&rec),
                 None,
                 NavView::NoCourse,
+                None,
                 43,
                 true,
             ) {
                 assert!(row.len() <= COLS, "glance row too wide: {:?}", row);
             }
-            assert!(page_hero(page, Some(u16::MAX), Some(&rec)).unwrap().len() <= COLS);
+            assert!(
+                page_hero(page, Some(u16::MAX), Some(&rec), None)
+                    .unwrap()
+                    .len()
+                    <= COLS
+            );
         }
     }
 
@@ -1525,11 +1667,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Zones, Some(152), Some(&rec))
+            page_hero(Page::Zones, Some(152), Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "152"
@@ -1561,11 +1704,14 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             2,
             true,
         );
         assert_eq!(
-            page_hero(Page::Zones, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Zones, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "--"
         );
         assert_eq!(rows[2].as_str(), "HR  BPM       ZONE --");
@@ -1589,6 +1735,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             2,
             true,
         );
@@ -1625,11 +1772,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, Some(152), Some(&rec))
+            page_hero(Page::Pacer, Some(152), Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "+0:42"
@@ -1660,11 +1808,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
             "-1:05"
         );
         assert_eq!(rows[2].as_str(), "PACER         BEHIND");
@@ -1680,11 +1829,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
             "+0:00"
         );
         assert_eq!(rows[2].as_str(), "PACER         ON PACE");
@@ -1705,11 +1855,12 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             2,
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
             "--"
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
@@ -1731,7 +1882,7 @@ mod tests {
             None,
         ));
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec)).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
             "-1:02:03"
         );
     }
@@ -1751,6 +1902,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             42,
             true,
         );
@@ -1791,6 +1943,7 @@ mod tests {
             Some(&rec),
             None,
             nav_status(12_340.0, 23.4, false),
+            None,
             42,
             true,
         );
@@ -1798,7 +1951,7 @@ mod tests {
         assert_eq!(rows[7].as_str(), "12.34 KM  OFF 23 M");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS");
         // No hero and no gutter icons — the map panel owns rows 1-6.
-        assert!(page_hero(Page::Nav, Some(152), Some(&rec)).is_none());
+        assert!(page_hero(Page::Nav, Some(152), Some(&rec), None).is_none());
         assert!(
             page_icons(Page::Nav, Some(&fix()), Some(152), Some(&rec), 42, true)
                 .iter()
@@ -1821,6 +1974,7 @@ mod tests {
                 Some(&rec),
                 None,
                 nav,
+                None,
                 42,
                 true,
             );
@@ -1840,6 +1994,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoCourse,
+            None,
             2,
             true,
         );
@@ -1851,6 +2006,7 @@ mod tests {
             Some(&rec),
             None,
             NavView::NoFix,
+            None,
             2,
             true,
         );
@@ -1873,12 +2029,12 @@ mod tests {
     fn nav_rec_tag_blinks_but_the_label_stays() {
         let rec = snapshot(RecordState::Recording, 100.0);
         let nav = nav_status(500.0, 5.0, false);
-        let even = page_rows(Page::Nav, None, None, Some(&rec), None, nav, 10, true);
+        let even = page_rows(Page::Nav, None, None, Some(&rec), None, nav, None, 10, true);
         assert_eq!(even[0].as_str(), "NAV               REC");
-        let odd = page_rows(Page::Nav, None, None, Some(&rec), None, nav, 11, true);
+        let odd = page_rows(Page::Nav, None, None, Some(&rec), None, nav, None, 11, true);
         assert_eq!(odd[0].as_str(), "NAV");
         // Gated animation holds the tag steady-on.
-        let gated = page_rows(Page::Nav, None, None, Some(&rec), None, nav, 11, false);
+        let gated = page_rows(Page::Nav, None, None, Some(&rec), None, nav, None, 11, false);
         assert_eq!(gated[0].as_str(), "NAV               REC");
     }
 
@@ -1893,6 +2049,7 @@ mod tests {
             Some(&rec),
             None,
             nav,
+            None,
             43,
             true,
         );
@@ -1901,5 +2058,162 @@ mod tests {
         }
         // Both values clamp rather than overflow the 21-cell info row.
         assert_eq!(rows[7].as_str(), "999.99 KM  OFF 9999 M");
+    }
+
+    /// A TrackbackView from a due-east walk: `steps` hops of `step_m`, one per second.
+    fn nav_east(steps: u32, step_m: f64) -> TrackbackView {
+        let mut tb = trackback::Trackback::new();
+        let lon_per_m = 1.0 / (crate::record::METRES_PER_DEGREE_LAT * (40.0f64.to_radians()).cos());
+        for i in 0..=steps {
+            tb.on_point(40.0, -105.0 + i as f64 * step_m * lon_per_m, i);
+        }
+        tb.view()
+    }
+
+    #[test]
+    fn back_to_start_shows_distance_heading_and_bearing() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let nav = nav_east(20, 6.0); // ~120 m due east, heading E, start W
+        let rows = page_rows(
+            Page::BackToStart,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            Some(&nav),
+            20,
+            true,
+        );
+        assert_eq!(
+            page_hero(Page::BackToStart, None, Some(&rec), Some(&nav))
+                .unwrap()
+                .as_str(),
+            "120"
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "TO START  M");
+        assert_eq!(rows[3].as_str(), "HDG  E");
+        assert_eq!(rows[4].as_str(), "BRG  W");
+        // A live arrow: its text spot stays blank for the app's drawing.
+        assert_eq!(rows[6].as_str(), "");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        // Text-only page: no gutter icons.
+        assert!(
+            page_icons(Page::BackToStart, Some(&fix()), None, Some(&rec), 20, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn back_to_start_hero_switches_to_km_past_a_kilometre() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let nav = nav_east(500, 6.0); // ~3 km due east
+        let rows = page_rows(
+            Page::BackToStart,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            Some(&nav),
+            500,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "TO START  KM");
+        assert_eq!(
+            page_hero(Page::BackToStart, None, Some(&rec), Some(&nav))
+                .unwrap()
+                .as_str(),
+            "3.00"
+        );
+    }
+
+    #[test]
+    fn back_to_start_placeholders_without_nav_and_with_a_stale_heading() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        // No nav yet (recording started, no accepted fix): placeholders all round.
+        let rows = page_rows(
+            Page::BackToStart,
+            None,
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            2,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "TO START");
+        assert_eq!(rows[3].as_str(), "HDG  --");
+        assert_eq!(rows[4].as_str(), "BRG  --");
+        assert_eq!(rows[6].as_str(), "  --");
+        assert_eq!(
+            page_hero(Page::BackToStart, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+        // A stopped runner: the heading goes stale, so HDG and the arrow blank
+        // while the bearing (position-only) stays live.
+        let nav = nav_east(20, 6.0);
+        let stale_s = 21 + trackback::HEADING_STALE_S;
+        let rows = page_rows(
+            Page::BackToStart,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            Some(&nav),
+            stale_s,
+            true,
+        );
+        assert_eq!(rows[3].as_str(), "HDG  --");
+        assert_eq!(rows[4].as_str(), "BRG  W");
+        assert_eq!(rows[6].as_str(), "  --");
+    }
+
+    #[test]
+    fn back_to_start_text_keeps_clear_of_the_map_region() {
+        // Rows 3-7 share the screen with the breadcrumb map (right of
+        // TRACKBACK_TEXT_COLS) and the arrow; their text must stay inside the
+        // reserved columns in every state.
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let mut extreme = nav_east(20, 6.0);
+        extreme.distance_to_start_m = 20_000_000.0;
+        for nav in [None, Some(&extreme)] {
+            for uptime_s in [2, 20, 21 + trackback::HEADING_STALE_S] {
+                let rows = page_rows(
+                    Page::BackToStart,
+                    Some(&fix()),
+                    None,
+                    Some(&rec),
+                    None,
+                    NavView::NoCourse,
+                    nav,
+                    uptime_s,
+                    true,
+                );
+                for row in &rows[3..8] {
+                    assert!(
+                        row.len() <= TRACKBACK_TEXT_COLS,
+                        "nav row collides with the map: {:?}",
+                        row
+                    );
+                }
+                for row in &rows {
+                    assert!(row.len() <= COLS, "nav row too wide: {:?}", row);
+                }
+            }
+        }
+        // The km hero clamps like the distance glance's.
+        assert_eq!(
+            page_hero(Page::BackToStart, None, Some(&rec), Some(&extreme))
+                .unwrap()
+                .as_str(),
+            "9999.99"
+        );
     }
 }
