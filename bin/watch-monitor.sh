@@ -8,7 +8,7 @@
 #
 #   runMacro $btn1    start / pause / resume the recording
 #   runMacro $btn2    stop the recording
-#   runMacro $btn3    cycle the run-view page (dashboard/distance/pace/lap)
+#   runMacro $btn3    cycle the run-view page (dashboard/distance/pace/lap/zones/pacer)
 #   runMacro $btn4    manual lap
 #
 # Any other monitor command works too, e.g.:

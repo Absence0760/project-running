@@ -8,7 +8,8 @@
 //! Mapping (see `watch_core::button::command_for`):
 //!   BTN1 — start / pause / resume toggle
 //!   BTN2 — stop
-//!   BTN3 — cycle the run-view page (dashboard / distance / pace / lap)
+//!   BTN3 — cycle the run-view page (dashboard / distance / pace / lap /
+//!          zones / pacer)
 //!   BTN4 — manual lap (the Fenix layout's lower-right Lap, decisions §81)
 //! The buttons are active-LOW (idle high, press pulls low), so a press is a
 //! falling edge and a held press reads `is_low()`. BTN3 carries no recording
