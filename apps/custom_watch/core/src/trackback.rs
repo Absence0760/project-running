@@ -55,7 +55,10 @@ pub const SECTOR_NAMES: [&str; SECTOR_COUNT as usize] = [
 /// Quantise a compass angle (degrees, any range) to its 16-wind sector,
 /// 0 = north / straight ahead, clockwise.
 pub fn sector_of_deg(deg: f32) -> u8 {
-    let d = deg.rem_euclid(360.0);
+    let mut d = libm::fmodf(deg, 360.0);
+    if d < 0.0 {
+        d += 360.0;
+    }
     (((d + 11.25) / 22.5) as u8) % SECTOR_COUNT
 }
 
@@ -74,7 +77,7 @@ fn initial_bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 /// points are metre offsets east/north of the run's start (equirectangular at
 /// the start latitude), which keeps the map projection a plain affine fit.
 #[derive(Clone, Copy, Debug)]
-pub struct NavView {
+pub struct TrackbackView {
     pub points: [(f32, f32); BREADCRUMB_CAP],
     pub len: usize,
     pub current_e_m: f32,
@@ -85,13 +88,13 @@ pub struct NavView {
     pub bearing_to_start_deg: Option<f32>,
     /// Course over ground from the last two sufficiently-separated accepted
     /// fixes; `None` until the first qualifying move. Judge freshness with
-    /// [`heading_fresh`](NavView::heading_fresh) before rendering.
+    /// [`heading_fresh`](TrackbackView::heading_fresh) before rendering.
     pub heading_deg: Option<f32>,
     /// Uptime second the heading was last derived.
     pub heading_uptime_s: u32,
 }
 
-impl NavView {
+impl TrackbackView {
     pub const fn empty() -> Self {
         Self {
             points: [(0.0, 0.0); BREADCRUMB_CAP],
@@ -154,7 +157,7 @@ pub struct TrackMap {
 /// north up, aspect preserved, centred, with a 2 px margin. `None` while the
 /// view is inactive or the region is too small to read.
 pub fn project_track(
-    view: &NavView,
+    view: &TrackbackView,
     w: u16,
     h: u16,
     out: &mut [(u16, u16); BREADCRUMB_CAP + 1],
@@ -222,11 +225,7 @@ pub fn arrow_lines(sector: u8, cx: i32, cy: i32, r: i32) -> [((i32, i32), (i32, 
         )
     };
     let quarter = core::f64::consts::FRAC_PI_4;
-    [
-        (tail, tip),
-        (tip, barb(quarter)),
-        (tip, barb(-quarter)),
-    ]
+    [(tail, tip), (tip, barb(quarter)), (tip, barb(-quarter))]
 }
 
 struct Origin {
@@ -312,19 +311,13 @@ impl Trackback {
             self.len += 1;
         }
 
-        let sep = haversine_metres(
-            self.anchor_lat_deg,
-            self.anchor_lon_deg,
-            lat_deg,
-            lon_deg,
-        );
+        let sep = haversine_metres(self.anchor_lat_deg, self.anchor_lon_deg, lat_deg, lon_deg);
         if sep >= HEADING_MIN_SEP_M {
-            self.heading_deg = Some(initial_bearing_deg(
-                self.anchor_lat_deg,
-                self.anchor_lon_deg,
-                lat_deg,
-                lon_deg,
-            ) as f32);
+            self.heading_deg =
+                Some(
+                    initial_bearing_deg(self.anchor_lat_deg, self.anchor_lon_deg, lat_deg, lon_deg)
+                        as f32,
+                );
             self.heading_uptime_s = uptime_s;
             self.anchor_lat_deg = lat_deg;
             self.anchor_lon_deg = lon_deg;
@@ -346,9 +339,9 @@ impl Trackback {
         self.spacing_m *= 2.0;
     }
 
-    pub fn view(&self) -> NavView {
+    pub fn view(&self) -> TrackbackView {
         let Some(origin) = &self.origin else {
-            return NavView::empty();
+            return TrackbackView::empty();
         };
         let distance = haversine_metres(
             self.current_lat_deg,
@@ -364,7 +357,7 @@ impl Trackback {
                 origin.lon_deg,
             ) as f32
         });
-        NavView {
+        TrackbackView {
             points: self.points,
             len: self.len,
             current_e_m: ((self.current_lon_deg - origin.lon_deg) * origin.m_per_deg_lon) as f32,
@@ -596,7 +589,7 @@ mod tests {
         assert!((map.start.0 as i32 - 39).abs() <= 1);
         assert!((map.start.1 as i32 - 39).abs() <= 1);
         assert!(project_track(&v, 4, 80, &mut out).is_none());
-        assert!(project_track(&NavView::empty(), 80, 80, &mut out).is_none());
+        assert!(project_track(&TrackbackView::empty(), 80, 80, &mut out).is_none());
     }
 
     #[test]
