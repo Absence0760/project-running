@@ -43,7 +43,7 @@ the stack is re-applied so the Lambda gets them. Run the rows top-to-bottom:
 
 ## Custom watch firmware (research-tier, [§ 71](../docs/architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](../docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance))
 
-Wrappers around `cargo` + `probe-rs` (and Renode, for the simulator) for the Rust + Embassy firmware at [`apps/custom_watch/`](../apps/custom_watch/README.md). All six `cd` into the workspace and forward extra args. Full walkthrough in [`apps/custom_watch/local_testing.md`](../apps/custom_watch/local_testing.md).
+Wrappers around `cargo` + `probe-rs` (and Renode, for the simulator) for the Rust + Embassy firmware at [`apps/custom_watch/`](../apps/custom_watch/README.md). The build/flash/test wrappers `cd` into the workspace and forward extra args. Full walkthrough in [`apps/custom_watch/local_testing.md`](../apps/custom_watch/local_testing.md).
 
 | When | Run |
 |---|---|
@@ -51,6 +51,7 @@ Wrappers around `cargo` + `probe-rs` (and Renode, for the simulator) for the Rus
 | Inner loop — build, flash, stream `defmt` logs over RTT until Ctrl-C | `bin/watch-flash.sh` |
 | Host-side unit tests (no board required) | `bin/watch-test.sh` |
 | Boot the firmware on an emulated nRF52840 DK + stream decoded `defmt` logs (no board required; `--gui` opens the live watch screen, phone link on TCP 7788) | `bin/watch-sim.sh` |
+| Attach an interactive Renode monitor to the running sim, from a second terminal (button macros: `runMacro $btn1`…`$btn4` — start/pause, stop, page, lap) | `bin/watch-monitor.sh` |
 | Compile-check / release binary without flashing | `bin/watch-build.sh` |
 | Stream logs from an already-running board (no reflash) | `bin/watch-logs.sh` |
 
