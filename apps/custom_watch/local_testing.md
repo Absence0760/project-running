@@ -154,12 +154,13 @@ You **cannot**:
 
 **The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press.
 
-**The `sim-buttons` feature — driving BTN1/BTN2/BTN3 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Inject presses from the monitor (`ncat localhost <port>`, the port is printed at startup):
+**The `sim-buttons` feature — driving BTN1/BTN2/BTN3/BTN4 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Inject presses from the monitor (`ncat localhost <port>`, the port is printed at startup):
 
 ```
 runMacro $btn1    # start / pause / resume the recording
 runMacro $btn2    # stop the recording (commits the run to flash)
-runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace
+runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap
+runMacro $btn4    # take a manual lap
 ```
 
 Each macro pulls the button's input pin low for ~0.3 s via `gpio0 OnGPIO`, then releases it — a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN3 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. These two features are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
@@ -178,7 +179,7 @@ What runs for real in the sim, end to end: the Embassy executor and RTC1 time dr
 
 Moving parts, all inside [`sim/`](sim/):
 
-- **`watch.resc`** — the Renode script: loads the `nrf52840` CPU platform + the DK LEDs inline (the stock `nrf52840dk_nrf52840` board repl is *not* used — its non-inverted Button peripherals drive the pins low at reset, which the firmware's pulled-up inputs would read as "pressed"), declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, defines the `btn1`/`btn2`/`btn3` injection macros, bridges the phone-link UART to TCP, exposes the GPS UART as a pty.
+- **`watch.resc`** — the Renode script: loads the `nrf52840` CPU platform + the DK LEDs inline (the stock `nrf52840dk_nrf52840` board repl is *not* used — its non-inverted Button peripherals drive the pins low at reset, which the firmware's pulled-up inputs would read as "pressed"), declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, defines the `btn1`/`btn2`/`btn3`/`btn4` injection macros, bridges the phone-link UART to TCP, exposes the GPS UART as a pty.
 - **`defmt_rtt.py`** — gets defmt logs out. Renode's bundled `segger-rtt.py` hooks the SEGGER *C library's* function symbols, which the pure-Rust `defmt-rtt` crate doesn't have; this script instead polls the `_SEGGER_RTT` control block in emulated RAM, appends new bytes to a capture file, and advances the read offset. The wrapper tails that file through `defmt-print -e <elf>` for live decoded output.
 - **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer. `showAnalyzer sysbus.spi3.display` is the window `--gui` opens; `DumpFrame` writes a PPM for headless checks.
 - **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever; the GPS task parses it into fixes that drive both the on-screen face and the phone-link frames, so the whole data path is exercised against a deterministic feed.
