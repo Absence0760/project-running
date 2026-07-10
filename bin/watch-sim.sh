@@ -6,9 +6,10 @@
 #
 # The ELF is the same thumbv7em build watch-flash.sh flashes, plus two sim
 # features: `sim-autostart` (start recording on the first fix so a run records
-# without a button) and `sim-buttons` (poll the button pins so the watch.resc
-# btn1/btn2/btn3 monitor macros can drive BTN1 start/pause, BTN2 stop, BTN3
-# page). What you can't simulate: BLE (nrf-softdevice needs the real radio),
+# without a button) and `sim-buttons` (poll the button pins so BTN1-4 presses
+# work — clicked on the --gui window's bezel, or injected via the watch.resc
+# btn1..btn4 monitor macros: BTN1 start/pause, BTN2 stop, BTN3 page, BTN4
+# lap). What you can't simulate: BLE (nrf-softdevice needs the real radio),
 # power draw, GPS/HR analog behaviour. See
 # apps/custom_watch/local_testing.md § Simulating without a board.
 #
@@ -95,7 +96,7 @@ echo "$MONITOR_PORT" > "$RUN_DIR/monitor.port"
 ln -sfn "$RUN_DIR" "$LATEST_LINK"
 RENODE_CMDS="\$elf=@$ELF; \$defmt_out=@$DEFMT_RAW; \$gps_pty=@$GPS_PTY; \$phone_port=$PHONE_PORT; include @$WORKSPACE/sim/watch.resc"
 if [[ "$GUI" == 1 ]]; then
-	step "Starting Renode (GUI — watch screen in a window)"
+	step "Starting Renode (GUI — watch screen in a window, BTN1-4 clickable under the LCD)"
 	RENODE_CMDS+="; showAnalyzer sysbus.spi3.display"
 else
 	step "Starting Renode (headless)"
@@ -119,7 +120,7 @@ done
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
-dim "buttons: in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page), \$btn4 (lap)"
+dim "buttons: click BTN1-4 in the --gui window, or in the monitor run  runMacro \$btn1 (start/pause), \$btn2 (stop), \$btn3 (page), \$btn4 (lap)"
 
 # Feed the fixture into the emulated GPS UART on a loop. Sentences come in
 # GGA+RMC pairs per GPS second; two lines per wall-clock second matches the
