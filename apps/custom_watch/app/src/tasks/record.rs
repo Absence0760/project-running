@@ -14,6 +14,11 @@
 //! a snapshot only when it actually changed, so a resting recorder wakes no
 //! downstream consumer (the ui face, the button task) on a heartbeat.
 //!
+//! It also drives the `watch_core::alerts` engine (drink / eat reminders on
+//! the fuel_plan moving-time cadence + the HR-zone ceiling alert) off the same
+//! event cadence, publishing the active alert to `state::ALERT` on change —
+//! after the recorder updates and never in its way (L4).
+//!
 //! Track capture: on start it opens a `run_store::RunWriter` over a slot-sized
 //! RAM staging buffer; each fix the recorder accepts as a new anchor
 //! (`Recorder::last_fix_stored`) becomes a `push_point`, stamped with the latest
@@ -32,6 +37,7 @@ use embassy_futures::select::{select, select3, Either, Either3};
 use embassy_time::{Duration, Instant, Ticker};
 use heapless::Vec;
 use max86177::peak_detect::Reading as HrReading;
+use watch_core::alerts::{Alert, AlertEngine};
 use watch_core::button::RecordCommand;
 use watch_core::fix::Fix;
 use watch_core::flash_store::{MAX_POINTS_PER_RUN, SLOT_LEN};
@@ -156,7 +162,13 @@ pub async fn run(store: &'static SharedStore) {
     let mut hr_rx = unwrap!(state::HR.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let sender = state::RECORD.sender();
+    let alert_sender = state::ALERT.sender();
     let mut recorder = Recorder::new();
+    // On-run alerts ride this task because it already owns the recorder's
+    // event cadence; the engine is pure and fed after the recorder updates,
+    // so an alert can never disturb the recording math (L4).
+    let mut alerts = AlertEngine::new();
+    let mut last_alert: Option<Alert> = None;
     let mut ticker = Ticker::every(Duration::from_secs(1));
     let mut next_seq: u32 = 0;
     let mut open: Option<OpenRun> = None;
@@ -167,6 +179,14 @@ pub async fn run(store: &'static SharedStore) {
     let mut last_published = recorder.snapshot();
     #[cfg(feature = "sim-autostart")]
     info!("record: sim-autostart on — starts on first fix");
+    // The sim can't wait 15 minutes of moving time for a real reminder, so
+    // the autostart build shortens the fuel cadences (drink 30 s, eat 45 s of
+    // moving time). Hardware keeps the fuel_plan-derived defaults.
+    #[cfg(feature = "sim-autostart")]
+    {
+        alerts.set_fuel_intervals(30, 45);
+        info!("record: sim fuel cadence 30s drink / 45s eat (moving time)");
+    }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
     loop {
@@ -245,6 +265,19 @@ pub async fn run(store: &'static SharedStore) {
         // Publish only on change: a resting recorder must not wake the ui face
         // or the button task on a heartbeat.
         let snap = recorder.snapshot();
+        let alert = alerts.on_update(
+            &snap,
+            latest_bpm.map(u16::from),
+            Instant::now().as_secs() as u32,
+        );
+        if alert != last_alert {
+            match alert {
+                Some(a) => info!("record: alert {}", a),
+                None => info!("record: alert cleared"),
+            }
+            last_alert = alert;
+            alert_sender.send(alert);
+        }
         if snap != last_published {
             debug!(
                 "record: {} dist={}m moving={}s",

@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
+use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -15,6 +15,7 @@ use embassy_nrf::spim::Spim;
 use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
+use watch_core::alerts::{self, Alert};
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::{self, FaceIcon};
 use watch_core::fix::Fix;
@@ -120,12 +121,14 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut page_rx = unwrap!(state::PAGE.receiver());
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
+    let mut alert_rx = unwrap!(state::ALERT.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr_bpm: Option<u16> = None;
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
     let mut page = Page::default();
     let mut last_interaction_s: u32 = 0;
+    let mut alert: Option<Alert> = None;
 
     if let Err(e) = display.clear_all() {
         warn!("ui: display clear failed: {:?}", e);
@@ -149,6 +152,9 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         }
         if let Some(t) = interaction_rx.try_changed() {
             last_interaction_s = t;
+        }
+        if let Some(a) = alert_rx.try_changed() {
+            alert = a;
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
@@ -179,8 +185,13 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         }
         // The 2x hero (elapsed time, or the glance page's headline metric)
         // overlays rows 0-1 (drawn after them so it wins); the state tag in
-        // row 0 sits top-right, clear of the digits.
-        if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref()) {
+        // row 0 sits top-right, clear of the digits. An active on-run alert
+        // takes the hero band over for its TTL — the banner ("! DRINK") is the
+        // most unmissable treatment a 1-bit panel gives, and the alert engine
+        // only emits during a run, so the idle face never loses its title.
+        if let Some(a) = alert {
+            fb.draw_text_2x(0, 0, &alerts::banner(a));
+        } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref()) {
             fb.draw_text_2x(0, 0, &hero);
         }
         if let Err(e) = display.flush(&mut fb) {
@@ -205,9 +216,10 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             rec_rx.changed(),
             elev_rx.changed(),
         );
-        let controls = select3(
+        let controls = select4(
             page_rx.changed(),
             interaction_rx.changed(),
+            alert_rx.changed(),
             Timer::after(tick),
         );
         // Apply the value the winning `changed()` yields. `changed()` advances
@@ -225,9 +237,10 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             }
             Either::First(Either4::Third(snap)) => rec = Some(snap),
             Either::First(Either4::Fourth(reading)) => elev = Some(reading),
-            Either::Second(Either3::First(p)) => page = p,
-            Either::Second(Either3::Second(t)) => last_interaction_s = t,
-            Either::Second(Either3::Third(())) => {}
+            Either::Second(Either4::First(p)) => page = p,
+            Either::Second(Either4::Second(t)) => last_interaction_s = t,
+            Either::Second(Either4::Third(a)) => alert = a,
+            Either::Second(Either4::Fourth(())) => {}
         }
     }
 }
