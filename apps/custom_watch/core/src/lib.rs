@@ -6,6 +6,8 @@
 //! 60-70% host-testable split that `local_testing.md` calls for and means
 //! the same core ports unchanged to tier-2 silicon (decisions.md § 90).
 //!
+//! - [`alerts`] — on-run alerts: drink / eat reminders on the `fuel_plan`
+//!   moving-time cadence + the HR-zone ceiling alert
 //! - [`fix`] — the GPS fix domain model + the RMC/GGA accumulator
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`grade_adjusted_pace`] — the Minetti GAP model (fourth parity port) +
@@ -23,6 +25,7 @@
 
 #![cfg_attr(not(test), no_std)]
 
+pub mod alerts;
 pub mod button;
 pub mod elevation;
 pub mod face;
