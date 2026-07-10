@@ -150,7 +150,7 @@ You **cannot**:
 
 ## Simulating without a board (Renode)
 
-`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with two sim-only Cargo features — `sim-autostart` and `sim-buttons` (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
+`bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with three sim-only Cargo features — `sim-autostart`, `sim-buttons`, and `sim-course` (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
 
 **The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press.
 
@@ -162,11 +162,13 @@ You **cannot**:
 ```
 runMacro $btn1    # start / pause / resume the recording
 runMacro $btn2    # stop the recording (commits the run to flash)
-runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap -> Zones -> Pacer
+runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap -> Zones -> Pacer -> Nav
 runMacro $btn4    # take a manual lap
 ```
 
-Each macro pulls the button's input pin low for ~0.3 s via `gpio0 OnGPIO`, then releases it — a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN3 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. These two features are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
+Each macro pulls the button's input pin low for ~0.3 s via `gpio0 OnGPIO`, then releases it — a bare `btn3` does *not* run a macro, use `runMacro $btn3`. Watch the defmt stream for `button: BTN3 -> page Distance` etc., or dump the panel before/after (below) to see the page switch. These two features plus `sim-course` (below) are the only places the sim ELF differs from the flashed one; the hardware build keeps the low-power SENSE button path.
+
+**The `sim-course` feature — the canned breadcrumb course.** The Nav run-view page follows a course (`watch_core::course`), but no course-push path exists yet — so the default-OFF `sim-course` feature bakes in a canned one: the west + south edges of the `bench_jog.nmea` rectangle. The fixture's east + north legs deliberately leave it, so every ~2-minute lap exercises the whole surface — on-course following, `nav: OFF COURSE (41 m off, 179 m along)` (WARN, fires whatever page is up), and `nav: back on course` as the loop closes. Cycle BTN3 to the Nav page to watch the breadcrumb panel, the position marker, and the 2x OFF COURSE banner on the emulated screen. A hardware flash (default features) carries no course and the Nav page reports `NO COURSE LOADED`.
 
 ```
 bin/watch-sim.sh                      # build + boot the default binary, headless

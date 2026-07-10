@@ -4,13 +4,15 @@
 # (Renode, no hardware) and stream decoded defmt logs until Ctrl-C, feeding
 # the canned NMEA fixture into the emulated GPS UART on a loop.
 #
-# The ELF is the same thumbv7em build watch-flash.sh flashes, plus two sim
+# The ELF is the same thumbv7em build watch-flash.sh flashes, plus three sim
 # features: `sim-autostart` (start recording on the first fix so a run records
-# without a button) and `sim-buttons` (poll the button pins so BTN1-4 presses
+# without a button), `sim-buttons` (poll the button pins so BTN1-4 presses
 # work — clicked on the --gui window's bezel, or injected via the watch.resc
 # btn1..btn4 monitor macros: BTN1 start/pause, BTN2 stop, BTN3 page, BTN4
-# lap). What you can't simulate: BLE (nrf-softdevice needs the real radio),
-# power draw, GPS/HR analog behaviour. See
+# lap), and `sim-course` (the canned breadcrumb course the Nav page follows;
+# the bench_jog fixture leaves it on two legs so the off-course alert fires
+# each lap). What you can't simulate: BLE (nrf-softdevice needs the real
+# radio), power draw, GPS/HR analog behaviour. See
 # apps/custom_watch/local_testing.md § Simulating without a board.
 #
 # Usage:
