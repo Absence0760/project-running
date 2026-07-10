@@ -203,6 +203,7 @@ pnpm watch:flash            # build + flash a connected nRF52840 DK + stream def
 pnpm watch:test             # host-side unit tests, no board
 pnpm watch:sim              # boot the firmware on an emulated DK (Renode), no board
 pnpm watch:sim:gui          # same, plus the live watch-screen window
+pnpm watch:monitor          # second terminal: interactive Renode monitor (runMacro $btn1..4)
 ```
 
 Full walkthrough in [apps/custom_watch/local_testing.md](../../apps/custom_watch/local_testing.md).
