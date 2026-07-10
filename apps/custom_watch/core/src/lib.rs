@@ -9,6 +9,10 @@
 //! - [`alerts`] — on-run alerts: drink / eat reminders on the `fuel_plan`
 //!   moving-time cadence + the HR-zone ceiling alert
 //! - [`fix`] — the GPS fix domain model + the RMC/GGA accumulator
+//! - [`course`] — breadcrumb course polyline, nearest-point projection,
+//!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
+//!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
+//!   route-overlay thresholds)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`grade_adjusted_pace`] — the Minetti GAP model (fourth parity port) +
 //!   the streaming grade estimator the recorder feeds
@@ -29,6 +33,7 @@
 
 pub mod alerts;
 pub mod button;
+pub mod course;
 pub mod elevation;
 pub mod face;
 pub mod fix;
