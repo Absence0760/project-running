@@ -9,7 +9,7 @@ use crate::record::RecordState;
 
 /// A control command for the recording state machine, produced by a button
 /// press and consumed by the record task. One variant per [`crate::record`]
-/// method: `start` / `pause` / `resume` / `stop`.
+/// method: `start` / `pause` / `resume` / `stop` / `lap`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum RecordCommand {
@@ -17,6 +17,7 @@ pub enum RecordCommand {
     Pause,
     Resume,
     Stop,
+    Lap,
 }
 
 /// The physical buttons wired to recording control on the nRF52840 DK.
@@ -27,6 +28,9 @@ pub enum Button {
     Primary,
     /// BTN2 — stop.
     Stop,
+    /// BTN4 — manual lap, standing in for the Garmin Fenix layout's
+    /// lower-right Lap/Back button (decisions.md § 81).
+    Lap,
 }
 
 /// Map a button press, given the current recorder state, to the command it
@@ -34,7 +38,8 @@ pub enum Button {
 ///
 /// BTN1 is a single context toggle: it starts an idle run, pauses a running
 /// one, and resumes a paused one. BTN2 stops whenever a run is in progress.
-/// Both are inert once the run is finished (a new run needs a fresh recorder).
+/// BTN4 closes the current lap whenever a run is in progress. All are inert
+/// once the run is finished (a new run needs a fresh recorder).
 ///
 /// The state comes from the published [`crate::record::Snapshot`], which does
 /// not distinguish a manual pause from a speed-derived auto-pause — so a
@@ -47,6 +52,7 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
         (Button::Primary, RecordState::Recording) => Some(RecordCommand::Pause),
         (Button::Primary, RecordState::Paused) => Some(RecordCommand::Resume),
         (Button::Stop, RecordState::Recording | RecordState::Paused) => Some(RecordCommand::Stop),
+        (Button::Lap, RecordState::Recording | RecordState::Paused) => Some(RecordCommand::Lap),
         _ => None,
     }
 }
@@ -86,9 +92,24 @@ mod tests {
     }
 
     #[test]
+    fn lap_only_acts_while_a_run_is_in_progress() {
+        assert_eq!(
+            command_for(Button::Lap, RecordState::Recording),
+            Some(RecordCommand::Lap)
+        );
+        assert_eq!(
+            command_for(Button::Lap, RecordState::Paused),
+            Some(RecordCommand::Lap)
+        );
+        assert_eq!(command_for(Button::Lap, RecordState::Idle), None);
+        assert_eq!(command_for(Button::Lap, RecordState::Finished), None);
+    }
+
+    #[test]
     fn everything_is_inert_once_finished() {
         assert_eq!(command_for(Button::Primary, RecordState::Finished), None);
         assert_eq!(command_for(Button::Stop, RecordState::Finished), None);
+        assert_eq!(command_for(Button::Lap, RecordState::Finished), None);
     }
 
     // Driving the emitted commands through a real Recorder proves the mapping
@@ -106,6 +127,7 @@ mod tests {
                     RecordCommand::Pause => r.pause(now),
                     RecordCommand::Resume => r.resume(now),
                     RecordCommand::Stop => r.stop(now),
+                    RecordCommand::Lap => r.lap(now),
                 }
             }
         };
@@ -116,6 +138,11 @@ mod tests {
         assert_eq!(r.state(), RecordState::Paused);
         apply(Button::Primary, 2, &mut r);
         assert_eq!(r.state(), RecordState::Recording);
+        // A lap press mid-run closes the lap without touching the run state.
+        apply(Button::Lap, 3, &mut r);
+        assert_eq!(r.state(), RecordState::Recording);
+        assert_eq!(r.snapshot().lap, 2);
+        assert_eq!(r.snapshot().last_lap.unwrap().index, 1);
         apply(Button::Stop, 3, &mut r);
         assert_eq!(r.state(), RecordState::Finished);
         // Post-finish presses are inert.

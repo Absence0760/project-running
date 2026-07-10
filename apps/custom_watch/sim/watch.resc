@@ -103,10 +103,15 @@ macro btn2
 """
     python "click(12)"
 """
-# BTN3 (P0.24) — cycle the run-view page (dashboard / distance / pace).
+# BTN3 (P0.24) — cycle the run-view page (dashboard / distance / pace / lap).
 macro btn3
 """
     python "click(24)"
+"""
+# BTN4 (P0.25) — take a manual lap.
+macro btn4
+"""
+    python "click(25)"
 """
 
 # LED1 (P0.13) blinks at 1 Hz from ui::blink_task — echo each state change

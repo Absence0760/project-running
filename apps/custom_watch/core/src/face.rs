@@ -172,6 +172,7 @@ pub fn page_rows(
                 uptime_s,
                 animate,
             ),
+            Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
         },
     }
 }
@@ -189,7 +190,7 @@ pub fn page_icons(
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
         Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
-        Page::Distance | Page::Pace => [None; ROWS],
+        Page::Distance | Page::Pace | Page::Lap => [None; ROWS],
     }
 }
 
@@ -206,6 +207,7 @@ pub fn page_hero(page: Page, rec: Option<&Snapshot>) -> Option<Row> {
         }
         Page::Distance => glance_hero(GlanceMetric::Distance, snap),
         Page::Pace => glance_hero(GlanceMetric::Pace, snap),
+        Page::Lap => split_row(snap.lap_elapsed_s),
     })
 }
 
@@ -284,6 +286,74 @@ fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
                 let _ = write!(row, "--:--");
             }
         },
+    }
+    row
+}
+
+/// The lap glance page: the current lap's running time up large in the rows-0-1
+/// hero (drawn by the app from [`page_hero`] via [`split_row`]), the lap number
+/// as the label, then last-lap split / lap distance / HR / GPS as 1x context —
+/// what a runner checks right after pressing Lap (or hearing the 1 km auto-lap
+/// tick over): which lap am I on, and what did the last one take.
+fn lap_glance(
+    fix: Option<&Fix>,
+    hr_bpm: Option<u16>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    let _ = write!(rows[2], "LAP {}", snap.lap.min(9999));
+
+    match snap.last_lap {
+        Some(lap) => {
+            let _ = write!(
+                rows[4],
+                "{:<5}{}",
+                "LAST",
+                split_row(lap.elapsed_s).as_str()
+            );
+        }
+        None => {
+            let _ = write!(rows[4], "{:<5}--", "LAST");
+        }
+    }
+
+    let km = (snap.lap_distance_m / 1000.0).min(9999.99);
+    let _ = write!(rows[5], "{:<5}{:.2} KM", "DIST", km);
+
+    match hr_bpm {
+        Some(bpm) => {
+            let _ = write!(rows[6], "{:<5}{} BPM", "HR", bpm);
+        }
+        None => {
+            let _ = write!(rows[6], "{:<5}--", "HR");
+        }
+    }
+
+    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    rows
+}
+
+/// A lap split as `M:SS`, growing to `H:MM:SS` past the hour — laps are
+/// usually minutes, so the shorter form keeps the 2x hero digits big without
+/// a misleading leading zero-hour.
+fn split_row(total_s: u32) -> Row {
+    let (h, m, s) = hms(total_s);
+    let mut row = Row::new();
+    if h > 0 {
+        let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
+    } else {
+        let _ = write!(row, "{}:{:02}", m, s);
     }
     row
 }
@@ -517,6 +587,10 @@ mod tests {
             current_speed_mps: 0.0,
             avg_pace_s_per_km: None,
             current_pace_s_per_km: None,
+            lap: 1,
+            lap_distance_m: 0.0,
+            lap_elapsed_s: 0,
+            last_lap: None,
         }
     }
 
@@ -871,6 +945,66 @@ mod tests {
     }
 
     #[test]
+    fn lap_glance_shows_lap_number_current_time_and_last_split() {
+        let mut rec = snapshot(RecordState::Recording, 3_400.0);
+        rec.lap = 4;
+        rec.lap_distance_m = 420.0;
+        rec.lap_elapsed_s = 2 * 60 + 5;
+        rec.last_lap = Some(crate::record::Lap {
+            index: 3,
+            distance_m: 1002.0,
+            elapsed_s: 4 * 60 + 58,
+            moving_s: 4 * 60 + 50,
+        });
+        let rows = page_rows(
+            Page::Lap,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            42,
+            true,
+        );
+        assert_eq!(page_hero(Page::Lap, Some(&rec)).unwrap().as_str(), "2:05");
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "LAP 4");
+        assert_eq!(rows[4].as_str(), "LAST 4:58");
+        assert_eq!(rows[5].as_str(), "DIST 0.42 KM");
+        assert_eq!(rows[6].as_str(), "HR   152 BPM");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        // Glance pages carry no gutter icons.
+        assert!(
+            page_icons(Page::Lap, Some(&fix()), Some(152), Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn lap_glance_first_lap_has_no_last_split() {
+        let rec = snapshot(RecordState::Recording, 100.0);
+        let rows = page_rows(Page::Lap, None, None, Some(&rec), None, 2, true);
+        assert_eq!(rows[2].as_str(), "LAP 1");
+        assert_eq!(rows[4].as_str(), "LAST --");
+        assert_eq!(rows[6].as_str(), "HR   --");
+        assert_eq!(page_hero(Page::Lap, Some(&rec)).unwrap().as_str(), "0:00");
+    }
+
+    #[test]
+    fn lap_splits_grow_to_hours_past_sixty_minutes() {
+        // An ultra checkpoint-to-checkpoint "lap" can run past an hour: the
+        // split format grows rather than wrapping the minutes.
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.lap_elapsed_s = 59 * 60 + 59;
+        assert_eq!(page_hero(Page::Lap, Some(&rec)).unwrap().as_str(), "59:59");
+        rec.lap_elapsed_s = 3600 + 2 * 60 + 3;
+        assert_eq!(
+            page_hero(Page::Lap, Some(&rec)).unwrap().as_str(),
+            "1:02:03"
+        );
+    }
+
+    #[test]
     fn gating_animation_off_freezes_every_animated_element() {
         // Odd second, HR present, no fresh fix: with animation ON everything is
         // on its alternate frame; with it OFF each holds a steady frame so the
@@ -953,7 +1087,7 @@ mod tests {
 
     #[test]
     fn every_page_falls_back_to_the_status_face_when_idle() {
-        for page in [Page::Dashboard, Page::Distance, Page::Pace] {
+        for page in [Page::Dashboard, Page::Distance, Page::Pace, Page::Lap] {
             let rows = page_rows(page, Some(&fix()), None, None, None, 42, true);
             assert_eq!(rows[2].as_str(), "GPS  8 SATS"); // status-face signature
             assert!(page_hero(page, None).is_none());
@@ -968,7 +1102,16 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
         rec.avg_pace_s_per_km = Some(99 * 60 + 59);
-        for page in [Page::Distance, Page::Pace] {
+        rec.lap = 9999;
+        rec.lap_distance_m = 9_999_990.0;
+        rec.lap_elapsed_s = 999 * 3600 + 59 * 60 + 59;
+        rec.last_lap = Some(crate::record::Lap {
+            index: 9998,
+            distance_m: 9_999_990.0,
+            elapsed_s: 999 * 3600 + 59 * 60 + 59,
+            moving_s: 999 * 3600 + 59 * 60 + 59,
+        });
+        for page in [Page::Distance, Page::Pace, Page::Lap] {
             for row in page_rows(page, Some(&fix()), Some(220), Some(&rec), None, 43, true) {
                 assert!(row.len() <= COLS, "glance row too wide: {:?}", row);
             }

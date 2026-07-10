@@ -123,10 +123,12 @@ async fn main(spawner: Spawner) {
     );
 
     // Buttons are active-LOW with the line idle-high, so pull up and treat a
-    // press as a falling edge (see the `button` task). BTN3 cycles the page.
+    // press as a falling edge (see the `button` task). BTN3 cycles the page,
+    // BTN4 takes a manual lap.
     let btn1 = Input::new(board.buttons.btn1, Pull::Up);
     let btn2 = Input::new(board.buttons.btn2, Pull::Up);
     let btn3 = Input::new(board.buttons.btn3, Pull::Up);
+    let btn4 = Input::new(board.buttons.btn4, Pull::Up);
 
     // Shared flash run store: `record` commits finished runs, `ble` reads them
     // back for sync. Probes for the NVMC controller at construction and no-ops
@@ -148,7 +150,7 @@ async fn main(spawner: Spawner) {
         board.display.extmode,
     )));
     spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
-    spawner.spawn(unwrap!(tasks::button::run(btn1, btn2, btn3)));
+    spawner.spawn(unwrap!(tasks::button::run(btn1, btn2, btn3, btn4)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
