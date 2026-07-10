@@ -54,10 +54,12 @@ command -v defmt-print >/dev/null || \
 # sim-autostart: start the run on the first fix so distance accrues without a
 # button. sim-buttons: poll the button pins so the watch.resc btn1/btn2/btn3
 # macros work (Renode's GPIO models the IN register but not the SENSE/DETECT
-# edge path the hardware button task waits on). Both are OFF on the hardware
-# build — see apps/custom_watch/app/src/tasks/{record,button}.rs.
-step "Building firmware (release, --features sim-autostart,sim-buttons)"
-(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart,sim-buttons,dev-blink)
+# edge path the hardware button task waits on). sim-course: the canned
+# breadcrumb course the Nav page follows (the bench_jog fixture leaves it on
+# two legs, so the off-course alert fires each lap). All OFF on the hardware
+# build — see apps/custom_watch/app/src/tasks/{record,button,nav}.rs.
+step "Building firmware (release, --features sim-autostart,sim-buttons,sim-course)"
+(cd "$WORKSPACE" && cargo build --release --bin "$BIN" --features sim-autostart,sim-buttons,sim-course,dev-blink)
 ELF="$WORKSPACE/target/thumbv7em-none-eabihf/release/$BIN"
 [[ -f "$ELF" ]] || fatal "build produced no ELF at $ELF"
 

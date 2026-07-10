@@ -38,6 +38,14 @@ sim-autostart = []
 # untouched (docs/custom_watch/performance_path.md — "every wake justifiable").
 sim-buttons = []
 
+# Canned breadcrumb course for the Nav page: the west + south edges of the
+# bench_jog.nmea rectangle, so a sim run exercises on-course following, the
+# off-course alert (the fixture's east + north legs leave the course), and the
+# re-arm. OFF by default: the hardware build carries no course until a phone
+# course-push path lands (tier 2), and its Nav page reports NO COURSE LOADED.
+# bin/watch-sim.sh builds with it.
+sim-course = []
+
 # Bench/sim liveness LED (LED1 @ 2 Hz). OFF by default so the lean build carries
 # no gratuitous always-on waker (docs/custom_watch/performance_path.md — "every
 # wake justifiable"). bin/watch-sim.sh and bin/watch-flash.sh enable it so the

@@ -149,9 +149,18 @@ async fn main(spawner: Spawner) {
         board.display.extcomin,
         board.display.extmode,
     )));
-    spawner.spawn(unwrap!(tasks::ui::screen_task(display_spi, display_cs)));
+    // The breadcrumb course, when this build carries one (the canned course
+    // behind `sim-course`): the nav task projects fixes onto it, the screen
+    // task draws it on the Nav page. One shared &'static, built once.
+    let course = tasks::nav::course();
+    spawner.spawn(unwrap!(tasks::ui::screen_task(
+        display_spi,
+        display_cs,
+        course
+    )));
     spawner.spawn(unwrap!(tasks::button::run(btn1, btn2, btn3, btn4)));
     spawner.spawn(unwrap!(tasks::gps::run(gps_rx)));
+    spawner.spawn(unwrap!(tasks::nav::run(course)));
     spawner.spawn(unwrap!(tasks::hr::run(hr_twim)));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
     spawner.spawn(unwrap!(tasks::record::run(store)));

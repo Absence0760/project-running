@@ -11,12 +11,14 @@ use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
 use watch_core::elevation::Reading as ElevationReading;
+use watch_core::face::NavView;
 use watch_core::fix::Fix;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
 
-/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, and `record` subscribe.
-pub static FIX: Watch<CriticalSectionRawMutex, Fix, 3> = Watch::new();
+/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, and `nav`
+/// subscribe.
+pub static FIX: Watch<CriticalSectionRawMutex, Fix, 4> = Watch::new();
 
 /// Latest heart-rate estimate: `hr` publishes; the `ui` face and `record`
 /// (to stamp each stored track point's bpm) subscribe.
@@ -46,6 +48,11 @@ pub static ALERT: Watch<CriticalSectionRawMutex, Option<Alert>, 1> = Watch::new(
 /// Current run-view page: the `button` task advances it on each BTN3 press, the
 /// `ui` face reads it to pick the layout. One receiver (the `ui` task).
 pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
+
+/// Course-projection status for the Nav page: the `nav` task publishes per fix
+/// (or once at boot when no course is loaded), the `ui` task renders it. One
+/// receiver (the `ui` task).
+pub static NAV: Watch<CriticalSectionRawMutex, NavView, 1> = Watch::new();
 
 /// Uptime (seconds) of the last button press — any button. The `button` task
 /// stamps it on every confirmed press; the `ui` task reads it to gate the
