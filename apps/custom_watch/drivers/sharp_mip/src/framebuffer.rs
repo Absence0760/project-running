@@ -71,6 +71,37 @@ impl Framebuffer {
         }
     }
 
+    /// Draw a 1-px line from `(x0, y0)` to `(x1, y1)` — Bresenham over
+    /// [`set_pixel`](Self::set_pixel), so spans reaching outside the panel
+    /// clip instead of panicking, and redrawing an identical line dirties
+    /// nothing. Signed coordinates so a clipped polyline can keep endpoints
+    /// off-panel.
+    pub fn draw_line(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, ink: bool) {
+        let (mut x, mut y) = (x0, y0);
+        let dx = (x1 - x0).abs();
+        let dy = -(y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx + dy;
+        loop {
+            if x >= 0 && y >= 0 {
+                self.set_pixel(x as usize, y as usize, ink);
+            }
+            if x == x1 && y == y1 {
+                break;
+            }
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
     pub fn pixel(&self, x: usize, y: usize) -> bool {
         x < WIDTH && y < HEIGHT && self.lines[y][x / 8] >> (x % 8) & 1 == 1
     }
