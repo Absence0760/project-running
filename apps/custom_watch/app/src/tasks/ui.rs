@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select4, Either, Either4};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -16,8 +16,9 @@ use embassy_nrf::Peri;
 use embassy_time::{Duration, Instant, Timer};
 use sharp_mip::{Framebuffer, Icon, SharpMip};
 use watch_core::alerts::{self, Alert};
+use watch_core::course::{Course, PanelFit};
 use watch_core::elevation::Reading as ElevationReading;
-use watch_core::face::{self, FaceIcon};
+use watch_core::face::{self, FaceIcon, NavView};
 use watch_core::fix::Fix;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
@@ -42,6 +43,20 @@ const ANIM_WINDOW_S: u32 = 8;
 // heartbeat so a truly idle wrist wakes the CPU seconds apart, not every second.
 const TICK_ACTIVE: Duration = Duration::from_secs(1);
 const TICK_IDLE: Duration = Duration::from_secs(30);
+
+// The Nav page's map panel in panel pixels: full display width, the
+// face-declared text rows tall. `core` speaks rows; only this task knows the
+// panel's 16-px cell height.
+const CELL_H: usize = sharp_mip::HEIGHT / sharp_mip::TEXT_ROWS;
+const PANEL_TOP_PX: i32 = (face::NAV_PANEL_TOP_ROW * CELL_H) as i32;
+const PANEL_H_PX: u32 = (face::NAV_PANEL_ROWS * CELL_H) as u32;
+const PANEL_ROWS: core::ops::Range<usize> =
+    face::NAV_PANEL_TOP_ROW..face::NAV_PANEL_TOP_ROW + face::NAV_PANEL_ROWS;
+
+// Keep the position marker's 5-px cross inside the panel, so an off-course
+// (or clamped off-panel) marker pins at the edge instead of scribbling on the
+// text rows above and below.
+const MARKER_ARM_PX: i32 = 2;
 
 /// Bench/sim liveness blinker — toggles LED1 at 2 Hz so you can see the
 /// firmware is alive before the display or defmt tells you. Gated behind the
@@ -110,7 +125,11 @@ pub async fn vcom_task(
 }
 
 #[embassy_executor::task]
-pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
+pub async fn screen_task(
+    spim: Spim<'static>,
+    cs: Output<'static>,
+    course: Option<&'static Course>,
+) {
     // Hardware VCOM: EXTCOMIN (driven by vcom_task) carries the bias, so a clean
     // framebuffer flushes nothing and a static screen costs zero SPI.
     let mut display = SharpMip::new_external_vcom(spim, cs);
@@ -122,6 +141,7 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
     let mut page_rx = unwrap!(state::PAGE.receiver());
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
+    let mut nav_rx = unwrap!(state::NAV.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr_bpm: Option<u16> = None;
     let mut rec: Option<Snapshot> = None;
@@ -129,6 +149,12 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
     let mut page = Page::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
+    let mut nav = NavView::NoCourse;
+    // The course geometry never changes at tier 1, so its panel fit is computed
+    // once; (marker, alert) is the panel's whole live state — remembering the
+    // last drawn pair lets an unchanged panel skip its redraw entirely.
+    let panel = course.map(|c| (c, PanelFit::fit(c, sharp_mip::WIDTH as u32, PANEL_H_PX)));
+    let mut last_panel: Option<(Option<(i32, i32)>, bool)> = None;
 
     if let Err(e) = display.clear_all() {
         warn!("ui: display clear failed: {:?}", e);
@@ -156,6 +182,9 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         if let Some(a) = alert_rx.try_changed() {
             alert = a;
         }
+        if let Some(v) = nav_rx.try_changed() {
+            nav = v;
+        }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
         // frames so an unattended run stops redrawing the display every second.
@@ -166,6 +195,7 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             hr_bpm,
             rec.as_ref(),
             elev.as_ref(),
+            nav,
             uptime_s,
             animate,
         );
@@ -177,10 +207,59 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             uptime_s,
             animate,
         );
+        // The Nav page's map panel: the course polyline plus a position-marker
+        // cross, drawn into the pixel rows the face leaves empty. The panel's
+        // live state is just (marker position, alert shown) — when neither
+        // changed the panel rows are skipped below and their pixels stand, so
+        // a resting Nav page still flushes zero lines. A repaint first lets
+        // draw_text_row blank the rows, then redraws; only lines whose bytes
+        // actually changed go dirty.
+        let nav_panel = if page == Page::Nav && face::run_view(rec.as_ref()) {
+            panel.as_ref()
+        } else {
+            None
+        };
+        let marker_px = nav_panel.and_then(|(_, fit)| {
+            latest.as_ref().map(|f| {
+                let (x, y) = fit.to_px(f.lat_deg, f.lon_deg);
+                (
+                    x.clamp(MARKER_ARM_PX, sharp_mip::WIDTH as i32 - 1 - MARKER_ARM_PX),
+                    (y + PANEL_TOP_PX).clamp(
+                        PANEL_TOP_PX + MARKER_ARM_PX,
+                        PANEL_TOP_PX + PANEL_H_PX as i32 - 1 - MARKER_ARM_PX,
+                    ),
+                )
+            })
+        });
+        let nav_alert = face::nav_alert_row(nav);
+        let panel_state = nav_panel.map(|_| (marker_px, nav_alert.is_some()));
+        let panel_repaint = panel_state.is_some() && panel_state != last_panel;
+        last_panel = panel_state;
         for (row, text) in rows.iter().enumerate() {
+            if PANEL_ROWS.contains(&row) && panel_state.is_some() && !panel_repaint {
+                continue;
+            }
             fb.draw_text_row(row, text);
             if let Some(icon) = icons[row] {
                 fb.draw_icon(0, row, driver_icon(icon));
+            }
+        }
+        if panel_repaint {
+            let (course, fit) = unwrap!(nav_panel);
+            for w in course.points().windows(2) {
+                let (x0, y0) = fit.to_px(w[0].lat_deg, w[0].lon_deg);
+                let (x1, y1) = fit.to_px(w[1].lat_deg, w[1].lon_deg);
+                fb.draw_line(x0, y0 + PANEL_TOP_PX, x1, y1 + PANEL_TOP_PX, true);
+            }
+            if let Some((mx, my)) = marker_px {
+                fb.draw_line(mx - MARKER_ARM_PX, my, mx + MARKER_ARM_PX, my, true);
+                fb.draw_line(mx, my - MARKER_ARM_PX, mx, my + MARKER_ARM_PX, true);
+            }
+            // The off-course treatment: a steady 2x banner centred over the
+            // breadcrumb, drawn last so it wins the panel pixels.
+            if let Some(text) = &nav_alert {
+                let col = sharp_mip::TEXT_COLS.saturating_sub(text.chars().count() * 2) / 2;
+                fb.draw_text_2x(col, face::NAV_ALERT_ROW, text);
             }
         }
         // The 2x hero (elapsed time, or the glance page's headline metric)
@@ -220,7 +299,7 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
             page_rx.changed(),
             interaction_rx.changed(),
             alert_rx.changed(),
-            Timer::after(tick),
+            nav_rx.changed(),
         );
         // Apply the value the winning `changed()` yields. `changed()` advances
         // the receiver's seen-marker when it resolves, so the top-of-loop
@@ -230,17 +309,18 @@ pub async fn screen_task(spim: Spim<'static>, cs: Output<'static>) {
         // next tick, but PAGE only changes on a button press. The losing
         // futures are dropped un-consumed, so `try_changed()` still coalesces
         // any other simultaneous changes on the next iteration.
-        match select(sensors, controls).await {
-            Either::First(Either4::First(fix)) => latest = Some(fix),
-            Either::First(Either4::Second(reading)) => {
+        match select3(sensors, controls, Timer::after(tick)).await {
+            Either3::First(Either4::First(fix)) => latest = Some(fix),
+            Either3::First(Either4::Second(reading)) => {
                 hr_bpm = reading.valid.then_some(reading.bpm)
             }
-            Either::First(Either4::Third(snap)) => rec = Some(snap),
-            Either::First(Either4::Fourth(reading)) => elev = Some(reading),
-            Either::Second(Either4::First(p)) => page = p,
-            Either::Second(Either4::Second(t)) => last_interaction_s = t,
-            Either::Second(Either4::Third(a)) => alert = a,
-            Either::Second(Either4::Fourth(())) => {}
+            Either3::First(Either4::Third(snap)) => rec = Some(snap),
+            Either3::First(Either4::Fourth(reading)) => elev = Some(reading),
+            Either3::Second(Either4::First(p)) => page = p,
+            Either3::Second(Either4::Second(t)) => last_interaction_s = t,
+            Either3::Second(Either4::Third(a)) => alert = a,
+            Either3::Second(Either4::Fourth(v)) => nav = v,
+            Either3::Third(()) => {}
         }
     }
 }
