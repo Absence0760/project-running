@@ -25,6 +25,7 @@ use core::fmt::Write;
 use crate::course::NavStatus;
 use crate::elevation;
 use crate::fix::Fix;
+use crate::gnss_mode::GnssMode;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
@@ -36,6 +37,22 @@ pub const ROWS: usize = 9;
 
 /// A fix older than this (in seconds of uptime) renders as signal lost.
 pub const STALE_AFTER_S: u32 = 5;
+
+/// The staleness budget in force: while a run is active, fixes arrive at the
+/// selected GNSS mode's cadence, so "stale" must mean *older than that
+/// cadence* — a 40 s-old fix in Expedition mode is the chosen rhythm, not a
+/// lost signal, and flagging it (or cycling the search arcs) would cry wolf
+/// for the whole run. Idle publication is de-rated to just under
+/// [`STALE_AFTER_S`] regardless of mode (see the gps task), so the idle face
+/// keeps the tight budget and a genuinely lost signal still flags within
+/// seconds. The mode's own interval keeps the usual slack on top.
+pub fn stale_after_s(mode: GnssMode, run_active: bool) -> u32 {
+    if run_active {
+        mode.fix_interval_s() - 1 + STALE_AFTER_S
+    } else {
+        STALE_AFTER_S
+    }
+}
 
 pub type Row = heapless::String<COLS>;
 
@@ -127,17 +144,20 @@ fn rec_tag(state: RecordState) -> Option<&'static str> {
 /// reports a stable pulse; `rec` is the live recording snapshot (its state
 /// selects the layout); `elev` is the latest barometric reading (`None` until
 /// the baro streams — the dashboard's ALT then falls back to the GPS fix and
-/// VERT shows a placeholder).
+/// VERT shows a placeholder); `mode` is the selected GNSS mode (it labels the
+/// GPS rows, sets the idle face's MODE row, and stretches the staleness
+/// budget to the mode's fix cadence while recording).
 pub fn face_rows(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     rec: Option<&Snapshot>,
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
-        Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true),
-        None => status_face(fix, hr_bpm, elev, uptime_s),
+        Some((snap, tag)) => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, true, mode),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode),
     }
 }
 
@@ -155,8 +175,9 @@ pub fn face_icons(
     hr_bpm: Option<u16>,
     rec: Option<&Snapshot>,
     uptime_s: u32,
+    mode: GnssMode,
 ) -> [Option<FaceIcon>; ROWS] {
-    dashboard_icons(fix, hr_bpm, rec, uptime_s, true)
+    dashboard_icons(fix, hr_bpm, rec, uptime_s, true, mode)
 }
 
 fn dashboard_icons(
@@ -165,6 +186,7 @@ fn dashboard_icons(
     rec: Option<&Snapshot>,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Option<FaceIcon>; ROWS] {
     let mut icons = [None; ROWS];
     if rec.and_then(|snap| rec_tag(snap.state)).is_some() {
@@ -173,7 +195,7 @@ fn dashboard_icons(
         icons[5] = Some(heart_icon(hr_bpm, uptime_s, animate));
         icons[6] = Some(FaceIcon::Mountain);
         icons[7] = Some(FaceIcon::Vert);
-        icons[8] = Some(gps_icon(fix, uptime_s, animate));
+        icons[8] = Some(gps_icon(fix, uptime_s, animate, stale_after_s(mode, true)));
     }
     icons
 }
@@ -210,11 +232,12 @@ pub fn page_rows(
     tb: Option<&TrackbackView>,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     match rec.and_then(|snap| rec_tag(snap.state).map(|tag| (snap, tag))) {
-        None => status_face(fix, hr_bpm, elev, uptime_s),
+        None => status_face(fix, hr_bpm, elev, uptime_s, mode),
         Some((snap, tag)) => match page {
-            Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate),
+            Page::Dashboard => dashboard(fix, hr_bpm, snap, tag, elev, uptime_s, animate, mode),
             Page::Distance => glance(
                 GlanceMetric::Distance,
                 fix,
@@ -223,6 +246,7 @@ pub fn page_rows(
                 tag,
                 uptime_s,
                 animate,
+                mode,
             ),
             Page::Pace => glance(
                 GlanceMetric::Pace,
@@ -232,12 +256,13 @@ pub fn page_rows(
                 tag,
                 uptime_s,
                 animate,
+                mode,
             ),
-            Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
-            Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate),
-            Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate),
-            Page::Nav => nav_page(nav, fix, tag, uptime_s, animate),
-            Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate),
+            Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
+            Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
+            Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Nav => nav_page(nav, fix, tag, uptime_s, animate, mode),
+            Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate, mode),
         },
     }
 }
@@ -252,9 +277,10 @@ pub fn page_icons(
     rec: Option<&Snapshot>,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Option<FaceIcon>; ROWS] {
     match page {
-        Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate),
+        Page::Dashboard => dashboard_icons(fix, hr_bpm, rec, uptime_s, animate, mode),
         Page::Distance
         | Page::Pace
         | Page::Lap
@@ -341,6 +367,7 @@ enum GlanceMetric {
 /// HR / GPS as 1x context — the "one big number" view for a mid-run glance. The
 /// pace glance adds the live grade-adjusted pace under HR, so raw and
 /// effort-equivalent pace read together on a hill.
+#[allow(clippy::too_many_arguments)]
 fn glance(
     metric: GlanceMetric,
     fix: Option<&Fix>,
@@ -349,6 +376,7 @@ fn glance(
     tag: &str,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
@@ -385,7 +413,7 @@ fn glance(
         write_pace(&mut rows[7], "GAP", snap.gap_s_per_km);
     }
 
-    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
 }
 
@@ -415,6 +443,7 @@ fn glance_hero(metric: GlanceMetric, snap: &Snapshot) -> Row {
 /// as the label, then last-lap split / lap distance / HR / GPS as 1x context —
 /// what a runner checks right after pressing Lap (or hearing the 1 km auto-lap
 /// tick over): which lap am I on, and what did the last one take.
+#[allow(clippy::too_many_arguments)]
 fn lap_glance(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -422,6 +451,7 @@ fn lap_glance(
     tag: &str,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
@@ -453,7 +483,7 @@ fn lap_glance(
 
     write_hr(&mut rows[6], "HR", hr_bpm, &snap.zone_cutoffs);
 
-    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
 }
 
@@ -471,6 +501,7 @@ const ZONE_BAR_CELLS: u32 = 8;
 /// fullest zone — and the GPS glance. Zone time accrues exactly where moving
 /// time does (see `Recorder`), so a paused / auto-paused / pulse-less stretch
 /// banks nothing and the rows read as "where has this run's effort gone".
+#[allow(clippy::too_many_arguments)]
 fn zones_glance(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -478,6 +509,7 @@ fn zones_glance(
     tag: &str,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
@@ -514,7 +546,7 @@ fn zones_glance(
         }
     }
 
-    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
 }
 
@@ -526,12 +558,14 @@ fn zones_glance(
 /// actual crossing time once finished), the distance delta in metres, and the
 /// GPS glance. With no goal configured the page is honestly inactive —
 /// `PACER --` and a how-to-set hint, never zeros pretending to be on pace.
+#[allow(clippy::too_many_arguments)]
 fn pacer_glance(
     fix: Option<&Fix>,
     snap: &Snapshot,
     tag: &str,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
@@ -581,7 +615,7 @@ fn pacer_glance(
         }
     }
 
-    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
 }
 
@@ -592,12 +626,14 @@ fn pacer_glance(
 /// the perpendicular offset on the info row and the GPS glance at the bottom.
 /// Without a course (or before the first projected fix) the info row says why,
 /// so the page never reads as a silently-empty map.
+#[allow(clippy::too_many_arguments)]
 fn nav_page(
     nav: NavView,
     fix: Option<&Fix>,
     tag: &str,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
@@ -627,7 +663,7 @@ fn nav_page(
         }
     }
 
-    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
 }
 
@@ -656,12 +692,14 @@ pub const TRACKBACK_TEXT_COLS: usize = 10;
 /// rows 3-7 with the TrackBack breadcrumb map (see `trackback::project_track`);
 /// this text layer only reserves that space. A missing or stale heading shows
 /// `--` in the arrow's spot — an honest placeholder, never a stale arrow.
+#[allow(clippy::too_many_arguments)]
 fn back_to_start_glance(
     fix: Option<&Fix>,
     tb: Option<&TrackbackView>,
     tag: &str,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
@@ -720,7 +758,7 @@ fn back_to_start_glance(
         let _ = write!(rows[6], "  --");
     }
 
-    let _ = write!(rows[8], "{:<5}{}", "GPS", gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
 }
 
@@ -754,8 +792,8 @@ fn heart_icon(hr_bpm: Option<u16>, uptime_s: u32, animate: bool) -> FaceIcon {
 /// growing-arc search cycle so a lost or not-yet-acquired fix reads as actively
 /// hunting. When `animate` is off the search holds one steady frame instead of
 /// cycling — the fix state still shows, without the per-second redraw.
-fn gps_icon(fix: Option<&Fix>, uptime_s: u32, animate: bool) -> FaceIcon {
-    if gps_fresh(fix, uptime_s) {
+fn gps_icon(fix: Option<&Fix>, uptime_s: u32, animate: bool, stale_after: u32) -> FaceIcon {
+    if gps_fresh(fix, uptime_s, stale_after) {
         FaceIcon::Satellite
     } else if !animate {
         FaceIcon::SatSearch1
@@ -768,8 +806,8 @@ fn gps_icon(fix: Option<&Fix>, uptime_s: u32, animate: bool) -> FaceIcon {
     }
 }
 
-fn gps_fresh(fix: Option<&Fix>, uptime_s: u32) -> bool {
-    matches!(fix, Some(f) if uptime_s.saturating_sub(f.uptime_s) <= STALE_AFTER_S)
+fn gps_fresh(fix: Option<&Fix>, uptime_s: u32, stale_after: u32) -> bool {
+    matches!(fix, Some(f) if uptime_s.saturating_sub(f.uptime_s) <= stale_after)
 }
 
 /// The active-run layout. Rows 0-1 are the elapsed-time hero — left empty here
@@ -778,6 +816,7 @@ fn gps_fresh(fix: Option<&Fix>, uptime_s: u32) -> bool {
 /// [`face_icons`]) so they leave their first five cells blank; the two pace rows
 /// keep a text label. Every value aligns at column 5 so the numbers stack in one
 /// glanceable column regardless of icon-vs-label gutter.
+#[allow(clippy::too_many_arguments)]
 fn dashboard(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
@@ -786,6 +825,7 @@ fn dashboard(
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
     animate: bool,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     const GUTTER: &str = "     ";
     let mut rows: [Row; ROWS] = Default::default();
@@ -827,25 +867,38 @@ fn dashboard(
         }
     }
 
-    let _ = write!(rows[8], "{}{}", GUTTER, gps_value(fix, uptime_s).as_str());
+    write_gps_row(&mut rows[8], "", fix, uptime_s, mode);
     rows
 }
 
-/// The idle / bench layout — brand, GPS status, last-known position, speed,
-/// altitude, HR, and vert (falling back to the UTC clock with no baro). The
-/// title row is deliberately static (no ticking uptime): the screen task is
-/// event-driven, so a resting idle face with no per-second element lets the CPU
-/// sleep instead of waking every second to advance a cosmetic clock. Time of
-/// day still shows on the bottom row from the GPS fix, updating on each fix.
+/// The idle / bench layout — brand, the selected GNSS mode with its projected
+/// hours, GPS status, last-known position, speed, altitude, HR, and vert
+/// (falling back to the UTC clock with no baro). The title row is deliberately
+/// static (no ticking uptime): the screen task is event-driven, so a resting
+/// idle face with no per-second element lets the CPU sleep instead of waking
+/// every second to advance a cosmetic clock. Time of day still shows on the
+/// bottom row from the GPS fix, updating on each fix.
+///
+/// Row 1 is the mode picker's read-out — BTN3 cycles it while idle — pairing
+/// the mode tag with its battery figure. The `~` marks the hours as the
+/// projection they are (tier-2 estimates derived in [`crate::gnss_mode`]; the
+/// tier-1 bench can't measure power at all).
 fn status_face(
     fix: Option<&Fix>,
     hr_bpm: Option<u16>,
     elev: Option<&elevation::Reading>,
     uptime_s: u32,
+    mode: GnssMode,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
     let _ = write!(rows[0], "THREKIR");
+    let _ = write!(
+        rows[1],
+        "MODE {:<5}~{}H",
+        mode.label(),
+        mode.battery_est_h()
+    );
 
     match fix {
         None => {
@@ -928,8 +981,9 @@ fn write_hr(row: &mut Row, label: &str, hr_bpm: Option<u16>, cutoffs: &ZoneCutof
 }
 
 /// The GPS glance shared by both layouts: satellite count, a staleness flag, or
-/// `ACQUIRING` before the first fix. Value only — the caller supplies the label.
-fn gps_value(fix: Option<&Fix>, uptime_s: u32) -> Row {
+/// `ACQUIRING` before the first fix. Value only — the caller supplies the label
+/// and the staleness budget in force (see [`stale_after_s`]).
+fn gps_value(fix: Option<&Fix>, uptime_s: u32, stale_after: u32) -> Row {
     let mut v = Row::new();
     match fix {
         None => {
@@ -937,7 +991,7 @@ fn gps_value(fix: Option<&Fix>, uptime_s: u32) -> Row {
         }
         Some(fix) => {
             let age = uptime_s.saturating_sub(fix.uptime_s);
-            if age > STALE_AFTER_S {
+            if age > stale_after {
                 let _ = write!(v, "STALE {}S", age.min(999));
             } else {
                 let _ = write!(v, "{} SATS", fix.sats);
@@ -947,6 +1001,21 @@ fn gps_value(fix: Option<&Fix>, uptime_s: u32) -> Row {
     v
 }
 
+/// Write a run-view GPS row: the glance value under the mode-stretched
+/// staleness budget, tagged with the active GNSS mode so a mid-run glance
+/// always shows which fix cadence (and battery trade) the run is on. Run
+/// layouts only — the idle status face pairs its plain GPS row with the
+/// dedicated MODE row instead.
+fn write_gps_row(row: &mut Row, label: &str, fix: Option<&Fix>, uptime_s: u32, mode: GnssMode) {
+    let _ = write!(
+        row,
+        "{:<5}{} {}",
+        label,
+        gps_value(fix, uptime_s, stale_after_s(mode, true)).as_str(),
+        mode.label()
+    );
+}
+
 fn hms(total_s: u32) -> (u32, u32, u32) {
     (total_s / 3600, total_s / 60 % 60, total_s % 60)
 }
@@ -954,6 +1023,74 @@ fn hms(total_s: u32) -> (u32, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The bulk of the suite exercises the default Performance mode (the 1 Hz
+    // behaviour that predates selectable modes); these shadows keep those
+    // call sites at the historical shape. Mode-specific behaviour calls
+    // `super::` directly with an explicit mode.
+    fn face_rows(
+        fix: Option<&Fix>,
+        hr_bpm: Option<u16>,
+        rec: Option<&Snapshot>,
+        elev: Option<&elevation::Reading>,
+        uptime_s: u32,
+    ) -> [Row; ROWS] {
+        super::face_rows(fix, hr_bpm, rec, elev, uptime_s, GnssMode::Performance)
+    }
+
+    fn face_icons(
+        fix: Option<&Fix>,
+        hr_bpm: Option<u16>,
+        rec: Option<&Snapshot>,
+        uptime_s: u32,
+    ) -> [Option<FaceIcon>; ROWS] {
+        super::face_icons(fix, hr_bpm, rec, uptime_s, GnssMode::Performance)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn page_rows(
+        page: Page,
+        fix: Option<&Fix>,
+        hr_bpm: Option<u16>,
+        rec: Option<&Snapshot>,
+        elev: Option<&elevation::Reading>,
+        nav: NavView,
+        tb: Option<&TrackbackView>,
+        uptime_s: u32,
+        animate: bool,
+    ) -> [Row; ROWS] {
+        super::page_rows(
+            page,
+            fix,
+            hr_bpm,
+            rec,
+            elev,
+            nav,
+            tb,
+            uptime_s,
+            animate,
+            GnssMode::Performance,
+        )
+    }
+
+    fn page_icons(
+        page: Page,
+        fix: Option<&Fix>,
+        hr_bpm: Option<u16>,
+        rec: Option<&Snapshot>,
+        uptime_s: u32,
+        animate: bool,
+    ) -> [Option<FaceIcon>; ROWS] {
+        super::page_icons(
+            page,
+            fix,
+            hr_bpm,
+            rec,
+            uptime_s,
+            animate,
+            GnssMode::Performance,
+        )
+    }
 
     fn fix() -> Fix {
         Fix {
@@ -1019,13 +1156,13 @@ mod tests {
         // Title row is static (no ticking uptime) so the idle screen doesn't
         // force a per-second wake; time of day still shows on the UTC row.
         assert_eq!(rows[0].as_str(), "THREKIR");
+        assert_eq!(rows[1].as_str(), "MODE PERF ~110H");
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
         assert_eq!(rows[4].as_str(), "LON   -105.27050");
         assert_eq!(rows[5].as_str(), "SPD  3.0 M/S");
         assert_eq!(rows[6].as_str(), "ALT  1624 M");
         assert_eq!(rows[8].as_str(), "UTC  07:30:15");
-        assert_eq!(rows[1].as_str(), "");
         assert_eq!(rows[7].as_str(), "");
     }
 
@@ -1062,7 +1199,7 @@ mod tests {
         assert_eq!(rows[5].as_str(), "     152 BPM Z3");
         assert_eq!(rows[6].as_str(), "     1600 M");
         assert_eq!(rows[7].as_str(), "     +540 -120 M");
-        assert_eq!(rows[8].as_str(), "     8 SATS");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
     }
 
     #[test]
@@ -1208,7 +1345,7 @@ mod tests {
         assert_eq!(rows[5].as_str(), "     --");
         assert_eq!(rows[6].as_str(), "     --");
         assert_eq!(rows[7].as_str(), "     --");
-        assert_eq!(rows[8].as_str(), "     ACQUIRING");
+        assert_eq!(rows[8].as_str(), "     ACQUIRING PERF");
     }
 
     #[test]
@@ -1223,7 +1360,7 @@ mod tests {
     fn dashboard_flags_a_stale_fix_on_the_gps_line() {
         let rec = snapshot(RecordState::Recording, 100.0);
         let rows = face_rows(Some(&fix()), None, Some(&rec), None, 41 + STALE_AFTER_S + 3);
-        assert_eq!(rows[8].as_str(), "     STALE 8S");
+        assert_eq!(rows[8].as_str(), "     STALE 8S PERF");
     }
 
     #[test]
@@ -1313,7 +1450,7 @@ mod tests {
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
         assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // Glance pages carry no gutter icons.
         assert!(page_icons(
             Page::Distance,
@@ -1429,7 +1566,7 @@ mod tests {
         assert_eq!(rows[4].as_str(), "LAST 4:58");
         assert_eq!(rows[5].as_str(), "DIST 0.42 KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // Glance pages carry no gutter icons.
         assert!(
             page_icons(Page::Lap, Some(&fix()), Some(152), Some(&rec), 42, true)
@@ -1686,7 +1823,7 @@ mod tests {
         assert_eq!(rows[5].as_str(), "Z3 20:00    ####");
         assert_eq!(rows[6].as_str(), "Z4 5:00     #");
         assert_eq!(rows[7].as_str(), "Z5 0:00     ");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // Text-only page: no gutter icons.
         assert!(
             page_icons(Page::Zones, Some(&fix()), Some(152), Some(&rec), 42, true)
@@ -1721,7 +1858,7 @@ mod tests {
             assert!(row.as_str().ends_with("0:00     "), "row: {:?}", row);
             assert!(!row.as_str().contains('#'));
         }
-        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING");
+        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING PERF");
     }
 
     #[test]
@@ -1789,7 +1926,7 @@ mod tests {
         assert_eq!(rows[5].as_str(), "TGT  50:00");
         assert_eq!(rows[6].as_str(), "PROJ 47:37");
         assert_eq!(rows[7].as_str(), "DIST +140 M");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // Text-only page: no gutter icons.
         assert!(
             page_icons(Page::Pacer, Some(&fix()), Some(152), Some(&rec), 42, true)
@@ -1876,7 +2013,7 @@ mod tests {
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(rows[6].as_str(), "");
         assert_eq!(rows[7].as_str(), "");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
     }
 
     #[test]
@@ -1931,7 +2068,153 @@ mod tests {
             42,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
-        assert_eq!(rows[1].as_str(), "");
+        assert_eq!(rows[1].as_str(), "MODE PERF ~110H");
+    }
+
+    #[test]
+    fn idle_mode_row_pairs_each_mode_with_its_projected_hours() {
+        // The BTN3 mode picker's read-out: the tag plus the (projection-marked)
+        // battery figure, one per mode, in the fixed row-1 slot.
+        for (mode, expected) in [
+            (GnssMode::Performance, "MODE PERF ~110H"),
+            (GnssMode::Balanced, "MODE BAL  ~180H"),
+            (GnssMode::Expedition, "MODE EXP  ~220H"),
+        ] {
+            let rows = super::face_rows(Some(&fix()), None, None, None, 42, mode);
+            assert_eq!(rows[1].as_str(), expected);
+            assert!(rows[1].len() <= COLS);
+        }
+    }
+
+    #[test]
+    fn run_gps_rows_carry_the_active_mode_tag() {
+        let rec = snapshot(RecordState::Recording, 12_340.0);
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            42,
+            GnssMode::Expedition,
+        );
+        assert_eq!(rows[8].as_str(), "     8 SATS EXP");
+        let rows = super::page_rows(
+            Page::Distance,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+            GnssMode::Balanced,
+        );
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS BAL");
+    }
+
+    #[test]
+    fn run_staleness_budget_follows_the_mode_cadence() {
+        // A 40 s-old fix mid-run: signal lost at the 1 Hz cadence, but exactly
+        // the chosen rhythm one Expedition interval apart — SATS, not STALE,
+        // and the locked satellite icon rather than the search arcs.
+        let rec = snapshot(RecordState::Recording, 12_340.0);
+        let aged = 41 + 40;
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            aged,
+            GnssMode::Performance,
+        );
+        assert_eq!(rows[8].as_str(), "     STALE 40S PERF");
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            aged,
+            GnssMode::Expedition,
+        );
+        assert_eq!(rows[8].as_str(), "     8 SATS EXP");
+        let icons = super::face_icons(Some(&fix()), None, Some(&rec), aged, GnssMode::Expedition);
+        assert_eq!(icons[8], Some(FaceIcon::Satellite));
+        // Past even the Expedition budget (64 s) the flag comes back — a
+        // genuinely lost signal is never dressed up as the mode's cadence.
+        let lost = 41 + 65;
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            lost,
+            GnssMode::Expedition,
+        );
+        assert_eq!(rows[8].as_str(), "     STALE 65S EXP");
+    }
+
+    #[test]
+    fn idle_staleness_keeps_the_tight_budget_in_every_mode() {
+        // Idle publication is de-rated to just under STALE_AFTER_S regardless
+        // of mode (the mode throttles recording, not idle), so the idle face
+        // must flag a 40 s-old fix even in Expedition mode.
+        assert_eq!(stale_after_s(GnssMode::Expedition, false), STALE_AFTER_S);
+        assert_eq!(stale_after_s(GnssMode::Performance, true), STALE_AFTER_S);
+        assert_eq!(stale_after_s(GnssMode::Balanced, true), 19);
+        assert_eq!(stale_after_s(GnssMode::Expedition, true), 64);
+        let rows = super::face_rows(
+            Some(&fix()),
+            None,
+            None,
+            None,
+            41 + 40,
+            GnssMode::Expedition,
+        );
+        assert_eq!(rows[2].as_str(), "GPS  STALE 40S");
+    }
+
+    #[test]
+    fn mode_tagged_rows_fit_the_grid_at_extremes() {
+        let rec = snapshot(RecordState::Recording, 9_999_990.0);
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            for page in [
+                Page::Dashboard,
+                Page::Distance,
+                Page::Pace,
+                Page::Lap,
+                Page::Zones,
+            ] {
+                let rows = super::page_rows(
+                    page,
+                    Some(&fix()),
+                    Some(u16::MAX),
+                    Some(&rec),
+                    None,
+                    NavView::NoCourse,
+                    None,
+                    999_999,
+                    true,
+                    mode,
+                );
+                for row in rows {
+                    assert!(row.len() <= COLS, "row too wide in {:?}: {:?}", mode, row);
+                }
+            }
+            let idle = super::face_rows(Some(&fix()), Some(u16::MAX), None, None, 999_999, mode);
+            for row in idle {
+                assert!(
+                    row.len() <= COLS,
+                    "idle row too wide in {:?}: {:?}",
+                    mode,
+                    row
+                );
+            }
+        }
     }
 
     fn nav_status(along_m: f64, off_m: f64, alerting: bool) -> NavView {
@@ -1958,7 +2241,7 @@ mod tests {
         );
         assert_eq!(rows[0].as_str(), "NAV               REC");
         assert_eq!(rows[7].as_str(), "12.34 KM  OFF 23 M");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // No hero and no gutter icons — the map panel owns rows 1-6.
         assert!(page_hero(Page::Nav, Some(152), Some(&rec), None).is_none());
         assert!(
@@ -2020,7 +2303,7 @@ mod tests {
             true,
         );
         assert_eq!(rows[7].as_str(), "AWAITING FIX");
-        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING");
+        assert_eq!(rows[8].as_str(), "GPS  ACQUIRING PERF");
     }
 
     #[test]
@@ -2116,7 +2399,7 @@ mod tests {
         assert_eq!(rows[4].as_str(), "BRG  W");
         // A live arrow: its text spot stays blank for the app's drawing.
         assert_eq!(rows[6].as_str(), "");
-        assert_eq!(rows[8].as_str(), "GPS  8 SATS");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // Text-only page: no gutter icons.
         assert!(
             page_icons(Page::BackToStart, Some(&fix()), None, Some(&rec), 20, true)

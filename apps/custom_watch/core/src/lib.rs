@@ -14,6 +14,8 @@
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
+//! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
+//!   projected battery hours) BTN3 cycles on the idle face
 //! - [`grade_adjusted_pace`] — the Minetti GAP model (fourth parity port) +
 //!   the streaming grade estimator the recorder feeds
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
@@ -40,6 +42,7 @@ pub mod elevation;
 pub mod face;
 pub mod fix;
 pub mod flash_store;
+pub mod gnss_mode;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
 pub mod link;
