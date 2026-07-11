@@ -1814,7 +1814,9 @@ mod tests {
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "-1:05"
         );
         assert_eq!(rows[2].as_str(), "PACER         BEHIND");
@@ -1835,7 +1837,9 @@ mod tests {
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "+0:00"
         );
         assert_eq!(rows[2].as_str(), "PACER         ON PACE");
@@ -1861,7 +1865,9 @@ mod tests {
             true,
         );
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "--"
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
@@ -1883,7 +1889,9 @@ mod tests {
             None,
         ));
         assert_eq!(
-            page_hero(Page::Pacer, None, Some(&rec), None).unwrap().as_str(),
+            page_hero(Page::Pacer, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
             "-1:02:03"
         );
     }
@@ -2035,7 +2043,17 @@ mod tests {
         let odd = page_rows(Page::Nav, None, None, Some(&rec), None, nav, None, 11, true);
         assert_eq!(odd[0].as_str(), "NAV");
         // Gated animation holds the tag steady-on.
-        let gated = page_rows(Page::Nav, None, None, Some(&rec), None, nav, None, 11, false);
+        let gated = page_rows(
+            Page::Nav,
+            None,
+            None,
+            Some(&rec),
+            None,
+            nav,
+            None,
+            11,
+            false,
+        );
         assert_eq!(gated[0].as_str(), "NAV               REC");
     }
 
