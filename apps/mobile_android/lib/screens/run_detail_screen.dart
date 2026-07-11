@@ -1087,13 +1087,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                             '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
                       ),
                     ),
-                  Expanded(
-                    child: _StatSmall(
-                      icon: Icons.local_fire_department,
-                      label: l10n.runStatCalories,
-                      value: '$_estimatedCalories ${l10n.runUnitKcal}',
+                  if (_showCalories)
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.local_fire_department,
+                        label: l10n.runStatCalories,
+                        value: '$_estimatedCalories ${l10n.runUnitKcal}',
+                      ),
                     ),
-                  ),
                   if (_steps > 0)
                     Expanded(
                       child: _StatSmall(
@@ -1395,6 +1396,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (gap == null || raw == null) return false;
     return (gap - raw).abs() >= 2;
   }
+
+  /// Universal `show_calories` pref (default on) — a weight-conscious runner
+  /// can suppress the estimate (which silently assumes 70 kg when no body
+  /// weight is set). Mirrors web's `/runs/[id]` gate: shown unless the pref
+  /// is explicitly `false`.
+  bool get _showCalories =>
+      widget.settingsSync?.service?.effective<bool>(SettingsKeys.showCalories) !=
+      false;
 
   double get _elevationGain {
     _resetStatsCacheIfStale();

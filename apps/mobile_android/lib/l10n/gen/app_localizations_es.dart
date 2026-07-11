@@ -6478,6 +6478,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Dibuja la línea grabada sin ajustar en el mapa de la carrera, aunque exista un trayecto ya corregido';
 
   @override
+  String get prefsShowCalories => 'Mostrar estimaciones de calorías';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      'Estimadas a partir de la distancia y el peso corporal (70 kg por defecto si no se ha configurado). Desactívalo para ocultar las calorías en las páginas de carrera.';
+
+  @override
   String get prefsDefaultRunPrivacy =>
       'Privacidad predeterminada de las carreras';
 

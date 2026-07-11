@@ -8662,6 +8662,14 @@
   "@prefsShowRawTrackSubtitle": {
     "description": "Subtitle of the show-raw-track toggle"
   },
+  "prefsShowCalories": "Show calorie estimates",
+  "@prefsShowCalories": {
+    "description": "Toggle title for showing the calorie estimate on run detail"
+  },
+  "prefsShowCaloriesHint": "Estimated from distance and body weight (a 70 kg default when unset). Turn off to hide the calorie figure on run pages.",
+  "@prefsShowCaloriesHint": {
+    "description": "Subtitle of the show-calories toggle"
+  },
   "prefsDefaultRunPrivacy": "Default run privacy",
   "@prefsDefaultRunPrivacy": {
     "description": "Tile title for the default run privacy"

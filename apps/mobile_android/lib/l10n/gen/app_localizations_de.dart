@@ -6486,6 +6486,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die ungeglättete aufgezeichnete Linie auf der Laufkarte anzeigen, auch wenn ein bereinigter, abgeglichener Track vorliegt';
 
   @override
+  String get prefsShowCalories => 'Kalorienschätzungen anzeigen';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      'Geschätzt aus Distanz und Körpergewicht (Standard 70 kg, wenn nicht gesetzt). Deaktivieren, um die Kalorienangabe auf Laufseiten auszublenden.';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Standard-Datenschutz für Läufe';
 
   @override

@@ -12,6 +12,7 @@ import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/run_detail_screen.dart';
+import '../lib/settings_sync.dart';
 
 late Directory _runsDir;
 
@@ -75,8 +76,37 @@ class _SlowShareApi extends ApiClient {
   }
 }
 
+/// Returns a seeded universal-bag value for [effective]; everything else
+/// falls through to the caller's fallback. Never touches Supabase.
+class _FakeSettingsService extends SettingsService {
+  _FakeSettingsService(this._values)
+      : super(deviceId: 'test-device', platform: 'android');
+
+  final Map<String, dynamic> _values;
+
+  @override
+  T? effective<T>(String key, {T? fallback}) =>
+      _values.containsKey(key) ? _values[key] as T? : fallback;
+}
+
+class _FakeSettingsSync extends SettingsSyncService {
+  _FakeSettingsSync(Preferences prefs, this._service)
+      : super(preferences: prefs);
+
+  final SettingsService? _service;
+
+  @override
+  bool get synced => true;
+
+  @override
+  SettingsService? get service => _service;
+}
+
 Future<void> _pump(WidgetTester tester, Run run,
-    {double? bodyWeightKg, LocalRouteStore? routeStore, ApiClient? apiClient}) async {
+    {double? bodyWeightKg,
+    LocalRouteStore? routeStore,
+    ApiClient? apiClient,
+    SettingsSyncService? settingsSync}) async {
   SharedPreferences.setMockInitialValues(
     bodyWeightKg != null ? {'body_weight_kg': bodyWeightKg} : {},
   );
@@ -97,6 +127,7 @@ Future<void> _pump(WidgetTester tester, Run run,
         routeStore: routeStore ?? LocalRouteStore(),
         preferences: prefs,
         apiClient: apiClient,
+        settingsSync: settingsSync,
       ),
     ),
   );
@@ -328,6 +359,47 @@ void main() {
       final run = _run(distanceMetres: 10000, withTrack: true);
       await _pump(tester, run);
       expect(find.text('700 kcal'), findsOneWidget);
+    });
+  });
+
+  // ───────── show_calories pref gates the run-detail calorie tile ─────────
+  //
+  // Mirror of web's `/runs/[id]` gate:
+  //   showCalories = effective<boolean>(settings, 'show_calories', true) !== false
+  // Default (pref absent / no settings) → the tile shows; pref explicitly
+  // false → hidden.
+  group('RunDetailScreen — show_calories pref', () {
+    testWidgets('shows the calorie tile by default (pref absent)',
+        (tester) async {
+      final run = _run(withTrack: true);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await _pump(
+        tester,
+        run,
+        settingsSync: _FakeSettingsSync(prefs, _FakeSettingsService({})),
+      );
+      expect(find.text('Calories'), findsOneWidget);
+      expect(find.text('350 kcal'), findsOneWidget);
+    });
+
+    testWidgets('hides the calorie tile when show_calories is false',
+        (tester) async {
+      final run = _run(withTrack: true);
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await _pump(
+        tester,
+        run,
+        settingsSync: _FakeSettingsSync(
+          prefs,
+          _FakeSettingsService({'show_calories': false}),
+        ),
+      );
+      expect(find.text('Calories'), findsNothing);
+      expect(find.text('350 kcal'), findsNothing);
     });
   });
 

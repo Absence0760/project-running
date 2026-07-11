@@ -100,4 +100,69 @@ void main() {
       expect(longestCompletedLongRunMetres(workouts), 12000);
     });
   });
+
+  group('planDistanceBanked', () {
+    test('sums planned over non-rest, completed over done', () {
+      final workouts = [
+        const DistanceWorkout(
+            kind: 'easy', targetDistanceM: 8000, manuallyCompleted: true),
+        const DistanceWorkout(
+            kind: 'long', targetDistanceM: 20000, completedRunId: null),
+        const DistanceWorkout(kind: 'rest', targetDistanceM: null),
+      ];
+      final r = planDistanceBanked(workouts);
+      expect(r.completedMetres, 8000);
+      expect(r.plannedMetres, 28000);
+    });
+
+    test('prefers actual run distance for completed workouts', () {
+      final workouts = [
+        const DistanceWorkout(
+            kind: 'long', targetDistanceM: 20000, completedRunId: 'r1'),
+      ];
+      final r = planDistanceBanked(workouts, {'r1': 21400.0});
+      expect(r.completedMetres, 21400);
+      expect(r.plannedMetres, 20000);
+    });
+
+    test('a skipped workout leaves the planned denominator', () {
+      final workouts = [
+        const DistanceWorkout(
+            kind: 'easy', targetDistanceM: 8000, manuallyCompleted: true),
+        const DistanceWorkout(
+            kind: 'long',
+            targetDistanceM: 20000,
+            skippedAt: '2026-07-01T00:00:00Z'),
+      ];
+      final r = planDistanceBanked(workouts);
+      expect(r.completedMetres, 8000);
+      expect(r.plannedMetres, 8000);
+    });
+
+    test('banked can exceed planned when the runner over-runs', () {
+      final workouts = [
+        const DistanceWorkout(
+            kind: 'long', targetDistanceM: 20000, completedRunId: 'r1'),
+      ];
+      final r = planDistanceBanked(workouts, {'r1': 24000.0});
+      expect(r.completedMetres, 24000);
+      expect(r.plannedMetres, 20000);
+    });
+
+    test('a zero-distance linked run falls back to the planned target', () {
+      final workouts = [
+        const DistanceWorkout(
+            kind: 'long', targetDistanceM: 20000, completedRunId: 'r1'),
+      ];
+      final r = planDistanceBanked(workouts, {'r1': 0.0});
+      expect(r.completedMetres, 20000);
+      expect(r.plannedMetres, 20000);
+    });
+
+    test('empty plan is zero / zero', () {
+      final r = planDistanceBanked(const []);
+      expect(r.completedMetres, 0);
+      expect(r.plannedMetres, 0);
+    });
+  });
 }

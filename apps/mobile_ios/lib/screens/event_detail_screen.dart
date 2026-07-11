@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:api_client/api_client.dart'
+    hide SessionPlanBlockInput, SessionPlanItemInput;
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -18,6 +20,7 @@ import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../preferences.dart';
 import '../recurrence.dart';
+import '../session_steps.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -32,6 +35,51 @@ import '../widgets/top_banner.dart';
 @visibleForTesting
 bool canMarkEventAttendance(ClubView? club, String category) =>
     club?.isEventOrganiser == true && category == 'class';
+
+SessionItemKind _sessionKindFromString(String raw) {
+  switch (raw) {
+    case 'reps':
+      return SessionItemKind.reps;
+    case 'flow':
+      return SessionItemKind.flow;
+    default:
+      return SessionItemKind.hold;
+  }
+}
+
+/// The gym-composer seed for the event-detail "Log as workout" action,
+/// mirroring web's `logWorkoutPrefill`. With an attached, expanded session plan
+/// the seed carries one set per expanded step (a per-side step stays two rows)
+/// and a title of the class discipline / plan title falling back to the flat
+/// gym_template title; without one it is title-only (the flat gym_template
+/// path, [sets] == null).
+@visibleForTesting
+({String? title, List<GymSetInput>? sets}) logWorkoutSeed({
+  required EventGymTemplate? gymTemplate,
+  required String eventTitle,
+  required String? discipline,
+  ExpandedSession? expansion,
+  String? sessionPlanTitle,
+}) {
+  final base = workoutDraftFromTemplate(gymTemplate, eventTitle);
+  if (expansion == null) return (title: base.title, sets: null);
+  final draft = workoutDraftFromSession(expansion, sessionPlanTitle, discipline);
+  return (
+    title: draft.title ?? base.title,
+    sets: [
+      for (final s in draft.sets)
+        (
+          exerciseName: s.exerciseName,
+          reps: s.reps,
+          weightKg: null,
+          rpe: null,
+          setType: null,
+          durationS: s.durationS,
+          exerciseId: null,
+        ),
+    ],
+  );
+}
 
 class EventDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -81,6 +129,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   /// through every EventDetailScreen push site.
   LocalGymStore? _gymStore;
 
+  /// Lazily-created API client for the class -> gym session-plan fetch. The
+  /// production `ApiClient()` resolves through the global Supabase instance —
+  /// same lazy pattern as [_gymStore].
+  ApiClient? _api;
+
+  /// The expanded attached session plan (session_planner.md P1), loaded
+  /// best-effort when a `class` event carries a `session_plan_id`. Drives the
+  /// session-derived Log-as-workout seed; null for a class with no plan.
+  ExpandedSession? _sessionExpansion;
+  String? _sessionPlanTitle;
+
   @override
   void initState() {
     super.initState();
@@ -102,18 +161,70 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _logAsWorkout() async {
     final e = _event;
     if (e == null) return;
-    final draft = workoutDraftFromTemplate(_gymTemplate, e.row.title);
+    final seed = logWorkoutSeed(
+      gymTemplate: _gymTemplate,
+      eventTitle: e.row.title,
+      discipline: e.row.discipline,
+      expansion: _sessionExpansion,
+      sessionPlanTitle: _sessionPlanTitle,
+    );
     final store = _gymStore ??= LocalGymStore();
     await store.init();
     if (!mounted) return;
     final l10n = AppLocalizations.of(context);
+    // With an attached session plan the attendee logs the class CONTENT (one
+    // seeded set per expanded step); otherwise just the flat gym_template
+    // title. seedTitle wins over prefillTitle in the composer, so the seed
+    // path routes the title through seedTitle alongside seedSets.
     final saved = await showGymComposeSheet(
       context: context,
       store: store,
-      prefillTitle: draft.title,
+      prefillTitle: seed.sets == null ? seed.title : null,
+      seedTitle: seed.sets == null ? null : seed.title,
+      seedSets: seed.sets,
     );
     if (saved == true && mounted) {
       showTopBanner(context, l10n.clubEventLogAsWorkoutSaved);
+    }
+  }
+
+  /// Best-effort load + expand the class's attached session plan so
+  /// [_logAsWorkout] can seed the composer from the class content. Mirrors
+  /// web's `loadSessionPlan` + `sessionExpansion`. A failure leaves the flat
+  /// gym_template path intact (L4).
+  Future<void> _maybeLoadSessionPlan(EventView event) async {
+    final planId = event.row.sessionPlanId;
+    if (planId == null || event.row.category != 'class') return;
+    try {
+      final data = await (_api ??= ApiClient()).fetchSessionPlan(planId);
+      if (!mounted || data == null) return;
+      final input = SessionPlanInput(
+        blocks: [
+          for (final b in data.blocks)
+            SessionPlanBlockInput(id: b.id, position: b.position, name: b.name),
+        ],
+        items: [
+          for (final it in data.items)
+            SessionPlanItemInput(
+              id: it.id,
+              blockId: it.blockId,
+              position: it.position,
+              movementName: it.movementName,
+              kind: _sessionKindFromString(it.kind),
+              durationS: it.durationS,
+              reps: it.reps,
+              perSide: it.perSide,
+              tempo: it.tempo,
+              cue: it.cue,
+            ),
+        ],
+      );
+      setState(() {
+        _sessionExpansion = expandSessionSteps(input);
+        _sessionPlanTitle = data.plan.title;
+      });
+    } catch (e) {
+      debugPrint('EventDetailScreen session-plan load failed: $e');
     }
   }
 
@@ -159,6 +270,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _instances = instances;
         _loading = false;
       });
+      unawaited(_maybeLoadSessionPlan(event));
       if (_channel == null && club != null) {
         _channel = widget.social.subscribeToEvent(
           event.row.id,

@@ -1757,6 +1757,8 @@
   "prefsAdvancedGpsSubtitle": "Mayor precisión, trazado más detallado, más consumo de batería",
   "prefsShowRawTrack": "Mostrar trayecto GPS sin procesar",
   "prefsShowRawTrackSubtitle": "Dibuja la línea grabada sin ajustar en el mapa de la carrera, aunque exista un trayecto ya corregido",
+  "prefsShowCalories": "Mostrar estimaciones de calorías",
+  "prefsShowCaloriesHint": "Estimadas a partir de la distancia y el peso corporal (70 kg por defecto si no se ha configurado). Desactívalo para ocultar las calorías en las páginas de carrera.",
   "prefsDefaultRunPrivacy": "Privacidad predeterminada de las carreras",
   "prefsStravaAutoShare": "Compartir automático en Strava",
   "prefsStravaAutoShareSubtitle": "Envía automáticamente cada nueva carrera a Strava. Requiere una integración de Strava conectada cuando esté disponible.",

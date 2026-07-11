@@ -216,6 +216,32 @@ test.describe('/nutrition — multi-day week journey', () => {
 			expect((weekRows ?? []).length).toBe(WEEK_OFFSETS.length + 1);
 		});
 
+		// ── 4b. The trend metric toggle re-plots the chart on protein ────────
+		await test.step('the calories/protein toggle switches the chart series', async () => {
+			const trend = page.locator('.trend-card');
+			const calBtn = trend.getByTestId('trend-metric-calories');
+			const proBtn = trend.getByTestId('trend-metric-protein');
+			await expect(calBtn).toBeVisible();
+			await expect(proBtn).toBeVisible();
+			// Calories is the default selection.
+			await expect(calBtn).toHaveAttribute('aria-pressed', 'true');
+			await expect(proBtn).toHaveAttribute('aria-pressed', 'false');
+
+			// Switch to protein → the pressed state flips and today's column (which
+			// carries this session's 40 g protein item) still shows a non-empty
+			// value, proving the bars re-plot on the protein series (already
+			// collected per day, previously never charted).
+			await proBtn.click();
+			await expect(proBtn).toHaveAttribute('aria-pressed', 'true');
+			await expect(calBtn).toHaveAttribute('aria-pressed', 'false');
+			const cols = trend.locator('.trend-col');
+			await expect(cols.last().locator('.trend-val')).not.toHaveText('');
+
+			// Restore the default so later steps read the calorie surfaces unchanged.
+			await calBtn.click();
+			await expect(calBtn).toHaveAttribute('aria-pressed', 'true');
+		});
+
 		// ── 5. The week-summary "under/over goal/day" chip is wired ──────────
 		await test.step('the week-summary delta chip compares the logged-day average to the goal', async () => {
 			const weekDelta = page.getByTestId('week-delta');
