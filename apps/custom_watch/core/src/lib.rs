@@ -91,6 +91,10 @@
 //!   a route polyline + the inverse distance-along-route projection + cumulative
 //!   length (port of web `routes/route_geometry.ts`; the self-contained twin of
 //!   the [`course`] nav-overlay projection)
+//! - [`route_gpx`] — course-waypoint GPX export: the route line as a `<trk>`
+//!   plus one `<wpt>` per course marker, kind→`<sym>` + cutoff/services in
+//!   `<desc>` (port of web `routes/route_gpx.ts`; reuses
+//!   [`route_markers::parse_cutoff`], builds into a `heapless::String`)
 //! - [`plan_progress`] — base→build→peak→taper phase ordering + longest
 //!   completed long run (port of web `training/plan_progress.ts`)
 //! - [`plan_adherence`] — weekly drift over/under + missed-workout make-up/skip
@@ -173,6 +177,7 @@ pub mod relink_candidates;
 pub mod roadbook;
 pub mod route_description;
 pub mod route_geometry;
+pub mod route_gpx;
 pub mod route_markers;
 pub mod run_heatmap;
 pub mod run_store;
