@@ -29,6 +29,11 @@
 --      so a bot newly creating 60 empty clubs can't outrank an old
 --      established club within the same geographic match.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 alter table clubs
   add column member_count integer not null default 0;
 

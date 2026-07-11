@@ -23,6 +23,11 @@
 -- replacing it: a malicious client passing a different user_id
 -- still hits RLS and gets nothing.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function routes_intersecting_track(
   caller_user_id uuid,
   track_geojson jsonb,

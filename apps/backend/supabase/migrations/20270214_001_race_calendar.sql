@@ -17,6 +17,11 @@
 -- were stripped by 20260714_001 and the column-promoted view 20261207_001.
 
 -- ── race_listings (the calendar) ────────────────────────────────────────────
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create table race_listings (
   id               uuid primary key default gen_random_uuid(),
   provider         text not null,

@@ -11,6 +11,11 @@
 -- (positions 17-20). The four are cross-user-readable (granted in
 -- 20270131_001), so projecting them directly is fine.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function search_clubs(
   p_query text default null,
   p_center_lng double precision default null,

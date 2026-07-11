@@ -26,6 +26,11 @@
 -- ─── 1. shadow_hidden columns ─────────────────────────────────────
 -- NOT NULL DEFAULT false keeps generated Insert types optional and means
 -- existing rows are visible until the trigger / an admin flips them.
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 alter table clubs         add column shadow_hidden boolean not null default false;
 alter table routes        add column shadow_hidden boolean not null default false;
 alter table user_profiles add column shadow_hidden boolean not null default false;

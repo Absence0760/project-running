@@ -17,6 +17,11 @@
 
 -- Signature changes (3 new geo params + distance_m in the return), so drop the
 -- 7-arg p_time version (20270111_001) first.
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 drop function if exists search_public_events(text, text, text, text, text, text, int);
 
 create or replace function search_public_events(

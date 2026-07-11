@@ -16,6 +16,11 @@
 -- addition is the distance predicate. Drop the prior 6-arg signature
 -- first since the argument list grows.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 drop function if exists discoverable_routes_in_bbox(
   double precision, double precision, double precision, double precision, int, text
 );

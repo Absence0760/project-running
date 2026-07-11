@@ -14,6 +14,11 @@
 -- re-pointed at the view so anon discovery keeps working; the import EF /
 -- admin tooling write with service_role, which bypasses RLS.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 drop policy "race listings readable by all" on race_listings;
 
 create policy "submitters read own listings"

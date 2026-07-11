@@ -27,6 +27,11 @@
 -- private event, but the explicit filter also keeps a *member's* own private
 -- events out of global discovery, which is the correct discovery semantic).
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 alter table events add column is_public boolean not null default true;
 
 comment on column events.is_public is
