@@ -66,13 +66,46 @@
 //!   Fitness-card training-load snapshot (port of web `training/fitness.ts`;
 //!   the ISO date + `nowMs` collapse to an integer day index like
 //!   [`training_load`])
+//! - [`route_markers`] — course-marker kind catalogue + `sort_markers` +
+//!   `parse_cutoff` + the aid-services vocabulary (port of web
+//!   `routes/route_markers.ts`; `parse_cutoff` mirrors the copy inlined in
+//!   [`roadbook`]/[`cutoff_eta`], a later de-dup target)
+//! - [`checkpoint_projection`] — grade a runner from aid-station crossings:
+//!   projected arrival at each remaining checkpoint + safe/tight/miss verdict
+//!   (port of web `runs/checkpoint_projection.ts`; reuses
+//!   [`roadbook::CutoffStatus`] + [`cutoff_eta::CUTOFF_TIGHT_S`])
+//! - [`route_description`] — bucket a route's stats into structured parts + the
+//!   canonical English assembler, the offline "describe this route" baseline
+//!   (port of web `routes/route_description.ts`; reuses
+//!   [`distance_bands::band_for_distance`])
+//! - [`plan_progress`] — base→build→peak→taper phase ordering + longest
+//!   completed long run (port of web `training/plan_progress.ts`)
+//! - [`plan_adherence`] — weekly drift over/under + missed-workout make-up/skip
+//!   advice as enums (port of web `training/plan_adherence.ts`)
+//! - [`current_week`] — bucket activities onto the seven days of the real
+//!   calendar week honouring the week-start pref (port of web
+//!   `training/current_week.ts`; ISO dates collapsed to a Unix-epoch day index)
+//! - [`nutrition_targets`] — Mifflin-St Jeor BMR → calorie + macro targets from
+//!   goal (port of web `nutrition/nutrition_targets.ts`)
+//! - [`challenge_progress`] — challenge progress fraction / rank / on-pace
+//!   projection (port of web `social/challenge_progress.ts`; reuses
+//!   [`pacer::ON_PACE_BAND`])
+//! - [`badges`] — achievement catalogue + `evaluate_badges` + `tier_for`,
+//!   thresholds in lockstep with the SQL awarder (port of web
+//!   `social/badges.ts`; i18n label keys carried as identifiers, not strings)
+//! - [`locale_defaults`] — locale → default unit + week-start region tables
+//!   (port of web `format/locale_defaults.ts`; the `Intl` fallback is web-only)
 
 #![cfg_attr(not(test), no_std)]
 
 pub mod age_grade;
 pub mod alerts;
+pub mod badges;
 pub mod button;
+pub mod challenge_progress;
+pub mod checkpoint_projection;
 pub mod course;
+pub mod current_week;
 pub mod cutoff_eta;
 pub mod distance_bands;
 pub mod elevation;
@@ -88,12 +121,18 @@ pub mod grade_adjusted_pace;
 pub mod hr_zones;
 pub mod hydration;
 pub mod link;
+pub mod locale_defaults;
+pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
 pub mod page;
+pub mod plan_adherence;
+pub mod plan_progress;
 pub mod race_predictor;
 pub mod record;
 pub mod roadbook;
+pub mod route_description;
+pub mod route_markers;
 pub mod run_store;
 pub mod trackback;
 pub mod training_load;
