@@ -3655,6 +3655,22 @@ Wiring the buttons immediately surfaced a real screen-task bug (fixed same day):
 
 Both results ride `Snapshot` (Shape A), so their glance pages render uniformly from `snap` with zero ui-task change, and both keep honest inactive states (`NO CUTOFFS` / `NO CUTOFF AHEAD` / `--`; `NEED 1 KM`) rather than zeros pretending to be data.
 
+## 216. Tier-1 watch UI splits pixel-widget drawing into a host-testable `watch_render` crate
+
+The glance pages were text-only (`watch_core::face` → rows of characters), which the ui task blitted through the 8x16 font. To make the mid-run numbers *glanceable as shapes* — a pacer ahead/behind bar, gear/fuel gauges, per-zone bars, a pace-distribution histogram, a GPS signal meter, a page-position indicator, and triple-size hero numbers — the UI needed real pixel drawing, not more glyphs.
+
+The load-bearing decision is **where that drawing lives**. Drawing needs both the `sharp_mip` framebuffer and `watch_core` state, and it had previously been done inline in the `app`'s `ui` task — which only builds for the board, so none of it was reachable by `cargo test` (the same gap that leaves the nav-panel + trackback overlays untested). Rather than grow that untested surface, the pixel geometry is factored three ways:
+
+- **Primitives** live in the `sharp_mip` driver (`fill_rect` / `stroke_rect` / `hline` / `vline` / `draw_progress_bar` / `draw_center_bar` / `draw_text_3x`), host-tested in the driver crate, clipping-not-panicking like the existing `draw_line` / `draw_text_2x`.
+- **Pure geometry** — *what* fraction / how many bars / which page-dot — lives in new `watch_core` modules (`statusbar`, `gauge`, `bar_chart`), `no_std` and unit-tested alongside the rest of core, with the honest-inactive discipline the pages already use (a zero-time zone draws no bar; a sensorless run frames nothing; a division guards against `NaN`).
+- **Composition** — turning that geometry into pixels over a framebuffer — is a new **`watch_render` crate** (`no_std`, depends on `sharp_mip` + `watch_core`) whose `draw_*_overlay(fb, snap, …)` functions fold in the `gauge`/`statusbar` math and are exercised by pixel-asserting unit tests **plus an ASCII-preview harness** (`render/src/preview.rs`) that dumps a composed page as text — the stand-in for a display sim on a host without Renode.
+
+The `ui` task shrinks to the peripheral glue it should be: it calls `widgets::draw_*` into the cells `face` leaves blank on the matching page, after the text rows. Widgets dirty nothing when their inputs are unchanged (the framebuffer's per-line compare), so a resting page still flushes zero SPI — the same power contract the rest of the face keeps.
+
+Two `face` layout changes pair with this: the zone / split rows drop their `#`-glyph bars (the pixel bars own those cells now), and the single-metric Distance / Pace pages reserve rows 0–2 for a `draw_text_3x` hero with the label moved to row 3. `f32::clamp` is used for the fraction clamps — it's a comparison-based method in `core`, so it links in these `no_std` crates (only the transcendental float ops need `libm`); the earlier hand-rolled comparison clamps were removed once the clippy `manual_clamp` gate flagged them.
+
+This advances the § 90 / `local_testing.md` "keep 60–70 % host-testable" goal by moving drawing — previously in the untestable 30–40 % — into a crate `cargo test` reaches, and it ports forward: the `watch_render` split is the same shape a tier-2 colour panel would reuse (geometry unchanged, only the primitive backend swapped).
+
 ## 218. Five more watch_core parity cores land as host-tested pure logic before any page wiring
 
 **Decided (2026-07-11).** Five further shipped web helpers were ported to `no_std` `watch_core` modules — `age_grade` (web `runs/age_grade.ts` + the generated `age_grade_tables.ts`), `hydration` (`nutrition/hydration.ts`), `exercise_calories` (`nutrition/exercise_calories.ts`), `training_paces` (the pace-zone surface of `training/training.ts`), and `fitness` (`training/fitness.ts`) — each mirroring its web `.test.ts` test-for-test (12 / 9 / 11 / 10 / 46 = 88 new host tests, `watch_core` now 435 green). This continues the §215 / 2026-07-10 "logic before peripherals" cadence: the cores are built and host-verified first, and **run-view page wiring is a deliberate separate follow-up** — this round touched none of `face`/`page`/`record`/`ui` to avoid colliding with the three in-flight page-wiring/UI/settings PRs (§216, §217, glance-wiring), and the `//!` module list documents each as unwired.
