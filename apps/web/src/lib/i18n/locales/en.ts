@@ -452,6 +452,8 @@ export const en = {
 	"planDetail.adherenceAria": "Plan adherence",
 	"planDetail.phaseMarkerAria": "Training phase",
 	"planDetail.longestLongRun": "Longest long run",
+	"planDetail.distanceBanked": "Distance banked",
+	"planDetail.distanceBankedValue": "{done} of {total}",
 	"planDetail.export": "Export",
 	"planDetail.exportCopyMarkdown": "Copy as Markdown",
 	"planDetail.exportDownloadMarkdown": "Download .md",

@@ -439,6 +439,8 @@ export const messages = {
 	"planDetail.adherenceAria": "プランの遵守状況",
 	"planDetail.phaseMarkerAria": "トレーニング期分け",
 	"planDetail.longestLongRun": "最長のロング走",
+	"planDetail.distanceBanked": "累積距離",
+	"planDetail.distanceBankedValue": "{total}中{done}",
 	"planDetail.export": "エクスポート",
 	"planDetail.exportCopyMarkdown": "Markdownとしてコピー",
 	"planDetail.exportDownloadMarkdown": ".md をダウンロード",

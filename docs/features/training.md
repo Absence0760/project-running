@@ -50,7 +50,7 @@ Plan + event creation flows intentionally stay on mobile (unlike clubs, where we
 |---|---|
 | `/plans` | Lists the user's plans, highlights the active one, supports abandon/delete. |
 | `/plans/new` | Wizard: goal race + goal time + recent 5K + days/week. Live pace + week-outline preview before save. |
-| `/plans/[id]` | Plan detail. Progress ring, today's workout card, month-by-month calendar (`PlanCalendar.svelte`) projecting workouts onto real dates with completion shading, plus the full week grid below for sequential reading. |
+| `/plans/[id]` | Plan detail. Progress ring, today's workout card, month-by-month calendar (`PlanCalendar.svelte`) projecting workouts onto real dates with completion shading, plus the full week grid below for sequential reading. The progress-header stat row (`plan_progress.ts`) carries the base→build→peak→taper phase marker, the longest-completed-long-run figure, and a **distance-banked** stat (`planDistanceBanked` — km actually run vs km the plan asks for; the mileage view of the workout-count ring, skipped workouts excluded from both, actual linked-run distance preferred so over/under-running shows honestly). |
 | `/plans/[id]/workouts/[wid]` | Workout detail: target distance / pace / tolerance, structured intervals laid out step-by-step, tailored "how to run it" advice per kind. `fetchWorkout` threads the query error (mirroring `fetchPlan`) so a transient load failure shows a distinct "couldn't load — Try again" state rather than the permanent "Workout not found" page (2026-06-21); pinned by `tests-e2e/plans/workout-load-error.spec.ts`. |
 | `/dashboard` | Hosts the "Today's workout" card (or a promo card if no active plan). |
 

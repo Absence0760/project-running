@@ -48,3 +48,51 @@ export function longestCompletedLongRunMetres(
 	}
 	return max;
 }
+
+interface DistanceWorkout {
+	kind: string;
+	target_distance_m: number | null;
+	completed_run_id?: string | null;
+	manually_completed?: boolean | null;
+	skipped_at?: string | null;
+}
+
+export interface PlanDistanceProgress {
+	/// Total metres actually banked so far — completed workouts only,
+	/// preferring the linked run's real distance over the planned target.
+	completedMetres: number;
+	/// Total metres the plan asks for — every non-rest workout still on the
+	/// books (skipped workouts drop out, mirroring the progress ring).
+	plannedMetres: number;
+}
+
+/// Plan-wide distance banked vs planned, in metres. The workout-count
+/// progress ring can read 80% off a run of short easy days while the real
+/// training volume lags; this is the mileage view of the same plan.
+///
+/// `plannedMetres` sums every non-rest, non-skipped workout's target — a
+/// deliberately skipped session leaves the denominator (same rule as the
+/// ring) so a skipped long run doesn't make the runner look permanently
+/// behind. `completedMetres` sums completed workouts, preferring the linked
+/// run's actual distance (looked up in `actualById`) over the planned
+/// target — so over- and under-running both show honestly, and it can
+/// exceed `plannedMetres` when the runner banks more than prescribed.
+export function planDistanceBanked(
+	workouts: DistanceWorkout[],
+	actualById: Map<string, number> = new Map(),
+): PlanDistanceProgress {
+	let completedMetres = 0;
+	let plannedMetres = 0;
+	for (const w of workouts) {
+		if (w.kind === 'rest') continue;
+		const skipped = w.skipped_at != null;
+		const completed = w.manually_completed === true || w.completed_run_id != null;
+		if (!skipped) plannedMetres += w.target_distance_m ?? 0;
+		if (completed) {
+			const actual =
+				w.completed_run_id != null ? actualById.get(w.completed_run_id) : undefined;
+			completedMetres += actual != null && actual > 0 ? actual : (w.target_distance_m ?? 0);
+		}
+	}
+	return { completedMetres, plannedMetres };
+}
