@@ -571,7 +571,7 @@ Tests and analysis run via Melos scripts — see [testing.md](../testing/testing
 
 iOS builds and Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag push — not on PR. See [releasing.md](../ops/releasing.md).
 
-Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHub OIDC to assume an IAM role and runs `aws s3 sync` + `aws lambda update-function-code` + `aws cloudfront create-invalidation` against the `prod` environment on tag `web@*`. Pushes to `main` deploy to the `preview` environment at `preview.threkir.com`. See [`apps/web/deployment.md`](../../apps/web/deployment.md).
+Web app deploys to AWS via `.github/workflows/release-web.yml`, which uses GitHub OIDC to assume an IAM role and runs `aws s3 sync` + `aws lambda update-function-code` + `aws cloudfront create-invalidation` against the `prod` environment when a `web@*` GitHub Release is published (a bare tag push does not deploy — the published Release is the gate, consistent with every other `release-*.yml`). Pushes to `main` deploy to the `preview` environment at `preview.threkir.com`. See [`apps/web/deployment.md`](../../apps/web/deployment.md).
 
 ---
 

@@ -223,9 +223,9 @@ The matrix of "what lives where":
 
 ## Release vs deploy
 
-Two orthogonal axes. **Release** is "we cut a tagged version of the product"; **deploy** is "those bytes are now serving traffic". They overlap in different ways per service:
+Two orthogonal axes. **Release** is "we cut a tagged version of the product"; **deploy** is "those bytes are now serving traffic". They overlap in different ways per service. Every `release-*.yml` deploy is **triggered by publishing a GitHub Release** for the tag below (a bare tag push no longer deploys — the published Release is the gate; see [releasing.md](releasing.md)):
 
-| Service | Tag triggers | Deploy means |
+| Service | Release tag | Deploy means |
 |---|---|---|
 | Web | `web@*` | CI builds → `aws s3 sync` to the prod bucket → `aws cloudfront create-invalidation` → `aws lambda update-function-code` for the coach handler. Live within ~60 s of CI success. |
 | Backend (migrations + EF) | `backend@*` | Migrations applied + EFs uploaded to the linked Supabase project |

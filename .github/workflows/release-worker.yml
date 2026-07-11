@@ -1,8 +1,7 @@
 name: Release worker
 
 # Per-app tag convention: `worker@1.2.3`. The workflow runs `flyctl deploy`
-# against the `job_worker` Fly.io app, then attaches a GitHub Release for
-# the audit trail. Fly.io builds the Docker image remotely so the runner
+# against the `job_worker` Fly.io app. Fly.io builds the Docker image remotely so the runner
 # stays small.
 #
 # Secret required:
@@ -13,13 +12,17 @@ name: Release worker
 # (sizing, secrets, observability, rollback, DR) and docs/ops/releasing.md
 # for the tag conventions.
 
+# Release-triggered: publishing a GitHub Release whose tag is `worker@*`
+# runs this workflow — a bare `worker@*` tag push does NOT deploy. `on:
+# release` fires for every published release in the repo, so the job below
+# is guarded to `worker@*` tags.
 on:
-  push:
-    tags:
-      - 'worker@*'
+  release:
+    types: [published]
 
-# Least-privilege default; the release job opts up to `contents: write`
-# for the GitHub Release step.
+# Least-privilege default. This workflow only deploys to Fly.io; it writes
+# nothing back to the triggering Release, so the job needs no
+# `contents: write` — checkout's `contents: read` is enough.
 permissions:
   contents: read
 
@@ -28,13 +31,14 @@ env:
 
 jobs:
   release:
-    name: flyctl deploy + GitHub Release
+    name: flyctl deploy
     runs-on: ubuntu-latest
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on worker@* releases.
+    if: startsWith(github.event.release.tag_name, 'worker@')
     # Pause on the `production` environment's required-reviewer rule
     # before any prod credentials/steps run (repo Settings → Environments).
     environment: production
-    permissions:
-      contents: write   # needed to create the GitHub Release
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -73,16 +77,3 @@ jobs:
         run: flyctl status --app job_worker
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: worker ${{ steps.version.outputs.version }}
-          body: |
-            Deployed worker `${{ steps.version.outputs.version }}` to Fly.io
-            (`job_worker` app, `lhr` region) via `flyctl deploy --remote-only`.
-
-            See [`apps/job_worker/deployment.md`](apps/job_worker/deployment.md)
-            for the full deploy plan including rollback (`flyctl releases
-            rollback`) and DR procedures.

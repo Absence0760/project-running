@@ -14,13 +14,17 @@ name: Release Backend
 # functions deploy they're live for every client. Roll forward with a
 # follow-up migration rather than trying to roll back.
 
+# Release-triggered: publishing a GitHub Release whose tag is `backend@*`
+# runs this workflow — a bare `backend@*` tag push does NOT deploy. `on:
+# release` fires for every published release in the repo, so the job below
+# is guarded to `backend@*` tags.
 on:
-  push:
-    tags:
-      - 'backend@*'
+  release:
+    types: [published]
 
-# Least-privilege default; the deploy job opts up to `contents: write`
-# for the GitHub Release step.
+# Least-privilege default. This workflow only deploys (migrations + Edge
+# Functions); it writes nothing back to the triggering Release, so the job
+# needs no `contents: write` — checkout's `contents: read` is enough.
 permissions:
   contents: read
 
@@ -31,11 +35,12 @@ jobs:
   deploy:
     name: Deploy migrations + Edge Functions
     runs-on: ubuntu-latest
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on backend@* releases.
+    if: startsWith(github.event.release.tag_name, 'backend@')
     # Pause on the `production` environment's required-reviewer rule
     # before any prod credentials/steps run (repo Settings → Environments).
     environment: production
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -73,10 +78,3 @@ jobs:
           for fn in strava-webhook strava-import parkrun-import refresh-tokens export-data revenuecat-webhook delete-account clip-public-track; do
             supabase functions deploy "$fn" --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
           done
-
-      - name: Create GitHub Release (audit record)
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          name: Backend ${{ steps.version.outputs.name }}
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true

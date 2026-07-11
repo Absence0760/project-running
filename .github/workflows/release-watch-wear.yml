@@ -17,10 +17,13 @@ name: Release Wear OS
 # share the upload identity; Play only requires that the key matches
 # whatever's already associated with each package name.
 
+# Release-triggered: publishing a GitHub Release whose tag is `watch_wear@*`
+# runs this workflow — a bare `watch_wear@*` tag push does NOT deploy. `on:
+# release` fires for every published release in the repo, so the job below
+# is guarded to `watch_wear@*` tags.
 on:
-  push:
-    tags:
-      - 'watch_wear@*'
+  release:
+    types: [published]
 
 # Least-privilege default; the release job opts up to `contents: write`
 # for the GitHub Release step.
@@ -34,6 +37,9 @@ jobs:
   release:
     name: Build, sign, upload Wear AAB
     runs-on: ubuntu-latest
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on watch_wear@* releases.
+    if: startsWith(github.event.release.tag_name, 'watch_wear@')
     permissions:
       contents: write
     steps:
@@ -106,12 +112,13 @@ jobs:
           track: internal
           status: completed
 
-      - name: Create GitHub Release + attach artifacts
+      - name: Attach artifacts to the Release
+        # The Release already exists — it triggered this run. Upload the
+        # signed AAB + APK onto it (no name/notes → the human-authored
+        # release title + notes aren't clobbered).
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
-          name: Wear OS ${{ steps.version.outputs.name }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             apps/watch_wear/android/app/build/outputs/bundle/release/app-release.aab
             apps/watch_wear/android/app/build/outputs/apk/release/app-release.apk
-          generate_release_notes: true
