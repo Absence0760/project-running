@@ -211,8 +211,10 @@ impl GapEstimator {
 
 /// Great-circle distance between two lat/lng points, in metres — the same
 /// haversine (R = 6371 km) the web/Dart batch helpers use, so the four ports
-/// agree segment for segment.
-pub(crate) fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+/// agree segment for segment. The canonical copy for `watch_core`: the privacy,
+/// roadbook, route-description, route-geometry, and turn-cue modules all call
+/// this rather than keep their own.
+pub fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
     const R: f64 = 6_371_000.0;
     let d_lat = (lat2 - lat1) * core::f64::consts::PI / 180.0;
     let d_lng = (lng2 - lng1) * core::f64::consts::PI / 180.0;
