@@ -14,4 +14,9 @@ apex_domain = "threkir.com"
 #
 # Gotcha: a TXT value longer than 255 chars (2048-bit DKIM keys) must be
 # split into quoted chunks inside the one string: "chunkA\"\"chunkB".
-email_auth_records = {}
+email_auth_records = {
+  dkim  = { name = "resend._domainkey", type = "TXT", records = ["p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGHkD1n/X+qOK6ruohZLqEFw5KT1slmd7GFxA/jdIHH0jR1Pa1OrfrpQMXpQR+BoxxLdv6YdWVsHm0O0gQZltrnSSUpToOx7uh3asZS64TfsfzwTFSbQH0Dae1m5NDVHHBOUKiETMLwKFIRp/SgcTX5WwyWVEY8SCCfq/gkXKnywIDAQAB"] }
+  spf   = { name = "send", type = "TXT", records = ["v=spf1 include:amazonses.com ~all"] }
+  mx    = { name = "send", type = "MX", records = ["10 feedback-smtp.us-east-1.amazonses.com"] }
+  dmarc = { name = "_dmarc", type = "TXT", records = ["v=DMARC1; p=none;"] }
+}
