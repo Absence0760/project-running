@@ -8,6 +8,11 @@
 -- call it via supabase.rpc('nearby_routes', { lat, lng, radius_m }) without
 -- constructing raw PostGIS SQL.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 -- 1. Enable PostGIS (idempotent).
 create extension if not exists postgis schema extensions;
 

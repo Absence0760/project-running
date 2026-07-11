@@ -47,6 +47,11 @@
 -- to satisfy the composite type without ever touching the sensitive
 -- column. Keeps the lockdown intact AND the RPC functional.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 grant select (is_verified) on clubs to authenticated, anon;
 
 create or replace function search_clubs(

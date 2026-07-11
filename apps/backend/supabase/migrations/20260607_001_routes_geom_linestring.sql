@@ -15,6 +15,11 @@
 -- column is server-side only.
 
 -- 1. Add the column.
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 alter table routes add column geom geography(LineString, 4326);
 
 -- 2. Backfill from existing waypoints. Skips routes with fewer than two

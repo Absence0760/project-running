@@ -49,6 +49,11 @@
 
 -- ─────────────────────── 1. Helper: is_public_club_by_id ───────────────────────
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function is_public_club_by_id(p_club_id uuid)
 returns boolean
 language sql

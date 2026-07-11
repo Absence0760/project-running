@@ -15,6 +15,11 @@
 -- transaction, where CONCURRENTLY hard-fails; these tables are small-to-medium
 -- today, so the brief ShareLock is accepted (see the migration-locks review).
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create extension if not exists pg_trgm with schema extensions;
 
 create index if not exists user_profiles_display_name_trgm

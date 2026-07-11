@@ -13,6 +13,11 @@
 
 -- Trigram index so discipline search ("pilates" -> "Reformer Pilates") stays an
 -- index scan, not a seq scan, as public class listings grow.
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create extension if not exists pg_trgm with schema extensions;
 
 create index if not exists events_discipline_trgm

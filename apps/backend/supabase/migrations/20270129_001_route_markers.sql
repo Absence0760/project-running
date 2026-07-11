@@ -28,6 +28,11 @@
 
 -- ─────────────────────── route_markers table ───────────────────────
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create table route_markers (
   id          uuid primary key default gen_random_uuid(),
   route_id    uuid references routes(id) on delete cascade not null,

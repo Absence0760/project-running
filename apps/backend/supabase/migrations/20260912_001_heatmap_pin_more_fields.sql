@@ -14,6 +14,11 @@
 -- adding columns to RETURNS TABLE is technically a signature
 -- change, so we `drop function` first.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 drop function if exists clubs_in_bbox(
   double precision, double precision, double precision, double precision, int
 );

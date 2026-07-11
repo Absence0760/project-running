@@ -38,6 +38,11 @@
 -- chose to set one.
 
 -- 1. Add the column. Nullable — every existing row stays valid.
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 alter table clubs add column location_point geography(Point, 4326);
 
 -- 2. Spatial index — partial, since most rows will be NULL for a

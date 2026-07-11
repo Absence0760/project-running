@@ -13,6 +13,11 @@
 -- (SocialService.searchClubs falls back to a direct table query on RPC
 -- failure, which masked this in the UI, but the RPC itself was dead.)
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function search_clubs(
   p_query text default null,
   p_center_lng double precision default null,

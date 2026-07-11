@@ -121,6 +121,26 @@ supabase db reset    # replays everything from scratch, including the new one
 - **Test data / fixtures**: in `seed.sql`, not a migration. `supabase db reset` runs `seed.sql` after migrations.
 - **Functions / views**: in a migration (`create or replace function ...`). See `20260406_001_database_functions.sql` for `weekly_mileage` and `personal_records`.
 
+### Migrations that reference postgis / pg_trgm objects must set search_path themselves
+
+Hosted `supabase db push` sessions do not reliably have `extensions` on the
+search_path (fresh projects lack it for direct connections), and the CLI runs
+`RESET ALL` before applying **each** file — so neither an `alter role postgres set
+search_path …` on the remote nor a set in an earlier migration carries over.
+Unqualified references to extension-schema objects (`geography`, `geometry`,
+`ST_*`, `gin_trgm_ops`, `similarity`, `<->`) then fail with SQLSTATE 42704
+(`type "geography" does not exist`) even though the same file applies cleanly on
+the local stack. Any migration using these must start with:
+
+```sql
+set search_path = public, extensions;
+```
+
+All 30 existing postgis/pg_trgm migrations carry this header (added 2026-07-11
+when the first prod `db push` hit the error). Function-level
+`set search_path = …` clauses on `security definer` functions are a separate,
+runtime concern — they don't satisfy this apply-time requirement.
+
 ### The Dart generator's parser is narrow
 
 It understands `create table`, `alter table ... add column`, and `alter table ... drop column`. It ignores everything else (indexes, policies, RPCs, storage, `$$...$$` function bodies). If you use a SQL form the parser doesn't cover — a `create type ... as enum`, an `alter table ... alter column ... type`, a column-renaming `alter table ... rename column` — the generator will silently skip it and your Dart row classes will drift. Two options:

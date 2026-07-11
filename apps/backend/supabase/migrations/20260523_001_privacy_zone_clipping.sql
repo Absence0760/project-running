@@ -16,6 +16,11 @@
 -- already enabled for the nearby-routes RPC, so reuse ST_Distance on
 -- geography casts — it's exact and does the right thing across the
 -- date line.
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function privacy_distance_m(lat1 float, lng1 float, lat2 float, lng2 float)
 returns float
 language sql

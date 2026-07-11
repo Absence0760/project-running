@@ -28,6 +28,11 @@
 -- RLS pattern (SECURITY DEFINER + start_point privacy gate), and grants
 -- are unchanged.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 drop function if exists discoverable_routes_in_bbox(
   double precision, double precision, double precision, double precision, int
 );

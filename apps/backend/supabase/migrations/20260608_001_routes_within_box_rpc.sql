@@ -12,6 +12,11 @@
 -- a new DTO. Sorted by distance from the box centre so the closest
 -- routes land first; cap defaults to 50 (same as nearby_routes).
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function routes_within_box(
   min_lat double precision,
   min_lng double precision,

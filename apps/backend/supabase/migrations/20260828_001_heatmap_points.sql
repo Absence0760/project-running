@@ -27,6 +27,11 @@
 -- visibility check is `routes.is_public = true`, which is public
 -- information anyway.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function heatmap_points_in_bbox(
   p_min_lng double precision,
   p_min_lat double precision,

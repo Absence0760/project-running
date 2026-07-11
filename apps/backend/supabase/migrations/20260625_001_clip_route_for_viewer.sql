@@ -41,6 +41,11 @@
 -- `type "geography" does not exist`. Fixing the chain in one place
 -- avoids the routes path duplicating the search_path workaround.
 
+-- Hosted `supabase db push` sessions may lack `extensions` on the search_path
+-- (and the CLI RESETs it before every file), so unqualified postgis/pg_trgm
+-- references only resolve if each file sets it itself.
+set search_path = public, extensions;
+
 create or replace function privacy_distance_m(lat1 float, lng1 float, lat2 float, lng2 float)
 returns float
 language sql
