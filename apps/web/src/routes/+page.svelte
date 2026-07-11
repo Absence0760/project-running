@@ -32,7 +32,8 @@
 			icon: 'android',
 			name: 'Android',
 			tagline: 'Flutter · Material 3',
-			body: m('landing.appAndroidBody')
+			body: m('landing.appAndroidBody'),
+			comingSoon: true
 		},
 		{
 			icon: 'phone_iphone',
@@ -52,7 +53,8 @@
 			icon: 'watch',
 			name: 'Wear OS',
 			tagline: 'Kotlin · Compose',
-			body: m('landing.appWearOsBody')
+			body: m('landing.appWearOsBody'),
+			comingSoon: true
 		},
 		{
 			icon: 'desktop_windows',

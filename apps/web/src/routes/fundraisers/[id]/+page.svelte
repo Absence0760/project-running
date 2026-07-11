@@ -15,6 +15,7 @@
 		startDonationCheckout,
 		closeFundraiser
 	} from '$lib/core/data';
+	import { fundraisingEnabled } from '$lib/social/fundraising_flag';
 	import type { Fundraiser, FundraiserFeedEntry, FundraiserTotals } from '$lib/types';
 
 	let { data }: { data: { id: string; donated: string | null } } = $props();
@@ -50,6 +51,14 @@
 
 	async function load() {
 		loading = true;
+		// Fail-closed: with fundraising off (PUBLIC_FUNDRAISING_ENABLED unset,
+		// the pre-Stripe default) the public page shows its not-found state
+		// rather than a donate flow that would dead-end. See fundraising_flag.ts.
+		if (!fundraisingEnabled()) {
+			fundraiser = null;
+			loading = false;
+			return;
+		}
 		fundraiser = await fetchFundraiserById(data.id);
 		if (fundraiser) await refreshTotalsFeed();
 		loading = false;

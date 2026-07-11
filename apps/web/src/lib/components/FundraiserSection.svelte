@@ -9,7 +9,14 @@
 		fetchFundraiserForEvent,
 		fetchFundraiserTotals
 	} from '$lib/core/data';
+	import { fundraisingEnabled } from '$lib/social/fundraising_flag';
 	import type { Fundraiser, FundraiserTotals } from '$lib/types';
+
+	// Fail-closed: hide every donation affordance until Stripe Connect +
+	// the compliance sign-off land (PUBLIC_FUNDRAISING_ENABLED). Off → the
+	// section (view + owner "Create fundraiser" CTA) renders nothing and
+	// never fetches, so nobody hits a donate flow that would 503.
+	const fundraisingOn = fundraisingEnabled();
 
 	// Anchor is exactly one of runId / eventId (mirrors the fundraisers CHECK).
 	let {
@@ -49,7 +56,9 @@
 		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		if (fundraisingOn) load();
+	});
 
 	function onCreated(f: Fundraiser) {
 		fundraiser = f;
@@ -58,7 +67,7 @@
 	}
 </script>
 
-{#if !loading}
+{#if fundraisingOn && !loading}
 	{#if fundraiser}
 		<section class="section fundraiser-section">
 			<FundraiserCard {fundraiser} {totals} />
