@@ -21,6 +21,8 @@
 
 use defmt::*;
 #[cfg(not(feature = "sim-buttons"))]
+use embassy_futures::select::{select, Either};
+#[cfg(not(feature = "sim-buttons"))]
 use embassy_futures::select::{select4, Either4};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
@@ -39,6 +41,13 @@ use crate::state;
 /// instant.
 #[cfg(not(feature = "sim-buttons"))]
 const DEBOUNCE: Duration = Duration::from_millis(20);
+
+/// How long BTN3 must be held to count as a long-press. A short BTN3 press
+/// still cycles forward (page next / GNSS mode); a long-press cycles the run
+/// pages *backward*, so a late page in the 31-page cycle is one press away
+/// instead of ~30. A deliberate hold, not a chord — inside decisions §81's
+/// five-button, no-chord budget.
+const BTN3_LONG_PRESS: Duration = Duration::from_millis(500);
 
 #[cfg(not(feature = "sim-buttons"))]
 #[embassy_executor::task]
@@ -74,6 +83,14 @@ pub async fn run(
                 // state puts it on (idle = GNSS mode, run view = pages).
                 Timer::after(DEBOUNCE).await;
                 if btn3.is_low() {
+                    // Time the hold: a long-press cycles pages backward so a
+                    // late page is one press away, not ~30. The idle GNSS-mode
+                    // selector ignores the distinction (only three modes, no
+                    // reverse), keeping the idle/run split intact.
+                    let long = matches!(
+                        select(Timer::after(BTN3_LONG_PRESS), btn3.wait_for_rising_edge()).await,
+                        Either::First(()),
+                    );
                     interaction_tx.send(Instant::now().as_secs() as u32);
                     let state = record_rx
                         .try_get()
@@ -81,7 +98,7 @@ pub async fn run(
                         .unwrap_or(RecordState::Idle);
                     match btn3_action(state) {
                         Btn3Action::CyclePage => {
-                            page = page.next();
+                            page = if long { page.prev() } else { page.next() };
                             info!("button: BTN3 -> page {}", page);
                             page_tx.send(page);
                         }
@@ -199,32 +216,43 @@ pub async fn run(
         btns[2].is_low(),
         btns[3].is_low(),
     ];
+    // BTN3 acts on release so its hold duration can pick short (forward) vs
+    // long (backward); this remembers when the current BTN3 press began.
+    let mut btn3_down_at: Option<Instant> = None;
     info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
 
     loop {
         Timer::after(POLL).await;
         for (i, b) in btns.iter().enumerate() {
             let pressed = b.is_low();
-            let falling = pressed && !prev[i];
+            let was = prev[i];
             prev[i] = pressed;
-            if !falling {
-                continue;
-            }
-            // A press is an interaction whether or not it issues a command —
-            // it wakes the face's animation window, same as the hardware task.
-            let now_s = Instant::now().as_secs() as u32;
-            interaction_tx.send(now_s);
-            let state = record_rx
-                .try_get()
-                .map(|snap| snap.state)
-                .unwrap_or(RecordState::Idle);
+            let falling = pressed && !was;
+            let rising = !pressed && was;
+
             if i == 2 {
-                // BTN3 is its own concern — no recording command. Which of its
-                // two cycles a press lands on follows the run state, same as
-                // the hardware task.
+                // BTN3 times its hold: press starts the clock, release decides
+                // short (forward) vs long (backward) and acts — the same
+                // short/long split the hardware task makes with a select.
+                if falling {
+                    btn3_down_at = Some(Instant::now());
+                    continue;
+                }
+                if !rising {
+                    continue;
+                }
+                let long = btn3_down_at.take().is_some_and(|t| {
+                    Instant::now().saturating_duration_since(t) >= BTN3_LONG_PRESS
+                });
+                let now_s = Instant::now().as_secs() as u32;
+                interaction_tx.send(now_s);
+                let state = record_rx
+                    .try_get()
+                    .map(|snap| snap.state)
+                    .unwrap_or(RecordState::Idle);
                 match btn3_action(state) {
                     Btn3Action::CyclePage => {
-                        page = page.next();
+                        page = if long { page.prev() } else { page.next() };
                         info!("button: BTN3 -> page {}", page);
                         page_tx.send(page);
                     }
@@ -241,6 +269,18 @@ pub async fn run(
                 }
                 continue;
             }
+
+            if !falling {
+                continue;
+            }
+            // A press is an interaction whether or not it issues a command —
+            // it wakes the face's animation window, same as the hardware task.
+            let now_s = Instant::now().as_secs() as u32;
+            interaction_tx.send(now_s);
+            let state = record_rx
+                .try_get()
+                .map(|snap| snap.state)
+                .unwrap_or(RecordState::Idle);
             let button = match i {
                 0 => Button::Primary,
                 1 => Button::Stop,
