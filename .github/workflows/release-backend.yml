@@ -31,6 +31,9 @@ jobs:
   deploy:
     name: Deploy migrations + Edge Functions
     runs-on: ubuntu-latest
+    # Pause on the `production` environment's required-reviewer rule
+    # before any prod credentials/steps run (repo Settings → Environments).
+    environment: production
     permissions:
       contents: write
     steps:
