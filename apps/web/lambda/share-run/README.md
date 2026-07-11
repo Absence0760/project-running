@@ -33,8 +33,10 @@ arm64 native binary external and copies both into the zip's
 must have `@resvg/resvg-js-linux-arm64-gnu` resolvable.
 
 **Operator / CI note:** on a linux/x64 build host (incl. GitHub
-Actions `ubuntu-latest`), `npm ci` downloads optional deps for other
-platforms by default, so the arm64 package is normally present. If
+Actions `ubuntu-latest`), `npm ci` installs only the optional native
+deps matching the HOST platform, so the arm64 package is NOT present
+after a plain install (this failed the first `web@*` release;
+`release-web.yml` now carries an explicit install step). If
 `build.mjs` fails with a missing-`@resvg/resvg-js-linux-arm64-gnu`
 error, install it explicitly before building the zip:
 
