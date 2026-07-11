@@ -218,6 +218,44 @@ pub fn draw_splits_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Mini-profile sparkline (elevation / pace shape)
+// ---------------------------------------------------------------------------
+
+/// Geometry description for a mini-profile: where it sits (a cell rect) and the
+/// series it plots. The range it normalises against is derived from the samples
+/// themselves, so a caller hands over raw elevation / pace values and gets a
+/// shape that fills the cell. A future glance page owns the rect + supplies the
+/// series; keeping it a plain struct lets the placement be unit-tested without a
+/// live snapshot.
+pub struct MiniProfile<'a> {
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
+    pub samples: &'a [i32],
+}
+
+/// Draw a [`MiniProfile`] as a baseline-aligned sparkline via
+/// [`Framebuffer::draw_sparkline`], auto-scaling the series to its own min..max
+/// so the shape uses the full cell height. A flat series (min == max) or fewer
+/// than two samples degrades to the baseline / a single point rather than a
+/// misleading full-height line.
+pub fn draw_mini_profile(fb: &mut Framebuffer, profile: &MiniProfile) {
+    let (min, max) = profile
+        .samples
+        .iter()
+        .fold((i32::MAX, i32::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+    fb.draw_sparkline(
+        profile.x,
+        profile.y,
+        profile.w,
+        profile.h,
+        profile.samples,
+        (min, max),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,5 +511,64 @@ mod tests {
         let py = HIST_TOP_ROW * CELL_H;
         assert!(ink_in(&fb, HIST_X, py, HIST_W, HIST_H) > 0);
         assert_eq!(ink_in(&fb, HIST_X, py + HIST_H, HIST_W, 1), HIST_W);
+    }
+
+    #[test]
+    fn mini_profile_auto_ranges_to_fill_the_cell() {
+        let mut fb = Framebuffer::new();
+        let samples = [10, 20, 40, 30, 50];
+        draw_mini_profile(
+            &mut fb,
+            &MiniProfile {
+                x: 4,
+                y: 4,
+                w: 60,
+                h: 30,
+                samples: &samples,
+            },
+        );
+        // The series scales to its own span: the min sample (first, left column)
+        // rides the baseline row and the max sample (last) reaches the top row —
+        // not left hugging the middle of the cell.
+        assert!(fb.pixel(4, 33), "min sample should sit on the baseline");
+        assert!(fb.pixel(63, 4), "max sample should reach the top row"); // plot_x(4)=4+4*59/4
+    }
+
+    #[test]
+    fn mini_profile_flat_series_sits_on_the_baseline() {
+        let mut fb = Framebuffer::new();
+        let samples = [1500, 1500, 1500];
+        draw_mini_profile(
+            &mut fb,
+            &MiniProfile {
+                x: 0,
+                y: 0,
+                w: 40,
+                h: 20,
+                samples: &samples,
+            },
+        );
+        // Auto-range collapses to min == max; the primitive flattens onto the
+        // baseline instead of dividing by zero or drawing a full-height line.
+        let baseline = 19;
+        assert!(fb.pixel(0, baseline) && fb.pixel(39, baseline));
+        assert_eq!(ink_in(&fb, 0, 0, 40, baseline), 0);
+    }
+
+    #[test]
+    fn mini_profile_empty_series_draws_nothing() {
+        let mut fb = Framebuffer::new();
+        let samples: [i32; 0] = [];
+        draw_mini_profile(
+            &mut fb,
+            &MiniProfile {
+                x: 0,
+                y: 0,
+                w: 40,
+                h: 20,
+                samples: &samples,
+            },
+        );
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
     }
 }

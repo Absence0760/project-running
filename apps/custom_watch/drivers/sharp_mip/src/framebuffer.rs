@@ -179,6 +179,58 @@ impl Framebuffer {
         self.vline(cx, iy, inner_h, true);
     }
 
+    /// Plot `samples` as a baseline-aligned mini-profile inside the `w`×`h` cell
+    /// at `(x, y)`: each value is clamped to `[min, max]` and mapped so `min`
+    /// sits on the bottom row and `max` on the top, with samples spread evenly
+    /// across the width and joined into a polyline via
+    /// [`draw_line`](Self::draw_line). Fewer than two samples plot a single
+    /// point; an empty slice or a zero dimension draws nothing. A `max <= min`
+    /// range flattens every sample onto the baseline instead of dividing by
+    /// zero. Like [`draw_line`](Self::draw_line) it plots over
+    /// [`set_pixel`](Self::set_pixel) — spans clip to the panel and redrawing an
+    /// identical profile dirties nothing; it does not clear a prior profile.
+    pub fn draw_sparkline(
+        &mut self,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        samples: &[i32],
+        range: (i32, i32),
+    ) {
+        let (min, max) = range;
+        if w == 0 || h == 0 || samples.is_empty() {
+            return;
+        }
+        let span = (max as i64 - min as i64).max(0);
+        let plot_y = |v: i32| -> i32 {
+            let t = if span > 0 {
+                (v.clamp(min, max) as i64 - min as i64) * (h as i64 - 1) / span
+            } else {
+                0
+            };
+            y as i32 + (h as i32 - 1) - t as i32
+        };
+        let n = samples.len();
+        let plot_x = |i: usize| -> i32 {
+            if n == 1 {
+                x as i32
+            } else {
+                x as i32 + (i as i64 * (w as i64 - 1) / (n as i64 - 1)) as i32
+            }
+        };
+        if n == 1 {
+            self.set_pixel(x, plot_y(samples[0]) as usize, true);
+            return;
+        }
+        let (mut px, mut py) = (plot_x(0), plot_y(samples[0]));
+        for (i, &v) in samples.iter().enumerate().skip(1) {
+            let (cx, cy) = (plot_x(i), plot_y(v));
+            self.draw_line(px, py, cx, cy, true);
+            (px, py) = (cx, cy);
+        }
+    }
+
     pub fn pixel(&self, x: usize, y: usize) -> bool {
         x < WIDTH && y < HEIGHT && self.lines[y][x / 8] >> (x % 8) & 1 == 1
     }
