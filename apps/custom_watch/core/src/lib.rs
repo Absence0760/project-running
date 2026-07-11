@@ -52,16 +52,33 @@
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
 //! - [`training_load`] — single-run + rolling CTL/ATL/TSB training-load
 //!   estimate (port of web `training/training_load.ts`)
+//! - [`age_grade`] — age-graded performance % for a standard-distance effort
+//!   against the USATF-MLDR 2025 factor tables (port of web `runs/age_grade.ts`
+//!   + the generated `age_grade_tables.ts`)
+//! - [`hydration`] — daily water target + budget from bodyweight + exercise
+//!   minutes (port of web `nutrition/hydration.ts`)
+//! - [`exercise_calories`] — gross run/gym kcal for the dynamic-TDEE nutrition
+//!   goal (port of web `nutrition/exercise_calories.ts`)
+//! - [`training_paces`] — the five Daniels intensity-zone paces from a goal
+//!   pace, with female + masters calibration (port of the pace-zone surface of
+//!   web `training/training.ts`; reuses [`race_predictor::riegel_predict`])
+//! - [`fitness`] — VDOT / VO2max / per-run TSS / recovery advice + the
+//!   Fitness-card training-load snapshot (port of web `training/fitness.ts`;
+//!   the ISO date + `nowMs` collapse to an integer day index like
+//!   [`training_load`])
 
 #![cfg_attr(not(test), no_std)]
 
+pub mod age_grade;
 pub mod alerts;
 pub mod button;
 pub mod course;
 pub mod cutoff_eta;
 pub mod distance_bands;
 pub mod elevation;
+pub mod exercise_calories;
 pub mod face;
+pub mod fitness;
 pub mod fix;
 pub mod flash_store;
 pub mod fuel_plan;
@@ -69,6 +86,7 @@ pub mod gear_wear;
 pub mod gnss_mode;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
+pub mod hydration;
 pub mod link;
 pub mod pace_segments;
 pub mod pacer;
@@ -79,3 +97,4 @@ pub mod roadbook;
 pub mod run_store;
 pub mod trackback;
 pub mod training_load;
+pub mod training_paces;
