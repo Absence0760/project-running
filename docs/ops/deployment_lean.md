@@ -160,7 +160,10 @@ done
 > (`noreply@mail.app.supabase.io`) is heavily rate-limited (a few messages/hour) and
 > spam-folders for a large fraction of recipients — so signup confirmation / magic-link /
 > password-reset email is a real launch blocker on the default sender. Point Supabase Auth →
-> SMTP settings at a free Resend account with SPF + DKIM on your domain ($0). This is
+> SMTP settings at a free Resend account with SPF + DKIM on your domain ($0). Add the
+> DKIM/SPF/MX records Resend hands you via `email_auth_records` in
+> `infra/dns/terraform.tfvars` (then apply the dns stack) — not by hand in the console, so
+> a DR rebuild keeps deliverability. This is
 > independent of the deferred Go worker (which handles *app-level* email, not auth email).
 
 ### 2. Web — AWS prod only
