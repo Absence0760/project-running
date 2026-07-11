@@ -54,4 +54,11 @@ regexes = [
   # env_isolation.test.mjs: the obviously-fake Stripe keys this security test
   # feeds itself to prove a *live* key in a dev env is rejected.
   '''(sk|pk)_(live|test)_abcdef0123456789''',
+  # apps/custom_watch/core/src/badges.rs: the watch_core badge catalogue's i18n
+  # key strings (label_key/desc_key = "badges.<family>.<label|desc>"). The
+  # generic-api-key rule's entropy gate trips on the higher-entropy ones, but
+  # these are the SAME i18n keys the web (badges.ts) / mobile (badges.dart)
+  # catalogues carry, not secrets. Matched on the key shape so a real token in
+  # badges.rs is still a finding.
+  '''badges\.[A-Za-z0-9]+\.(label|desc)''',
 ]
