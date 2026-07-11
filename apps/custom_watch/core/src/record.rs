@@ -219,6 +219,115 @@ impl ElevProfileView {
     }
 }
 
+// The synced summary each of the twelve run-view glance pages ported in the
+// 2026-07-11 batch renders. Every one is a small `Copy` struct the phone pushes
+// pre-computed (the phone holds the run history / plan / course the on-watch
+// cores can't), stored `Option`-wrapped on the `Recorder` and passed through to
+// `Snapshot`. `None` leaves the page an honest empty state until synced — the
+// `set_fitness` / `set_training_goal_pace_s_per_km` precedent. Display state
+// only: none of these touch the flash run-store wire format.
+
+/// Year/Month-in-Running totals ([`crate::recap`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RecapView {
+    pub runs: u16,
+    pub distance_km: u16,
+    pub longest_km: u16,
+    pub best_streak_days: u16,
+}
+
+/// Current + best run-streak day counts ([`crate::streaks`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StreaksView {
+    pub current_days: u16,
+    pub best_days: u16,
+}
+
+/// Synced run-stats summary — moving time, elevation gain, split count
+/// ([`crate::run_stats`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RunStatsView {
+    pub moving_s: u32,
+    pub gain_m: u16,
+    pub splits: u16,
+}
+
+/// How long ago the current PR was set, in whole days ([`crate::pr_recency`]);
+/// the face buckets it into today / weeks / months / years.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PrRecencyView {
+    pub days_ago: u16,
+}
+
+/// The re-plan proposal counts ([`crate::plan_replan`]): total changes split
+/// into make-ups and ease-offs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlanReplanView {
+    pub changes: u8,
+    pub make_ups: u8,
+    pub ease_offs: u8,
+}
+
+/// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
+/// `band` is 0 low / 1 moderate / 2 high.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReadinessView {
+    pub score: u8,
+    pub band: u8,
+}
+
+/// The primary goal's ring progress ([`crate::goals`]): percent 0..=100 and
+/// whether it is complete.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GoalsView {
+    pub percent: u8,
+    pub complete: bool,
+}
+
+/// The next turn on the loaded course ([`crate::turn_cues`]): a direction code
+/// (0 straight / 1 slight-left / 2 left / 3 sharp-left / 4 slight-right /
+/// 5 right / 6 sharp-right / 7 u-turn), metres to it, and how many cues remain.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TurnCueView {
+    pub direction: u8,
+    pub distance_m: u16,
+    pub remaining: u8,
+}
+
+/// A simplified-course summary ([`crate::route_simplify`]): point count after
+/// simplification and total distance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RouteSimplifyView {
+    pub points: u16,
+    pub distance_km: u16,
+}
+
+/// Auto-segment-effort match counts ([`crate::auto_segment_effort`]): how many
+/// of the considered segments matched the run end-to-end.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutoEffortView {
+    pub matched: u8,
+    pub considered: u8,
+}
+
+/// The loaded course's elevation profile summary ([`crate::route_elevation`]):
+/// total gain / loss and the point count the profile was sampled to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RouteElevView {
+    pub gain_m: u16,
+    pub loss_m: u16,
+    pub points: u16,
+}
+
+/// The race-day countdown + goal-feasibility verdict ([`crate::race_day`]):
+/// signed days until the race (negative once past) and `feasible` 0 behind /
+/// 1 on-track / 2 ahead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RaceDayView {
+    pub days_until: i16,
+    pub feasible: u8,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordState {
     Idle,
@@ -322,6 +431,30 @@ pub struct Snapshot {
     /// The decimated elevation series for the ElevationProfile page's sparkline;
     /// `len == 0` until an altitude sample lands.
     pub elev_profile: ElevProfileView,
+    /// The synced Year/Month-in-Running summary, or `None` until pushed.
+    pub recap: Option<RecapView>,
+    /// The synced run-streak counts, or `None` until pushed.
+    pub streaks: Option<StreaksView>,
+    /// The synced run-stats summary, or `None` until pushed.
+    pub run_stats: Option<RunStatsView>,
+    /// The synced PR-recency (days since the current PR), or `None` until pushed.
+    pub pr_recency: Option<PrRecencyView>,
+    /// The synced re-plan proposal counts, or `None` until pushed.
+    pub plan_replan: Option<PlanReplanView>,
+    /// The synced training-readiness score, or `None` until pushed.
+    pub readiness: Option<ReadinessView>,
+    /// The synced primary-goal progress, or `None` until pushed.
+    pub goals: Option<GoalsView>,
+    /// The next turn on the loaded course, or `None` until pushed.
+    pub turn_cue: Option<TurnCueView>,
+    /// The simplified-course summary, or `None` until pushed.
+    pub route_simplify: Option<RouteSimplifyView>,
+    /// The auto-segment-effort match counts, or `None` until pushed.
+    pub auto_effort: Option<AutoEffortView>,
+    /// The loaded course's elevation summary, or `None` until pushed.
+    pub route_elev: Option<RouteElevView>,
+    /// The race-day countdown + feasibility, or `None` until pushed.
+    pub race_day: Option<RaceDayView>,
 }
 
 /// Fixed-RAM decimated elevation series feeding [`ElevProfileView`]. Mirrors the
@@ -476,6 +609,20 @@ pub struct Recorder {
     /// accepted fix (the same seam that feeds the GAP grade + trackback), reset
     /// on [`start`](Recorder::start).
     elev_profile: ElevProfile,
+    /// Phone-pushed summaries for the twelve 2026-07-11 glance pages; each
+    /// `None` by default leaves its page an honest empty state until synced.
+    recap: Option<RecapView>,
+    streaks: Option<StreaksView>,
+    run_stats: Option<RunStatsView>,
+    pr_recency: Option<PrRecencyView>,
+    plan_replan: Option<PlanReplanView>,
+    readiness: Option<ReadinessView>,
+    goals: Option<GoalsView>,
+    turn_cue: Option<TurnCueView>,
+    route_simplify: Option<RouteSimplifyView>,
+    auto_effort: Option<AutoEffortView>,
+    route_elev: Option<RouteElevView>,
+    race_day: Option<RaceDayView>,
 }
 
 impl Default for Recorder {
@@ -518,6 +665,18 @@ impl Recorder {
             training_goal_pace_s_per_km: None,
             fitness: None,
             elev_profile: ElevProfile::new(),
+            recap: None,
+            streaks: None,
+            run_stats: None,
+            pr_recency: None,
+            plan_replan: None,
+            readiness: None,
+            goals: None,
+            turn_cue: None,
+            route_simplify: None,
+            auto_effort: None,
+            route_elev: None,
+            race_day: None,
         }
     }
 
@@ -648,6 +807,80 @@ impl Recorder {
                 recovery,
             })
         };
+    }
+
+    /// Load the synced summaries for the twelve 2026-07-11 glance pages. Each is
+    /// a phone-pushed `Copy` view (the phone runs the ported core over the
+    /// history / plan / course the watch doesn't hold) stored verbatim; `None`
+    /// leaves the page an honest empty state. Display state only — none touch the
+    /// flash run-store wire format. Kept as plain setters (no plausibility guard):
+    /// the phone owns the computation, and the fields are already bounded counts.
+    pub fn set_recap(&mut self, view: Option<RecapView>) {
+        self.recap = view;
+    }
+
+    pub fn set_streaks(&mut self, view: Option<StreaksView>) {
+        self.streaks = view;
+    }
+
+    pub fn set_run_stats(&mut self, view: Option<RunStatsView>) {
+        self.run_stats = view;
+    }
+
+    pub fn set_pr_recency(&mut self, view: Option<PrRecencyView>) {
+        self.pr_recency = view;
+    }
+
+    pub fn set_plan_replan(&mut self, view: Option<PlanReplanView>) {
+        self.plan_replan = view;
+    }
+
+    /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
+    /// corrupt push can't render an out-of-range ring or an unknown band label.
+    pub fn set_readiness(&mut self, view: Option<ReadinessView>) {
+        self.readiness = view.map(|v| ReadinessView {
+            score: v.score.min(100),
+            band: v.band.min(2),
+        });
+    }
+
+    /// The goal percent is clamped to 0..=100 so a corrupt push can't overfill
+    /// the ring.
+    pub fn set_goals(&mut self, view: Option<GoalsView>) {
+        self.goals = view.map(|v| GoalsView {
+            percent: v.percent.min(100),
+            complete: v.complete,
+        });
+    }
+
+    /// The turn direction is clamped to the 0..=7 code space so an unknown code
+    /// can't index past the face's direction glyphs.
+    pub fn set_turn_cue(&mut self, view: Option<TurnCueView>) {
+        self.turn_cue = view.map(|v| TurnCueView {
+            direction: v.direction.min(7),
+            ..v
+        });
+    }
+
+    pub fn set_route_simplify(&mut self, view: Option<RouteSimplifyView>) {
+        self.route_simplify = view;
+    }
+
+    pub fn set_auto_effort(&mut self, view: Option<AutoEffortView>) {
+        self.auto_effort = view;
+    }
+
+    pub fn set_route_elev(&mut self, view: Option<RouteElevView>) {
+        self.route_elev = view;
+    }
+
+    /// The feasibility verdict is clamped to 0..=2 so a corrupt push can't render
+    /// an unknown verdict label.
+    pub fn set_race_day(&mut self, view: Option<RaceDayView>) {
+        self.race_day = view.map(|v| RaceDayView {
+            days_until: v.days_until,
+            feasible: v.feasible.min(2),
+        });
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -904,6 +1137,18 @@ impl Recorder {
             training_paces: self.training_paces_snapshot(),
             fitness: self.fitness,
             elev_profile: self.elev_profile.view(),
+            recap: self.recap,
+            streaks: self.streaks,
+            run_stats: self.run_stats,
+            pr_recency: self.pr_recency,
+            plan_replan: self.plan_replan,
+            readiness: self.readiness,
+            goals: self.goals,
+            turn_cue: self.turn_cue,
+            route_simplify: self.route_simplify,
+            auto_effort: self.auto_effort,
+            route_elev: self.route_elev,
+            race_day: self.race_day,
         }
     }
 
@@ -2150,5 +2395,53 @@ mod tests {
             v.samples[v.len - 1] > 1300,
             "the tail still reaches the climb's top, not a truncated head"
         );
+    }
+
+    #[test]
+    fn synced_summary_setters_round_trip_and_clamp() {
+        let mut r = Recorder::new();
+        // Unset by default — every synced page reads its honest empty state.
+        let s = r.snapshot();
+        assert!(s.recap.is_none() && s.readiness.is_none() && s.race_day.is_none());
+
+        r.set_recap(Some(RecapView {
+            runs: 120,
+            distance_km: 1500,
+            longest_km: 42,
+            best_streak_days: 30,
+        }));
+        assert_eq!(r.snapshot().recap.unwrap().runs, 120);
+
+        // A corrupt push can't render an out-of-range ring or an unknown band /
+        // verdict / turn glyph — the setters clamp to the code space.
+        r.set_readiness(Some(ReadinessView {
+            score: 200,
+            band: 9,
+        }));
+        let rd = r.snapshot().readiness.unwrap();
+        assert_eq!((rd.score, rd.band), (100, 2));
+
+        r.set_goals(Some(GoalsView {
+            percent: 250,
+            complete: true,
+        }));
+        assert_eq!(r.snapshot().goals.unwrap().percent, 100);
+
+        r.set_turn_cue(Some(TurnCueView {
+            direction: 42,
+            distance_m: 100,
+            remaining: 3,
+        }));
+        assert_eq!(r.snapshot().turn_cue.unwrap().direction, 7);
+
+        r.set_race_day(Some(RaceDayView {
+            days_until: -5,
+            feasible: 9,
+        }));
+        assert_eq!(r.snapshot().race_day.unwrap().feasible, 2);
+
+        // Clearing works.
+        r.set_recap(None);
+        assert!(r.snapshot().recap.is_none());
     }
 }
