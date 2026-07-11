@@ -21,6 +21,13 @@ pub const FLAG_PACER: u8 = 1 << 1;
 pub const FLAG_GEAR: u8 = 1 << 2;
 pub const FLAG_ZONE_CEILING: u8 = 1 << 3;
 
+/// Every presence bit version 1 defines. A set bit outside this mask can't be a
+/// forward-compatible field — a new field rides a version bump, which `decode`
+/// rejects on the version byte — so an unknown bit means a corrupt or misframed
+/// push, and `decode` rejects the frame rather than silently dropping whatever
+/// the sender meant by it.
+const KNOWN_FLAGS: u8 = FLAG_MAX_HR | FLAG_PACER | FLAG_GEAR | FLAG_ZONE_CEILING;
+
 /// Header: magic (4) + version (1) + flags (1).
 const HEADER_LEN: usize = 6;
 
@@ -64,13 +71,17 @@ pub struct WatchSettings {
 
 impl WatchSettings {
     /// Decode a settings frame. Returns `None` on a bad magic, an unknown
-    /// version, or a buffer too short for the fields the flags claim — never a
-    /// partial struct off a truncated frame.
+    /// version, an unknown presence bit, a buffer too short for the fields the
+    /// flags claim, or trailing bytes past the declared fields — never a partial
+    /// or off-frame struct.
     pub fn decode(b: &[u8]) -> Option<Self> {
         if b.len() < HEADER_LEN || b[0..4] != SETTINGS_MAGIC || b[4] != SETTINGS_VERSION {
             return None;
         }
         let flags = b[5];
+        if flags & !KNOWN_FLAGS != 0 {
+            return None;
+        }
         let mut off = HEADER_LEN;
         let mut out = WatchSettings::default();
 
@@ -104,6 +115,13 @@ impl WatchSettings {
             let z = *b.get(off)?;
             // 0 encodes "clear" (Some(None)); 1..=4 a real ceiling.
             out.zone_ceiling = Some((z != 0).then_some(z));
+            off += 1;
+        }
+        // Bytes left over past the fields the flags claim mean a corrupt or
+        // misframed push (data present for a bit that wasn't set); reject it
+        // rather than silently apply a frame the phone didn't mean to send.
+        if off != b.len() {
+            return None;
         }
         Some(out)
     }
@@ -291,6 +309,99 @@ mod tests {
         let n = s.encode(&mut buf).unwrap();
         // Chop the last byte of the pacer field: flags claim it, bytes lack it.
         assert_eq!(WatchSettings::decode(&buf[..n - 1]), None);
+    }
+
+    #[test]
+    fn trailing_bytes_past_declared_fields_are_rejected() {
+        let s = WatchSettings {
+            max_hr: Some(150),
+            ..Default::default()
+        };
+        let mut buf = [0u8; MAX_SETTINGS_LEN];
+        let n = s.encode(&mut buf).unwrap();
+        assert!(n < MAX_SETTINGS_LEN);
+        // One extra byte belongs to no set flag: data present for an unset bit.
+        assert_eq!(WatchSettings::decode(&buf[..n + 1]), None);
+    }
+
+    #[test]
+    fn unknown_presence_bit_is_rejected() {
+        let mut frame = [0u8; HEADER_LEN + 1];
+        frame[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        frame[4] = SETTINGS_VERSION;
+        frame[5] = 1 << 4; // a bit outside KNOWN_FLAGS
+        assert_eq!(WatchSettings::decode(&frame[..HEADER_LEN]), None);
+        assert_eq!(WatchSettings::decode(&frame), None);
+
+        let mut with_known = [0u8; HEADER_LEN + 2];
+        with_known[0..4].copy_from_slice(&SETTINGS_MAGIC);
+        with_known[4] = SETTINGS_VERSION;
+        with_known[5] = FLAG_MAX_HR | (1 << 4);
+        with_known[6] = 0xbe;
+        with_known[7] = 0x00;
+        assert_eq!(WatchSettings::decode(&with_known), None);
+    }
+
+    #[test]
+    fn each_set_field_truncated_by_one_byte_is_rejected() {
+        let cases = [
+            WatchSettings {
+                max_hr: Some(180),
+                ..Default::default()
+            },
+            WatchSettings {
+                pacer: Some(PacerGoalCfg {
+                    distance_m: 5_000,
+                    time_s: 1_500,
+                }),
+                ..Default::default()
+            },
+            WatchSettings {
+                gear: Some(GearCfg {
+                    baseline_m: 100.0,
+                    target_m: Some(200.0),
+                }),
+                ..Default::default()
+            },
+            WatchSettings {
+                zone_ceiling: Some(Some(3)),
+                ..Default::default()
+            },
+        ];
+        for s in cases {
+            let mut buf = [0u8; MAX_SETTINGS_LEN];
+            let n = s.encode(&mut buf).unwrap();
+            assert!(n > HEADER_LEN);
+            assert_eq!(
+                WatchSettings::decode(&buf[..n - 1]),
+                None,
+                "truncated {s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn all_presence_combinations_roundtrip() {
+        for mask in 0u8..16 {
+            let s = WatchSettings {
+                max_hr: (mask & FLAG_MAX_HR != 0).then_some(190),
+                pacer: (mask & FLAG_PACER != 0).then_some(PacerGoalCfg {
+                    distance_m: 21_097,
+                    time_s: 7_200,
+                }),
+                gear: (mask & FLAG_GEAR != 0).then_some(GearCfg {
+                    baseline_m: 300_000.0,
+                    target_m: Some(600_000.0),
+                }),
+                zone_ceiling: (mask & FLAG_ZONE_CEILING != 0).then_some(Some(2)),
+            };
+            let back = roundtrip(&s);
+            assert_eq!(back, s, "roundtrip drift at mask {mask:#06b}");
+            assert_eq!(back.max_hr.is_some(), mask & FLAG_MAX_HR != 0);
+            assert_eq!(back.pacer.is_some(), mask & FLAG_PACER != 0);
+            assert_eq!(back.gear.is_some(), mask & FLAG_GEAR != 0);
+            assert_eq!(back.zone_ceiling.is_some(), mask & FLAG_ZONE_CEILING != 0);
+        }
     }
 
     #[test]
