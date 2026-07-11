@@ -50,6 +50,8 @@
 //! - [`button`] — the pure button-press → record-command mapping
 //! - [`run_store`] — on-device run wire format + BLE sync framing
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
+//! - [`training_load`] — single-run + rolling CTL/ATL/TSB training-load
+//!   estimate (port of web `training/training_load.ts`)
 
 #![cfg_attr(not(test), no_std)]
 
@@ -76,3 +78,4 @@ pub mod record;
 pub mod roadbook;
 pub mod run_store;
 pub mod trackback;
+pub mod training_load;
