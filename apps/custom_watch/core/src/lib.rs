@@ -21,6 +21,8 @@
 //!   verdict (port of web `routes/roadbook.ts`)
 //! - [`fuel_plan`] — per-leg carbs/fluid scaled onto the roadbook timeline +
 //!   carry-to-next-aid per refill (port of web `routes/fuel_plan.ts`)
+//! - [`pace_segments`] — split a track into pace segments with the shared
+//!   pace/age colour ramp (port of web `segments/pace_segments.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
@@ -60,6 +62,7 @@ pub mod gnss_mode;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
 pub mod link;
+pub mod pace_segments;
 pub mod pacer;
 pub mod page;
 pub mod race_predictor;
