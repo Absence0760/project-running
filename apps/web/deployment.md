@@ -231,8 +231,8 @@ Two near-identical Lambdas render the public share surfaces at request time so a
 
 | Lambda | CloudFront behaviours | Surface |
 |---|---|---|
-| `runonward-web-<env>-share-run` | `/share/run/*`, `/og/run/*` | per-run SPA-shell HTML + og:image PNG ([`lambda/share-run/README.md`](lambda/share-run/README.md)) |
-| `runonward-web-<env>-share-route` | `/share/route/*`, `/og/route/*` | per-route SPA-shell HTML + JSON-LD + privacy-clipped og:image PNG ([`lambda/share-route/README.md`](lambda/share-route/README.md)) |
+| `threkir-web-<env>-share-run` | `/share/run/*`, `/og/run/*` | per-run SPA-shell HTML + og:image PNG ([`lambda/share-run/README.md`](lambda/share-run/README.md)) |
+| `threkir-web-<env>-share-route` | `/share/route/*`, `/og/route/*` | per-route SPA-shell HTML + JSON-LD + privacy-clipped og:image PNG ([`lambda/share-route/README.md`](lambda/share-route/README.md)) |
 
 Both run Node 24 / arm64 / 512 MB (the @resvg PNG rasteriser needs the headroom), hold no secrets (every read is the public anon key against the `public_runs` / `public_routes` views + the `clip_track_for_user` RPC), and cache at the edge for 5 min so a crawler storm costs one invocation per window and a public→private flip propagates fast. The matching SvelteKit page (`+page.ts`) + og endpoint (`+server.ts`) carry `prerender = false` so adapter-static doesn't bake stale per-id HTML/PNG onto S3; the Lambda owns the path in prod, the dev server owns it under `npm run dev`. CI (`release-web.yml`) rebuilds + redeploys both zips on every `web@*` tag — they embed `apps/web/build/index.html`, so they must build *after* `npm run build`. The PNG path always returns HTTP 200 (a generic branded card for private / deleted ids) so an unfurl never breaks with a 404 image.
 

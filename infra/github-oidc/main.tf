@@ -85,7 +85,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 # ─────────────────── Deploy role: prod ───────────────────
 
 resource "aws_iam_role" "deploy_prod" {
-  name = "runonward-web-deploy-prod"
+  name = "threkir-web-deploy-prod"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -116,8 +116,8 @@ resource "aws_iam_role_policy" "deploy_prod" {
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:DeleteObject", "s3:GetObject", "s3:ListBucket"]
         Resource = [
-          "arn:aws:s3:::runonward-web-prod-site",
-          "arn:aws:s3:::runonward-web-prod-site/*",
+          "arn:aws:s3:::threkir-web-prod-site",
+          "arn:aws:s3:::threkir-web-prod-site/*",
         ]
       },
       {
@@ -137,13 +137,13 @@ resource "aws_iam_role_policy" "deploy_prod" {
           "lambda:GetAlias",
         ]
         Resource = [
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-coach*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-generate-route*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-run*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-route*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-recap*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-badge*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-prod-share-entity*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-coach*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-generate-route*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-run*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-route*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-recap*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-badge*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-share-entity*",
         ]
       },
     ]
@@ -153,7 +153,7 @@ resource "aws_iam_role_policy" "deploy_prod" {
 # ─────────────────── Deploy role: preview ───────────────────
 
 resource "aws_iam_role" "deploy_preview" {
-  name = "runonward-web-deploy-preview"
+  name = "threkir-web-deploy-preview"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -185,8 +185,8 @@ resource "aws_iam_role_policy" "deploy_preview" {
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:DeleteObject", "s3:GetObject", "s3:ListBucket"]
         Resource = [
-          "arn:aws:s3:::runonward-web-preview-site",
-          "arn:aws:s3:::runonward-web-preview-site/*",
+          "arn:aws:s3:::threkir-web-preview-site",
+          "arn:aws:s3:::threkir-web-preview-site/*",
         ]
       },
       {
@@ -206,13 +206,13 @@ resource "aws_iam_role_policy" "deploy_preview" {
           "lambda:GetAlias",
         ]
         Resource = [
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-coach*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-generate-route*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-run*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-route*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-recap*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-badge*",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:runonward-web-preview-share-entity*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-coach*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-generate-route*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-run*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-route*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-recap*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-badge*",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-share-entity*",
         ]
       },
     ]

@@ -189,8 +189,8 @@ if probe_phase_done 2c; then
 else
 	step "Phase 2c — GitHub OIDC + per-env deploy roles"
 	log "After apply, copy the role ARNs into GitHub Actions secrets:"
-	log "  AWS_DEPLOY_ROLE_ARN_PREVIEW = …role/runonward-web-preview-deploy"
-	log "  AWS_DEPLOY_ROLE_ARN_PROD    = …role/runonward-web-prod-deploy"
+	log "  AWS_DEPLOY_ROLE_ARN_PREVIEW = …role/threkir-web-preview-deploy"
+	log "  AWS_DEPLOY_ROLE_ARN_PROD    = …role/threkir-web-prod-deploy"
 	if confirm "Proceed with Phase 2c?"; then
 		(
 			cd "$REPO_ROOT/infra/github-oidc"

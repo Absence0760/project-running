@@ -32,7 +32,7 @@ done
 need_cmd aws
 need_aws_auth
 
-LOG_GROUP="/aws/lambda/runonward-web-${ENV_NAME}-coach"
+LOG_GROUP="/aws/lambda/threkir-web-${ENV_NAME}-coach"
 
 step "Tailing $LOG_GROUP (since $SINCE)"
 if [[ $FOLLOW -eq 1 ]]; then
