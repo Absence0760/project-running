@@ -518,6 +518,106 @@ mod tests {
     }
 
     #[test]
+    fn recording_slow_stretch_banks_only_moving_time_not_elapsed() {
+        let mut e = AlertEngine::new();
+        // Sub-moving-gate crawl / dropped GPS pulses while still Recording:
+        // the wall clock (elapsed) runs to 2000 s but moving is frozen at 899.
+        // A cadence keyed off elapsed would fire here; keyed off moving it must
+        // not — the guard the shared `snap` helper (elapsed == moving) can't give.
+        for t in 0..2000 {
+            let s = Snapshot {
+                elapsed_s: t,
+                ..rec(899)
+            };
+            assert_eq!(e.on_update(&s, None, t), None, "fired off elapsed at t={t}");
+        }
+        // The 900th moving second finally crosses.
+        assert_eq!(e.on_update(&rec(900), None, 2000), Some(Alert::Drink));
+    }
+
+    #[test]
+    fn autopause_with_wall_clock_running_banks_nothing() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&rec(899), None, 899), None);
+        // Auto-pause at an aid station: moving frozen at 899, elapsed climbing.
+        for t in 900..2000 {
+            let s = Snapshot {
+                elapsed_s: t,
+                ..snap(RecordState::Paused, 899)
+            };
+            assert_eq!(
+                e.on_update(&s, None, t),
+                None,
+                "fired while paused at t={t}"
+            );
+        }
+        assert_eq!(e.on_update(&rec(900), None, 2001), Some(Alert::Drink));
+    }
+
+    #[test]
+    fn zone_alert_supersedes_an_active_eat_which_requeues() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        e.set_fuel_intervals(1_000_000, 300);
+        assert_eq!(e.on_update(&rec(300), None, 300), Some(Alert::Eat));
+        assert_eq!(
+            e.on_update(&rec(302), Some(160), 302),
+            Some(Alert::ZoneAbove(4))
+        );
+        // The superseded eat is re-queued, not dropped — it returns post-TTL.
+        let after = 302 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&rec(after), Some(150), after), Some(Alert::Eat));
+    }
+
+    #[test]
+    fn after_zone_clears_eat_promotes_before_the_requeued_drink() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        e.set_fuel_intervals(300, 300);
+        // Shared crossing: eat takes the slot, drink queues behind it.
+        assert_eq!(e.on_update(&rec(300), None, 300), Some(Alert::Eat));
+        // Zone supersedes the active eat: now both eat and drink are queued.
+        assert_eq!(
+            e.on_update(&rec(301), Some(160), 301),
+            Some(Alert::ZoneAbove(4))
+        );
+        // Zone clears: eat-before-drink holds across the re-queue.
+        let a = 301 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&rec(a), Some(150), a), Some(Alert::Eat));
+        let b = a + ALERT_TTL_S;
+        assert_eq!(e.on_update(&rec(b), Some(150), b), Some(Alert::Drink));
+    }
+
+    #[test]
+    fn an_expiring_alert_does_not_swallow_a_newly_due_one() {
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(8, 16);
+        assert_eq!(e.on_update(&rec(8), None, 8), Some(Alert::Drink));
+        // At moving == 16 the drink's TTL expires on the very tick eat comes
+        // due; the expiring alert must not block the newly-queued one.
+        assert_eq!(e.on_update(&rec(16), None, 16), Some(Alert::Eat));
+    }
+
+    #[test]
+    fn two_excursions_within_the_cooldown_fire_once_under_a_1hz_feed() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&rec(10), Some(160), 10),
+            Some(Alert::ZoneAbove(4))
+        );
+        // Continuous 1 Hz feed: dip to re-arm at 20, cross again at 30 — all
+        // inside the 60 s cooldown. No second alert after the first TTL.
+        for t in 11..70 {
+            let bpm = if (20..30).contains(&t) { 150 } else { 160 };
+            let shown = e.on_update(&rec(t), Some(bpm), t);
+            if t >= 10 + ALERT_TTL_S {
+                assert_eq!(shown, None, "re-fired inside the cooldown at t={t}");
+            }
+        }
+    }
+
+    #[test]
     fn banner_text_is_the_bang_prefixed_label() {
         assert_eq!(banner(Alert::Drink).as_str(), "! DRINK");
         assert_eq!(banner(Alert::Eat).as_str(), "! EAT");
