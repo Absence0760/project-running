@@ -18,7 +18,7 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 EXPECTED_REGION="us-east-1"
-STATE_BUCKET="runonward-tfstate"
+STATE_BUCKET="threkir-tfstate"
 FAILS=0
 
 bump_fail() { FAILS=$((FAILS + 1)); }

@@ -10,7 +10,7 @@ provider "aws" {
 data "terraform_remote_state" "dns" {
   backend = "s3"
   config = {
-    bucket = "runonward-tfstate"
+    bucket = "threkir-tfstate"
     key    = "dns/terraform.tfstate"
     region = "us-east-1"
   }
@@ -20,7 +20,7 @@ data "terraform_remote_state" "dns" {
 data "terraform_remote_state" "github_oidc" {
   backend = "s3"
   config = {
-    bucket = "runonward-tfstate"
+    bucket = "threkir-tfstate"
     key    = "github-oidc/terraform.tfstate"
     region = "us-east-1"
   }

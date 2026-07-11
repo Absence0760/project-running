@@ -85,7 +85,7 @@ echo 'export AWS_PROFILE=runonward' > ~/.bashrc.d/26-aliases-aws.sh
 ```bash
 cd infra/bootstrap
 terraform init
-terraform apply -var "state_bucket_name=runonward-tfstate"
+terraform apply -var "state_bucket_name=threkir-tfstate"
 ```
 
 Creates the S3 bucket every other stack uses for remote state. **Local state only** — never migrate this stack into the bucket it creates.
@@ -240,7 +240,7 @@ The Lambda's environment variables update in-place; in-flight requests finish on
 
 ## State
 
-Remote state in `s3://runonward-tfstate/`. Locking is S3-native via `use_lockfile = true` — Terraform writes a `.tflock` file alongside each state file, using S3's conditional-write `If-None-Match` semantics. No DynamoDB table to manage. The `bootstrap` stack itself uses local state (chicken-and-egg).
+Remote state in `s3://threkir-tfstate/`. Locking is S3-native via `use_lockfile = true` — Terraform writes a `.tflock` file alongside each state file, using S3's conditional-write `If-None-Match` semantics. No DynamoDB table to manage. The `bootstrap` stack itself uses local state (chicken-and-egg).
 
 ## Disaster recovery
 

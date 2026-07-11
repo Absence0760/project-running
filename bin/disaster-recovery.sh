@@ -36,7 +36,7 @@ probe_phase_done() {
 	case "$phase" in
 		2a)
 			# State bucket exists?
-			aws s3api head-bucket --bucket runonward-tfstate >/dev/null 2>&1
+			aws s3api head-bucket --bucket threkir-tfstate >/dev/null 2>&1
 			;;
 		2b)
 			# DNS hosted zone exists with one of our nameservers?
@@ -146,13 +146,13 @@ if probe_phase_done 2a; then
 	ok "Phase 2a (state bucket) already complete — skipping"
 else
 	step "Phase 2a — bootstrap state bucket"
-	log "Will run: cd infra/bootstrap && terraform init && terraform apply -var state_bucket_name=runonward-tfstate"
+	log "Will run: cd infra/bootstrap && terraform init && terraform apply -var state_bucket_name=threkir-tfstate"
 	if confirm "Proceed with Phase 2a?"; then
 		"$REPO_ROOT/bin/aws-preflight.sh" || fatal "Preflight failed"
 		(
 			cd "$REPO_ROOT/infra/bootstrap"
 			terraform init -input=false
-			terraform apply -var "state_bucket_name=runonward-tfstate"
+			terraform apply -var "state_bucket_name=threkir-tfstate"
 		)
 		ok "Phase 2a complete"
 	fi
