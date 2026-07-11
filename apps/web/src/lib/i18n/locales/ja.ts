@@ -2108,6 +2108,7 @@ export const messages = {
 	"live.cutoffAhead": "{n} の余裕",
 	"live.cutoffBehind": "{n} の遅れ",
 	"live.cutoffWaitingSignal": "最新の信号を待っています",
+	"live.cutoffSignalLost": "信号が途絶えました — 到着予測できません",
 	"liveEvent.runnerFallback": "ランナー",
 	"liveEvent.pageTitle": "ライブレース — {title}",
 	"liveEvent.eventFallback": "イベント",

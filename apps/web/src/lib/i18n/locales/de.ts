@@ -2113,6 +2113,7 @@ export const messages = {
 	"live.cutoffAhead": "{n} Vorsprung",
 	"live.cutoffBehind": "{n} Rückstand",
 	"live.cutoffWaitingSignal": "Warte auf ein frisches Signal",
+	"live.cutoffSignalLost": "Signal verloren – Ankunft nicht berechenbar",
 	"liveEvent.runnerFallback": "Läufer",
 	"liveEvent.pageTitle": "Live-Rennen — {title}",
 	"liveEvent.eventFallback": "Event",

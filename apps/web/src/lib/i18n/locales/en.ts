@@ -2121,6 +2121,7 @@ export const en = {
 	"live.cutoffAhead": "{n} ahead",
 	"live.cutoffBehind": "{n} behind",
 	"live.cutoffWaitingSignal": "Waiting for a fresh signal",
+	"live.cutoffSignalLost": "Signal lost — can't project arrival",
 	"liveEvent.runnerFallback": "Runner",
 	"liveEvent.pageTitle": "Live race — {title}",
 	"liveEvent.eventFallback": "Event",
