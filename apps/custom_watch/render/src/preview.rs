@@ -126,7 +126,10 @@ fn preview_pacer_page() {
     use watch_core::pacer::{PaceVerdict, PacerGoal, PacerStatus};
     let mut snap = base_snapshot();
     snap.pacer = Some(PacerStatus {
-        goal: PacerGoal { distance_m: 42_195, time_s: 4 * 3600 },
+        goal: PacerGoal {
+            distance_m: 42_195,
+            time_s: 4 * 3600,
+        },
         ahead_m: 120.0,
         ahead_s: 75,
         projected_finish_s: Some(3 * 3600 + 55 * 60),
@@ -165,7 +168,10 @@ fn preview_splits_page() {
 #[test]
 fn preview_gear_and_fuel_pages() {
     let mut gear_snap = base_snapshot();
-    gear_snap.gear = Some(watch_core::gear_wear::gear_wear(Some(920_000.0), Some(800_000.0)));
+    gear_snap.gear = Some(watch_core::gear_wear::gear_wear(
+        Some(920_000.0),
+        Some(800_000.0),
+    ));
     let mut fb = Framebuffer::new();
     draw_face(&mut fb, Page::GearWear, Some(&gear_snap), None);
     widgets::draw_gear_overlay(&mut fb, &gear_snap);
@@ -173,7 +179,10 @@ fn preview_gear_and_fuel_pages() {
 
     let mut fuel_snap = base_snapshot();
     fuel_snap.fuel = Some(FuelView {
-        carry: Some(FuelCarryView { carbs_g: 60.0, fluid_ml: 500.0 }),
+        carry: Some(FuelCarryView {
+            carbs_g: 60.0,
+            fluid_ml: 500.0,
+        }),
         total_carbs_g: 240.0,
         total_fluid_ml: 2000.0,
     });

@@ -73,7 +73,12 @@ pub fn draw_signal_bars(fb: &mut Framebuffer, right_x: usize, baseline_y: usize,
 /// Idle-face GPS signal meter, top-right of the brand row (row 0), from the live
 /// fix + its freshness. Drawn only on the idle status face; a run view shows the
 /// per-row GPS glance instead.
-pub fn draw_idle_signal(fb: &mut Framebuffer, fix: Option<&Fix>, uptime_s: u32, stale_after_s: u32) {
+pub fn draw_idle_signal(
+    fb: &mut Framebuffer,
+    fix: Option<&Fix>,
+    uptime_s: u32,
+    stale_after_s: u32,
+) {
     let bars = statusbar::gps_bars(fix, uptime_s, stale_after_s);
     draw_signal_bars(fb, WIDTH - 2, CELL_H - 2, bars);
 }
@@ -158,7 +163,13 @@ pub fn draw_zones_overlay(fb: &mut Framebuffer, snap: &Snapshot, hr_bpm: Option<
             }
         }
         if current == Some(i) {
-            fb.stroke_rect(ZONE_BAR_X - 2, row * CELL_H + 2, ZONE_BAR_W + 4, CELL_H - 4, true);
+            fb.stroke_rect(
+                ZONE_BAR_X - 2,
+                row * CELL_H + 2,
+                ZONE_BAR_W + 4,
+                CELL_H - 4,
+                true,
+            );
         }
     }
 }
@@ -180,7 +191,12 @@ const HIST_GAP: usize = 4;
 /// `#` bars only approximated.
 pub fn draw_splits_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
     let py = HIST_TOP_ROW * CELL_H;
-    let mut bars = [Bar { x: 0, y: 0, w: 0, h: 0 }; 8];
+    let mut bars = [Bar {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+    }; 8];
     let n = bar_chart(
         &snap.pace_bucket_m,
         HIST_W as u16,
@@ -272,7 +288,10 @@ mod tests {
         let (x3, y3) = interior(3);
         assert!(!fb.pixel(x3, y3), "unlit tick 3 is hollow (blank interior)");
         // ...but its frame is drawn: the tick's left edge column carries ink.
-        assert!(fb.pixel(left + 3 * TICK_STEP, baseline_y), "hollow tick keeps its frame");
+        assert!(
+            fb.pixel(left + 3 * TICK_STEP, baseline_y),
+            "hollow tick keeps its frame"
+        );
     }
 
     #[test]
@@ -290,15 +309,30 @@ mod tests {
         draw_signal_bars(&mut a, WIDTH - 2, CELL_H - 2, 4);
         draw_signal_bars(&mut b, WIDTH - 2, CELL_H - 2, 1);
         let left = WIDTH - 1 - SIGNAL_METER_W;
-        assert!(ink_in(&a, left, 0, SIGNAL_METER_W, CELL_H) > ink_in(&b, left, 0, SIGNAL_METER_W, CELL_H));
+        assert!(
+            ink_in(&a, left, 0, SIGNAL_METER_W, CELL_H)
+                > ink_in(&b, left, 0, SIGNAL_METER_W, CELL_H)
+        );
     }
 
     #[test]
     fn page_indicator_thumb_moves_with_the_active_page() {
         let mut early = Framebuffer::new();
         let mut late = Framebuffer::new();
-        draw_page_indicator(&mut early, PageIndicator { active: 0, total: 16 });
-        draw_page_indicator(&mut late, PageIndicator { active: 15, total: 16 });
+        draw_page_indicator(
+            &mut early,
+            PageIndicator {
+                active: 0,
+                total: 16,
+            },
+        );
+        draw_page_indicator(
+            &mut late,
+            PageIndicator {
+                active: 15,
+                total: 16,
+            },
+        );
         // Thumb ink (rows 0..3) sits at the left for page 0, the right for the last.
         assert!(ink_in(&early, 0, 0, 12, 3) > 0);
         assert_eq!(ink_in(&early, WIDTH - 12, 0, 12, 3), 0);
@@ -311,13 +345,22 @@ mod tests {
     #[test]
     fn page_indicator_zero_total_is_a_noop() {
         let mut fb = Framebuffer::new();
-        draw_page_indicator(&mut fb, PageIndicator { active: 0, total: 0 });
+        draw_page_indicator(
+            &mut fb,
+            PageIndicator {
+                active: 0,
+                total: 0,
+            },
+        );
         assert_eq!(ink_in(&fb, 0, 0, WIDTH, CELL_H), 0);
     }
 
     fn pacer(ahead_s: i32) -> PacerStatus {
         PacerStatus {
-            goal: PacerGoal { distance_m: 10_000, time_s: 3_000 },
+            goal: PacerGoal {
+                distance_m: 10_000,
+                time_s: 3_000,
+            },
             ahead_m: 0.0,
             ahead_s,
             projected_finish_s: None,
@@ -370,13 +413,19 @@ mod tests {
     fn fuel_overlay_bar_scales_with_carry_share() {
         let mut full = snapshot();
         full.fuel = Some(FuelView {
-            carry: Some(FuelCarryView { carbs_g: 120.0, fluid_ml: 0.0 }),
+            carry: Some(FuelCarryView {
+                carbs_g: 120.0,
+                fluid_ml: 0.0,
+            }),
             total_carbs_g: 120.0,
             total_fluid_ml: 0.0,
         });
         let mut part = snapshot();
         part.fuel = Some(FuelView {
-            carry: Some(FuelCarryView { carbs_g: 30.0, fluid_ml: 0.0 }),
+            carry: Some(FuelCarryView {
+                carbs_g: 30.0,
+                fluid_ml: 0.0,
+            }),
             total_carbs_g: 120.0,
             total_fluid_ml: 0.0,
         });
@@ -394,7 +443,7 @@ mod tests {
         snap.zone_cutoffs = zone_cutoffs_from_max_hr(190);
         let mut fb = Framebuffer::new();
         draw_zones_overlay(&mut fb, &snap, Some(140)); // ~Z3
-        // Z1 (row 3, biggest time) out-fills Z2 (row 4) out-fills Z3 (row 5).
+                                                       // Z1 (row 3, biggest time) out-fills Z2 (row 4) out-fills Z3 (row 5).
         let w1 = ink_in(&fb, ZONE_BAR_X, bar_y(3), ZONE_BAR_W, BAR_H);
         let w2 = ink_in(&fb, ZONE_BAR_X, bar_y(4), ZONE_BAR_W, BAR_H);
         let w3 = ink_in(&fb, ZONE_BAR_X, bar_y(5), ZONE_BAR_W, BAR_H);
@@ -408,7 +457,10 @@ mod tests {
     fn zones_overlay_sensorless_run_draws_no_bars() {
         let mut fb = Framebuffer::new();
         draw_zones_overlay(&mut fb, &snapshot(), None);
-        assert_eq!(ink_in(&fb, ZONE_BAR_X, 3 * CELL_H, ZONE_BAR_W, 5 * CELL_H), 0);
+        assert_eq!(
+            ink_in(&fb, ZONE_BAR_X, 3 * CELL_H, ZONE_BAR_W, 5 * CELL_H),
+            0
+        );
     }
 
     #[test]

@@ -88,7 +88,12 @@ mod tests {
     #[test]
     fn even_values_tile_the_box_at_full_height() {
         // 4 * 24 + 3 * 2 gap == 102, so widths divide evenly.
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 8];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 8];
         let n = bar_chart(&[1.0, 1.0, 1.0, 1.0], 102, 64, 2, &mut out);
         assert_eq!(n, 4);
         for b in &out[..n] {
@@ -103,7 +108,12 @@ mod tests {
 
     #[test]
     fn heights_scale_to_the_max_value() {
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 4];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 4];
         let n = bar_chart(&[1.0, 2.0, 4.0], 100, 100, 0, &mut out);
         assert_eq!(n, 3);
         assert_eq!(out[2].h, 100, "the tallest bar is full box_h");
@@ -117,7 +127,12 @@ mod tests {
 
     #[test]
     fn all_zero_input_yields_zero_heights_without_dividing_by_zero() {
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 4];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 4];
         let n = bar_chart(&[0.0, 0.0, 0.0], 90, 60, 3, &mut out);
         assert_eq!(n, 3);
         for b in &out[..n] {
@@ -129,7 +144,12 @@ mod tests {
 
     #[test]
     fn a_short_output_slice_fills_what_fits() {
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 2];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 2];
         let n = bar_chart(&[1.0, 2.0, 3.0, 4.0], 120, 50, 1, &mut out);
         assert_eq!(n, 2, "capped at out.len(), no OOB");
         // Geometry is that of the full 4-bar chart, truncated to two.
@@ -139,7 +159,12 @@ mod tests {
 
     #[test]
     fn empty_values_and_zero_box_dims_return_zero() {
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 4];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 4];
         assert_eq!(bar_chart(&[], 100, 100, 2, &mut out), 0);
         assert_eq!(bar_chart(&[1.0, 2.0], 0, 100, 2, &mut out), 0);
         assert_eq!(bar_chart(&[1.0, 2.0], 100, 0, 2, &mut out), 0);
@@ -151,7 +176,12 @@ mod tests {
     fn real_zone_and_pace_bucket_fixtures_lay_out_sanely() {
         // zone_time_s-shaped: five per-zone moving-time seconds.
         let zones = [300.0, 1200.0, 1800.0, 600.0, 120.0];
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 8];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 8];
         let n = bar_chart(&zones, 128, 48, 2, &mut out);
         assert_eq!(n, 5);
         assert_eq!(out[2].h, 48, "the busiest zone is full height");
@@ -172,7 +202,12 @@ mod tests {
 
     #[test]
     fn negative_and_nonfinite_values_count_as_zero() {
-        let mut out = [Bar { x: 0, y: 0, w: 0, h: 0 }; 4];
+        let mut out = [Bar {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }; 4];
         let n = bar_chart(&[-5.0, 10.0], 60, 40, 2, &mut out);
         assert_eq!(n, 2);
         assert_eq!(out[0].h, 0, "a negative value is treated as zero");

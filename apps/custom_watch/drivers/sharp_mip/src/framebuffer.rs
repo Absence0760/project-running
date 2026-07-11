@@ -366,7 +366,11 @@ fn triple_bits(src: u8) -> (u8, u8, u8) {
             out |= 0b111 << (b * 3);
         }
     }
-    ((out & 0xff) as u8, (out >> 8 & 0xff) as u8, (out >> 16 & 0xff) as u8)
+    (
+        (out & 0xff) as u8,
+        (out >> 8 & 0xff) as u8,
+        (out >> 16 & 0xff) as u8,
+    )
 }
 
 fn glyph_for(ch: char) -> &'static [u8; font::GLYPH_HEIGHT] {

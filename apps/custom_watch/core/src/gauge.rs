@@ -100,7 +100,10 @@ mod tests {
         // The ultra runner a minute up on the partner fills the bar positive.
         let ahead = pacer_fill(&pacer(60));
         assert!(ahead > 0.0, "ahead of the partner must read positive");
-        assert!((ahead - 0.5).abs() < 1e-6, "60 s over the 120 s scale is +0.5");
+        assert!(
+            (ahead - 0.5).abs() < 1e-6,
+            "60 s over the 120 s scale is +0.5"
+        );
         // A minute down mirrors it.
         let behind = pacer_fill(&pacer(-60));
         assert!(behind < 0.0, "behind the partner must read negative");
