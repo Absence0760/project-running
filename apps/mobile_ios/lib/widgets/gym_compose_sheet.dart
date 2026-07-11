@@ -182,6 +182,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                     'weight_kg': s.weightKg,
                     'rpe': s.rpe,
                     'set_type': s.setType,
+                    'duration_s': s.durationS,
                   },
               ]));
   }
