@@ -23,6 +23,10 @@
 //!   carry-to-next-aid per refill (port of web `routes/fuel_plan.ts`)
 //! - [`pace_segments`] — split a track into pace segments with the shared
 //!   pace/age colour ramp (port of web `segments/pace_segments.ts`)
+//! - [`distance_bands`] — classify a distance into its race-distance band
+//!   (port of web `routes/distance_bands.ts`)
+//! - [`gear_wear`] — gear/shoe wear state from accumulated mileage
+//!   (port of web `gear/gear_wear.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
@@ -53,11 +57,13 @@ pub mod alerts;
 pub mod button;
 pub mod course;
 pub mod cutoff_eta;
+pub mod distance_bands;
 pub mod elevation;
 pub mod face;
 pub mod fix;
 pub mod flash_store;
 pub mod fuel_plan;
+pub mod gear_wear;
 pub mod gnss_mode;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
