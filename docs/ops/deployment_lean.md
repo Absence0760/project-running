@@ -53,7 +53,7 @@ Fully functional web launch with backups intact.
   Pro card + `/routes/new` from advertising the dead perk (decisions §204).
 - No mobile stores.
 
-### Rock-bottom — ~$10–11/mo (coach off) — SELECTED 2026-07-02
+### Rock-bottom — ~$10–11/mo (coach off) — SELECTED 2026-07-02, DEPLOYED 2026-07-11
 
 Absolute floor. Appropriate **pre-launch / no real users** or for a demo. Accepts real
 tradeoffs (below).
@@ -180,7 +180,23 @@ bin/deploy-prod.sh            # bootstrap + dns + oidc + envs/prod, idempotent
 ```
 
 Register a domain first (any registrar; ~$1/mo amortized for a `.com`) and paste the four NS
-records the `dns` stack outputs.
+records the `dns` stack outputs. If the domain is registered **in Route 53 itself**,
+registration auto-created its own hosted zone and pointed the domain at it — switch the
+registered domain's name servers to the Terraform zone's set
+(`aws route53domains update-domain-nameservers --region us-east-1 …`) and delete the
+auto-created duplicate zone ($0.50/mo). The `dns` apply blocks on ACM validation until this
+delegation is live.
+
+> **New-account gotcha — Lambda concurrency quota.** Fresh AWS accounts get an account-wide
+> Lambda concurrent-executions quota of **10**, and a reservation must leave ≥10 unreserved —
+> so the web-stack's reserved-concurrency bill caps (20/25) cannot apply at all
+> (`PutFunctionConcurrency` → InvalidParameterValueException). Request the Service Quotas
+> raise to 1000 (`aws service-quotas request-service-quota-increase --service-code lambda
+> --quota-code L-B99A9384 --desired-value 1000`) **before** the first envs/prod apply — new
+> accounts get routed to human review, which can take a business day. Until it lands, set
+> `lambda_reserved_concurrency = -1` and `generate_route_reserved_concurrency = -1` in the
+> env tfvars (the 10-wide account pool is itself the tighter bill cap meanwhile) and revert
+> the two lines + re-apply once approved.
 
 **Required `infra/envs/prod/terraform.tfvars` values — the apply hard-fails validation without them:**
 
