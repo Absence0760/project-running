@@ -7,9 +7,10 @@
 //!
 //! Talker-agnostic: `$GPRMC`, `$GNRMC`, `$GLRMC` all parse as RMC — the
 //! MAX-M10S emits `GN` talkers in multi-GNSS mode, older fixtures use `GP`.
-//! Sentences carried: RMC (validity + position + speed + course) and GGA
-//! (fix quality + satellite count + altitude). Everything else, including
-//! GSV, returns `Sentence::Other` so callers can count-but-ignore it.
+//! Sentences carried: RMC (validity + position + speed + course), GGA
+//! (fix quality + satellite count + altitude), and GSV (satellites in view,
+//! for an honest signal meter). Everything else returns `Sentence::Other`
+//! so callers can count-but-ignore it.
 
 #![no_std]
 
@@ -46,7 +47,11 @@ pub struct GgaData {
 pub enum Sentence {
     Rmc(RmcData),
     Gga(GgaData),
-    /// Valid checksum, but a type we don't decode (GSV, VTG, ...).
+    /// Satellites in view, reported by every GSV in a multi-sentence group.
+    Gsv {
+        sats_in_view: u8,
+    },
+    /// Valid checksum, but a type we don't decode (VTG, GSA, ...).
     Other,
 }
 
@@ -128,6 +133,7 @@ fn parse_sentence(body: &[u8]) -> Option<Sentence> {
     match kind {
         b"RMC" => parse_rmc(&mut fields).map(Sentence::Rmc),
         b"GGA" => parse_gga(&mut fields).map(Sentence::Gga),
+        b"GSV" => parse_gsv(&mut fields),
         _ => Some(Sentence::Other),
     }
 }
@@ -165,6 +171,17 @@ fn parse_gga(f: &mut Fields) -> Option<GgaData> {
         sats,
         alt_m,
     })
+}
+
+/// GSV: `<total_msgs>,<msg_num>,<sats_in_view>,...`. Every sentence in the
+/// group repeats the same total, so the third field is enough for the meter —
+/// the per-satellite tuples that follow are ignored. A missing or non-numeric
+/// count drops the sentence rather than reporting a false zero.
+fn parse_gsv(f: &mut Fields) -> Option<Sentence> {
+    let _total_msgs = f.next()?;
+    let _msg_num = f.next()?;
+    let sats_in_view = parse_u32(f.next()?)? as u8;
+    Some(Sentence::Gsv { sats_in_view })
 }
 
 /// Comma-separated field iterator over the payload after the type field.
