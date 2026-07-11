@@ -4051,6 +4051,7 @@ export const messages = {
 	"clubEvent.cancelPolicyNoRefund": "Esta inscripción está fuera del plazo de reembolso. Contacta con el organizador para cancelar.",
 	"clubEvent.cancelNoOrder": "No encontramos ninguna inscripción para cancelar.",
 	"clubEvent.cancelRefundFailed": "No se pudo iniciar el reembolso. Inténtalo de nuevo o contacta con el organizador.",
+	"clubEvent.addToCalendar": "Añadir al calendario",
 	// Session planner (session_planner.md P1)
 	"session.title": "Sesiones",
 	"session.new": "Nueva sesión",

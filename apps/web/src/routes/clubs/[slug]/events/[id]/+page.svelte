@@ -69,6 +69,7 @@
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { formatPrice } from '$lib/format/format_price';
 	import { registrationOpen, resolveRefundEligibility } from '$lib/social/paid_registration';
+	import { buildEventIcs, icsFilename } from '$lib/social/event_ics';
 	import { env } from '$env/dynamic/public';
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl, geoUri } from '$lib/routes/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
@@ -853,6 +854,22 @@
 		downloadBlob(blob, `threkir-results-${safe}.csv`);
 	}
 
+	function addToCalendar() {
+		if (!event) return;
+		const startIso = activeInstance ?? event.starts_at;
+		const ics = buildEventIcs({
+			uid: `event-${event.id}-${startIso}@threkir.com`,
+			title: event.title,
+			startIso,
+			durationMin: event.duration_min,
+			description: event.description,
+			location: event.meet_label,
+			url: canonicalUrl
+		});
+		if (!ics) return;
+		downloadBlob(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), icsFilename(event.title));
+	}
+
 	function formatRunDate(iso: string): string {
 		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			month: 'short',
@@ -1627,6 +1644,17 @@
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.declined}</span>
 						</button>
 					</div>
+				{/if}
+				{#if !isPast && !activeException}
+					<button
+						type="button"
+						class="btn btn-secondary add-to-calendar"
+						onclick={addToCalendar}
+						data-testid="add-to-calendar"
+					>
+						<span class="material-symbols" aria-hidden="true">calendar_add_on</span>
+						{m('clubEvent.addToCalendar')}
+					</button>
 				{/if}
 				{#if isEventOrganiser && event.recurrence_freq && activeInstance && !activeException}
 					<div class="admin-actions">
@@ -2663,6 +2691,9 @@
 	}
 	.register-cta {
 		width: 100%;
+		justify-content: center;
+	}
+	.add-to-calendar {
 		justify-content: center;
 	}
 	.register-cancel {
