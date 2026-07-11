@@ -34,7 +34,7 @@
 use defmt::{debug, info, unwrap, warn};
 use embassy_nrf::uarte::UarteRx;
 use embassy_time::{Duration, Instant, Timer};
-use ublox_nmea::Parser;
+use ublox_nmea::{Parser, Sentence};
 use watch_core::face::STALE_AFTER_S;
 use watch_core::fix::FixAccumulator;
 use watch_core::gnss_mode::GnssMode;
@@ -80,6 +80,7 @@ pub async fn run(mut rx: UarteRx<'static>) {
     let mut parser = Parser::new();
     let mut acc = FixAccumulator::new();
     let sender = state::FIX.sender();
+    let sats_sender = state::SATS.sender();
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut buf = [0u8; RX_BURST];
@@ -109,6 +110,12 @@ pub async fn run(mut rx: UarteRx<'static>) {
                         continue;
                     };
                     let uptime_s = Instant::now().as_secs() as u32;
+                    // Best-effort satellite count for an honest signal meter
+                    // (L4): publish alongside the fix pipeline, never gating it.
+                    // UI wiring of the statusbar meter is a follow-up.
+                    if let Sentence::Gsv { sats_in_view } = sentence {
+                        sats_sender.send(sats_in_view);
+                    }
                     if let Some(fix) = acc.apply(&sentence, uptime_s) {
                         // Throttle to the cadence in force: the idle de-rate,
                         // or the selected mode's interval while recording. An

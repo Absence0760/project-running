@@ -64,9 +64,48 @@ fn corrupted_payload_fails_checksum() {
 }
 
 #[test]
-fn gsv_is_other() {
+fn parses_gsv_sats_in_view() {
     let gsv = "$GPGSV,2,1,08,05,55,120,42,07,34,210,38,13,21,300,35,15,60,045,44*7D\r\n";
-    assert_eq!(parse_one(gsv), Some(Sentence::Other));
+    assert_eq!(parse_one(gsv), Some(Sentence::Gsv { sats_in_view: 8 }));
+}
+
+#[test]
+fn gsv_bad_checksum_dropped() {
+    let gsv = "$GPGSV,2,1,08,05,55,120,42,07,34,210,38,13,21,300,35,15,60,045,44*7D\r\n";
+    let corrupt = gsv.replace("*7D", "*7E");
+    assert_eq!(parse_one(&corrupt), None);
+}
+
+#[test]
+fn gsv_empty_sats_field_dropped() {
+    // Malformed group header (empty sats-in-view field): drop, don't report 0.
+    let body = "GPGSV,1,1,,05,55,120,42";
+    let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+    let sentence = format!("${}*{:02X}\r\n", body, cksum);
+    assert_eq!(parse_one(&sentence), None);
+}
+
+#[test]
+fn gl_talker_gsv_parses_like_gp() {
+    // GLONASS constellation emits GL talkers; checksum recomputed for GL.
+    let body = "GLGSV,1,1,04,65,55,120,42,66,34,210,38,72,21,300,35,80,60,045,44";
+    let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+    let sentence = format!("${}*{:02X}\r\n", body, cksum);
+    assert_eq!(
+        parse_one(&sentence),
+        Some(Sentence::Gsv { sats_in_view: 4 })
+    );
+}
+
+#[test]
+fn gsv_multi_sentence_group_reports_same_total() {
+    // A 2-message group: each sentence carries the same 08 total.
+    let mut p = Parser::new();
+    let group = "$GPGSV,2,1,08,05,55,120,42,07,34,210,38,13,21,300,35,15,60,045,44*7D\r\n\
+        $GPGSV,2,2,08,18,12,090,30,20,48,270,41,24,08,180,28,30,29,330,37*7E\r\n";
+    let got = feed_all(&mut p, group);
+    assert_eq!(got.len(), 2);
+    assert!(got.iter().all(|s| *s == Sentence::Gsv { sats_in_view: 8 }));
 }
 
 #[test]
@@ -109,6 +148,7 @@ fn whole_fixture_file_parses() {
     let mut p = Parser::new();
     let mut rmc = 0;
     let mut gga = 0;
+    let mut gsv = 0;
     let mut other = 0;
     for s in fixture.bytes().filter_map(|b| p.feed(b)) {
         match s {
@@ -121,10 +161,15 @@ fn whole_fixture_file_parses() {
                 assert_eq!(g.sats, 8);
                 gga += 1;
             }
+            Sentence::Gsv { sats_in_view } => {
+                assert_eq!(sats_in_view, 8);
+                gsv += 1;
+            }
             Sentence::Other => other += 1,
         }
     }
     assert_eq!(rmc, 120);
     assert_eq!(gga, 120);
-    assert_eq!(other, 2); // the two GSV lines
+    assert_eq!(gsv, 2); // the two GSV lines
+    assert_eq!(other, 0);
 }

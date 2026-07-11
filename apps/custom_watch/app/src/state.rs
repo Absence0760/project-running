@@ -76,6 +76,12 @@ pub static GNSS_MODE: Watch<CriticalSectionRawMutex, GnssMode, 3> = Watch::new()
 /// wrist stops paying the per-second animation redraw. One receiver (the `ui`).
 pub static INTERACTION: Watch<CriticalSectionRawMutex, u32, 1> = Watch::new();
 
+/// Latest GSV satellites-in-view count: the `gps` task publishes it best-effort
+/// per GSV group so the signal meter can show the real sat count instead of a
+/// placeholder. No value published means "unknown" (searching). One receiver
+/// reserved for the `ui` face — the statusbar wiring is a follow-up.
+pub static SATS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
 /// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling): the
 /// `ble` task decodes a phone characteristic write (and the sim seeds a demo
 /// frame) and publishes; the `record` task applies each present field to the
