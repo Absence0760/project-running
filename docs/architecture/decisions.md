@@ -3671,6 +3671,19 @@ Two `face` layout changes pair with this: the zone / split rows drop their `#`-g
 
 This advances the § 90 / `local_testing.md` "keep 60–70 % host-testable" goal by moving drawing — previously in the untestable 30–40 % — into a crate `cargo test` reaches, and it ports forward: the `watch_render` split is the same shape a tier-2 colour panel would reuse (geometry unchanged, only the primitive backend swapped).
 
+## 217. Tier-1 watch settings sync: a binary phone→watch frame decoded into the existing setter hooks
+
+Several recorder features shipped with a plausibility-guarded settings-sync *setter* but nothing driving it — `Recorder::set_max_hr` / `set_pacer_goal` / `set_gear` and `AlertEngine::set_zone_ceiling` were armed only by hardcoded sim demos (a 1 km/5:00 pacer, a 700/800 km shoe). This wires the real phone→watch config push into those hooks.
+
+Decisions:
+
+- **Binary wire, not JSON.** The watch is `no_std` with no allocator and no JSON parser, and the run-sync side already speaks fixed-layout little-endian frames (`run_store`). `watch_core::settings` matches that: a 4-byte magic (`SET1`), a version byte, a presence-bitfield, then only the present fields in bit order (max HR `u16`, pacer `u32`+`u32`, gear `f32`+`f32`, zone ceiling `u8`). Every field is optional so a partial push (just a new max HR) leaves the rest untouched. A JSON frame would have meant pulling a parser into the firmware for one small message.
+- **Decode parses, setters guard.** `WatchSettings::decode` only turns bytes into a struct; the plausibility rules stay in the setters it feeds (`set_max_hr`'s 100–240 bpm window, `Pacer::set_goal`'s bounds, `set_zone_ceiling`'s 1–4). A garbage value is rejected by the same rule whether it arrived over BLE or the sim seed — one source of truth, not a second guard on the wire.
+- **Applied in the record task, L4.** The record task already owns both the `Recorder` and the `AlertEngine`, so `apply_settings` lives there, applied before the event mutates run totals — config can never disturb the recording math. The sim demo now flows through the *same* `apply_settings` (a demo `WatchSettings`) instead of a separate hardcoded seam, so the sim actually exercises the sync path.
+- **Transport: a write-only BLE characteristic + a golden-vector-pinned Dart encoder.** The Threkir GATT service gains a fourth (`write`) characteristic that decodes the frame and publishes to `state::SETTINGS`; like the rest of the `ble` build it compiles + links but is hardware-unverified. The phone encoder is a Dart mirror pinned to the same golden byte vector as the Rust test (the run-sync discipline), so the two codecs can't drift.
+
+The doubly-optional `zone_ceiling` (`Option<Option<u8>>`) lets a push both *set* (`Some(Some(z))`) and *clear* (`Some(None)`, wire byte 0) the ceiling, versus an absent field that leaves it alone — the phone needs to turn the alert off, not only change it.
+
 ## 218. Five more watch_core parity cores land as host-tested pure logic before any page wiring
 
 **Decided (2026-07-11).** Five further shipped web helpers were ported to `no_std` `watch_core` modules — `age_grade` (web `runs/age_grade.ts` + the generated `age_grade_tables.ts`), `hydration` (`nutrition/hydration.ts`), `exercise_calories` (`nutrition/exercise_calories.ts`), `training_paces` (the pace-zone surface of `training/training.ts`), and `fitness` (`training/fitness.ts`) — each mirroring its web `.test.ts` test-for-test (12 / 9 / 11 / 10 / 46 = 88 new host tests, `watch_core` now 435 green). This continues the §215 / 2026-07-10 "logic before peripherals" cadence: the cores are built and host-verified first, and **run-view page wiring is a deliberate separate follow-up** — this round touched none of `face`/`page`/`record`/`ui` to avoid colliding with the three in-flight page-wiring/UI/settings PRs (§216, §217, glance-wiring), and the `//!` module list documents each as unwired.
