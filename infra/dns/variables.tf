@@ -20,3 +20,14 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "email_auth_records" {
+  description = "Outbound-email sender-authentication records (DKIM / SPF / MX / DMARC), pasted from the sending provider (Resend). Keyed by a short label; `name` is relative to the apex ('' = the apex itself). These are public DNS data — safe to commit in terraform.tfvars."
+  type = map(object({
+    name    = string
+    type    = string
+    ttl     = optional(number, 300)
+    records = list(string)
+  }))
+  default = {}
+}

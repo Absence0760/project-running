@@ -81,6 +81,21 @@ resource "aws_route53_record" "cert_validation" {
   ttl     = 60
 }
 
+# ─────────────────── Email sender authentication ───────────────────
+# DKIM / SPF / MX / DMARC for outbound mail (Resend). Values live in
+# terraform.tfvars so a DR rebuild restores deliverability — a record
+# added by hand in the console would silently vanish on rebuild.
+
+resource "aws_route53_record" "email_auth" {
+  for_each = var.email_auth_records
+
+  zone_id = aws_route53_zone.apex.zone_id
+  name    = each.value.name == "" ? var.apex_domain : "${each.value.name}.${var.apex_domain}"
+  type    = each.value.type
+  ttl     = each.value.ttl
+  records = each.value.records
+}
+
 resource "aws_acm_certificate_validation" "apex" {
   provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.apex.arn
