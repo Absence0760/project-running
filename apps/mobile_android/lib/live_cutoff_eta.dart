@@ -81,7 +81,10 @@ LiveCutoffEta nextCutoffEta({
       : const LiveCutoffCheckpoint(kind: 'cutoff', label: '');
   final distanceToM = leg.cumDistM - distAlongRouteM;
 
-  if (stale || recentPaceSecPerKm == null || recentPaceSecPerKm <= 0) {
+  if (stale ||
+      recentPaceSecPerKm == null ||
+      !recentPaceSecPerKm.isFinite ||
+      recentPaceSecPerKm <= 0) {
     return LiveCutoffEta(
       checkpoint: checkpoint,
       distanceToM: distanceToM,

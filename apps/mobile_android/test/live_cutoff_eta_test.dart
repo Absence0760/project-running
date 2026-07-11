@@ -91,6 +91,14 @@ void main() {
     expect(eta.projectedArrivalElapsedS, isNull);
   });
 
+  test('a non-finite pace returns unknown, never a fabricated on-pace ETA', () {
+    for (final pace in [double.nan, double.infinity]) {
+      final eta = call(recentPaceSecPerKm: pace);
+      expect(eta.status, LiveCutoffStatus.unknown);
+      expect(eta.projectedArrivalElapsedS, isNull);
+    }
+  });
+
   test('a runner past the last cutoff has no checkpoint and is unknown', () {
     final eta = call(distAlongRouteM: 40000);
     expect(eta.checkpoint, isNull);
