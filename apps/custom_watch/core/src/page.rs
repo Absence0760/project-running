@@ -22,6 +22,9 @@ pub enum Page {
     /// Current lap time up large, with lap number / last-lap split / lap
     /// distance / HR as context.
     Lap,
+    /// Distance banked in each pace bucket for the run so far — the pace
+    /// analogue of the zones page (buckets from [`crate::pace_segments`]).
+    Splits,
     /// Current HR up large, with the live zone and the per-zone moving-time
     /// breakdown as context.
     Zones,
@@ -33,16 +36,35 @@ pub enum Page {
     /// run, with a per-rung confidence flag; blank until the run is long
     /// enough to project honestly.
     RacePredictor,
+    /// This run's training-load stress contribution so far — the single-run
+    /// distance/TRIMP model from [`crate::training_load`].
+    TrainingLoad,
+    /// The race-distance band the run's distance falls in
+    /// ([`crate::distance_bands`]); an honest "no band" between windows.
+    DistanceBand,
     /// The next cut-off ETA up large (on / tight / behind vs the cutoff limit),
     /// with the distance to it and the projected arrival; an honest inactive
     /// state when no course cutoffs are loaded.
     CutoffEta,
+    /// The race roadbook: the upcoming checkpoints from the current position,
+    /// each with its projected arrival + safe/tight/miss cutoff verdict; an
+    /// honest inactive state when no roadbook is loaded
+    /// ([`crate::roadbook`]).
+    Roadbook,
+    /// The race fuelling plan: what to carry to the next aid + the run totals,
+    /// scaled onto the roadbook timeline ([`crate::fuel_plan`]); inactive
+    /// without a roadbook.
+    Fuel,
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
     /// Distance back to the run's start up large, with a relative direction
     /// arrow, heading/bearing rows, and the TrackBack breadcrumb map.
     BackToStart,
+    /// Gear wear: the active shoe's accumulated distance vs its replacement
+    /// target ([`crate::gear_wear`]); an honest inactive state when no gear is
+    /// synced.
+    GearWear,
 }
 
 impl Page {
@@ -52,13 +74,19 @@ impl Page {
             Page::Dashboard => Page::Distance,
             Page::Distance => Page::Pace,
             Page::Pace => Page::Lap,
-            Page::Lap => Page::Zones,
+            Page::Lap => Page::Splits,
+            Page::Splits => Page::Zones,
             Page::Zones => Page::Pacer,
             Page::Pacer => Page::RacePredictor,
-            Page::RacePredictor => Page::CutoffEta,
-            Page::CutoffEta => Page::Nav,
+            Page::RacePredictor => Page::TrainingLoad,
+            Page::TrainingLoad => Page::DistanceBand,
+            Page::DistanceBand => Page::CutoffEta,
+            Page::CutoffEta => Page::Roadbook,
+            Page::Roadbook => Page::Fuel,
+            Page::Fuel => Page::Nav,
             Page::Nav => Page::BackToStart,
-            Page::BackToStart => Page::Dashboard,
+            Page::BackToStart => Page::GearWear,
+            Page::GearWear => Page::Dashboard,
         }
     }
 }
@@ -72,43 +100,51 @@ mod tests {
         assert_eq!(Page::default(), Page::Dashboard);
     }
 
+    /// Every page, in declaration (`as u8`) order.
+    const ALL: [Page; 16] = [
+        Page::Dashboard,
+        Page::Distance,
+        Page::Pace,
+        Page::Lap,
+        Page::Splits,
+        Page::Zones,
+        Page::Pacer,
+        Page::RacePredictor,
+        Page::TrainingLoad,
+        Page::DistanceBand,
+        Page::CutoffEta,
+        Page::Roadbook,
+        Page::Fuel,
+        Page::Nav,
+        Page::BackToStart,
+        Page::GearWear,
+    ];
+
     #[test]
     fn next_cycles_every_page_and_wraps() {
         assert_eq!(Page::Dashboard.next(), Page::Distance);
-        assert_eq!(Page::Distance.next(), Page::Pace);
-        assert_eq!(Page::Pace.next(), Page::Lap);
-        assert_eq!(Page::Lap.next(), Page::Zones);
-        assert_eq!(Page::Zones.next(), Page::Pacer);
-        assert_eq!(Page::Pacer.next(), Page::RacePredictor);
-        assert_eq!(Page::RacePredictor.next(), Page::CutoffEta);
-        assert_eq!(Page::CutoffEta.next(), Page::Nav);
-        assert_eq!(Page::Nav.next(), Page::BackToStart);
-        assert_eq!(Page::BackToStart.next(), Page::Dashboard);
-        // Walking `next` from the default visits all ten and returns home.
+        assert_eq!(Page::Lap.next(), Page::Splits);
+        assert_eq!(Page::Splits.next(), Page::Zones);
+        assert_eq!(Page::RacePredictor.next(), Page::TrainingLoad);
+        assert_eq!(Page::TrainingLoad.next(), Page::DistanceBand);
+        assert_eq!(Page::DistanceBand.next(), Page::CutoffEta);
+        assert_eq!(Page::CutoffEta.next(), Page::Roadbook);
+        assert_eq!(Page::Roadbook.next(), Page::Fuel);
+        assert_eq!(Page::Fuel.next(), Page::Nav);
+        assert_eq!(Page::BackToStart.next(), Page::GearWear);
+        assert_eq!(Page::GearWear.next(), Page::Dashboard);
+        // Walking `next` from the default visits every page exactly once and
+        // returns home.
         let mut p = Page::default();
-        let mut seen = [p; 10];
+        let mut seen = [p; ALL.len()];
         for slot in seen.iter_mut().skip(1) {
             p = p.next();
             *slot = p;
         }
         seen.sort_by_key(|q| *q as u8);
-        assert_eq!(
-            seen,
-            [
-                Page::Dashboard,
-                Page::Distance,
-                Page::Pace,
-                Page::Lap,
-                Page::Zones,
-                Page::Pacer,
-                Page::RacePredictor,
-                Page::CutoffEta,
-                Page::Nav,
-                Page::BackToStart
-            ]
-        );
+        assert_eq!(seen, ALL);
         let mut p = Page::default();
-        for _ in 0..10 {
+        for _ in 0..ALL.len() {
             p = p.next();
         }
         assert_eq!(p, Page::default());
