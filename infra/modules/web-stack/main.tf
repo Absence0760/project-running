@@ -192,6 +192,33 @@ data "aws_iam_policy_document" "kms_secrets" {
     ]
     resources = ["*"]
   }
+  # CloudWatch Logs encrypts the lambda log groups with this same CMK
+  # (kms_key_id on every aws_cloudwatch_log_group below). A service
+  # principal can only be authorised in the KEY policy — without this
+  # statement CreateLogGroup fails with "The specified KMS key does not
+  # exist or is not allowed to be used". Scoped by encryption context
+  # to this env's lambda log groups.
+  statement {
+    sid    = "AllowCloudWatchLogsUseOfTheKey"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${data.aws_region.current.region}.amazonaws.com"]
+    }
+    actions = [
+      "kms:Encrypt*",
+      "kms:Decrypt*",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:Describe*",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.resource_prefix}-*"]
+    }
+  }
   statement {
     sid    = "AllowLambdaAndDeployRolesToDecrypt"
     effect = "Allow"
@@ -1321,12 +1348,17 @@ resource "aws_cloudfront_cache_policy" "lambda_passthrough" {
   default_ttl = 0
   max_ttl     = 0
   min_ttl     = 0
+  # With caching disabled (all TTLs 0) CloudFront rejects any non-none
+  # cache-key contribution ("CookieBehavior is invalid for policy with
+  # caching disabled"). Forwarding cookies / query strings / headers to
+  # the origin is the origin request policy's job (`lambda` above),
+  # which already carries all of them.
   parameters_in_cache_key_and_forwarded_to_origin {
     enable_accept_encoding_brotli = false
     enable_accept_encoding_gzip   = false
-    cookies_config { cookie_behavior = "all" }
+    cookies_config { cookie_behavior = "none" }
     headers_config { header_behavior = "none" }
-    query_strings_config { query_string_behavior = "all" }
+    query_strings_config { query_string_behavior = "none" }
   }
 }
 
