@@ -29,7 +29,9 @@ use crate::pacer::{Pacer, PacerStatus};
 pub const TRACK_THRESHOLD_M: f64 = 3.0;
 
 /// A single hop longer than this is a corrupt fix, never real travel — the
-/// `delta < 100` ceiling in `run_recorder`.
+/// `delta < 100` ceiling in `run_recorder`. Calibrated for the ~1 s fix
+/// cadence both recorders were built around; a throttled GNSS mode replaces
+/// it with a segment-speed ceiling (see [`Recorder::set_fix_interval_s`]).
 pub const MAX_JUMP_M: f64 = 100.0;
 
 /// A segment implying a speed above this (or a non-positive time delta) is
@@ -167,6 +169,10 @@ pub struct Recorder {
     /// Virtual partner vs the configured goal — see
     /// [`set_pacer_goal`](Recorder::set_pacer_goal).
     pacer: Pacer,
+    /// Expected seconds between incoming fixes — 1 at the default full rate;
+    /// a throttled GNSS mode raises it. See
+    /// [`set_fix_interval_s`](Recorder::set_fix_interval_s).
+    fix_interval_s: u32,
 }
 
 impl Default for Recorder {
@@ -198,7 +204,23 @@ impl Recorder {
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
             pacer: Pacer::new(),
+            fix_interval_s: 1,
         }
+    }
+
+    /// Expected seconds between incoming fixes, from the selected GNSS mode
+    /// (clamped to at least 1). At the default 1 s cadence the acceptance
+    /// filter is byte-identical to the Dart `run_recorder`'s. At a throttled
+    /// cadence the fixed [`MAX_JUMP_M`] ceiling would reject *every* legitimate
+    /// segment (a runner at 4 m/s covers 240 m between 60 s fixes), so the
+    /// jump gate switches to the segment-speed ceiling `MAX_SPEED_MPS * dt` —
+    /// the same physical plausibility bound the speed gate already enforces,
+    /// scaled by the actual time between fixes rather than an assumed 1 s.
+    /// Deliberately keyed off the configured interval, not off `dt` alone, so
+    /// the full-rate filter is never silently loosened: at 1 Hz a 150 m hop
+    /// after a 30 s signal gap is still rejected as corrupt, exactly as today.
+    pub fn set_fix_interval_s(&mut self, interval_s: u32) {
+        self.fix_interval_s = interval_s.max(1);
     }
 
     pub fn state(&self) -> RecordState {
@@ -367,8 +389,14 @@ impl Recorder {
 
         // Corrupt fix: a shared/backwards timestamp, an implied speed past the
         // ceiling, or a jump too long to be real. Drop it and keep the anchor
-        // so the next good fix measures from the last trusted position.
-        if dt == 0 || delta >= MAX_JUMP_M || delta / dt as f64 > MAX_SPEED_MPS {
+        // so the next good fix measures from the last trusted position. The
+        // jump ceiling is interval-aware — see `set_fix_interval_s`.
+        let max_jump_m = if self.fix_interval_s > 1 {
+            MAX_SPEED_MPS * dt as f64
+        } else {
+            MAX_JUMP_M
+        };
+        if dt == 0 || delta >= max_jump_m || delta / dt as f64 > MAX_SPEED_MPS {
             return;
         }
         self.current_speed_mps = fix.speed_mps.max(0.0);
@@ -403,9 +431,10 @@ impl Recorder {
         self.pacer.on_distance(self.distance_m, self.elapsed_s());
 
         // Auto-lap: the fix that carries the current lap past the boundary
-        // closes it. A segment is at most MAX_JUMP_M, so one fix can never
-        // cross two boundaries; the overshoot stays in the closed lap, and the
-        // next lap starts here.
+        // closes it. The overshoot stays in the closed lap and the next lap
+        // starts at the closing fix's totals, so however long an accepted
+        // segment is (a throttled GNSS mode allows multi-hundred-metre legs),
+        // at most one lap closes per fix and no distance is lost.
         if self.distance_m - self.lap_start_distance_m >= AUTO_LAP_DISTANCE_M {
             self.close_lap();
         }
@@ -661,6 +690,97 @@ mod tests {
         r.on_fix(&fix(40.00005, -105.0, 4.0, 2));
         let d = r.snapshot().distance_m;
         assert!((d - expected_m((40.0, -105.0), (40.00005, -105.0))).abs() < 1e-3);
+    }
+
+    #[test]
+    fn throttled_interval_accepts_legitimate_minute_apart_segments() {
+        // Expedition mode: one fix per 60 s. A runner at ~4 m/s covers ~240 m
+        // per segment — far past the 1 Hz MAX_JUMP_M ceiling, entirely real.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        let pts = [
+            (40.0, -105.0),
+            (40.00216, -105.0), // ~240 m north
+            (40.00432, -105.0),
+            (40.00648, -105.0),
+        ];
+        let mut expected = 0.0;
+        for w in pts.windows(2) {
+            expected += expected_m(w[0], w[1]);
+        }
+        for (i, p) in pts.iter().enumerate() {
+            r.on_fix(&fix(p.0, p.1, 4.0, i as u32 * 60));
+        }
+        let s = r.snapshot();
+        assert!(
+            fabs(s.distance_m - expected) < 1e-3,
+            "distance {} vs expected {}",
+            s.distance_m,
+            expected
+        );
+        assert_eq!(s.moving_s, 180, "each 60 s segment clears the moving gate");
+        assert_eq!(s.state, RecordState::Recording);
+    }
+
+    #[test]
+    fn throttled_interval_still_rejects_implausible_speed() {
+        // The physical plausibility bound survives the throttle: ~700 m in
+        // 60 s implies ~11.7 m/s, past MAX_SPEED_MPS — corrupt, dropped, and
+        // the anchor kept for the next fix to measure from.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        r.on_fix(&fix(40.0063, -105.0, 4.0, 60));
+        assert_eq!(r.snapshot().distance_m, 0.0);
+        // A missed forwarding (dt = 2 intervals) scales the allowance with the
+        // actual gap: ~480 m over 120 s is 4 m/s, accepted.
+        r.on_fix(&fix(40.00432, -105.0, 4.0, 120));
+        let d = r.snapshot().distance_m;
+        assert!((d - expected_m((40.0, -105.0), (40.00432, -105.0))).abs() < 1e-3);
+    }
+
+    #[test]
+    fn full_rate_filter_is_not_loosened_by_the_interval_hook() {
+        // At the default 1 s cadence the fixed 100 m ceiling still applies
+        // even when a signal gap makes the implied speed plausible: a 150 m
+        // hop after 30 s dark is corrupt at 1 Hz, exactly as before the hook.
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        r.on_fix(&fix(40.00135, -105.0, 4.0, 30));
+        assert_eq!(r.snapshot().distance_m, 0.0);
+        // An explicit interval of 1 (Performance) is the same filter, and a
+        // zero interval clamps to 1 rather than dividing the gate away.
+        r.set_fix_interval_s(1);
+        r.on_fix(&fix(40.0027, -105.0, 4.0, 60));
+        assert_eq!(r.snapshot().distance_m, 0.0);
+        r.set_fix_interval_s(0);
+        r.on_fix(&fix(40.00405, -105.0, 4.0, 90));
+        assert_eq!(r.snapshot().distance_m, 0.0);
+    }
+
+    #[test]
+    fn throttled_auto_lap_still_closes_once_per_boundary() {
+        // ~240 m segments at 60 s: the fifth segment carries the lap past
+        // 1 km; the overshoot stays in the closed lap and the next lap opens
+        // at the closing fix.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        for i in 0..=5u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.00216, -105.0, 4.0, i * 60));
+            if i < 5 {
+                assert_eq!(r.snapshot().lap, 1, "no lap before the boundary (i={})", i);
+            }
+        }
+        let s = r.snapshot();
+        assert_eq!(s.lap, 2);
+        let last = s.last_lap.unwrap();
+        assert_eq!(last.index, 1);
+        assert!(last.distance_m >= AUTO_LAP_DISTANCE_M);
+        assert_eq!(s.lap_distance_m, 0.0);
     }
 
     #[test]

@@ -57,6 +57,27 @@ pub fn command_for(button: Button, state: RecordState) -> Option<RecordCommand> 
     }
 }
 
+/// What BTN3 does in the current run state. The run-view pages only exist
+/// once a run is under way (the idle status face ignores the page entirely —
+/// see [`crate::face`]), so while idle the otherwise-dead page button doubles
+/// as the GNSS-mode selector, keeping the mode surface inside decisions §81's
+/// five-button budget with no chorded or long-press input. Any non-idle state
+/// (recording, paused, finished — all of which show a run view) keeps BTN3 on
+/// pages, which also freezes the GNSS mode for the duration of a run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Btn3Action {
+    CyclePage,
+    CycleGnssMode,
+}
+
+pub fn btn3_action(state: RecordState) -> Btn3Action {
+    match state {
+        RecordState::Idle => Btn3Action::CycleGnssMode,
+        _ => Btn3Action::CyclePage,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,6 +124,16 @@ mod tests {
         );
         assert_eq!(command_for(Button::Lap, RecordState::Idle), None);
         assert_eq!(command_for(Button::Lap, RecordState::Finished), None);
+    }
+
+    #[test]
+    fn btn3_cycles_gnss_mode_only_while_idle() {
+        assert_eq!(btn3_action(RecordState::Idle), Btn3Action::CycleGnssMode);
+        // Every run-view state keeps BTN3 on pages — a mid-run (or post-run)
+        // press must never silently change the GNSS mode.
+        assert_eq!(btn3_action(RecordState::Recording), Btn3Action::CyclePage);
+        assert_eq!(btn3_action(RecordState::Paused), Btn3Action::CyclePage);
+        assert_eq!(btn3_action(RecordState::Finished), Btn3Action::CyclePage);
     }
 
     #[test]
