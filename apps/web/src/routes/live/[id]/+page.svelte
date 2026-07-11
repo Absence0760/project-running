@@ -729,6 +729,7 @@
 					class:on={eta.status === 'on'}
 					class:tight={eta.status === 'tight'}
 					class:behind={eta.status === 'behind'}
+					class:stale={eta.status === 'unknown' && isStale}
 					aria-label={m('live.cutoffTitle')}
 				>
 					<div class="cutoff-head">
@@ -749,7 +750,11 @@
 							{/if}
 						</div>
 						{#if eta.status === 'unknown'}
-							<span class="cutoff-waiting">{m('live.cutoffWaitingSignal')}</span>
+							<span class="cutoff-waiting"
+								>{isStale
+									? m('live.cutoffSignalLost')
+									: m('live.cutoffWaitingSignal')}</span
+							>
 						{:else if eta.marginS != null}
 							<span class="cutoff-chip">
 								{#if eta.status === 'behind'}
@@ -1079,6 +1084,17 @@
 	}
 	.cutoff-card.behind {
 		border-inline-start-color: var(--color-danger);
+	}
+	/* Signal-lost state: the projection is suppressed because the last fix
+	 * is stale, so the card reads amber-delayed — matching the header
+	 * DELAYED badge — rather than a neutral "still computing" grey. */
+	.cutoff-card.stale {
+		border-inline-start-color: var(--color-warning);
+	}
+	.cutoff-card.stale .cutoff-waiting {
+		color: var(--color-warning);
+		font-style: normal;
+		font-weight: 600;
 	}
 	.cutoff-head {
 		display: flex;

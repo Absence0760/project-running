@@ -158,6 +158,67 @@ test.describe('/live/[id] — Next cut-off card (anon)', () => {
 			await expect(card.locator('.cutoff-waiting')).toBeVisible();
 			await expect(card.locator('.cutoff-chip')).toHaveCount(0);
 			await expect(card.locator('.cutoff-eta')).toHaveCount(0);
+			// A LOST-signal fix reads distinctly from a still-connecting one:
+			// the card carries the amber `.stale` delayed state and the
+			// "Signal lost" copy, never the neutral "waiting for a signal"
+			// startup line. This is the lost-signal-runner honesty contract on
+			// the predictive card (matches the header DELAYED badge).
+			await expect(card).toHaveClass(/stale/);
+			await expect(card.locator('.cutoff-waiting')).toContainText(/Signal lost/i);
+			await expect(card.locator('.cutoff-waiting')).not.toContainText(
+				/Waiting for a fresh signal/i
+			);
+		} finally {
+			await deleteRun(runId);
+			await cleanup();
+		}
+	});
+
+	test('fresh single ping (no pace yet) shows the neutral waiting line, not "signal lost"', async ({
+		page
+	}) => {
+		// The other side of the unknown-status branch: exactly one FRESH
+		// ping means the page can't derive a recent pace yet (needs >=2), so
+		// nextCutoffEta returns 'unknown' — but the fix is NOT stale. The
+		// card must read the neutral "waiting for a fresh signal" startup
+		// line and stay OFF the amber delayed state, so a runner who just
+		// started broadcasting is never mislabelled as having lost signal.
+		const { routeId, cleanup } = await seedCourse({ publicRoute: true });
+		const startedAt = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 4_400,
+			duration_s: 3_600,
+			is_public: true,
+			route_id: routeId
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [
+					{
+						...RUNNER_NEAR_START,
+						distance_m: 900,
+						elapsed_s: 600,
+						at: new Date(Date.now() - 2_000).toISOString()
+					}
+				]
+			});
+
+			await page.goto(`/live/${runId}`);
+
+			const card = page.locator('.cutoff-card');
+			await expect(card).toBeVisible({ timeout: 10_000 });
+			await expect(card.locator('.cutoff-waiting')).toBeVisible();
+			await expect(card.locator('.cutoff-waiting')).toContainText(
+				/Waiting for a fresh signal/i
+			);
+			await expect(card.locator('.cutoff-waiting')).not.toContainText(/Signal lost/i);
+			await expect(card).not.toHaveClass(/stale/);
+			// Still no fabricated verdict.
+			await expect(card.locator('.cutoff-chip')).toHaveCount(0);
 		} finally {
 			await deleteRun(runId);
 			await cleanup();

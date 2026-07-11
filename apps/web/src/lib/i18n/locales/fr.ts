@@ -2115,6 +2115,7 @@ export const messages = {
 	"live.cutoffAhead": "{n} d'avance",
 	"live.cutoffBehind": "{n} de retard",
 	"live.cutoffWaitingSignal": "En attente d'un signal récent",
+	"live.cutoffSignalLost": "Signal perdu — arrivée impossible à estimer",
 	"liveEvent.runnerFallback": "Coureur",
 	"liveEvent.pageTitle": "Course en direct — {title}",
 	"liveEvent.eventFallback": "Événement",
