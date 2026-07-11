@@ -16,6 +16,7 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
+use watch_core::settings::WatchSettings;
 use watch_core::trackback::TrackbackView;
 
 /// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, and `nav`
@@ -74,3 +75,10 @@ pub static GNSS_MODE: Watch<CriticalSectionRawMutex, GnssMode, 3> = Watch::new()
 /// face's ~1 Hz animations to a short window after an interaction, so an idle
 /// wrist stops paying the per-second animation redraw. One receiver (the `ui`).
 pub static INTERACTION: Watch<CriticalSectionRawMutex, u32, 1> = Watch::new();
+
+/// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling): the
+/// `ble` task decodes a phone characteristic write (and the sim seeds a demo
+/// frame) and publishes; the `record` task applies each present field to the
+/// recorder + alert engine through their settings-sync setters. `None` means
+/// nothing pushed yet. One receiver (the `record` task).
+pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
