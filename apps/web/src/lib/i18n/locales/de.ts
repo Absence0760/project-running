@@ -4053,6 +4053,7 @@ export const messages = {
 	"clubEvent.cancelPolicyNoRefund": "Diese Anmeldung liegt außerhalb der Erstattungsfrist. Wende dich zum Stornieren an den Veranstalter.",
 	"clubEvent.cancelNoOrder": "Wir konnten keine Anmeldung zum Stornieren finden.",
 	"clubEvent.cancelRefundFailed": "Die Erstattung konnte nicht gestartet werden. Bitte versuche es erneut oder wende dich an den Veranstalter.",
+	"clubEvent.addToCalendar": "In Kalender eintragen",
 	// Session planner (session_planner.md P1)
 	"session.title": "Sessions",
 	"session.new": "Neue Session",
