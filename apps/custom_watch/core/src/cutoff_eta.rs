@@ -247,4 +247,58 @@ mod tests {
     fn cutoff_tight_s_is_thirty_minutes() {
         assert_eq!(CUTOFF_TIGHT_S, 1800);
     }
+
+    #[test]
+    fn nan_pace_is_unknown() {
+        // The `p > 0.0` guard rejects NaN (NaN > 0.0 is false), so a corrupt pace
+        // withholds the ETA rather than fabricating a NaN "on pace" arrival.
+        let legs = [HALFWAY, FINISH_GATE];
+        let e = eta(10000.0, Some(f64::NAN), false, &legs);
+        assert_eq!(e.status, CutoffEtaStatus::Unknown);
+        assert_eq!(e.projected_arrival_elapsed_s, None);
+        assert_eq!(e.margin_s, None);
+        assert!(e.has_cutoff);
+    }
+
+    #[test]
+    fn nan_distance_along_route_has_no_checkpoint() {
+        let legs = [HALFWAY, FINISH_GATE];
+        let e = eta(f64::NAN, Some(180.0), false, &legs);
+        assert!(!e.has_cutoff);
+        assert_eq!(e.status, CutoffEtaStatus::Unknown);
+    }
+
+    #[test]
+    fn stale_beats_a_good_pace_regardless_of_leg_order() {
+        // The staleness gate runs after nearest-selection, so no leg ordering can
+        // sneak a confident ETA past a stale fix.
+        let legs = [FINISH_GATE, HALFWAY];
+        let e = eta(10000.0, Some(180.0), true, &legs);
+        assert_eq!(e.status, CutoffEtaStatus::Unknown);
+        assert_eq!(e.projected_arrival_elapsed_s, None);
+        assert!((e.distance_to_m - 10000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_multi_day_ultra_projects_a_finite_arrival() {
+        let leg = CutoffLeg {
+            cum_dist_m: 386_000.0,
+            limit_elapsed_s: 400_000,
+        };
+        // 200 km in at 200_000 s elapsed, hiking 300 s/km.
+        let e = next_cutoff_eta(200_000.0, 200_000, Some(300.0), false, &[leg]);
+        assert!((e.distance_to_m - 186_000.0).abs() < 1e-9);
+        assert_eq!(e.projected_arrival_elapsed_s, Some(255_800));
+        assert_eq!(e.margin_s, Some(144_200));
+        assert_eq!(e.status, CutoffEtaStatus::On);
+    }
+
+    #[test]
+    fn an_absurd_pace_saturates_instead_of_panicking() {
+        let legs = [HALFWAY, FINISH_GATE];
+        let e = eta(10000.0, Some(1e12), false, &legs);
+        assert_eq!(e.projected_arrival_elapsed_s, Some(u32::MAX));
+        assert_eq!(e.margin_s, Some(i32::MIN));
+        assert_eq!(e.status, CutoffEtaStatus::Behind);
+    }
 }

@@ -399,4 +399,149 @@ mod tests {
         assert!((a.actual_elapsed_s.unwrap() - 3_600.0).abs() < 1e-9);
         assert_eq!(a.projected_elapsed_s, None);
     }
+
+    #[test]
+    fn empty_checkpoints_do_not_panic() {
+        let p = project_runner(&[], &[]);
+        assert!(p.legs.is_empty());
+        assert_eq!(p.status, RunnerStatus::Racing);
+        assert_eq!(p.last_checkpoint_id, None);
+        assert_eq!(p.pace_s_per_m, None);
+    }
+
+    #[test]
+    fn empty_checkpoints_with_orphan_crossings_do_not_panic() {
+        let cr = [ProjectionCrossing {
+            checkpoint_id: "ghost",
+            elapsed_s: 3_600.0,
+        }];
+        let p = project_runner(&[], &cr);
+        assert!(p.legs.is_empty());
+        assert_eq!(p.status, RunnerStatus::Racing);
+        assert_eq!(p.pace_s_per_m, None);
+    }
+
+    #[test]
+    fn a_single_reached_checkpoint_is_finished() {
+        let cps = [ProjectionCheckpoint {
+            id: "only",
+            position_m: 5_000.0,
+            cutoff_elapsed_s: None,
+        }];
+        let cr = [ProjectionCrossing {
+            checkpoint_id: "only",
+            elapsed_s: 1_500.0,
+        }];
+        let p = project_runner(&cps, &cr);
+        assert_eq!(p.status, RunnerStatus::Finished);
+        assert_eq!(p.last_checkpoint_id, Some("only"));
+    }
+
+    #[test]
+    fn nonfinite_or_negative_positions_clamp_and_never_divide_by_zero() {
+        // A bad position clamps to 0; a crossing there leaves covered_m == 0, so
+        // pace stays None instead of dividing by zero.
+        let cps = [
+            ProjectionCheckpoint {
+                id: "nan",
+                position_m: f64::NAN,
+                cutoff_elapsed_s: None,
+            },
+            ProjectionCheckpoint {
+                id: "neg",
+                position_m: -5_000.0,
+                cutoff_elapsed_s: None,
+            },
+        ];
+        let cr = [
+            ProjectionCrossing {
+                checkpoint_id: "nan",
+                elapsed_s: 900.0,
+            },
+            ProjectionCrossing {
+                checkpoint_id: "neg",
+                elapsed_s: 1_000.0,
+            },
+        ];
+        let p = project_runner(&cps, &cr);
+        assert!(p.legs.iter().all(|l| l.position_m.abs() < 1e-9));
+        assert!(p.covered_m.abs() < 1e-9);
+        assert_eq!(p.pace_s_per_m, None);
+        assert!(p.legs.iter().all(|l| l.projected_elapsed_s.is_none()));
+    }
+
+    #[test]
+    fn arriving_exactly_on_a_cutoff_is_tight_not_a_dnf() {
+        // Inclusive cutoff: reaching b at exactly its 7200 s limit is margin 0 →
+        // tight, so the runner is NOT dnf'd for making it on the second.
+        let cr = [
+            ProjectionCrossing {
+                checkpoint_id: "a",
+                elapsed_s: 3_600.0,
+            },
+            ProjectionCrossing {
+                checkpoint_id: "b",
+                elapsed_s: 7_200.0,
+            },
+        ];
+        let p = project_runner(&cps(), &cr);
+        let b = leg(&p, "b");
+        assert!(b.reached);
+        assert!(b.cutoff.unwrap().margin_s.abs() < 1e-9);
+        assert_eq!(b.cutoff.unwrap().status, CutoffStatus::Tight);
+        assert_ne!(p.status, RunnerStatus::Dnf);
+    }
+
+    #[test]
+    fn a_projected_margin_exactly_at_the_tight_threshold_is_safe() {
+        // a at 2700 s over 10k → 0.27 s/m → b projected 5400, margin
+        // 7200 - 5400 = 1800 == CUTOFF_TIGHT_S. The band is exclusive → safe.
+        let cr = [ProjectionCrossing {
+            checkpoint_id: "a",
+            elapsed_s: 2_700.0,
+        }];
+        let p = project_runner(&cps(), &cr);
+        let cutoff = leg(&p, "b").cutoff.unwrap();
+        assert!((cutoff.margin_s - CUTOFF_TIGHT_S as f64).abs() < 1e-9);
+        assert_eq!(cutoff.status, CutoffStatus::Safe);
+    }
+
+    #[test]
+    fn a_multi_day_ultra_projects_without_overflow() {
+        let cps = [
+            ProjectionCheckpoint {
+                id: "mid",
+                position_m: 200_000.0,
+                cutoff_elapsed_s: None,
+            },
+            ProjectionCheckpoint {
+                id: "finish",
+                position_m: 386_000.0,
+                cutoff_elapsed_s: Some(400_000.0),
+            },
+        ];
+        let cr = [ProjectionCrossing {
+            checkpoint_id: "mid",
+            elapsed_s: 200_000.0, // 1 s/m power-hike
+        }];
+        let p = project_runner(&cps, &cr);
+        let finish = leg(&p, "finish");
+        let projected = finish.projected_elapsed_s.unwrap();
+        assert!(projected.is_finite());
+        assert!((projected - 386_000.0).abs() < 1e-6);
+        assert_eq!(finish.cutoff.unwrap().status, CutoffStatus::Safe);
+    }
+
+    #[test]
+    fn more_checkpoints_than_capacity_truncate_without_panic() {
+        let cps: [ProjectionCheckpoint<'static>; 40] =
+            core::array::from_fn(|i| ProjectionCheckpoint {
+                id: "x",
+                position_m: (i as f64) * 1_000.0,
+                cutoff_elapsed_s: None,
+            });
+        let p = project_runner(&cps, &[]);
+        assert_eq!(p.legs.len(), MAX_ROADBOOK_LEGS);
+        assert_eq!(p.status, RunnerStatus::Racing);
+    }
 }
