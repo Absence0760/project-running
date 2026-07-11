@@ -4051,6 +4051,7 @@ export const messages = {
 	"clubEvent.cancelPolicyNoRefund": "Cette inscription a dépassé le délai de remboursement. Contactez l’organisateur pour annuler.",
 	"clubEvent.cancelNoOrder": "Nous n’avons trouvé aucune inscription à annuler.",
 	"clubEvent.cancelRefundFailed": "Le remboursement n’a pas pu être lancé. Veuillez réessayer ou contacter l’organisateur.",
+	"clubEvent.addToCalendar": "Ajouter au calendrier",
 	// Session planner (session_planner.md P1)
 	"session.title": "Séances",
 	"session.new": "Nouvelle séance",
