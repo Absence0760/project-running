@@ -53,7 +53,7 @@ Working from zero — no AWS account, no domain, no AWS CLI:
 
 **0.2 — Domain.** Either register one fresh (Porkbun, Namecheap, Cloudflare Registrar — all fine; you don't need Route 53 to register, only to host DNS) or pick an apex you already own. The default examples use `threkir.com` — search the repo for it and swap if you're using something else. The places that hardcode it are:
 - `infra/dns/` — set `apex_domain` in the committed `infra/dns/terraform.tfvars` (which also carries `email_auth_records`, the Resend DKIM/SPF/MX/DMARC set — public DNS data, Terraformed so a DR rebuild restores mail deliverability instead of dropping it)
-- `infra/envs/{preview,prod}/terraform.tfvars` — set `apex_domain` there
+- `infra/envs/{preview,prod}/terraform.tfvars` — set `apex_domain` there (canonical copies live in the private estate repo as `../infra-secrets/running/{preview,prod}.tfvars`, symlinked into place — see § 4/5)
 - `infra/envs/preview/variables.tf` + `infra/envs/prod/variables.tf` — `default = "threkir.com"` if you want a fallback
 
 **0.3 — Workstation tooling.**
@@ -134,7 +134,11 @@ If a secret is unset, the workflow writes an empty string into `.env` and `svelt
 
 ```bash
 cd ../envs/preview
-cp terraform.tfvars.example terraform.tfvars
+# The canonical tfvars lives in the PRIVATE estate repo (plaintext — the values
+# are non-secret: publishable key, public URLs, alert emails; the private repo
+# keeps them off public GitHub and makes any workstation deploy-ready). Symlink
+# it in; fall back to cp-from-example only if you're not using the estate repo.
+ln -s ../../../../infra-secrets/running/preview.tfvars terraform.tfvars
 $EDITOR terraform.tfvars                          # fill in supabase URL + anon key
 terraform init
 terraform apply
@@ -185,7 +189,7 @@ Same flow, in `envs/prod/` (ciphertext → `../infra-secrets/running/prod.sops.y
 
 ```bash
 cd ../prod
-cp terraform.tfvars.example terraform.tfvars
+ln -s ../../../../infra-secrets/running/prod.tfvars terraform.tfvars   # canonical copy in the estate repo (see § 4)
 $EDITOR terraform.tfvars
 terraform init
 terraform apply
