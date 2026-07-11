@@ -86,7 +86,12 @@ module "web" {
   # which at ~3k input + ~1k output × Anthropic pricing puts the
   # absolute burst spend at a known ceiling. Tightened for a
   # cost-minimized launch; raise once we have real traffic data.
-  lambda_reserved_concurrency = 20
+  # Var-driven (default 20) so a tfvars override can set -1 while the
+  # account's Lambda concurrency quota is still the new-account 10 —
+  # reservations need >=10 left unreserved, so under a 10 pool ANY
+  # reservation is rejected (and the 10-wide pool is itself the
+  # tighter bill cap until the quota raise lands).
+  lambda_reserved_concurrency = var.lambda_reserved_concurrency
 
   # Self-hosted GraphHopper engine URL for server-side route generation.
   # Non-secret (an internal engine URL), so it's a plain var, not sops.
@@ -101,8 +106,9 @@ module "web" {
   # Caps the generate-route Lambda's concurrency. Each invocation fans
   # out several round_trip calls at the GraphHopper engine, so this is
   # the engine's load ceiling. 25 is comfortable for launch traffic;
-  # raise once real usage is observed.
-  generate_route_reserved_concurrency = 25
+  # raise once real usage is observed. Var-driven for the same
+  # quota-pending override as lambda_reserved_concurrency above.
+  generate_route_reserved_concurrency = var.generate_route_reserved_concurrency
 
   # Prod tightens the coach WAF per-IP rate limit below the module
   # default (100). A free user's coach cap is 2/day and a pro's 10/day
