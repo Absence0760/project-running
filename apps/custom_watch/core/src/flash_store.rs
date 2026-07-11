@@ -100,6 +100,12 @@ struct SlotMeta {
     run_seq: u32,
     size: u32,
     start_uptime_s: u32,
+    /// The phone has pulled this run's whole blob. Eviction sacrifices a synced
+    /// run before a still-unsynced one, so a finished-but-unsynced run is not
+    /// silently overwritten. RAM-only — not persisted across a reboot (that is a
+    /// wire-format v2 job), so a run recovered from a prior power cycle starts
+    /// unsynced and is protected until the phone re-pulls it.
+    synced: bool,
 }
 
 /// In-RAM index of which slot holds which committed run.
@@ -141,6 +147,7 @@ impl SlotDir {
                 run_seq: r.run_seq,
                 size: r.size,
                 start_uptime_s: r.start_uptime_s,
+                synced: false,
             });
         }
         dir
@@ -169,8 +176,19 @@ impl SlotDir {
             run_seq,
             size,
             start_uptime_s,
+            synced: false,
         });
         slot
+    }
+
+    /// Mark a committed run as fully pulled by the phone, so [`place`](Self::place)
+    /// evicts it before a still-unsynced run. No-op if the id isn't held.
+    pub fn mark_synced(&mut self, run_seq: u32) {
+        for s in self.slots.iter_mut().flatten() {
+            if s.run_seq == run_seq {
+                s.synced = true;
+            }
+        }
     }
 
     fn victim(&self) -> usize {
@@ -179,7 +197,25 @@ impl SlotDir {
                 return i;
             }
         }
-        // All full: evict the lowest seq (the oldest committed run).
+        // All full. Evict the oldest SYNCED run (lowest seq the phone has already
+        // pulled) so a finished-but-unsynced run is never silently overwritten
+        // while any synced run still occupies a slot.
+        let mut synced_victim: Option<(usize, u32)> = None;
+        for (i, m) in self
+            .slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.map(|m| (i, m)))
+        {
+            if m.synced && synced_victim.is_none_or(|(_, seq)| m.run_seq < seq) {
+                synced_victim = Some((i, m.run_seq));
+            }
+        }
+        if let Some((i, _)) = synced_victim {
+            return i;
+        }
+        // Nothing synced: fall back to the oldest run overall — the region can't
+        // hold more than SLOT_COUNT, so an unsynced run must go. Best-effort.
         let mut oldest = 0;
         for i in 1..SLOT_COUNT {
             if self.slots[i].map(|m| m.run_seq) < self.slots[oldest].map(|m| m.run_seq) {
@@ -203,12 +239,27 @@ impl SlotDir {
 
     /// Manifest entries for every committed run, in slot order.
     pub fn manifest(&self) -> Vec<ManifestEntry, SLOT_COUNT> {
+        self.manifest_at(u32::MAX)
+    }
+
+    /// Manifest entries with each run's `start_uptime_s` clamped to the current
+    /// `watch_uptime_s`.
+    ///
+    /// The watch has no RTC, so the phone dates a run as
+    /// `now - (watch_uptime_s - start_uptime_s)`. A run recovered from a PRIOR
+    /// power cycle carries a `start_uptime_s` from that boot's epoch, which can
+    /// exceed the current (post-reboot) uptime and date the run in the FUTURE.
+    /// Clamping `start_uptime_s <= watch_uptime_s` makes the offset non-negative,
+    /// so a recovered run reads as "around this power-on" (under-aged) rather than
+    /// in the future. Precise wall-clock dating of a prior-boot run needs the
+    /// phone to fall back to the footer's elapsed time — a phone-side follow-up.
+    pub fn manifest_at(&self, watch_uptime_s: u32) -> Vec<ManifestEntry, SLOT_COUNT> {
         let mut out = Vec::new();
         for s in self.slots.iter().flatten() {
             let _ = out.push(ManifestEntry {
                 run_seq: s.run_seq,
                 size: s.size,
-                start_uptime_s: s.start_uptime_s,
+                start_uptime_s: s.start_uptime_s.min(watch_uptime_s),
             });
         }
         out
@@ -735,5 +786,153 @@ mod tests {
         assert_eq!(dir.place(seq, 200, 5), 3, "evicts slot 3 (seq 0)");
         assert_eq!(dir.find(0), None);
         assert_eq!(dir.find(4), Some((3, 200)));
+    }
+
+    #[test]
+    fn eviction_sacrifices_a_synced_run_before_an_unsynced_one() {
+        // Four runs, seqs 0..=3. The oldest (seq 0) is UNSYNCED; a newer run
+        // (seq 2) has been fully pulled by the phone. A fifth run must evict the
+        // synced seq 2, NOT the older-but-unsynced seq 0.
+        let mut dir = SlotDir::new();
+        dir.place(0, 100, 10);
+        dir.place(1, 100, 11);
+        dir.place(2, 100, 12);
+        dir.place(3, 100, 13);
+        dir.mark_synced(2);
+        assert_eq!(
+            dir.place(4, 100, 14),
+            2,
+            "evicts the synced run, not the oldest"
+        );
+        assert_eq!(dir.find(2), None, "the synced run was the victim");
+        assert_eq!(
+            dir.find(0),
+            Some((0, 100)),
+            "the unsynced oldest run survives"
+        );
+        assert_eq!(dir.find(4), Some((2, 100)));
+    }
+
+    #[test]
+    fn eviction_prefers_the_oldest_synced_run() {
+        // Two synced runs (seqs 1 and 3): eviction picks the lower-seq synced one.
+        let mut dir = SlotDir::new();
+        for seq in 0..4 {
+            dir.place(seq, 100, seq);
+        }
+        dir.mark_synced(3);
+        dir.mark_synced(1);
+        assert_eq!(
+            dir.place(4, 100, 14),
+            1,
+            "lowest-seq synced run is the victim"
+        );
+        assert_eq!(dir.find(1), None);
+        assert_eq!(
+            dir.find(3),
+            Some((3, 100)),
+            "the newer synced run survives this round"
+        );
+    }
+
+    #[test]
+    fn eviction_falls_back_to_oldest_when_nothing_is_synced() {
+        // With no synced run to sacrifice, the region is physically full, so the
+        // oldest (lowest-seq) run must go — the unchanged best-effort fallback.
+        let mut dir = SlotDir::new();
+        for seq in 0..4 {
+            dir.place(seq, 100, seq);
+        }
+        assert_eq!(dir.place(4, 100, 14), 0, "no synced run → evict the oldest");
+        assert_eq!(dir.find(0), None);
+    }
+
+    #[test]
+    fn recovered_runs_start_unsynced_and_are_protected() {
+        // A run recovered from a prior power cycle carries no synced bit, so it
+        // is protected: a fresh run can't evict it while it stays unsynced —
+        // unless every slot is an unsynced recovered run (the fallback).
+        let recovered = [
+            Some(RecoveredRun {
+                run_seq: 0,
+                size: 100,
+                start_uptime_s: 1,
+            }),
+            Some(RecoveredRun {
+                run_seq: 1,
+                size: 100,
+                start_uptime_s: 2,
+            }),
+            Some(RecoveredRun {
+                run_seq: 2,
+                size: 100,
+                start_uptime_s: 3,
+            }),
+            None,
+        ];
+        let mut dir = SlotDir::from_recovered(recovered);
+        // Slot 3 is free, so a new run fills it — nothing evicted.
+        assert_eq!(dir.place(3, 100, 4), 3);
+        // Now full and all unsynced: the next run falls back to the oldest.
+        assert_eq!(dir.place(4, 100, 5), 0);
+        assert_eq!(dir.find(0), None);
+    }
+
+    #[test]
+    fn mark_synced_ignores_an_unknown_run() {
+        let mut dir = SlotDir::new();
+        dir.place(7, 100, 10);
+        dir.mark_synced(999); // not held — no panic, no effect
+        dir.place(8, 100, 11);
+        dir.mark_synced(8); // 8 is the only synced run
+        dir.place(9, 100, 12);
+        dir.place(10, 100, 13);
+        let slot_of_8 = dir.find(8).expect("8 is held").0;
+        // Full: the synced run (8) is the victim, and the unknown mark_synced(999)
+        // left seq 7 unsynced and therefore protected.
+        assert_eq!(dir.place(11, 100, 14), slot_of_8);
+        assert_eq!(dir.find(8), None);
+        assert_eq!(
+            dir.find(7),
+            Some((0, 100)),
+            "the unsynced oldest run survives"
+        );
+    }
+
+    #[test]
+    fn manifest_at_clamps_a_prior_boot_start_out_of_the_future() {
+        // A run recovered from a prior boot carries start=3600; the post-reboot
+        // uptime is only 100. Unclamped, the phone would date it in the future.
+        let recovered = [
+            Some(RecoveredRun {
+                run_seq: 5,
+                size: 200,
+                start_uptime_s: 3600,
+            }),
+            None,
+            None,
+            None,
+        ];
+        let dir = SlotDir::from_recovered(recovered);
+        // manifest_at clamps start to the current uptime → never > watch_uptime_s.
+        let clamped = dir.manifest_at(100);
+        assert_eq!(
+            clamped[0].start_uptime_s, 100,
+            "clamped to the current uptime"
+        );
+        // The unclamped manifest still carries the raw (prior-boot) start.
+        assert_eq!(dir.manifest()[0].start_uptime_s, 3600);
+    }
+
+    #[test]
+    fn manifest_at_leaves_a_same_session_start_untouched() {
+        // A run recorded THIS session has start <= uptime, so the clamp is a no-op
+        // and it dates correctly; only the future-dating recovered case is changed.
+        let mut dir = SlotDir::new();
+        dir.place(1, 100, 40);
+        dir.place(2, 100, 900);
+        let m = dir.manifest_at(1000);
+        assert_eq!(m[0].start_uptime_s, 40);
+        assert_eq!(m[1].start_uptime_s, 900);
     }
 }

@@ -163,11 +163,28 @@ impl<'d> RunStore<'d> {
         );
     }
 
-    /// Manifest entries for every committed run this power cycle. Consumed by
-    /// the BLE run-sync task; unused in the default (non-`ble`) build.
+    /// Manifest entries for every committed run this power cycle, each run's
+    /// `start_uptime_s` clamped to `watch_uptime_s` so a run recovered from a
+    /// prior power cycle can't date in the future (see
+    /// [`SlotDir::manifest_at`]). Consumed by the BLE run-sync task; unused in
+    /// the default (non-`ble`) build.
     #[cfg_attr(not(feature = "ble"), allow(dead_code))]
-    pub fn manifest(&self) -> Vec<ManifestEntry, SLOT_COUNT> {
-        self.dir.manifest()
+    pub fn manifest_at(&self, watch_uptime_s: u32) -> Vec<ManifestEntry, SLOT_COUNT> {
+        self.dir.manifest_at(watch_uptime_s)
+    }
+
+    /// Once the phone has pulled through a run's blob end (`next_offset` is its
+    /// read cursor after the chunk just served), mark the run synced so eviction
+    /// sacrifices it before a still-unsynced run. RAM-only, best-effort (L4):
+    /// the synced bit is not persisted across a reboot. Consumed by the BLE
+    /// run-sync task; unused in the default build.
+    #[cfg_attr(not(feature = "ble"), allow(dead_code))]
+    pub fn mark_synced_if_complete(&mut self, run_seq: u32, next_offset: u32) {
+        if let Some((_, size)) = self.dir.find(run_seq) {
+            if next_offset >= size {
+                self.dir.mark_synced(run_seq);
+            }
+        }
     }
 
     /// Copy up to `buf.len()` bytes of run `run_seq`'s blob starting at

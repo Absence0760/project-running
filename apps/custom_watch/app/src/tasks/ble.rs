@@ -167,7 +167,10 @@ mod imp {
     /// Build the manifest characteristic value: header (run count + the watch
     /// uptime anchor) followed by one entry per finished run.
     async fn build_manifest(store: &SharedStore, uptime_s: u32) -> Vec<u8, MANIFEST_CAP> {
-        let entries = store.lock().await.manifest();
+        // Clamp each run's start to the current uptime so a run recovered from a
+        // prior power cycle can't advertise a start ahead of `uptime_s` and date
+        // in the future on the phone (run_flash::manifest_at).
+        let entries = store.lock().await.manifest_at(uptime_s);
         let mut buf: Vec<u8, MANIFEST_CAP> = Vec::new();
         let header = ManifestHeader {
             run_count: entries.len() as u8,
@@ -314,11 +317,21 @@ mod imp {
                             // or past-the-end, so the phone isn't left waiting.
                             let want = (req.len as usize).min(FRAME_CAP);
                             let mut scratch = [0u8; FRAME_CAP];
-                            let n = store.lock().await.read_chunk(
-                                req.run_seq,
-                                req.offset,
-                                &mut scratch[..want],
-                            );
+                            let n = {
+                                let mut guard = store.lock().await;
+                                let n =
+                                    guard.read_chunk(req.run_seq, req.offset, &mut scratch[..want]);
+                                // Reaching the blob end means the phone has pulled
+                                // this whole run: mark it synced so eviction keeps
+                                // a still-unsynced run over it.
+                                if n > 0 {
+                                    guard.mark_synced_if_complete(
+                                        req.run_seq,
+                                        req.offset + n as u32,
+                                    );
+                                }
+                                n
+                            };
                             let mut out: Vec<u8, FRAME_CAP> = Vec::new();
                             let _ = out.extend_from_slice(&scratch[..n]);
                             if let Err(e) = server.link.run_chunk_notify(&conn, &out) {
