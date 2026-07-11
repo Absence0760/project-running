@@ -63,3 +63,63 @@ double? longestCompletedLongRunMetres(
   }
   return max;
 }
+
+/// A planned workout as far as the distance-banked stat cares.
+class DistanceWorkout {
+  final String kind;
+  final double? targetDistanceM;
+  final String? completedRunId;
+  final bool? manuallyCompleted;
+  final String? skippedAt;
+  const DistanceWorkout({
+    required this.kind,
+    required this.targetDistanceM,
+    this.completedRunId,
+    this.manuallyCompleted,
+    this.skippedAt,
+  });
+}
+
+/// Plan-wide distance banked vs planned, in metres.
+class PlanDistanceProgress {
+  /// Total metres actually banked so far — completed workouts only,
+  /// preferring the linked run's real distance over the planned target.
+  final double completedMetres;
+
+  /// Total metres the plan asks for — every non-rest workout still on the
+  /// books (skipped workouts drop out, mirroring the progress ring).
+  final double plannedMetres;
+  const PlanDistanceProgress(this.completedMetres, this.plannedMetres);
+}
+
+/// Plan-wide distance banked vs planned, in metres. The workout-count
+/// progress ring can read 80% off a run of short easy days while the real
+/// training volume lags; this is the mileage view of the same plan.
+///
+/// [plannedMetres] sums every non-rest, non-skipped workout's target — a
+/// deliberately skipped session leaves the denominator (same rule as the
+/// ring) so a skipped long run doesn't make the runner look permanently
+/// behind. [completedMetres] sums completed workouts, preferring the linked
+/// run's actual distance (looked up in [actualById]) over the planned
+/// target — so over- and under-running both show honestly, and it can
+/// exceed [plannedMetres] when the runner banks more than prescribed.
+PlanDistanceProgress planDistanceBanked(
+  List<DistanceWorkout> workouts, [
+  Map<String, double> actualById = const {},
+]) {
+  double completedMetres = 0;
+  double plannedMetres = 0;
+  for (final w in workouts) {
+    if (w.kind == 'rest') continue;
+    final skipped = w.skippedAt != null;
+    final completed = w.manuallyCompleted == true || w.completedRunId != null;
+    if (!skipped) plannedMetres += w.targetDistanceM ?? 0;
+    if (completed) {
+      final actual =
+          w.completedRunId != null ? actualById[w.completedRunId] : null;
+      completedMetres +=
+          (actual != null && actual > 0) ? actual : (w.targetDistanceM ?? 0);
+    }
+  }
+  return PlanDistanceProgress(completedMetres, plannedMetres);
+}
