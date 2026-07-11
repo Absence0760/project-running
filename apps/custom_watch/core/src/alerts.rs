@@ -267,6 +267,12 @@ mod tests {
             pacer: None,
             cutoff: None,
             race_prediction: None,
+            pace_bucket_m: [0.0; crate::record::PACE_BUCKET_COUNT],
+            training_stress: None,
+            band: None,
+            gear: None,
+            roadbook: None,
+            fuel: None,
         }
     }
 

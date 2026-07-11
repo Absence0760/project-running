@@ -26,12 +26,14 @@ use crate::course::NavStatus;
 use crate::cutoff_eta::CutoffEtaStatus;
 use crate::elevation;
 use crate::fix::Fix;
+use crate::gear_wear::GearWearStatus;
 use crate::gnss_mode::GnssMode;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RecordState, Snapshot};
+use crate::roadbook::CutoffStatus;
 use crate::trackback::{self, TrackbackView};
 
 pub const COLS: usize = 21;
@@ -261,12 +263,18 @@ pub fn page_rows(
                 mode,
             ),
             Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
+            Page::Splits => splits_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RacePredictor => race_predictor_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::TrainingLoad => training_load_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::DistanceBand => distance_band_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::CutoffEta => cutoff_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Roadbook => roadbook_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Fuel => fuel_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Nav => nav_page(nav, fix, tag, uptime_s, animate, mode),
             Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate, mode),
+            Page::GearWear => gear_wear_glance(fix, snap, tag, uptime_s, animate, mode),
         },
     }
 }
@@ -288,12 +296,18 @@ pub fn page_icons(
         Page::Distance
         | Page::Pace
         | Page::Lap
+        | Page::Splits
         | Page::Zones
         | Page::Pacer
         | Page::RacePredictor
+        | Page::TrainingLoad
+        | Page::DistanceBand
         | Page::CutoffEta
+        | Page::Roadbook
+        | Page::Fuel
         | Page::Nav
-        | Page::BackToStart => [None; ROWS],
+        | Page::BackToStart
+        | Page::GearWear => [None; ROWS],
     }
 }
 
@@ -369,6 +383,60 @@ pub fn page_hero(
                 row
             }
         },
+        // The Splits + DistanceBand heroes both headline the run distance (the
+        // number their rows contextualise); the analytics pages headline their
+        // one derived value, `--` when inactive.
+        Page::Splits => glance_hero(GlanceMetric::Distance, snap),
+        Page::DistanceBand => glance_hero(GlanceMetric::Distance, snap),
+        Page::TrainingLoad => {
+            let mut row = Row::new();
+            match snap.training_stress {
+                Some(s) => {
+                    let _ = write!(row, "{}", (s as u32).min(9999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::Roadbook => {
+            let mut row = Row::new();
+            match snap.roadbook.filter(|rb| rb.upcoming_len > 0) {
+                Some(rb) => {
+                    let km = (rb.upcoming[0].cum_dist_m as f64 / 1000.0).min(999.99);
+                    let _ = write!(row, "{:.2}", km);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::Fuel => {
+            let mut row = Row::new();
+            match snap.fuel.and_then(|f| f.carry) {
+                Some(c) => {
+                    let _ = write!(row, "{}", (c.carbs_g as u32).min(9999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Page::GearWear => {
+            let mut row = Row::new();
+            match snap.gear.and_then(|g| g.fraction) {
+                Some(fr) => {
+                    let _ = write!(row, "{}", ((fr * 100.0) as u32).min(999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
         Page::BackToStart => {
             let mut row = Row::new();
             match trackback_distance(tb) {
@@ -772,6 +840,299 @@ fn cutoff_glance(
                 }
                 None => {
                     let _ = write!(rows[5], "{:<5}--", "ETA");
+                }
+            }
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// Width of a full pace-bucket bar, in cells — the space left after `Bn ` and
+/// the km field (same budget as the zone bars).
+const SPLIT_BAR_CELLS: u32 = 6;
+
+/// The splits glance: distance banked in each pace bucket (`B1` slowest ..
+/// `B6` fastest, from [`crate::pace_segments`]), each with a bar scaled to the
+/// fullest bucket — the pace analogue of the zones page. Total distance rides
+/// the hero. An all-zero run (no distance yet) draws the labels only.
+#[allow(clippy::too_many_arguments)]
+fn splits_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    // Six buckets fill rows 2..=7 (no header row — the GPS row still owns 8),
+    // scaled to the fullest so the dominant pace always reads at full width.
+    let max = snap.pace_bucket_m.iter().copied().fold(0.0_f64, f64::max);
+    for (i, &d) in snap.pace_bucket_m.iter().enumerate() {
+        let row = &mut rows[2 + i];
+        let km = (d / 1000.0).min(99.99);
+        let _ = write!(row, "B{} {:>6.2}K ", i + 1, km);
+        let cells = if max <= 0.0 {
+            0
+        } else {
+            (d * SPLIT_BAR_CELLS as f64 / max + 0.5) as usize
+        };
+        for _ in 0..cells {
+            let _ = row.push('#');
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The training-load glance: this run's single-run stress up large in the hero
+/// (drawn by [`page_hero`]), with the distance + moving time it is derived
+/// from. The rolling CTL/ATL/TSB needs multi-day history the watch doesn't
+/// hold, so it reads an honest "ROLLING: SYNC" rather than a fabricated trend.
+/// "LOAD --" until the run accrues distance.
+#[allow(clippy::too_many_arguments)]
+fn training_load_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.training_stress {
+        None => {
+            let _ = write!(rows[2], "LOAD --");
+            let _ = write!(rows[4], "NEED DISTANCE");
+        }
+        Some(_) => {
+            let _ = write!(rows[2], "LOAD  POINTS");
+            let km = (snap.distance_m / 1000.0).min(9999.99);
+            let _ = write!(rows[4], "{:<7}{:.2} KM", "DIST", km);
+            let (h, m, s) = hms(snap.moving_s);
+            let _ = write!(rows[5], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
+            let _ = write!(rows[6], "{:<7}SYNC", "ROLLING");
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The distance-band glance: the run distance up large in the hero, the race
+/// band it falls in as the label, and the band's window. "NO RACE BAND" in a
+/// gap between bands (a 15 km run matches nothing).
+#[allow(clippy::too_many_arguments)]
+fn distance_band_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    let km = (snap.distance_m / 1000.0).min(9999.99);
+    match snap.band {
+        None => {
+            let _ = write!(rows[2], "BAND --");
+            let _ = write!(rows[4], "NO RACE BAND");
+            let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
+        }
+        Some(b) => {
+            let _ = write!(rows[2], "{:<11}{}", "BAND", b.label);
+            let lo = (b.min_m / 1000.0) as u32;
+            match b.max_m {
+                Some(max) => {
+                    let _ = write!(rows[4], "{:<6}{}-{} KM", "RANGE", lo, (max / 1000.0) as u32);
+                }
+                None => {
+                    let _ = write!(rows[4], "{:<6}{}+ KM", "RANGE", lo);
+                }
+            }
+            let _ = write!(rows[5], "{:<6}{:.2} KM", "DIST", km);
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// A one-glyph cutoff flag for a roadbook row: ` ` safe, `!` tight, `X` miss,
+/// `.` no cutoff on that checkpoint.
+fn cutoff_flag(status: Option<CutoffStatus>) -> char {
+    match status {
+        Some(CutoffStatus::Safe) => ' ',
+        Some(CutoffStatus::Tight) => '!',
+        Some(CutoffStatus::Miss) => 'X',
+        None => '.',
+    }
+}
+
+/// The roadbook glance: the total checkpoint count beside the label, then the
+/// next few checkpoints ahead of the current position — each its distance,
+/// projected arrival clock, and safe/tight/miss cutoff flag. The next
+/// checkpoint's distance rides the hero. "NO ROADBOOK" when none is loaded.
+#[allow(clippy::too_many_arguments)]
+fn roadbook_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match &snap.roadbook {
+        None => {
+            let _ = write!(rows[2], "ROADBOOK --");
+            let _ = write!(rows[4], "NO ROADBOOK");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(rb) => {
+            let _ = write!(rows[2], "{:<11}{} CP", "ROADBOOK", rb.total.min(99));
+            for i in 0..(rb.upcoming_len as usize).min(rb.upcoming.len()) {
+                let leg = rb.upcoming[i];
+                let km = (leg.cum_dist_m as f64 / 1000.0).min(999.99);
+                let (h, m, s) = hms(leg.projected_elapsed_s);
+                let _ = write!(
+                    rows[3 + i],
+                    "{:>6.2}K {}:{:02}:{:02} {}",
+                    km,
+                    h.min(99),
+                    m,
+                    s,
+                    cutoff_flag(leg.cutoff)
+                );
+            }
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The fuel glance: the carbs to carry to the next aid up large in the hero,
+/// with the fluid to carry and the whole-plan totals. "NO FUEL PLAN" without a
+/// roadbook; "LAST AID PASSED" once past the final refill.
+#[allow(clippy::too_many_arguments)]
+fn fuel_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match &snap.fuel {
+        None => {
+            let _ = write!(rows[2], "FUEL --");
+            let _ = write!(rows[4], "NO FUEL PLAN");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(f) => {
+            let _ = write!(rows[2], "FUEL  TO NEXT AID");
+            match f.carry {
+                Some(c) => {
+                    let _ = write!(rows[4], "{:<7}{} G", "CARB", (c.carbs_g as u32).min(9999));
+                    let _ = write!(
+                        rows[5],
+                        "{:<7}{} ML",
+                        "FLUID",
+                        (c.fluid_ml as u32).min(99999)
+                    );
+                }
+                None => {
+                    let _ = write!(rows[4], "{:<7}--", "CARB");
+                    let _ = write!(rows[5], "LAST AID PASSED");
+                }
+            }
+            let _ = write!(
+                rows[6],
+                "{:<7}{}G {}ML",
+                "TOTAL",
+                (f.total_carbs_g as u32).min(9999),
+                (f.total_fluid_ml as u32).min(99999)
+            );
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The gear-wear glance: the active shoe's wear percent up large in the hero,
+/// the OK/DUE/WORN verdict beside the label, and the accumulated distance vs
+/// its target. "NO GEAR SYNCED" when no gear is configured.
+#[allow(clippy::too_many_arguments)]
+fn gear_wear_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.gear {
+        None => {
+            let _ = write!(rows[2], "GEAR --");
+            let _ = write!(rows[4], "NO GEAR SYNCED");
+        }
+        Some(g) => {
+            let word = match g.status {
+                GearWearStatus::Untracked => "UNTRACKED",
+                GearWearStatus::Ok => "OK",
+                GearWearStatus::Due => "DUE",
+                GearWearStatus::Worn => "WORN",
+            };
+            let _ = write!(rows[2], "{:<11}{}", "GEAR", word);
+            match g.fraction {
+                Some(fr) => {
+                    let _ = write!(rows[4], "{:<6}{} %", "WEAR", ((fr * 100.0) as u32).min(999));
+                }
+                None => {
+                    let _ = write!(rows[4], "{:<6}--", "WEAR");
                 }
             }
         }
@@ -1286,6 +1647,12 @@ mod tests {
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
             race_prediction: None,
+            pace_bucket_m: [0.0; crate::record::PACE_BUCKET_COUNT],
+            training_stress: None,
+            band: None,
+            gear: None,
+            roadbook: None,
+            fuel: None,
         }
     }
 
@@ -1311,6 +1678,102 @@ mod tests {
         // Idle status face at extreme values.
         for row in face_rows(Some(&fix()), Some(220), None, Some(&e), 999_999) {
             assert!(row.len() <= COLS, "status row too wide: {:?}", row);
+        }
+    }
+
+    #[test]
+    fn every_page_fits_the_grid_active_and_inactive() {
+        use crate::record::{FuelCarryView, FuelView, RoadbookLegView, RoadbookView};
+        // An active run with every new page's data at extreme values.
+        let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
+        rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
+        rec.moving_s = 999 * 3600 + 59 * 60 + 59;
+        rec.avg_pace_s_per_km = Some(99 * 60 + 59);
+        rec.current_pace_s_per_km = Some(99 * 60 + 59);
+        rec.gap_s_per_km = Some(99 * 60 + 59);
+        rec.pace_bucket_m = [12_345.6; crate::record::PACE_BUCKET_COUNT];
+        rec.training_stress = Some(9999.0);
+        rec.band = crate::distance_bands::band_for_distance(42_200.0);
+        rec.gear = Some(crate::gear_wear::gear_wear(
+            Some(1_200_000.0),
+            Some(800_000.0),
+        ));
+        rec.roadbook = Some(RoadbookView {
+            total: 99,
+            upcoming: [RoadbookLegView {
+                cum_dist_m: 999_990.0,
+                projected_elapsed_s: 99 * 3600 + 59 * 60 + 59,
+                cutoff: Some(CutoffStatus::Miss),
+            }; crate::record::ROADBOOK_WINDOW],
+            upcoming_len: crate::record::ROADBOOK_WINDOW as u8,
+        });
+        rec.fuel = Some(FuelView {
+            carry: Some(FuelCarryView {
+                carbs_g: 9999.0,
+                fluid_ml: 99_999.0,
+            }),
+            total_carbs_g: 9999.0,
+            total_fluid_ml: 999_999.0,
+        });
+        let e = elev(99_999.0, 99_999.0, 99_999.0);
+
+        let mut p = Page::default();
+        for _ in 0..20 {
+            let rows = page_rows(
+                p,
+                Some(&fix()),
+                Some(220),
+                Some(&rec),
+                Some(&e),
+                NavView::NoCourse,
+                None,
+                42,
+                true,
+            );
+            for row in rows {
+                assert!(
+                    row.len() <= COLS,
+                    "active page {:?} row too wide: {:?}",
+                    p,
+                    row
+                );
+            }
+            if let Some(h) = page_hero(p, Some(220), Some(&rec), None) {
+                assert!(
+                    h.len() <= COLS,
+                    "active page {:?} hero too wide: {:?}",
+                    p,
+                    h
+                );
+            }
+            p = p.next();
+        }
+
+        // Inactive: a short run with no pushed roadbook / fuel / gear — every new
+        // page must render its honest empty state and still fit the grid.
+        let inactive = snapshot(RecordState::Recording, 15_000.0);
+        let mut p = Page::default();
+        for _ in 0..20 {
+            let rows = page_rows(
+                p,
+                None,
+                None,
+                Some(&inactive),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                true,
+            );
+            for row in rows {
+                assert!(
+                    row.len() <= COLS,
+                    "inactive page {:?} row too wide: {:?}",
+                    p,
+                    row
+                );
+            }
+            p = p.next();
         }
     }
 

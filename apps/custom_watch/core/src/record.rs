@@ -17,13 +17,22 @@
 //! spacing of successive fixes.
 
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
+use crate::distance_bands::{band_for_distance, DistanceBand};
 use crate::fix::Fix;
+use crate::fuel_plan::{
+    build_fuel_plan, FuelLegInput, FuelPlanOptions, DEFAULT_CARBS_PER_HOUR_G,
+    DEFAULT_FLUID_PER_HOUR_ML,
+};
+use crate::gear_wear::{gear_wear, GearWear};
 use crate::grade_adjusted_pace::GapEstimator;
 use crate::hr_zones::{
     self, ZoneCutoffs, DEFAULT_MAX_HR_BPM, MAX_HR_PLAUSIBLE_MAX, MAX_HR_PLAUSIBLE_MIN, ZONE_COUNT,
 };
+use crate::pace_segments::{pace_bucket_for_speed, ActivityKind};
 use crate::pacer::{Pacer, PacerStatus};
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
+use crate::roadbook::CutoffStatus;
+use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -69,6 +78,70 @@ pub const MAX_CUTOFF_LEGS: usize = 16;
 /// algorithm (see [`crate::race_predictor`]): an input-validity guard for the
 /// watch's live-partial-run effort source.
 pub const MIN_PREDICT_DISTANCE_M: f64 = 1000.0;
+
+/// Pace buckets tracked for the Splits page, matching `crate::pace_segments`'s
+/// six-bucket ramp (slowest .. fastest).
+pub const PACE_BUCKET_COUNT: usize = 6;
+
+/// How many pushed roadbook checkpoints the watch holds — an ultra's aid legs,
+/// bounded like [`MAX_CUTOFF_LEGS`]. A longer roadbook is trimmed phone-side.
+pub const MAX_PUSHED_LEGS: usize = 16;
+
+/// Upcoming roadbook checkpoints the Roadbook page shows at once.
+pub const ROADBOOK_WINDOW: usize = 4;
+
+/// One pushed roadbook checkpoint — name-free + `Copy`. The phone builds the
+/// roadbook from the route polyline + markers ([`crate::roadbook`], which needs
+/// the polyline the watch doesn't hold) and pushes the numeric schedule, the
+/// same model as cutoff legs. Loaded via [`Recorder::set_roadbook`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RoadbookCheckpoint {
+    /// Cumulative distance along the course to this checkpoint, metres.
+    pub cum_dist_m: f64,
+    /// Distance of the leg arriving here, metres — the fuel scaler.
+    pub leg_dist_m: f64,
+    /// Projected elapsed arrival, seconds (from the phone-built roadbook).
+    pub projected_elapsed_s: u32,
+    /// Safe/tight/miss cutoff verdict, if this checkpoint carries a cutoff.
+    pub cutoff: Option<CutoffStatus>,
+    /// Whether this checkpoint offers water/food — a fuel refill point.
+    pub is_refill: bool,
+}
+
+/// One upcoming checkpoint in the [`RoadbookView`] window.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct RoadbookLegView {
+    pub cum_dist_m: f32,
+    pub projected_elapsed_s: u32,
+    pub cutoff: Option<CutoffStatus>,
+}
+
+/// The Roadbook page view: total checkpoints + the next few ahead of the
+/// current position. `None` on the [`Snapshot`] when no roadbook is loaded.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RoadbookView {
+    pub total: u8,
+    pub upcoming: [RoadbookLegView; ROADBOOK_WINDOW],
+    pub upcoming_len: u8,
+}
+
+/// The Fuel page view: what to carry to the next aid from the current position,
+/// plus the whole-plan totals, from [`crate::fuel_plan`] over the loaded
+/// roadbook.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FuelView {
+    /// Carbs/fluid to carry out from the last aid to the next; `None` past the
+    /// final aid.
+    pub carry: Option<FuelCarryView>,
+    pub total_carbs_g: f32,
+    pub total_fluid_ml: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FuelCarryView {
+    pub carbs_g: f32,
+    pub fluid_ml: f32,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordState {
@@ -147,6 +220,23 @@ pub struct Snapshot {
     /// single effort — `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]
     /// and a moving pace exists, so a warm-up shows no fabricated prediction.
     pub race_prediction: Option<RacePrediction>,
+    /// Distance banked in each pace bucket (slowest..fastest), metres — the
+    /// Splits page's pace-distribution, the pace analogue of [`Snapshot::zone_time_s`].
+    /// All zero until a run accrues distance.
+    pub pace_bucket_m: [f64; PACE_BUCKET_COUNT],
+    /// This run's single-run training-load stress so far (distance/TRIMP model,
+    /// see [`crate::training_load`]); `None` while idle or before any distance.
+    pub training_stress: Option<f32>,
+    /// The race-distance band the run distance falls in, or `None` in a gap
+    /// between bands (or while idle).
+    pub band: Option<DistanceBand>,
+    /// The active gear's wear verdict, or `None` when no gear is synced.
+    pub gear: Option<GearWear>,
+    /// The upcoming-checkpoint window of the loaded roadbook, or `None` when no
+    /// roadbook is loaded.
+    pub roadbook: Option<RoadbookView>,
+    /// The fuelling headline over the loaded roadbook, or `None` without one.
+    pub fuel: Option<FuelView>,
 }
 
 pub struct Recorder {
@@ -211,6 +301,17 @@ pub struct Recorder {
     /// limit), set via [`set_cutoff_legs`](Recorder::set_cutoff_legs). Empty on
     /// the hardware build until a course-push path lands.
     cutoff_legs: heapless::Vec<CutoffLeg, MAX_CUTOFF_LEGS>,
+    /// Per-pace-bucket distance accumulators (metres), reset on `start`.
+    pace_bucket_m: [f64; PACE_BUCKET_COUNT],
+    /// Baseline mileage + replacement target of the active gear, from a future
+    /// settings sync via [`set_gear`](Recorder::set_gear); both `None` leaves
+    /// the gear page inactive. The live run's distance is added to the baseline
+    /// at snapshot time.
+    gear_base_m: Option<f64>,
+    gear_target_m: Option<f64>,
+    /// The loaded roadbook checkpoints, pushed pre-built (see
+    /// [`RoadbookCheckpoint`]); empty leaves the Roadbook + Fuel pages inactive.
+    roadbook_legs: heapless::Vec<RoadbookCheckpoint, MAX_PUSHED_LEGS>,
 }
 
 impl Default for Recorder {
@@ -246,6 +347,10 @@ impl Recorder {
             route_along_m: None,
             route_along_at_s: 0,
             cutoff_legs: heapless::Vec::new(),
+            pace_bucket_m: [0.0; PACE_BUCKET_COUNT],
+            gear_base_m: None,
+            gear_target_m: None,
+            roadbook_legs: heapless::Vec::new(),
         }
     }
 
@@ -325,6 +430,27 @@ impl Recorder {
         }
     }
 
+    /// Load the active gear's rolled-up baseline distance + replacement target
+    /// (metres) — the same future settings-sync hook shape as the others; both
+    /// unset by default keeps the gear page inactive. The live run's distance is
+    /// added to the baseline in [`snapshot`](Recorder::snapshot), so a run in
+    /// progress wears the shoe down in real time.
+    pub fn set_gear(&mut self, baseline_m: Option<f64>, target_m: Option<f64>) {
+        self.gear_base_m = baseline_m;
+        self.gear_target_m = target_m;
+    }
+
+    /// Load the roadbook checkpoints for the current course (pushed pre-built,
+    /// see [`RoadbookCheckpoint`]). Replaces any existing set and caps at
+    /// [`MAX_PUSHED_LEGS`] rather than growing. Empty legs leave the Roadbook +
+    /// Fuel pages inactive.
+    pub fn set_roadbook(&mut self, legs: &[RoadbookCheckpoint]) {
+        self.roadbook_legs.clear();
+        for leg in legs.iter().take(MAX_PUSHED_LEGS) {
+            let _ = self.roadbook_legs.push(*leg);
+        }
+    }
+
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
     /// point — the run's first anchor, or an accepted move that accrued
     /// distance. `false` after any call that rejected the fix (corrupt / too
@@ -356,6 +482,7 @@ impl Recorder {
         self.lap_start_moving_s = 0;
         self.last_lap = None;
         self.zone_time_s = [0; ZONE_COUNT];
+        self.pace_bucket_m = [0.0; PACE_BUCKET_COUNT];
         // Fresh grade anchors for the new run; the sticky baro altitude and HR
         // stay — each is still the current reading, not run state. The pacer
         // splits the same way: its finish latch is run state and clears, the
@@ -475,6 +602,10 @@ impl Recorder {
         // movingTimeOf rule, which auto-pauses a slow (stopped-but-drifting)
         // stretch out of moving time while still crediting the ground covered.
         self.distance_m += delta;
+        // Pace-distribution: bank the segment's distance in the bucket for its
+        // own speed — the Splits page's pace analogue of the HR-zone time.
+        let bucket = pace_bucket_for_speed(delta / dt as f64, ActivityKind::Run);
+        self.pace_bucket_m[bucket] += delta;
         if delta / dt as f64 >= MIN_MOVING_SPEED_MPS {
             self.moving_s += dt;
             // Zone time banks exactly where moving time does, into the zone of
@@ -559,7 +690,129 @@ impl Recorder {
             zone_time_s: self.zone_time_s,
             cutoff: self.cutoff_snapshot(),
             race_prediction: self.race_prediction_snapshot(),
+            pace_bucket_m: self.pace_bucket_m,
+            training_stress: self.training_stress_snapshot(),
+            band: if self.state == RecordState::Idle {
+                None
+            } else {
+                band_for_distance(self.distance_m)
+            },
+            gear: self.gear_snapshot(),
+            roadbook: self.roadbook_snapshot(),
+            fuel: self.fuel_snapshot(),
         }
+    }
+
+    /// This run's single-run training-load stress, or `None` while idle / before
+    /// any distance. Distance-model by default (the watch tracks no average HR);
+    /// a future HR-threshold sync would upgrade it to TRIMP.
+    fn training_stress_snapshot(&self) -> Option<f32> {
+        if self.state == RecordState::Idle || self.distance_m < 1.0 {
+            return None;
+        }
+        let run = RunForLoad {
+            day: 0,
+            duration_s: self.moving_s,
+            distance_m: self.distance_m,
+            avg_bpm: None,
+        };
+        Some(compute_stress(&run, &HrPrefs::default(), None) as f32)
+    }
+
+    /// The active gear's wear verdict with this run's distance folded into the
+    /// baseline, or `None` when no gear baseline is synced.
+    fn gear_snapshot(&self) -> Option<GearWear> {
+        let base = self.gear_base_m?;
+        Some(gear_wear(Some(base + self.distance_m), self.gear_target_m))
+    }
+
+    /// The upcoming-checkpoint window from the current route position. `None`
+    /// with no roadbook loaded or while idle.
+    fn roadbook_snapshot(&self) -> Option<RoadbookView> {
+        if self.state == RecordState::Idle || self.roadbook_legs.is_empty() {
+            return None;
+        }
+        let pos = self.route_along_m.unwrap_or(0.0);
+        let mut upcoming = [RoadbookLegView::default(); ROADBOOK_WINDOW];
+        let mut len = 0;
+        for leg in self.roadbook_legs.iter() {
+            if leg.cum_dist_m < pos {
+                continue;
+            }
+            if len >= ROADBOOK_WINDOW {
+                break;
+            }
+            upcoming[len] = RoadbookLegView {
+                cum_dist_m: leg.cum_dist_m as f32,
+                projected_elapsed_s: leg.projected_elapsed_s,
+                cutoff: leg.cutoff,
+            };
+            len += 1;
+        }
+        Some(RoadbookView {
+            total: self.roadbook_legs.len() as u8,
+            upcoming,
+            upcoming_len: len as u8,
+        })
+    }
+
+    /// The fuelling headline over the loaded roadbook — the carry out of the
+    /// last aid at/behind the current position plus the whole-plan totals,
+    /// scaled by [`crate::fuel_plan`]. `None` without a roadbook or while idle.
+    fn fuel_snapshot(&self) -> Option<FuelView> {
+        if self.state == RecordState::Idle || self.roadbook_legs.is_empty() {
+            return None;
+        }
+        // Reconstruct the aid services from the pushed refill flag; static
+        // slices satisfy `FuelLegInput`'s borrow without owning storage.
+        const REFILL: &[&str] = &["water"];
+        const DRY: &[&str] = &[];
+        let mut inputs: heapless::Vec<FuelLegInput, MAX_PUSHED_LEGS> = heapless::Vec::new();
+        for leg in self.roadbook_legs.iter() {
+            let _ = inputs.push(FuelLegInput {
+                projected_elapsed_s: leg.projected_elapsed_s as f64,
+                leg_dist_m: leg.leg_dist_m,
+                services: if leg.is_refill { REFILL } else { DRY },
+            });
+        }
+        let plan = build_fuel_plan(
+            &inputs,
+            FuelPlanOptions {
+                carbs_per_hour_g: DEFAULT_CARBS_PER_HOUR_G,
+                fluid_per_hour_ml: DEFAULT_FLUID_PER_HOUR_ML,
+                heat_factor: None,
+                gel_carbs_g: None,
+                weight_kg: None,
+            },
+        );
+        let carry_view = |c: crate::fuel_plan::FuelCarry| FuelCarryView {
+            carbs_g: c.carbs_g as f32,
+            fluid_ml: c.fluid_ml as f32,
+        };
+        // The carry set at the last aid at/behind us is what we're carrying now;
+        // before the first aid, the start's carry.
+        let pos = self.route_along_m.unwrap_or(0.0);
+        let mut carry = None;
+        for (i, leg) in self.roadbook_legs.iter().enumerate() {
+            if leg.cum_dist_m > pos {
+                break;
+            }
+            if let Some(c) = plan.legs.get(i).and_then(|l| l.carry_to_next_aid) {
+                carry = Some(carry_view(c));
+            }
+        }
+        if carry.is_none() {
+            carry = plan
+                .legs
+                .first()
+                .and_then(|l| l.carry_to_next_aid)
+                .map(carry_view);
+        }
+        Some(FuelView {
+            carry,
+            total_carbs_g: plan.total_carbs_g as f32,
+            total_fluid_ml: plan.total_fluid_ml as f32,
+        })
     }
 
     /// The live next-cutoff ETA, or `None` when idle or no cutoff legs are
@@ -1460,5 +1713,101 @@ mod tests {
         assert_eq!(stale.status, CutoffEtaStatus::Unknown);
         assert_eq!(stale.projected_arrival_elapsed_s, None);
         assert!(stale.has_cutoff);
+    }
+
+    #[test]
+    fn distance_band_pace_buckets_and_training_stress_wire_through() {
+        let mut r = Recorder::new();
+        // Idle: every derived surface is inactive.
+        assert_eq!(r.snapshot().band, None);
+        assert_eq!(r.snapshot().training_stress, None);
+        assert_eq!(r.snapshot().pace_bucket_m, [0.0; PACE_BUCKET_COUNT]);
+
+        // A throttled interval lets the test cover ~5 km in a few long legs
+        // rather than 500 one-second fixes.
+        r.set_fix_interval_s(60);
+        r.start(0);
+        let d = 500.0 / METRES_PER_DEGREE_LAT;
+        for i in 1..=11 {
+            r.on_fix(&fix(40.0 + i as f64 * d, -105.0, 8.0, i * 60));
+        }
+        let snap = r.snapshot();
+        assert!(
+            (4900.0..5100.0).contains(&snap.distance_m),
+            "distance {}",
+            snap.distance_m
+        );
+        // Band mirrors the pure classifier over the live distance.
+        assert_eq!(snap.band, band_for_distance(snap.distance_m));
+        assert_eq!(
+            snap.band.map(|b| b.key),
+            Some(crate::distance_bands::DistanceBandKey::FiveK)
+        );
+        // Every accepted segment's distance banks in exactly one bucket, so the
+        // buckets sum back to the run distance.
+        let bucket_sum: f64 = snap.pace_bucket_m.iter().sum();
+        assert!((bucket_sum - snap.distance_m).abs() < 1.0);
+        // Single-run stress is the distance model (the watch tracks no avg HR).
+        let stress = snap.training_stress.expect("stress once distance accrues");
+        assert!((stress - (snap.distance_m as f32 / 1000.0) * 10.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn gear_wear_folds_the_live_run_into_the_baseline() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // No gear synced → inactive.
+        assert!(r.snapshot().gear.is_none());
+        // A shoe at 700 km of an 800 km target sits in the 85% "due" band.
+        r.set_gear(Some(700_000.0), Some(800_000.0));
+        let g = r.snapshot().gear.expect("gear active once synced");
+        assert_eq!(g.status, crate::gear_wear::GearWearStatus::Due);
+        assert!(g.fraction.unwrap() >= 0.85);
+    }
+
+    #[test]
+    fn roadbook_and_fuel_wire_through() {
+        let mut r = Recorder::new();
+        assert!(r.snapshot().roadbook.is_none());
+        assert!(r.snapshot().fuel.is_none());
+        r.set_roadbook(&[
+            RoadbookCheckpoint {
+                cum_dist_m: 0.0,
+                leg_dist_m: 0.0,
+                projected_elapsed_s: 0,
+                cutoff: None,
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 5000.0,
+                leg_dist_m: 5000.0,
+                projected_elapsed_s: 1800,
+                cutoff: Some(CutoffStatus::Safe),
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 10000.0,
+                leg_dist_m: 5000.0,
+                projected_elapsed_s: 3600,
+                cutoff: Some(CutoffStatus::Tight),
+                is_refill: false,
+            },
+        ]);
+        r.start(0);
+        // No position yet → the window starts at the first checkpoint.
+        let rb = r.snapshot().roadbook.expect("roadbook active");
+        assert_eq!(rb.total, 3);
+        assert_eq!(rb.upcoming_len, 3);
+        assert_eq!(rb.upcoming[1].cutoff, Some(CutoffStatus::Safe));
+        // Past the first aid: only the finish is still ahead.
+        r.set_route_position(Some(6000.0));
+        let rb2 = r.snapshot().roadbook.unwrap();
+        assert_eq!(rb2.upcoming_len, 1);
+        assert!((rb2.upcoming[0].cum_dist_m - 10000.0).abs() < 1.0);
+        // Fuel scales onto the schedule: non-zero totals + a carry out of the
+        // aid we are between.
+        let f = r.snapshot().fuel.expect("fuel active with a roadbook");
+        assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
+        assert!(f.carry.is_some());
     }
 }
