@@ -407,11 +407,33 @@
 	const proteinSummary = $derived(
 		weeklyProteinSummary(weekDays.map((d) => d.protein), targets?.proteinG ?? null),
 	);
-	const trendAvg = $derived(weekSummary.avgCalories);
+	// The 7-day chart plots one metric at a time. Both series (calories +
+	// protein) are already collected per day and each has its own logged-day
+	// average (weekSummary / proteinSummary) and target, so the toggle only
+	// re-selects which one the bars, value labels, avg line and goal line draw.
+	let trendMetric = $state<'calories' | 'protein'>('calories');
+	const trendSeries = $derived.by(() => {
+		if (trendMetric === 'protein') {
+			return {
+				values: weekDays.map((d) => d.protein),
+				avg: proteinSummary.avgProteinG,
+				goal: targets?.proteinG ?? null,
+				unit: 'g',
+				avgLabel: m('nutrition.trendAvgProtein', { n: proteinSummary.avgProteinG }),
+			};
+		}
+		return {
+			values: weekDays.map((d) => d.calories),
+			avg: weekSummary.avgCalories,
+			goal: targets?.calories ?? null,
+			unit: 'kcal',
+			avgLabel: m('nutrition.trendAvgCalories', { n: weekSummary.avgCalories }),
+		};
+	});
 	// Bars + the avg/goal reference lines share one scale; include the goal so
 	// its line stays on-chart even when no logged day reaches it.
 	const trendMax = $derived(
-		Math.max(1, ...weekDays.map((d) => d.calories), targets?.calories ?? 0),
+		Math.max(1, ...trendSeries.values, trendSeries.goal ?? 0),
 	);
 </script>
 
@@ -699,7 +721,7 @@
 				<div class="card-head">
 					<span class="section-label">{m('nutrition.weeklyTrend')}</span>
 					<div class="trend-meta">
-						{#if trendAvg > 0}<span class="card-meta">{trendAvg} kcal avg</span>{/if}
+						{#if trendSeries.avg > 0}<span class="card-meta">{trendSeries.avgLabel}</span>{/if}
 						{#if weekSummary.deltaPerDay !== null}
 							{@const delta = weekSummary.deltaPerDay}
 							{#if delta === 0}
@@ -719,30 +741,49 @@
 						{/if}
 					</div>
 				</div>
+				<div class="trend-toggle" role="group" aria-label={m('nutrition.trendMetric')}>
+					<button
+						type="button"
+						class="trend-toggle-btn"
+						class:active={trendMetric === 'calories'}
+						aria-pressed={trendMetric === 'calories'}
+						onclick={() => (trendMetric = 'calories')}
+						data-testid="trend-metric-calories"
+					>{m('nutrition.calories')}</button>
+					<button
+						type="button"
+						class="trend-toggle-btn"
+						class:active={trendMetric === 'protein'}
+						aria-pressed={trendMetric === 'protein'}
+						onclick={() => (trendMetric = 'protein')}
+						data-testid="trend-metric-protein"
+					>{m('nutrition.protein')}</button>
+				</div>
 				<div class="trend-bars">
 					<div class="trend-track">
-						{#if trendAvg > 0}
+						{#if trendSeries.avg > 0}
 							<div
 								class="trend-avg-line"
-								style={`bottom: ${Math.round((trendAvg / trendMax) * 100)}%`}
+								style={`bottom: ${Math.round((trendSeries.avg / trendMax) * 100)}%`}
 								aria-hidden="true"
 							></div>
 						{/if}
-						{#if targets}
+						{#if trendSeries.goal}
 							<div
 								class="trend-goal-line"
-								style={`bottom: ${Math.round((targets.calories / trendMax) * 100)}%`}
-								title={`${m('nutrition.goalLine')}: ${targets.calories} kcal`}
+								style={`bottom: ${Math.round((trendSeries.goal / trendMax) * 100)}%`}
+								title={`${m('nutrition.goalLine')}: ${trendSeries.goal} ${trendSeries.unit}`}
 								aria-hidden="true"
 							></div>
 						{/if}
 						{#each weekDays as d, i (d.label + i)}
+							{@const val = trendSeries.values[i] ?? 0}
 							<div class="trend-col" class:trend-today={i === weekDays.length - 1}>
-								<span class="trend-val">{d.calories > 0 ? d.calories : ''}</span>
+								<span class="trend-val">{val > 0 ? val : ''}</span>
 								<div
 									class="trend-bar"
-									style={`height: ${Math.round((d.calories / trendMax) * 100)}%`}
-									title={`${d.label}: ${d.calories} kcal`}
+									style={`height: ${Math.round((val / trendMax) * 100)}%`}
+									title={`${d.label}: ${val} ${trendSeries.unit}`}
 								></div>
 							</div>
 						{/each}
@@ -1247,6 +1288,38 @@
 	/* 7-day trend — value labels + a dashed average reference line, today
 	   highlighted in the primary colour. The bar track is its own box so
 	   the avg line positions against the bar area, not the day labels. */
+	/* Metric switch — a compact segmented control so the same chart can plot
+	   calories or protein without a second card. */
+	.trend-toggle {
+		display: inline-flex;
+		gap: 2px;
+		padding: 2px;
+		margin-bottom: var(--space-md);
+		background: color-mix(in srgb, var(--color-text-tertiary) 12%, transparent);
+		border-radius: 9999px;
+	}
+	.trend-toggle-btn {
+		appearance: none;
+		border: none;
+		background: none;
+		cursor: pointer;
+		padding: 0.25rem 0.85rem;
+		border-radius: 9999px;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		transition: background var(--transition-fast), color var(--transition-fast);
+	}
+	.trend-toggle-btn:hover { color: var(--color-text); }
+	.trend-toggle-btn.active {
+		background: var(--color-surface);
+		color: var(--color-primary);
+		box-shadow: var(--shadow-sm);
+	}
+	.trend-toggle-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
 	.trend-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
 	.trend-track {
 		display: flex;
