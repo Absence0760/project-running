@@ -16,6 +16,11 @@
 //! - [`cutoff_eta`] — live next-cutoff ETA: on / tight / behind at the nearest
 //!   cutoff ahead from distance-along-route + recent pace, honest `Unknown` on
 //!   a stale fix (port of web `runs/live_cutoff_eta.ts`)
+//! - [`roadbook`] — per-checkpoint race-crew schedule: cumulative distance,
+//!   effort-allocated projected arrival, per-leg vert, safe/tight/miss cutoff
+//!   verdict (port of web `routes/roadbook.ts`)
+//! - [`fuel_plan`] — per-leg carbs/fluid scaled onto the roadbook timeline +
+//!   carry-to-next-aid per refill (port of web `routes/fuel_plan.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
@@ -50,6 +55,7 @@ pub mod elevation;
 pub mod face;
 pub mod fix;
 pub mod flash_store;
+pub mod fuel_plan;
 pub mod gnss_mode;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
@@ -58,5 +64,6 @@ pub mod pacer;
 pub mod page;
 pub mod race_predictor;
 pub mod record;
+pub mod roadbook;
 pub mod run_store;
 pub mod trackback;
