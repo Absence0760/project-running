@@ -5,7 +5,7 @@
 
 use std::f64::consts::PI;
 
-use max86177::peak_detect::{PeakDetector, Reading};
+use max86177::peak_detect::{Contact, PeakDetector, Reading};
 
 /// Deterministic pseudo-noise so the tests don't pull in a rand dependency.
 struct Noise(u64);
@@ -278,6 +278,82 @@ fn recovers_to_valid_after_artifacts_pass() {
         "recovered rate should be correct, got {}",
         recovered.bpm
     );
+}
+
+#[test]
+fn worn_signal_reports_contact() {
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    let r = synth.run(&mut det, 72.0, 20);
+    assert_eq!(det.contact(), Contact::Worn, "a real pulse means worn");
+    assert!(r.valid);
+}
+
+#[test]
+fn floor_signal_reads_off_wrist() {
+    // A dark floor: the diode sits near zero counts. Even a heartbeat-cadence
+    // AC riding it — which the beat detector alone would latch onto — must read
+    // off-wrist, because the DC baseline is nowhere near a wrist's.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    synth.dc = 0.0;
+    let r = synth.run(&mut det, 72.0, 20);
+    assert_eq!(det.contact(), Contact::OffWrist);
+    assert!(!r.valid, "off-wrist must never report a heart rate");
+    assert_eq!(r.bpm, 0);
+}
+
+#[test]
+fn saturated_rail_reads_off_wrist() {
+    // Bright ambient rails the ADC near full scale (0x7_FFFF). A flickering
+    // ambient AC on top is not a pulse; the railed DC level gives it away.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    synth.dc = 524_000.0;
+    let r = synth.run(&mut det, 72.0, 20);
+    assert_eq!(det.contact(), Contact::OffWrist);
+    assert!(!r.valid);
+    assert_eq!(r.bpm, 0);
+}
+
+#[test]
+fn plausible_dc_without_ac_reads_off_wrist() {
+    // Boundary: the DC sits inside the worn band but the pulse is below the
+    // envelope floor — a static reflector, not skin. Contact must still read
+    // off-wrist, so a plausible resting level alone can't unlock a reading.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    synth.amplitude = 5.0;
+    synth.noise_amp = 2;
+    let r = synth.run(&mut det, 72.0, 20);
+    assert_eq!(det.contact(), Contact::OffWrist);
+    assert!(!r.valid);
+}
+
+#[test]
+fn worn_weak_but_real_pulse_keeps_contact() {
+    // The other side of the boundary: a genuinely weak pulse (a looser strap)
+    // on a plausible DC must still read worn and valid — the contact gate must
+    // not suppress a real, if faint, heartbeat.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    synth.amplitude = 60.0;
+    let r = synth.run(&mut det, 72.0, 20);
+    assert_eq!(det.contact(), Contact::Worn);
+    assert!(r.valid);
+    assert!(r.bpm.abs_diff(72) <= 3, "weak-but-worn rate, got {}", r.bpm);
+}
+
+#[test]
+fn fresh_detector_reads_off_wrist() {
+    // Fail-closed: before any sample, the sensor is off-wrist, not worn.
+    let det = PeakDetector::new(100);
+    assert_eq!(det.contact(), Contact::OffWrist);
 }
 
 #[test]

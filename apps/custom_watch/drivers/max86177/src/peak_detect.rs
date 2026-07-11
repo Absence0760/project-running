@@ -15,6 +15,13 @@
 //!    physiological refractory period so one pulse counts once.
 //! 4. Convert the inter-beat interval to BPM, smooth it across beats, and only
 //!    report valid once several consecutive intervals agree.
+//!
+//! A companion [`PeakDetector::contact`] reuses that same DC baseline and AC
+//! envelope to tell a worn sensor from an off-wrist one — a worn sensor rests
+//! at a plausible mid-scale DC with a pulsatile envelope, an unworn one reads a
+//! dark floor or a saturated rail with little AC. A reading is forced invalid
+//! whenever the sensor is off the wrist, so ambient light can never masquerade
+//! as a heart rate.
 
 /// DC-baseline EMA shift: alpha = 1/64, ~0.64 s time constant at 100 Hz, a
 /// corner well below the heart-rate band.
@@ -38,6 +45,15 @@ const THRESH_DEN: i32 = 10;
 /// finger / no pulse. Amplitude scales with LED current and skin contact, so
 /// this floor is a bench-verify value; kept low enough to accept a weak pulse.
 const MIN_ENVELOPE: i32 = 20;
+
+/// Plausible worn-DC band, in raw 19-bit photodiode counts (full scale
+/// 0x7_FFFF = 524287). Below the floor the diode sees almost no reflected light
+/// — the sensor is face-up off the wrist or against a dark surface; above the
+/// ceiling it is railing on bright ambient or an over-driven LED. Both are
+/// bench-verify values: they track LED current and the optical stack, so retune
+/// them on the bench alongside `MEAS1_LEDA_CURRENT`.
+const CONTACT_DC_MIN: i32 = 2_000;
+const CONTACT_DC_MAX: i32 = 480_000;
 
 /// Reportable physiological band. An inter-beat interval implying a rate
 /// outside this is a double-trigger or a dropout, not a heartbeat, and is
@@ -81,6 +97,17 @@ const BPM_Q: i32 = 8;
 pub struct Reading {
     pub bpm: u16,
     pub valid: bool,
+}
+
+/// Whether the optical stack is looking at skin (a worn wrist) or nothing
+/// useful (off-wrist floor or ambient-light rail). Gates HR validity so the
+/// detector reports "no contact" rather than a BPM synthesised from ambient
+/// light.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Contact {
+    Worn,
+    OffWrist,
 }
 
 pub struct PeakDetector {
@@ -220,9 +247,27 @@ impl PeakDetector {
         self.last_interval = interval;
     }
 
+    /// Skin-contact state from the DC baseline + AC envelope the beat detector
+    /// already tracks — no second pass over the samples. `Worn` requires the DC
+    /// to sit inside the plausible band *and* the envelope to clear the pulse
+    /// floor; a fresh detector, a dark floor, a saturated rail, or a flat
+    /// (non-pulsatile) reflector all read `OffWrist`. Fail-closed: uninitialised
+    /// is `OffWrist`.
+    pub fn contact(&self) -> Contact {
+        if self.initialized
+            && (CONTACT_DC_MIN..=CONTACT_DC_MAX).contains(&self.baseline)
+            && self.envelope >= MIN_ENVELOPE
+        {
+            Contact::Worn
+        } else {
+            Contact::OffWrist
+        }
+    }
+
     fn reading(&self) -> Reading {
-        let valid =
-            self.good_beats >= MIN_GOOD_BEATS && self.samples_since_beat <= self.timeout_samples;
+        let valid = self.contact() == Contact::Worn
+            && self.good_beats >= MIN_GOOD_BEATS
+            && self.samples_since_beat <= self.timeout_samples;
         let bpm = if valid {
             (((self.bpm_q8 + (1 << (BPM_Q - 1))) >> BPM_Q) as u16).max(1)
         } else {
