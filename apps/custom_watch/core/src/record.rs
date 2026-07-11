@@ -18,6 +18,7 @@
 
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
 use crate::distance_bands::{band_for_distance, DistanceBand};
+use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
 use crate::fuel_plan::{
     build_fuel_plan, FuelLegInput, FuelPlanOptions, DEFAULT_CARBS_PER_HOUR_G,
@@ -33,6 +34,7 @@ use crate::pacer::{Pacer, PacerStatus};
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::roadbook::CutoffStatus;
 use crate::training_load::{compute_stress, HrPrefs, RunForLoad};
+use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -90,6 +92,19 @@ pub const MAX_PUSHED_LEGS: usize = 16;
 /// Upcoming roadbook checkpoints the Roadbook page shows at once.
 pub const ROADBOOK_WINDOW: usize = 4;
 
+/// Plausible synced goal-race pace band (seconds per km): ~2:00/km (a road
+/// world-record split) to ~20:00/km (a walk). A push outside this is corrupt and
+/// ignored, the same guard shape as [`MAX_HR_PLAUSIBLE_MIN`] — a bad frame must
+/// not fabricate a training-pace set.
+pub const GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM: f64 = 120.0;
+pub const GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM: f64 = 1200.0;
+
+/// Plausible synced VO2 max / VDOT band: 20 (very unfit) to 90 (the same
+/// physiological ceiling `fitness::vdot_from_run` rejects above). Guards a
+/// corrupt fitness push from showing a fake number.
+pub const FITNESS_VO2_PLAUSIBLE_MIN: f64 = 20.0;
+pub const FITNESS_VO2_PLAUSIBLE_MAX: f64 = 90.0;
+
 /// One pushed roadbook checkpoint — name-free + `Copy`. The phone builds the
 /// roadbook from the route polyline + markers ([`crate::roadbook`], which needs
 /// the polyline the watch doesn't hold) and pushes the numeric schedule, the
@@ -141,6 +156,32 @@ pub struct FuelView {
 pub struct FuelCarryView {
     pub carbs_g: f32,
     pub fluid_ml: f32,
+}
+
+/// The TrainingPaces page view: the synced goal-race pace plus the five Daniels
+/// intensity-zone paces derived from it ([`crate::training_paces`]). `None` on
+/// the [`Snapshot`] until a goal pace is synced.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrainingPacesView {
+    /// The synced goal-race pace these zones derive from, seconds per km.
+    pub goal_pace_s_per_km: u32,
+    /// The five zone paces (easy .. repetition, seconds per km).
+    pub paces: TrainingPaces,
+}
+
+/// The Fitness page view: only what a single synced snapshot can honestly
+/// present — the VO2 max / VDOT ceiling and the recovery-advice verdict, both
+/// pushed from the phone. Deliberately no rolling CTL/ATL/TSB: that needs the
+/// multi-day history the watch doesn't hold, so a single pushed number would be
+/// a stale point masquerading as a live trend. `None` on the [`Snapshot`] until
+/// synced.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FitnessView {
+    /// Synced VO2 max estimate (== VDOT at these scales), or `None` when the
+    /// phone couldn't derive one (no qualifying run).
+    pub vo2_max: Option<f32>,
+    /// Synced recovery-advice verdict, or `None` when the phone had no data.
+    pub recovery: Option<RecoveryAdvice>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,6 +278,12 @@ pub struct Snapshot {
     pub roadbook: Option<RoadbookView>,
     /// The fuelling headline over the loaded roadbook, or `None` without one.
     pub fuel: Option<FuelView>,
+    /// The training-pace zones derived from the synced goal-race pace, or `None`
+    /// until a goal pace is synced.
+    pub training_paces: Option<TrainingPacesView>,
+    /// The synced fitness snapshot (VO2 max + recovery advice), or `None` until
+    /// the phone pushes one.
+    pub fitness: Option<FitnessView>,
 }
 
 pub struct Recorder {
@@ -312,6 +359,15 @@ pub struct Recorder {
     /// The loaded roadbook checkpoints, pushed pre-built (see
     /// [`RoadbookCheckpoint`]); empty leaves the Roadbook + Fuel pages inactive.
     roadbook_legs: heapless::Vec<RoadbookCheckpoint, MAX_PUSHED_LEGS>,
+    /// The synced goal-race pace (seconds per km) the TrainingPaces page derives
+    /// its zone paces from — the same future settings-sync hook shape as the
+    /// others; `None` by default leaves that page inactive. Plausibility-guarded
+    /// in [`set_training_goal_pace_s_per_km`](Recorder::set_training_goal_pace_s_per_km).
+    training_goal_pace_s_per_km: Option<f64>,
+    /// The synced fitness snapshot the Fitness page shows, pushed pre-computed by
+    /// the phone (which holds the multi-day history the on-watch cores can't).
+    /// `None` by default leaves that page inactive.
+    fitness: Option<FitnessView>,
 }
 
 impl Default for Recorder {
@@ -351,6 +407,8 @@ impl Recorder {
             gear_base_m: None,
             gear_target_m: None,
             roadbook_legs: heapless::Vec::new(),
+            training_goal_pace_s_per_km: None,
+            fitness: None,
         }
     }
 
@@ -449,6 +507,38 @@ impl Recorder {
         for leg in legs.iter().take(MAX_PUSHED_LEGS) {
             let _ = self.roadbook_legs.push(*leg);
         }
+    }
+
+    /// Load the synced goal-race pace (seconds per km) the TrainingPaces page
+    /// derives its zone paces from — the same future settings-sync hook shape as
+    /// the others; `None` (or a value outside the
+    /// [`GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM`]..=[`GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM`]
+    /// window) leaves the page inactive. The zone paces are re-derived at
+    /// [`snapshot`](Recorder::snapshot) time via [`paces_from_goal_pace`].
+    pub fn set_training_goal_pace_s_per_km(&mut self, goal_s_per_km: Option<f64>) {
+        self.training_goal_pace_s_per_km = goal_s_per_km.filter(|p| {
+            (GOAL_PACE_PLAUSIBLE_MIN_S_PER_KM..=GOAL_PACE_PLAUSIBLE_MAX_S_PER_KM).contains(p)
+        });
+    }
+
+    /// Load the synced fitness snapshot the Fitness page shows — the VO2 max /
+    /// VDOT ceiling + the recovery-advice verdict, both pushed pre-computed by
+    /// the phone. Same unset-by-default hook shape as the others. The VO2 value
+    /// is plausibility-guarded (a corrupt push can't fake a fitness number);
+    /// both `None` leaves the page inactive. Deliberately no CTL/ATL/TSB input —
+    /// the rolling series needs history the watch doesn't hold.
+    pub fn set_fitness(&mut self, vo2_max: Option<f64>, recovery: Option<RecoveryAdvice>) {
+        let vo2 = vo2_max
+            .filter(|v| (FITNESS_VO2_PLAUSIBLE_MIN..=FITNESS_VO2_PLAUSIBLE_MAX).contains(v))
+            .map(|v| v as f32);
+        self.fitness = if vo2.is_none() && recovery.is_none() {
+            None
+        } else {
+            Some(FitnessView {
+                vo2_max: vo2,
+                recovery,
+            })
+        };
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -700,7 +790,22 @@ impl Recorder {
             gear: self.gear_snapshot(),
             roadbook: self.roadbook_snapshot(),
             fuel: self.fuel_snapshot(),
+            training_paces: self.training_paces_snapshot(),
+            fitness: self.fitness,
         }
+    }
+
+    /// The training-pace zones derived from the synced goal-race pace, or `None`
+    /// until one is synced. Gender-neutral (base Daniels curve) — the watch has
+    /// no gender-sync hook, and the base curve is the honest default (no
+    /// unvalidated calibration). Not gated on run state: the paces are a plan
+    /// reference, meaningful the moment a goal is synced.
+    fn training_paces_snapshot(&self) -> Option<TrainingPacesView> {
+        let goal = self.training_goal_pace_s_per_km?;
+        Some(TrainingPacesView {
+            goal_pace_s_per_km: goal as u32,
+            paces: paces_from_goal_pace(goal, TrainingGender::None),
+        })
     }
 
     /// This run's single-run training-load stress, or `None` while idle / before
@@ -1809,5 +1914,71 @@ mod tests {
         let f = r.snapshot().fuel.expect("fuel active with a roadbook");
         assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
         assert!(f.carry.is_some());
+    }
+
+    #[test]
+    fn training_goal_pace_wires_through_and_guards_implausible() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // No goal synced → the page is honestly inactive.
+        assert!(r.snapshot().training_paces.is_none());
+
+        // A 4:00/km (240 s/km) goal derives the five zone paces, slow → fast.
+        r.set_training_goal_pace_s_per_km(Some(240.0));
+        let tp = r
+            .snapshot()
+            .training_paces
+            .expect("paces once a goal is synced");
+        assert_eq!(tp.goal_pace_s_per_km, 240);
+        assert!(tp.paces.easy > tp.paces.marathon);
+        assert!(tp.paces.marathon > tp.paces.tempo);
+        assert!(tp.paces.tempo > tp.paces.interval);
+        assert!(tp.paces.interval > tp.paces.repetition);
+        // Matches the ported core directly (base curve, gender-neutral).
+        assert_eq!(tp.paces, paces_from_goal_pace(240.0, TrainingGender::None));
+
+        // An implausible pace (30 s/km, faster than any human) is ignored — the
+        // previously-synced goal is cleared, never replaced with garbage.
+        r.set_training_goal_pace_s_per_km(Some(30.0));
+        assert!(r.snapshot().training_paces.is_none());
+        // A too-slow value (past the 20:00/km ceiling) is likewise dropped.
+        r.set_training_goal_pace_s_per_km(Some(2000.0));
+        assert!(r.snapshot().training_paces.is_none());
+        // Explicit clear.
+        r.set_training_goal_pace_s_per_km(Some(300.0));
+        assert!(r.snapshot().training_paces.is_some());
+        r.set_training_goal_pace_s_per_km(None);
+        assert!(r.snapshot().training_paces.is_none());
+    }
+
+    #[test]
+    fn fitness_wires_through_and_guards_implausible() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // Nothing synced → honestly inactive.
+        assert!(r.snapshot().fitness.is_none());
+
+        // A plausible VO2 + recovery verdict wires straight through.
+        r.set_fitness(Some(52.0), Some(RecoveryAdvice::SweetSpot));
+        let f = r.snapshot().fitness.expect("fitness once synced");
+        assert_eq!(f.vo2_max, Some(52.0));
+        assert_eq!(f.recovery, Some(RecoveryAdvice::SweetSpot));
+
+        // An implausible VO2 (past the 90 ceiling) is dropped, but a valid
+        // recovery verdict alone still activates the page with a `--` VO2.
+        r.set_fitness(Some(140.0), Some(RecoveryAdvice::HeavilyLoaded));
+        let f = r
+            .snapshot()
+            .fitness
+            .expect("recovery alone keeps the page active");
+        assert_eq!(f.vo2_max, None);
+        assert_eq!(f.recovery, Some(RecoveryAdvice::HeavilyLoaded));
+
+        // Both empty → back to inactive.
+        r.set_fitness(None, None);
+        assert!(r.snapshot().fitness.is_none());
+        // A sub-floor VO2 with no recovery is also inactive.
+        r.set_fitness(Some(5.0), None);
+        assert!(r.snapshot().fitness.is_none());
     }
 }

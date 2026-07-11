@@ -65,6 +65,8 @@ fn base_snapshot() -> Snapshot {
         gear: None,
         roadbook: None,
         fuel: None,
+        training_paces: None,
+        fitness: None,
     }
 }
 

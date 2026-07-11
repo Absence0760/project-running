@@ -25,6 +25,7 @@ use core::fmt::Write;
 use crate::course::NavStatus;
 use crate::cutoff_eta::CutoffEtaStatus;
 use crate::elevation;
+use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
 use crate::gear_wear::GearWearStatus;
 use crate::gnss_mode::GnssMode;
@@ -275,6 +276,8 @@ pub fn page_rows(
             Page::Nav => nav_page(nav, fix, tag, uptime_s, animate, mode),
             Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate, mode),
             Page::GearWear => gear_wear_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::TrainingPaces => training_paces_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Fitness => fitness_glance(fix, snap, tag, uptime_s, animate, mode),
         },
     }
 }
@@ -307,7 +310,9 @@ pub fn page_icons(
         | Page::Fuel
         | Page::Nav
         | Page::BackToStart
-        | Page::GearWear => [None; ROWS],
+        | Page::GearWear
+        | Page::TrainingPaces
+        | Page::Fitness => [None; ROWS],
     }
 }
 
@@ -430,6 +435,35 @@ pub fn page_hero(
             match snap.gear.and_then(|g| g.fraction) {
                 Some(fr) => {
                     let _ = write!(row, "{}", ((fr * 100.0) as u32).min(999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // The easy pace — the day-to-day training pace runners glance at most —
+        // rides the hero as `m:ss`; the page's rows carry the whole zone ladder.
+        Page::TrainingPaces => {
+            let mut row = Row::new();
+            match snap.training_paces {
+                Some(tp) => {
+                    let s = tp.paces.easy as u32;
+                    let _ = write!(row, "{}:{:02}", (s / 60).min(99), s % 60);
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        // The synced VO2 max ceiling — the recognisable fitness number — is the
+        // hero, `--` until the phone pushes a snapshot.
+        Page::Fitness => {
+            let mut row = Row::new();
+            match snap.fitness.and_then(|f| f.vo2_max) {
+                Some(v) => {
+                    let _ = write!(row, "{}", (v as u32).min(999));
                 }
                 None => {
                     let _ = write!(row, "--");
@@ -1114,6 +1148,118 @@ fn gear_wear_glance(
     rows
 }
 
+/// Write a `M:SS /KM` training-zone pace onto a row behind `label` (padded to a
+/// six-cell gutter so five-letter zone labels still clear the value). Minutes
+/// clamp to 99 so a very slow easy pace can't overflow the grid.
+fn write_zone_pace(row: &mut Row, label: &str, pace_s_per_km: u32) {
+    let (m, s) = ((pace_s_per_km / 60).min(99), pace_s_per_km % 60);
+    let _ = write!(row, "{:<6}{}:{:02} /KM", label, m, s);
+}
+
+/// The training-paces glance: the five Daniels intensity-zone paces derived from
+/// the synced goal-race pace — easy / marathon / tempo / interval / repetition,
+/// one per row with the source goal on the header. The easy pace rides the hero.
+/// "PACES --" / "NO GOAL SET" until a goal pace is synced.
+#[allow(clippy::too_many_arguments)]
+fn training_paces_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.training_paces {
+        None => {
+            let _ = write!(rows[2], "PACES --");
+            let _ = write!(rows[4], "NO GOAL SET");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(tp) => {
+            let (gm, gs) = (
+                (tp.goal_pace_s_per_km / 60).min(99),
+                tp.goal_pace_s_per_km % 60,
+            );
+            let _ = write!(rows[2], "{:<7}GOAL {}:{:02}", "PACES", gm, gs);
+            write_zone_pace(&mut rows[3], "EASY", tp.paces.easy as u32);
+            write_zone_pace(&mut rows[4], "MARA", tp.paces.marathon as u32);
+            write_zone_pace(&mut rows[5], "TEMPO", tp.paces.tempo as u32);
+            write_zone_pace(&mut rows[6], "INTVL", tp.paces.interval as u32);
+            write_zone_pace(&mut rows[7], "REP", tp.paces.repetition as u32);
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// A short all-caps word for a [`RecoveryAdvice`] verdict — the presentation
+/// wording the pure core deliberately leaves to the display layer.
+fn recovery_word(advice: RecoveryAdvice) -> &'static str {
+    match advice {
+        RecoveryAdvice::NotEnoughData => "NO DATA",
+        RecoveryAdvice::ReturningFromLayoff => "LAYOFF",
+        RecoveryAdvice::HeavilyLoaded => "REST",
+        RecoveryAdvice::StillBuilding => "BUILD",
+        RecoveryAdvice::LoadedBuildTerritory => "EASY",
+        RecoveryAdvice::SweetSpot => "SWEET",
+        RecoveryAdvice::Tapering => "TAPER",
+        RecoveryAdvice::VeryFresh => "FRESH",
+    }
+}
+
+/// The fitness glance: the synced VO2 max ceiling up large in the hero, with the
+/// recovery-advice verdict beside the label and the VO2 number on its own row.
+/// Only what a single synced snapshot honestly holds — the rolling CTL/ATL/TSB
+/// needs multi-day history the watch doesn't keep, so it is deliberately absent.
+/// "FITNESS --" / "NOT SYNCED" until the phone pushes a snapshot.
+#[allow(clippy::too_many_arguments)]
+fn fitness_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.fitness {
+        None => {
+            let _ = write!(rows[2], "FITNESS --");
+            let _ = write!(rows[4], "NOT SYNCED");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(f) => {
+            let word = f.recovery.map(recovery_word).unwrap_or("--");
+            let _ = write!(rows[2], "{:<11}{}", "FITNESS", word);
+            match f.vo2_max {
+                Some(v) => {
+                    let _ = write!(rows[4], "{:<9}{}", "VO2 MAX", (v as u32).min(999));
+                }
+                None => {
+                    let _ = write!(rows[4], "{:<9}--", "VO2 MAX");
+                }
+            }
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
 /// The Nav page: the breadcrumb map panel on rows [`NAV_PANEL_TOP_ROW`]..+
 /// [`NAV_PANEL_ROWS`] (left empty here — the app draws the course polyline +
 /// position marker into those pixels, and the 2x [`nav_alert_row`] overlay on
@@ -1625,6 +1771,8 @@ mod tests {
             gear: None,
             roadbook: None,
             fuel: None,
+            training_paces: None,
+            fitness: None,
         }
     }
 
@@ -1655,7 +1803,9 @@ mod tests {
 
     #[test]
     fn every_page_fits_the_grid_active_and_inactive() {
-        use crate::record::{FuelCarryView, FuelView, RoadbookLegView, RoadbookView};
+        use crate::record::{
+            FitnessView, FuelCarryView, FuelView, RoadbookLegView, RoadbookView, TrainingPacesView,
+        };
         // An active run with every new page's data at extreme values.
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
         rec.elapsed_s = 999 * 3600 + 59 * 60 + 59;
@@ -1686,6 +1836,19 @@ mod tests {
             }),
             total_carbs_g: 9999.0,
             total_fluid_ml: 999_999.0,
+        });
+        // A slow goal pace stresses the widest zone-pace rows; "NO DATA" is the
+        // longest recovery word and 999 the widest VO2.
+        rec.training_paces = Some(TrainingPacesView {
+            goal_pace_s_per_km: 99 * 60 + 59,
+            paces: crate::training_paces::paces_from_goal_pace(
+                1200.0,
+                crate::training_paces::TrainingGender::None,
+            ),
+        });
+        rec.fitness = Some(FitnessView {
+            vo2_max: Some(999.0),
+            recovery: Some(RecoveryAdvice::NotEnoughData),
         });
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
@@ -3276,6 +3439,169 @@ mod tests {
         assert_eq!(rows[4].as_str(), "NEED 1 KM");
         assert_eq!(
             page_hero(Page::RacePredictor, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+    }
+
+    #[test]
+    fn training_paces_glance_shows_the_zone_ladder() {
+        use crate::record::TrainingPacesView;
+        use crate::training_paces::{paces_from_goal_pace, TrainingGender};
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        // A 4:00/km (240 s/km) goal — the same input the core's ordering test uses.
+        rec.training_paces = Some(TrainingPacesView {
+            goal_pace_s_per_km: 240,
+            paces: paces_from_goal_pace(240.0, TrainingGender::None),
+        });
+        let rows = page_rows(
+            Page::TrainingPaces,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "PACES  GOAL 4:00");
+        // Zone rows slow → fast, each a `m:ss /KM`.
+        assert!(rows[3].as_str().starts_with("EASY  "));
+        assert!(rows[3].as_str().ends_with(" /KM"));
+        assert!(rows[4].as_str().starts_with("MARA  "));
+        assert!(rows[5].as_str().starts_with("TEMPO "));
+        assert!(rows[6].as_str().starts_with("INTVL "));
+        assert!(rows[7].as_str().starts_with("REP   "));
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        // Hero echoes the easy pace and is a real time, not `--`.
+        let hero = page_hero(Page::TrainingPaces, None, Some(&rec), None).unwrap();
+        assert_ne!(hero.as_str(), "--");
+        assert!(page_icons(
+            Page::TrainingPaces,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            42,
+            true
+        )
+        .iter()
+        .all(Option::is_none));
+    }
+
+    #[test]
+    fn training_paces_glance_honest_inactive() {
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::TrainingPaces,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "PACES --");
+        assert_eq!(rows[4].as_str(), "NO GOAL SET");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(
+            page_hero(Page::TrainingPaces, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+    }
+
+    #[test]
+    fn fitness_glance_shows_vo2_and_recovery() {
+        use crate::record::FitnessView;
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.fitness = Some(FitnessView {
+            vo2_max: Some(52.0),
+            recovery: Some(RecoveryAdvice::SweetSpot),
+        });
+        let rows = page_rows(
+            Page::Fitness,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "FITNESS    SWEET");
+        assert_eq!(rows[4].as_str(), "VO2 MAX  52");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert_eq!(
+            page_hero(Page::Fitness, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "52"
+        );
+        assert!(
+            page_icons(Page::Fitness, Some(&fix()), None, Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn fitness_glance_recovery_alone_shows_dash_vo2() {
+        use crate::record::FitnessView;
+        // A verdict but no VO2 (the phone had load history but no qualifying run)
+        // keeps the page active with an honest `--` where the number would be.
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.fitness = Some(FitnessView {
+            vo2_max: None,
+            recovery: Some(RecoveryAdvice::HeavilyLoaded),
+        });
+        let rows = page_rows(
+            Page::Fitness,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "FITNESS    REST");
+        assert_eq!(rows[4].as_str(), "VO2 MAX  --");
+        assert_eq!(
+            page_hero(Page::Fitness, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+    }
+
+    #[test]
+    fn fitness_glance_honest_inactive() {
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::Fitness,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "FITNESS --");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(
+            page_hero(Page::Fitness, None, Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "--"

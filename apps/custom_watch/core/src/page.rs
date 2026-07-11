@@ -65,6 +65,15 @@ pub enum Page {
     /// target ([`crate::gear_wear`]); an honest inactive state when no gear is
     /// synced.
     GearWear,
+    /// The five Daniels intensity-zone training paces (easy / marathon / tempo /
+    /// interval / repetition) derived from a synced goal-race pace
+    /// ([`crate::training_paces`]); an honest "NO GOAL SET" until one is synced.
+    TrainingPaces,
+    /// The synced fitness snapshot — VO2 max / VDOT + the recovery-advice verdict
+    /// pushed from the phone ([`crate::fitness`]); an honest `--` until synced.
+    /// Only what a single synced snapshot can present: the rolling CTL/ATL/TSB
+    /// needs multi-day history the watch doesn't hold.
+    Fitness,
 }
 
 impl Page {
@@ -86,7 +95,9 @@ impl Page {
             Page::Fuel => Page::Nav,
             Page::Nav => Page::BackToStart,
             Page::BackToStart => Page::GearWear,
-            Page::GearWear => Page::Dashboard,
+            Page::GearWear => Page::TrainingPaces,
+            Page::TrainingPaces => Page::Fitness,
+            Page::Fitness => Page::Dashboard,
         }
     }
 }
@@ -101,7 +112,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 16] = [
+    const ALL: [Page; 18] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -118,6 +129,8 @@ mod tests {
         Page::Nav,
         Page::BackToStart,
         Page::GearWear,
+        Page::TrainingPaces,
+        Page::Fitness,
     ];
 
     #[test]
@@ -132,7 +145,9 @@ mod tests {
         assert_eq!(Page::Roadbook.next(), Page::Fuel);
         assert_eq!(Page::Fuel.next(), Page::Nav);
         assert_eq!(Page::BackToStart.next(), Page::GearWear);
-        assert_eq!(Page::GearWear.next(), Page::Dashboard);
+        assert_eq!(Page::GearWear.next(), Page::TrainingPaces);
+        assert_eq!(Page::TrainingPaces.next(), Page::Fitness);
+        assert_eq!(Page::Fitness.next(), Page::Dashboard);
         // Walking `next` from the default visits every page exactly once and
         // returns home.
         let mut p = Page::default();
