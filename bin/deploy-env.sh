@@ -102,10 +102,13 @@ apply_stack() {
 	step "$label  ($dir)"
 	pushd "$REPO_ROOT/$dir" >/dev/null
 
-	if [[ ! -d .terraform ]]; then
-		log "terraform init"
-		terraform init -input=false
-	fi
+	# Always init: it's idempotent and fast when nothing changed, and the
+	# old "skip if .terraform exists" guard wedged on any leftover partial
+	# init (e.g. a `terraform init -backend=false` run for validate) or
+	# backend config change. -reconfigure re-syncs backend config without
+	# state migration — safe here because every stack's backend is static.
+	log "terraform init"
+	terraform init -input=false -reconfigure >/dev/null
 
 	# Generate a plan to a file so we apply exactly what we previewed.
 	# -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes. Capture the
