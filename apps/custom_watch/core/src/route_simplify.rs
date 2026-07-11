@@ -10,10 +10,15 @@
 //! uses an equirectangular projection centred on the chord's start, which is
 //! cheap and accurate enough at the scale RDP cares about (tens of metres).
 //!
-//! RDP is recursive on the growable web/Dart sides. Without an allocator the
-//! watch runs it iteratively over an explicit fixed-capacity stack of pending
-//! `(first, last)` ranges, and the kept-point flags live in a fixed bool array
-//! rather than a heap-allocated one — same kept set, same output, no recursion.
+//! RDP is recursive on the growable web/Dart sides, with no output cap. Without
+//! an allocator the watch can't size a per-input-point flag array — the input
+//! track can be far longer than the output capacity — so it runs a priority
+//! variant iteratively: it repeatedly splits the kept polyline at the segment
+//! whose farthest point deviates most, holding only the kept input indices in a
+//! fixed-capacity sorted list. Below the [`MAX_SIMPLIFY_POINTS`] budget the kept
+//! set is identical to the recursive twin (RDP's kept set is independent of
+//! split order); at the budget it degrades by keeping the most significant
+//! points — the whole line is thinned, the tail is never truncated. No recursion.
 //!
 //! Pure logic, no peripherals, no allocator.
 
@@ -28,12 +33,12 @@ const R_M: f64 = 6_371_000.0;
 /// jitter; tighter keeps more turns, looser collapses more.
 pub const DEFAULT_EPSILON_METRES: f64 = 10.0;
 
-/// Point capacity. A tier-1 recording is bounded like a course polyline
-/// ([`crate::course::MAX_COURSE_POINTS`]); an input longer than this is clamped
-/// to its first [`MAX_SIMPLIFY_POINTS`] points rather than overflowing the fixed
-/// buffers. The RDP pending-range stack and the kept-point flags are sized to
-/// this cap: in the pathological all-kept case the stack holds one range per
-/// point, so it can never overflow at or below the cap.
+/// Output point budget. The simplified polyline is capped at this many
+/// waypoints — a tier-1 course polyline is bounded the same way
+/// ([`crate::course::MAX_COURSE_POINTS`]). The input track may be longer: RDP
+/// runs over the whole line and, if the epsilon-driven result would exceed the
+/// budget, keeps the most significant points up to it rather than truncating the
+/// tail. The kept-index list is sized to this cap and can never overflow it.
 pub const MAX_SIMPLIFY_POINTS: usize = 256;
 
 /// A track / route waypoint in degrees, with an optional elevation. Mirrors the
@@ -59,48 +64,65 @@ pub struct RouteSummary {
 /// within `epsilon_metres` of the straight-line chords. Fewer than three points
 /// are returned unchanged. The first and last points are always retained.
 pub fn simplify_track(points: &[LatLng], epsilon_metres: f64) -> Vec<LatLng, MAX_SIMPLIFY_POINTS> {
-    let n = points.len().min(MAX_SIMPLIFY_POINTS);
+    let n = points.len();
     let mut out: Vec<LatLng, MAX_SIMPLIFY_POINTS> = Vec::new();
     if n < 3 {
-        for p in points.iter().take(n) {
+        for p in points.iter() {
             let _ = out.push(*p);
         }
         return out;
     }
-    let mut keep = [false; MAX_SIMPLIFY_POINTS];
-    keep[0] = true;
-    keep[n - 1] = true;
-    dp_step(points, 0, n - 1, epsilon_metres, &mut keep);
-    for i in 0..n {
-        if keep[i] {
-            let _ = out.push(points[i]);
-        }
+    for &i in dp_budgeted(points, epsilon_metres).iter() {
+        let _ = out.push(points[i]);
     }
     out
 }
 
-fn dp_step(points: &[LatLng], first: usize, last: usize, eps: f64, keep: &mut [bool]) {
-    let mut stack: Vec<(usize, usize), MAX_SIMPLIFY_POINTS> = Vec::new();
-    let _ = stack.push((first, last));
-    while let Some((first, last)) = stack.pop() {
-        if last <= first + 1 {
-            continue;
-        }
-        let mut max_dist = 0.0;
-        let mut max_index = first;
-        for i in (first + 1)..last {
-            let d = perp_distance_metres(&points[i], &points[first], &points[last]);
-            if d > max_dist {
-                max_dist = d;
-                max_index = i;
+/// Priority Ramer-Douglas-Peucker over the whole line, bounded to
+/// [`MAX_SIMPLIFY_POINTS`] output points. Returns the kept input indices in
+/// ascending order, endpoints always included. Repeatedly splits the kept
+/// polyline at the segment carrying the point of greatest perpendicular
+/// deviation, stopping when no segment's farthest point exceeds `eps` or the
+/// budget is reached — so below the budget the kept set matches the recursive
+/// twin, and at the budget the most significant points survive across the whole
+/// line rather than the tail being dropped. `points.len()` must be >= 3.
+fn dp_budgeted(points: &[LatLng], eps: f64) -> Vec<usize, MAX_SIMPLIFY_POINTS> {
+    let mut kept: Vec<usize, MAX_SIMPLIFY_POINTS> = Vec::new();
+    let _ = kept.push(0);
+    let _ = kept.push(points.len() - 1);
+    while kept.len() < MAX_SIMPLIFY_POINTS {
+        let mut best_dev = eps;
+        let mut best_slot = 0;
+        let mut best_index = 0;
+        let mut found = false;
+        for slot in 0..kept.len() - 1 {
+            let a = kept[slot];
+            let b = kept[slot + 1];
+            if b <= a + 1 {
+                continue;
+            }
+            let mut seg_dev = 0.0;
+            let mut seg_index = a;
+            for i in (a + 1)..b {
+                let d = perp_distance_metres(&points[i], &points[a], &points[b]);
+                if d > seg_dev {
+                    seg_dev = d;
+                    seg_index = i;
+                }
+            }
+            if seg_dev > best_dev {
+                best_dev = seg_dev;
+                best_slot = slot;
+                best_index = seg_index;
+                found = true;
             }
         }
-        if max_dist > eps {
-            keep[max_index] = true;
-            let _ = stack.push((first, max_index));
-            let _ = stack.push((max_index, last));
+        if !found {
+            break;
         }
+        let _ = kept.insert(best_slot + 1, best_index);
     }
+    kept
 }
 
 /// Perpendicular distance from `p` to the segment `a`-`b`, in metres, over an
@@ -259,6 +281,65 @@ mod tests {
         assert_eq!(out[0].lat, 0.0);
         assert_eq!(out[0].lng, 0.0);
         assert_eq!(out[out.len() - 1].lng, 0.0002);
+    }
+
+    #[test]
+    fn simplify_over_256_points_keeps_a_tail_feature_and_endpoints_within_budget() {
+        // A mostly-straight line far longer than the output budget, with a sharp
+        // detour living well past index 256. The old code truncated to the first
+        // 256 points and lost the tail entirely; RDP must now thin the whole line.
+        let mut pts: std::vec::Vec<LatLng> = (0..400).map(|i| ll(0.0, i as f64 * 0.001)).collect();
+        for p in pts.iter_mut().take(381).skip(370) {
+            p.lat = 0.01;
+        }
+        let out = simplify_track(&pts, DEFAULT_EPSILON_METRES);
+        assert!(
+            out.len() <= MAX_SIMPLIFY_POINTS,
+            "must respect the output budget"
+        );
+        assert!(out.len() >= 3, "endpoints plus the tail feature survive");
+        assert_eq!(out[0], pts[0], "first point preserved");
+        assert_eq!(
+            out[out.len() - 1],
+            pts[399],
+            "last point preserved, not the truncated points[255]"
+        );
+        assert!(
+            out.iter().any(|p| p.lat > 0.005),
+            "the tail detour past index 256 must survive simplification"
+        );
+    }
+
+    #[test]
+    fn simplify_caps_a_dense_zigzag_at_the_budget_without_dropping_the_tail() {
+        // Every interior point is a corner far above epsilon, so unbounded RDP
+        // would keep all 600. The budget forces a thinning of the WHOLE line: the
+        // output caps at MAX_SIMPLIFY_POINTS, keeps both endpoints, and still
+        // represents the tail rather than truncating past index 256.
+        let n = 600usize;
+        let pts: std::vec::Vec<LatLng> = (0..n)
+            .map(|i| ll(if i % 2 == 0 { 0.0 } else { 0.0005 }, i as f64 * 0.001))
+            .collect();
+        let out = simplify_track(&pts, DEFAULT_EPSILON_METRES);
+        assert_eq!(
+            out.len(),
+            MAX_SIMPLIFY_POINTS,
+            "dense corners fill the point budget exactly"
+        );
+        let idx: std::vec::Vec<usize> = out
+            .iter()
+            .map(|p| (p.lng / 0.001).round() as usize)
+            .collect();
+        assert_eq!(*idx.first().unwrap(), 0, "first endpoint kept");
+        assert_eq!(
+            *idx.last().unwrap(),
+            n - 1,
+            "last endpoint kept, tail not truncated"
+        );
+        assert!(
+            idx.iter().any(|&i| i > MAX_SIMPLIFY_POINTS && i < n - 1),
+            "an interior corner past the 256th point must survive"
+        );
     }
 
     #[test]
