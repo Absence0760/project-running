@@ -13,6 +13,9 @@
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
 //!   port: web `route_snap.ts` / `route_geometry.ts` + the mobile
 //!   route-overlay thresholds)
+//! - [`cutoff_eta`] — live next-cutoff ETA: on / tight / behind at the nearest
+//!   cutoff ahead from distance-along-route + recent pace, honest `Unknown` on
+//!   a stale fix (port of web `runs/live_cutoff_eta.ts`)
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
@@ -26,6 +29,10 @@
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
 //!   goal distance + time) the recorder folds into its snapshot
+//! - [`race_predictor`] — the 5K/10K/Half/Marathon race-time ladder (parity
+//!   port of web `training/race_predictor.ts` + the reused Riegel +
+//!   prediction-confidence helpers), recency-weighted anchor, per-rung
+//!   confidence
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
@@ -38,6 +45,7 @@
 pub mod alerts;
 pub mod button;
 pub mod course;
+pub mod cutoff_eta;
 pub mod elevation;
 pub mod face;
 pub mod fix;
@@ -48,6 +56,7 @@ pub mod hr_zones;
 pub mod link;
 pub mod pacer;
 pub mod page;
+pub mod race_predictor;
 pub mod record;
 pub mod run_store;
 pub mod trackback;
