@@ -15,7 +15,9 @@
 //! `apps/mobile_android/lib/roadbook.dart`) — keep the allocation, cutoff
 //! rules, edge cases, and test count in lockstep. The 30-minute "tight" span is
 //! the crate-shared [`CUTOFF_TIGHT_S`] reused from `cutoff_eta`; the grade
-//! factor and trusted-segment length come from `grade_adjusted_pace`. The web
+//! factor and trusted-segment length come from `grade_adjusted_pace`; the
+//! cutoff clock/elapsed validation reuses [`crate::route_markers::parse_cutoff`].
+//! The web
 //! canonical (and the Dart twin) each define the roadbook `CutoffStatus`
 //! verdict locally, so this port does the same rather than borrow the
 //! semantically-distinct `cutoff_eta::CutoffEtaStatus` (on/tight/behind).
@@ -379,35 +381,12 @@ pub fn build_roadbook<'a>(
     }
 }
 
-struct CutoffParts<'a> {
-    clock: Option<&'a str>,
-    elapsed_s: Option<u32>,
-}
-
-/// Validate + normalise a cutoff's clock / elapsed inputs — the roadbook half
-/// of web `route_markers.ts` `parseCutoff` (not ported as its own module here).
-/// `None` when neither a valid clock nor a valid elapsed is present.
-fn parse_cutoff(clock: Option<&str>, elapsed: Option<f64>) -> Option<CutoffParts<'_>> {
-    let out_clock = clock.filter(|c| valid_clock(c));
-    let out_elapsed = elapsed
-        .filter(|e| e.is_finite() && *e >= 0.0)
-        .map(|e| libm::floor(e) as u32);
-    if out_clock.is_some() || out_elapsed.is_some() {
-        Some(CutoffParts {
-            clock: out_clock,
-            elapsed_s: out_elapsed,
-        })
-    } else {
-        None
-    }
-}
-
 /// Resolve a cutoff to a limit in elapsed seconds from the start. Prefers the
 /// elapsed field; otherwise derives from the clock minus the start clock,
 /// wrapping a clock at or before the start to the next day (a 24h+ race
 /// expressing its overall limit as the start wall-clock one day on).
 fn cutoff_limit_s(stop: &Stop, start_clock_min: Option<f64>) -> Option<u32> {
-    let parts = parse_cutoff(stop.cutoff_clock, stop.cutoff_elapsed_s)?;
+    let parts = crate::route_markers::parse_cutoff(stop.cutoff_clock, stop.cutoff_elapsed_s)?;
     if let Some(e) = parts.elapsed_s {
         return Some(e);
     }
@@ -421,25 +400,8 @@ fn cutoff_limit_s(stop: &Stop, start_clock_min: Option<f64>) -> Option<u32> {
     None
 }
 
-/// True when `s` is a "HH:MM" 24-hour clock — the web `CLOCK_RE` regex.
-fn valid_clock(s: &str) -> bool {
-    let b = s.as_bytes();
-    if b.len() != 5 || b[2] != b':' {
-        return false;
-    }
-    if !(b[0].is_ascii_digit()
-        && b[1].is_ascii_digit()
-        && b[3].is_ascii_digit()
-        && b[4].is_ascii_digit())
-    {
-        return false;
-    }
-    let hh = (b[0] - b'0') * 10 + (b[1] - b'0');
-    let mm = (b[3] - b'0') * 10 + (b[4] - b'0');
-    hh <= 23 && mm <= 59
-}
-
-/// Minutes-past-midnight for a clock already validated by [`valid_clock`].
+/// Minutes-past-midnight for a clock already validated by
+/// [`crate::route_markers::valid_clock`].
 fn clock_minutes(s: &str) -> u32 {
     let b = s.as_bytes();
     let hh = (b[0] - b'0') as u32 * 10 + (b[1] - b'0') as u32;
