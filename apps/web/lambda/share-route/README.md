@@ -45,8 +45,16 @@ platforms by default, so the arm64 package is normally present. If
 error, install it explicitly before building the zip:
 
 ```bash
-npm install --force --workspace=apps/web --cpu=arm64 --os=linux @resvg/resvg-js-linux-arm64-gnu
+ver="$(node -p "require('@resvg/resvg-js/package.json').version")"
+npm pack "@resvg/resvg-js-linux-arm64-gnu@${ver}" --pack-destination /tmp
+mkdir -p node_modules/@resvg/resvg-js-linux-arm64-gnu
+tar -xzf "/tmp/resvg-resvg-js-linux-arm64-gnu-${ver}.tgz" -C node_modules/@resvg/resvg-js-linux-arm64-gnu --strip-components=1
 ```
+
+(Do **not** `npm install --cpu=arm64 --os=linux` it: that re-evaluates the
+whole tree's optional deps for arm64 and prunes the x64 native bindings
+the build toolchain itself needs — rolldown lost its host binding this
+way on the `web@1.0.2` release.)
 
 The SvelteKit dev-server still owns `/share/route/*` and
 `/og/route/*.png` under `npm run dev` (see

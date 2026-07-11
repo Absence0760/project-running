@@ -121,10 +121,12 @@ function copyResvgPackages() {
 	} catch {
 		console.error(
 			`[share-run build] missing ${RESVG_ARM64}. The Lambda runs on ` +
-				`arm64, so its native binary must ship in the zip. Install it ` +
-				`with:\n\n  npm install --workspace=apps/web --cpu=arm64 ` +
-				`--os=linux ${RESVG_ARM64}\n\nor run \`npm ci\` on a host that ` +
-				`resolves linux/arm64 optional deps. See ` +
+				`arm64, so its native binary must ship in the zip. Fetch the versioned tarball and ` +
+				`unpack it into node_modules (npm pack + tar; do NOT ` +
+				`npm install --cpu=arm64 — that re-evaluates every optional ` +
+				`dep for arm64 and prunes the x64 bindings the build ` +
+				`toolchain itself needs). Recipe: release-web.yml's ` +
+				`install step, and ` +
 				`apps/web/lambda/share-run/README.md.`,
 		);
 		process.exit(1);

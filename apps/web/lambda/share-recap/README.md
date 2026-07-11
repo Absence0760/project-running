@@ -32,8 +32,10 @@ node lambda/share-recap/build.mjs
 
 The zip bundles `src/index.ts` + its `$lib` imports (supabase-js inlined) and
 copies the arm64 `@resvg/resvg-js` native package into `node_modules`. Needs
-`@resvg/resvg-js-linux-arm64-gnu` resolvable (pulled by `npm ci` as an optional
-dep, or install with `--cpu=arm64 --os=linux`).
+`@resvg/resvg-js-linux-arm64-gnu` resolvable — npm ci only installs
+host-platform optional deps, so on x64 fetch it via `npm pack` + untar into
+`node_modules` (recipe in `share-run/README.md`; never
+`npm install --cpu=arm64`, which prunes the host toolchain's own bindings).
 
 ## Env vars (set on the Lambda)
 
