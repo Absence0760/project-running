@@ -8,6 +8,9 @@
 //!
 //! - [`alerts`] — on-run alerts: drink / eat reminders on the `fuel_plan`
 //!   moving-time cadence + the HR-zone ceiling alert
+//! - [`auto_segment_effort`] — pick the route a route-less run followed +
+//!   batch its segment-effort rows (port of web
+//!   `segments/auto_segment_effort.ts`; reuses [`segments`])
 //! - [`fix`] — the GPS fix domain model + the RMC/GGA accumulator
 //! - [`course`] — breadcrumb course polyline, nearest-point projection,
 //!   off-course alert latch, and the panel-fit pixel mapping (fifth parity
@@ -30,6 +33,10 @@
 //! - [`elevation`] — barometric altitude + the cumulative-vert accumulator
 //! - [`gnss_mode`] — the selectable GNSS recording modes (fix interval +
 //!   projected battery hours) BTN3 cycles on the idle face
+//! - [`goals`] — multi-metric run goals: distance / time / pace / run-count
+//!   targets over a week or month window (port of web `training/goals.ts`; the
+//!   localStorage persistence + UUID id + i18n period label are web-only, dates
+//!   collapsed to a day index like [`current_week`])
 //! - [`grade_adjusted_pace`] — the Minetti GAP model (fourth parity port) +
 //!   the streaming grade estimator the recorder feeds
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
@@ -47,10 +54,17 @@
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
 //!   goal distance + time) the recorder folds into its snapshot
+//! - [`race_day`] — race-day pacing: days-until, even / negative-split per-unit
+//!   splits, the distance-aware pre-race checklist (items as enum ids), goal
+//!   feasibility vs a prediction, and the split-time formatter (port of web
+//!   `runs/race_day.ts`)
 //! - [`race_predictor`] — the 5K/10K/Half/Marathon race-time ladder (parity
 //!   port of web `training/race_predictor.ts` + the reused Riegel +
 //!   prediction-confidence helpers), recency-weighted anchor, per-rung
 //!   confidence
+//! - [`readiness`] — readiness-to-run score from form / sleep / resting-HR drift
+//!   around a 75 baseline + the dominant-contributor advice (port of web
+//!   `training/readiness.ts`; notes/advice carried as enums, not English)
 //! - [`record`] — recording state machine: commands + fixes in, run totals out
 //! - [`trackback`] — back-to-start: breadcrumb buffer, distance/bearing to
 //!   the start, the course-over-ground heading + relative direction arrow
@@ -87,6 +101,10 @@
 //!   canonical English assembler, the offline "describe this route" baseline
 //!   (port of web `routes/route_description.ts`; reuses
 //!   [`distance_bands::band_for_distance`])
+//! - [`route_elevation`] — positive-delta elevation gain + evenly-spaced
+//!   coordinate sampling (the pure half of web `routes/elevation.ts`, renamed to
+//!   avoid the [`elevation`] barometric-accumulator collision; `fetchElevations`
+//!   is a browser network hop and stays web-only)
 //! - [`route_geometry`] — interpolate a fraction to a distance-weighted point on
 //!   a route polyline + the inverse distance-along-route projection + cumulative
 //!   length (port of web `routes/route_geometry.ts`; the self-contained twin of
@@ -95,10 +113,17 @@
 //!   plus one `<wpt>` per course marker, kind→`<sym>` + cutoff/services in
 //!   `<desc>` (port of web `routes/route_gpx.ts`; reuses
 //!   [`route_markers::parse_cutoff`], builds into a `heapless::String`)
+//! - [`route_simplify`] — Ramer-Douglas-Peucker track simplification + the
+//!   route summary (simplified waypoints + equirectangular distance +
+//!   elevation gain) (port of web `routes/route_simplify.ts`; iterative RDP
+//!   over a fixed-capacity stack, no recursion)
 //! - [`plan_progress`] — base→build→peak→taper phase ordering + longest
 //!   completed long run (port of web `training/plan_progress.ts`)
 //! - [`plan_adherence`] — weekly drift over/under + missed-workout make-up/skip
 //!   advice as enums (port of web `training/plan_adherence.ts`)
+//! - [`plan_replan`] — propose future-only make-up / ease-off changes around
+//!   missed sessions (port of web `training/plan_replan.ts`; reuses
+//!   [`plan_adherence::weekly_drift`] + [`plan_adherence::missed_workout_advice`])
 //! - [`current_week`] — bucket activities onto the seven days of the real
 //!   calendar week honouring the week-start pref (port of web
 //!   `training/current_week.ts`; ISO dates collapsed to a Unix-epoch day index)
@@ -124,6 +149,9 @@
 //! - [`run_heatmap`] — grid-quantise many tracks into clamped weighted cells +
 //!   the fit box (port of web `routes/run_heatmap.ts`; the MapLibre GeoJSON
 //!   emitters are web-only)
+//! - [`run_stats`] — on-demand run stats from a GPS track: moving time,
+//!   positive elevation gain, per-unit splits (port of web `runs/run_stats.ts`;
+//!   reuses [`grade_adjusted_pace::haversine_metres`], epoch-ms timestamps)
 //! - [`relink_candidates`] — the runs eligible to re-link to a planned workout
 //!   (±7-day window, excluding already-linked) (port of web
 //!   `training/relink_candidates.ts`; dates collapsed to a day index)
@@ -133,11 +161,24 @@
 //! - [`finisher_certificate`] — certificate eligibility + the time / distance /
 //!   ordinal-place formatters (port of the shaping half of web
 //!   `runs/finisher_certificate.ts`; the SVG/PNG builder is web-only)
+//! - [`recap`] — Year / Month-in-Running aggregator: totals, run-family
+//!   longest/fastest, top week, streaks, monthly strip + the earned trophy grid
+//!   (port of web `runs/recap.ts`; reuses [`current_week::dow_of`] +
+//!   [`locale_defaults::DistanceUnit`], ISO timestamps collapsed to day indices)
+//! - [`streaks`] — current + best run-streak counts with the Strava grace rule
+//!   (port of web `runs/streaks.ts`; ISO local-day keys collapsed to a day
+//!   index, so the day-step arithmetic is DST-safe by construction)
+//! - [`pr_recency`] — the relative age of a PR date as a language-free bucket
+//!   enum, softening an old best for a returning runner (port of web
+//!   `runs/pr_recency.ts`; ISO dates collapsed to a day index)
+//! - [`turn_cues`] — offline turn-by-turn cues from a route polyline's bearing
+//!   deltas at each interior vertex (port of web `routes/turn_cues.ts`)
 
 #![cfg_attr(not(test), no_std)]
 
 pub mod age_grade;
 pub mod alerts;
+pub mod auto_segment_effort;
 pub mod badges;
 pub mod bar_chart;
 pub mod button;
@@ -158,6 +199,7 @@ pub mod fuel_plan;
 pub mod gauge;
 pub mod gear_wear;
 pub mod gnss_mode;
+pub mod goals;
 pub mod grade_adjusted_pace;
 pub mod hr_zones;
 pub mod hydration;
@@ -170,21 +212,31 @@ pub mod pacer;
 pub mod page;
 pub mod plan_adherence;
 pub mod plan_progress;
+pub mod plan_replan;
+pub mod pr_recency;
 pub mod privacy;
+pub mod race_day;
 pub mod race_predictor;
+pub mod readiness;
+pub mod recap;
 pub mod record;
 pub mod relink_candidates;
 pub mod roadbook;
 pub mod route_description;
+pub mod route_elevation;
 pub mod route_geometry;
 pub mod route_gpx;
 pub mod route_markers;
+pub mod route_simplify;
 pub mod run_heatmap;
+pub mod run_stats;
 pub mod run_store;
 pub mod segments;
 pub mod settings;
 pub mod statusbar;
+pub mod streaks;
 pub mod track_projection;
 pub mod trackback;
 pub mod training_load;
 pub mod training_paces;
+pub mod turn_cues;
