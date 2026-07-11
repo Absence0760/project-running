@@ -273,6 +273,8 @@ mod tests {
             gear: None,
             roadbook: None,
             fuel: None,
+            training_paces: None,
+            fitness: None,
         }
     }
 
