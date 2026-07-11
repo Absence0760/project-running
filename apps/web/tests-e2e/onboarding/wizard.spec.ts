@@ -259,6 +259,65 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 			.eq('id', USER_A.id);
 	});
 
+	test('the body-weight step honours the chosen distance unit — miles asks for lbs and stores canonical kg', async ({
+		page,
+	}) => {
+		// Regression: step 4 used to ask for weight in kg unconditionally,
+		// while step 2 auto-selects miles for US/GB/LR/MM runners. An
+		// imperial runner typing "154" (thinking pounds) had it stored as
+		// 154 KG — a 340-lb body weight that poisons the TDEE / hydration
+		// math consuming body_weight_kg. The fix derives the weight unit
+		// from the distance choice, labels + parses in that unit (storage
+		// stays canonical kg), and persists weight_unit so Settings agrees.
+		test.setTimeout(45_000);
+		await page.goto('/onboarding');
+
+		// Step 1 — display name
+		await page.getByLabel('Display name').fill('E2E Weight Unit');
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 2 — pick Miles, which flips the weight step to lbs.
+		await expect(
+			page.getByRole('heading', { name: /Kilometres or miles/i })
+		).toBeVisible();
+		await page.getByRole('radio', { name: /Miles/ }).click();
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 3 — goal (leave unset; skip via Continue).
+		await expect(page.getByRole('heading', { name: /main goal/i })).toBeVisible();
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 4 — about you: the weight field now reads lbs, not kg.
+		await expect(
+			page.getByRole('heading', { name: /A bit about you/i })
+		).toBeVisible();
+		await expect(page.getByText(/Body weight in lbs/i)).toBeVisible();
+		// Enter 154 lbs → 154 / 2.2046226218 = 69.85 kg canonical.
+		await page.getByLabel(/Body weight in lbs/i).fill('154');
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 5 — privacy
+		await page.getByRole('radio', { name: /Private/i }).click();
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 6 — notifications
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 7 — finish
+		await page.getByRole('button', { name: 'Open dashboard' }).click();
+		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+
+		const admin = getAdminClient();
+		const { data: settings } = await admin
+			.from('user_settings')
+			.select('prefs')
+			.eq('user_id', USER_A.id)
+			.maybeSingle();
+		const p = (settings?.prefs ?? {}) as Record<string, unknown>;
+		// The chosen distance unit propagated to the weight_unit pref…
+		expect(p.weight_unit).toBe('lbs');
+		// …and the typed lbs value was stored as canonical kg, NOT verbatim.
+		expect(p.body_weight_kg as number).toBeCloseTo(69.9, 1);
+	});
+
 	test('DOB entered without the health-data consent still writes user_profiles.date_of_birth (family-club minor-exclusion floor)', async ({
 		page,
 	}) => {
