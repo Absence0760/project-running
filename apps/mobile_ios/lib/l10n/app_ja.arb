@@ -203,6 +203,7 @@
   "signInResetSent": "そのメールアドレスが登録されている場合、リセット用リンクを送信しました。",
   "signInWithApple": "Appleでサインイン",
   "signInWithGoogle": "Googleでサインイン",
+  "googleSignInSoon": "Google でのサインインは近日対応予定です。今はメールをご利用ください。",
   "signInContinueOffline": "オフラインで続ける",
   "signInCreateAccountPrompt": "アカウントをお持ちでないですか？ 作成する",
   "signUpTitle": "アカウントを作成",

@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/sign_in_screen.dart';
@@ -81,6 +82,23 @@ void main() {
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
       expect(find.textContaining('Invalid credentials'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Google button shows a coming-soon notice when the provider is unconfigured',
+        (tester) async {
+      // GOOGLE_WEB_CLIENT_ID unset (empty env) → the button must show the
+      // friendly coming-soon copy, not attempt a native sign-in or surface
+      // a raw config error. Mirrors web's PUBLIC_GOOGLE_AUTH_ENABLED gate.
+      dotenv.loadFromString(envString: '', isOptional: true);
+      await tester.binding.setSurfaceSize(const Size(400, 900));
+      await _pump(tester, _FakeApiClient());
+      final googleBtn =
+          find.widgetWithText(OutlinedButton, 'Sign in with Google');
+      await tester.ensureVisible(googleBtn);
+      await tester.tap(googleBtn);
+      await tester.pump();
+      expect(find.textContaining('coming soon'), findsOneWidget);
     });
 
     testWidgets('"Create one" link navigates to SignUpScreen', (tester) async {

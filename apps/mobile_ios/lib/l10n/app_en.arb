@@ -1006,6 +1006,10 @@
   "@signInWithGoogle": {
     "description": "Google OAuth button label on the sign-in screen"
   },
+  "googleSignInSoon": "Google sign-in is coming soon. For now, please use email.",
+  "@googleSignInSoon": {
+    "description": "Notice shown when the Google button is tapped but the provider isn't configured yet"
+  },
   "signInContinueOffline": "Continue offline",
   "@signInContinueOffline": {
     "description": "Button to dismiss the sign-in screen and use the app without an account"

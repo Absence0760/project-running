@@ -1325,6 +1325,12 @@ abstract class AppLocalizations {
   /// **'Sign in with Google'**
   String get signInWithGoogle;
 
+  /// Notice shown when the Google button is tapped but the provider isn't configured yet
+  ///
+  /// In en, this message translates to:
+  /// **'Google sign-in is coming soon. For now, please use email.'**
+  String get googleSignInSoon;
+
   /// Button to dismiss the sign-in screen and use the app without an account
   ///
   /// In en, this message translates to:

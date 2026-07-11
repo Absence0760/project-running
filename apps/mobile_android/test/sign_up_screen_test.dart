@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/sign_up_screen.dart';
@@ -190,6 +191,26 @@ void main() {
       await tester.pump();
       expect(client.capturedEmail, isNull);
       expect(find.textContaining('16 or older'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Google button shows coming-soon before the gate when unconfigured',
+        (tester) async {
+      // With the provider unconfigured (empty env) the coming-soon notice
+      // must win even with the GDPR gates unchecked — the button isn't
+      // functional yet, so it shouldn't nag about age/terms first.
+      dotenv.loadFromString(envString: '', isOptional: true);
+      final client = _FakeApiClient();
+      await _pump(tester, client);
+      final googleBtn =
+          find.widgetWithText(OutlinedButton, 'Continue with Google');
+      await tester.ensureVisible(googleBtn);
+      await tester.tap(googleBtn);
+      await tester.pump();
+      expect(find.textContaining('coming soon'), findsOneWidget);
+      // The config check precedes the gate, so no age-gate error and no API call.
+      expect(find.textContaining('16 or older'), findsNothing);
+      expect(client.capturedEmail, isNull);
     });
 
     testWidgets('"Sign in" back link pops the screen', (tester) async {

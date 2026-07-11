@@ -728,6 +728,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInWithGoogle => 'Sign in with Google';
 
   @override
+  String get googleSignInSoon =>
+      'Google sign-in is coming soon. For now, please use email.';
+
+  @override
   String get signInContinueOffline => 'Continue offline';
 
   @override
