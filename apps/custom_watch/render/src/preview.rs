@@ -229,3 +229,14 @@ fn preview_mini_profile() {
     );
     show("mini-profile: elevation climb + descent", &fb);
 }
+
+#[test]
+fn preview_dial_and_compass() {
+    // The navigation-glance shape a future page would show: a fuel-fraction ring
+    // dial with a trackback bearing-to-start arrow nested inside it.
+    let mut fb = Framebuffer::new();
+    let (cx, cy) = (WIDTH / 2, HEIGHT / 2);
+    widgets::draw_dial(&mut fb, cx, cy, 56, 12, 0.66);
+    widgets::draw_compass(&mut fb, cx, cy, 34, 300);
+    show("dial + compass: fuel ring + bearing-to-start", &fb);
+}
