@@ -281,6 +281,18 @@ pub fn page_rows(
             Page::ElevationProfile => {
                 elevation_profile_glance(fix, snap, elev, tag, uptime_s, animate, mode)
             }
+            Page::Recap => recap_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Streaks => streaks_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::RunStats => run_stats_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::PrRecency => pr_recency_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::PlanReplan => plan_replan_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Readiness => readiness_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Goals => goals_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::TurnCue => turn_cue_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::RouteSimplify => route_simplify_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::AutoEffort => auto_effort_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::RouteElev => route_elev_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::RaceDay => race_day_glance(fix, snap, tag, uptime_s, animate, mode),
         },
     }
 }
@@ -316,7 +328,19 @@ pub fn page_icons(
         | Page::GearWear
         | Page::TrainingPaces
         | Page::Fitness
-        | Page::ElevationProfile => [None; ROWS],
+        | Page::ElevationProfile
+        | Page::Recap
+        | Page::Streaks
+        | Page::RunStats
+        | Page::PrRecency
+        | Page::PlanReplan
+        | Page::Readiness
+        | Page::Goals
+        | Page::TurnCue
+        | Page::RouteSimplify
+        | Page::AutoEffort
+        | Page::RouteElev
+        | Page::RaceDay => [None; ROWS],
     }
 }
 
@@ -502,6 +526,20 @@ pub fn page_hero(
             }
             row
         }
+        // The twelve 2026-07-11 synced-summary pages are rows-only (no 2x hero):
+        // each headlines its number in the rows, like the Nav page.
+        Page::Recap
+        | Page::Streaks
+        | Page::RunStats
+        | Page::PrRecency
+        | Page::PlanReplan
+        | Page::Readiness
+        | Page::Goals
+        | Page::TurnCue
+        | Page::RouteSimplify
+        | Page::AutoEffort
+        | Page::RouteElev
+        | Page::RaceDay => return None,
     })
 }
 
@@ -1091,12 +1129,7 @@ fn fuel_glance(
             match f.carry {
                 Some(c) => {
                     let _ = write!(rows[4], "{:<7}{} G", "CARB", (c.carbs_g as u32).min(9999));
-                    let _ = write!(
-                        rows[5],
-                        "{:<7}{} ML",
-                        "FLUID",
-                        (c.fluid_ml as u32).min(99999)
-                    );
+                    let _ = write!(rows[5], "{:<7}{} ML", "FLUID", (c.fluid_ml as u32));
                 }
                 None => {
                     let _ = write!(rows[4], "{:<7}--", "CARB");
@@ -1108,7 +1141,7 @@ fn fuel_glance(
                 "{:<7}{}G {}ML",
                 "TOTAL",
                 (f.total_carbs_g as u32).min(9999),
-                (f.total_fluid_ml as u32).min(99999)
+                (f.total_fluid_ml as u32)
             );
         }
     }
@@ -1323,6 +1356,382 @@ fn elevation_profile_glance(
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// Write the common tag row (row 0) and GPS row (row 8) shared by every
+/// synced-summary glance, blinking the REC tag with the animation window.
+fn summary_frame(
+    rows: &mut [Row; ROWS],
+    fix: Option<&Fix>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) {
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+}
+
+/// The Recap glance: the synced Year/Month-in-Running totals. "RECAP --" /
+/// "NOT SYNCED" until the phone pushes a summary.
+#[allow(clippy::too_many_arguments)]
+fn recap_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.recap {
+        None => {
+            let _ = write!(rows[2], "RECAP --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "{:<7}{} RUNS", "RECAP", v.runs.min(9999));
+            let _ = write!(rows[4], "{:<7}{} KM", "DIST", v.distance_km);
+            let _ = write!(rows[5], "{:<7}{} KM", "LONGEST", v.longest_km.min(9999));
+            let _ = write!(rows[6], "{:<7}{}D", "STREAK", v.best_streak_days.min(9999));
+        }
+    }
+    rows
+}
+
+/// The Streaks glance: current + best run-streak day counts.
+#[allow(clippy::too_many_arguments)]
+fn streaks_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.streaks {
+        None => {
+            let _ = write!(rows[2], "STREAK --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "{:<7}{}D", "CURRENT", v.current_days.min(9999));
+            let _ = write!(rows[4], "{:<7}{}D", "BEST", v.best_days.min(9999));
+        }
+    }
+    rows
+}
+
+/// The RunStats glance: a synced moving-time / gain / split-count summary.
+#[allow(clippy::too_many_arguments)]
+fn run_stats_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.run_stats {
+        None => {
+            let _ = write!(rows[2], "STATS --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let (h, m, s) = hms(v.moving_s);
+            let _ = write!(rows[2], "{:<7}{}:{:02}:{:02}", "MOVING", h.min(999), m, s);
+            let _ = write!(rows[4], "{:<7}{} M", "GAIN", v.gain_m);
+            let _ = write!(rows[5], "{:<7}{}", "SPLITS", v.splits.min(9999));
+        }
+    }
+    rows
+}
+
+/// The PrRecency glance: how long ago the current PR was set, bucketed into
+/// today / days / weeks / months / years.
+#[allow(clippy::too_many_arguments)]
+fn pr_recency_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.pr_recency {
+        None => {
+            let _ = write!(rows[2], "PR AGE --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "PR AGE");
+            let d = v.days_ago;
+            if d == 0 {
+                let _ = write!(rows[4], "TODAY");
+            } else if d < 7 {
+                let _ = write!(rows[4], "{} DAYS", d);
+            } else if d < 31 {
+                let _ = write!(rows[4], "{} WEEKS", d / 7);
+            } else if d < 365 {
+                let _ = write!(rows[4], "{} MONTHS", d / 30);
+            } else {
+                let _ = write!(rows[4], "{} YEARS", d / 365);
+            }
+        }
+    }
+    rows
+}
+
+/// The PlanReplan glance: the re-plan proposal counts (total / make-ups /
+/// ease-offs).
+#[allow(clippy::too_many_arguments)]
+fn plan_replan_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.plan_replan {
+        None => {
+            let _ = write!(rows[2], "REPLAN --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "{:<8}{}", "REPLAN", v.changes);
+            let _ = write!(rows[4], "{:<8}{}", "MAKE-UP", v.make_ups);
+            let _ = write!(rows[5], "{:<8}{}", "EASE-OFF", v.ease_offs);
+        }
+    }
+    rows
+}
+
+/// The Readiness glance: the training-readiness score + its band.
+#[allow(clippy::too_many_arguments)]
+fn readiness_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.readiness {
+        None => {
+            let _ = write!(rows[2], "READY --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let band = match v.band {
+                0 => "LOW",
+                1 => "MODERATE",
+                _ => "HIGH",
+            };
+            let _ = write!(rows[2], "{:<7}{}", "READY", v.score.min(100));
+            let _ = write!(rows[4], "{}", band);
+        }
+    }
+    rows
+}
+
+/// The Goals glance: the primary goal's ring percent + complete flag.
+#[allow(clippy::too_many_arguments)]
+fn goals_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.goals {
+        None => {
+            let _ = write!(rows[2], "GOAL --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "{:<7}{}%", "GOAL", v.percent.min(100));
+            let _ = write!(
+                rows[4],
+                "{}",
+                if v.complete {
+                    "COMPLETE"
+                } else {
+                    "IN PROGRESS"
+                }
+            );
+        }
+    }
+    rows
+}
+
+/// The TurnCue glance: the next turn on the loaded course — direction, distance
+/// to it, and how many cues remain. "NO COURSE" until one is synced.
+#[allow(clippy::too_many_arguments)]
+fn turn_cue_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.turn_cue {
+        None => {
+            let _ = write!(rows[2], "TURN --");
+            let _ = write!(rows[4], "NO COURSE");
+        }
+        Some(v) => {
+            let dir = match v.direction {
+                0 => "STRAIGHT",
+                1 => "SLIGHT L",
+                2 => "LEFT",
+                3 => "SHARP L",
+                4 => "SLIGHT R",
+                5 => "RIGHT",
+                6 => "SHARP R",
+                _ => "U-TURN",
+            };
+            let _ = write!(rows[2], "{:<7}{}", "TURN", dir);
+            let _ = write!(rows[4], "{:<7}{} M", "IN", v.distance_m);
+            let _ = write!(rows[5], "{:<7}{}", "REMAIN", v.remaining);
+        }
+    }
+    rows
+}
+
+/// The RouteSimplify glance: the simplified-course point count + length.
+#[allow(clippy::too_many_arguments)]
+fn route_simplify_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.route_simplify {
+        None => {
+            let _ = write!(rows[2], "COURSE --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "{:<7}{} PTS", "COURSE", v.points);
+            let _ = write!(rows[4], "{:<7}{} KM", "LENGTH", v.distance_km);
+        }
+    }
+    rows
+}
+
+/// The AutoEffort glance: how many considered segments matched the run.
+#[allow(clippy::too_many_arguments)]
+fn auto_effort_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.auto_effort {
+        None => {
+            let _ = write!(rows[2], "SEGMENTS --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "SEGMENTS");
+            let _ = write!(rows[4], "{:<7}{}/{}", "MATCH", v.matched, v.considered);
+        }
+    }
+    rows
+}
+
+/// The RouteElev glance: the loaded course's total gain / loss + point count.
+#[allow(clippy::too_many_arguments)]
+fn route_elev_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.route_elev {
+        None => {
+            let _ = write!(rows[2], "CRS ELEV --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let _ = write!(rows[2], "CRS ELEV");
+            let _ = write!(rows[4], "{:<7}{} M", "GAIN", v.gain_m);
+            let _ = write!(rows[5], "{:<7}{} M", "LOSS", v.loss_m);
+            let _ = write!(rows[6], "{:<7}{}", "PTS", v.points);
+        }
+    }
+    rows
+}
+
+/// The RaceDay glance: the countdown to the race + the goal-feasibility verdict.
+#[allow(clippy::too_many_arguments)]
+fn race_day_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+    summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
+    match snap.race_day {
+        None => {
+            let _ = write!(rows[2], "RACE --");
+            let _ = write!(rows[4], "NOT SYNCED");
+        }
+        Some(v) => {
+            let d = v.days_until;
+            let _ = write!(rows[2], "RACE DAY");
+            if d > 0 {
+                let _ = write!(rows[4], "IN {} DAYS", d.min(9999));
+            } else if d == 0 {
+                let _ = write!(rows[4], "TODAY");
+            } else {
+                let _ = write!(rows[4], "{} DAYS AGO", (-d).min(9999));
+            }
+            let feas = match v.feasible {
+                0 => "BEHIND",
+                1 => "ON TRACK",
+                _ => "AHEAD",
+            };
+            let _ = write!(rows[5], "{}", feas);
+        }
+    }
     rows
 }
 
@@ -1840,6 +2249,18 @@ mod tests {
             training_paces: None,
             fitness: None,
             elev_profile: crate::record::ElevProfileView::empty(),
+            recap: None,
+            streaks: None,
+            run_stats: None,
+            pr_recency: None,
+            plan_replan: None,
+            readiness: None,
+            goals: None,
+            turn_cue: None,
+            route_simplify: None,
+            auto_effort: None,
+            route_elev: None,
+            race_day: None,
         }
     }
 
@@ -1871,8 +2292,10 @@ mod tests {
     #[test]
     fn every_page_fits_the_grid_active_and_inactive() {
         use crate::record::{
-            ElevProfileView, FitnessView, FuelCarryView, FuelView, RoadbookLegView, RoadbookView,
-            TrainingPacesView, ELEV_PROFILE_CAP,
+            AutoEffortView, ElevProfileView, FitnessView, FuelCarryView, FuelView, GoalsView,
+            PlanReplanView, PrRecencyView, RaceDayView, ReadinessView, RecapView, RoadbookLegView,
+            RoadbookView, RouteElevView, RouteSimplifyView, RunStatsView, StreaksView,
+            TrainingPacesView, TurnCueView, ELEV_PROFILE_CAP,
         };
         // An active run with every new page's data at extreme values.
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
@@ -1922,10 +2345,61 @@ mod tests {
             samples: [99_999; ELEV_PROFILE_CAP],
             len: ELEV_PROFILE_CAP,
         };
+        rec.recap = Some(RecapView {
+            runs: 9999,
+            distance_km: 65535,
+            longest_km: 9999,
+            best_streak_days: 9999,
+        });
+        rec.streaks = Some(StreaksView {
+            current_days: 9999,
+            best_days: 9999,
+        });
+        rec.run_stats = Some(RunStatsView {
+            moving_s: 999 * 3600 + 59 * 60 + 59,
+            gain_m: 65535,
+            splits: 9999,
+        });
+        rec.pr_recency = Some(PrRecencyView { days_ago: 9999 });
+        rec.plan_replan = Some(PlanReplanView {
+            changes: 255,
+            make_ups: 255,
+            ease_offs: 255,
+        });
+        rec.readiness = Some(ReadinessView {
+            score: 100,
+            band: 1,
+        });
+        rec.goals = Some(GoalsView {
+            percent: 100,
+            complete: false,
+        });
+        rec.turn_cue = Some(TurnCueView {
+            direction: 0,
+            distance_m: 65535,
+            remaining: 255,
+        });
+        rec.route_simplify = Some(RouteSimplifyView {
+            points: 65535,
+            distance_km: 65535,
+        });
+        rec.auto_effort = Some(AutoEffortView {
+            matched: 255,
+            considered: 255,
+        });
+        rec.route_elev = Some(RouteElevView {
+            gain_m: 65535,
+            loss_m: 65535,
+            points: 65535,
+        });
+        rec.race_day = Some(RaceDayView {
+            days_until: -9999,
+            feasible: 1,
+        });
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
         let mut p = Page::default();
-        for _ in 0..20 {
+        for _ in 0..31 {
             let rows = page_rows(
                 p,
                 Some(&fix()),
@@ -1960,7 +2434,7 @@ mod tests {
         // page must render its honest empty state and still fit the grid.
         let inactive = snapshot(RecordState::Recording, 15_000.0);
         let mut p = Page::default();
-        for _ in 0..20 {
+        for _ in 0..31 {
             let rows = page_rows(
                 p,
                 None,
@@ -3777,5 +4251,86 @@ mod tests {
                 .as_str(),
             "--"
         );
+    }
+
+    #[test]
+    fn synced_summary_glances_render_content_and_empty_states() {
+        // Empty state — nothing pushed yet.
+        let inactive = snapshot(RecordState::Recording, 5000.0);
+        let rows = page_rows(
+            Page::Recap,
+            Some(&fix()),
+            None,
+            Some(&inactive),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "RECAP --");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+
+        // Populated recap.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.recap = Some(crate::record::RecapView {
+            runs: 120,
+            distance_km: 1500,
+            longest_km: 42,
+            best_streak_days: 30,
+        });
+        let rows = page_rows(
+            Page::Recap,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert!(
+            rows[2].as_str().contains("120 RUNS"),
+            "row2 was {:?}",
+            rows[2]
+        );
+        assert!(rows[4].as_str().contains("1500 KM"));
+
+        // Race-day countdown + verdict.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.race_day = Some(crate::record::RaceDayView {
+            days_until: 3,
+            feasible: 1,
+        });
+        let rows = page_rows(
+            Page::RaceDay,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[4].as_str(), "IN 3 DAYS");
+        assert_eq!(rows[5].as_str(), "ON TRACK");
+
+        // PR recency buckets whole days into a human unit.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.pr_recency = Some(crate::record::PrRecencyView { days_ago: 60 });
+        let rows = page_rows(
+            Page::PrRecency,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[4].as_str(), "2 MONTHS");
     }
 }

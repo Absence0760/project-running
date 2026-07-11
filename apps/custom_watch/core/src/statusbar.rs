@@ -176,15 +176,15 @@ mod tests {
     fn indicator_first_and_last_pages() {
         let first = page_indicator(Page::Dashboard);
         assert_eq!(first.active, 0);
-        let last = page_indicator(Page::ElevationProfile);
-        // ElevationProfile is the final variant, so its index is total - 1.
+        let last = page_indicator(Page::RaceDay);
+        // RaceDay is the final variant, so its index is total - 1.
         assert_eq!(last.active, last.total - 1);
     }
 
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard).total, 19);
+        assert_eq!(page_indicator(Page::Dashboard).total, 31);
     }
 
     #[test]

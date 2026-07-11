@@ -78,6 +78,41 @@ pub enum Page {
     /// run ([`crate::record::ElevProfileView`]), with total ascent / descent as
     /// context; an honest "NO ELEVATION" until the first altitude sample lands.
     ElevationProfile,
+    /// Year/Month-in-Running totals pushed from the phone ([`crate::recap`]); an
+    /// honest empty state until synced.
+    Recap,
+    /// Current + best run-streak day counts ([`crate::streaks`]); empty until
+    /// synced.
+    Streaks,
+    /// A synced run-stats summary — moving time / gain / split count
+    /// ([`crate::run_stats`]); empty until synced.
+    RunStats,
+    /// How long ago the current PR was set, bucketed ([`crate::pr_recency`]);
+    /// empty until synced.
+    PrRecency,
+    /// The re-plan proposal counts around missed sessions ([`crate::plan_replan`]);
+    /// empty until synced.
+    PlanReplan,
+    /// The training-readiness score + band ([`crate::readiness`]); empty until
+    /// synced.
+    Readiness,
+    /// The primary goal's ring progress ([`crate::goals`]); empty until synced.
+    Goals,
+    /// The next turn on the loaded course ([`crate::turn_cues`]); empty until
+    /// synced.
+    TurnCue,
+    /// A simplified-course point/length summary ([`crate::route_simplify`]);
+    /// empty until synced.
+    RouteSimplify,
+    /// Auto-segment-effort match counts ([`crate::auto_segment_effort`]); empty
+    /// until synced.
+    AutoEffort,
+    /// The loaded course's elevation gain/loss summary ([`crate::route_elevation`]);
+    /// empty until synced.
+    RouteElev,
+    /// The race-day countdown + goal-feasibility verdict ([`crate::race_day`]);
+    /// empty until synced.
+    RaceDay,
 }
 
 impl Page {
@@ -102,7 +137,19 @@ impl Page {
             Page::GearWear => Page::TrainingPaces,
             Page::TrainingPaces => Page::Fitness,
             Page::Fitness => Page::ElevationProfile,
-            Page::ElevationProfile => Page::Dashboard,
+            Page::ElevationProfile => Page::Recap,
+            Page::Recap => Page::Streaks,
+            Page::Streaks => Page::RunStats,
+            Page::RunStats => Page::PrRecency,
+            Page::PrRecency => Page::PlanReplan,
+            Page::PlanReplan => Page::Readiness,
+            Page::Readiness => Page::Goals,
+            Page::Goals => Page::TurnCue,
+            Page::TurnCue => Page::RouteSimplify,
+            Page::RouteSimplify => Page::AutoEffort,
+            Page::AutoEffort => Page::RouteElev,
+            Page::RouteElev => Page::RaceDay,
+            Page::RaceDay => Page::Dashboard,
         }
     }
 }
@@ -117,7 +164,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 19] = [
+    const ALL: [Page; 31] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -137,6 +184,18 @@ mod tests {
         Page::TrainingPaces,
         Page::Fitness,
         Page::ElevationProfile,
+        Page::Recap,
+        Page::Streaks,
+        Page::RunStats,
+        Page::PrRecency,
+        Page::PlanReplan,
+        Page::Readiness,
+        Page::Goals,
+        Page::TurnCue,
+        Page::RouteSimplify,
+        Page::AutoEffort,
+        Page::RouteElev,
+        Page::RaceDay,
     ];
 
     #[test]
@@ -154,7 +213,11 @@ mod tests {
         assert_eq!(Page::GearWear.next(), Page::TrainingPaces);
         assert_eq!(Page::TrainingPaces.next(), Page::Fitness);
         assert_eq!(Page::Fitness.next(), Page::ElevationProfile);
-        assert_eq!(Page::ElevationProfile.next(), Page::Dashboard);
+        assert_eq!(Page::ElevationProfile.next(), Page::Recap);
+        assert_eq!(Page::Recap.next(), Page::Streaks);
+        assert_eq!(Page::Goals.next(), Page::TurnCue);
+        assert_eq!(Page::RouteElev.next(), Page::RaceDay);
+        assert_eq!(Page::RaceDay.next(), Page::Dashboard);
         // Walking `next` from the default visits every page exactly once and
         // returns home.
         let mut p = Page::default();

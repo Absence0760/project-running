@@ -68,6 +68,18 @@ fn base_snapshot() -> Snapshot {
         training_paces: None,
         fitness: None,
         elev_profile: watch_core::record::ElevProfileView::empty(),
+        recap: None,
+        streaks: None,
+        run_stats: None,
+        pr_recency: None,
+        plan_replan: None,
+        readiness: None,
+        goals: None,
+        turn_cue: None,
+        route_simplify: None,
+        auto_effort: None,
+        route_elev: None,
+        race_day: None,
     }
 }
 
