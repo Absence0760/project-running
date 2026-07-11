@@ -194,7 +194,9 @@ pub async fn run(store: &'static SharedStore) {
     let mut alerts = AlertEngine::new();
     let mut last_alert: Option<Alert> = None;
     let mut ticker = Ticker::every(Duration::from_secs(1));
-    let mut next_seq: u32 = 0;
+    // Resume past any run recovered from flash so a new run can't reuse a
+    // recovered run's id (which would confuse the phone's manifest + chunk pull).
+    let mut next_seq: u32 = store.lock().await.next_run_seq();
     let mut open: Option<OpenRun> = None;
     let mut latest_bpm: Option<u8> = None;
     let mut latest_baro_alt_m: Option<f32> = None;

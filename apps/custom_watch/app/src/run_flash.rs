@@ -35,7 +35,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use heapless::Vec;
-use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
+use watch_core::flash_store::{self, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::run_store::{ByteSink, ManifestEntry};
 
 /// Absolute flash offset of the run-store region: the top `REGION_LEN` bytes of
@@ -92,12 +92,21 @@ pub struct RunStore<'d> {
 }
 
 impl<'d> RunStore<'d> {
-    pub fn new(flash: Nvmc<'d>) -> Self {
+    pub fn new(mut flash: Nvmc<'d>) -> Self {
         let available = nvmc_present();
+        // Rebuild the slot directory from flash so runs recorded in a prior
+        // power cycle are advertised again — their blobs survive, only the
+        // in-RAM index is lost on reset. No NVMC (sim) → empty directory.
+        let dir = if available {
+            recover_dir(&mut flash)
+        } else {
+            SlotDir::new()
+        };
         if available {
             info!(
-                "run_flash: NVMC present, run store armed at {=u32:#x}",
-                REGION_OFFSET
+                "run_flash: NVMC present, run store armed at {=u32:#x}, {=u8} run(s) recovered",
+                REGION_OFFSET,
+                dir.run_count()
             );
         } else {
             warn!(
@@ -106,9 +115,15 @@ impl<'d> RunStore<'d> {
         }
         Self {
             flash,
-            dir: SlotDir::new(),
+            dir,
             available,
         }
+    }
+
+    /// The `run_seq` the record task should start numbering from so a new run
+    /// can't reuse a recovered run's id. Read once at record-task startup.
+    pub fn next_run_seq(&self) -> u32 {
+        self.dir.next_run_seq()
     }
 
     /// Persist a finished run's staged blob. Best-effort: any failure warns,
@@ -182,6 +197,26 @@ impl<'d> RunStore<'d> {
         }
         n
     }
+}
+
+/// Read each slot's raw bytes from flash once at boot and rebuild the directory
+/// from whatever finished runs are found there. Best-effort / L4: a read error
+/// on a slot just leaves it empty (that run stays unadvertised until overwritten)
+/// and never blocks boot. The one-slot scratch buffer is transient — this runs
+/// before the record task stages its own slot-sized blob, so the two never
+/// coexist on the stack.
+fn recover_dir(flash: &mut Nvmc<'_>) -> SlotDir {
+    let mut recovered: [Option<RecoveredRun>; SLOT_COUNT] = [None; SLOT_COUNT];
+    let mut buf = [0u8; SLOT_LEN];
+    for (slot, entry) in recovered.iter_mut().enumerate() {
+        let abs = flash_store::slot_offset(REGION_OFFSET, slot);
+        if let Err(e) = flash.read(abs, &mut buf) {
+            warn!("run_flash: recover read slot {=usize} failed {:?}", slot, e);
+            continue;
+        }
+        *entry = flash_store::recover_slot(&buf);
+    }
+    SlotDir::from_recovered(recovered)
 }
 
 fn nvmc_present() -> bool {
