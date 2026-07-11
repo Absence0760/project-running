@@ -265,6 +265,8 @@ mod tests {
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
             pacer: None,
+            cutoff: None,
+            race_prediction: None,
         }
     }
 

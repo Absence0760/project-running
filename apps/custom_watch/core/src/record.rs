@@ -16,12 +16,14 @@
 //! dependency and the two agree to well under a millimetre at the metres-apart
 //! spacing of successive fixes.
 
+use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
 use crate::fix::Fix;
 use crate::grade_adjusted_pace::GapEstimator;
 use crate::hr_zones::{
     self, ZoneCutoffs, DEFAULT_MAX_HR_BPM, MAX_HR_PLAUSIBLE_MAX, MAX_HR_PLAUSIBLE_MIN, ZONE_COUNT,
 };
 use crate::pacer::{Pacer, PacerStatus};
+use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 
 /// Movement gate: a segment shorter than this is GPS jitter while effectively
 /// stopped, not travel. `max(distanceFilterMetres = 3, minMovementMetres = 2)`
@@ -54,6 +56,19 @@ pub const METRES_PER_DEGREE_LAT: f64 = 111_320.0;
 /// always measured from the current lap's start, not from multiples of the
 /// run total.
 pub const AUTO_LAP_DISTANCE_M: f64 = 1000.0;
+
+/// How many cutoff legs the tier-1 recorder holds for the loaded course —
+/// enough for an ultra's aid-station cutoffs. A pushed course with more must be
+/// trimmed phone-side; [`Recorder::set_cutoff_legs`] caps rather than grows.
+pub const MAX_CUTOFF_LEGS: usize = 16;
+
+/// Minimum run distance before the live race-time predictor projects a ladder.
+/// Below this a Riegel projection off a warm-up is noise, so the RacePredictor
+/// page stays honestly blank — the same "not meaningful yet" gate `avg_pace`
+/// applies to itself, one distance tier up. Not a change to the ported
+/// algorithm (see [`crate::race_predictor`]): an input-validity guard for the
+/// watch's live-partial-run effort source.
+pub const MIN_PREDICT_DISTANCE_M: f64 = 1000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordState {
@@ -122,6 +137,16 @@ pub struct Snapshot {
     /// nothing — and only while an HR reading is live, so a sensorless run
     /// keeps all five at zero.
     pub zone_time_s: [u32; ZONE_COUNT],
+    /// The live next-cutoff ETA when the loaded course carries cutoff legs and
+    /// a run is under way; `None` otherwise, so the CutoffEta page reads an
+    /// honest "no cutoffs loaded". Distance-along-route is fed from the nav
+    /// projection via [`Recorder::set_route_position`]; a stale route position
+    /// withholds the projected time rather than fabricate one off an old fix.
+    pub cutoff: Option<CutoffEta>,
+    /// The live race-time ladder projected from the current run treated as a
+    /// single effort — `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]
+    /// and a moving pace exists, so a warm-up shows no fabricated prediction.
+    pub race_prediction: Option<RacePrediction>,
 }
 
 pub struct Recorder {
@@ -173,6 +198,19 @@ pub struct Recorder {
     /// a throttled GNSS mode raises it. See
     /// [`set_fix_interval_s`](Recorder::set_fix_interval_s).
     fix_interval_s: u32,
+    /// Distance along the loaded course, fed per accepted fix by the nav task
+    /// (which owns the course + projection). `None` with no course loaded — the
+    /// recorder stays course-agnostic; this is one more external input like the
+    /// HR / baro / pacer-goal hooks, not a course dependency in the core math.
+    route_along_m: Option<f64>,
+    /// `now_s` when [`route_along_m`](Recorder::route_along_m) last updated — a
+    /// position frozen by a lost signal ages into "stale" past a few fix
+    /// intervals, at which point the cutoff ETA withholds a projected time.
+    route_along_at_s: u32,
+    /// Cutoff legs for the loaded course (distance-along-course + elapsed
+    /// limit), set via [`set_cutoff_legs`](Recorder::set_cutoff_legs). Empty on
+    /// the hardware build until a course-push path lands.
+    cutoff_legs: heapless::Vec<CutoffLeg, MAX_CUTOFF_LEGS>,
 }
 
 impl Default for Recorder {
@@ -205,6 +243,9 @@ impl Recorder {
             zone_time_s: [0; ZONE_COUNT],
             pacer: Pacer::new(),
             fix_interval_s: 1,
+            route_along_m: None,
+            route_along_at_s: 0,
+            cutoff_legs: heapless::Vec::new(),
         }
     }
 
@@ -259,6 +300,29 @@ impl Recorder {
     /// pacer inactive. Plausibility guarding lives in [`Pacer::set_goal`].
     pub fn set_pacer_goal(&mut self, distance_m: u32, time_s: u32) {
         self.pacer.set_goal(distance_m, time_s);
+    }
+
+    /// Latest distance along the loaded course, from the nav task's projection.
+    /// `None` clears it (no course, or a fix that didn't project). Stamped with
+    /// the current clock so a lost-signal freeze ages into "stale" and the
+    /// cutoff ETA stops projecting off it — the recorder never fabricates an
+    /// arrival from a position it can no longer trust.
+    pub fn set_route_position(&mut self, along_m: Option<f64>) {
+        self.route_along_m = along_m;
+        if along_m.is_some() {
+            self.route_along_at_s = self.now_s;
+        }
+    }
+
+    /// Load the cutoff legs for the current course (distance-along-course +
+    /// elapsed-seconds limit). Replaces any existing set and caps at
+    /// [`MAX_CUTOFF_LEGS`] rather than growing — a longer course is trimmed
+    /// phone-side before the push. Empty legs leave the CutoffEta page inactive.
+    pub fn set_cutoff_legs(&mut self, legs: &[CutoffLeg]) {
+        self.cutoff_legs.clear();
+        for leg in legs.iter().take(MAX_CUTOFF_LEGS) {
+            let _ = self.cutoff_legs.push(*leg);
+        }
     }
 
     /// Whether the most recent [`on_fix`](Recorder::on_fix) stored a new track
@@ -493,7 +557,46 @@ impl Recorder {
             },
             zone_cutoffs: self.zone_cutoffs,
             zone_time_s: self.zone_time_s,
+            cutoff: self.cutoff_snapshot(),
+            race_prediction: self.race_prediction_snapshot(),
         }
+    }
+
+    /// The live next-cutoff ETA, or `None` when idle or no cutoff legs are
+    /// loaded. Projects from the fed route position + the whole-run moving pace;
+    /// a missing or stale route position (lost signal) drops the projected time
+    /// to `Unknown` — see [`crate::cutoff_eta`].
+    fn cutoff_snapshot(&self) -> Option<CutoffEta> {
+        if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
+            return None;
+        }
+        // Stale once the fed position ages past a few fix intervals (scaled to
+        // the GNSS mode's cadence, so Expedition's 60 s gaps are not "stale").
+        let stale_budget_s = self.fix_interval_s.saturating_mul(3).max(10);
+        let stale = self.route_along_m.is_none()
+            || self.now_s.saturating_sub(self.route_along_at_s) > stale_budget_s;
+        Some(next_cutoff_eta(
+            self.route_along_m.unwrap_or(0.0),
+            self.elapsed_s(),
+            self.avg_pace().map(f64::from),
+            stale,
+            &self.cutoff_legs,
+        ))
+    }
+
+    /// The live race-time ladder, projecting the current run as a single effort
+    /// (age 0). `None` until the run clears [`MIN_PREDICT_DISTANCE_M`]; below
+    /// that a Riegel projection is noise. `predict_race_ladder` returns `None`
+    /// itself when the effort doesn't qualify (no moving time yet).
+    fn race_prediction_snapshot(&self) -> Option<RacePrediction> {
+        if self.state == RecordState::Idle || self.distance_m < MIN_PREDICT_DISTANCE_M {
+            return None;
+        }
+        predict_race_ladder(&[Effort {
+            distance_m: self.distance_m,
+            duration_s: self.moving_s,
+            age_days: 0.0,
+        }])
     }
 
     fn avg_pace(&self) -> Option<u32> {
@@ -1278,5 +1381,84 @@ mod tests {
         r.on_fix(&fix(40.001, -105.0, 5.0, 20));
         r.tick(50);
         assert_eq!(r.snapshot(), frozen);
+    }
+
+    #[test]
+    fn idle_has_no_cutoff_or_prediction() {
+        let r = Recorder::new();
+        assert_eq!(r.snapshot().cutoff, None);
+        assert_eq!(r.snapshot().race_prediction, None);
+    }
+
+    #[test]
+    fn race_prediction_gated_on_min_distance() {
+        // ~240 m segments at 60 s (4 m/s, clears the moving gate). Below 1 km
+        // the predictor stays blank; the segment that crosses 1 km turns it on.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        let mut lat = 40.0;
+        r.on_fix(&fix(lat, -105.0, 4.0, 0));
+        for i in 1..=3 {
+            lat += 0.00216; // ~240 m north
+            r.on_fix(&fix(lat, -105.0, 4.0, i * 60));
+        }
+        // ~720 m — under the gate.
+        assert!(r.snapshot().distance_m < MIN_PREDICT_DISTANCE_M);
+        assert_eq!(r.snapshot().race_prediction, None);
+        for i in 4..=6 {
+            lat += 0.00216;
+            r.on_fix(&fix(lat, -105.0, 4.0, i * 60));
+        }
+        // ~1440 m — the ladder is live.
+        let snap = r.snapshot();
+        assert!(snap.distance_m >= MIN_PREDICT_DISTANCE_M);
+        let pred = snap.race_prediction.expect("ladder past the min distance");
+        assert_eq!(pred.rungs.len(), 4);
+        assert_eq!(pred.qualifying_count, 1);
+        // The anchor is the live run: its distance/time, projected age 0.
+        assert!((pred.anchor.distance_m - snap.distance_m).abs() < 1e-9);
+        assert_eq!(pred.anchor.age_days, 0.0);
+    }
+
+    #[test]
+    fn cutoff_eta_needs_legs_and_projects_from_route_position() {
+        use crate::cutoff_eta::CutoffEtaStatus;
+
+        // A run under way with a moving pace but no cutoff legs: no ETA surface.
+        // 60 s fix interval so the ~240 m segment clears the jump filter.
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        r.on_fix(&fix(40.00216, -105.0, 4.0, 60)); // ~240 m, moving pace exists
+        assert!(r.snapshot().avg_pace_s_per_km.is_some());
+        assert_eq!(r.snapshot().cutoff, None);
+
+        // Load a cutoff 500 m along the course and feed a 200 m route position:
+        // 300 m to go, a fresh fix + known pace, so an honest verdict (not
+        // Unknown) with the distance reported.
+        r.set_cutoff_legs(&[CutoffLeg {
+            cum_dist_m: 500.0,
+            limit_elapsed_s: 600,
+        }]);
+        r.set_route_position(Some(200.0));
+        let eta = r
+            .snapshot()
+            .cutoff
+            .expect("cutoff surface with legs loaded");
+        assert!(eta.has_cutoff);
+        assert!((eta.distance_to_m - 300.0).abs() < 1e-6);
+        assert_ne!(eta.status, CutoffEtaStatus::Unknown);
+        assert!(eta.projected_arrival_elapsed_s.is_some());
+
+        // Let the clock run on with no fresh route position: the frozen position
+        // ages past the stale budget, so the ETA is withheld (Unknown) while the
+        // checkpoint distance is still reported.
+        r.tick(300);
+        let stale = r.snapshot().cutoff.expect("still has the leg");
+        assert_eq!(stale.status, CutoffEtaStatus::Unknown);
+        assert_eq!(stale.projected_arrival_elapsed_s, None);
+        assert!(stale.has_cutoff);
     }
 }

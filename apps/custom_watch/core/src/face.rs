@@ -23,12 +23,14 @@
 use core::fmt::Write;
 
 use crate::course::NavStatus;
+use crate::cutoff_eta::CutoffEtaStatus;
 use crate::elevation;
 use crate::fix::Fix;
 use crate::gnss_mode::GnssMode;
 use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
+use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RecordState, Snapshot};
 use crate::trackback::{self, TrackbackView};
 
@@ -261,6 +263,8 @@ pub fn page_rows(
             Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::RacePredictor => race_predictor_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::CutoffEta => cutoff_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Nav => nav_page(nav, fix, tag, uptime_s, animate, mode),
             Page::BackToStart => back_to_start_glance(fix, tb, tag, uptime_s, animate, mode),
         },
@@ -286,6 +290,8 @@ pub fn page_icons(
         | Page::Lap
         | Page::Zones
         | Page::Pacer
+        | Page::RacePredictor
+        | Page::CutoffEta
         | Page::Nav
         | Page::BackToStart => [None; ROWS],
     }
@@ -327,6 +333,36 @@ pub fn page_hero(
         }
         Page::Pacer => match snap.pacer {
             Some(status) => signed_split(status.ahead_s),
+            None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--");
+                row
+            }
+        },
+        // The 10K projection is the headline rung (the anchor reference
+        // distance, the most universally-read yardstick); the page's rows carry
+        // the whole ladder.
+        Page::RacePredictor => match &snap.race_prediction {
+            Some(pred) => {
+                let (h, m, s) = hms(pred.rungs[1].predicted_s as u32);
+                let mut row = Row::new();
+                if h > 0 {
+                    let _ = write!(row, "{}:{:02}:{:02}", h.min(99), m, s);
+                } else {
+                    let _ = write!(row, "{}:{:02}", m, s);
+                }
+                row
+            }
+            None => {
+                let mut row = Row::new();
+                let _ = write!(row, "--");
+                row
+            }
+        },
+        // The margin to the next cut-off: `+` slack, `-` over. `--` when there
+        // is no cut-off ahead or the projection is withheld (stale / no pace).
+        Page::CutoffEta => match snap.cutoff.and_then(|c| c.margin_s) {
+            Some(margin_s) => signed_split(margin_s),
             None => {
                 let mut row = Row::new();
                 let _ = write!(row, "--");
@@ -612,6 +648,132 @@ fn pacer_glance(
             let clamped = delta_m.clamp(-99_999, 99_999);
             let sign = if clamped < 0 { '-' } else { '+' };
             let _ = write!(rows[7], "{:<5}{}{} M", "DIST", sign, clamped.unsigned_abs());
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// One ladder row: the distance label, the projected finish (H:MM:SS past an
+/// hour, else M:SS), and a one-glyph confidence flag — ` ` solid, `?` moderate,
+/// `~` low — so a runner reads at a glance how much to trust each rung.
+fn pred_row(row: &mut Row, label: &str, rung: &LadderRung) {
+    let flag = match rung.quality.confidence {
+        PredictionConfidence::High => ' ',
+        PredictionConfidence::Moderate => '?',
+        PredictionConfidence::Low => '~',
+    };
+    let (h, m, s) = hms(rung.predicted_s as u32);
+    if h > 0 {
+        let _ = write!(row, "{:<5}{}:{:02}:{:02} {}", label, h.min(99), m, s, flag);
+    } else {
+        let _ = write!(row, "{:<5}{}:{:02} {}", label, m, s, flag);
+    }
+}
+
+/// The race-predictor glance page: the 10K projection up large in the rows-0-1
+/// hero (drawn by [`page_hero`]), then the whole 5K / 10K / Half / Marathon
+/// ladder as rows — each with a confidence flag — under the run distance the
+/// projection is based on. Honestly blank ("NEED 1 KM") until the run clears
+/// [`crate::record::MIN_PREDICT_DISTANCE_M`]: no fabricated race time off a
+/// warm-up.
+#[allow(clippy::too_many_arguments)]
+fn race_predictor_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match &snap.race_prediction {
+        None => {
+            let _ = write!(rows[2], "PREDICT --");
+            let _ = write!(rows[4], "NEED 1 KM");
+        }
+        Some(pred) => {
+            let from_km = (pred.anchor.distance_m / 1000.0).min(9999.99);
+            let _ = write!(rows[2], "{:<9}{:.2} KM", "FROM", from_km);
+            const LABELS: [&str; 4] = ["5K", "10K", "HALF", "MAR"];
+            for (i, rung) in pred.rungs.iter().enumerate() {
+                pred_row(&mut rows[3 + i], LABELS[i], rung);
+            }
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
+/// The cut-off ETA glance page: the margin to the next cut-off up large in the
+/// rows-0-1 hero (drawn by [`page_hero`] via [`signed_split`] — `+` slack, `-`
+/// over the limit), then the verdict word, the distance to the cut-off, and the
+/// projected arrival clock. Honest inactive states: "NO CUTOFFS" when the
+/// course carries none, "NO CUTOFF AHEAD" once past the last one, and a `--`
+/// ETA when the fix is too stale (or the pace too uncertain) to project.
+#[allow(clippy::too_many_arguments)]
+fn cutoff_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
+    // REC while `animate` is on, steady-on otherwise.
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    match snap.cutoff {
+        None => {
+            let _ = write!(rows[2], "CUTOFF --");
+            let _ = write!(rows[4], "NO CUTOFFS");
+            let _ = write!(rows[5], "SET VIA PHONE SYNC");
+        }
+        Some(eta) if !eta.has_cutoff => {
+            let _ = write!(rows[2], "CUTOFF --");
+            let _ = write!(rows[4], "NO CUTOFF AHEAD");
+        }
+        Some(eta) => {
+            let verdict = match eta.status {
+                CutoffEtaStatus::On => "ON",
+                CutoffEtaStatus::Tight => "TIGHT",
+                CutoffEtaStatus::Behind => "BEHIND",
+                CutoffEtaStatus::Unknown => "--",
+            };
+            let _ = write!(rows[2], "{:<14}{}", "CUTOFF", verdict);
+
+            if eta.distance_to_m < 1000.0 {
+                let _ = write!(rows[4], "{:<5}{:.0} M", "TO", eta.distance_to_m.max(0.0));
+            } else {
+                let km = (eta.distance_to_m / 1000.0).min(9999.99);
+                let _ = write!(rows[4], "{:<5}{:.2} KM", "TO", km);
+            }
+
+            match eta.projected_arrival_elapsed_s {
+                Some(arrival_s) => {
+                    let (h, m, s) = hms(arrival_s);
+                    let _ = write!(rows[5], "{:<5}{}:{:02}:{:02}", "ETA", h.min(999), m, s);
+                }
+                None => {
+                    let _ = write!(rows[5], "{:<5}--", "ETA");
+                }
+            }
         }
     }
 
@@ -1122,6 +1284,8 @@ mod tests {
             pacer: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
             zone_time_s: [0; ZONE_COUNT],
+            cutoff: None,
+            race_prediction: None,
         }
     }
 
@@ -2516,6 +2680,166 @@ mod tests {
                 .unwrap()
                 .as_str(),
             "9999.99"
+        );
+    }
+
+    #[test]
+    fn cutoff_glance_shows_the_next_cutoff_verdict_and_eta() {
+        let mut rec = snapshot(RecordState::Recording, 15_000.0);
+        rec.cutoff = Some(crate::cutoff_eta::CutoffEta {
+            has_cutoff: true,
+            distance_to_m: 10_000.0,
+            projected_arrival_elapsed_s: Some(5_400),
+            margin_s: Some(1_800),
+            status: crate::cutoff_eta::CutoffEtaStatus::On,
+        });
+        let rows = page_rows(
+            Page::CutoffEta,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        // Hero: the margin as a signed split, `+` = slack to the cutoff.
+        assert_eq!(
+            page_hero(Page::CutoffEta, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "+30:00"
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "CUTOFF        ON");
+        assert_eq!(rows[4].as_str(), "TO   10.00 KM");
+        assert_eq!(rows[5].as_str(), "ETA  1:30:00");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        assert!(
+            page_icons(Page::CutoffEta, Some(&fix()), None, Some(&rec), 42, true)
+                .iter()
+                .all(Option::is_none)
+        );
+    }
+
+    #[test]
+    fn cutoff_glance_honest_inactive_states() {
+        // No legs loaded: honest "no cutoffs" with the how-to hint.
+        let rec = snapshot(RecordState::Recording, 500.0);
+        let rows = page_rows(
+            Page::CutoffEta,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "CUTOFF --");
+        assert_eq!(rows[4].as_str(), "NO CUTOFFS");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(
+            page_hero(Page::CutoffEta, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+
+        // Past the last cutoff: distinct message, still no fabricated time.
+        let mut past = snapshot(RecordState::Recording, 500.0);
+        past.cutoff = Some(crate::cutoff_eta::CutoffEta {
+            has_cutoff: false,
+            distance_to_m: 0.0,
+            projected_arrival_elapsed_s: None,
+            margin_s: None,
+            status: crate::cutoff_eta::CutoffEtaStatus::Unknown,
+        });
+        let rows = page_rows(
+            Page::CutoffEta,
+            Some(&fix()),
+            None,
+            Some(&past),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[4].as_str(), "NO CUTOFF AHEAD");
+    }
+
+    #[test]
+    fn race_predictor_glance_shows_the_ladder_with_confidence_flags() {
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        rec.race_prediction = Some(
+            crate::race_predictor::predict_race_ladder(&[crate::race_predictor::Effort {
+                distance_m: 5_000.0,
+                duration_s: 1_200,
+                age_days: 0.0,
+            }])
+            .unwrap(),
+        );
+        let rows = page_rows(
+            Page::RacePredictor,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        assert_eq!(rows[2].as_str(), "FROM     5.00 KM");
+        // 5K off a 5K anchor is exact (1200 s = 20:00); a single effort is
+        // thinly sampled, so even the closest rung flags moderate (`?`).
+        assert_eq!(rows[3].as_str(), "5K   20:00 ?");
+        assert!(rows[4].as_str().starts_with("10K "));
+        assert!(rows[5].as_str().starts_with("HALF "));
+        // Marathon is >4x the anchor: low confidence, flagged `~`.
+        assert!(rows[6].as_str().starts_with("MAR "));
+        assert!(rows[6].as_str().ends_with('~'));
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        // Hero echoes the 10K rung and is a real time, not `--`.
+        let hero = page_hero(Page::RacePredictor, None, Some(&rec), None).unwrap();
+        assert_ne!(hero.as_str(), "--");
+        assert!(page_icons(
+            Page::RacePredictor,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            42,
+            true
+        )
+        .iter()
+        .all(Option::is_none));
+    }
+
+    #[test]
+    fn race_predictor_glance_blank_until_enough_distance() {
+        let rec = snapshot(RecordState::Recording, 500.0);
+        let rows = page_rows(
+            Page::RacePredictor,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "PREDICT --");
+        assert_eq!(rows[4].as_str(), "NEED 1 KM");
+        assert_eq!(
+            page_hero(Page::RacePredictor, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
         );
     }
 }

@@ -29,6 +29,14 @@ pub enum Page {
     /// finish, and distance delta as context; an honest inactive state while
     /// no goal is configured.
     Pacer,
+    /// The 5K/10K/Half/Marathon race-time ladder projected from the current
+    /// run, with a per-rung confidence flag; blank until the run is long
+    /// enough to project honestly.
+    RacePredictor,
+    /// The next cut-off ETA up large (on / tight / behind vs the cutoff limit),
+    /// with the distance to it and the projected arrival; an honest inactive
+    /// state when no course cutoffs are loaded.
+    CutoffEta,
     /// Breadcrumb course view: the loaded course polyline with the current
     /// position marked, distance-along-course, and the off-course alert.
     Nav,
@@ -46,7 +54,9 @@ impl Page {
             Page::Pace => Page::Lap,
             Page::Lap => Page::Zones,
             Page::Zones => Page::Pacer,
-            Page::Pacer => Page::Nav,
+            Page::Pacer => Page::RacePredictor,
+            Page::RacePredictor => Page::CutoffEta,
+            Page::CutoffEta => Page::Nav,
             Page::Nav => Page::BackToStart,
             Page::BackToStart => Page::Dashboard,
         }
@@ -69,21 +79,18 @@ mod tests {
         assert_eq!(Page::Pace.next(), Page::Lap);
         assert_eq!(Page::Lap.next(), Page::Zones);
         assert_eq!(Page::Zones.next(), Page::Pacer);
-        assert_eq!(Page::Pacer.next(), Page::Nav);
+        assert_eq!(Page::Pacer.next(), Page::RacePredictor);
+        assert_eq!(Page::RacePredictor.next(), Page::CutoffEta);
+        assert_eq!(Page::CutoffEta.next(), Page::Nav);
         assert_eq!(Page::Nav.next(), Page::BackToStart);
         assert_eq!(Page::BackToStart.next(), Page::Dashboard);
-        // Walking `next` from the default visits all eight and returns home.
+        // Walking `next` from the default visits all ten and returns home.
         let mut p = Page::default();
-        let mut seen = [
-            p,
-            p.next(),
-            p.next().next(),
-            p.next().next().next(),
-            p.next().next().next().next(),
-            p.next().next().next().next().next(),
-            p.next().next().next().next().next().next(),
-            p.next().next().next().next().next().next().next(),
-        ];
+        let mut seen = [p; 10];
+        for slot in seen.iter_mut().skip(1) {
+            p = p.next();
+            *slot = p;
+        }
         seen.sort_by_key(|q| *q as u8);
         assert_eq!(
             seen,
@@ -94,11 +101,14 @@ mod tests {
                 Page::Lap,
                 Page::Zones,
                 Page::Pacer,
+                Page::RacePredictor,
+                Page::CutoffEta,
                 Page::Nav,
                 Page::BackToStart
             ]
         );
-        for _ in 0..8 {
+        let mut p = Page::default();
+        for _ in 0..10 {
             p = p.next();
         }
         assert_eq!(p, Page::default());
