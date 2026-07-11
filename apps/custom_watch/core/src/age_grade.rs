@@ -947,6 +947,6 @@ mod tests {
             Some(AgeGradeSex::Male)
         )
         .is_none());
-        assert!(AGE_GRADE_DISTANCE_TOLERANCE > 0.0);
+        const _: () = assert!(AGE_GRADE_DISTANCE_TOLERANCE > 0.0);
     }
 }

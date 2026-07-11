@@ -402,9 +402,9 @@ fn clock_minutes(s: &str) -> u32 {
 mod tests {
     use super::*;
 
-    /// Mirror of `apps/web/src/lib/routes/roadbook.test.ts` /
-    /// `apps/mobile_android/test/roadbook_test.dart` — same scenarios, same
-    /// expected values, so the ports can't drift.
+    // Mirror of `apps/web/src/lib/routes/roadbook.test.ts` /
+    // `apps/mobile_android/test/roadbook_test.dart` — same scenarios, same
+    // expected values, so the ports can't drift.
 
     /// ~2 km course heading north from (0,0): flat first half, second half
     /// climbing 30 m per step, so the effort model has something to bite on.

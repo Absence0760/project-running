@@ -149,10 +149,10 @@ pub fn resolve_training_paces(input: PaceAnchor) -> TrainingPaces {
 mod tests {
     use super::*;
 
-    /// Mirror of the pace-zone cases in
-    /// `apps/web/src/lib/training/training.test.ts` — same goal-pace inputs,
-    /// same bands, so the port can't drift. Plan-generation / phase / VDOT
-    /// cases are out of scope and not mirrored.
+    // Mirror of the pace-zone cases in
+    // `apps/web/src/lib/training/training.test.ts` — same goal-pace inputs,
+    // same bands, so the port can't drift. Plan-generation / phase / VDOT
+    // cases are out of scope and not mirrored.
 
     fn anchor(
         goal_distance_m: f64,
