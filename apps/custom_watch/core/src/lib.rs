@@ -104,6 +104,27 @@
 //!   `social/badges.ts`; i18n label keys carried as identifiers, not strings)
 //! - [`locale_defaults`] — locale → default unit + week-start region tables
 //!   (port of web `format/locale_defaults.ts`; the `Intl` fallback is web-only)
+//! - [`privacy`] — privacy-zone track clipping: trim leading/trailing points
+//!   inside a home/work zone (port of web `routes/privacy.ts`
+//!   `clipPointsToZones`)
+//! - [`segments`] — segment effort from a track + competition-rank (1224) +
+//!   the age-band vocabulary + crown-label enum (port of web
+//!   `segments/segments.ts`)
+//! - [`track_projection`] — project a lat/lng track into panel x/y for a
+//!   preview thumbnail (port of web `routes/track_projection.ts`; the Dart twin
+//!   `projectTrack` lives inside `track_preview.dart`)
+//! - [`run_heatmap`] — grid-quantise many tracks into clamped weighted cells +
+//!   the fit box (port of web `routes/run_heatmap.ts`; the MapLibre GeoJSON
+//!   emitters are web-only)
+//! - [`relink_candidates`] — the runs eligible to re-link to a planned workout
+//!   (±7-day window, excluding already-linked) (port of web
+//!   `training/relink_candidates.ts`; dates collapsed to a day index)
+//! - [`live_freshness`] — spectator staleness: age clamp + stale flag + display
+//!   bucket, so a lost-signal runner reads stale (port of web
+//!   `runs/live_freshness.ts`)
+//! - [`finisher_certificate`] — certificate eligibility + the time / distance /
+//!   ordinal-place formatters (port of the shaping half of web
+//!   `runs/finisher_certificate.ts`; the SVG/PNG builder is web-only)
 
 #![cfg_attr(not(test), no_std)]
 
@@ -121,6 +142,7 @@ pub mod distance_bands;
 pub mod elevation;
 pub mod exercise_calories;
 pub mod face;
+pub mod finisher_certificate;
 pub mod fitness;
 pub mod fix;
 pub mod flash_store;
@@ -132,6 +154,7 @@ pub mod grade_adjusted_pace;
 pub mod hr_zones;
 pub mod hydration;
 pub mod link;
+pub mod live_freshness;
 pub mod locale_defaults;
 pub mod nutrition_targets;
 pub mod pace_segments;
@@ -139,14 +162,19 @@ pub mod pacer;
 pub mod page;
 pub mod plan_adherence;
 pub mod plan_progress;
+pub mod privacy;
 pub mod race_predictor;
 pub mod record;
+pub mod relink_candidates;
 pub mod roadbook;
 pub mod route_description;
 pub mod route_markers;
+pub mod run_heatmap;
 pub mod run_store;
+pub mod segments;
 pub mod settings;
 pub mod statusbar;
+pub mod track_projection;
 pub mod trackback;
 pub mod training_load;
 pub mod training_paces;
