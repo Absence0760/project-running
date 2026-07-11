@@ -4,8 +4,8 @@
 # lived AWS keys in `Settings → Secrets`. The trust policies are
 # scoped per env:
 #
-#   prod    only assumable from a tag matching refs/tags/web@*
-#   preview only assumable from a push to refs/heads/main
+#   prod    only assumable from a job in the gated `production` environment
+#   preview only assumable from a job in the `preview` environment
 #
 # Permissions: each role can sync the env's S3 bucket, invalidate the
 # env's CloudFront distribution, and update the env's Lambda. Nothing
@@ -121,9 +121,15 @@ resource "aws_iam_role_policy" "deploy_prod" {
         ]
       },
       {
-        Sid      = "CloudFrontInvalidate"
-        Effect   = "Allow"
-        Action   = ["cloudfront:CreateInvalidation"]
+        Sid    = "CloudFrontInvalidate"
+        Effect = "Allow"
+        # ListDistributions: the release workflow resolves the target
+        # distribution id from its alias (no resource-level scoping
+        # exists for list actions). Read-only metadata.
+        Action = [
+          "cloudfront:CreateInvalidation",
+          "cloudfront:ListDistributions",
+        ]
         Resource = "*"
       },
       {
@@ -190,9 +196,15 @@ resource "aws_iam_role_policy" "deploy_preview" {
         ]
       },
       {
-        Sid      = "CloudFrontInvalidate"
-        Effect   = "Allow"
-        Action   = ["cloudfront:CreateInvalidation"]
+        Sid    = "CloudFrontInvalidate"
+        Effect = "Allow"
+        # ListDistributions: the release workflow resolves the target
+        # distribution id from its alias (no resource-level scoping
+        # exists for list actions). Read-only metadata.
+        Action = [
+          "cloudfront:CreateInvalidation",
+          "cloudfront:ListDistributions",
+        ]
         Resource = "*"
       },
       {
