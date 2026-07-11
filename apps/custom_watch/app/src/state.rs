@@ -79,8 +79,16 @@ pub static INTERACTION: Watch<CriticalSectionRawMutex, u32, 1> = Watch::new();
 /// Latest GSV satellites-in-view count: the `gps` task publishes it best-effort
 /// per GSV group so the signal meter can show the real sat count instead of a
 /// placeholder. No value published means "unknown" (searching). The `ui` face
-/// consumes it via `statusbar::bars_for_sats` to drive the idle signal meter.
+/// combines it with `state::FIX_QUALITY` via `statusbar::bars_for_fix` to drive
+/// the idle signal meter.
 pub static SATS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
+/// Latest GSA fix quality (NMEA fix type: 0 unknown/none, 2 = 2D, 3 = 3D): the
+/// `gps` task publishes it per GSA sentence so the idle signal meter gates its
+/// bars on a real position, not merely satellites in view — no fix reads as
+/// "searching" even under a full sky, and a 2D fix caps below a 3D lock. No
+/// value published means "unknown" (0). One receiver (the `ui` face's meter).
+pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
 /// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling): the
 /// `ble` task decodes a phone characteristic write (and the sim seeds a demo

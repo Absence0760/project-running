@@ -57,6 +57,24 @@ pub fn bars_for_sats(sats: u8) -> u8 {
     }
 }
 
+/// The most bars a 2D fix may show: a horizontal-only fix is real but less
+/// trustworthy than a 3D lock, so it never reads full strength.
+pub const FIX_2D_MAX_BARS: u8 = 2;
+
+/// Signal bars (0..=4) from the satellites-in-view count gated on the GSA fix
+/// type, so the meter reflects a real position rather than merely sky in view:
+/// fix type 0/1 (unknown / no fix) is always 0 bars — "searching" even under a
+/// full sky. A 2D fix caps at [`FIX_2D_MAX_BARS`]; a 3D fix uses the full
+/// [`bars_for_sats`] ladder. Freshness is layered on by the caller: a fix that
+/// has stopped updating reads 0 regardless of the last reported fix type.
+pub fn bars_for_fix(sats: u8, fix_type: u8) -> u8 {
+    match fix_type {
+        2 => bars_for_sats(sats).min(FIX_2D_MAX_BARS),
+        3 => bars_for_sats(sats),
+        _ => 0,
+    }
+}
+
 /// The run-view page-dot indicator: which dot is lit (`active`) out of how
 /// many (`total`). `active` is the page's position in the cycle, `total` the
 /// number of pages, so the strip draws `total` dots with the `active`-th
@@ -169,6 +187,43 @@ mod tests {
     fn bars_for_sats_never_exceed_the_scale() {
         for sats in 0..=255u8 {
             assert!(bars_for_sats(sats) <= MAX_BARS);
+        }
+    }
+
+    #[test]
+    fn no_fix_is_zero_bars_even_with_many_sats() {
+        // fix_type 0 (unknown) and 1 (no fix) both mean "searching": a receiver
+        // can see a full sky yet hold no lock.
+        assert_eq!(bars_for_fix(12, 0), 0);
+        assert_eq!(bars_for_fix(12, 1), 0);
+    }
+
+    #[test]
+    fn two_d_fix_caps_below_full_strength() {
+        // A 2D fix never shows more than FIX_2D_MAX_BARS, even with 9+ sats that
+        // would earn 4 bars at 3D.
+        assert_eq!(bars_for_fix(12, 2), FIX_2D_MAX_BARS);
+        assert_eq!(bars_for_fix(9, 2), FIX_2D_MAX_BARS);
+        // Below the cap the sat ladder still governs.
+        assert_eq!(bars_for_fix(2, 2), 1);
+        assert_eq!(bars_for_fix(4, 2), 2);
+    }
+
+    #[test]
+    fn three_d_fix_uses_the_full_sat_ladder() {
+        // Each band of the `bars_for_sats` ladder, ungated at 3D.
+        assert_eq!(bars_for_fix(2, 3), 1);
+        assert_eq!(bars_for_fix(5, 3), 2);
+        assert_eq!(bars_for_fix(8, 3), 3);
+        assert_eq!(bars_for_fix(12, 3), 4);
+    }
+
+    #[test]
+    fn bars_for_fix_never_exceeds_the_scale() {
+        for sats in 0..=64u8 {
+            for fix_type in 0..=3u8 {
+                assert!(bars_for_fix(sats, fix_type) <= MAX_BARS);
+            }
         }
     }
 

@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select3, select4, Either3, Either4};
+use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -158,12 +158,14 @@ pub async fn screen_task(
     let mut nav_rx = unwrap!(state::NAV.receiver());
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
     let mut sats_rx = unwrap!(state::SATS.receiver());
+    let mut fix_quality_rx = unwrap!(state::FIX_QUALITY.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr_bpm: Option<u16> = None;
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
     let mut tb: Option<TrackbackView> = None;
     let mut sats: Option<u8> = None;
+    let mut fix_quality: Option<u8> = None;
     let mut page = Page::default();
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
@@ -212,6 +214,9 @@ pub async fn screen_task(
         }
         if let Some(s) = sats_rx.try_changed() {
             sats = Some(s);
+        }
+        if let Some(q) = fix_quality_rx.try_changed() {
+            fix_quality = Some(q);
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
@@ -344,7 +349,7 @@ pub async fn screen_task(
                 }
             }
         } else {
-            let bars = sats.map_or(0, statusbar::bars_for_sats);
+            let bars = statusbar::bars_for_fix(sats.unwrap_or(0), fix_quality.unwrap_or(0));
             widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
         }
 
@@ -412,7 +417,7 @@ pub async fn screen_task(
                 tb_rx.changed(),
                 mode_rx.changed(),
                 sats_rx.changed(),
-                Timer::after(tick),
+                select(fix_quality_rx.changed(), Timer::after(tick)),
             ),
         )
         .await
@@ -430,7 +435,8 @@ pub async fn screen_task(
             Either3::Third(Either4::First(v)) => tb = Some(v),
             Either3::Third(Either4::Second(m)) => mode = m,
             Either3::Third(Either4::Third(s)) => sats = Some(s),
-            Either3::Third(Either4::Fourth(())) => {}
+            Either3::Third(Either4::Fourth(Either::First(q))) => fix_quality = Some(q),
+            Either3::Third(Either4::Fourth(Either::Second(()))) => {}
         }
     }
 }

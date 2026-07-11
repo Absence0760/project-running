@@ -81,6 +81,7 @@ pub async fn run(mut rx: UarteRx<'static>) {
     let mut acc = FixAccumulator::new();
     let sender = state::FIX.sender();
     let sats_sender = state::SATS.sender();
+    let fix_quality_sender = state::FIX_QUALITY.sender();
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut buf = [0u8; RX_BURST];
@@ -110,10 +111,15 @@ pub async fn run(mut rx: UarteRx<'static>) {
                         continue;
                     };
                     let uptime_s = Instant::now().as_secs() as u32;
-                    // Best-effort satellite count for an honest signal meter
-                    // (L4): publish alongside the fix pipeline, never gating it.
+                    // Best-effort satellite count + GSA fix quality for an honest
+                    // signal meter (L4): publish alongside the fix pipeline, never
+                    // gating it. Fix quality lets the meter read "searching" on a
+                    // no-fix even under a full sky in view.
                     if let Sentence::Gsv { sats_in_view } = sentence {
                         sats_sender.send(sats_in_view);
+                    }
+                    if let Sentence::Gsa { fix_type, .. } = sentence {
+                        fix_quality_sender.send(fix_type);
                     }
                     if let Some(fix) = acc.apply(&sentence, uptime_s) {
                         // Throttle to the cadence in force: the idle de-rate,
