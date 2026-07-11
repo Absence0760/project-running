@@ -168,9 +168,9 @@ pub fn build_fuel_plan(legs: &[FuelLegInput], opts: FuelPlanOptions) -> FuelPlan
 mod tests {
     use super::*;
 
-    /// Mirror of `apps/web/src/lib/routes/fuel_plan.test.ts` /
-    /// `apps/mobile_android/test/fuel_plan_test.dart` — same scenarios, same
-    /// expected values, so the ports can't drift.
+    // Mirror of `apps/web/src/lib/routes/fuel_plan.test.ts` /
+    // `apps/mobile_android/test/fuel_plan_test.dart` — same scenarios, same
+    // expected values, so the ports can't drift.
 
     const WATER_FOOD: [&str; 2] = ["water", "food"];
 

@@ -798,7 +798,7 @@ mod tests {
             day: REF,
             sets: &sets,
         });
-        assert!(stress >= 40.0 && stress <= 60.0, "got {stress}");
+        assert!((40.0..=60.0).contains(&stress), "got {stress}");
     }
 
     #[test]

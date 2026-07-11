@@ -501,7 +501,7 @@ mod tests {
     }
 
     fn has(sec: &ChecklistSection, item: ChecklistItem) -> bool {
-        sec.items.iter().any(|&i| i == item)
+        sec.items.contains(&item)
     }
 
     #[test]
