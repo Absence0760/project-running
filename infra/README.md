@@ -98,7 +98,9 @@ terraform init
 terraform apply -var "apex_domain=threkir.com"
 ```
 
-Outputs the four NS records — paste those at the registrar that owns `threkir.com`. Wait for propagation (typically <5 min, occasionally an hour) before continuing — ACM cert validation requires the NS delegation to be live.
+Outputs the four NS records — paste those at the registrar that owns `threkir.com`. Wait for propagation (typically <5 min, occasionally an hour) before continuing — ACM cert validation requires the NS delegation to be live (the apply's `aws_acm_certificate_validation` polls for up to ~75 min, so it's fine to do this mid-apply).
+
+If the domain is registered **in Route 53**, registration auto-created its own hosted zone and the domain points at *that* zone's name servers, not the Terraform zone's. Switch the registered domain over (`aws route53domains update-domain-nameservers --region us-east-1 --domain-name <apex> --nameservers Name=… Name=… Name=… Name=…`) and delete the auto-created duplicate zone ($0.50/mo).
 
 ### 3. GitHub OIDC
 
@@ -185,6 +187,11 @@ terraform apply
 > `deploy-preview.sh` (idempotent — the shared bootstrap / dns / github-oidc
 > stacks no-op, only `infra/envs/prod` applies) and prints the exact phase-2
 > secret-wiring commands. The manual steps below are the equivalent.
+
+> **Fresh AWS account?** The default Lambda concurrent-executions quota is 10, which rejects
+> the module's reserved-concurrency caps outright. Request the raise to 1000 before this
+> apply and/or set the two `*_reserved_concurrency = -1` tfvars overrides while it's pending —
+> full recipe in [deployment_lean.md § Rock-bottom deploy steps](../docs/ops/deployment_lean.md#rock-bottom-deploy-steps).
 
 Same flow, in `envs/prod/` (ciphertext → `../infra-secrets/running/prod.sops.yaml`):
 
