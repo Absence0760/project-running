@@ -39,8 +39,31 @@ const THRESH_DEN: i32 = 10;
 /// this floor is a bench-verify value; kept low enough to accept a weak pulse.
 const MIN_ENVELOPE: i32 = 20;
 
+/// Reportable physiological band. An inter-beat interval implying a rate
+/// outside this is a double-trigger or a dropout, not a heartbeat, and is
+/// refused entry to the smoothed estimate. 220 bpm is the classic HR-max
+/// ceiling (the 220 - age formula at age 0 — nobody sustains a higher rate);
+/// 30 bpm is a severe-bradycardia floor below which a "beat" is a stalled
+/// signal or motion, not a pulse. `MAX_BPM` also sets the refractory spacing,
+/// so a tighter crossing is silently blocked before it can register at all.
 const MIN_BPM: u32 = 30;
 const MAX_BPM: u32 = 220;
+
+/// SNR floor: a candidate beat whose systolic envelope has collapsed below
+/// 1/4 of the slow running amplitude reference is a low-amplitude noise bump
+/// riding a decayed threshold, not a pulse. Kept conservative (1/4) so a merely
+/// weak but real beat still counts.
+const SNR_MIN_NUM: i32 = 1;
+const SNR_MIN_DEN: i32 = 4;
+
+/// Amplitude-reference release shift: the reference is a peak-hold that snaps
+/// up to a stronger envelope instantly but bleeds down at alpha = 1/1024
+/// (~10 s at 100 Hz) — far slower than the ~1.3 s envelope decay. Holding the
+/// recent systolic level well past a transient dropout is what gives the SNR
+/// gate a stable margin to judge a bump against; the slow bleed still lets it
+/// relearn a genuinely weaker signal, so a real weak pulse is never suppressed
+/// for good.
+const BEAT_REF_DECAY_SHIFT: u32 = 10;
 
 /// Consecutive intervals that must agree before a reading is reported valid.
 const MIN_GOOD_BEATS: u32 = 3;
@@ -69,6 +92,7 @@ pub struct PeakDetector {
     baseline: i32,
     smoothed: i32,
     envelope: i32,
+    beat_ref: i32,
     armed: bool,
 
     samples_since_beat: u32,
@@ -88,6 +112,7 @@ impl PeakDetector {
             baseline: 0,
             smoothed: 0,
             envelope: 0,
+            beat_ref: 0,
             armed: false,
             samples_since_beat: 0,
             last_interval: 0,
@@ -101,6 +126,7 @@ impl PeakDetector {
         self.baseline = 0;
         self.smoothed = 0;
         self.envelope = 0;
+        self.beat_ref = 0;
         self.armed = false;
         self.samples_since_beat = 0;
         self.last_interval = 0;
@@ -124,6 +150,17 @@ impl PeakDetector {
             self.envelope = self.smoothed;
         } else {
             self.envelope -= self.envelope >> ENVELOPE_DECAY_SHIFT;
+        }
+
+        // Slow peak-hold of the systolic amplitude for the SNR gate: it matches
+        // the envelope on the way up (so warm-up and a genuine step-up never
+        // trip the gate) but bleeds down far slower than the envelope, so a
+        // transient dropout leaves it holding the real signal level to judge a
+        // suspiciously small bump against.
+        if self.envelope > self.beat_ref {
+            self.beat_ref = self.envelope;
+        } else {
+            self.beat_ref -= self.beat_ref >> BEAT_REF_DECAY_SHIFT;
         }
 
         self.samples_since_beat = self.samples_since_beat.saturating_add(1);
@@ -160,6 +197,16 @@ impl PeakDetector {
             self.good_beats = 0;
             return;
         }
+
+        // SNR gate: reject a crossing whose envelope has fallen far below the
+        // running amplitude reference — a low-amplitude noise bump, not a pulse.
+        // A sustained artifact keeps failing here, so `good_beats` stays low and
+        // the reading is honestly invalid rather than a stale last value.
+        if self.beat_ref > 0 && self.envelope * SNR_MIN_DEN < self.beat_ref * SNR_MIN_NUM {
+            self.good_beats = 0;
+            return;
+        }
+
         let inst_q8 = (bpm as i32) << BPM_Q;
 
         let agrees = self.last_interval != 0 && interval_agrees(interval, self.last_interval);
