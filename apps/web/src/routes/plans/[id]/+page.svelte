@@ -52,7 +52,11 @@
 		todayISO
 	} from '$lib/training/training';
 	import { weeklyDrift, missedWorkoutAdvice } from '$lib/training/plan_adherence';
-	import { orderedPlanPhases, longestCompletedLongRunMetres } from '$lib/training/plan_progress';
+	import {
+		orderedPlanPhases,
+		longestCompletedLongRunMetres,
+		planDistanceBanked
+	} from '$lib/training/plan_progress';
 	import { planToMarkdown, planToJson, type ExportPlan } from '$lib/training/plan_serialize';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
@@ -629,6 +633,16 @@
 		return longestCompletedLongRunMetres(workouts, actualById);
 	});
 
+	/// Plan-wide mileage banked vs planned — the distance view of the
+	/// workout-count progress ring (which can read high on a run of short
+	/// easy days while real volume lags). Actual run distance when the
+	/// linked run is in the recent window, else the planned target.
+	let distanceBanked = $derived.by(() => {
+		const actualById = new Map<string, number>();
+		for (const r of recentRuns) actualById.set(r.id, r.distance_m ?? 0);
+		return planDistanceBanked(workouts, actualById);
+	});
+
 	/// Current-week mileage drift vs plan. Owner-only (needs the runs
 	/// list). Planned volume is the week's target, falling back to the
 	/// sum of its non-rest workouts' distances; actual is every run dated
@@ -890,7 +904,7 @@
 			</div>
 		{/if}
 
-		{#if orderedPhases.length > 1 || longestLongRunMetres != null}
+		{#if orderedPhases.length > 1 || longestLongRunMetres != null || distanceBanked.plannedMetres > 0}
 			<section class="plan-progress">
 				{#if orderedPhases.length > 1}
 					<ol class="phase-marker" aria-label={m('planDetail.phaseMarkerAria')}>
@@ -901,13 +915,27 @@
 						{/each}
 					</ol>
 				{/if}
-				{#if longestLongRunMetres != null}
-					<div class="longest-long" title={m('planDetail.longestLongRun')}>
-						<span class="material-symbols">trending_up</span>
-						<span class="longest-label">{m('planDetail.longestLongRun')}</span>
-						<span class="longest-value">{fmtKm(longestLongRunMetres)}</span>
-					</div>
-				{/if}
+				<div class="plan-progress-stats">
+					{#if distanceBanked.plannedMetres > 0}
+						<div class="stat-chip" title={m('planDetail.distanceBanked')}>
+							<span class="material-symbols">route</span>
+							<span class="stat-label">{m('planDetail.distanceBanked')}</span>
+							<span class="stat-value">
+								{m('planDetail.distanceBankedValue', {
+									done: fmtKm(distanceBanked.completedMetres, 0),
+									total: fmtKm(distanceBanked.plannedMetres, 0)
+								})}
+							</span>
+						</div>
+					{/if}
+					{#if longestLongRunMetres != null}
+						<div class="stat-chip" title={m('planDetail.longestLongRun')}>
+							<span class="material-symbols">trending_up</span>
+							<span class="stat-label">{m('planDetail.longestLongRun')}</span>
+							<span class="stat-value">{fmtKm(longestLongRunMetres)}</span>
+						</div>
+					{/if}
+				</div>
 			</section>
 		{/if}
 
@@ -1612,18 +1640,24 @@
 		color: white;
 		border-color: var(--color-primary);
 	}
-	.longest-long {
+	.plan-progress-stats {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-md);
+	}
+	.stat-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 	}
-	.longest-long .material-symbols {
+	.stat-chip .material-symbols {
 		font-size: 1.1rem;
 		color: var(--color-primary);
 	}
-	.longest-value {
+	.stat-value {
 		font-weight: 700;
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;

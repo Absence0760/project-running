@@ -444,6 +444,8 @@ export const messages = {
 	"planDetail.adherenceAria": "Planeinhaltung",
 	"planDetail.phaseMarkerAria": "Trainingsphase",
 	"planDetail.longestLongRun": "Längster langer Lauf",
+	"planDetail.distanceBanked": "Erreichte Distanz",
+	"planDetail.distanceBankedValue": "{done} von {total}",
 	"planDetail.export": "Exportieren",
 	"planDetail.exportCopyMarkdown": "Als Markdown kopieren",
 	"planDetail.exportDownloadMarkdown": ".md herunterladen",
