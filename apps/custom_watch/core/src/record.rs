@@ -85,6 +85,19 @@ pub const MIN_PREDICT_DISTANCE_M: f64 = 1000.0;
 /// six-bucket ramp (slowest .. fastest).
 pub const PACE_BUCKET_COUNT: usize = 6;
 
+/// Elevation-profile capacity, in stored altitude samples. With the initial
+/// spacing this covers ~1.6 km before the first thinning; each thinning halves
+/// the count and doubles the spacing (the trackback breadcrumb's decimation, one
+/// dimension instead of two), so the whole run stays represented at coarsening
+/// resolution — seven doublings reach ~200 km — at a fixed 256 B of RAM. Sized
+/// for a sparkline cell, not a full profile chart, so this is already more
+/// resolution than the panel can show.
+pub const ELEV_PROFILE_CAP: usize = 64;
+
+/// Initial elevation-profile spacing: a new altitude sample is kept once the run
+/// has advanced this far since the last kept sample. Doubles on each thinning.
+pub const ELEV_PROFILE_SPACING_M: f64 = 25.0;
+
 /// How many pushed roadbook checkpoints the watch holds — an ultra's aid legs,
 /// bounded like [`MAX_CUTOFF_LEGS`]. A longer roadbook is trimmed phone-side.
 pub const MAX_PUSHED_LEGS: usize = 16;
@@ -182,6 +195,28 @@ pub struct FitnessView {
     pub vo2_max: Option<f32>,
     /// Synced recovery-advice verdict, or `None` when the phone had no data.
     pub recovery: Option<RecoveryAdvice>,
+}
+
+/// The decimated elevation series the ElevationProfile page plots as a
+/// mini-profile sparkline: baro-preferred altitude (metres, truncated to `i32`)
+/// sampled along the run at ~[`ELEV_PROFILE_SPACING_M`] intervals and thinned by
+/// halving so the whole run stays represented at fixed RAM. `len == 0` until the
+/// first altitude sample lands, so a baro-less (or pre-fix) run leaves the page
+/// an honest empty state. RAM display state like the laps + trackback breadcrumb
+/// — the flash run-store wire format carries none of it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ElevProfileView {
+    pub samples: [i32; ELEV_PROFILE_CAP],
+    pub len: usize,
+}
+
+impl ElevProfileView {
+    pub const fn empty() -> Self {
+        Self {
+            samples: [0; ELEV_PROFILE_CAP],
+            len: 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -284,6 +319,75 @@ pub struct Snapshot {
     /// The synced fitness snapshot (VO2 max + recovery advice), or `None` until
     /// the phone pushes one.
     pub fitness: Option<FitnessView>,
+    /// The decimated elevation series for the ElevationProfile page's sparkline;
+    /// `len == 0` until an altitude sample lands.
+    pub elev_profile: ElevProfileView,
+}
+
+/// Fixed-RAM decimated elevation series feeding [`ElevProfileView`]. Mirrors the
+/// trackback breadcrumb's halve-and-double-spacing decimation over one dimension
+/// (altitude against distance-along-run), so the whole run's shape survives at a
+/// bounded sample count instead of the tail falling off.
+struct ElevProfile {
+    samples: [i32; ELEV_PROFILE_CAP],
+    len: usize,
+    spacing_m: f64,
+    last_kept_dist_m: f64,
+}
+
+impl ElevProfile {
+    const fn new() -> Self {
+        Self {
+            samples: [0; ELEV_PROFILE_CAP],
+            len: 0,
+            spacing_m: ELEV_PROFILE_SPACING_M,
+            last_kept_dist_m: 0.0,
+        }
+    }
+
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    /// Keep the run's altitude at `dist_m`: the first sample anchors the start,
+    /// later ones are kept once the run has advanced a full spacing interval;
+    /// thin by halving when the buffer is full.
+    fn push(&mut self, dist_m: f64, alt_m: f64) {
+        let value = alt_m as i32;
+        if self.len == 0 {
+            self.samples[0] = value;
+            self.len = 1;
+            self.last_kept_dist_m = dist_m;
+            return;
+        }
+        if dist_m - self.last_kept_dist_m >= self.spacing_m {
+            if self.len == ELEV_PROFILE_CAP {
+                self.thin();
+            }
+            self.samples[self.len] = value;
+            self.len += 1;
+            self.last_kept_dist_m = dist_m;
+        }
+    }
+
+    fn thin(&mut self) {
+        let mut kept = 0;
+        let mut i = 0;
+        while i < self.len {
+            self.samples[kept] = self.samples[i];
+            kept += 1;
+            i += 2;
+        }
+        self.len = kept;
+        self.spacing_m *= 2.0;
+    }
+
+    fn view(&self) -> ElevProfileView {
+        ElevProfileView {
+            samples: self.samples,
+            len: self.len,
+        }
+    }
 }
 
 pub struct Recorder {
@@ -368,6 +472,10 @@ pub struct Recorder {
     /// the phone (which holds the multi-day history the on-watch cores can't).
     /// `None` by default leaves that page inactive.
     fitness: Option<FitnessView>,
+    /// The decimated elevation series, fed the baro-preferred altitude on each
+    /// accepted fix (the same seam that feeds the GAP grade + trackback), reset
+    /// on [`start`](Recorder::start).
+    elev_profile: ElevProfile,
 }
 
 impl Default for Recorder {
@@ -409,6 +517,7 @@ impl Recorder {
             roadbook_legs: heapless::Vec::new(),
             training_goal_pace_s_per_km: None,
             fitness: None,
+            elev_profile: ElevProfile::new(),
         }
     }
 
@@ -579,6 +688,7 @@ impl Recorder {
         // configured goal is settings and stays.
         self.gap.reset();
         self.pacer.reset();
+        self.elev_profile.reset();
     }
 
     /// Manually pause. Valid while recording or auto-paused; inert once idle,
@@ -733,6 +843,7 @@ impl Recorder {
     fn feed_gap(&mut self, fix: &Fix) {
         if let Some(alt) = self.baro_alt_m.or(fix.alt_m.map(f64::from)) {
             self.gap.on_sample(self.distance_m, alt);
+            self.elev_profile.push(self.distance_m, alt);
         }
     }
 
@@ -792,6 +903,7 @@ impl Recorder {
             fuel: self.fuel_snapshot(),
             training_paces: self.training_paces_snapshot(),
             fitness: self.fitness,
+            elev_profile: self.elev_profile.view(),
         }
     }
 
@@ -1980,5 +2092,63 @@ mod tests {
         // A sub-floor VO2 with no recovery is also inactive.
         r.set_fitness(Some(5.0), None);
         assert!(r.snapshot().fitness.is_none());
+    }
+
+    #[test]
+    fn elevation_profile_empty_without_any_altitude() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // No baro pushed and the fixes carry no GPS altitude: nothing to sample.
+        for i in 0..5u32 {
+            r.on_fix(&fix(40.0, -105.0 + i as f64 * 0.0012, 4.0, i));
+        }
+        assert_eq!(r.snapshot().elev_profile.len, 0);
+    }
+
+    #[test]
+    fn elevation_profile_banks_baro_preferred_altitude_along_the_run() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // ~5.5 m north per 1 s fix (clears the 1 Hz jump/speed gate) over 40
+        // fixes (~220 m, several 25 m spacing intervals), with the baro climbing.
+        for i in 0..40u32 {
+            r.set_baro_altitude(1200.0 + i as f32 * 2.0);
+            r.on_fix(&fix(40.0 + i as f64 * 0.00005, -105.0, 5.0, i));
+        }
+        let v = r.snapshot().elev_profile;
+        assert!(
+            v.len >= 5,
+            "banks a sample per spacing interval, got {}",
+            v.len
+        );
+        assert_eq!(v.samples[0], 1200, "first sample is the start altitude");
+        assert!(
+            v.samples[v.len - 1] > v.samples[0],
+            "series climbs with the baro reading"
+        );
+    }
+
+    #[test]
+    fn elevation_profile_thins_by_halving_when_full() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // ~5.5 m north per 1 s fix (clears the 1 Hz jump/speed gate) over 800
+        // fixes (~4.4 km) forces several thinnings, with the baro climbing.
+        for i in 0..800u32 {
+            r.set_baro_altitude(1000.0 + i as f32);
+            r.on_fix(&fix(40.0 + i as f64 * 0.00005, -105.0, 5.0, i));
+        }
+        let v = r.snapshot().elev_profile;
+        assert!(v.len <= ELEV_PROFILE_CAP);
+        assert!(
+            v.len > ELEV_PROFILE_CAP / 2,
+            "stays densely populated after thinning: {}",
+            v.len
+        );
+        assert_eq!(v.samples[0], 1000, "the start altitude survives thinning");
+        assert!(
+            v.samples[v.len - 1] > 1300,
+            "the tail still reaches the climb's top, not a truncated head"
+        );
     }
 }

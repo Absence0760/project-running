@@ -78,8 +78,8 @@ pub static INTERACTION: Watch<CriticalSectionRawMutex, u32, 1> = Watch::new();
 
 /// Latest GSV satellites-in-view count: the `gps` task publishes it best-effort
 /// per GSV group so the signal meter can show the real sat count instead of a
-/// placeholder. No value published means "unknown" (searching). One receiver
-/// reserved for the `ui` face — the statusbar wiring is a follow-up.
+/// placeholder. No value published means "unknown" (searching). The `ui` face
+/// consumes it via `statusbar::bars_for_sats` to drive the idle signal meter.
 pub static SATS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
 /// Pushed user settings (max HR / pacer goal / gear / HR-zone ceiling): the

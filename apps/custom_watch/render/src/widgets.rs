@@ -306,6 +306,7 @@ mod tests {
             fuel: None,
             training_paces: None,
             fitness: None,
+            elev_profile: watch_core::record::ElevProfileView::empty(),
         }
     }
 

@@ -275,6 +275,7 @@ mod tests {
             fuel: None,
             training_paces: None,
             fitness: None,
+            elev_profile: crate::record::ElevProfileView::empty(),
         }
     }
 

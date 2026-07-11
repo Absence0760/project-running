@@ -112,7 +112,6 @@ pub async fn run(mut rx: UarteRx<'static>) {
                     let uptime_s = Instant::now().as_secs() as u32;
                     // Best-effort satellite count for an honest signal meter
                     // (L4): publish alongside the fix pipeline, never gating it.
-                    // UI wiring of the statusbar meter is a follow-up.
                     if let Sentence::Gsv { sats_in_view } = sentence {
                         sats_sender.send(sats_in_view);
                     }

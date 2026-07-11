@@ -63,6 +63,14 @@ const PANEL_ROWS: core::ops::Range<usize> =
 // text rows above and below.
 const MARKER_ARM_PX: i32 = 2;
 
+// The ElevationProfile page's mini-profile sparkline: the rows the face leaves
+// blank below its vert-totals context row (rows 3..8), full width with a small
+// margin — the elevation analogue of the splits histogram panel.
+const ELEV_PROFILE_X: usize = 6;
+const ELEV_PROFILE_Y: usize = 3 * CELL_H;
+const ELEV_PROFILE_W: usize = sharp_mip::WIDTH - 2 * ELEV_PROFILE_X;
+const ELEV_PROFILE_H: usize = 5 * CELL_H - 4;
+
 /// Bench/sim liveness blinker — toggles LED1 at 2 Hz so you can see the
 /// firmware is alive before the display or defmt tells you. Gated behind the
 /// default-OFF `dev-blink` feature: a free-running 2 Hz waker + LED current is
@@ -149,11 +157,13 @@ pub async fn screen_task(
     let mut alert_rx = unwrap!(state::ALERT.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
     let mut tb_rx = unwrap!(state::TRACKBACK.receiver());
+    let mut sats_rx = unwrap!(state::SATS.receiver());
     let mut latest: Option<Fix> = None;
     let mut hr_bpm: Option<u16> = None;
     let mut rec: Option<Snapshot> = None;
     let mut elev: Option<ElevationReading> = None;
     let mut tb: Option<TrackbackView> = None;
+    let mut sats: Option<u8> = None;
     let mut page = Page::default();
     let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
@@ -199,6 +209,9 @@ pub async fn screen_task(
         }
         if let Some(v) = tb_rx.try_changed() {
             tb = Some(v);
+        }
+        if let Some(s) = sats_rx.try_changed() {
+            sats = Some(s);
         }
         let uptime_s = Instant::now().as_secs() as u32;
         // Animate only in the window after a button press; otherwise hold steady
@@ -312,16 +325,27 @@ pub async fn screen_task(
                     Page::GearWear => widgets::draw_gear_overlay(&mut fb, snap),
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
                     Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
+                    Page::ElevationProfile => {
+                        let ep = &snap.elev_profile;
+                        if ep.len > 0 {
+                            widgets::draw_mini_profile(
+                                &mut fb,
+                                &widgets::MiniProfile {
+                                    x: ELEV_PROFILE_X,
+                                    y: ELEV_PROFILE_Y,
+                                    w: ELEV_PROFILE_W,
+                                    h: ELEV_PROFILE_H,
+                                    samples: &ep.samples[..ep.len],
+                                },
+                            );
+                        }
+                    }
                     _ => {}
                 }
             }
         } else {
-            widgets::draw_idle_signal(
-                &mut fb,
-                latest.as_ref(),
-                uptime_s,
-                face::stale_after_s(mode, false),
-            );
+            let bars = sats.map_or(0, statusbar::bars_for_sats);
+            widgets::draw_signal_bars(&mut fb, sharp_mip::WIDTH - 2, CELL_H - 2, bars);
         }
 
         // The BackToStart page's pixel layer rides on top of the text rows
@@ -384,7 +408,12 @@ pub async fn screen_task(
         match select3(
             sensors,
             controls,
-            select3(tb_rx.changed(), mode_rx.changed(), Timer::after(tick)),
+            select4(
+                tb_rx.changed(),
+                mode_rx.changed(),
+                sats_rx.changed(),
+                Timer::after(tick),
+            ),
         )
         .await
         {
@@ -398,9 +427,10 @@ pub async fn screen_task(
             Either3::Second(Either4::Second(t)) => last_interaction_s = t,
             Either3::Second(Either4::Third(a)) => alert = a,
             Either3::Second(Either4::Fourth(v)) => nav = v,
-            Either3::Third(Either3::First(v)) => tb = Some(v),
-            Either3::Third(Either3::Second(m)) => mode = m,
-            Either3::Third(Either3::Third(())) => {}
+            Either3::Third(Either4::First(v)) => tb = Some(v),
+            Either3::Third(Either4::Second(m)) => mode = m,
+            Either3::Third(Either4::Third(s)) => sats = Some(s),
+            Either3::Third(Either4::Fourth(())) => {}
         }
     }
 }
