@@ -56,6 +56,8 @@
 //!   the start, the course-over-ground heading + relative direction arrow
 //! - [`button`] — the pure button-press → record-command mapping
 //! - [`run_store`] — on-device run wire format + BLE sync framing
+//! - [`settings`] — phone→watch settings frame (max HR / pacer goal / gear /
+//!   HR-zone ceiling) decoded into the recorder's settings-sync hooks
 //! - [`flash_store`] — tier-1 internal-flash slot layout for finished runs
 //! - [`training_load`] — single-run + rolling CTL/ATL/TSB training-load
 //!   estimate (port of web `training/training_load.ts`)
@@ -143,6 +145,7 @@ pub mod roadbook;
 pub mod route_description;
 pub mod route_markers;
 pub mod run_store;
+pub mod settings;
 pub mod statusbar;
 pub mod trackback;
 pub mod training_load;
