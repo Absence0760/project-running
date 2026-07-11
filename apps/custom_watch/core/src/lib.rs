@@ -87,6 +87,10 @@
 //!   canonical English assembler, the offline "describe this route" baseline
 //!   (port of web `routes/route_description.ts`; reuses
 //!   [`distance_bands::band_for_distance`])
+//! - [`route_geometry`] — interpolate a fraction to a distance-weighted point on
+//!   a route polyline + the inverse distance-along-route projection + cumulative
+//!   length (port of web `routes/route_geometry.ts`; the self-contained twin of
+//!   the [`course`] nav-overlay projection)
 //! - [`plan_progress`] — base→build→peak→taper phase ordering + longest
 //!   completed long run (port of web `training/plan_progress.ts`)
 //! - [`plan_adherence`] — weekly drift over/under + missed-workout make-up/skip
@@ -168,6 +172,7 @@ pub mod record;
 pub mod relink_candidates;
 pub mod roadbook;
 pub mod route_description;
+pub mod route_geometry;
 pub mod route_markers;
 pub mod run_heatmap;
 pub mod run_store;
