@@ -15,9 +15,9 @@
 //! icon glyph stay at the render layer — this catalogue carries only the
 //! shared hex colour + label key so a pin looks identical across platforms.
 //!
-//! This is the canonical home for [`parse_cutoff`] + [`valid_clock`];
-//! `roadbook` and `cutoff_eta` inline private equivalents that a later harvest
-//! folds back onto these. Pure logic, no peripherals, no allocator.
+//! This is the canonical home for [`parse_cutoff`] + [`valid_clock`], reused by
+//! [`crate::roadbook`] and [`crate::route_gpx`] rather than re-inlined. Pure
+//! logic, no peripherals, no allocator.
 
 use core::cmp::Ordering;
 
