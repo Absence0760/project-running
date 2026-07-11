@@ -1,7 +1,11 @@
 //! Host-side conversion tests. Run via `bin/watch-test.sh` from the repo root,
 //! or `cargo test --target <HOST_TRIPLE> -p bmp581` from anywhere.
 
-use bmp581::{altitude_from_pressure_m, raw_to_celsius, raw_to_pa, Bmp581, STANDARD_SEA_LEVEL_PA};
+use bmp581::{
+    altitude_from_pressure_m, encode_dsp_config, encode_dsp_iir, encode_odr_config,
+    encode_osr_config, raw_to_celsius, raw_to_pa, Bmp581, Config, IirFilter, Oversampling,
+    PowerMode, STANDARD_SEA_LEVEL_PA,
+};
 use embedded_hal::i2c::{ErrorType, I2c, Operation};
 
 fn approx(a: f32, b: f32, tol: f32) -> bool {
@@ -64,7 +68,7 @@ fn high_altitude_low_pressure() {
 
 #[test]
 fn one_count_is_a_sixty_fourth_pa() {
-    assert!(approx(raw_to_pa(6_484_801), 101_325.015_625, 0.001));
+    assert!(approx(raw_to_pa(6_484_801), 101_325.016, 0.001));
 }
 
 #[test]
@@ -143,4 +147,117 @@ fn implausible_qnh_is_rejected() {
     dev.set_sea_level_pa(200_000.0);
     let after = dev.read_altitude_m().unwrap().unwrap();
     assert!(approx(after, baseline, 0.001));
+}
+
+#[test]
+fn osr_config_matches_legacy_default() {
+    // The pre-refactor init wrote press 8x / temp 2x as the literal 0x59.
+    assert_eq!(encode_osr_config(Oversampling::X8, Oversampling::X2), 0x59);
+}
+
+#[test]
+fn osr_config_lowest_is_press_en_only() {
+    // press_en set (bit 6), both OSR fields zero (1x).
+    assert_eq!(encode_osr_config(Oversampling::X1, Oversampling::X1), 0x40);
+}
+
+#[test]
+fn osr_config_highest_packs_both_fields() {
+    // press_en (0x40) | osr_p=7<<3 (0x38) | osr_t=7 (0x07).
+    assert_eq!(
+        encode_osr_config(Oversampling::X128, Oversampling::X128),
+        0x7F
+    );
+}
+
+#[test]
+fn osr_config_ultra_watch_default() {
+    // press 16x (4<<3=0x20) | temp 2x (0x01) | press_en (0x40) = 0x61.
+    assert_eq!(encode_osr_config(Oversampling::X16, Oversampling::X2), 0x61);
+}
+
+#[test]
+fn odr_config_matches_legacy_normal_50hz() {
+    // The pre-refactor init wrote odr=50 Hz + normal as the literal 0x3D.
+    assert_eq!(encode_odr_config(0x0F, PowerMode::Normal), 0x3D);
+}
+
+#[test]
+fn odr_config_standby_clears_pwr_mode() {
+    assert_eq!(encode_odr_config(0x0F, PowerMode::Standby), 0x3C);
+}
+
+#[test]
+fn odr_config_continuous_sets_both_pwr_bits() {
+    assert_eq!(encode_odr_config(0x0F, PowerMode::Continuous), 0x3F);
+}
+
+#[test]
+fn dsp_iir_packs_pressure_then_temperature() {
+    // set_iir_p=3<<3 (0x18) | set_iir_t=1 (0x01) = 0x19.
+    assert_eq!(encode_dsp_iir(IirFilter::Coeff7, IirFilter::Coeff1), 0x19);
+}
+
+#[test]
+fn dsp_iir_off_is_zero() {
+    assert_eq!(encode_dsp_iir(IirFilter::Off, IirFilter::Off), 0x00);
+}
+
+#[test]
+fn dsp_iir_highest_coefficients() {
+    assert_eq!(
+        encode_dsp_iir(IirFilter::Coeff127, IirFilter::Coeff127),
+        0x3F
+    );
+}
+
+#[test]
+fn dsp_config_routes_both_filtered_channels() {
+    // comp_pt_en (0x03) | shdw_sel_iir_t (0x08) | shdw_sel_iir_p (0x20) = 0x2B.
+    assert_eq!(
+        encode_dsp_config(IirFilter::Coeff7, IirFilter::Coeff1),
+        0x2B
+    );
+}
+
+#[test]
+fn dsp_config_keeps_compensation_when_filters_off() {
+    // No shadow-select bits, but compensation stays on.
+    assert_eq!(encode_dsp_config(IirFilter::Off, IirFilter::Off), 0x03);
+}
+
+#[test]
+fn dsp_config_pressure_only_filter() {
+    // comp_pt_en (0x03) | shdw_sel_iir_p (0x20), temperature filter off.
+    assert_eq!(encode_dsp_config(IirFilter::Coeff31, IirFilter::Off), 0x23);
+}
+
+#[test]
+fn default_config_encodes_to_ultra_watch_bytes() {
+    let cfg = Config::default();
+    assert_eq!(
+        encode_osr_config(cfg.osr_pressure, cfg.osr_temperature),
+        0x61
+    );
+    assert_eq!(encode_dsp_iir(cfg.iir_pressure, cfg.iir_temperature), 0x19);
+    assert_eq!(
+        encode_dsp_config(cfg.iir_pressure, cfg.iir_temperature),
+        0x2B
+    );
+    assert_eq!(encode_odr_config(0x0F, cfg.power_mode), 0x3D);
+}
+
+#[test]
+fn oversampling_discriminants_are_the_field_values() {
+    assert_eq!(Oversampling::X1 as u8, 0);
+    assert_eq!(Oversampling::X16 as u8, 4);
+    assert_eq!(Oversampling::X128 as u8, 7);
+}
+
+#[test]
+fn iir_and_power_discriminants_are_the_field_values() {
+    assert_eq!(IirFilter::Off as u8, 0);
+    assert_eq!(IirFilter::Coeff127 as u8, 7);
+    assert_eq!(PowerMode::Standby as u8, 0);
+    assert_eq!(PowerMode::Continuous as u8, 3);
 }
