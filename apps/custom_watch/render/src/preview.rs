@@ -191,3 +191,26 @@ fn preview_gear_and_fuel_pages() {
     widgets::draw_fuel_overlay(&mut fb2, &fuel_snap);
     show("fuel: carry-load bar", &fb2);
 }
+
+#[test]
+fn preview_mini_profile() {
+    // A synthetic climb-then-descend altitude series — the shape a future glance
+    // page would show for a route's elevation profile, auto-scaled to the cell.
+    let elevation: [i32; 14] = [
+        1600, 1615, 1650, 1710, 1790, 1855, 1880, 1860, 1795, 1720, 1680, 1650, 1625, 1605,
+    ];
+    let mut fb = Framebuffer::new();
+    let (x, y, w, h) = (6, 20, WIDTH - 12, 100);
+    fb.stroke_rect(x - 2, y - 2, w + 4, h + 4, true);
+    widgets::draw_mini_profile(
+        &mut fb,
+        &widgets::MiniProfile {
+            x,
+            y,
+            w,
+            h,
+            samples: &elevation,
+        },
+    );
+    show("mini-profile: elevation climb + descent", &fb);
+}

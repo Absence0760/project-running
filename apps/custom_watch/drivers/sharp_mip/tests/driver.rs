@@ -603,6 +603,80 @@ fn center_bar_clamps_magnitude() {
 }
 
 #[test]
+fn sparkline_empty_and_zero_dimension_draw_nothing() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_sparkline(0, 0, 40, 20, &[], (0, 100));
+    fb.draw_sparkline(0, 0, 0, 20, &[1, 2, 3], (0, 100));
+    fb.draw_sparkline(0, 0, 40, 0, &[1, 2, 3], (0, 100));
+    assert_eq!(fb.dirty_count(), 0);
+}
+
+#[test]
+fn sparkline_single_sample_plots_one_point_at_its_height() {
+    let mut fb = Framebuffer::new();
+    // h = 11 so the baseline is y+10 and the top is y; the midpoint value 50 of
+    // 0..100 lands on the middle row, at the left column.
+    fb.draw_sparkline(5, 10, 30, 11, &[50], (0, 100));
+    let mut lit = Vec::new();
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            if fb.pixel(x, y) {
+                lit.push((x, y));
+            }
+        }
+    }
+    assert_eq!(lit, vec![(5, 15)]);
+}
+
+#[test]
+fn sparkline_flat_series_draws_a_horizontal_line() {
+    let mut fb = Framebuffer::new();
+    // value 5 of 0..10 over h=11 -> row = (h-1) - 5*(h-1)/10 = 10 - 5 = 5.
+    fb.draw_sparkline(0, 0, 20, 11, &[5, 5, 5, 5], (0, 10));
+    for x in 0..20 {
+        assert!(fb.pixel(x, 5), "missing flat-line pixel at x={x}");
+    }
+    for y in 0..11 {
+        if y != 5 {
+            for x in 0..20 {
+                assert!(!fb.pixel(x, y), "stray at ({x},{y})");
+            }
+        }
+    }
+}
+
+#[test]
+fn sparkline_rising_ramp_climbs_from_baseline_to_top() {
+    let mut fb = Framebuffer::new();
+    fb.draw_sparkline(0, 0, 30, 11, &[0, 5, 10], (0, 10));
+    // The min sample sits on the baseline (row h-1 = 10); the max on the top row.
+    assert!(fb.pixel(0, 10), "ramp should start on the baseline");
+    assert!(fb.pixel(29, 0), "ramp should reach the top row"); // plot_x(2) = 2*29/2
+                                                               // Monotonic climb: the highest lit row (smallest index) only rises left->right.
+    let top_at = |col: usize| (0..11).find(|&y| fb.pixel(col, y));
+    assert!(top_at(0).unwrap() >= top_at(29).unwrap());
+}
+
+#[test]
+fn sparkline_clamps_values_outside_the_range() {
+    let mut over = Framebuffer::new();
+    over.draw_sparkline(0, 0, 20, 11, &[200, 200], (0, 100));
+    let mut under = Framebuffer::new();
+    under.draw_sparkline(0, 0, 20, 11, &[-50, -50], (0, 100));
+    // 200 clamps to max -> top row 0; -50 clamps to min -> baseline row 10.
+    assert!(over.pixel(0, 0) && over.pixel(19, 0));
+    assert!(under.pixel(0, 10) && under.pixel(19, 10));
+    for x in 0..20 {
+        assert!(
+            !over.pixel(x, 10),
+            "over-range leaked to the baseline at x={x}"
+        );
+        assert!(!under.pixel(x, 0), "under-range leaked to the top at x={x}");
+    }
+}
+
+#[test]
 fn draw_text_3x_triples_a_glyph() {
     let mut fb = Framebuffer::new();
     fb.clear_dirty();
