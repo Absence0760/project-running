@@ -203,6 +203,7 @@
   "signInResetSent": "Si cet e-mail est enregistré, nous avons envoyé un lien de réinitialisation.",
   "signInWithApple": "Se connecter avec Apple",
   "signInWithGoogle": "Se connecter avec Google",
+  "googleSignInSoon": "La connexion avec Google arrive bientôt. Pour l’instant, utilisez l’e-mail.",
   "signInContinueOffline": "Continuer hors ligne",
   "signInCreateAccountPrompt": "Pas encore de compte ? Créez-en un",
   "signUpTitle": "Créer un compte",

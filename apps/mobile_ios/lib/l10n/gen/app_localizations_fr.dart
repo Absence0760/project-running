@@ -736,6 +736,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get signInWithGoogle => 'Se connecter avec Google';
 
   @override
+  String get googleSignInSoon =>
+      'La connexion avec Google arrive bientôt. Pour l’instant, utilisez l’e-mail.';
+
+  @override
   String get signInContinueOffline => 'Continuer hors ligne';
 
   @override

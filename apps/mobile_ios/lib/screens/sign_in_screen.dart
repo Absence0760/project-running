@@ -98,19 +98,21 @@ class _SignInScreenState extends State<SignInScreen> {
   /// client configured with the app's SHA-1 fingerprint. See
   /// `apps/mobile_android/local_testing.md`.
   Future<void> _signInWithGoogle() async {
+    final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+    if (webClientId == null || webClientId.isEmpty) {
+      // Google OAuth provider isn't wired up on this build yet — show a
+      // friendly coming-soon notice instead of a raw configuration error.
+      // Mirrors web's PUBLIC_GOOGLE_AUTH_ENABLED fail-closed gate.
+      if (mounted) {
+        setState(() => _error = AppLocalizations.of(context).googleSignInSoon);
+      }
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
-      if (webClientId == null || webClientId.isEmpty) {
-        throw Exception(
-          'Google Sign-In not configured — set GOOGLE_WEB_CLIENT_ID in .env.local. '
-          'See apps/mobile_android/local_testing.md.',
-        );
-      }
-
       // google_sign_in 7.x: singleton + one-time initialize() before any
       // other call. _ensureGoogleInitialized makes that idempotent so
       // multiple sign-in attempts in one session don't trip "undefined

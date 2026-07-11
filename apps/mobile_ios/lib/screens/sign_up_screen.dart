@@ -126,20 +126,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
+    final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+    if (webClientId == null || webClientId.isEmpty) {
+      // Google OAuth provider isn't wired up on this build yet — show a
+      // friendly coming-soon notice instead of a raw configuration error
+      // (and before the gate nag, since the button isn't functional yet).
+      // Mirrors web's PUBLIC_GOOGLE_AUTH_ENABLED fail-closed gate.
+      if (mounted) {
+        setState(() => _error = AppLocalizations.of(context).googleSignInSoon);
+      }
+      return;
+    }
     if (!_checkGates()) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
-      if (webClientId == null || webClientId.isEmpty) {
-        throw Exception(
-          'Google Sign-In not configured — set GOOGLE_WEB_CLIENT_ID in .env.local. '
-          'See apps/mobile_android/local_testing.md.',
-        );
-      }
-
       // See sign_in_screen.dart for the google_sign_in 7.x notes.
       await _ensureGoogleInitialized(webClientId);
       final account = await GoogleSignIn.instance.authenticate();

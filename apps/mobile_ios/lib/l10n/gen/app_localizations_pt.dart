@@ -734,6 +734,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get signInWithGoogle => 'Entrar com Google';
 
   @override
+  String get googleSignInSoon =>
+      'O login com o Google chega em breve. Por enquanto, use o e-mail.';
+
+  @override
   String get signInContinueOffline => 'Continuar offline';
 
   @override
@@ -11686,6 +11690,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get signInWithGoogle => 'Entrar com Google';
+
+  @override
+  String get googleSignInSoon =>
+      'O login com o Google chega em breve. Por enquanto, use o e-mail.';
 
   @override
   String get signInContinueOffline => 'Continuar offline';

@@ -711,6 +711,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signInWithGoogle => 'Googleでサインイン';
 
   @override
+  String get googleSignInSoon => 'Google でのサインインは近日対応予定です。今はメールをご利用ください。';
+
+  @override
   String get signInContinueOffline => 'オフラインで続ける';
 
   @override
