@@ -18252,6 +18252,24 @@ abstract class AppLocalizations {
   /// **'Watch sync failed: {error}'**
   String simWatchSyncFailed(String error);
 
+  /// Button that pushes the user's config to the custom watch over BLE
+  ///
+  /// In en, this message translates to:
+  /// **'Push settings to watch'**
+  String get simWatchPushSettingsAction;
+
+  /// No description provided for @simWatchSettingsPushed.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings pushed to the watch'**
+  String get simWatchSettingsPushed;
+
+  /// No description provided for @simWatchPushSettingsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings push failed: {error}'**
+  String simWatchPushSettingsFailed(String error);
+
   /// No description provided for @simWatchNoRuns.
   ///
   /// In en, this message translates to:

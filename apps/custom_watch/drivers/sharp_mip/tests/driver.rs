@@ -5,7 +5,9 @@ use std::convert::Infallible;
 
 use embedded_hal::digital::{ErrorType as PinErrorType, OutputPin};
 use embedded_hal::spi::{ErrorType as SpiErrorType, SpiBus};
-use sharp_mip::{font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS};
+use sharp_mip::{
+    font, Framebuffer, Icon, SharpMip, HEIGHT, ICON_SIZE, LINE_BYTES, TEXT_COLS, TEXT_ROWS, WIDTH,
+};
 
 #[derive(Default)]
 struct MockSpi {
@@ -372,4 +374,302 @@ fn redrawing_an_identical_line_dirties_nothing() {
     fb.clear_dirty();
     fb.draw_line(3, 3, 60, 47, true);
     assert_eq!(fb.dirty_count(), 0);
+}
+
+#[test]
+fn hline_sets_the_span_and_clips_at_the_right_edge() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.hline(10, 40, 5, true);
+    assert!(!fb.pixel(9, 40));
+    for x in 10..15 {
+        assert!(fb.pixel(x, 40), "missing pixel at x={x}");
+    }
+    assert!(!fb.pixel(15, 40));
+    assert_eq!(fb.dirty_count(), 1);
+    assert!(fb.is_dirty(40));
+    // A run reaching past the right edge clips instead of panicking.
+    fb.hline(WIDTH - 3, 41, 20, true);
+    assert!(fb.pixel(WIDTH - 1, 41));
+    // Entirely off-panel row is a silent no-op.
+    fb.hline(0, 9999, 10, true);
+}
+
+#[test]
+fn vline_sets_the_span_and_clips_at_the_bottom() {
+    let mut fb = Framebuffer::new();
+    fb.vline(5, 10, 6, true);
+    assert!(!fb.pixel(5, 9));
+    for y in 10..16 {
+        assert!(fb.pixel(5, y), "missing pixel at y={y}");
+    }
+    assert!(!fb.pixel(5, 16));
+    // Runs off the bottom / right clip without panicking.
+    fb.vline(6, HEIGHT - 2, 20, true);
+    assert!(fb.pixel(6, HEIGHT - 1));
+    fb.vline(9999, 0, 10, true);
+}
+
+#[test]
+fn fill_rect_fills_its_interior_and_clips() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.fill_rect(20, 30, 4, 3, true);
+    let mut count = 0;
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            if fb.pixel(x, y) {
+                count += 1;
+                assert!(
+                    (20..24).contains(&x) && (30..33).contains(&y),
+                    "stray at ({x},{y})"
+                );
+            }
+        }
+    }
+    assert_eq!(count, 4 * 3);
+    assert_eq!(fb.dirty_count(), 3);
+    // A rect straddling the corner clips to the panel, no panic.
+    fb.fill_rect(WIDTH - 2, HEIGHT - 2, 10, 10, true);
+    assert!(fb.pixel(WIDTH - 1, HEIGHT - 1));
+}
+
+#[test]
+fn stroke_rect_draws_only_the_border() {
+    let mut fb = Framebuffer::new();
+    fb.stroke_rect(10, 10, 6, 5, true);
+    // Corners + edges are ink.
+    for x in 10..16 {
+        assert!(fb.pixel(x, 10) && fb.pixel(x, 14), "top/bottom edge x={x}");
+    }
+    for y in 10..15 {
+        assert!(fb.pixel(10, y) && fb.pixel(15, y), "left/right edge y={y}");
+    }
+    // The interior is untouched.
+    for y in 11..14 {
+        for x in 11..15 {
+            assert!(!fb.pixel(x, y), "interior ink at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn stroke_rect_degenerate_sizes_still_draw_without_panic() {
+    let mut fb = Framebuffer::new();
+    // Height 1 collapses to a horizontal line.
+    fb.stroke_rect(4, 4, 5, 1, true);
+    for x in 4..9 {
+        assert!(fb.pixel(x, 4));
+    }
+    // Width 1 collapses to a vertical line.
+    fb.stroke_rect(20, 20, 1, 4, true);
+    for y in 20..24 {
+        assert!(fb.pixel(20, y));
+    }
+    // Zero dimension draws nothing and does not panic.
+    fb.stroke_rect(0, 0, 0, 5, true);
+    fb.stroke_rect(0, 0, 5, 0, true);
+}
+
+#[test]
+fn progress_bar_frac_zero_is_border_only() {
+    let mut fb = Framebuffer::new();
+    fb.draw_progress_bar(10, 10, 20, 8, 0.0);
+    // Border present.
+    assert!(fb.pixel(10, 10) && fb.pixel(29, 17));
+    // Inner area entirely empty.
+    for y in 11..17 {
+        for x in 11..29 {
+            assert!(!fb.pixel(x, y), "inner ink at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn progress_bar_half_fills_about_half_the_inner_width() {
+    let mut fb = Framebuffer::new();
+    fb.draw_progress_bar(0, 0, 22, 6, 0.5);
+    // inner_w = 20, filled = 10: columns 1..11 ink on an inner row, 11..21 empty.
+    let y = 2;
+    for x in 1..11 {
+        assert!(fb.pixel(x, y), "expected fill at x={x}");
+    }
+    for x in 11..21 {
+        assert!(!fb.pixel(x, y), "expected empty at x={x}");
+    }
+}
+
+#[test]
+fn progress_bar_full_and_over_range_clamp_to_full_inner() {
+    let mut full = Framebuffer::new();
+    full.draw_progress_bar(0, 0, 12, 6, 1.0);
+    let mut over = Framebuffer::new();
+    over.draw_progress_bar(0, 0, 12, 6, 5.0);
+    // inner_w = 10: every inner column filled, and >1 clamps to the same image.
+    for y in 1..5 {
+        for x in 1..11 {
+            assert!(full.pixel(x, y), "full missing ({x},{y})");
+            assert_eq!(
+                over.pixel(x, y),
+                full.pixel(x, y),
+                "clamp mismatch ({x},{y})"
+            );
+        }
+    }
+    // Negative clamps to empty inner.
+    let mut neg = Framebuffer::new();
+    neg.draw_progress_bar(0, 0, 12, 6, -3.0);
+    for y in 1..5 {
+        for x in 1..11 {
+            assert!(!neg.pixel(x, y), "neg-clamp ink at ({x},{y})");
+        }
+    }
+}
+
+#[test]
+fn progress_bar_shrinking_clears_prior_fill() {
+    let mut fb = Framebuffer::new();
+    fb.draw_progress_bar(0, 0, 22, 6, 1.0);
+    // Redraw smaller: the trailing inner span must erase.
+    fb.draw_progress_bar(0, 0, 22, 6, 0.25);
+    let y = 2;
+    // inner_w = 20, filled = 5.
+    for x in 1..6 {
+        assert!(fb.pixel(x, y), "expected retained fill at x={x}");
+    }
+    for x in 6..21 {
+        assert!(!fb.pixel(x, y), "stale fill left at x={x}");
+    }
+}
+
+#[test]
+fn center_bar_frac_zero_is_just_the_center_tick() {
+    let mut fb = Framebuffer::new();
+    fb.draw_center_bar(0, 0, 21, 6, 0.0);
+    let cx = 21 / 2; // 10
+    for y in 1..5 {
+        assert!(fb.pixel(cx, y), "center tick missing at y={y}");
+        for x in 1..20 {
+            if x != cx {
+                assert!(!fb.pixel(x, y), "unexpected ink at ({x},{y})");
+            }
+        }
+    }
+}
+
+#[test]
+fn center_bar_positive_fills_right_negative_fills_left() {
+    let cx = 21 / 2; // 10
+    let y = 2;
+    let mut pos = Framebuffer::new();
+    pos.draw_center_bar(0, 0, 21, 6, 0.5);
+    // right_space = (0+21-2) - 10 = 9, fill_w = 4: columns cx+1..cx+5 ink, left empty.
+    for x in (cx + 1)..(cx + 5) {
+        assert!(pos.pixel(x, y), "positive fill missing at x={x}");
+    }
+    for x in 1..cx {
+        assert!(!pos.pixel(x, y), "positive bar leaked left at x={x}");
+    }
+
+    let mut neg = Framebuffer::new();
+    neg.draw_center_bar(0, 0, 21, 6, -0.5);
+    // left_space = 10 - 1 = 9, fill_w = 4: columns cx-4..cx ink, right empty.
+    for x in (cx - 4)..cx {
+        assert!(neg.pixel(x, y), "negative fill missing at x={x}");
+    }
+    for x in (cx + 1)..20 {
+        assert!(!neg.pixel(x, y), "negative bar leaked right at x={x}");
+    }
+}
+
+#[test]
+fn center_bar_clamps_magnitude() {
+    let cx = 21 / 2;
+    let y = 2;
+    let mut full = Framebuffer::new();
+    full.draw_center_bar(0, 0, 21, 6, 1.0);
+    let mut over = Framebuffer::new();
+    over.draw_center_bar(0, 0, 21, 6, 9.0);
+    for x in 1..20 {
+        assert_eq!(
+            over.pixel(x, y),
+            full.pixel(x, y),
+            "clamp mismatch at x={x}"
+        );
+    }
+    // Full-positive reaches the last inner column right of the tick.
+    assert!(full.pixel(19, y));
+    assert!(full.pixel(cx, y));
+}
+
+#[test]
+fn draw_text_3x_triples_a_glyph() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_text_3x(0, 0, "1");
+    let glyph = &font::FONT[(b'1' - font::FIRST_CHAR) as usize];
+    // Each source row maps to three dest rows; each source bit b lights dest
+    // bits 3b..3b+3 across the three-byte-wide tripled cell.
+    for (dy, &bits) in glyph.iter().enumerate() {
+        let mut wide: u32 = 0;
+        for b in 0..8 {
+            if bits >> b & 1 != 0 {
+                wide |= 0b111 << (b * 3);
+            }
+        }
+        let bytes = [
+            (wide & 0xff) as u8,
+            (wide >> 8 & 0xff) as u8,
+            (wide >> 16 & 0xff) as u8,
+        ];
+        for third in 0..3 {
+            let y = dy * 3 + third;
+            if y >= HEIGHT {
+                break;
+            }
+            for (c, &want) in bytes.iter().enumerate() {
+                assert_eq!(fb.line(y)[c], want, "row {y} cell {c}");
+            }
+        }
+    }
+    // A tripled glyph spans 48 rows and dirtied at least the non-empty ones.
+    assert!(fb.dirty_count() > 0);
+    assert!((0..HEIGHT)
+        .filter(|&y| fb.is_dirty(y))
+        .all(|y| y < 3 * font::GLYPH_HEIGHT));
+}
+
+#[test]
+fn draw_text_3x_block_is_24_wide_and_48_tall() {
+    let mut fb = Framebuffer::new();
+    fb.draw_text_3x(0, 0, "8"); // a dense glyph
+    let mut max_x = 0;
+    let mut max_y = 0;
+    let mut any = false;
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            if fb.pixel(x, y) {
+                any = true;
+                if x > max_x {
+                    max_x = x;
+                }
+                if y > max_y {
+                    max_y = y;
+                }
+            }
+        }
+    }
+    assert!(any, "glyph rendered nothing");
+    // 24 px wide (3 cells) and 48 px tall (3 rows) upper bounds.
+    assert!(max_x < 24, "wider than 24 px: {max_x}");
+    assert!(max_y < 48, "taller than 48 px: {max_y}");
+}
+
+#[test]
+fn draw_text_3x_truncates_and_clips_without_panicking() {
+    let mut fb = Framebuffer::new();
+    fb.draw_text_3x(0, 99, "X"); // past the bottom text row
+    fb.draw_text_3x(TEXT_COLS - 2, 0, "X"); // 2nd/3rd cells fall off the right
+    fb.draw_text_3x(0, TEXT_ROWS - 1, "X"); // bottom row: lower two-thirds clip off-panel
+    fb.draw_text_3x(0, 0, &"8".repeat(TEXT_COLS)); // more chars than fit
 }

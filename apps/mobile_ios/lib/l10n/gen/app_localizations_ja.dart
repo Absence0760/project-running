@@ -10396,6 +10396,17 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushSettingsAction => '設定を時計に送信';
+
+  @override
+  String get simWatchSettingsPushed => '設定を時計に送信しました';
+
+  @override
+  String simWatchPushSettingsFailed(String error) {
+    return '設定の送信に失敗しました: $error';
+  }
+
+  @override
   String get simWatchNoRuns => '同期する時計のランがありません';
 
   @override

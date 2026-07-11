@@ -1,0 +1,15 @@
+[package]
+name = "watch_render"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+# Host-testable widget drawing: composes `watch_core` state onto a `sharp_mip`
+# framebuffer. Split out of the embedded `app` ui task on purpose — the app
+# crate only builds for the board, so its inline drawing was untestable; the
+# geometry that decides where a gauge / bar / indicator lands is pure and
+# belongs here, where `cargo test` reaches it (the 60-70% host-testable split
+# local_testing.md calls for). The app's ui task keeps only the peripheral glue.
+[dependencies]
+sharp_mip = { path = "../drivers/sharp_mip" }
+watch_core = { path = "../core" }

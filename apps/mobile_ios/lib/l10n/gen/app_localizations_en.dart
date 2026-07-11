@@ -10798,6 +10798,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushSettingsAction => 'Push settings to watch';
+
+  @override
+  String get simWatchSettingsPushed => 'Settings pushed to the watch';
+
+  @override
+  String simWatchPushSettingsFailed(String error) {
+    return 'Settings push failed: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'No runs on the watch to sync';
 
   @override

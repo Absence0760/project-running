@@ -101,6 +101,7 @@ panic-probe  = { version = "1.0", features = ["print-defmt"] }
 
 # Workspace crates
 watch_core  = { path = "../core",               features = ["defmt"] }
+watch_render = { path = "../render" }
 sharp_mip   = { path = "../drivers/sharp_mip",  features = ["defmt"] }
 ublox_nmea  = { path = "../drivers/ublox_nmea", features = ["defmt"] }
 max86177    = { path = "../drivers/max86177",   features = ["defmt"] }
