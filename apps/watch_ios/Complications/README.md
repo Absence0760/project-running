@@ -15,7 +15,7 @@ This note is the one-time wiring. Once it's done, the complication ticks up in [
 1. **Add the widget extension target.**
    - File → New → Target… → **Watch App Complication**.
    - Product Name: `WatchAppComplication`.
-   - Bundle Identifier: `com.runapp.watchios.WatchAppComplication`.
+   - Bundle Identifier: `com.threkir.app.watchapp.WatchAppComplication`.
    - Embed in Application: `WatchApp`.
    - Language: Swift.
    - Activate the scheme when prompted.
@@ -24,7 +24,7 @@ This note is the one-time wiring. Once it's done, the complication ticks up in [
    - Drag `apps/watch_ios/Complications/ActiveRunComplication.swift` into the new `WatchAppComplication` group; **target membership** = `WatchAppComplication` only.
    - Drag `apps/watch_ios/WatchApp/ActiveRunBridge.swift` into the same group as a *reference* (don't copy); **target membership** = both `WatchApp` and `WatchAppComplication`.
 3. **Configure App Groups.**
-   - Select the `WatchApp` target → Signing & Capabilities → `+ Capability` → **App Groups** → add `group.com.runapp.watchios.activerun`.
+   - Select the `WatchApp` target → Signing & Capabilities → `+ Capability` → **App Groups** → add `group.com.threkir.app.activerun`.
    - Repeat on the `WatchAppComplication` target. The identifier must match `ActiveRunBridge.appGroup` exactly.
 4. **Set deployment target.**
    - WatchAppComplication → General → Minimum Deployments → watchOS 10.0 (or whatever the host app uses; staying in lockstep avoids `@available` annotations).

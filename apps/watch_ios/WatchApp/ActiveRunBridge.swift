@@ -51,7 +51,7 @@ public enum ActiveRunBridge {
     /// The App Group must be registered on **both** the host app
     /// target and the widget-extension target — see the watchOS
     /// Capabilities pane in Xcode and the README in this directory.
-    public static let appGroup = "group.com.runapp.watchios.activerun"
+    public static let appGroup = "group.com.threkir.app.activerun"
 
     private static let key = "active_run_snapshot_v1"
 
