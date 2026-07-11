@@ -17,11 +17,15 @@
 //!    report valid once several consecutive intervals agree.
 //!
 //! A companion [`PeakDetector::contact`] reuses that same DC baseline and AC
-//! envelope to tell a worn sensor from an off-wrist one — a worn sensor rests
-//! at a plausible mid-scale DC with a pulsatile envelope, an unworn one reads a
-//! dark floor or a saturated rail with little AC. A reading is forced invalid
-//! whenever the sensor is off the wrist, so ambient light can never masquerade
-//! as a heart rate.
+//! envelope to classify what the optics are looking at: a worn sensor rests at
+//! a plausible mid-scale DC with a pulsatile envelope; an off-wrist one reads a
+//! dark floor with no pulse; and a photodiode railed near full scale — bright
+//! ambient IR bleeding in, or an over-driven LED — reads `Saturated`. The rail
+//! case is reported distinctly from off-wrist because the wrist may well be worn
+//! (a runner in blinding sun), the AC is simply clipped away so no honest BPM
+//! survives, and the LED-current AGC cannot pull an *ambient*-sourced rail down.
+//! A reading is forced invalid whenever the sensor is anything but `Worn`, so
+//! ambient light can never masquerade as a heart rate.
 
 /// DC-baseline EMA shift: alpha = 1/64, ~0.64 s time constant at 100 Hz, a
 /// corner well below the heart-rate band.
@@ -99,15 +103,25 @@ pub struct Reading {
     pub valid: bool,
 }
 
-/// Whether the optical stack is looking at skin (a worn wrist) or nothing
-/// useful (off-wrist floor or ambient-light rail). Gates HR validity so the
-/// detector reports "no contact" rather than a BPM synthesised from ambient
-/// light.
+/// What the optical stack is looking at. Gates HR validity so the detector
+/// reports an honest, correctly-attributed no-contact state rather than a BPM
+/// synthesised from ambient light. Only [`Contact::Worn`] can produce a reading.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Contact {
+    /// Skin against the sensor: a plausible mid-scale DC with a pulsatile AC
+    /// envelope.
     Worn,
+    /// Nothing useful against the sensor: a dark floor (diode near zero counts),
+    /// or a plausible-DC-but-flat reflector with no pulse.
     OffWrist,
+    /// The photodiode is railed near full scale — bright ambient IR (blinding
+    /// sun) bleeding onto the diode, or an over-driven LED. Distinct from
+    /// `OffWrist`: the wrist may be well worn, but the pulsatile AC is clipped
+    /// away so no honest BPM survives, and the LED-current AGC cannot walk an
+    /// *ambient*-sourced DC rail back down (ambient light is not LED-driven). A
+    /// worn-but-sunlit wrist lands here, never in `OffWrist`.
+    Saturated,
 }
 
 pub struct PeakDetector {
@@ -248,20 +262,30 @@ impl PeakDetector {
     }
 
     /// Skin-contact state from the DC baseline + AC envelope the beat detector
-    /// already tracks — no second pass over the samples. `Worn` requires the DC
+    /// already tracks — no second pass over the samples, and no dedicated ambient
+    /// channel or hardware saturation flag needed (a datasheet-accurate build
+    /// would prefer either if wired; both are a bench-verify follow-up).
+    ///
+    /// A DC pinned above the worn band's ceiling is a railed photodiode — bright
+    /// ambient IR or an over-driven LED — and reads [`Contact::Saturated`],
+    /// *distinct* from off-wrist, so a worn-but-sunlit wrist is attributed to
+    /// saturation rather than falsely reported bare. `Worn` then requires the DC
     /// to sit inside the plausible band *and* the envelope to clear the pulse
-    /// floor; a fresh detector, a dark floor, a saturated rail, or a flat
-    /// (non-pulsatile) reflector all read `OffWrist`. Fail-closed: uninitialised
-    /// is `OffWrist`.
+    /// floor; a dark floor or a flat (non-pulsatile) reflector reads `OffWrist`.
+    /// Fail-closed: uninitialised is `OffWrist`. Either non-`Worn` state forces
+    /// the reading invalid, so no BPM is ever synthesised from a railed or bare
+    /// sensor.
     pub fn contact(&self) -> Contact {
-        if self.initialized
-            && (CONTACT_DC_MIN..=CONTACT_DC_MAX).contains(&self.baseline)
-            && self.envelope >= MIN_ENVELOPE
-        {
-            Contact::Worn
-        } else {
-            Contact::OffWrist
+        if !self.initialized {
+            return Contact::OffWrist;
         }
+        if self.baseline > CONTACT_DC_MAX {
+            return Contact::Saturated;
+        }
+        if self.baseline >= CONTACT_DC_MIN && self.envelope >= MIN_ENVELOPE {
+            return Contact::Worn;
+        }
+        Contact::OffWrist
     }
 
     fn reading(&self) -> Reading {

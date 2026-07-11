@@ -306,17 +306,70 @@ fn floor_signal_reads_off_wrist() {
 }
 
 #[test]
-fn saturated_rail_reads_off_wrist() {
-    // Bright ambient rails the ADC near full scale (0x7_FFFF). A flickering
-    // ambient AC on top is not a pulse; the railed DC level gives it away.
+fn ambient_railed_reads_saturated_not_off_wrist() {
+    // Blinding sun: ambient IR bleeds into the photodiode and drives the DC near
+    // full scale (0x7_FFFF) on a well-worn wrist. A flickering ambient AC on top
+    // is not a pulse. This must read Saturated — an honest "signal unavailable,
+    // too much light" — NOT off-wrist (the wrist is worn) and NEVER a fabricated
+    // BPM. The LED-current AGC cannot pull an ambient-sourced rail down, so the
+    // contact classifier is the only thing standing between bright sun and a
+    // garbage reading.
     let rate = 100;
     let mut det = PeakDetector::new(rate);
     let mut synth = Synth::new(rate);
     synth.dc = 524_000.0;
     let r = synth.run(&mut det, 72.0, 20);
-    assert_eq!(det.contact(), Contact::OffWrist);
+    assert_eq!(det.contact(), Contact::Saturated);
+    assert_ne!(
+        det.contact(),
+        Contact::OffWrist,
+        "a worn-but-sunlit wrist must not be reported off-wrist"
+    );
+    assert!(!r.valid, "a railed signal must never report a heart rate");
+    assert_eq!(r.bpm, 0);
+}
+
+#[test]
+fn ambient_railed_with_no_ac_reads_saturated() {
+    // The pure railing signature: DC pinned near full scale with no AC envelope
+    // at all (a flat, saturated diode). Still Saturated, still no BPM.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    synth.dc = 524_000.0;
+    synth.amplitude = 0.0;
+    synth.noise_amp = 2;
+    let r = synth.run(&mut det, 0.0, 20);
+    assert_eq!(det.contact(), Contact::Saturated);
     assert!(!r.valid);
     assert_eq!(r.bpm, 0);
+}
+
+#[test]
+fn ambient_railed_is_distinguishable_from_off_wrist() {
+    // The two invalid states must be told apart: a dark floor (diode near zero)
+    // is genuinely off-wrist, while a full-scale rail is saturation on a possibly
+    // worn wrist. Both blank the BPM, but the attribution differs — the point of
+    // the fix.
+    let rate = 100;
+
+    let mut dark = PeakDetector::new(rate);
+    let mut dark_synth = Synth::new(rate);
+    dark_synth.dc = 0.0;
+    dark_synth.run(&mut dark, 72.0, 20);
+
+    let mut bright = PeakDetector::new(rate);
+    let mut bright_synth = Synth::new(rate);
+    bright_synth.dc = 524_000.0;
+    bright_synth.run(&mut bright, 72.0, 20);
+
+    assert_eq!(dark.contact(), Contact::OffWrist);
+    assert_eq!(bright.contact(), Contact::Saturated);
+    assert_ne!(
+        dark.contact(),
+        bright.contact(),
+        "off-wrist and ambient-railed must be reported as distinct states"
+    );
 }
 
 #[test]
