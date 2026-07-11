@@ -164,7 +164,7 @@ apply_stack() {
 
 # Bootstrap takes a -var; the rest read from terraform.tfvars or
 # remote state. Args after `--` are passed verbatim to `terraform plan`.
-apply_stack "Stack 1/4: bootstrap (state bucket)" "infra/bootstrap" -- -var "state_bucket_name=runonward-tfstate"
+apply_stack "Stack 1/4: bootstrap (state bucket)" "infra/bootstrap" -- -var "state_bucket_name=threkir-tfstate"
 apply_stack "Stack 2/4: dns (Route 53 + ACM)" "infra/dns"
 apply_stack "Stack 3/4: github-oidc (deploy roles)" "infra/github-oidc"
 apply_stack "Stack 4/4: envs/$ENV_NAME (S3 + CloudFront + Lambda + KMS)" "$ENV_STACK"

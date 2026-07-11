@@ -3,7 +3,7 @@
 # No DynamoDB table required.
 terraform {
   backend "s3" {
-    bucket       = "runonward-tfstate"
+    bucket       = "threkir-tfstate"
     key          = "dns/terraform.tfstate"
     region       = "us-east-1"
     use_lockfile = true

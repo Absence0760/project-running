@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket       = "runonward-tfstate"
+    bucket       = "threkir-tfstate"
     key          = "github-oidc/terraform.tfstate"
     region       = "us-east-1"
     use_lockfile = true
