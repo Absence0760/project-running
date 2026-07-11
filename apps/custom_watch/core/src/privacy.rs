@@ -15,9 +15,9 @@
 //! twins use, so a watch clips a track identically to the phone and server.
 //! Pure logic, no peripherals, no allocator.
 
-use core::f64::consts::PI;
-
 use heapless::Vec;
+
+use crate::grade_adjusted_pace::haversine_metres;
 
 /// The `user_device_settings`/`user_settings` prefs key the zone list lives
 /// under, mirroring the web `PRIVACY_ZONES_KEY`.
@@ -94,17 +94,6 @@ fn collect_clamped(points: &[TrackPoint]) -> Vec<TrackPoint, MAX_CLIPPED_TRACK_P
         }
     }
     out
-}
-
-fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
-    const R: f64 = 6_371_000.0;
-    let d_lat = (lat2 - lat1) * PI / 180.0;
-    let d_lng = (lng2 - lng1) * PI / 180.0;
-    let sin_lat = libm::sin(d_lat / 2.0);
-    let sin_lng = libm::sin(d_lng / 2.0);
-    let a = sin_lat * sin_lat
-        + libm::cos(lat1 * PI / 180.0) * libm::cos(lat2 * PI / 180.0) * sin_lng * sin_lng;
-    R * 2.0 * libm::atan2(libm::sqrt(a), libm::sqrt(1.0 - a))
 }
 
 #[cfg(test)]

@@ -27,7 +27,7 @@
 use heapless::Vec;
 
 use crate::cutoff_eta::CUTOFF_TIGHT_S;
-use crate::grade_adjusted_pace::{grade_factor, MIN_SEGMENT_M};
+use crate::grade_adjusted_pace::{grade_factor, haversine_metres, MIN_SEGMENT_M};
 
 /// Route polyline capacity — one flash-slot's worth, matching `course`'s
 /// [`crate::course::MAX_COURSE_POINTS`]. A longer course is trusted only up to
@@ -132,17 +132,6 @@ pub struct Roadbook<'a> {
     pub has_elevation: bool,
 }
 
-fn haversine_m(a: &RoadbookWaypoint, b: &RoadbookWaypoint) -> f64 {
-    const R: f64 = 6_371_000.0;
-    let deg = core::f64::consts::PI / 180.0;
-    let d_lat = (b.lat - a.lat) * deg;
-    let d_lng = (b.lng - a.lng) * deg;
-    let s_lat = libm::sin(d_lat / 2.0);
-    let s_lng = libm::sin(d_lng / 2.0);
-    let h = s_lat * s_lat + libm::cos(a.lat * deg) * libm::cos(b.lat * deg) * s_lng * s_lng;
-    R * 2.0 * libm::asin(libm::sqrt(h).min(1.0))
-}
-
 struct Cumulative {
     dist: Vec<f64, MAX_ROADBOOK_WAYPOINTS>,
     gap: Vec<f64, MAX_ROADBOOK_WAYPOINTS>,
@@ -181,7 +170,7 @@ fn walk(waypoints: &[RoadbookWaypoint]) -> Cumulative {
     for i in 1..n {
         let a = &waypoints[i - 1];
         let b = &waypoints[i];
-        let horiz = haversine_m(a, b);
+        let horiz = haversine_metres(a.lat, a.lng, b.lat, b.lng);
         let d_ele = match (a.ele, b.ele) {
             (Some(ae), Some(be)) => be - ae,
             _ => 0.0,

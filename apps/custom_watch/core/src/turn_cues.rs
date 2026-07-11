@@ -15,7 +15,8 @@
 
 use heapless::Vec;
 
-const R_M: f64 = 6_371_000.0;
+use crate::grade_adjusted_pace::haversine_metres;
+
 const DEFAULT_MIN_TURN_ANGLE_DEG: f64 = 30.0;
 const DEFAULT_MERGE_WITHIN_M: f64 = 15.0;
 const SLIGHT_MAX_DEG: f64 = 45.0;
@@ -105,7 +106,12 @@ pub fn generate_turn_cues(
         cum_m: 0.0,
     });
     for i in 1..waypoints.len() {
-        cum += haversine_m(&waypoints[i - 1], &waypoints[i]);
+        cum += haversine_metres(
+            waypoints[i - 1].lat,
+            waypoints[i - 1].lng,
+            waypoints[i].lat,
+            waypoints[i].lng,
+        );
         if let Some(prev) = collapsed.last_mut() {
             if cum - prev.cum_m <= merge_within {
                 prev.wp = waypoints[i];
@@ -190,18 +196,6 @@ fn bearing_deg(a: &TurnCueWaypoint, b: &TurnCueWaypoint) -> f64 {
         libm::cos(lat1) * libm::sin(lat2) - libm::sin(lat1) * libm::cos(lat2) * libm::cos(d_lng);
     let brng = libm::atan2(y, x) / deg;
     (brng + 360.0) % 360.0
-}
-
-fn haversine_m(a: &TurnCueWaypoint, b: &TurnCueWaypoint) -> f64 {
-    let deg = core::f64::consts::PI / 180.0;
-    let d_lat = (b.lat - a.lat) * deg;
-    let d_lng = (b.lng - a.lng) * deg;
-    let h = libm::sin(d_lat / 2.0) * libm::sin(d_lat / 2.0)
-        + libm::cos(a.lat * deg)
-            * libm::cos(b.lat * deg)
-            * libm::sin(d_lng / 2.0)
-            * libm::sin(d_lng / 2.0);
-    R_M * 2.0 * libm::asin(libm::sqrt(h).min(1.0))
 }
 
 #[cfg(test)]
