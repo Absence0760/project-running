@@ -361,6 +361,32 @@ mod tests {
     }
 
     #[test]
+    fn multi_day_ultra_does_not_overflow() {
+        let mut p = Pacer::new();
+        // 1000 km in ~11.5 days — the top of both plausibility windows, 1 m/s.
+        p.set_goal(GOAL_DISTANCE_MAX_M, GOAL_TIME_MAX_S);
+        // Deep into the effort but not yet finished: the f64/i64 arithmetic must
+        // stay finite and produce a sane projection, never wrap or NaN.
+        let st = p.status(500_000.0, 500_000).unwrap();
+        assert!(st.ahead_m.is_finite());
+        assert_eq!(st.projected_finish_s, Some(1_000_000));
+        assert!(!st.finished);
+        // A finish latched at a huge elapsed (~136 years) clamps rather than
+        // wrapping the seconds delta or the projected finish.
+        p.on_distance(GOAL_DISTANCE_MAX_M as f64, u32::MAX);
+        let st = p.status(GOAL_DISTANCE_MAX_M as f64, u32::MAX).unwrap();
+        assert!(st.finished);
+        assert_eq!(st.projected_finish_s, Some(u32::MAX));
+        assert_eq!(
+            st.ahead_s,
+            i32::MIN,
+            "a finish this late clamps, never wraps"
+        );
+        assert!(st.ahead_m.is_finite());
+        assert_eq!(st.verdict, PaceVerdict::Behind);
+    }
+
+    #[test]
     fn on_distance_without_a_goal_is_inert() {
         let mut p = Pacer::new();
         p.on_distance(10_000.0, 2_820);
