@@ -81,3 +81,15 @@ variable "alert_emails" {
     error_message = "alert_emails contains an @example.com / you@ placeholder — replace with a real address."
   }
 }
+
+variable "lambda_reserved_concurrency" {
+  description = "Reserved concurrency for the coach + share Lambdas (the burst-spend ceiling). Set -1 to skip reserving — only appropriate while the account's Lambda concurrency quota is the new-account 10, where any reservation is rejected and the tiny pool is itself the cap."
+  type        = number
+  default     = 20
+}
+
+variable "generate_route_reserved_concurrency" {
+  description = "Reserved concurrency for the generate-route Lambda (the GraphHopper load ceiling). Same -1 quota-pending override as lambda_reserved_concurrency."
+  type        = number
+  default     = 25
+}
