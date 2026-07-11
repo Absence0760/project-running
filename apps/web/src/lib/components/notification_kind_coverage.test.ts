@@ -4,15 +4,21 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-// Source-level guard: every NotificationKind has a verbFor + linkFor case in
-// BOTH the bell popover and the inbox list. The bug this pins: the DB CHECK
-// allows kinds (event_reminder, achievement, challenge_complete, content_hidden)
-// that the two switch statements never handled, so verbFor() fell through and
-// returned undefined — a blank, dead notification row that still counted toward
-// the unread badge. A new kind added to the type/CHECK must get rendered.
+// Source-level guard: every NotificationKind has a verbFor case in BOTH the
+// bell popover and the inbox list. The bug this pins: the DB CHECK allows kinds
+// (event_reminder, achievement, challenge_complete, content_hidden) that the
+// switch statements never handled, so verbFor() fell through and returned
+// undefined — a blank, dead notification row that still counted toward the
+// unread badge. A new kind added to the type/CHECK must get rendered.
+//
+// linkFor lives once in $lib/social/notification_link and is executed directly
+// by notification_link.test.ts, so its per-kind coverage is asserted there;
+// this file's linkFor guard just checks that shared helper still handles every
+// kind + keeps a default arm.
 //
 // The components use Svelte $state runes so they can't run under raw tsx — this
-// reads the source instead of executing it.
+// reads the source instead of executing it. verbFor stays per-component because
+// its message keys are namespaced (notificationBell.* vs notificationsList.*).
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (p: string) => readFileSync(resolve(here, p), 'utf8');
@@ -20,6 +26,7 @@ const read = (p: string) => readFileSync(resolve(here, p), 'utf8');
 const types = read('../types.ts');
 const bell = read('./NotificationBell.svelte');
 const list = read('./NotificationsList.svelte');
+const linkHelper = read('../social/notification_link.ts');
 
 function notificationKinds(): string[] {
 	// Parse the union members from `export type NotificationKind = | 'a' | 'b' ...`
@@ -49,19 +56,19 @@ for (const [name, src] of [
 			);
 		}
 	});
-
-	test(`${name}.linkFor handles every NotificationKind (no dead clicks)`, () => {
-		const start = src.indexOf('function linkFor');
-		assert.ok(start >= 0, `${name} has no linkFor`);
-		const body = src.slice(start, src.indexOf('\n\tfunction ', start + 1));
-		for (const kind of KINDS) {
-			assert.match(
-				body,
-				new RegExp(`case '${kind}':`),
-				`${name}.linkFor must have a case for '${kind}'`,
-			);
-		}
-		// A default arm keeps a future kind from falling through to undefined.
-		assert.match(body, /default:/, `${name}.linkFor must have a default arm`);
-	});
 }
+
+test('notificationLinkFor handles every NotificationKind (no dead clicks)', () => {
+	const start = linkHelper.indexOf('function notificationLinkFor');
+	assert.ok(start >= 0, 'notification_link.ts has no notificationLinkFor');
+	const body = linkHelper.slice(start);
+	for (const kind of KINDS) {
+		assert.match(
+			body,
+			new RegExp(`case '${kind}':`),
+			`notificationLinkFor must have a case for '${kind}'`,
+		);
+	}
+	// A default arm keeps a future kind from falling through to undefined.
+	assert.match(body, /default:/, 'notificationLinkFor must have a default arm');
+});
