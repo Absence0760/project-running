@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/event_category.dart';
+import '../lib/event_gym_template.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/event_detail_screen.dart';
+import '../lib/session_steps.dart';
 import '../lib/social_service.dart';
 
 ClubView _club(String? viewerRole) => ClubView(
@@ -340,6 +342,89 @@ void main() {
       final social = _EventSocial(club: _club('owner'), category: 'class');
       await pumpEvent(tester, social);
       expect(find.text('Not armed'), findsNothing);
+    });
+  });
+
+  group('logWorkoutSeed — session-derived Log-as-workout prefill', () {
+    ExpandedSession sampleSession() => expandSessionSteps(SessionPlanInput(
+          blocks: const [],
+          items: const [
+            SessionPlanItemInput(
+              id: 'i1',
+              blockId: null,
+              position: 0,
+              movementName: 'Downward Dog',
+              kind: SessionItemKind.hold,
+              durationS: 30,
+            ),
+            SessionPlanItemInput(
+              id: 'i2',
+              blockId: null,
+              position: 1,
+              movementName: 'Warrior II',
+              kind: SessionItemKind.reps,
+              reps: 10,
+              perSide: true,
+            ),
+          ],
+        ));
+
+    test('no expansion → title-only from the flat gym_template path', () {
+      final seed = logWorkoutSeed(
+        gymTemplate: null,
+        eventTitle: 'Morning Class',
+        discipline: null,
+      );
+      expect(seed.title, 'Morning Class');
+      expect(seed.sets, isNull);
+    });
+
+    test('no expansion → title prefers the gym_template discipline', () {
+      final seed = logWorkoutSeed(
+        gymTemplate: parseGymTemplate(const {'discipline': 'HIIT'}),
+        eventTitle: 'Morning Class',
+        discipline: 'HIIT',
+      );
+      expect(seed.title, 'HIIT');
+      expect(seed.sets, isNull);
+    });
+
+    test('with an attached session plan → one seeded set per expanded step',
+        () {
+      final seed = logWorkoutSeed(
+        gymTemplate: null,
+        eventTitle: 'Morning Class',
+        discipline: 'Vinyasa Yoga',
+        expansion: sampleSession(),
+        sessionPlanTitle: 'Flow',
+      );
+      // Title prefers the class discipline over the flat title.
+      expect(seed.title, 'Vinyasa Yoga');
+      // Hold + per-side reps (left + right) = 3 seeded sets.
+      final sets = seed.sets;
+      expect(sets, isNotNull);
+      expect(sets!.length, 3);
+      expect(sets[0].exerciseName, 'Downward Dog');
+      expect(sets[0].durationS, 30); // timed hold carries through
+      expect(sets[0].reps, isNull);
+      // The per-side reps item expands to two rows carrying the reps target.
+      expect(sets[1].exerciseName, 'Warrior II');
+      expect(sets[1].reps, 10);
+      expect(sets[2].exerciseName, 'Warrior II');
+      expect(sets[2].reps, 10);
+    });
+
+    test('title falls back to the flat gym_template title when no discipline',
+        () {
+      final seed = logWorkoutSeed(
+        gymTemplate: null,
+        eventTitle: 'Morning Class',
+        discipline: null,
+        expansion: sampleSession(),
+        sessionPlanTitle: null,
+      );
+      expect(seed.title, 'Morning Class');
+      expect(seed.sets, isNotNull);
     });
   });
 
