@@ -152,7 +152,7 @@ You **cannot**:
 
 `bin/watch-sim.sh` boots the firmware on [Renode](https://renode.io/)'s emulated nRF52840 DK — no board, no probe-rs. It builds the `thumbv7em-none-eabihf` release ELF that `watch-flash.sh` flashes with three sim-only Cargo features — `sim-autostart`, `sim-buttons`, and `sim-course` (see below), starts headless Renode with [`apps/custom_watch/sim/watch.resc`](sim/watch.resc), and streams decoded defmt logs to your terminal until Ctrl-C — same UX as `watch-flash.sh`. Rationale + design in [decisions.md § 208](../../docs/architecture/decisions.md#208-firmware-simulation-runs-the-unmodified-elf-on-renode-with-a-custom-defmt-rtt-drain).
 
-**The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press.
+**The `sim-autostart` feature.** Recording starts on **BTN1** on real hardware (see the `button` task; BTN2 stops). The `app` crate's default-OFF `sim-autostart` feature restores the old "start the run on the first GPS fix" path in the `record` task; `watch-sim.sh` builds with it so the sim records without needing a button. A hardware flash (default features) needs a real BTN1 press. Pass `--no-autostart` to drop the feature and boot to the idle face instead — needed to exercise anything that only exists *before* a run starts (the BTN3 GNSS-mode picker), with `runMacro $btn1` starting the run when you're ready.
 
 **The `sim-buttons` feature — driving BTN1/BTN2/BTN3/BTN4 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Two ways to press a button:
 
@@ -162,7 +162,10 @@ You **cannot**:
 ```
 runMacro $btn1    # start / pause / resume the recording
 runMacro $btn2    # stop the recording (commits the run to flash)
-runMacro $btn3    # cycle the run view: Dashboard -> Distance -> Pace -> Lap -> Zones -> Pacer -> Nav -> BackToStart
+runMacro $btn3    # mid-run: cycle the run view (Dashboard -> Distance -> Pace ->
+                  # Lap -> Zones -> Pacer -> Nav -> BackToStart); on the idle
+                  # face: cycle the GNSS recording mode (Performance ->
+                  # Balanced -> Expedition)
 runMacro $btn4    # take a manual lap
 ```
 
@@ -176,6 +179,7 @@ bin/watch-sim.sh --gui                # also open the live watch-screen window
 bin/watch-sim.sh --bin sensor_smoke   # boot a specific binary
 bin/watch-sim.sh --nmea my_route.nmea # substitute the GPS fixture
 bin/watch-sim.sh --phone-port 9900    # move the phone-link TCP port (default 7788)
+bin/watch-sim.sh --no-autostart       # boot to the idle face; BTN1 starts the run
 ```
 
 What runs for real in the sim, end to end: the Embassy executor and RTC1 time driver; GPIO (LED1 toggles logged at INFO as `gpio0.led0: LED1 on/off`); the GPS pipeline (canned NMEA → UARTE0 → `ublox_nmea` parser → `watch_core` fix accumulator); the Sharp MIP display (SPIM3 → the C# panel model — `--gui` shows the live screen, or dump a frame from the monitor: `sysbus.spi3.display DumpFrame "/tmp/frame.ppm"`); and the phone link (status frames on UARTE1 → TCP, the mobile app's dev Sim Watch screen connects here). What doesn't: BLE, power, and the HR/baro sensor analog side.
