@@ -124,7 +124,8 @@ While you're in the GitHub Secrets UI, add the **build-input** secrets too. Thes
 | `PUBLIC_SUPABASE_URL` | Supabase project settings → API → URL | yes |
 | `PUBLIC_SUPABASE_ANON_KEY` | Supabase project settings → API → `anon` `publishable` key (NOT `service_role`) | yes |
 | `PUBLIC_MAPTILER_KEY` | maptiler.com → Account → Keys | yes (maps don't render without it) |
-| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | RevenueCat dashboard → Web Paywall Link (`https://pay.rev.cat/<token>`) | yes for prod (build guard fails if unset; preview/dev degrade gracefully) |
+| `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` | RevenueCat dashboard → Web Paywall Link (`https://pay.rev.cat/<token>`) | only when Pro is sellable — `PUBLIC_COACH_ENABLED` or `PUBLIC_ROUTE_GEN_ENABLED` truthy (the build guard enforces it then; with both flags unset — the rock-bottom tier — leave it unset too) |
+| `PUBLIC_COACH_ENABLED` / `PUBLIC_ROUTE_GEN_ENABLED` | set `true` when the coach / route engines go live (decisions §204) | no — leave unset at rock-bottom; unset = Pro not sold, coach UI hidden |
 | `PUBLIC_REVENUECAT_WEB_PORTAL_URL` | RevenueCat dashboard → customer portal link | optional (manage-subscription button degrades to a hint) |
 | `PUBLIC_SENTRY_DSN` | Sentry → Settings → Projects → Client Keys (DSN) | optional |
 

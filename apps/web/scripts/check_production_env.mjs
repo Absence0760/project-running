@@ -20,9 +20,13 @@
  *     PNG renderer at prerender time and by the maplibre tile
  *     source at runtime; an empty key bakes broken map / share-
  *     image URLs into every public route + run page.
- *   - PUBLIC_REVENUECAT_WEB_CHECKOUT_URL must be non-empty. The hosted
- *     Web Paywall Link `/settings/upgrade` redirects to; an empty value
- *     disables the Pro purchase flow silently.
+ *   - PUBLIC_REVENUECAT_WEB_CHECKOUT_URL must be non-empty — but only
+ *     when Pro is sellable, i.e. PUBLIC_COACH_ENABLED or
+ *     PUBLIC_ROUTE_GEN_ENABLED is truthy (Pro's two perks, decisions
+ *     §204). With both flags off (the rock-bottom tier,
+ *     deployment_lean.md) /settings/upgrade deliberately shows the
+ *     "coming soon" teaser instead of selling, so an empty checkout
+ *     link is the intended config, not a broken one.
  *
  * NOT enforced (intentional):
  *   - PUBLIC_REVENUECAT_WEB_PORTAL_URL — the manage-subscription portal
@@ -93,12 +97,18 @@ export function checkProductionEnv(env) {
 		});
 	}
 
+	// Same truthiness as coach_flag.ts / route_gen_flag.ts.
+	const flagOn = (v) => {
+		const raw = String(v ?? '').trim().toLowerCase();
+		return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	};
+	const proSellable = flagOn(env.PUBLIC_COACH_ENABLED) || flagOn(env.PUBLIC_ROUTE_GEN_ENABLED);
 	const revenueCatCheckout = String(env.PUBLIC_REVENUECAT_WEB_CHECKOUT_URL ?? '').trim();
-	if (!revenueCatCheckout) {
+	if (proSellable && !revenueCatCheckout) {
 		findings.push({
 			envVar: 'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL',
 			value: '<empty>',
-			reason: 'Missing / empty. The Pro purchase flow on /settings/upgrade silently disables itself when the hosted-checkout link is unset.',
+			reason: 'Missing / empty while a Pro perk flag (PUBLIC_COACH_ENABLED / PUBLIC_ROUTE_GEN_ENABLED) is on. A sellable Pro with no hosted-checkout link silently disables the purchase flow on /settings/upgrade.',
 		});
 	}
 
