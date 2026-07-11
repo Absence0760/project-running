@@ -45,7 +45,7 @@ platforms by default, so the arm64 package is normally present. If
 error, install it explicitly before building the zip:
 
 ```bash
-npm install --workspace=apps/web --cpu=arm64 --os=linux @resvg/resvg-js-linux-arm64-gnu
+npm install --force --workspace=apps/web --cpu=arm64 --os=linux @resvg/resvg-js-linux-arm64-gnu
 ```
 
 The SvelteKit dev-server still owns `/share/route/*` and

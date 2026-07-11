@@ -32,6 +32,9 @@ jobs:
   release:
     name: Build iOS (unsigned until app ships)
     runs-on: macos-latest
+    # Pause on the `production` environment's required-reviewer rule
+    # before any prod credentials/steps run (repo Settings → Environments).
+    environment: production
     permissions:
       contents: write
     steps:

@@ -30,6 +30,9 @@ jobs:
   release:
     name: flyctl deploy + GitHub Release
     runs-on: ubuntu-latest
+    # Pause on the `production` environment's required-reviewer rule
+    # before any prod credentials/steps run (repo Settings → Environments).
+    environment: production
     permissions:
       contents: write   # needed to create the GitHub Release
     steps:

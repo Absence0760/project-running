@@ -61,6 +61,15 @@ git push origin mobile_android@1.2.3
 GitHub Actions catches the tag, runs the matching workflow, and — on
 success — creates a GitHub Release with the built artifact(s) attached.
 
+**Every prod release job pauses for approval first** (added 2026-07-11):
+the deploy jobs declare the `production` GitHub environment, whose
+required-reviewer rule (repo Settings → Environments) holds the run at
+"Waiting for review" until an approver clicks **Approve and deploy** in
+the run's page. `release-web`'s preview leg resolves to the ungated
+`preview` environment instead, so continuous preview deploys stay
+approval-free. A tag that nobody approves within GitHub's 30-day wait
+window just expires — re-run the workflow from the tag to try again.
+
 ### What gets published where
 
 | Tag prefix | Runs | Signs | Publishes to | Also attaches to GitHub Release |
@@ -167,7 +176,7 @@ The web workflow assumes an IAM role via GitHub OIDC — there is **no** `AWS_AC
 | `PUBLIC_SENTRY_DSN` | Frontend Sentry DSN. Optional — empty disables client-side capture. |
 | `APP_RELEASE` | `web@<version>` tag — passed as `PUBLIC_APP_RELEASE` for Sentry release tagging. Defaults to `dev`. |
 
-Server-only secrets (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN`) live **sops-encrypted in the repo** under `infra/envs/<env>/secrets.enc.yaml`, with one AWS KMS key per env decrypting them. Terraform reads them at apply time (via the `carlpett/sops` provider) and writes them into the Lambda's `environment.variables` block. The Lambda gets them as plain env vars at runtime — no AWS SDK calls, no cold-start secret-fetch latency. Rotation is `sops <file>` → save → `terraform apply` (or `bin/secret-set.sh <env> <KEY> < value-file` for non-interactive single-key rotation, then `terraform apply`). No secret values touch GitHub Secrets.
+Server-only secrets (`ANTHROPIC_API_KEY`, server-side `SENTRY_DSN`) live **sops-encrypted in the PRIVATE estate repo** at `../infra-secrets/running/<env>.sops.yaml` (never in this public repo — see the secrets row in the root CLAUDE.md), with one AWS KMS key per env decrypting them. Terraform reads them at apply time (via the `carlpett/sops` provider) and writes them into the Lambda's `environment.variables` block. The Lambda gets them as plain env vars at runtime — no AWS SDK calls, no cold-start secret-fetch latency. Rotation is `sops <file>` → save → `terraform apply` (or `bin/secret-set.sh <env> <KEY> < value-file` for non-interactive single-key rotation, then `terraform apply`). No secret values touch GitHub Secrets.
 
 For the AWS-side deploy + rotation flows (preflight, orchestrated apply, sops bootstrap, post-deploy health check, interactive disaster recovery) see [`bin/README.md`](../../bin/README.md).
 
