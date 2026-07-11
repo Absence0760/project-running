@@ -13,22 +13,24 @@
 #
 # ── Trust-policy contract that has to stay in sync with the workflow ──
 #
-# These trust policies match GitHub's `:sub` claim shape for the
-# `push` event family ONLY:
+# The deploy jobs in release-web.yml declare GitHub ENVIRONMENTS
+# (production for `web@*` tags — gated on the environment's
+# required-reviewer rule — preview for the push-to-main leg), and a
+# job that declares an environment gets `:sub` =
+# `repo:<owner/repo>:environment:<name>` INSTEAD of the ref shape.
+# So the trust policies pin the environment claim:
 #
-#   refs/tags/web@*          push (tag)         → assumes deploy_prod
-#   refs/heads/main          push (branch)      → assumes deploy_preview
+#   environment:production   → assumes deploy_prod
+#   environment:preview      → assumes deploy_preview
 #
-# `pull_request` events have a different `:sub` shape
-# (`pull_request:...`) — they CANNOT assume either role, which is
-# correct: a fork PR must never be able to deploy. `workflow_dispatch`
-# events from the configured branch share the `refs/heads/main`
-# shape — so a manual run from `main` would assume deploy_preview.
-# That's currently fine because the only trigger in
-# `.github/workflows/release-web.yml` is `on: push: { tags, branches:
-# [main] }`. If you ever add `workflow_dispatch` or any other trigger,
-# revisit these StringLike conditions or scope per-trigger via
-# environments.
+# This is strictly tighter than the old refs/tags/web@* match: only a
+# job that passed the production environment's approval gate can even
+# request the prod role, whatever its trigger. A workflow that does
+# NOT declare the environment (any PR, any fork, any other event)
+# carries a ref- or pull_request-shaped sub and matches neither role.
+# The web@1.0.3 release failed AssumeRoleWithWebIdentity when the
+# environments landed while these still matched the ref shape — the
+# two halves must move together.
 
 # ── CloudFrontInvalidate scoping caveat ──
 #
@@ -95,9 +97,7 @@ resource "aws_iam_role" "deploy_prod" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/tags/web@*"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:environment:production"
         }
       }
     }]
@@ -161,12 +161,12 @@ resource "aws_iam_role" "deploy_preview" {
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        # Pin to literal `refs/heads/main` — no wildcard, so
-        # StringEquals expresses the intent precisely (preview can
-        # only assume from the main-branch workflow).
+        # Pin to the `preview` environment claim — release-web.yml's
+        # preview leg declares it (ungated), and no other sub shape
+        # can assume this role.
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:environment:preview"
         }
       }
     }]
