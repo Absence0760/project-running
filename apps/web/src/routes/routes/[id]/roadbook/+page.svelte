@@ -221,7 +221,13 @@
 		const lines = [`${route?.name ?? m('roadbook.heading')} — ${m('roadbook.heading')}`, ''];
 		lines.push(`${m('roadbook.colCheckpoint')} | ${m('roadbook.colDistance')} | ${m('roadbook.colArrival')} | ${m('roadbook.colCutoff')}`);
 		for (const leg of roadbook.legs) {
-			const cut = leg.cutoff ? `${fmtClock(undefined) || ''}${fmtMargin(leg.cutoff.marginS)}` : '';
+			const cut = leg.cutoff
+				? `${
+						startClockMin != null
+							? fmtClock(startClockMin + leg.cutoff.limitElapsedS / 60)
+							: fmtSplitTime(leg.cutoff.limitElapsedS)
+					} ${fmtMargin(leg.cutoff.marginS)}`
+				: '';
 			lines.push(
 				`${checkpointLabel(leg)} | ${formatDistance(leg.cumDistM)} | ${fmtSplitTime(leg.projectedElapsedS)}${leg.projectedClockMin != null ? ` (${fmtClock(leg.projectedClockMin)})` : ''} | ${cut}`
 			);
