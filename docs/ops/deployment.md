@@ -21,7 +21,7 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 | Coach LLM | `apps/web/src/routes/api/coach/+server.ts` (deployed as a Node 24 Lambda) | Anthropic Claude (default) — `OPENAI_BASE_URL` for self-host | Plan (web) |
 | Mobile Android | `apps/mobile_android/` | **Google Play** — Internal → Beta → Production tracks | Plan |
 | Mobile iOS | `apps/mobile_ios/` | **App Store Connect** — TestFlight → App Store | Plan |
-| Wear OS | `apps/watch_wear/` | **Google Play** — separate listing (`com.runapp.watchwear`) | Plan |
+| Wear OS | `apps/watch_wear/` | **Google Play** — separate listing (`com.threkir.watchwear`) | Plan |
 | Apple Watch | `apps/watch_ios/` | Bundled inside the iOS app — no separate listing | Plan |
 | RevenueCat | (third party) | RevenueCat dashboard — webhook to `apps/backend/supabase/functions/revenuecat-webhook` | Plan |
 | MapTiler | (third party) | MapTiler Cloud — `PUBLIC_MAPTILER_KEY` shared by web + Wear OS | Plan |

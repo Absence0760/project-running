@@ -46,7 +46,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.runapp.watchwear"
+        applicationId = "com.threkir.watchwear"
         // API 30 = Wear OS 3. `androidx.health:health-services-client` requires 30+
         // regardless, so we set it here rather than as a library override.
         minSdk = 30

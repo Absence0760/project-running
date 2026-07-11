@@ -107,7 +107,7 @@ jobs:
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.runapp.watchwear
+          packageName: com.threkir.watchwear
           releaseFiles: apps/watch_wear/android/app/build/outputs/bundle/release/app-release.aab
           track: internal
           status: completed

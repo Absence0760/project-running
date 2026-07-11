@@ -99,7 +99,7 @@ create` / UI / `/release`). The last column is what the workflow attaches
 | Release tag | Runs | Signs | Publishes to | Attaches back to the Release |
 |---|---|---|---|---|
 | `mobile_android@*` | ubuntu-latest | release keystore from secrets | Play Internal track | `.aab` |
-| `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.runapp.watchwear`) | `.aab` + `.apk` |
+| `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.threkir.watchwear`) | `.aab` + `.apk` |
 | `mobile_ios@*` | macos-latest | *unsigned today* (skeleton until app ships) | — | `.ipa` |
 | `watch_ios@*` | macos-latest | — | — (build smoke-check only) | — |
 | `web@*` | ubuntu-latest | — | AWS S3 + CloudFront + Lambda (`prod` env at `threkir.com` / `www.threkir.com`) | build zip |
@@ -145,7 +145,7 @@ account in Google Cloud → download the JSON key → paste into
 ### Wear OS
 
 Same shape as Android, different keystore (the Wear app has its own
-`applicationId`, `com.runapp.watchwear`, so it needs its own upload
+`applicationId`, `com.threkir.watchwear`, so it needs its own upload
 identity):
 
 | Secret | What |
