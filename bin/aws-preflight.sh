@@ -35,7 +35,12 @@ done
 
 # Terraform must be ≥ 1.10 for S3-native locking (we don't use DynamoDB).
 if command -v terraform >/dev/null; then
-	tf_version="$(terraform version | head -1 | awk '{print $2}' | tr -d v)"
+	# Capture, don't pipe: `terraform version | head -1` SIGPIPEs terraform
+	# when it prints its platform/out-of-date lines after head exits, and
+	# pipefail+errexit turns that into a flaky 141 abort.
+	tf_version_out="$(terraform version)"
+	tf_version_line="${tf_version_out%%$'\n'*}"
+	tf_version="${tf_version_line##* v}"
 	tf_major="${tf_version%%.*}"
 	tf_rest="${tf_version#*.}"
 	tf_minor="${tf_rest%%.*}"
