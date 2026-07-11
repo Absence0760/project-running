@@ -8,9 +8,9 @@
 //! Talker-agnostic: `$GPRMC`, `$GNRMC`, `$GLRMC` all parse as RMC — the
 //! MAX-M10S emits `GN` talkers in multi-GNSS mode, older fixtures use `GP`.
 //! Sentences carried: RMC (validity + position + speed + course), GGA
-//! (fix quality + satellite count + altitude), and GSV (satellites in view,
-//! for an honest signal meter). Everything else returns `Sentence::Other`
-//! so callers can count-but-ignore it.
+//! (fix quality + satellite count + altitude), GSV (satellites in view,
+//! for an honest signal meter), and GSA (fix mode + DOP). Everything else
+//! returns `Sentence::Other` so callers can count-but-ignore it.
 
 #![no_std]
 
@@ -51,7 +51,15 @@ pub enum Sentence {
     Gsv {
         sats_in_view: u8,
     },
-    /// Valid checksum, but a type we don't decode (VTG, GSA, ...).
+    /// GNSS fix mode + dilution-of-precision, reported by GSA.
+    Gsa {
+        /// 1 = no fix, 2 = 2D, 3 = 3D.
+        fix_type: u8,
+        pdop: Option<f32>,
+        hdop: Option<f32>,
+        vdop: Option<f32>,
+    },
+    /// Valid checksum, but a type we don't decode (VTG, GLL, ...).
     Other,
 }
 
@@ -134,6 +142,7 @@ fn parse_sentence(body: &[u8]) -> Option<Sentence> {
         b"RMC" => parse_rmc(&mut fields).map(Sentence::Rmc),
         b"GGA" => parse_gga(&mut fields).map(Sentence::Gga),
         b"GSV" => parse_gsv(&mut fields),
+        b"GSA" => parse_gsa(&mut fields),
         _ => Some(Sentence::Other),
     }
 }
@@ -182,6 +191,28 @@ fn parse_gsv(f: &mut Fields) -> Option<Sentence> {
     let _msg_num = f.next()?;
     let sats_in_view = parse_u32(f.next()?)? as u8;
     Some(Sentence::Gsv { sats_in_view })
+}
+
+/// GSA: `<mode>,<fix_type>,<12 satellite PRN slots>,<pdop>,<hdop>,<vdop>`. The
+/// 12 PRN slots are fixed-position, so reading the DOP triple by position (not
+/// from the end) tolerates the optional NMEA-4.10 trailing system-id field. A
+/// missing or non-numeric fix type drops the sentence rather than reporting a
+/// false mode; empty DOP fields report `None` like GGA's optional altitude.
+fn parse_gsa(f: &mut Fields) -> Option<Sentence> {
+    let _mode = f.next()?;
+    let fix_type = parse_u32(f.next()?)? as u8;
+    for _ in 0..12 {
+        f.next()?;
+    }
+    let pdop = parse_f32(f.next()?);
+    let hdop = parse_f32(f.next()?);
+    let vdop = parse_f32(f.next()?);
+    Some(Sentence::Gsa {
+        fix_type,
+        pdop,
+        hdop,
+        vdop,
+    })
 }
 
 /// Comma-separated field iterator over the payload after the type field.

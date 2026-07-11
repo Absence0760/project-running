@@ -108,6 +108,84 @@ fn gsv_multi_sentence_group_reports_same_total() {
     assert!(got.iter().all(|s| *s == Sentence::Gsv { sats_in_view: 8 }));
 }
 
+// 3D fix with a full DOP triple.
+const GSA_3D: &str = "$GPGSA,A,3,04,05,09,12,24,,,,,,,,2.50,1.30,2.10*09\r\n";
+
+#[test]
+fn parses_gsa_3d() {
+    let Some(Sentence::Gsa {
+        fix_type,
+        pdop,
+        hdop,
+        vdop,
+    }) = parse_one(GSA_3D)
+    else {
+        panic!("expected GSA");
+    };
+    assert_eq!(fix_type, 3);
+    assert!((pdop.unwrap() - 2.50).abs() < 1e-4);
+    assert!((hdop.unwrap() - 1.30).abs() < 1e-4);
+    assert!((vdop.unwrap() - 2.10).abs() < 1e-4);
+}
+
+#[test]
+fn parses_gsa_2d_with_empty_vdop() {
+    // 2D fix: no vertical component, so the VDOP field is empty.
+    let gsa = "$GPGSA,A,2,04,05,09,,,,,,,,,,2.50,1.30,*10\r\n";
+    let Some(Sentence::Gsa {
+        fix_type,
+        pdop,
+        hdop,
+        vdop,
+    }) = parse_one(gsa)
+    else {
+        panic!("expected GSA");
+    };
+    assert_eq!(fix_type, 2);
+    assert!((pdop.unwrap() - 2.50).abs() < 1e-4);
+    assert!((hdop.unwrap() - 1.30).abs() < 1e-4);
+    assert_eq!(vdop, None);
+}
+
+#[test]
+fn gsa_empty_dop_fields_report_none() {
+    // No-fix report: fix type 1, all three DOP fields empty.
+    let body = "GPGSA,A,1,,,,,,,,,,,,,,,";
+    let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+    let sentence = format!("${}*{:02X}\r\n", body, cksum);
+    let Some(Sentence::Gsa {
+        fix_type,
+        pdop,
+        hdop,
+        vdop,
+    }) = parse_one(&sentence)
+    else {
+        panic!("expected GSA");
+    };
+    assert_eq!(fix_type, 1);
+    assert_eq!(pdop, None);
+    assert_eq!(hdop, None);
+    assert_eq!(vdop, None);
+}
+
+#[test]
+fn gn_talker_gsa_parses_like_gp() {
+    // Multi-GNSS mode emits GN talkers; checksum recomputed for GN.
+    let body = "GNGSA,A,3,04,05,09,12,24,,,,,,,,2.50,1.30,2.10";
+    let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+    let sentence = format!("${}*{:02X}\r\n", body, cksum);
+    assert!(matches!(
+        parse_one(&sentence),
+        Some(Sentence::Gsa { fix_type: 3, .. })
+    ));
+}
+
+#[test]
+fn gsa_bad_checksum_dropped() {
+    let corrupt = GSA_3D.replace("*09", "*0A");
+    assert_eq!(parse_one(&corrupt), None);
+}
+
 #[test]
 fn void_rmc_reports_invalid_without_position() {
     // Cold start: status V, empty position/speed/course fields.
@@ -165,6 +243,7 @@ fn whole_fixture_file_parses() {
                 assert_eq!(sats_in_view, 8);
                 gsv += 1;
             }
+            Sentence::Gsa { .. } => {}
             Sentence::Other => other += 1,
         }
     }
