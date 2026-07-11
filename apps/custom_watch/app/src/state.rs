@@ -13,6 +13,7 @@ use watch_core::button::RecordCommand;
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
+use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::Snapshot;
 use watch_core::trackback::TrackbackView;
@@ -60,6 +61,12 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 1> = Watch::new();
 /// store consumes, so the crumb mirrors the stored track exactly — and the
 /// `ui` task renders it on the BackToStart page. One receiver (the `ui`).
 pub static TRACKBACK: Watch<CriticalSectionRawMutex, TrackbackView, 1> = Watch::new();
+
+/// Selected GNSS recording mode: the `button` task cycles it on an idle-face
+/// BTN3 press; the `gps` task reads the fix-forwarding cadence, `record` the
+/// interval its acceptance filter scales to, and the `ui` face the mode rows +
+/// staleness budget. No value published means the default (Performance).
+pub static GNSS_MODE: Watch<CriticalSectionRawMutex, GnssMode, 3> = Watch::new();
 
 /// Uptime (seconds) of the last button press — any button. The `button` task
 /// stamps it on every confirmed press; the `ui` task reads it to gate the

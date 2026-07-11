@@ -9,18 +9,23 @@
 //!   BTN1 — start / pause / resume toggle
 //!   BTN2 — stop
 //!   BTN3 — cycle the run-view page (dashboard / distance / pace / lap /
-//!          zones / pacer)
+//!          zones / pacer / nav / back-to-start) while a run is under way;
+//!          cycle the GNSS recording mode (Performance / Balanced /
+//!          Expedition) on the idle face
 //!   BTN4 — manual lap (the Fenix layout's lower-right Lap, decisions §81)
 //! The buttons are active-LOW (idle high, press pulls low), so a press is a
 //! falling edge and a held press reads `is_low()`. BTN3 carries no recording
-//! command — it just advances `state::PAGE`, which the `ui` face reads.
+//! command — which of its two cycles a press lands on is the host-tested
+//! `watch_core::button::btn3_action` (idle = mode, any run view = pages, so a
+//! run's mode is frozen for its duration).
 
 use defmt::*;
 #[cfg(not(feature = "sim-buttons"))]
 use embassy_futures::select::{select4, Either4};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
-use watch_core::button::{command_for, Button};
+use watch_core::button::{btn3_action, command_for, Btn3Action, Button};
+use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::RecordState;
 
@@ -42,9 +47,11 @@ pub async fn run(
 ) {
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let page_tx = state::PAGE.sender();
+    let mode_tx = state::GNSS_MODE.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
-    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page, BTN4 lap");
+    let mut mode = GnssMode::default();
+    info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
     loop {
         // Wait for whichever button is pressed first (falling edge = press).
         let button = match select4(
@@ -58,14 +65,33 @@ pub async fn run(
             Either4::First(()) => Button::Primary,
             Either4::Second(()) => Button::Stop,
             Either4::Third(()) => {
-                // The page button is its own concern — no recording command.
-                // Debounce, confirm the press held, then advance the page.
+                // BTN3 is its own concern — no recording command. Debounce,
+                // confirm the press held, then cycle whichever surface the run
+                // state puts it on (idle = GNSS mode, run view = pages).
                 Timer::after(DEBOUNCE).await;
                 if btn3.is_low() {
                     interaction_tx.send(Instant::now().as_secs() as u32);
-                    page = page.next();
-                    info!("button: BTN3 -> page {}", page);
-                    page_tx.send(page);
+                    let state = record_rx
+                        .try_get()
+                        .map(|snap| snap.state)
+                        .unwrap_or(RecordState::Idle);
+                    match btn3_action(state) {
+                        Btn3Action::CyclePage => {
+                            page = page.next();
+                            info!("button: BTN3 -> page {}", page);
+                            page_tx.send(page);
+                        }
+                        Btn3Action::CycleGnssMode => {
+                            mode = mode.next();
+                            info!(
+                                "button: BTN3 -> gnss mode {} (fix interval {=u32}s, ~{=u32}h)",
+                                mode,
+                                mode.fix_interval_s(),
+                                mode.battery_est_h()
+                            );
+                            mode_tx.send(mode);
+                        }
+                    }
                 }
                 continue;
             }
@@ -111,8 +137,8 @@ pub async fn run(
 /// software, so the `btn1`/`btn2`/`btn3`/`btn4` monitor macros in
 /// `sim/watch.resc` drive the SAME `command_for` / page logic the real task
 /// uses. The mapping is identical (BTN1 start/pause/resume, BTN2 stop, BTN3
-/// page, BTN4 lap). Renode has no contact bounce, so a clean edge needs no
-/// debounce confirm.
+/// page / idle GNSS mode, BTN4 lap). Renode has no contact bounce, so a clean
+/// edge needs no debounce confirm.
 ///
 /// Feature-gated to the sim build; the hardware task keeps the low-power SENSE
 /// path (docs/custom_watch/performance_path.md — "every wake justifiable").
@@ -130,8 +156,10 @@ pub async fn run(
 
     let mut record_rx = unwrap!(state::RECORD.receiver());
     let page_tx = state::PAGE.sender();
+    let mode_tx = state::GNSS_MODE.sender();
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
+    let mut mode = GnssMode::default();
 
     // Active-low: pressed pulls the line low. Track the previous level per
     // button so a release→press transition (high→low) fires exactly once.
@@ -142,7 +170,7 @@ pub async fn run(
         btns[2].is_low(),
         btns[3].is_low(),
     ];
-    info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page, BTN4 lap");
+    info!("button(sim): polling BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
 
     loop {
         Timer::after(POLL).await;
@@ -156,11 +184,31 @@ pub async fn run(
             // A press is an interaction whether or not it issues a command —
             // it wakes the face's animation window, same as the hardware task.
             interaction_tx.send(Instant::now().as_secs() as u32);
+            let state = record_rx
+                .try_get()
+                .map(|snap| snap.state)
+                .unwrap_or(RecordState::Idle);
             if i == 2 {
-                // BTN3 is its own concern — no recording command, just a page.
-                page = page.next();
-                info!("button: BTN3 -> page {}", page);
-                page_tx.send(page);
+                // BTN3 is its own concern — no recording command. Which of its
+                // two cycles a press lands on follows the run state, same as
+                // the hardware task.
+                match btn3_action(state) {
+                    Btn3Action::CyclePage => {
+                        page = page.next();
+                        info!("button: BTN3 -> page {}", page);
+                        page_tx.send(page);
+                    }
+                    Btn3Action::CycleGnssMode => {
+                        mode = mode.next();
+                        info!(
+                            "button: BTN3 -> gnss mode {} (fix interval {=u32}s, ~{=u32}h)",
+                            mode,
+                            mode.fix_interval_s(),
+                            mode.battery_est_h()
+                        );
+                        mode_tx.send(mode);
+                    }
+                }
                 continue;
             }
             let button = match i {
@@ -168,10 +216,6 @@ pub async fn run(
                 1 => Button::Stop,
                 _ => Button::Lap,
             };
-            let state = record_rx
-                .try_get()
-                .map(|snap| snap.state)
-                .unwrap_or(RecordState::Idle);
             if let Some(cmd) = command_for(button, state) {
                 info!("button: {} -> {}", button, cmd);
                 state::RECORD_CMD.send(cmd).await;

@@ -123,8 +123,8 @@ async fn main(spawner: Spawner) {
     );
 
     // Buttons are active-LOW with the line idle-high, so pull up and treat a
-    // press as a falling edge (see the `button` task). BTN3 cycles the page,
-    // BTN4 takes a manual lap.
+    // press as a falling edge (see the `button` task). BTN3 cycles the run-view
+    // page (or, on the idle face, the GNSS mode), BTN4 takes a manual lap.
     let btn1 = Input::new(board.buttons.btn1, Pull::Up);
     let btn2 = Input::new(board.buttons.btn2, Pull::Up);
     let btn3 = Input::new(board.buttons.btn3, Pull::Up);
