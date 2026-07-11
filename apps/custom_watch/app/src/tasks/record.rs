@@ -162,6 +162,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut hr_rx = unwrap!(state::HR.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
+    let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -217,6 +218,15 @@ pub async fn run(store: &'static SharedStore) {
                 Either::Second(cmd) => Event::Cmd(cmd),
             }
         };
+
+        // Keep the recorder's acceptance filter scaled to the selected GNSS
+        // mode's fix cadence (see `Recorder::set_fix_interval_s`). The mode
+        // only changes while idle (BTN3 cycles pages once a run is under way),
+        // so it is always applied here before the Start command that opens the
+        // run reaches the recorder.
+        if let Some(mode) = mode_rx.try_changed() {
+            recorder.set_fix_interval_s(mode.fix_interval_s());
+        }
 
         match event {
             Event::Tick => recorder.tick(Instant::now().as_secs() as u32),

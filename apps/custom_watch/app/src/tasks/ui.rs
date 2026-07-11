@@ -7,7 +7,7 @@
 //! alternation, which the glass needs regardless of content changes.
 
 use defmt::*;
-use embassy_futures::select::{select, select3, select4, Either, Either3, Either4};
+use embassy_futures::select::{select3, select4, Either3, Either4};
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive};
 use embassy_nrf::peripherals::PWM0;
 use embassy_nrf::pwm::{DutyCycle, Prescaler, SimpleConfig, SimplePwm};
@@ -20,6 +20,7 @@ use watch_core::course::{Course, PanelFit};
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::{self, FaceIcon, NavView};
 use watch_core::fix::Fix;
+use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::{RecordState, Snapshot};
 use watch_core::trackback::{self, TrackbackView};
@@ -141,6 +142,7 @@ pub async fn screen_task(
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut page_rx = unwrap!(state::PAGE.receiver());
+    let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut interaction_rx = unwrap!(state::INTERACTION.receiver());
     let mut alert_rx = unwrap!(state::ALERT.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
@@ -151,6 +153,7 @@ pub async fn screen_task(
     let mut elev: Option<ElevationReading> = None;
     let mut tb: Option<TrackbackView> = None;
     let mut page = Page::default();
+    let mut mode = GnssMode::default();
     let mut last_interaction_s: u32 = 0;
     let mut alert: Option<Alert> = None;
     let mut nav = NavView::NoCourse;
@@ -180,6 +183,9 @@ pub async fn screen_task(
         if let Some(p) = page_rx.try_changed() {
             page = p;
         }
+        if let Some(m) = mode_rx.try_changed() {
+            mode = m;
+        }
         if let Some(t) = interaction_rx.try_changed() {
             last_interaction_s = t;
         }
@@ -206,6 +212,7 @@ pub async fn screen_task(
             tb.as_ref(),
             uptime_s,
             animate,
+            mode,
         );
         let icons = face::page_icons(
             page,
@@ -214,6 +221,7 @@ pub async fn screen_task(
             rec.as_ref(),
             uptime_s,
             animate,
+            mode,
         );
         // The Nav page's map panel: the course polyline plus a position-marker
         // cross, drawn into the pixel rows the face leaves empty. The panel's
@@ -302,9 +310,17 @@ pub async fn screen_task(
         // wakes us via RECORD snapshots each second; a moving GPS fix wakes us
         // via FIX; a button press via INTERACTION. The only refreshes with no
         // event behind them are the animation frame and the fresh→stale flip.
+        // Freshness follows the same mode-aware budget the face renders with
+        // (see `face::stale_after_s`), so the fresh→stale redraw is scheduled
+        // for the moment the face would actually flip — not 5 s into a
+        // throttled mode's perfectly healthy 60 s gap between fixes.
+        let run_view = rec
+            .as_ref()
+            .is_some_and(|snap| snap.state != RecordState::Idle);
+        let stale_after = face::stale_after_s(mode, run_view);
         let fix_fresh = latest
             .as_ref()
-            .is_some_and(|f| uptime_s.saturating_sub(f.uptime_s) <= face::STALE_AFTER_S);
+            .is_some_and(|f| uptime_s.saturating_sub(f.uptime_s) <= stale_after);
         let tick = if animate || fix_fresh {
             TICK_ACTIVE
         } else {
@@ -333,7 +349,7 @@ pub async fn screen_task(
         match select3(
             sensors,
             controls,
-            select(tb_rx.changed(), Timer::after(tick)),
+            select3(tb_rx.changed(), mode_rx.changed(), Timer::after(tick)),
         )
         .await
         {
@@ -347,8 +363,9 @@ pub async fn screen_task(
             Either3::Second(Either4::Second(t)) => last_interaction_s = t,
             Either3::Second(Either4::Third(a)) => alert = a,
             Either3::Second(Either4::Fourth(v)) => nav = v,
-            Either3::Third(Either::First(v)) => tb = Some(v),
-            Either3::Third(Either::Second(())) => {}
+            Either3::Third(Either3::First(v)) => tb = Some(v),
+            Either3::Third(Either3::Second(m)) => mode = m,
+            Either3::Third(Either3::Third(())) => {}
         }
     }
 }
