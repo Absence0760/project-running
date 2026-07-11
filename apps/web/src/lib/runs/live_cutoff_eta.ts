@@ -73,7 +73,12 @@ export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
 			: { kind: 'cutoff', label: '' };
 	const distanceToM = leg.cumDistM - input.distAlongRouteM;
 
-	if (input.stale || input.recentPaceSecPerKm == null || input.recentPaceSecPerKm <= 0) {
+	if (
+		input.stale ||
+		input.recentPaceSecPerKm == null ||
+		!Number.isFinite(input.recentPaceSecPerKm) ||
+		input.recentPaceSecPerKm <= 0
+	) {
 		return {
 			checkpoint,
 			distanceToM,

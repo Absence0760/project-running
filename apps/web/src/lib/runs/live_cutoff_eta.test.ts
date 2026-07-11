@@ -87,6 +87,14 @@ test('zero (or negative) pace returns unknown', () => {
 	assert.equal(eta.projectedArrivalElapsedS, null);
 });
 
+test('a non-finite pace returns unknown, never a fabricated on-pace ETA', () => {
+	for (const pace of [Number.NaN, Number.POSITIVE_INFINITY]) {
+		const eta = nextCutoffEta(input({ recentPaceSecPerKm: pace }));
+		assert.equal(eta.status, 'unknown');
+		assert.equal(eta.projectedArrivalElapsedS, null);
+	}
+});
+
 test('a runner past the last cutoff has no checkpoint and is unknown', () => {
 	const eta = nextCutoffEta(input({ distAlongRouteM: 40_000 }));
 	assert.equal(eta.checkpoint, null);
