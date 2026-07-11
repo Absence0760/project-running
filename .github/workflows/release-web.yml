@@ -216,13 +216,13 @@ jobs:
         id: aws
         run: |
           ENV="${{ steps.env.outputs.env }}"
-          echo "bucket=runonward-web-${ENV}-site" >> "$GITHUB_OUTPUT"
-          echo "lambda=runonward-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
-          echo "share_run_lambda=runonward-web-${ENV}-share-run" >> "$GITHUB_OUTPUT"
-          echo "share_route_lambda=runonward-web-${ENV}-share-route" >> "$GITHUB_OUTPUT"
-          echo "share_recap_lambda=runonward-web-${ENV}-share-recap" >> "$GITHUB_OUTPUT"
-          echo "share_badge_lambda=runonward-web-${ENV}-share-badge" >> "$GITHUB_OUTPUT"
-          echo "share_entity_lambda=runonward-web-${ENV}-share-entity" >> "$GITHUB_OUTPUT"
+          echo "bucket=threkir-web-${ENV}-site" >> "$GITHUB_OUTPUT"
+          echo "lambda=threkir-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
+          echo "share_run_lambda=threkir-web-${ENV}-share-run" >> "$GITHUB_OUTPUT"
+          echo "share_route_lambda=threkir-web-${ENV}-share-route" >> "$GITHUB_OUTPUT"
+          echo "share_recap_lambda=threkir-web-${ENV}-share-recap" >> "$GITHUB_OUTPUT"
+          echo "share_badge_lambda=threkir-web-${ENV}-share-badge" >> "$GITHUB_OUTPUT"
+          echo "share_entity_lambda=threkir-web-${ENV}-share-entity" >> "$GITHUB_OUTPUT"
 
           if [[ "$ENV" == "prod" ]]; then ALIAS="threkir.com"; else ALIAS="preview.threkir.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \

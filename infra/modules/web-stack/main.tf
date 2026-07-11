@@ -10,7 +10,7 @@
 # CloudWatch alarms live in `alarms.tf`.
 
 locals {
-  resource_prefix = "runonward-web-${var.env}"
+  resource_prefix = "threkir-web-${var.env}"
 
   # If the sops file exists at apply time, decrypt it and merge into
   # the Lambda env. On first apply (before the user has encoded
@@ -224,7 +224,7 @@ data "aws_iam_policy_document" "kms_secrets" {
 }
 
 resource "aws_kms_key" "secrets" {
-  description             = "Encrypts sops secrets for runonward-web-${var.env}"
+  description             = "Encrypts sops secrets for threkir-web-${var.env}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
   policy                  = data.aws_iam_policy_document.kms_secrets.json

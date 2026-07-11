@@ -22,7 +22,7 @@
 # applied locally, not from CI.
 
 resource "aws_budgets_budget" "monthly" {
-  name         = "runonward-monthly"
+  name         = "threkir-monthly"
   budget_type  = "COST"
   limit_amount = tostring(var.monthly_budget_limit_usd)
   limit_unit   = "USD"

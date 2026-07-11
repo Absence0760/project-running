@@ -6,7 +6,7 @@
 #
 # Usage:
 #   bin/aws-login.sh                   # uses $AWS_PROFILE, defaults to running
-#   bin/aws-login.sh runonward-prod    # explicit profile
+#   bin/aws-login.sh mgmt    # explicit profile
 
 set -euo pipefail
 

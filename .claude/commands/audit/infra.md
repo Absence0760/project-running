@@ -14,7 +14,7 @@ The web app's blast radius runs through these stacks: a permissive OIDC trust po
 
 2. **OIDC trust policy.** `infra/github-oidc/main.tf` — both `aws_iam_role.deploy_*` resources have `Condition` blocks that pin BOTH `:aud = "sts.amazonaws.com"` AND a `:sub` `StringLike` matching exactly the intended ref (`refs/tags/web@*` for prod, `refs/heads/main` for preview). Wildcards or missing `:sub` conditions are the canonical "fork PR can assume your role" footgun. Thumbprints in `thumbprint_list` exist (AWS validates them inline now, but the field is required).
 
-3. **OIDC role permissions.** Same file — each role's `aws_iam_role_policy` is scoped per-resource: S3 actions limited to the env's bucket ARN (no `*`), Lambda actions limited to `function:runonward-web-<env>-coach*`, CloudFront `CreateInvalidation` is the only CF action (not `cloudfront:*`). No `iam:*` / `sts:AssumeRole` / `secretsmanager:*` / `kms:*` actions on the deploy role.
+3. **OIDC role permissions.** Same file — each role's `aws_iam_role_policy` is scoped per-resource: S3 actions limited to the env's bucket ARN (no `*`), Lambda actions limited to `function:threkir-web-<env>-coach*`, CloudFront `CreateInvalidation` is the only CF action (not `cloudfront:*`). No `iam:*` / `sts:AssumeRole` / `secretsmanager:*` / `kms:*` actions on the deploy role.
 
 4. **S3 buckets.** `bootstrap/main.tf` (state) and `modules/web-stack/main.tf` (site) — every bucket has:
    - `aws_s3_bucket_public_access_block` with all four flags `true`
@@ -81,7 +81,7 @@ The web app's blast radius runs through these stacks: a permissive OIDC trust po
     - KMS keys have a deletion window long enough that a misclick can be reversed.
     - Lambda alias separates the deployable code from the function shape (so rollback is `update-alias`, not a full Terraform redeploy).
 
-15. **No shared global resources.** Per-env stacks must not name resources without an env suffix — e.g. a CloudFront response-headers policy named `runonward-web-security` (no env) would conflict between prod and preview. Confirm `local.resource_prefix = "runonward-web-${var.env}"` is used for every named resource.
+15. **No shared global resources.** Per-env stacks must not name resources without an env suffix — e.g. a CloudFront response-headers policy named `threkir-web-security` (no env) would conflict between prod and preview. Confirm `local.resource_prefix = "threkir-web-${var.env}"` is used for every named resource.
 
 ## Report
 
