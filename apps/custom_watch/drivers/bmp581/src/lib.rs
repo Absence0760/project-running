@@ -1,8 +1,9 @@
 //! Driver for the Bosch BMP581 barometric pressure sensor over I²C.
 //!
 //! Delivers raw barometric pressure in Pascals plus the sensor's calibrated
-//! ambient temperature in °C; altitude and vertical-speed derivation live in
-//! `watch_core::elevation`, not here. The `baro` task (per
+//! ambient temperature in °C, and a QNH-calibrated altitude convenience
+//! (`read_altitude_m`) off a settable sea-level reference; vertical-speed
+//! derivation still lives in `watch_core::elevation`, not here. The `baro` task (per
 //! `docs/architecture/decisions.md` § 90, the Apollo510B / BMP581 BOM refresh)
 //! polls `read_pressure_pa` / `read_sample` and hands the reading upward.
 //!
@@ -60,6 +61,7 @@ pub struct Sample {
 pub struct Bmp581<I2C> {
     i2c: I2C,
     addr: u8,
+    sea_level_pa: f32,
 }
 
 impl<I2C, E> Bmp581<I2C>
@@ -70,7 +72,27 @@ where
         Self {
             i2c,
             addr: I2C_ADDR,
+            sea_level_pa: STANDARD_SEA_LEVEL_PA,
         }
+    }
+
+    /// Sets the sea-level reference pressure (QNH) used by `read_altitude_m`,
+    /// e.g. from an aviation METAR or a known-elevation calibration point.
+    /// Non-finite values or values outside the physically plausible QNH range
+    /// are ignored, so a garbage reading can never poison the reference.
+    pub fn set_sea_level_pa(&mut self, pa: f32) {
+        if pa.is_finite() && (87_000.0..=108_500.0).contains(&pa) {
+            self.sea_level_pa = pa;
+        }
+    }
+
+    /// Reads pressure and converts it to altitude in metres against the
+    /// calibrated sea-level reference. `Ok(None)` when no fresh sample is ready,
+    /// mirroring `read_pressure_pa`.
+    pub fn read_altitude_m(&mut self) -> Result<Option<f32>, Error<E>> {
+        Ok(self
+            .read_pressure_pa()?
+            .map(|pa| altitude_from_pressure_m(pa, self.sea_level_pa)))
     }
 
     pub fn init(&mut self) -> Result<(), Error<E>> {
@@ -142,4 +164,16 @@ pub fn raw_to_pa(raw: u32) -> f32 {
 pub fn raw_to_celsius(raw: u32) -> f32 {
     let signed = ((raw << 8) as i32) >> 8;
     signed as f32 / 65536.0
+}
+
+/// ISA sea-level standard pressure (101.325 kPa), the default QNH reference.
+pub const STANDARD_SEA_LEVEL_PA: f32 = 101_325.0;
+
+/// International barometric altitude formula: converts a pressure reading to a
+/// height above the `sea_level_pa` reference. The `44330.0` scale and `5.255`
+/// exponent are the standard-atmosphere constants (0–11 km troposphere), so the
+/// result is metres above the surface where pressure equals `sea_level_pa`.
+/// Feeding a QNH-calibrated reference removes the day's weather bias.
+pub fn altitude_from_pressure_m(pressure_pa: f32, sea_level_pa: f32) -> f32 {
+    44330.0 * (1.0 - libm::powf(pressure_pa / sea_level_pa, 1.0 / 5.255))
 }
