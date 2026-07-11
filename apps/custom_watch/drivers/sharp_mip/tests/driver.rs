@@ -420,7 +420,10 @@ fn fill_rect_fills_its_interior_and_clips() {
         for x in 0..WIDTH {
             if fb.pixel(x, y) {
                 count += 1;
-                assert!((20..24).contains(&x) && (30..33).contains(&y), "stray at ({x},{y})");
+                assert!(
+                    (20..24).contains(&x) && (30..33).contains(&y),
+                    "stray at ({x},{y})"
+                );
             }
         }
     }
@@ -506,7 +509,11 @@ fn progress_bar_full_and_over_range_clamp_to_full_inner() {
     for y in 1..5 {
         for x in 1..11 {
             assert!(full.pixel(x, y), "full missing ({x},{y})");
-            assert_eq!(over.pixel(x, y), full.pixel(x, y), "clamp mismatch ({x},{y})");
+            assert_eq!(
+                over.pixel(x, y),
+                full.pixel(x, y),
+                "clamp mismatch ({x},{y})"
+            );
         }
     }
     // Negative clamps to empty inner.
@@ -584,7 +591,11 @@ fn center_bar_clamps_magnitude() {
     let mut over = Framebuffer::new();
     over.draw_center_bar(0, 0, 21, 6, 9.0);
     for x in 1..20 {
-        assert_eq!(over.pixel(x, y), full.pixel(x, y), "clamp mismatch at x={x}");
+        assert_eq!(
+            over.pixel(x, y),
+            full.pixel(x, y),
+            "clamp mismatch at x={x}"
+        );
     }
     // Full-positive reaches the last inner column right of the tick.
     assert!(full.pixel(19, y));
