@@ -747,3 +747,212 @@ fn draw_text_3x_truncates_and_clips_without_panicking() {
     fb.draw_text_3x(0, TEXT_ROWS - 1, "X"); // bottom row: lower two-thirds clip off-panel
     fb.draw_text_3x(0, 0, &"8".repeat(TEXT_COLS)); // more chars than fit
 }
+
+#[test]
+fn draw_circle_sets_the_midpoint_outline() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_circle(20, 20, 3, true);
+    // The r=3 midpoint octant set, reflected into all four quadrants.
+    let on = [
+        (23, 20),
+        (17, 20),
+        (20, 23),
+        (20, 17),
+        (23, 21),
+        (23, 19),
+        (17, 21),
+        (17, 19),
+        (21, 23),
+        (19, 23),
+        (21, 17),
+        (19, 17),
+        (22, 22),
+        (18, 22),
+        (22, 18),
+        (18, 18),
+    ];
+    for &(x, y) in &on {
+        assert!(fb.pixel(x, y), "missing outline pixel at ({x},{y})");
+    }
+    // Centre stays clear (it's an outline) and the box corner isn't on the ring.
+    assert!(!fb.pixel(20, 20));
+    assert!(!fb.pixel(23, 23));
+    // Every dirtied row is inside the circle's vertical extent.
+    assert!((0..HEIGHT)
+        .filter(|&y| fb.is_dirty(y))
+        .all(|y| (17..=23).contains(&y)));
+}
+
+#[test]
+fn redrawing_identical_circle_dirties_nothing() {
+    let mut fb = Framebuffer::new();
+    fb.draw_circle(40, 40, 12, true);
+    fb.clear_dirty();
+    fb.draw_circle(40, 40, 12, true);
+    assert_eq!(fb.dirty_count(), 0);
+}
+
+#[test]
+fn draw_circle_degenerate_and_offscreen_clip() {
+    let mut fb = Framebuffer::new();
+    // r == 0 is exactly the centre pixel.
+    fb.draw_circle(5, 5, 0, true);
+    assert!(fb.pixel(5, 5));
+    let mut lit = 0;
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            if fb.pixel(x, y) {
+                lit += 1;
+            }
+        }
+    }
+    assert_eq!(lit, 1);
+    // r < 0 draws nothing; a centre off every edge clips without panic.
+    fb.draw_circle(20, 20, -4, true);
+    fb.draw_circle(-30, 70, 10, true);
+    fb.draw_circle(WIDTH as i32 + 20, 70, 10, true);
+    fb.draw_circle(2, 2, 200, true);
+}
+
+#[test]
+fn draw_ring_fills_a_solid_disc() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_ring(20, 20, 2, 0, true);
+    // r_outer=2, r_inner=0: every pixel with dx^2+dy^2 <= 4.
+    let mut lit = Vec::new();
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            if fb.pixel(x, y) {
+                lit.push((x, y));
+            }
+        }
+    }
+    assert_eq!(lit.len(), 13);
+    assert!(fb.pixel(20, 20)); // centre filled
+    for &(x, y) in &[(22, 20), (18, 20), (20, 22), (20, 18)] {
+        assert!(fb.pixel(x, y), "missing tip at ({x},{y})");
+    }
+    assert!(!fb.pixel(22, 22)); // corner is outside the radius
+}
+
+#[test]
+fn draw_ring_thin_annulus_and_degenerate_inputs() {
+    let mut fb = Framebuffer::new();
+    fb.draw_ring(20, 20, 2, 2, true);
+    // Only the pixels at exactly distance^2 == 4 survive the [4,4] band.
+    let mut lit = Vec::new();
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            if fb.pixel(x, y) {
+                lit.push((x, y));
+            }
+        }
+    }
+    assert_eq!(lit.len(), 4);
+    for &(x, y) in &[(22, 20), (18, 20), (20, 22), (20, 18)] {
+        assert!(fb.pixel(x, y), "missing annulus pixel at ({x},{y})");
+    }
+    assert!(!fb.pixel(20, 20)); // hollow centre
+                                // Degenerate: inner past outer, negative outer, and an off-panel centre.
+    let mut empty = Framebuffer::new();
+    empty.clear();
+    empty.clear_dirty();
+    empty.draw_ring(20, 20, 2, 5, true);
+    empty.draw_ring(20, 20, -1, 0, true);
+    assert_eq!(empty.dirty_count(), 0);
+    empty.draw_ring(-3, 70, 5, 2, true);
+    empty.draw_ring(WIDTH as i32 + 3, 70, 5, 0, true);
+}
+
+#[test]
+fn draw_dashed_line_lays_the_on_off_pattern() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    fb.draw_dashed_line(10, 40, 20, 40, (2, 2), true);
+    // Period 4 (2 on, 2 off) over x=10..=20: on at 10,11,14,15,18,19.
+    for &x in &[10, 11, 14, 15, 18, 19] {
+        assert!(fb.pixel(x, 40), "expected dash pixel at x={x}");
+    }
+    for &x in &[12, 13, 16, 17, 20] {
+        assert!(!fb.pixel(x, 40), "expected gap at x={x}");
+    }
+    assert_eq!(fb.dirty_count(), 1);
+    assert!(fb.is_dirty(40));
+}
+
+#[test]
+fn draw_dashed_line_degenerate_patterns() {
+    // off == 0 is a solid line, identical to draw_line.
+    let mut solid = Framebuffer::new();
+    solid.draw_dashed_line(3, 3, 40, 25, (3, 0), true);
+    let mut plain = Framebuffer::new();
+    plain.draw_line(3, 3, 40, 25, true);
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            assert_eq!(
+                solid.pixel(x, y),
+                plain.pixel(x, y),
+                "mismatch at ({x},{y})"
+            );
+        }
+    }
+    // on == 0 draws nothing; on == 0 && off == 0 is a no-op (guards the modulo).
+    let mut blank = Framebuffer::new();
+    blank.clear();
+    blank.clear_dirty();
+    blank.draw_dashed_line(0, 0, 30, 30, (0, 4), true);
+    blank.draw_dashed_line(0, 0, 30, 30, (0, 0), true);
+    assert_eq!(blank.dirty_count(), 0);
+    // Off-panel span clips without panicking.
+    blank.draw_dashed_line(-20, 60, 400, 60, (3, 3), true);
+}
+
+#[test]
+fn draw_arc_keeps_only_the_swept_quadrant() {
+    let mut fb = Framebuffer::new();
+    fb.clear_dirty();
+    // 0->90 deg is east..south: the dx>=0, dy>=0 quadrant on-screen.
+    fb.draw_arc(30, 30, 5, 0, 90, true);
+    assert!(fb.pixel(35, 30), "east endpoint missing");
+    assert!(fb.pixel(30, 35), "south endpoint missing");
+    assert!(fb.pixel(34, 33), "mid-arc pixel missing");
+    // Points outside the sweep stay clear.
+    assert!(!fb.pixel(25, 30), "west leaked in");
+    assert!(!fb.pixel(30, 25), "north leaked in");
+    assert!(!fb.pixel(35, 28), "point just above east leaked in");
+    assert!((0..HEIGHT)
+        .filter(|&y| fb.is_dirty(y))
+        .all(|y| (30..=35).contains(&y)));
+}
+
+#[test]
+fn draw_arc_full_sweep_matches_the_full_circle() {
+    let mut arc = Framebuffer::new();
+    arc.draw_arc(40, 60, 15, 0, 360, true);
+    let mut circle = Framebuffer::new();
+    circle.draw_circle(40, 60, 15, true);
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            assert_eq!(
+                arc.pixel(x, y),
+                circle.pixel(x, y),
+                "full arc != circle at ({x},{y})"
+            );
+        }
+    }
+}
+
+#[test]
+fn draw_arc_degenerate_and_offscreen_clip() {
+    let mut fb = Framebuffer::new();
+    // r == 0 plots the centre once.
+    fb.draw_arc(8, 8, 0, 0, 90, true);
+    assert!(fb.pixel(8, 8));
+    // r < 0 draws nothing; a wrapping sweep and an off-panel centre don't panic.
+    fb.draw_arc(20, 20, -3, 0, 90, true);
+    fb.draw_arc(50, 50, 10, 350, 20, true); // wraps through 0
+    fb.draw_arc(-40, 70, 30, 0, 270, true);
+    fb.draw_arc(WIDTH as i32 + 40, 70, 30, 45, 200, true);
+}
