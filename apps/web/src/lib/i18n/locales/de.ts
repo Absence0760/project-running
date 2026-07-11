@@ -4501,4 +4501,11 @@ export const messages = {
 	"fundraiser.notFound": "Diese Spendenaktion ist nicht verfügbar.",
 	"fundraiser.loading": "Spendenaktion wird geladen…",
 	"fundraiser.donateOnWeb": "Im Web spenden",
+	"dashConsistency.title": "Trainingskonstanz",
+	"dashConsistency.weeksTrained": "Wochen trainiert ({pct} %)",
+	"dashConsistency.currentStreakLabel": "Aktuelle Wochenserie",
+	"dashConsistency.bestStreakLabel": "Beste Wochenserie",
+	"dashConsistency.steady": "Gleichmäßig",
+	"dashConsistency.variable": "Schwankend",
+	"dashConsistency.footnote": "Wochen mit mindestens einer Aktivität in den letzten {total}. Konstanz schlägt jede einzelne große Woche.",
 } satisfies Messages;

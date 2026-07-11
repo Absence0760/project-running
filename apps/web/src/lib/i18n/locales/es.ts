@@ -4501,4 +4501,11 @@ export const messages = {
 	"fundraiser.notFound": "Esta campaña no está disponible.",
 	"fundraiser.loading": "Cargando campaña…",
 	"fundraiser.donateOnWeb": "Donar en la web",
+	"dashConsistency.title": "Constancia de entrenamiento",
+	"dashConsistency.weeksTrained": "semanas activas ({pct} %)",
+	"dashConsistency.currentStreakLabel": "Racha de semanas actual",
+	"dashConsistency.bestStreakLabel": "Mejor racha de semanas",
+	"dashConsistency.steady": "Constante",
+	"dashConsistency.variable": "Variable",
+	"dashConsistency.footnote": "Semanas con al menos una actividad, de las últimas {total}. La constancia supera a cualquier semana grande aislada.",
 } satisfies Messages;

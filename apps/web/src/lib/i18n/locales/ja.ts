@@ -4496,4 +4496,11 @@ export const messages = {
 	"fundraiser.notFound": "この募金ページは利用できません。",
 	"fundraiser.loading": "募金ページを読み込んでいます…",
 	"fundraiser.donateOnWeb": "ウェブで寄付する",
+	"dashConsistency.title": "トレーニングの一貫性",
+	"dashConsistency.weeksTrained": "運動した週（{pct}%）",
+	"dashConsistency.currentStreakLabel": "現在の連続週",
+	"dashConsistency.bestStreakLabel": "最長の連続週",
+	"dashConsistency.steady": "安定",
+	"dashConsistency.variable": "変動",
+	"dashConsistency.footnote": "直近{total}週間で1回以上運動した週数。1回の大きな週より継続が大切です。",
 } satisfies Messages;

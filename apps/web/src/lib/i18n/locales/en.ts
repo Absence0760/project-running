@@ -4520,4 +4520,11 @@ export const en = {
 	"fundraiser.notFound": "This fundraiser isn't available.",
 	"fundraiser.loading": "Loading fundraiser…",
 	"fundraiser.donateOnWeb": "Donate on web",
+	"dashConsistency.title": "Training consistency",
+	"dashConsistency.weeksTrained": "weeks trained ({pct}%)",
+	"dashConsistency.currentStreakLabel": "Current week streak",
+	"dashConsistency.bestStreakLabel": "Best week streak",
+	"dashConsistency.steady": "Steady",
+	"dashConsistency.variable": "Variable",
+	"dashConsistency.footnote": "Weeks with at least one activity, over the last {total}. Consistency beats any single big week.",
 } satisfies Record<string, string>;
