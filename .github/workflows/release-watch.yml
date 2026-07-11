@@ -6,13 +6,17 @@ name: Release Apple Watch
 # isolation, but the canonical "ship to users" path goes through
 # `release-ios.yml` once that's code-signed.
 
+# Release-triggered: publishing a GitHub Release whose tag is `watch_ios@*`
+# runs this workflow — a bare `watch_ios@*` tag push does NOT deploy. `on:
+# release` fires for every published release in the repo, so the job below
+# is guarded to `watch_ios@*` tags.
 on:
-  push:
-    tags:
-      - 'watch_ios@*'
+  release:
+    types: [published]
 
-# Least-privilege default; the build job opts up to `contents: write`
-# for the GitHub Release step.
+# Least-privilege default. This workflow is a build smoke-check only; it
+# writes nothing back to the triggering Release, so the job needs no
+# `contents: write` — checkout's `contents: read` is enough.
 permissions:
   contents: read
 
@@ -23,8 +27,9 @@ jobs:
   build:
     name: Build watchOS target
     runs-on: macos-latest
-    permissions:
-      contents: write
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on watch_ios@* releases.
+    if: startsWith(github.event.release.tag_name, 'watch_ios@')
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -49,14 +54,3 @@ jobs:
             -scheme WatchApp \
             -destination 'generic/platform=watchOS Simulator' \
             build
-
-      - name: Create GitHub Release (audit record)
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          name: Apple Watch ${{ steps.version.outputs.name }}
-          tag_name: ${{ github.ref_name }}
-          body: |
-            Apple Watch builds ship inside the paired iOS app (see the
-            corresponding `mobile_ios@${{ steps.version.outputs.name }}`
-            tag). This release is a build-only audit record.
-          generate_release_notes: true

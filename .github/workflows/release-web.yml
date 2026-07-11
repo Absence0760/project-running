@@ -1,14 +1,22 @@
 name: Release Web
 
-# Tag-only trigger:
-#   - tag `web@*`     →  prod  →  threkir.com + www.threkir.com
+# Release-triggered: publishing a GitHub Release whose tag is `web@*`
+# runs this workflow  →  prod  →  threkir.com + www.threkir.com. A bare
+# `web@*` tag push does NOT deploy — the published Release is the deploy
+# gate (`gh release create web@1.2.3 …`, the Releases UI, or the /release
+# skill), so the notes/title are authored up front and the deploy is a
+# deliberate human action rather than a tag side effect.
+#
+# `on: release` fires for every published release in the repo, so the job
+# is guarded to `web@*` tags below — a backend@/mobile_android@/… release
+# publish is ignored.
 #
 # A preview deploy on push-to-main is supported by the rest of the
 # workflow (env=preview, ARN_PREVIEW, preview.threkir.com), but the
 # trigger is left out here because this fork doesn't have the AWS
 # Terraform stacks applied or the GitHub secrets populated — every
 # push to main would otherwise fail the configure-aws-credentials
-# step. Re-enable by adding `branches: [main]` under `push:` once the
+# step. Re-enable by adding a `push: branches: [main]` trigger once the
 # AWS_DEPLOY_ROLE_ARN_PREVIEW + PUBLIC_* secrets exist (see
 # infra/README.md § First-time deploy).
 #
@@ -20,14 +28,13 @@ name: Release Web
 # and AWS_DEPLOY_ROLE_ARN_PREVIEW. No long-lived AWS keys are stored
 # anywhere.
 #
-# Build artifact: a .zip of the static SvelteKit build is attached to
-# the GitHub Release on prod tags so a rollback is one workflow re-run
+# Build artifact: a .zip of the static SvelteKit build is attached back
+# to the triggering GitHub Release so a rollback is one workflow re-run
 # against the older tag.
 
 on:
-  push:
-    tags:
-      - 'web@*'
+  release:
+    types: [published]
 
 # Least-privilege default; the release job opts up to `id-token: write`
 # (OIDC) + `contents: write` (GitHub Release).
@@ -41,6 +48,10 @@ jobs:
   release:
     name: Build + deploy web
     runs-on: ubuntu-latest
+
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on web@* releases.
+    if: startsWith(github.event.release.tag_name, 'web@')
 
     # Prod tags pause on the `production` environment's required-reviewer
     # rule (repo Settings → Environments) before any AWS step runs. The
@@ -373,7 +384,12 @@ jobs:
             --distribution-id "${{ steps.aws.outputs.distribution }}" \
             --paths "/*" > /dev/null
 
-      # ──────────────────── GitHub Release (prod tags only) ────────────────────
+      # ──────────────────── Attach build to the Release (prod only) ────────────────────
+      #
+      # The Release already exists — it's what triggered this run. We only
+      # upload the build zip back onto it (no name/notes, so the human-
+      # authored title + notes aren't clobbered) so a rollback is
+      # `gh release download <older-tag>` + a workflow re-run.
 
       - name: Package build for release
         if: steps.env.outputs.is_prod == 'true'
@@ -381,11 +397,9 @@ jobs:
           cd apps/web
           zip -qr "../../web-build-${{ steps.env.outputs.version }}.zip" build
 
-      - name: Create GitHub Release + attach build zip
+      - name: Attach build zip to the Release
         if: steps.env.outputs.is_prod == 'true'
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
-          name: Web ${{ steps.env.outputs.version }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ github.event.release.tag_name }}
           files: web-build-${{ steps.env.outputs.version }}.zip
-          generate_release_notes: true

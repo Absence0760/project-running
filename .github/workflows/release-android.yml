@@ -16,10 +16,13 @@ name: Release Android
 #
 # See docs/ops/releasing.md for the end-to-end flow.
 
+# Release-triggered: publishing a GitHub Release whose tag is `mobile_android@*`
+# runs this workflow — a bare `mobile_android@*` tag push does NOT deploy. `on:
+# release` fires for every published release in the repo, so the job below
+# is guarded to `mobile_android@*` tags.
 on:
-  push:
-    tags:
-      - 'mobile_android@*'
+  release:
+    types: [published]
 
 # Least-privilege default; the release job opts up to `contents: write`
 # for the GitHub Release step.
@@ -33,6 +36,9 @@ jobs:
   release:
     name: Build, sign, upload to Play Internal
     runs-on: ubuntu-latest
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on mobile_android@* releases.
+    if: startsWith(github.event.release.tag_name, 'mobile_android@')
     # Pause on the `production` environment's required-reviewer rule
     # before any prod credentials/steps run (repo Settings → Environments).
     environment: production
@@ -103,10 +109,11 @@ jobs:
           # track — always 100% there. Promote to beta / prod manually
           # via the Play Console once tested.
 
-      - name: Create GitHub Release + attach AAB
+      - name: Attach AAB to the Release
+        # The Release already exists — it triggered this run. Upload the
+        # signed AAB onto it (no name/notes → the human-authored release
+        # title + notes aren't clobbered).
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
-          name: Android ${{ steps.version.outputs.name }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ github.event.release.tag_name }}
           files: apps/mobile_android/build/app/outputs/bundle/release/app-release.aab
-          generate_release_notes: true
