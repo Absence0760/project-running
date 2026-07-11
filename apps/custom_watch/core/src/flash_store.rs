@@ -226,7 +226,7 @@ impl SlotDir {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::run_store::{blob_len, RunWriter, TrackPoint, RUN_MAGIC};
+    use crate::run_store::{blob_len, verify_blob, RunWriter, TrackPoint, RUN_MAGIC};
 
     /// Build a full 4 KiB slot image: a finished run's blob followed by erased
     /// (0xFF) flash, exactly what a committed-then-power-cycled slot looks like.
@@ -497,5 +497,243 @@ mod tests {
     fn recover_ignores_a_zeroed_magic() {
         // Guard that recovery keys on the magic, not just non-erased bytes.
         assert_ne!(RUN_MAGIC, [0u8; 4]);
+    }
+
+    /// A CRC-internally-consistent blob at an arbitrary header `version`, so a
+    /// test can present exactly what a future firmware would write: a valid
+    /// footer whose CRC covers a header carrying a version we don't understand.
+    fn slot_image_version(
+        version: u8,
+        run_seq: u32,
+        start_uptime_s: u32,
+        points: &[TrackPoint],
+    ) -> [u8; SLOT_LEN] {
+        let mut prefix: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
+        prefix
+            .extend_from_slice(
+                &RunHeader {
+                    version,
+                    flags: 0,
+                    run_seq,
+                    start_uptime_s,
+                }
+                .encode(),
+            )
+            .unwrap();
+        for p in points {
+            prefix.extend_from_slice(&p.encode()).unwrap();
+        }
+        let footer = RunFooter {
+            distance_m: 1234,
+            moving_s: 600,
+            elapsed_s: 620,
+            crc32: crc32(&prefix),
+        }
+        .encode();
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..prefix.len()].copy_from_slice(&prefix);
+        slot[prefix.len()..prefix.len() + FOOTER_LEN].copy_from_slice(&footer);
+        slot
+    }
+
+    #[test]
+    fn recover_slot_reads_past_a_mid_track_decoy_magic() {
+        // The decoy magic sits mid-run, not at point 0: the scan must still walk
+        // past it (CRC mismatch there) and land on the true footer at the end.
+        let sneaky = TrackPoint {
+            lat_e7: i32::from_le_bytes(*b"END1"),
+            lon_e7: 5,
+            t_offset_s: 2,
+            ele_dm: None,
+            bpm: None,
+        };
+        let pts = [a_point(0), a_point(1), sneaky, a_point(3), a_point(4)];
+        let slot = slot_image(30, 8, &pts);
+        assert_eq!(
+            &slot[HEADER_LEN + 2 * POINT_LEN..HEADER_LEN + 2 * POINT_LEN + 4],
+            b"END1",
+            "the decoy magic is planted at the point-2 boundary"
+        );
+        let r = recover_slot(&slot).expect("recovers past the mid-track decoy");
+        assert_eq!(r.run_seq, 30);
+        assert_eq!(r.size, blob_len(5), "found the real footer, not the decoy");
+    }
+
+    #[test]
+    fn recover_slot_reads_past_a_decoy_magic_in_the_last_point() {
+        // Nastiest placement: the decoy is the LAST point, so its would-be CRC
+        // field overlaps the true footer's own magic bytes. The CRC still fails
+        // there and the true footer one point later wins.
+        let sneaky = TrackPoint {
+            lat_e7: i32::from_le_bytes(*b"END1"),
+            lon_e7: 9,
+            t_offset_s: 2,
+            ele_dm: None,
+            bpm: None,
+        };
+        let pts = [a_point(0), a_point(1), sneaky];
+        let slot = slot_image(31, 8, &pts);
+        assert_eq!(
+            &slot[HEADER_LEN + 2 * POINT_LEN..HEADER_LEN + 2 * POINT_LEN + 4],
+            b"END1"
+        );
+        let r = recover_slot(&slot).expect("recovers past the last-point decoy");
+        assert_eq!(r.run_seq, 31);
+        assert_eq!(r.size, blob_len(3));
+    }
+
+    #[test]
+    fn recover_slot_rejects_a_crc_valid_newer_version_blob() {
+        // A future firmware writes a v2 blob with an internally-correct CRC. The
+        // version gate must reject it BEFORE the footer scan — the CRC being
+        // valid is exactly why this can't lean on CRC failure to filter it.
+        let pts = [a_point(0), a_point(1)];
+        let newer = slot_image_version(FORMAT_VERSION + 1, 7, 41, &pts);
+        assert!(
+            verify_blob(&newer[..blob_len(2) as usize]),
+            "the v2 CRC is valid"
+        );
+        assert_eq!(recover_slot(&newer), None, "rejected by the version gate");
+
+        // Same builder at the understood version DOES recover, so the version is
+        // the only thing that changed and the gate is what rejected the newer one.
+        let ours = slot_image_version(FORMAT_VERSION, 7, 41, &pts);
+        assert_eq!(
+            recover_slot(&ours),
+            Some(RecoveredRun {
+                run_seq: 7,
+                size: blob_len(2),
+                start_uptime_s: 41,
+            })
+        );
+    }
+
+    #[test]
+    fn recover_slot_rejects_a_half_written_header() {
+        // Only the magic landed before power loss; the rest of the page is still
+        // erased, so the version byte reads 0xFF and fails the gate.
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..4].copy_from_slice(&RUN_MAGIC);
+        assert_eq!(recover_slot(&slot), None);
+
+        // A fully-written header with nothing after it (zero points, no footer)
+        // is a never-finalised slot and recovers nothing.
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..HEADER_LEN].copy_from_slice(
+            &RunHeader {
+                version: FORMAT_VERSION,
+                flags: 0,
+                run_seq: 2,
+                start_uptime_s: 9,
+            }
+            .encode(),
+        );
+        assert_eq!(recover_slot(&slot), None);
+    }
+
+    #[test]
+    fn recover_slot_never_reads_out_of_bounds_on_a_short_slice() {
+        // Slices too short to hold a header, or a header but no room for a
+        // footer, must return None without panicking or over-reading.
+        assert_eq!(recover_slot(&[]), None);
+        assert_eq!(recover_slot(&[0xFFu8; 8]), None);
+        assert_eq!(recover_slot(&[0xFFu8; HEADER_LEN]), None);
+
+        let header = RunHeader {
+            version: FORMAT_VERSION,
+            flags: 0,
+            run_seq: 1,
+            start_uptime_s: 3,
+        }
+        .encode();
+        // Header exactly, no bytes for a footer: the loop breaks on the first n.
+        assert_eq!(recover_slot(&header), None);
+
+        // Header + a footer magic but the footer itself is truncated (10 of 20
+        // bytes). The `footer_at + FOOTER_LEN > len` guard must skip the decode
+        // rather than slice past the end.
+        let mut truncated: heapless::Vec<u8, 64> = heapless::Vec::new();
+        truncated.extend_from_slice(&header).unwrap();
+        truncated.extend_from_slice(b"END1123456").unwrap();
+        assert_eq!(recover_slot(&truncated), None);
+    }
+
+    #[test]
+    fn recover_slot_reads_back_a_zero_point_run() {
+        // Header + footer, no points: the footer sits at n == 0.
+        let slot = slot_image(4, 15, &[]);
+        assert_eq!(
+            recover_slot(&slot),
+            Some(RecoveredRun {
+                run_seq: 4,
+                size: blob_len(0),
+                start_uptime_s: 15,
+            })
+        );
+    }
+
+    #[test]
+    fn next_run_seq_with_a_full_directory_resumes_above_the_max() {
+        // Four recovered runs whose seqs are out of slot order: the next id is
+        // one past the maximum, never one past slot 3's or the count.
+        let recovered = [
+            Some(RecoveredRun {
+                run_seq: 12,
+                size: 100,
+                start_uptime_s: 1,
+            }),
+            Some(RecoveredRun {
+                run_seq: 7,
+                size: 100,
+                start_uptime_s: 2,
+            }),
+            Some(RecoveredRun {
+                run_seq: 30,
+                size: 100,
+                start_uptime_s: 3,
+            }),
+            Some(RecoveredRun {
+                run_seq: 3,
+                size: 100,
+                start_uptime_s: 4,
+            }),
+        ];
+        let dir = SlotDir::from_recovered(recovered);
+        assert_eq!(dir.run_count(), 4);
+        assert_eq!(dir.next_run_seq(), 31);
+    }
+
+    #[test]
+    fn eviction_picks_the_lowest_seq_regardless_of_slot_index() {
+        // The oldest run (lowest seq) is NOT in slot 0, so this proves eviction
+        // keys on seq, not on a slot-0 bias.
+        let recovered = [
+            Some(RecoveredRun {
+                run_seq: 3,
+                size: 100,
+                start_uptime_s: 1,
+            }),
+            Some(RecoveredRun {
+                run_seq: 1,
+                size: 100,
+                start_uptime_s: 2,
+            }),
+            Some(RecoveredRun {
+                run_seq: 2,
+                size: 100,
+                start_uptime_s: 3,
+            }),
+            Some(RecoveredRun {
+                run_seq: 0,
+                size: 100,
+                start_uptime_s: 4,
+            }),
+        ];
+        let mut dir = SlotDir::from_recovered(recovered);
+        let seq = dir.next_run_seq();
+        assert_eq!(seq, 4);
+        assert_eq!(dir.place(seq, 200, 5), 3, "evicts slot 3 (seq 0)");
+        assert_eq!(dir.find(0), None);
+        assert_eq!(dir.find(4), Some((3, 200)));
     }
 }
