@@ -548,4 +548,130 @@ mod tests {
              in apps/mobile_android/lib/sim_watch_sync.dart"
         );
     }
+
+    /// A run staged into a slot-sized sink, as the on-device recorder does
+    /// (`app/run_flash.rs` stages into a `heapless::Vec<u8, SLOT_LEN>`). Returns
+    /// the finalised blob, or `Err` if any push or the footer overran the sink.
+    fn build_n(n: u32) -> Result<heapless::Vec<u8, 4096>, ()> {
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 1, 0)?;
+        for i in 0..n {
+            w.push_point(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            })?;
+        }
+        w.finalize(0, 0, 0)
+    }
+
+    #[test]
+    fn point_cap_matches_a_slot_sized_sink() {
+        // 253 is the most points that still leave room for the 20-byte footer in
+        // one 4096-byte flash slot: HEADER(16) + 253*POINT(16) + FOOTER(20) =
+        // 4084 (this is flash_store::MAX_POINTS_PER_RUN).
+        let ok = build_n(253).expect("253 points + footer fit a slot");
+        assert_eq!(ok.len(), 4084);
+        assert_eq!(ok.len() as u32, blob_len(253));
+        assert!(verify_blob(&ok));
+
+        // 254 points still stage as raw records (16 + 254*16 = 4080 <= 4096) but
+        // leave no room for the footer — so finalize, not push_point, is what
+        // rejects the over-long run.
+        assert!(build_n(254).is_err(), "no slot room for the footer");
+
+        // 256 points can't even be staged; push_point returns the sink's error
+        // rather than overrunning the buffer.
+        assert!(build_n(256).is_err());
+    }
+
+    #[test]
+    fn verify_rejects_header_and_footer_corruption() {
+        // A flipped byte in the header body (run_seq, inside the CRC'd prefix) is
+        // caught by the CRC recompute even though the magic still decodes.
+        let mut blob = build();
+        blob[8] ^= 0xFF;
+        assert!(!verify_blob(&blob));
+
+        // A corrupted header magic fails the header decode outright.
+        let mut blob = build();
+        blob[0] ^= 0xFF;
+        assert!(!verify_blob(&blob));
+
+        // A corrupted footer magic fails the footer decode.
+        let mut blob = build();
+        let footer_at = blob.len() - FOOTER_LEN;
+        blob[footer_at] ^= 0xFF;
+        assert!(!verify_blob(&blob));
+
+        // A corrupted stored CRC (footer's last four bytes) mismatches the
+        // recompute over header + points.
+        let mut blob = build();
+        let last = blob.len() - 1;
+        blob[last] ^= 0xFF;
+        assert!(!verify_blob(&blob));
+    }
+
+    #[test]
+    fn zero_point_blob_verifies_and_round_trips() {
+        let sink: heapless::Vec<u8, 64> = heapless::Vec::new();
+        let w = RunWriter::start(sink, 1, 2).expect("start");
+        let blob = w.finalize(0, 0, 0).expect("finalize");
+        assert_eq!(blob.len() as u32, blob_len(0));
+        assert_eq!(point_count(blob.len() as u32), Some(0));
+        assert!(verify_blob(&blob));
+    }
+
+    #[test]
+    fn point_count_round_trips_and_rejects_bad_lengths() {
+        for n in [0u32, 1, 2, 253] {
+            assert_eq!(point_count(blob_len(n)), Some(n));
+        }
+        // Shorter than a bare header + footer.
+        assert_eq!(point_count(0), None);
+        assert_eq!(point_count((HEADER_LEN + FOOTER_LEN) as u32 - 1), None);
+        // A body that isn't a whole number of points.
+        assert_eq!(point_count((HEADER_LEN + FOOTER_LEN + 1) as u32), None);
+        assert_eq!(point_count(blob_len(3) - 1), None);
+    }
+
+    #[test]
+    fn decoders_reject_short_buffers_and_wrong_magic() {
+        let z = [0u8; 32];
+        for len in 0..POINT_LEN {
+            assert_eq!(TrackPoint::decode(&z[..len]), None);
+        }
+        for len in 0..HEADER_LEN {
+            assert_eq!(RunHeader::decode(&z[..len]), None);
+        }
+        for len in 0..FOOTER_LEN {
+            assert_eq!(RunFooter::decode(&z[..len]), None);
+        }
+        // Correct length, wrong magic.
+        assert_eq!(RunHeader::decode(&[0u8; HEADER_LEN]), None);
+        assert_eq!(RunFooter::decode(&[0u8; FOOTER_LEN]), None);
+    }
+
+    #[test]
+    fn chunk_request_decode_is_bounds_safe_and_carries_extremes() {
+        let buf = [0u8; CHUNK_REQUEST_LEN];
+        for len in 0..CHUNK_REQUEST_LEN {
+            assert_eq!(ChunkRequest::decode(&buf[..len]), None);
+        }
+        // Trailing bytes past the fixed 10 are ignored, never over-read.
+        let padded = [0xABu8; CHUNK_REQUEST_LEN + 4];
+        assert!(ChunkRequest::decode(&padded).is_some());
+
+        // The wire struct never clamps — a len past the blob end or above the
+        // notify MTU round-trips untouched; clamping to a valid slice is
+        // flash_store::chunk_len's job, exercised there.
+        let r = ChunkRequest {
+            run_seq: u32::MAX,
+            offset: u32::MAX,
+            len: u16::MAX,
+        };
+        assert_eq!(ChunkRequest::decode(&r.encode()), Some(r));
+    }
 }
