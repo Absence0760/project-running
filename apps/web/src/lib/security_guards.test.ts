@@ -1715,6 +1715,11 @@ test('release-web.yml runs the production-env guard before npm run build', () =>
 		'PUBLIC_SUPABASE_ANON_KEY',
 		'PUBLIC_MAPTILER_KEY',
 		'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL',
+		// Pro perk flags: the guard requires the RevenueCat checkout URL
+		// only when one of these is truthy, so they must reach the guard's
+		// env or a sellable Pro would pass with no checkout link.
+		'PUBLIC_COACH_ENABLED',
+		'PUBLIC_ROUTE_GEN_ENABLED',
 	]) {
 		assert.match(
 			env,

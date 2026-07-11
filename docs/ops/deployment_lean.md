@@ -198,7 +198,10 @@ once.
 
 Set the required build-input GitHub secrets (`PUBLIC_SUPABASE_URL` = the same raw
 `<ref>.supabase.co` URL, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`) before the first
-`web@*` deploy, then push to trigger `release-web.yml`.
+`web@*` deploy, then push to trigger `release-web.yml`. `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL`
+is NOT needed at this tier: the release guard (`check_production_env.mjs`) only requires it
+when a Pro perk flag (`PUBLIC_COACH_ENABLED` / `PUBLIC_ROUTE_GEN_ENABLED`) is truthy — with
+both unset, the empty checkout link matches the "Pro — coming soon" teaser.
 
 ### 3. Skip Fly entirely
 

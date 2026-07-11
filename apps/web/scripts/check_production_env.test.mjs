@@ -105,19 +105,22 @@ test('rejects an empty PUBLIC_SUPABASE_ANON_KEY independently', () => {
 
 test('reports every missing required var together', () => {
 	// An empty CI environment is the realistic failure mode — the helper
-	// should surface ALL four required keys at once rather than fail
+	// should surface ALL the required keys at once rather than fail
 	// after the first one, so the operator gets a single readable list
-	// instead of N edit-rerun cycles.
+	// instead of N edit-rerun cycles. (RevenueCat checkout is absent
+	// here: with both Pro perk flags off it isn't required.)
 	const r = checkProductionEnv({});
 	assert.equal(r.ok, false);
-	assert.equal(r.findings.length, 4);
+	assert.equal(r.findings.length, 3);
 	const vars = r.findings.map((f) => f.envVar).sort();
 	assert.deepEqual(vars, [
 		'PUBLIC_MAPTILER_KEY',
-		'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL',
 		'PUBLIC_SUPABASE_ANON_KEY',
 		'PUBLIC_SUPABASE_URL',
 	]);
+	const withProFlag = checkProductionEnv({ PUBLIC_COACH_ENABLED: 'true' });
+	assert.equal(withProFlag.findings.length, 4);
+	assert.ok(withProFlag.findings.some((f) => f.envVar === 'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL'));
 });
 
 test('rejects an empty PUBLIC_MAPTILER_KEY', () => {
@@ -135,18 +138,42 @@ test('rejects an empty PUBLIC_MAPTILER_KEY', () => {
 	assert.equal(r.findings[0].envVar, 'PUBLIC_MAPTILER_KEY');
 });
 
-test('rejects an empty PUBLIC_REVENUECAT_WEB_CHECKOUT_URL', () => {
-	// `/settings/upgrade` redirects to this hosted-checkout link; an
-	// empty value disables the Pro purchase flow silently (the CTA
-	// degrades to a "not configured" toast). Fail the build.
-	const r = checkProductionEnv({
-		PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
-		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
-		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
-		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: '',
-	});
-	assert.equal(r.ok, false);
-	assert.equal(r.findings[0].envVar, 'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL');
+test('rejects an empty PUBLIC_REVENUECAT_WEB_CHECKOUT_URL when a Pro perk flag is on', () => {
+	// `/settings/upgrade` redirects to this hosted-checkout link; with a
+	// Pro perk advertised (coach or route-gen flag truthy) an empty value
+	// disables the purchase flow silently (the CTA degrades to a "not
+	// configured" toast). Fail the build. Both flags trigger it.
+	for (const flags of [
+		{ PUBLIC_COACH_ENABLED: 'true' },
+		{ PUBLIC_ROUTE_GEN_ENABLED: '1' },
+	]) {
+		const r = checkProductionEnv({
+			PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+			PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+			PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+			PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: '',
+			...flags,
+		});
+		assert.equal(r.ok, false, `expected reject with ${JSON.stringify(flags)}`);
+		assert.equal(r.findings[0].envVar, 'PUBLIC_REVENUECAT_WEB_CHECKOUT_URL');
+	}
+});
+
+test('allows an empty PUBLIC_REVENUECAT_WEB_CHECKOUT_URL when Pro is not sellable', () => {
+	// The rock-bottom tier (deployment_lean.md) deliberately ships with
+	// both Pro perk flags off — /settings/upgrade shows the "coming soon"
+	// teaser instead of selling, so an empty checkout link is the
+	// intended config and must not block the release.
+	for (const flags of [{}, { PUBLIC_COACH_ENABLED: 'false' }, { PUBLIC_ROUTE_GEN_ENABLED: '' }]) {
+		const r = checkProductionEnv({
+			PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+			PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+			PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+			PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: '',
+			...flags,
+		});
+		assert.equal(r.ok, true, `expected pass with ${JSON.stringify(flags)}`);
+	}
 });
 
 test('does NOT enforce PUBLIC_REVENUECAT_WEB_PORTAL_URL (management portal is optional)', () => {

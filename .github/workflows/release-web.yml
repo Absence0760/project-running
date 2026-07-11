@@ -99,6 +99,8 @@ jobs:
           PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: ${{ secrets.PUBLIC_REVENUECAT_WEB_CHECKOUT_URL }}
           PUBLIC_REVENUECAT_WEB_PORTAL_URL: ${{ secrets.PUBLIC_REVENUECAT_WEB_PORTAL_URL }}
           PUBLIC_SENTRY_DSN: ${{ secrets.PUBLIC_SENTRY_DSN }}
+          PUBLIC_COACH_ENABLED: ${{ secrets.PUBLIC_COACH_ENABLED }}
+          PUBLIC_ROUTE_GEN_ENABLED: ${{ secrets.PUBLIC_ROUTE_GEN_ENABLED }}
           PUBLIC_APP_RELEASE: web@${{ steps.env.outputs.version }}
         run: |
           cat <<EOF > apps/web/.env
@@ -108,6 +110,8 @@ jobs:
           PUBLIC_REVENUECAT_WEB_CHECKOUT_URL=${PUBLIC_REVENUECAT_WEB_CHECKOUT_URL}
           PUBLIC_REVENUECAT_WEB_PORTAL_URL=${PUBLIC_REVENUECAT_WEB_PORTAL_URL}
           PUBLIC_SENTRY_DSN=${PUBLIC_SENTRY_DSN}
+          PUBLIC_COACH_ENABLED=${PUBLIC_COACH_ENABLED}
+          PUBLIC_ROUTE_GEN_ENABLED=${PUBLIC_ROUTE_GEN_ENABLED}
           PUBLIC_APP_RELEASE=${PUBLIC_APP_RELEASE}
           EOF
 
@@ -126,6 +130,8 @@ jobs:
           PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
           PUBLIC_MAPTILER_KEY: ${{ secrets.PUBLIC_MAPTILER_KEY }}
           PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: ${{ secrets.PUBLIC_REVENUECAT_WEB_CHECKOUT_URL }}
+          PUBLIC_COACH_ENABLED: ${{ secrets.PUBLIC_COACH_ENABLED }}
+          PUBLIC_ROUTE_GEN_ENABLED: ${{ secrets.PUBLIC_ROUTE_GEN_ENABLED }}
         run: node apps/web/scripts/check_production_env.mjs
 
       - run: npm run build --workspace=apps/web
