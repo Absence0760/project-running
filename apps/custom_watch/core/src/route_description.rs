@@ -14,7 +14,7 @@
 //! peripherals, no allocator.
 
 use crate::distance_bands::{band_for_distance, DistanceBandKey};
-use core::f64::consts::PI;
+use crate::grade_adjusted_pace::haversine_metres;
 use core::fmt::Write;
 use heapless::String;
 
@@ -99,20 +99,6 @@ pub const ELEVATION_ROLLING_M_PER_KM: f64 = 10.0;
 pub const ELEVATION_HILLY_M_PER_KM: f64 = 30.0;
 pub const ELEVATION_MOUNTAINOUS_M_PER_KM: f64 = 70.0;
 
-/// Great-circle distance in metres. Local copy so this module stays
-/// dependency-light and mirrors the web twin 1:1.
-fn haversine_m(a: GeoPoint, b: GeoPoint) -> f64 {
-    let r = 6_371_000.0_f64;
-    let d_lat = (b.lat - a.lat) * PI / 180.0;
-    let d_lng = (b.lng - a.lng) * PI / 180.0;
-    let lat1 = a.lat * PI / 180.0;
-    let lat2 = b.lat * PI / 180.0;
-    let s_lat = libm::sin(d_lat / 2.0);
-    let s_lng = libm::sin(d_lng / 2.0);
-    let h = s_lat * s_lat + libm::cos(lat1) * libm::cos(lat2) * s_lng * s_lng;
-    2.0 * r * libm::asin(libm::sqrt(h).min(1.0))
-}
-
 /// Bucket total gain (m) over distance into a coarse elevation character.
 pub fn elevation_profile(distance_m: f64, elevation_m: f64) -> ElevationBucket {
     if distance_m <= 0.0 || elevation_m <= 0.0 {
@@ -142,7 +128,9 @@ pub fn elevation_profile(distance_m: f64, elevation_m: f64) -> ElevationBucket {
 /// start ≈ end the route closes on itself and reads as a loop.
 pub fn route_shape(input: &RouteDescriptionInput) -> RouteShape {
     match (input.start, input.end) {
-        (Some(s), Some(e)) if haversine_m(s, e) <= LOOP_CLOSE_M => RouteShape::Loop,
+        (Some(s), Some(e)) if haversine_metres(s.lat, s.lng, e.lat, e.lng) <= LOOP_CLOSE_M => {
+            RouteShape::Loop
+        }
         _ => RouteShape::PointToPoint,
     }
 }

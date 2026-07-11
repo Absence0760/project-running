@@ -17,6 +17,8 @@
 //! self-contained port and shares no code with it. Pure logic, no peripherals,
 //! no allocator.
 
+use crate::grade_adjusted_pace::haversine_metres;
+
 const R_M: f64 = 6_371_000.0;
 
 /// A route waypoint in degrees, with an optional elevation the interpolation
@@ -52,7 +54,7 @@ pub fn interpolate_along_route(
     for i in 1..waypoints.len() {
         let a = waypoints[i - 1];
         let b = waypoints[i];
-        let seg_len = haversine_m(a.lat, a.lng, b.lat, b.lng);
+        let seg_len = haversine_metres(a.lat, a.lng, b.lat, b.lng);
         if seg_len <= 0.0 {
             continue;
         }
@@ -92,7 +94,7 @@ pub fn distance_along_route(
     for i in 1..waypoints.len() {
         let a = waypoints[i - 1];
         let b = waypoints[i];
-        let seg_len = haversine_m(a.lat, a.lng, b.lat, b.lng);
+        let seg_len = haversine_metres(a.lat, a.lng, b.lat, b.lng);
         let cos_lat = libm::cos(a.lat * deg);
         let bx = (b.lng - a.lng) * cos_lat * r_per_deg;
         let by = (b.lat - a.lat) * r_per_deg;
@@ -128,21 +130,9 @@ fn cumulative_length_m(waypoints: &[RouteWaypoint]) -> f64 {
     for i in 1..waypoints.len() {
         let a = waypoints[i - 1];
         let b = waypoints[i];
-        total += haversine_m(a.lat, a.lng, b.lat, b.lng);
+        total += haversine_metres(a.lat, a.lng, b.lat, b.lng);
     }
     total
-}
-
-fn haversine_m(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
-    let deg = core::f64::consts::PI / 180.0;
-    let d_lat = (lat2 - lat1) * deg;
-    let d_lng = (lng2 - lng1) * deg;
-    let a = libm::sin(d_lat / 2.0) * libm::sin(d_lat / 2.0)
-        + libm::cos(lat1 * deg)
-            * libm::cos(lat2 * deg)
-            * libm::sin(d_lng / 2.0)
-            * libm::sin(d_lng / 2.0);
-    R_M * 2.0 * libm::asin(libm::sqrt(a).min(1.0))
 }
 
 fn lerp_nullable(a: Option<f64>, b: Option<f64>, t: f64) -> Option<f64> {
