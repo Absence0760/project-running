@@ -21,6 +21,8 @@
 //! segment smoothing the Garmin field uses, with the identical
 //! [`grade_factor`] at its core.
 
+use core::cell::Cell;
+
 /// Flat-ground running cost C(0) from the polynomial below.
 pub const MINETTI_FLAT_COST: f64 = 3.6;
 
@@ -43,6 +45,23 @@ pub const MIN_SPEED_MPS: f64 = 0.4;
 /// `formatPace` guard; unreachable at the km unit given [`MIN_SPEED_MPS`] and
 /// the bounded factor, kept so the streaming pipeline matches its source.
 pub const MAX_PACE_S_PER_KM: f64 = 5940.0;
+
+/// A power-hike up a steep headwall crawls below [`MIN_SPEED_MPS`] while the
+/// effort-equivalent pace is *most* worth reading, so [`GapEstimator`] holds
+/// the last valid GAP through such a dip rather than blanking to `--:--`. The
+/// hold is bounded to this many consecutive sub-gate snapshot updates; the
+/// recorder samples the estimator once per ~1 Hz active-clock tick, so this is
+/// roughly a ten-second grace before a *sustained* slow crawl blanks. This is
+/// watch-local streaming behaviour layered on top of the ported math — it does
+/// NOT touch [`grade_factor`] or the parity-locked constants above, so it is
+/// not part of the four-way lockstep.
+pub const GAP_HOLD_WINDOW: u32 = 10;
+
+/// Floor of the hold band. Between this and [`MIN_SPEED_MPS`] the runner is
+/// still moving forward (a power-hike, ~0.3 m/s), so the held GAP is honest;
+/// at or below it they have genuinely stopped and the estimator blanks at once
+/// — the "real stop" exit the hold window must not paper over.
+pub const GAP_HOLD_MIN_SPEED_MPS: f64 = 0.15;
 
 /// Minetti 2002 5th-order fit: C(i) in J/kg/m, i fractional gradient.
 pub fn minetti_cost_at_grade(i: f64) -> f64 {
@@ -159,6 +178,14 @@ pub struct GapEstimator {
     last_distance_m: Option<f64>,
     last_alt_m: Option<f64>,
     grade: f64,
+    /// The most recent above-gate GAP, kept so a sub-gate power-hike dip can
+    /// show it instead of `--:--`. `Cell` because the recorder samples GAP
+    /// through the shared `&self` [`snapshot`](crate::record::Recorder::snapshot),
+    /// so the hold bookkeeping has to advance without a `&mut` handle.
+    last_gap: Cell<Option<u32>>,
+    /// Consecutive sub-gate updates the held GAP has been shown for; blanks
+    /// once it passes [`GAP_HOLD_WINDOW`].
+    dip_count: Cell<u32>,
 }
 
 impl Default for GapEstimator {
@@ -173,6 +200,8 @@ impl GapEstimator {
             last_distance_m: None,
             last_alt_m: None,
             grade: 0.0,
+            last_gap: Cell::new(None),
+            dip_count: Cell::new(0),
         }
     }
 
@@ -203,9 +232,36 @@ impl GapEstimator {
     }
 
     /// Live GAP for the current speed against the smoothed grade, seconds per
-    /// kilometre; `None` when the speed is below the walk threshold.
+    /// kilometre.
+    ///
+    /// Above [`MIN_SPEED_MPS`] this is the pure [`gap_pace_s_per_km`], recorded
+    /// as the value to hold. A dip into the power-hike band (between
+    /// [`GAP_HOLD_MIN_SPEED_MPS`] and the gate) keeps showing that held value
+    /// for up to [`GAP_HOLD_WINDOW`] consecutive updates before blanking, so a
+    /// steep-headwall crawl reads its recent effort-pace instead of `--:--`. A
+    /// genuine stop (at or below [`GAP_HOLD_MIN_SPEED_MPS`]) blanks at once and
+    /// forgets the held value, so a resumed hike can't resurrect a pre-stop
+    /// pace.
     pub fn gap_s_per_km(&self, speed_mps: f64) -> Option<u32> {
-        gap_pace_s_per_km(speed_mps, self.grade)
+        if speed_mps <= GAP_HOLD_MIN_SPEED_MPS {
+            self.last_gap.set(None);
+            self.dip_count.set(0);
+            return None;
+        }
+        if speed_mps >= MIN_SPEED_MPS {
+            let gap = gap_pace_s_per_km(speed_mps, self.grade);
+            self.last_gap.set(gap);
+            self.dip_count.set(0);
+            return gap;
+        }
+        let held_for = self.dip_count.get().saturating_add(1);
+        self.dip_count.set(held_for);
+        if held_for <= GAP_HOLD_WINDOW {
+            self.last_gap.get()
+        } else {
+            self.last_gap.set(None);
+            None
+        }
     }
 }
 
@@ -399,6 +455,67 @@ mod tests {
         assert_eq!(e.gap_s_per_km(0.39), None);
         assert_eq!(e.gap_s_per_km(0.0), None);
         assert!(e.gap_s_per_km(MIN_SPEED_MPS).is_some());
+    }
+
+    #[test]
+    fn estimator_holds_last_gap_through_a_power_hike_dip_then_blanks() {
+        let mut e = GapEstimator::new();
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0); // +10% headwall
+        let hiking_gap = e.gap_s_per_km(5.0).unwrap(); // primes the held value
+
+        // The crawl up the wall drops below the walk gate but is still moving.
+        // Every update inside the window shows the last effort-pace, not --:--.
+        for _ in 0..GAP_HOLD_WINDOW {
+            assert_eq!(e.gap_s_per_km(0.3), Some(hiking_gap));
+        }
+        // Once the dip outlasts the window the crawl is no longer a transient;
+        // GAP blanks.
+        assert_eq!(e.gap_s_per_km(0.3), None);
+    }
+
+    #[test]
+    fn estimator_recovering_from_a_dip_refills_the_hold_window() {
+        let mut e = GapEstimator::new();
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0);
+        let gap = e.gap_s_per_km(5.0).unwrap();
+
+        assert_eq!(e.gap_s_per_km(0.3), Some(gap)); // one dip update
+        assert_eq!(e.gap_s_per_km(5.0), Some(gap)); // back above the gate resets it
+
+        // The full window is available again after the recovery.
+        for _ in 0..GAP_HOLD_WINDOW {
+            assert_eq!(e.gap_s_per_km(0.3), Some(gap));
+        }
+        assert_eq!(e.gap_s_per_km(0.3), None);
+    }
+
+    #[test]
+    fn estimator_real_stop_blanks_immediately_and_forgets_the_held_gap() {
+        let mut e = GapEstimator::new();
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0);
+        assert!(e.gap_s_per_km(5.0).is_some()); // primes a valid GAP
+
+        // A genuine stop (at/below the hold floor) blanks at once — not after
+        // the window — and clears the held value...
+        assert_eq!(e.gap_s_per_km(0.05), None);
+        // ...so a sub-gate hike resumed after the stop shows nothing until the
+        // speed climbs back over the gate and GAP is recomputed.
+        assert_eq!(e.gap_s_per_km(0.3), None);
+        assert!(e.gap_s_per_km(5.0).is_some());
+    }
+
+    #[test]
+    fn estimator_dip_before_any_valid_gap_stays_blank() {
+        // No above-gate reading has ever primed a value, so a sub-gate dip has
+        // nothing to hold and must stay None across the whole window.
+        let e = GapEstimator::new();
+        for _ in 0..GAP_HOLD_WINDOW {
+            assert_eq!(e.gap_s_per_km(0.3), None);
+        }
+        assert_eq!(e.gap_s_per_km(0.3), None);
     }
 
     #[test]
