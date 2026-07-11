@@ -256,6 +256,109 @@ pub fn draw_mini_profile(fb: &mut Framebuffer, profile: &MiniProfile) {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Integer trig (no libm) — a quarter-turn sine table + octant reflection so the
+// ring dial and compass arrow place points around a circle without linking a
+// float math library into the firmware.
+// ---------------------------------------------------------------------------
+
+const TRIG_SCALE: i32 = 10_000;
+
+/// `sin(0deg)..sin(90deg)` scaled by [`TRIG_SCALE`]; every other quadrant is a
+/// reflection of these 91 values, so the whole circle is one small table.
+const SIN_Q: [i32; 91] = [
+    0, 175, 349, 523, 698, 872, 1045, 1219, 1392, 1564, 1736, 1908, 2079, 2250, 2419, 2588, 2756,
+    2924, 3090, 3256, 3420, 3584, 3746, 3907, 4067, 4226, 4384, 4540, 4695, 4848, 5000, 5150, 5299,
+    5446, 5592, 5736, 5878, 6018, 6157, 6293, 6428, 6561, 6691, 6820, 6947, 7071, 7193, 7314, 7431,
+    7547, 7660, 7771, 7880, 7986, 8090, 8192, 8290, 8387, 8480, 8572, 8660, 8746, 8829, 8910, 8988,
+    9063, 9135, 9205, 9272, 9336, 9397, 9455, 9511, 9563, 9613, 9659, 9703, 9744, 9781, 9816, 9848,
+    9877, 9903, 9925, 9945, 9962, 9976, 9986, 9994, 9998, 10000,
+];
+
+fn isin(deg: i32) -> i32 {
+    let d = deg.rem_euclid(360);
+    match d {
+        0..=90 => SIN_Q[d as usize],
+        91..=180 => SIN_Q[(180 - d) as usize],
+        181..=270 => -SIN_Q[(d - 180) as usize],
+        _ => -SIN_Q[(360 - d) as usize],
+    }
+}
+
+fn icos(deg: i32) -> i32 {
+    isin(deg + 90)
+}
+
+/// Point at `bearing` degrees clockwise from north (screen up) on a circle of
+/// radius `r` about `(cx, cy)`, in screen coordinates (y grows downward).
+fn ring_point(cx: i32, cy: i32, r: i32, bearing: i32) -> (i32, i32) {
+    (
+        cx + r * isin(bearing) / TRIG_SCALE,
+        cy - r * icos(bearing) / TRIG_SCALE,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Segmented ring dial (a fraction shown as a dial rather than a bar)
+// ---------------------------------------------------------------------------
+
+const DIAL_SEG: usize = 6; // side of each square ring segment, px
+
+/// Draw a `segments`-block ring dial about `(cx, cy)` at radius `r`: the first
+/// `frac` (clamped 0..=1) share of the ring, clockwise from the top, are solid
+/// blocks and the rest hollow frames — so a zero fraction still shows the empty
+/// ring, never a blank gap a glance could mistake for "no widget". A `segments`
+/// of 0 draws nothing.
+pub fn draw_dial(fb: &mut Framebuffer, cx: usize, cy: usize, r: usize, segments: usize, frac: f32) {
+    if segments == 0 {
+        return;
+    }
+    let lit = (frac.clamp(0.0, 1.0) * segments as f32 + 0.5) as usize;
+    let half = DIAL_SEG as i32 / 2;
+    for i in 0..segments {
+        let bearing = (i * 360 / segments) as i32;
+        let (px, py) = ring_point(cx as i32, cy as i32, r as i32, bearing);
+        let x = (px - half).max(0) as usize;
+        let y = (py - half).max(0) as usize;
+        if i < lit {
+            fb.fill_rect(x, y, DIAL_SEG, DIAL_SEG, true);
+        } else {
+            fb.stroke_rect(x, y, DIAL_SEG, DIAL_SEG, true);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Compass arrow (e.g. trackback bearing-to-start)
+// ---------------------------------------------------------------------------
+
+const COMPASS_HEAD_LEN: i32 = 6; // arrowhead barb reach back from the tip
+const COMPASS_HEAD_W: i32 = 4; // arrowhead half-width
+const COMPASS_N_TICK: i32 = 5; // north reference tick length outside the ring
+
+/// Draw a directional arrow from `(cx, cy)` pointing `bearing` degrees clockwise
+/// from north (screen up), tip on a circle of radius `r`, plus a fixed north
+/// reference tick + 'N' so the arrow reads against true north rather than alone.
+/// `bearing` wraps mod 360, so 360 renders as 0.
+pub fn draw_compass(fb: &mut Framebuffer, cx: usize, cy: usize, r: usize, bearing: u16) {
+    let (cxi, cyi, ri) = (cx as i32, cy as i32, r as i32);
+    let b = bearing as i32;
+    let (tx, ty) = ring_point(cxi, cyi, ri, b);
+    fb.draw_line(cxi, cyi, tx, ty, true);
+
+    let (bx, by) = ring_point(cxi, cyi, (ri - COMPASS_HEAD_LEN).max(0), b);
+    let (ox, oy) = ring_point(0, 0, COMPASS_HEAD_W, b + 90);
+    fb.draw_line(tx, ty, bx + ox, by + oy, true);
+    fb.draw_line(tx, ty, bx - ox, by - oy, true);
+
+    fb.draw_line(cxi, cyi - ri, cxi, cyi - ri - COMPASS_N_TICK, true);
+    let nx = cxi - CELL_W as i32 / 2;
+    let ny = cyi - ri - COMPASS_N_TICK - CELL_H as i32;
+    if nx >= 0 && ny >= 0 {
+        fb.draw_text(nx as usize / CELL_W, ny as usize / CELL_H, "N");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -585,5 +688,143 @@ mod tests {
             },
         );
         assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    // Centre + radius used by the dial/compass tests: a ring wholly on-panel so
+    // every cardinal tip (cx±r, cy±r) is a real pixel to assert against.
+    const CX: usize = WIDTH / 2; // 84
+    const CY: usize = HEIGHT / 2; // 72
+    const R: usize = 40;
+
+    #[test]
+    fn dial_full_fraction_lights_every_segment_solid() {
+        let mut fb = Framebuffer::new();
+        draw_dial(&mut fb, CX, CY, R, 8, 1.0);
+        // The top segment (bearing 0) is centred on (cx, cy - r); a solid block
+        // inks its centre pixel.
+        assert!(
+            fb.pixel(CX, CY - R),
+            "top segment centre is inked when solid"
+        );
+    }
+
+    #[test]
+    fn dial_zero_fraction_is_hollow_frames_not_blank() {
+        let mut fb = Framebuffer::new();
+        draw_dial(&mut fb, CX, CY, R, 8, 0.0);
+        // Hollow: the top segment's centre pixel is blank...
+        assert!(
+            !fb.pixel(CX, CY - R),
+            "top segment centre is blank when hollow"
+        );
+        // ...but its frame still carries ink, so the empty ring is visible.
+        assert!(
+            ink_in(
+                &fb,
+                CX - DIAL_SEG,
+                CY - R - DIAL_SEG,
+                2 * DIAL_SEG,
+                2 * DIAL_SEG
+            ) > 0,
+            "hollow segment keeps its frame"
+        );
+    }
+
+    #[test]
+    fn dial_half_fills_the_first_half_clockwise() {
+        let mut fb = Framebuffer::new();
+        draw_dial(&mut fb, CX, CY, R, 8, 0.5);
+        // 4 of 8 lit: the top segment (i=0) is solid, the bottom (i=4, bearing
+        // 180 -> centre (cx, cy + r)) is still hollow.
+        assert!(fb.pixel(CX, CY - R), "first segment solid at half");
+        assert!(!fb.pixel(CX, CY + R), "fifth segment still hollow at half");
+    }
+
+    #[test]
+    fn dial_fill_grows_with_fraction() {
+        let (mut lo, mut hi) = (Framebuffer::new(), Framebuffer::new());
+        draw_dial(&mut lo, CX, CY, R, 12, 0.25);
+        draw_dial(&mut hi, CX, CY, R, 12, 0.75);
+        assert!(
+            ink_in(&hi, 0, 0, WIDTH, HEIGHT) > ink_in(&lo, 0, 0, WIDTH, HEIGHT),
+            "a bigger fraction inks more of the ring"
+        );
+    }
+
+    #[test]
+    fn dial_out_of_range_fractions_clamp() {
+        let (mut over, mut full) = (Framebuffer::new(), Framebuffer::new());
+        draw_dial(&mut over, CX, CY, R, 8, 2.0);
+        draw_dial(&mut full, CX, CY, R, 8, 1.0);
+        assert_eq!(
+            ink_in(&over, 0, 0, WIDTH, HEIGHT),
+            ink_in(&full, 0, 0, WIDTH, HEIGHT),
+            "frac > 1 clamps to full"
+        );
+        let (mut under, mut empty) = (Framebuffer::new(), Framebuffer::new());
+        draw_dial(&mut under, CX, CY, R, 8, -1.0);
+        draw_dial(&mut empty, CX, CY, R, 8, 0.0);
+        assert_eq!(
+            ink_in(&under, 0, 0, WIDTH, HEIGHT),
+            ink_in(&empty, 0, 0, WIDTH, HEIGHT),
+            "frac < 0 clamps to empty"
+        );
+    }
+
+    #[test]
+    fn dial_zero_segments_is_a_noop() {
+        let mut fb = Framebuffer::new();
+        draw_dial(&mut fb, CX, CY, R, 0, 0.5);
+        assert_eq!(ink_in(&fb, 0, 0, WIDTH, HEIGHT), 0);
+    }
+
+    #[test]
+    fn compass_points_to_each_cardinal_bearing() {
+        for (bearing, (tx, ty)) in [
+            (0u16, (CX, CY - R)),
+            (90, (CX + R, CY)),
+            (180, (CX, CY + R)),
+            (270, (CX - R, CY)),
+        ] {
+            let mut fb = Framebuffer::new();
+            draw_compass(&mut fb, CX, CY, R, bearing);
+            assert!(
+                fb.pixel(tx, ty),
+                "bearing {bearing} should reach the tip at ({tx}, {ty})"
+            );
+        }
+    }
+
+    #[test]
+    fn compass_360_matches_0() {
+        let (mut a, mut b) = (Framebuffer::new(), Framebuffer::new());
+        draw_compass(&mut a, CX, CY, R, 0);
+        draw_compass(&mut b, CX, CY, R, 360);
+        assert_eq!(
+            ink_in(&a, 0, 0, WIDTH, HEIGHT),
+            ink_in(&b, 0, 0, WIDTH, HEIGHT),
+            "360 wraps to 0"
+        );
+        assert!(fb_eq(&a, &b), "360 renders identically to 0");
+    }
+
+    #[test]
+    fn compass_keeps_a_fixed_north_tick_when_pointing_away() {
+        let mut fb = Framebuffer::new();
+        draw_compass(&mut fb, CX, CY, R, 180); // arrow points south
+        assert!(
+            ink_in(
+                &fb,
+                CX - 1,
+                CY - R - COMPASS_N_TICK as usize,
+                3,
+                COMPASS_N_TICK as usize
+            ) > 0,
+            "north reference tick is drawn regardless of bearing"
+        );
+    }
+
+    fn fb_eq(a: &Framebuffer, b: &Framebuffer) -> bool {
+        (0..HEIGHT).all(|y| (0..WIDTH).all(|x| a.pixel(x, y) == b.pixel(x, y)))
     }
 }
