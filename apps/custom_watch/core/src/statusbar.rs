@@ -39,6 +39,24 @@ pub fn gps_bars(fix: Option<&Fix>, uptime_s: u32, stale_after_s: u32) -> u8 {
     }
 }
 
+/// Signal-meter bars (0..=4) from a GSV satellites-*in-view* count — the idle
+/// face's acquisition meter. Unlike [`gps_bars`], which reads the count a fix
+/// actually solved on and floors a present fix at one bar, this reads the raw
+/// in-view count the receiver reports even before it locks, so `0` is the
+/// honest "nothing acquired yet" a searching runner must see, not a floor. The
+/// bands sit a notch above the fix ladder because satellites in view always
+/// outnumber those a solution uses: `1-3` is a marginal sky, `7-9` workable,
+/// `>=10` the open-sky ceiling worth full bars.
+pub fn bars_for_sats(sats: u8) -> u8 {
+    match sats {
+        0 => 0,
+        1..=3 => 1,
+        4..=6 => 2,
+        7..=9 => 3,
+        _ => 4,
+    }
+}
+
 /// The run-view page-dot indicator: which dot is lit (`active`) out of how
 /// many (`total`). `active` is the page's position in the cycle, `total` the
 /// number of pages, so the strip draws `total` dots with the `active`-th
@@ -135,18 +153,38 @@ mod tests {
     }
 
     #[test]
+    fn bars_for_sats_maps_each_band() {
+        assert_eq!(bars_for_sats(0), 0);
+        assert_eq!(bars_for_sats(1), 1);
+        assert_eq!(bars_for_sats(3), 1);
+        assert_eq!(bars_for_sats(4), 2);
+        assert_eq!(bars_for_sats(6), 2);
+        assert_eq!(bars_for_sats(7), 3);
+        assert_eq!(bars_for_sats(9), 3);
+        assert_eq!(bars_for_sats(10), 4);
+        assert_eq!(bars_for_sats(255), 4);
+    }
+
+    #[test]
+    fn bars_for_sats_never_exceed_the_scale() {
+        for sats in 0..=255u8 {
+            assert!(bars_for_sats(sats) <= MAX_BARS);
+        }
+    }
+
+    #[test]
     fn indicator_first_and_last_pages() {
         let first = page_indicator(Page::Dashboard);
         assert_eq!(first.active, 0);
-        let last = page_indicator(Page::Fitness);
-        // Fitness is the final variant, so its index is total - 1.
+        let last = page_indicator(Page::ElevationProfile);
+        // ElevationProfile is the final variant, so its index is total - 1.
         assert_eq!(last.active, last.total - 1);
     }
 
     #[test]
     fn total_matches_the_live_variant_count() {
         // Pinned to today's page set; a new page must move this deliberately.
-        assert_eq!(page_indicator(Page::Dashboard).total, 18);
+        assert_eq!(page_indicator(Page::Dashboard).total, 19);
     }
 
     #[test]

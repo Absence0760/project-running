@@ -278,6 +278,9 @@ pub fn page_rows(
             Page::GearWear => gear_wear_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::TrainingPaces => training_paces_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::Fitness => fitness_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::ElevationProfile => {
+                elevation_profile_glance(fix, snap, elev, tag, uptime_s, animate, mode)
+            }
         },
     }
 }
@@ -312,7 +315,8 @@ pub fn page_icons(
         | Page::BackToStart
         | Page::GearWear
         | Page::TrainingPaces
-        | Page::Fitness => [None; ROWS],
+        | Page::Fitness
+        | Page::ElevationProfile => [None; ROWS],
     }
 }
 
@@ -468,6 +472,18 @@ pub fn page_hero(
                 None => {
                     let _ = write!(row, "--");
                 }
+            }
+            row
+        }
+        // The current altitude (the run's latest banked sample) headlines the
+        // profile; `--` until the first altitude sample lands.
+        Page::ElevationProfile => {
+            let mut row = Row::new();
+            let ep = &snap.elev_profile;
+            if ep.len > 0 {
+                let _ = write!(row, "{}", ep.samples[ep.len - 1].clamp(-99_999, 99_999));
+            } else {
+                let _ = write!(row, "--");
             }
             row
         }
@@ -1260,6 +1276,56 @@ fn fitness_glance(
     rows
 }
 
+/// The elevation-profile glance: the run's decimated elevation series drawn as
+/// a mini-profile sparkline the app paints (`render::widgets::draw_mini_profile`)
+/// into rows 3..8, with the total ascent / descent from the baro task's
+/// [`elevation::Reading`] as the context row and the current altitude on the
+/// hero. "ELEV --" / "NO ELEVATION" until the first altitude sample lands, so a
+/// baro-less (or pre-fix) run reads honestly rather than as a flat sea-level
+/// line. The vert totals come from the authoritative accumulator, not the lossy
+/// decimated series, so a between-samples peak is never dropped from D+.
+#[allow(clippy::too_many_arguments)]
+fn elevation_profile_glance(
+    fix: Option<&Fix>,
+    snap: &Snapshot,
+    elev: Option<&elevation::Reading>,
+    tag: &str,
+    uptime_s: u32,
+    animate: bool,
+    mode: GnssMode,
+) -> [Row; ROWS] {
+    let mut rows: [Row; ROWS] = Default::default();
+
+    let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
+    if tag_shown {
+        let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
+    }
+
+    if snap.elev_profile.len == 0 {
+        let _ = write!(rows[2], "ELEV --");
+        let _ = write!(rows[4], "NO ELEVATION");
+        let _ = write!(rows[5], "AWAITING BARO");
+    } else {
+        // rows 3..8 are the sparkline cell the app draws into.
+        match elev {
+            Some(e) => {
+                let _ = write!(
+                    rows[2],
+                    "ELEV D+{} D-{}",
+                    (e.gain_m as u32).min(99_999),
+                    (e.loss_m as u32).min(99_999)
+                );
+            }
+            None => {
+                let _ = write!(rows[2], "ELEV PROFILE");
+            }
+        }
+    }
+
+    write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
+    rows
+}
+
 /// The Nav page: the breadcrumb map panel on rows [`NAV_PANEL_TOP_ROW`]..+
 /// [`NAV_PANEL_ROWS`] (left empty here — the app draws the course polyline +
 /// position marker into those pixels, and the 2x [`nav_alert_row`] overlay on
@@ -1773,6 +1839,7 @@ mod tests {
             fuel: None,
             training_paces: None,
             fitness: None,
+            elev_profile: crate::record::ElevProfileView::empty(),
         }
     }
 
@@ -1804,7 +1871,8 @@ mod tests {
     #[test]
     fn every_page_fits_the_grid_active_and_inactive() {
         use crate::record::{
-            FitnessView, FuelCarryView, FuelView, RoadbookLegView, RoadbookView, TrainingPacesView,
+            ElevProfileView, FitnessView, FuelCarryView, FuelView, RoadbookLegView, RoadbookView,
+            TrainingPacesView, ELEV_PROFILE_CAP,
         };
         // An active run with every new page's data at extreme values.
         let mut rec = snapshot(RecordState::Recording, 9_999_990.0);
@@ -1850,6 +1918,10 @@ mod tests {
             vo2_max: Some(999.0),
             recovery: Some(RecoveryAdvice::NotEnoughData),
         });
+        rec.elev_profile = ElevProfileView {
+            samples: [99_999; ELEV_PROFILE_CAP],
+            len: ELEV_PROFILE_CAP,
+        };
         let e = elev(99_999.0, 99_999.0, 99_999.0);
 
         let mut p = Page::default();
@@ -3602,6 +3674,105 @@ mod tests {
         assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
         assert_eq!(
             page_hero(Page::Fitness, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
+    }
+
+    #[test]
+    fn elevation_profile_glance_shows_context_and_leaves_the_cell_blank() {
+        use crate::record::{ElevProfileView, ELEV_PROFILE_CAP};
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        let mut samples = [0i32; ELEV_PROFILE_CAP];
+        samples[..3].copy_from_slice(&[1000, 1100, 1250]);
+        rec.elev_profile = ElevProfileView { samples, len: 3 };
+        let e = elev(1250.0, 300.0, 50.0);
+        let rows = page_rows(
+            Page::ElevationProfile,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            Some(&e),
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[0].as_str().trim(), "REC");
+        // Total ascent / descent from the authoritative accumulator.
+        assert_eq!(rows[2].as_str(), "ELEV D+300 D-50");
+        // rows 3..8 are left blank for the sparkline pixel layer.
+        assert_eq!(rows[3].as_str(), "");
+        assert_eq!(rows[7].as_str(), "");
+        assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
+        // Hero echoes the current (latest) altitude, not `--`.
+        assert_eq!(
+            page_hero(Page::ElevationProfile, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "1250"
+        );
+        assert!(page_icons(
+            Page::ElevationProfile,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            42,
+            true
+        )
+        .iter()
+        .all(Option::is_none));
+    }
+
+    #[test]
+    fn elevation_profile_glance_without_baro_reading_labels_the_profile() {
+        use crate::record::{ElevProfileView, ELEV_PROFILE_CAP};
+        // A series banked off GPS altitude, but the baro task published no vert
+        // Reading: show the profile, no fabricated D+/D-.
+        let mut rec = snapshot(RecordState::Recording, 5_000.0);
+        let mut samples = [0i32; ELEV_PROFILE_CAP];
+        samples[..2].copy_from_slice(&[12, 20]);
+        rec.elev_profile = ElevProfileView { samples, len: 2 };
+        let rows = page_rows(
+            Page::ElevationProfile,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "ELEV PROFILE");
+        assert_eq!(
+            page_hero(Page::ElevationProfile, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "20"
+        );
+    }
+
+    #[test]
+    fn elevation_profile_glance_honest_inactive() {
+        let rec = snapshot(RecordState::Recording, 5_000.0);
+        let rows = page_rows(
+            Page::ElevationProfile,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[2].as_str(), "ELEV --");
+        assert_eq!(rows[4].as_str(), "NO ELEVATION");
+        assert_eq!(rows[5].as_str(), "AWAITING BARO");
+        assert_eq!(
+            page_hero(Page::ElevationProfile, None, Some(&rec), None)
                 .unwrap()
                 .as_str(),
             "--"

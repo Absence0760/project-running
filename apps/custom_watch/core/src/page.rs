@@ -74,6 +74,10 @@ pub enum Page {
     /// Only what a single synced snapshot can present: the rolling CTL/ATL/TSB
     /// needs multi-day history the watch doesn't hold.
     Fitness,
+    /// The run's elevation profile as a mini-profile sparkline over the whole
+    /// run ([`crate::record::ElevProfileView`]), with total ascent / descent as
+    /// context; an honest "NO ELEVATION" until the first altitude sample lands.
+    ElevationProfile,
 }
 
 impl Page {
@@ -97,7 +101,8 @@ impl Page {
             Page::BackToStart => Page::GearWear,
             Page::GearWear => Page::TrainingPaces,
             Page::TrainingPaces => Page::Fitness,
-            Page::Fitness => Page::Dashboard,
+            Page::Fitness => Page::ElevationProfile,
+            Page::ElevationProfile => Page::Dashboard,
         }
     }
 }
@@ -112,7 +117,7 @@ mod tests {
     }
 
     /// Every page, in declaration (`as u8`) order.
-    const ALL: [Page; 18] = [
+    const ALL: [Page; 19] = [
         Page::Dashboard,
         Page::Distance,
         Page::Pace,
@@ -131,6 +136,7 @@ mod tests {
         Page::GearWear,
         Page::TrainingPaces,
         Page::Fitness,
+        Page::ElevationProfile,
     ];
 
     #[test]
@@ -147,7 +153,8 @@ mod tests {
         assert_eq!(Page::BackToStart.next(), Page::GearWear);
         assert_eq!(Page::GearWear.next(), Page::TrainingPaces);
         assert_eq!(Page::TrainingPaces.next(), Page::Fitness);
-        assert_eq!(Page::Fitness.next(), Page::Dashboard);
+        assert_eq!(Page::Fitness.next(), Page::ElevationProfile);
+        assert_eq!(Page::ElevationProfile.next(), Page::Dashboard);
         // Walking `next` from the default visits every page exactly once and
         // returns home.
         let mut p = Page::default();
