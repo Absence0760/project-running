@@ -88,13 +88,21 @@ jobs:
       - run: npm ci
 
       # The share Lambdas run on arm64 and bundle resvg's NATIVE arm64
-      # binary into their zips, but npm ci on the x64 runner only
-      # installs optional deps matching the host platform — so the
-      # arm64 package must be pulled explicitly (--no-save keeps
-      # package.json/lock untouched). Without it every share-* bundle
-      # step fails with a missing-@resvg/resvg-js-linux-arm64-gnu error.
+      # binary into their zips, but npm ci on the x64 runner installs
+      # only host-platform optional deps (failed web@1.0.0/1.0.1) — and
+      # any `npm install --cpu=arm64 --os=linux` re-evaluates the WHOLE
+      # tree for that platform, pruning the x64 bindings the build
+      # toolchain itself needs (rolldown lost its host binding on
+      # web@1.0.2). So: fetch the tarball directly and unpack it into
+      # node_modules without touching npm's dependency tree, version
+      # pinned to the installed loader.
       - name: Install arm64 resvg binary for the share Lambdas
-        run: npm install --no-save --force --workspace=apps/web --cpu=arm64 --os=linux @resvg/resvg-js-linux-arm64-gnu
+        run: |
+          ver="$(node -p "require('@resvg/resvg-js/package.json').version")"
+          npm pack "@resvg/resvg-js-linux-arm64-gnu@${ver}" --pack-destination "$RUNNER_TEMP"
+          dest="node_modules/@resvg/resvg-js-linux-arm64-gnu"
+          mkdir -p "$dest"
+          tar -xzf "$RUNNER_TEMP/resvg-resvg-js-linux-arm64-gnu-${ver}.tgz" -C "$dest" --strip-components=1
 
       # ──────────────────── Build static site ────────────────────
 
