@@ -4499,4 +4499,11 @@ export const messages = {
 	"fundraiser.notFound": "Cette collecte n'est pas disponible.",
 	"fundraiser.loading": "Chargement de la collecte…",
 	"fundraiser.donateOnWeb": "Faire un don sur le web",
+	"dashConsistency.title": "Régularité d'entraînement",
+	"dashConsistency.weeksTrained": "semaines actives ({pct} %)",
+	"dashConsistency.currentStreakLabel": "Série de semaines actuelle",
+	"dashConsistency.bestStreakLabel": "Meilleure série de semaines",
+	"dashConsistency.steady": "Régulier",
+	"dashConsistency.variable": "Variable",
+	"dashConsistency.footnote": "Semaines avec au moins une activité, sur les {total} dernières. La régularité vaut mieux qu'une seule grosse semaine.",
 } satisfies Messages;
