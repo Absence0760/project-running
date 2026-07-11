@@ -1,9 +1,10 @@
 //! Driver for the Bosch BMP581 barometric pressure sensor over I²C.
 //!
-//! Delivers raw barometric pressure in Pascals; altitude and vertical-speed
-//! derivation live in `watch_core::elevation`, not here. The `baro` task (per
+//! Delivers raw barometric pressure in Pascals plus the sensor's calibrated
+//! ambient temperature in °C; altitude and vertical-speed derivation live in
+//! `watch_core::elevation`, not here. The `baro` task (per
 //! `docs/architecture/decisions.md` § 90, the Apollo510B / BMP581 BOM refresh)
-//! polls `read_pressure_pa` and hands the reading upward.
+//! polls `read_pressure_pa` / `read_sample` and hands the reading upward.
 //!
 //! Generic over any blocking `embedded_hal::i2c::I2c`, so the same code runs on
 //! the nRF52840 TWIM and under a mock bus in `cargo test`.
@@ -33,6 +34,7 @@ mod reg {
     //! on-board read.
     pub const CHIP_ID: u8 = 0x01;
     pub const INT_STATUS: u8 = 0x27;
+    pub const TEMP_DATA_XLSB: u8 = 0x1D;
     pub const PRESS_DATA_XLSB: u8 = 0x20;
     pub const OSR_CONFIG: u8 = 0x36;
     pub const ODR_CONFIG: u8 = 0x37;
@@ -44,6 +46,15 @@ mod reg {
 pub enum Error<E> {
     I2c(E),
     BadChipId,
+}
+
+/// One BMP581 conversion: barometric pressure in Pascals and the sensor's
+/// calibrated ambient temperature in °C, both from the same data burst.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Sample {
+    pub pressure_pa: f32,
+    pub temperature_c: f32,
 }
 
 pub struct Bmp581<I2C> {
@@ -83,6 +94,23 @@ where
         Ok(Some(raw_to_pa(raw)))
     }
 
+    /// Reads temperature and pressure from the single 6-byte data burst
+    /// (`TEMP_DATA_XLSB`..`PRESS_DATA_MSB`). Temperature registers precede
+    /// pressure in the readout, so one `write_read` fetches both.
+    pub fn read_sample(&mut self) -> Result<Option<Sample>, Error<E>> {
+        if self.read_reg(reg::INT_STATUS)? & INT_STATUS_DRDY == 0 {
+            return Ok(None);
+        }
+        let mut buf = [0u8; 6];
+        self.read_regs(reg::TEMP_DATA_XLSB, &mut buf)?;
+        let temp_raw = u32::from(buf[0]) | (u32::from(buf[1]) << 8) | (u32::from(buf[2]) << 16);
+        let press_raw = u32::from(buf[3]) | (u32::from(buf[4]) << 8) | (u32::from(buf[5]) << 16);
+        Ok(Some(Sample {
+            pressure_pa: raw_to_pa(press_raw),
+            temperature_c: raw_to_celsius(temp_raw),
+        }))
+    }
+
     fn write_reg(&mut self, reg: u8, val: u8) -> Result<(), Error<E>> {
         self.i2c.write(self.addr, &[reg, val]).map_err(Error::I2c)
     }
@@ -106,4 +134,12 @@ where
 /// dividing by 64 yields Pascals directly.
 pub fn raw_to_pa(raw: u32) -> f32 {
     raw as f32 / 64.0
+}
+
+/// BMP581 temperature is a *signed* 24-bit fixed-point count with an LSB of
+/// 1/65536 °C, so sign-extending the 24-bit value to `i32` and dividing by
+/// 2^16 yields °C directly.
+pub fn raw_to_celsius(raw: u32) -> f32 {
+    let signed = ((raw << 8) as i32) >> 8;
+    signed as f32 / 65536.0
 }
