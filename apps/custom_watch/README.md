@@ -78,6 +78,16 @@ A `decisions.md` § entry for this batch is owed (deferred: another session hold
 
 Not sim/hardware-verified — Renode tooling is absent on the dev machine. The `decisions.md` §224 + §225 entries for these batches are now recorded.
 
+**Parallel batch — driver completeness + honest signal meter + a guided-run core (2026-07-11).** A six-task parallel pass hardening the real hardware path rather than adding display surfaces (host-tested; default + `ble` + embedded `thumbv7em-none-eabihf` all compile, `cargo fmt --check` + the CI `clippy -D warnings` gate clean; `watch_core` now **945 host tests**):
+- **`ublox_nmea` GLL + VTG parsing** — the driver now decodes GLL (position + validity) and VTG (course + knots→m/s speed) alongside RMC/GGA/GSV/GSA, so a receiver configured for those sentences isn't silently dropped (6 driver tests).
+- **`bmp581` QNH-calibrated altitude** — `altitude_from_pressure_m` (the international barometric formula via `libm`) + a `set_sea_level_pa` calibration setter (plausibility-guarded to the real QNH range) + `read_altitude_m`, so barometric altitude has a proper pressure→altitude conversion with a settable reference (5 driver tests).
+- **`max86177` off-wrist detection** — reuses the peak detector's DC-baseline + AC-envelope state to classify `Worn` / `OffWrist` (DC inside a plausible band **and** a real pulse envelope), and gates the HR reading's `valid` flag on contact, so an off-wrist sensor reads honest "no HR" instead of a garbage BPM off ambient light (6 driver tests).
+- **Honest GPS signal meter** — the GSA fix type is now published to `state::FIX_QUALITY` and the idle-face meter combines it with sat-count via `statusbar::bars_for_fix`: fix type 0/1 (no fix) reads 0 bars even under a full sky in view, a 2D fix caps at `FIX_2D_MAX_BARS`, a 3D fix uses the full ladder (host-tested; embedded build confirmed).
+- **`gps_dropout.nmea` sim fixture** — a checksummed ~2 min NMEA stream (jog → 40 s signal dropout via void RMC / fix-quality-0 GGA → plausible reacquire) exercising the recorder's staleness + reacquire path (`--fixture gps_dropout`).
+- **`guided_runs` parity core** — the scripted-coach-run library + the `(prev, now]` cue-tick dispatcher (port of web `training/guided_runs.ts`; TTS speaking + translation injection dropped, cue/title text carried as i18n key identifiers; 17 tests).
+
+**Integration note:** the six worktrees were forked from a base predating the previous two batches, so integration was a 3-way merge against `main` (not a copy) — main's GSA kept, the GLL/VTG + fix-quality work layered on, one duplicate `Gsa` variant + a stale `bars_for_sats` ladder from a stale-base agent discarded. Not sim/hardware-verified — Renode tooling is absent on the dev machine. A `decisions.md` § entry (§226) records this batch.
+
 ## Layout
 
 Actual workspace shape (Cargo workspace, all paths relative to `apps/custom_watch/`):
