@@ -67,7 +67,15 @@ over-claiming when the position is stale** (the personas' core complaint).
 2. **Spectator card** on `/live/[id]` + `live_spectator_screen.dart`: "Next
    cut-off" — name, distance to go, projected arrival, a green/amber/red margin
    chip. Gated on: the live run is linked to a route that has cutoff markers.
-   Honour staleness (show "last known" + suppress the verdict when stale).
+   Honour staleness (show "last known" + suppress the verdict when stale). The
+   suppressed (`unknown`) state now distinguishes its two causes on web: a
+   **stale** fix reads the amber-delayed `live.cutoffSignalLost` copy ("Signal
+   lost — can't project arrival") with the card border in the DELAYED amber,
+   while a merely still-connecting fix (a fresh single ping, no pace yet) keeps
+   the neutral `live.cutoffWaitingSignal` line — so a runner who went dark
+   mid-race is never mislabelled as still starting up. Mobile mirror of this
+   copy split is an open follow-up (`liveCutoffWaitingSignal` is still shared
+   across both causes on `live_spectator_screen.dart`).
 3. **Pace source:** recent average over the last N pings (decide N), or
    effort-adjusted (GAP) remaining distance for a better hill estimate.
 
