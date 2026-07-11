@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { orderedPlanPhases, longestCompletedLongRunMetres } from './plan_progress';
+import {
+	orderedPlanPhases,
+	longestCompletedLongRunMetres,
+	planDistanceBanked,
+} from './plan_progress';
 
 // ─────────────────────── orderedPlanPhases ───────────────────────
 
@@ -83,4 +87,60 @@ test('longestCompletedLongRunMetres: ignores non-long completed workouts', () =>
 		{ kind: 'long', target_distance_m: 12_000, manually_completed: true },
 	];
 	assert.equal(longestCompletedLongRunMetres(workouts), 12_000);
+});
+
+// ─────────────────────── planDistanceBanked ───────────────────────
+
+test('planDistanceBanked: sums planned over non-rest, completed over done', () => {
+	const workouts = [
+		{ kind: 'easy', target_distance_m: 8_000, manually_completed: true },
+		{ kind: 'long', target_distance_m: 20_000, completed_run_id: null },
+		{ kind: 'rest', target_distance_m: null },
+	];
+	assert.deepEqual(planDistanceBanked(workouts), {
+		completedMetres: 8_000,
+		plannedMetres: 28_000,
+	});
+});
+
+test('planDistanceBanked: prefers actual run distance for completed workouts', () => {
+	const workouts = [{ kind: 'long', target_distance_m: 20_000, completed_run_id: 'r1' }];
+	const actual = new Map([['r1', 21_400]]);
+	assert.deepEqual(planDistanceBanked(workouts, actual), {
+		completedMetres: 21_400,
+		plannedMetres: 20_000,
+	});
+});
+
+test('planDistanceBanked: a skipped workout leaves the planned denominator', () => {
+	const workouts = [
+		{ kind: 'easy', target_distance_m: 8_000, manually_completed: true },
+		{ kind: 'long', target_distance_m: 20_000, skipped_at: '2026-07-01T00:00:00Z' },
+	];
+	// The skipped long run is off the books: it neither counts as banked nor
+	// inflates the plan's asking distance.
+	assert.deepEqual(planDistanceBanked(workouts), {
+		completedMetres: 8_000,
+		plannedMetres: 8_000,
+	});
+});
+
+test('planDistanceBanked: banked can exceed planned when the runner over-runs', () => {
+	const workouts = [{ kind: 'long', target_distance_m: 20_000, completed_run_id: 'r1' }];
+	const actual = new Map([['r1', 24_000]]);
+	const r = planDistanceBanked(workouts, actual);
+	assert.equal(r.completedMetres, 24_000);
+	assert.equal(r.plannedMetres, 20_000);
+});
+
+test('planDistanceBanked: a zero-distance linked run falls back to the planned target', () => {
+	const workouts = [{ kind: 'long', target_distance_m: 20_000, completed_run_id: 'r1' }];
+	assert.deepEqual(planDistanceBanked(workouts, new Map([['r1', 0]])), {
+		completedMetres: 20_000,
+		plannedMetres: 20_000,
+	});
+});
+
+test('planDistanceBanked: empty plan is zero / zero', () => {
+	assert.deepEqual(planDistanceBanked([]), { completedMetres: 0, plannedMetres: 0 });
 });

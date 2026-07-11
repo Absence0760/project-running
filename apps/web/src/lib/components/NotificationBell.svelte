@@ -13,6 +13,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { notificationLinkFor } from '$lib/social/notification_link';
 
 	let open = $state(false);
 	let loading = $state(false);
@@ -95,7 +96,7 @@
 			markNotificationRead(item.row.id).catch((e) => console.warn('mark read failed', e));
 		}
 		open = false;
-		const href = linkFor(item);
+		const href = notificationLinkFor(item);
 		if (href) goto(href);
 	}
 
@@ -109,41 +110,6 @@
 			}));
 		} catch (e) {
 			showToast(m('notificationBell.markAllFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
-		}
-	}
-
-	function linkFor(item: NotificationView): string | null {
-		const r = item.row;
-		switch (r.kind) {
-			case 'kudos':
-			case 'comment':
-			case 'comment_reply':
-				return r.run_id ? `/runs/${r.run_id}` : null;
-			case 'follow':
-				return r.actor_id ? `/u/${r.actor_id}` : null;
-			case 'event_rsvp':
-			case 'event_cancel':
-			case 'event_reminder':
-				return r.event_id && item.event_club_slug
-					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
-					: null;
-			case 'plan_update':
-			case 'plan_assigned':
-				return r.plan_id ? `/plans/${r.plan_id}` : null;
-			case 'message':
-				return r.actor_id ? `/messages/${r.actor_id}` : null;
-			case 'club_post':
-				return item.club_slug ? `/clubs/${item.club_slug}` : null;
-			case 'run_completed':
-				return r.run_id ? `/share/run/${r.run_id}` : null;
-			case 'achievement':
-				return r.achievement_id ? `/share/badge/${r.achievement_id}` : null;
-			case 'challenge_complete':
-				return r.challenge_id ? `/challenges/${r.challenge_id}` : null;
-			case 'content_hidden':
-				return null;
-			default:
-				return null;
 		}
 	}
 

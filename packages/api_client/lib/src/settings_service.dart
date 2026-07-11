@@ -80,6 +80,12 @@ class SettingsKeys {
   /// kg; this only changes how the number is shown and parsed, the same
   /// display-only split as [preferredUnit].
   static const weightUnit = 'weight_unit';
+  /// Show the run-detail calorie estimate — default `true`. When `false`,
+  /// the run-detail calorie cell is hidden (the estimate silently assumes a
+  /// 70 kg default when no body weight is set, so a weight-conscious runner
+  /// can opt out entirely). Display-only opt-out; mirrors web's
+  /// `show_calories` read on `/runs/[id]`.
+  static const showCalories = 'show_calories';
   /// Activity multiplier for the Mifflin-St Jeor nutrition target
   /// (`nutrition_targets.ts`/`.dart`) — `'sedentary' | 'light' | 'moderate'
   /// (default) | 'active' | 'very_active'`. An effort label, not a body

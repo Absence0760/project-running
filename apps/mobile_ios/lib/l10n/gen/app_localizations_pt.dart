@@ -6477,6 +6477,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Desenha a linha gravada sem ajuste no mapa da corrida, mesmo quando existe um trajeto corrigido';
 
   @override
+  String get prefsShowCalories => 'Mostrar estimativas de calorias';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      'Estimadas a partir da distância e do peso corporal (padrão de 70 kg quando não definido). Desative para ocultar as calorias nas páginas de corrida.';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Privacidade padrão das corridas';
 
   @override
@@ -17432,6 +17439,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsShowRawTrackSubtitle =>
       'Desenha a linha gravada sem ajuste no mapa da corrida, mesmo quando existe um trajeto corrigido';
+
+  @override
+  String get prefsShowCalories => 'Mostrar estimativas de calorias';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      'Estimadas a partir da distância e do peso corporal (padrão de 70 kg quando não definido). Desative para ocultar as calorias nas páginas de corrida.';
 
   @override
   String get prefsDefaultRunPrivacy => 'Privacidade padrão das corridas';

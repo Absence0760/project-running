@@ -116,6 +116,30 @@ test.describe('/routes/[id]/roadbook', () => {
 		}).toPass();
 	});
 
+	test('copy-as-text includes the cut-off limit time, not just the margin', async ({
+		page,
+		context
+	}) => {
+		routeId = await seedRoute();
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+		// start 06:00 + a 30-min cut-off limit ⇒ the crew sheet must carry the
+		// wall-clock limit 06:30 on the Gate line (regression: fmtClock(undefined)
+		// always rendered empty, so the copied text dropped the limit entirely).
+		await page.goto(`/routes/${routeId}/roadbook?goal=1800&start=06:00&model=even`);
+		await expect(page.locator('.rb-table tbody tr')).toHaveCount(4);
+
+		await page.getByRole('button', { name: 'Copy' }).click();
+
+		await expect
+			.poll(async () => page.evaluate(() => navigator.clipboard.readText()), { timeout: 8_000 })
+			.toContain('06:30');
+
+		const text = await page.evaluate(() => navigator.clipboard.readText());
+		const gateLine = text.split('\n').find((l) => l.includes('Gate')) ?? '';
+		expect(gateLine).toContain('06:30');
+	});
+
 	test('downloads a GPX with markers containing the waypoints + a marker name', async ({
 		page
 	}) => {

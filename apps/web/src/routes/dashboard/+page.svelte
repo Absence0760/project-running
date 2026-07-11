@@ -45,6 +45,7 @@
 	import NutritionRingsCard from '$lib/components/NutritionRingsCard.svelte';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import RacePredictorCard from '$lib/components/RacePredictorCard.svelte';
+	import ConsistencyCard from '$lib/components/ConsistencyCard.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
@@ -1387,6 +1388,16 @@
 		     graded for confidence. Self-hides when no run qualifies (its own
 		     null return). Backlog #11 (advanced analytics polish). -->
 		<RacePredictorCard {runs} />
+
+		<!-- Training consistency — the fraction of the last 12 calendar weeks
+		     with any activity, the trailing active-week streak, and whether
+		     weekly volume is steady or spiky. A distinct signal from VDOT
+		     (fitness ceiling), the load trio (acute fatigue/form), and the
+		     day-streak (consecutive days). Scoped to filteredRuns so the
+		     source filter + activity-type view carry through, like the week
+		     strip + streak card. Self-hides with < 2 active weeks. Backlog #11
+		     (advanced analytics polish). -->
+		<ConsistencyCard activities={filteredRuns} weekStart={weekStartDay} {now} />
 
 		<!-- Mileage chart -->
 		<section class="card-elevated">

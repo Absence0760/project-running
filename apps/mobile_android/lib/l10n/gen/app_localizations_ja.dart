@@ -6116,6 +6116,13 @@ class AppLocalizationsJa extends AppLocalizations {
       '補正済みのトラックがある場合でも、未補正の記録ラインをランマップに描画します';
 
   @override
+  String get prefsShowCalories => 'カロリー推定を表示';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      '距離と体重から推定します（未設定の場合は70 kgを使用）。オフにするとラン詳細ページのカロリー表示を非表示にします。';
+
+  @override
   String get prefsDefaultRunPrivacy => 'ランのデフォルトプライバシー';
 
   @override

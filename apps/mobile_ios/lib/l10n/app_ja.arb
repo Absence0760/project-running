@@ -1757,6 +1757,8 @@
   "prefsAdvancedGpsSubtitle": "高精度、より細かいトラック、バッテリー消費増",
   "prefsShowRawTrack": "生のGPSトラックを表示",
   "prefsShowRawTrackSubtitle": "補正済みのトラックがある場合でも、未補正の記録ラインをランマップに描画します",
+  "prefsShowCalories": "カロリー推定を表示",
+  "prefsShowCaloriesHint": "距離と体重から推定します（未設定の場合は70 kgを使用）。オフにするとラン詳細ページのカロリー表示を非表示にします。",
   "prefsDefaultRunPrivacy": "ランのデフォルトプライバシー",
   "prefsStravaAutoShare": "Stravaへ自動共有",
   "prefsStravaAutoShareSubtitle": "新しいランをすべてStravaに自動送信します。実装後はStrava連携の接続が必要です。",
