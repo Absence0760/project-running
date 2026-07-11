@@ -420,6 +420,86 @@ mod tests {
     }
 
     #[test]
+    fn projecting_exactly_onto_a_vertex_snaps_there_and_the_earlier_segment_wins() {
+        // The 100 m vertex is shared by segments 0 and 1; a fix landing exactly
+        // on it has a zero offset to both, and the strict `<` keeps the earlier
+        // segment (t == 1) so the along-distance is the vertex's cumulative
+        // metres, never re-counted onto the next segment at t == 0.
+        let c =
+            Course::from_points(&[dist_pt(0.0), dist_pt(100.0), dist_pt(200.0), dist_pt(300.0)])
+                .unwrap();
+        let v = dist_pt(100.0);
+        let p = c.project(v.lat_deg, v.lon_deg).unwrap();
+        assert_eq!(p.segment, 0);
+        assert!((p.t - 1.0).abs() < 1e-9, "t {}", p.t);
+        assert!(p.off_m < 1e-6, "off {}", p.off_m);
+        assert!((p.along_m - 100.0).abs() < 1.0, "along {}", p.along_m);
+    }
+
+    #[test]
+    fn a_foot_past_the_segment_end_clamps_to_the_end_vertex() {
+        // A fix whose perpendicular foot lands beyond the segment end clamps to
+        // t == 1 and snaps to that endpoint — never reads past the vertex.
+        let c = Course::from_points(&[dist_pt(0.0), dist_pt(100.0)]).unwrap();
+        let end = dist_pt(100.0);
+        let p = c.project(50.0 / M_PER_DEG, 150.0 / M_PER_DEG).unwrap();
+        assert_eq!(p.segment, 0);
+        assert_eq!(p.t, 1.0);
+        assert!((p.lon_deg - end.lon_deg).abs() < 1e-9, "lon {}", p.lon_deg);
+        assert!((p.along_m - c.total_m()).abs() < 1.0, "along {}", p.along_m);
+        assert!(p.off_m.is_finite() && p.off_m > 0.0, "off {}", p.off_m);
+    }
+
+    #[test]
+    fn a_far_off_position_clamps_in_bounds_without_nan() {
+        // Ten degrees off a London-scale course: every field stays finite, `t`
+        // is a real fraction, the segment index is valid, and along-distance is
+        // pinned inside [0, total] by an endpoint clamp — never out of range.
+        let c = line();
+        let total = c.total_m();
+        let p = c.project(61.5, 9.88).unwrap();
+        assert!(p.segment < c.points().len() - 1, "segment {}", p.segment);
+        assert!((0.0..=1.0).contains(&p.t), "t {}", p.t);
+        assert!(p.off_m.is_finite() && p.off_m > 0.0, "off {}", p.off_m);
+        assert!(
+            p.along_m.is_finite() && p.along_m >= 0.0 && p.along_m <= total + 1e-6,
+            "along {}",
+            p.along_m
+        );
+    }
+
+    #[test]
+    fn along_distance_is_monotonic_and_finite_walking_the_course() {
+        // March a fix east along a three-leg equatorial course, a few metres
+        // off the line each step: the reported along-distance never goes
+        // backwards and never turns NaN as the runner progresses.
+        let c =
+            Course::from_points(&[dist_pt(0.0), dist_pt(100.0), dist_pt(200.0), dist_pt(300.0)])
+                .unwrap();
+        let mut prev = -1.0;
+        for k in 0..=30 {
+            let east_m = k as f64 * 10.0;
+            let p = c.project(5.0 / M_PER_DEG, east_m / M_PER_DEG).unwrap();
+            assert!(p.along_m.is_finite(), "along NaN at {}", east_m);
+            assert!(p.off_m.is_finite(), "off NaN at {}", east_m);
+            assert!(p.along_m + 1e-6 >= prev, "along went back at {}", east_m);
+            prev = p.along_m;
+        }
+    }
+
+    #[test]
+    fn a_max_capacity_course_projects_without_panic() {
+        let pts: std::vec::Vec<CoursePoint> = (0..MAX_COURSE_POINTS)
+            .map(|i| dist_pt(i as f64 * 10.0))
+            .collect();
+        let c = Course::from_points(&pts).unwrap();
+        assert_eq!(c.points().len(), MAX_COURSE_POINTS);
+        let p = c.project(3.0 / M_PER_DEG, 1234.0 / M_PER_DEG).unwrap();
+        assert!(p.along_m.is_finite() && p.off_m.is_finite());
+        assert!(p.segment < MAX_COURSE_POINTS - 1);
+    }
+
+    #[test]
     fn off_course_alert_fires_once_and_stays_latched_while_out() {
         let mut a = OffCourseAlert::new();
         assert!(!a.update(10.0));
@@ -447,6 +527,37 @@ mod tests {
         assert!(!a.update(10.0));
         assert!(!a.active());
         assert!(a.update(45.0));
+    }
+
+    #[test]
+    fn off_course_alert_does_not_rearm_exactly_at_the_rearm_boundary() {
+        let mut a = OffCourseAlert::new();
+        assert!(a.update(50.0));
+        assert!(a.active());
+        // Exactly at the re-arm distance is still "out" (strict <), matching
+        // the mobile run screen's `off < threshold / 2` branch: no re-arm.
+        assert!(!a.update(OFF_COURSE_REARM_M));
+        assert!(a.active());
+        // A hair below re-arms; the next excursion can fire again.
+        assert!(!a.update(OFF_COURSE_REARM_M - 0.001));
+        assert!(!a.active());
+        assert!(a.update(45.0));
+    }
+
+    #[test]
+    fn off_course_alert_does_not_flap_hovering_at_the_threshold() {
+        // Jittering either side of the 40 m boundary fires exactly once — the
+        // hysteresis band (re-arm only under 20 m) is what stops a per-fix
+        // re-alert.
+        let mut a = OffCourseAlert::new();
+        let mut fires = 0;
+        for off in [39.999, 40.001, 39.999, 40.001, 40.0, 40.001] {
+            if a.update(off) {
+                fires += 1;
+            }
+        }
+        assert_eq!(fires, 1);
+        assert!(a.active());
     }
 
     #[test]
