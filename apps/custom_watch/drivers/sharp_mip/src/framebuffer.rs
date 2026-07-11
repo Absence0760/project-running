@@ -102,6 +102,95 @@ impl Framebuffer {
         }
     }
 
+    /// Horizontal run of `w` pixels from `(x, y)`. Clips at the right edge and
+    /// off-panel rows through [`set_pixel`](Self::set_pixel), so redrawing an
+    /// identical run dirties nothing.
+    pub fn hline(&mut self, x: usize, y: usize, w: usize, ink: bool) {
+        for i in 0..w {
+            self.set_pixel(x + i, y, ink);
+        }
+    }
+
+    /// Vertical run of `h` pixels from `(x, y)`.
+    pub fn vline(&mut self, x: usize, y: usize, h: usize, ink: bool) {
+        for j in 0..h {
+            self.set_pixel(x, y + j, ink);
+        }
+    }
+
+    /// Solid `w`×`h` rectangle anchored at `(x, y)`.
+    pub fn fill_rect(&mut self, x: usize, y: usize, w: usize, h: usize, ink: bool) {
+        for j in 0..h {
+            self.hline(x, y + j, w, ink);
+        }
+    }
+
+    /// 1-px rectangle border. A `w` or `h` of 1 collapses to a single line and
+    /// a 0 dimension draws nothing — no underflow on the `- 1` edges.
+    pub fn stroke_rect(&mut self, x: usize, y: usize, w: usize, h: usize, ink: bool) {
+        if w == 0 || h == 0 {
+            return;
+        }
+        self.hline(x, y, w, ink);
+        self.hline(x, y + h - 1, w, ink);
+        self.vline(x, y, h, ink);
+        self.vline(x + w - 1, y, h, ink);
+    }
+
+    /// Bordered progress box filled left-to-right to `frac` (clamped 0..=1) of
+    /// the inner width. The trailing inner span is cleared so a bar that shrinks
+    /// between frames erases its old fill instead of leaving a stale tail.
+    pub fn draw_progress_bar(&mut self, x: usize, y: usize, w: usize, h: usize, frac: f32) {
+        self.stroke_rect(x, y, w, h, true);
+        if w < 2 || h < 2 {
+            return;
+        }
+        let inner_w = w - 2;
+        let inner_h = h - 2;
+        let frac = if frac < 0.0 {
+            0.0
+        } else if frac > 1.0 {
+            1.0
+        } else {
+            frac
+        };
+        let filled = (inner_w as f32 * frac) as usize;
+        self.fill_rect(x + 1, y + 1, filled, inner_h, true);
+        self.fill_rect(x + 1 + filled, y + 1, inner_w - filled, inner_h, false);
+    }
+
+    /// Signed "ahead/behind" bar: a bordered box with a 1-px center tick, filled
+    /// from the center toward the right for positive `frac` (clamped -1..=1) or
+    /// the left for negative, proportional to its magnitude. The inner band is
+    /// cleared first so the sign and length erase cleanly between frames.
+    pub fn draw_center_bar(&mut self, x: usize, y: usize, w: usize, h: usize, frac: f32) {
+        self.stroke_rect(x, y, w, h, true);
+        if w < 2 || h < 2 {
+            return;
+        }
+        let inner_h = h - 2;
+        let iy = y + 1;
+        self.fill_rect(x + 1, iy, w - 2, inner_h, false);
+        let cx = x + w / 2;
+        let frac = if frac < -1.0 {
+            -1.0
+        } else if frac > 1.0 {
+            1.0
+        } else {
+            frac
+        };
+        if frac > 0.0 {
+            let right_space = (x + w - 2).saturating_sub(cx);
+            let fill_w = (right_space as f32 * frac) as usize;
+            self.fill_rect(cx + 1, iy, fill_w, inner_h, true);
+        } else if frac < 0.0 {
+            let left_space = cx.saturating_sub(x + 1);
+            let fill_w = (left_space as f32 * -frac) as usize;
+            self.fill_rect(cx - fill_w, iy, fill_w, inner_h, true);
+        }
+        self.vline(cx, iy, inner_h, true);
+    }
+
     pub fn pixel(&self, x: usize, y: usize) -> bool {
         x < WIDTH && y < HEIGHT && self.lines[y][x / 8] >> (x % 8) & 1 == 1
     }
@@ -180,6 +269,41 @@ impl Framebuffer {
         }
     }
 
+    /// Draw a string at 3x scale — each 8x16 glyph pixel-tripled into a 24x48
+    /// block spanning three grid cells wide and three text rows tall. The
+    /// biggest single-metric band, still authored from the one 8x16 font.
+    /// Cell-aligned at `(col, row)`; truncates at the right edge and clips at
+    /// the bottom. Overwrites the covered cells, so redrawing dirties nothing.
+    pub fn draw_text_3x(&mut self, col: usize, row: usize, text: &str) {
+        if row >= TEXT_ROWS {
+            return;
+        }
+        let y0 = row * font::GLYPH_HEIGHT;
+        for (i, ch) in text.chars().enumerate() {
+            let cell = col + i * 3;
+            if cell >= TEXT_COLS {
+                break;
+            }
+            let glyph = glyph_for(ch);
+            for (dy, &bits) in glyph.iter().enumerate() {
+                let (b0, b1, b2) = triple_bits(bits);
+                for third in 0..3 {
+                    let y = y0 + dy * 3 + third;
+                    if y >= HEIGHT {
+                        break;
+                    }
+                    self.put_cell_byte(cell, y, b0);
+                    if cell + 1 < TEXT_COLS {
+                        self.put_cell_byte(cell + 1, y, b1);
+                    }
+                    if cell + 2 < TEXT_COLS {
+                        self.put_cell_byte(cell + 2, y, b2);
+                    }
+                }
+            }
+        }
+    }
+
     fn put_cell_byte(&mut self, cell: usize, y: usize, bits: u8) {
         if self.lines[y][cell] != bits {
             self.lines[y][cell] = bits;
@@ -242,6 +366,19 @@ fn double_bits(src: u8) -> (u8, u8) {
         }
     }
     ((out & 0xff) as u8, (out >> 8) as u8)
+}
+
+/// Pixel-triple one 8-bit glyph row into 24 bits (three bytes): source bit `b`
+/// (bit 0 = leftmost) lights destination bits `3b`, `3b+1`, `3b+2`, keeping the
+/// framebuffer's LSB-first-is-leftmost convention.
+fn triple_bits(src: u8) -> (u8, u8, u8) {
+    let mut out: u32 = 0;
+    for b in 0..8 {
+        if src >> b & 1 != 0 {
+            out |= 0b111 << (b * 3);
+        }
+    }
+    ((out & 0xff) as u8, (out >> 8 & 0xff) as u8, (out >> 16 & 0xff) as u8)
 }
 
 fn glyph_for(ch: char) -> &'static [u8; font::GLYPH_HEIGHT] {
