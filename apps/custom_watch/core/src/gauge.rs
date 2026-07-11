@@ -6,8 +6,8 @@
 //!
 //! Every ratio is division-guarded — a zero or non-finite denominator yields the
 //! low end of the range, never a `NaN`/`inf` that would poison a bar width — and
-//! clamped with comparisons rather than `f32::clamp`, which is std-only in this
-//! `no_std` crate.
+//! `f32::clamp`ed to that range (the comparison-based clamp is in `core`, so it
+//! links in this `no_std` crate; only the transcendental float ops need `libm`).
 //!
 //! Pure logic, no peripherals, no allocator — like the rest of `core`.
 
@@ -27,14 +27,7 @@ pub const PACER_FULL_SCALE_S: i32 = 120;
 /// (lead positive, deficit negative), so a runner ahead of the partner fills the
 /// bar towards the positive end.
 pub fn pacer_fill(status: &PacerStatus) -> f32 {
-    let v = status.ahead_s as f32 / PACER_FULL_SCALE_S as f32;
-    if v > 1.0 {
-        1.0
-    } else if v < -1.0 {
-        -1.0
-    } else {
-        v
-    }
+    (status.ahead_s as f32 / PACER_FULL_SCALE_S as f32).clamp(-1.0, 1.0)
 }
 
 /// Fill for the gear-wear bar, in `0.0..=1.0`: accumulated distance over the
@@ -77,13 +70,7 @@ pub fn current_zone(bpm: u16, cutoffs: &ZoneCutoffs) -> usize {
 }
 
 fn clamp01(v: f32) -> f32 {
-    if v > 1.0 {
-        1.0
-    } else if v < 0.0 {
-        0.0
-    } else {
-        v
-    }
+    v.clamp(0.0, 1.0)
 }
 
 #[cfg(test)]

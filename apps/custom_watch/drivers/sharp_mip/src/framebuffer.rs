@@ -147,13 +147,7 @@ impl Framebuffer {
         }
         let inner_w = w - 2;
         let inner_h = h - 2;
-        let frac = if frac < 0.0 {
-            0.0
-        } else if frac > 1.0 {
-            1.0
-        } else {
-            frac
-        };
+        let frac = frac.clamp(0.0, 1.0);
         let filled = (inner_w as f32 * frac) as usize;
         self.fill_rect(x + 1, y + 1, filled, inner_h, true);
         self.fill_rect(x + 1 + filled, y + 1, inner_w - filled, inner_h, false);
@@ -172,13 +166,7 @@ impl Framebuffer {
         let iy = y + 1;
         self.fill_rect(x + 1, iy, w - 2, inner_h, false);
         let cx = x + w / 2;
-        let frac = if frac < -1.0 {
-            -1.0
-        } else if frac > 1.0 {
-            1.0
-        } else {
-            frac
-        };
+        let frac = frac.clamp(-1.0, 1.0);
         if frac > 0.0 {
             let right_space = (x + w - 2).saturating_sub(cx);
             let fill_w = (right_space as f32 * frac) as usize;
