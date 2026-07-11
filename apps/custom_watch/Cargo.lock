@@ -43,6 +43,7 @@ dependencies = [
  "static_cell",
  "ublox_nmea",
  "watch_core",
+ "watch_render",
 ]
 
 [[package]]
@@ -1343,6 +1344,14 @@ dependencies = [
  "libm",
  "serde_json",
  "ublox_nmea",
+]
+
+[[package]]
+name = "watch_render"
+version = "0.1.0"
+dependencies = [
+ "sharp_mip",
+ "watch_core",
 ]
 
 [[package]]
