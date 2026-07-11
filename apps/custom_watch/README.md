@@ -45,6 +45,8 @@ The watch's developer inner loop is `bin/watch-flash.sh` from the repo root (or 
 
 Each step is roughly 2–4 weeks of evenings depending on prior firmware experience.
 
+**Parity-port analysis cores (2026-07-10).** Six more pure `no_std` `watch_core` modules landed as host-tested parity ports of shipped web helpers, ahead of their UI wiring (the same "logic before peripherals" pattern as steps 5/7): [`roadbook`] + [`fuel_plan`] (the race-crew per-checkpoint schedule + per-leg fueling — the biggest ultra-watch gap), [`pace_segments`] (per-split pace breakdown with the shared colour ramp), [`distance_bands`] (race-distance band), [`gear_wear`] (shoe-mileage wear state), and [`training_load`] (single-run + rolling CTL/ATL/TSB). Each mirrors its web `.test.ts` + Dart twin test-for-test (roadbook 11 / fuel_plan 9 / pace_segments 24 / distance_bands 9 / gear_wear 8 / training_load 31 = 92 new host tests, `watch_core` now 347 green) and compiles for both the default and `ble` targets. Wiring them into run-view glance pages (`face`/`page`) + the recorder snapshot is the deliberate follow-up. Two small helpers the ports depend on but that aren't yet their own `watch_core` modules (route_markers' `parseCutoff`, exercise_calories' `runCalories`) are inlined privately for now, to be de-duplicated when those helpers are ported.
+
 ## Layout
 
 Actual workspace shape (Cargo workspace, all paths relative to `apps/custom_watch/`):
