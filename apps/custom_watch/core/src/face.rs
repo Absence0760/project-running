@@ -263,7 +263,7 @@ pub fn page_rows(
                 mode,
             ),
             Page::Lap => lap_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
-            Page::Splits => splits_glance(fix, snap, tag, uptime_s, animate, mode),
+            Page::Splits => splits_glance(fix, tag, uptime_s, animate, mode),
             Page::Zones => zones_glance(fix, hr_bpm, snap, tag, uptime_s, animate, mode),
             Page::Pacer => pacer_glance(fix, snap, tag, uptime_s, animate, mode),
             Page::RacePredictor => race_predictor_glance(fix, snap, tag, uptime_s, animate, mode),
@@ -466,11 +466,11 @@ enum GlanceMetric {
     Pace,
 }
 
-/// A single-metric glance page: the metric up large in the rows-0-1 hero (drawn
-/// by the app from [`page_hero`]), a unit label, then time / the other metric /
-/// HR / GPS as 1x context — the "one big number" view for a mid-run glance. The
-/// pace glance adds the live grade-adjusted pace under HR, so raw and
-/// effort-equivalent pace read together on a hill.
+/// A single-metric glance page: the metric up large in the rows-0-2 3x hero
+/// (drawn by the app from [`page_hero`]), a unit label on row 3, then time /
+/// the other metric / HR / GPS as 1x context — the "one big number" view for a
+/// mid-run glance. The pace glance adds the live grade-adjusted pace under HR,
+/// so raw and effort-equivalent pace read together on a hill.
 #[allow(clippy::too_many_arguments)]
 fn glance(
     metric: GlanceMetric,
@@ -484,8 +484,10 @@ fn glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    // Rows 0-1 hold the 2x hero; only the state tag rides row 0, blinking for
-    // REC while `animate` is on, steady-on otherwise.
+    // Rows 0-2 hold the 3x hero (the app draws the single-metric pages' headline
+    // number triple-size — the glance a runner takes at arm's length); only the
+    // state tag rides row 0's right cells, clear of the hero digits, blinking for
+    // REC while `animate` is on and steady-on otherwise.
     let tag_shown = tag != "REC" || !animate || uptime_s.is_multiple_of(2);
     if tag_shown {
         let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
@@ -495,7 +497,7 @@ fn glance(
         GlanceMetric::Distance => "DISTANCE  KM",
         GlanceMetric::Pace => "AVG PACE  /KM",
     };
-    let _ = write!(rows[2], "{}", label);
+    let _ = write!(rows[3], "{}", label);
 
     let (h, m, s) = hms(snap.elapsed_s);
     let _ = write!(rows[4], "{:<5}{}:{:02}:{:02}", "TIME", h.min(999), m, s);
@@ -595,10 +597,6 @@ fn lap_glance(
 /// GPS row.
 const _: () = assert!(3 + ZONE_COUNT < ROWS);
 
-/// Width of a full zone bar, in character cells — the space left on a zone row
-/// after `Zn ` and the nine-cell time field.
-const ZONE_BAR_CELLS: u32 = 8;
-
 /// The HR/zones glance page: the live BPM up large in the rows-0-1 hero (drawn
 /// by the app from [`page_hero`]), the current zone beside the label, then one
 /// row per zone — the moving time banked in that zone plus a bar scaled to the
@@ -634,20 +632,12 @@ fn zones_glance(
         }
     }
 
-    // Bars scale to the fullest zone so the dominant effort always reads at
-    // full width; an all-zero run (no HR yet) draws times only, no bars.
-    let max = snap.zone_time_s.iter().copied().max().unwrap_or(0);
+    // Per-zone moving-time label; the app draws the scaled bar beside it into
+    // the trailing cells this leaves blank (`render::widgets::draw_zones_overlay`)
+    // — a smooth pixel bar in place of the `#` glyphs, and a frame on the live
+    // zone. The `{:<9}` pads the time so the bar always starts in the same column.
     for (i, &t) in snap.zone_time_s.iter().enumerate() {
-        let row = &mut rows[3 + i];
-        let _ = write!(row, "Z{} {:<9}", i + 1, split_row(t).as_str());
-        let cells = if max == 0 {
-            0
-        } else {
-            ((t as u64 * ZONE_BAR_CELLS as u64 + max as u64 / 2) / max as u64) as usize
-        };
-        for _ in 0..cells {
-            let _ = row.push('#');
-        }
+        let _ = write!(rows[3 + i], "Z{} {:<9}", i + 1, split_row(t).as_str());
     }
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
@@ -849,18 +839,12 @@ fn cutoff_glance(
     rows
 }
 
-/// Width of a full pace-bucket bar, in cells — the space left after `Bn ` and
-/// the km field (same budget as the zone bars).
-const SPLIT_BAR_CELLS: u32 = 6;
-
-/// The splits glance: distance banked in each pace bucket (`B1` slowest ..
-/// `B6` fastest, from [`crate::pace_segments`]), each with a bar scaled to the
-/// fullest bucket — the pace analogue of the zones page. Total distance rides
-/// the hero. An all-zero run (no distance yet) draws the labels only.
-#[allow(clippy::too_many_arguments)]
+/// The splits glance: the pace-distribution histogram — distance banked in
+/// each pace bucket (slowest .. fastest, from [`crate::pace_segments`]) drawn
+/// by the app as bottom-aligned pixel bars over rows 3..8, with an axis label
+/// on row 2 and the total distance up in the hero.
 fn splits_glance(
     fix: Option<&Fix>,
-    snap: &Snapshot,
     tag: &str,
     uptime_s: u32,
     animate: bool,
@@ -873,22 +857,10 @@ fn splits_glance(
         let _ = write!(rows[0], "{:>width$}", tag, width = COLS);
     }
 
-    // Six buckets fill rows 2..=7 (no header row — the GPS row still owns 8),
-    // scaled to the fullest so the dominant pace always reads at full width.
-    let max = snap.pace_bucket_m.iter().copied().fold(0.0_f64, f64::max);
-    for (i, &d) in snap.pace_bucket_m.iter().enumerate() {
-        let row = &mut rows[2 + i];
-        let km = (d / 1000.0).min(99.99);
-        let _ = write!(row, "B{} {:>6.2}K ", i + 1, km);
-        let cells = if max <= 0.0 {
-            0
-        } else {
-            (d * SPLIT_BAR_CELLS as f64 / max + 0.5) as usize
-        };
-        for _ in 0..cells {
-            let _ = row.push('#');
-        }
-    }
+    // The pace-distribution histogram fills rows 3..8 as pixel bars the app
+    // draws (`render::widgets::draw_splits_overlay`, slowest bucket left →
+    // fastest right); this labels the axis and leaves those rows blank for it.
+    let _ = write!(rows[2], "PACE DIST  SLOW>FAST");
 
     write_gps_row(&mut rows[8], "GPS", fix, uptime_s, mode);
     rows
@@ -2073,7 +2045,9 @@ mod tests {
             "42.19"
         );
         assert_eq!(rows[0].as_str().trim(), "REC");
-        assert_eq!(rows[2].as_str(), "DISTANCE  KM");
+        // Rows 0-2 are the 3x hero (drawn by the app); the label rides row 3.
+        assert_eq!(rows[2].as_str(), "");
+        assert_eq!(rows[3].as_str(), "DISTANCE  KM");
         assert_eq!(rows[4].as_str(), "TIME 3:24:07");
         assert_eq!(rows[5].as_str(), "PACE 5:12 /KM");
         assert_eq!(rows[6].as_str(), "HR   152 BPM Z3");
@@ -2113,7 +2087,7 @@ mod tests {
                 .as_str(),
             "5:12"
         );
-        assert_eq!(rows[2].as_str(), "AVG PACE  /KM");
+        assert_eq!(rows[3].as_str(), "AVG PACE  /KM");
         assert_eq!(rows[5].as_str(), "DIST 12.34 KM");
         assert_eq!(rows[6].as_str(), "HR   --");
         assert_eq!(rows[7].as_str(), "GAP  4:52 /KM");
@@ -2445,10 +2419,12 @@ mod tests {
         assert_eq!(rows[0].as_str().trim(), "REC");
         // 152 bpm on the default 190 ladder is the Z3 cutoff itself.
         assert_eq!(rows[2].as_str(), "HR  BPM       ZONE 3");
-        assert_eq!(rows[3].as_str(), "Z1 10:00    ##");
-        assert_eq!(rows[4].as_str(), "Z2 40:00    ########");
-        assert_eq!(rows[5].as_str(), "Z3 20:00    ####");
-        assert_eq!(rows[6].as_str(), "Z4 5:00     #");
+        // The `{:<9}` pad keeps the (app-drawn) pixel bar's start column fixed;
+        // the row text itself is now just the label + banked time.
+        assert_eq!(rows[3].as_str(), "Z1 10:00    ");
+        assert_eq!(rows[4].as_str(), "Z2 40:00    ");
+        assert_eq!(rows[5].as_str(), "Z3 20:00    ");
+        assert_eq!(rows[6].as_str(), "Z4 5:00     ");
         assert_eq!(rows[7].as_str(), "Z5 0:00     ");
         assert_eq!(rows[8].as_str(), "GPS  8 SATS PERF");
         // Text-only page: no gutter icons.
@@ -2504,7 +2480,7 @@ mod tests {
             2,
             true,
         );
-        assert_eq!(rows[3].as_str(), "Z1 1:02:03  ########");
+        assert_eq!(rows[3].as_str(), "Z1 1:02:03  ");
     }
 
     fn pacer_status(

@@ -23,7 +23,9 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::{RecordState, Snapshot};
+use watch_core::statusbar;
 use watch_core::trackback::{self, TrackbackView};
+use watch_render::widgets;
 
 use crate::state;
 
@@ -287,8 +289,41 @@ pub async fn screen_task(
         if let Some(a) = alert {
             fb.draw_text_2x(0, 0, &alerts::banner(a));
         } else if let Some(hero) = face::page_hero(page, hr_bpm, rec.as_ref(), tb.as_ref()) {
-            fb.draw_text_2x(0, 0, &hero);
+            // The single-metric glance pages headline their number triple-size
+            // (their face reserves rows 0-2 + puts the label on row 3); every
+            // other hero stays 2x over rows 0-1.
+            if matches!(page, Page::Distance | Page::Pace) {
+                fb.draw_text_3x(0, 0, &hero);
+            } else {
+                fb.draw_text_2x(0, 0, &hero);
+            }
         }
+        // Widget overlays (host-tested in `watch_render`): the render layer
+        // paints into the cells the face leaves blank. A run view gets the
+        // top-edge page-position indicator plus its page's gauge / bars; the
+        // idle status face gets the GPS signal meter instead. Unchanged pixels
+        // dirty nothing, so a resting page still flushes zero lines.
+        if face::run_view(rec.as_ref()) {
+            widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(page));
+            if let Some(snap) = rec.as_ref() {
+                match page {
+                    Page::Pacer => widgets::draw_pacer_overlay(&mut fb, snap),
+                    Page::Fuel => widgets::draw_fuel_overlay(&mut fb, snap),
+                    Page::GearWear => widgets::draw_gear_overlay(&mut fb, snap),
+                    Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
+                    Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
+                    _ => {}
+                }
+            }
+        } else {
+            widgets::draw_idle_signal(
+                &mut fb,
+                latest.as_ref(),
+                uptime_s,
+                face::stale_after_s(mode, false),
+            );
+        }
+
         // The BackToStart page's pixel layer rides on top of the text rows
         // (which reserve the space — see face::NAV_TEXT_COLS): the TrackBack
         // breadcrumb map on the right of rows 3-7, the relative direction
