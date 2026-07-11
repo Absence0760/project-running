@@ -61,6 +61,7 @@ mod imp {
     use watch_core::run_store::{
         ChunkRequest, ManifestHeader, MANIFEST_ENTRY_LEN, MANIFEST_HEADER_LEN,
     };
+    use watch_core::settings::{WatchSettings, MAX_SETTINGS_LEN};
     use watch_core::{flash_store, link};
 
     use crate::run_flash::SharedStore;
@@ -96,6 +97,11 @@ mod imp {
         /// the watch notifies back that byte slice of the run blob.
         #[characteristic(uuid = "d1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write, notify)]
         run_chunk: Vec<u8, FRAME_CAP>,
+        /// Settings push. The phone WRITES a `settings::WatchSettings` frame; the
+        /// watch decodes it and publishes to `state::SETTINGS`, which the record
+        /// task applies to the recorder + alert engine. Write-only — no readback.
+        #[characteristic(uuid = "d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f", write)]
+        settings: Vec<u8, MAX_SETTINGS_LEN>,
     }
 
     #[nrf_softdevice::gatt_server]
@@ -190,6 +196,7 @@ mod imp {
         // persist across reconnects so a fresh connection sees last-known data.
         let mut fix_rx = unwrap!(state::FIX.receiver());
         let mut elev_rx = unwrap!(state::ELEVATION.receiver());
+        let settings_sender = state::SETTINGS.sender();
         let mut latest = None;
         let mut elev = None;
 
@@ -251,6 +258,13 @@ mod imp {
                     LinkServiceEvent::RunChunkCccdWrite { notifications: on } => {
                         debug!("ble: chunk notifications {}", on);
                     }
+                    LinkServiceEvent::SettingsWrite(bytes) => match WatchSettings::decode(&bytes) {
+                        Some(s) => {
+                            info!("ble: settings push ({=usize} B)", bytes.len());
+                            settings_sender.send(Some(s));
+                        }
+                        None => warn!("ble: bad settings frame ({=usize} B)", bytes.len()),
+                    },
                 },
             });
 

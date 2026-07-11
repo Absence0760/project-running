@@ -46,6 +46,7 @@ use watch_core::fix::Fix;
 use watch_core::flash_store::{MAX_POINTS_PER_RUN, SLOT_LEN};
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::run_store::{verify_blob, RunWriter, TrackPoint};
+use watch_core::settings::WatchSettings;
 use watch_core::trackback::Trackback;
 
 use crate::run_flash::SharedStore;
@@ -213,6 +214,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
+    let mut settings_rx = unwrap!(state::SETTINGS.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -244,22 +246,28 @@ pub async fn run(store: &'static SharedStore) {
         alerts.set_fuel_intervals(30, 45);
         info!("record: sim fuel cadence 30s drink / 45s eat (moving time)");
     }
-    // Sim-only demo pacer goal: 1 km at 5:00 (a partner slightly faster than
-    // the ~5:33/km bench_jog fixture), so the Pacer page shows a live BEHIND
-    // readout under the sim. Hardware defaults stay unset — the pacer arms
-    // only via the future settings sync (see watch_core::pacer).
+    // Sim-only demo settings, applied through the SAME path a phone push takes
+    // (`apply_settings`) so the sim exercises the settings-sync apply, not a
+    // separate hardcoded seam: a 1 km / 5:00 pacer goal (a partner slightly
+    // faster than the ~5:33/km bench_jog fixture, so the Pacer page reads a live
+    // BEHIND) and a 700 km / 800 km shoe (a live DUE the run's mileage pushes on).
+    // Hardware stays unset until a real push over the settings characteristic.
     #[cfg(feature = "sim-autostart")]
     {
-        recorder.set_pacer_goal(1_000, 300);
-        info!("record: sim demo pacer goal 1 km in 5:00");
-    }
-    // Sim-only demo gear: a shoe at 700 km of an 800 km target, so the GearWear
-    // page shows a live DUE verdict that the run's mileage pushes further.
-    // Hardware stays unset until a settings sync (see watch_core::gear_wear).
-    #[cfg(feature = "sim-autostart")]
-    {
-        recorder.set_gear(Some(700_000.0), Some(800_000.0));
-        info!("record: sim demo gear 700 km / 800 km target");
+        use watch_core::settings::{GearCfg, PacerGoalCfg};
+        let demo = WatchSettings {
+            pacer: Some(PacerGoalCfg {
+                distance_m: 1_000,
+                time_s: 300,
+            }),
+            gear: Some(GearCfg {
+                baseline_m: 700_000.0,
+                target_m: Some(800_000.0),
+            }),
+            ..WatchSettings::default()
+        };
+        apply_settings(&demo, &mut recorder, &mut alerts);
+        info!("record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km)");
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
@@ -306,6 +314,13 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => Some(s.along_m),
                 NavView::NoCourse | NavView::NoFix => None,
             });
+        }
+
+        // A pushed settings frame (from the ble task; the sim seeds one above)
+        // applies each present field to the recorder + alert engine. Config, not
+        // run data — L4, applied before the event mutates run totals.
+        if let Some(Some(s)) = settings_rx.try_changed() {
+            apply_settings(&s, &mut recorder, &mut alerts);
         }
 
         match event {
@@ -424,6 +439,26 @@ pub async fn run(store: &'static SharedStore) {
 /// Finished are inert, so the 1 Hz tick is dropped in those states.
 fn is_active(state: RecordState) -> bool {
     matches!(state, RecordState::Recording | RecordState::Paused)
+}
+
+/// Apply a pushed settings frame: each present field feeds the recorder's (or
+/// alert engine's) existing settings-sync setter, which keeps its own
+/// plausibility guard, so a bad value is rejected the same way regardless of
+/// transport. Absent fields are left untouched — a partial push is a partial
+/// update, never a reset of the rest.
+fn apply_settings(s: &WatchSettings, recorder: &mut Recorder, alerts: &mut AlertEngine) {
+    if let Some(hr) = s.max_hr {
+        recorder.set_max_hr(hr);
+    }
+    if let Some(p) = s.pacer {
+        recorder.set_pacer_goal(p.distance_m, p.time_s);
+    }
+    if let Some(g) = s.gear {
+        recorder.set_gear(Some(g.baseline_m as f64), g.target_m.map(f64::from));
+    }
+    if let Some(z) = s.zone_ceiling {
+        alerts.set_zone_ceiling(z);
+    }
 }
 
 enum Event {
