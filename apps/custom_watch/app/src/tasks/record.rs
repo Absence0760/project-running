@@ -177,6 +177,35 @@ static SIM_CUTOFFS: [CutoffLeg; 2] = [
     },
 ];
 
+/// Canned roadbook checkpoints for the sim course — start, an aid at 90 m, and
+/// the 180 m finish, with demo arrival times matching the ~3 m/s bench_jog
+/// fixture, so the Roadbook + Fuel pages show a live schedule + carry-to-aid
+/// under the sim. Hardware carries none until a course-push path lands.
+#[cfg(feature = "sim-course")]
+static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
+    watch_core::record::RoadbookCheckpoint {
+        cum_dist_m: 0.0,
+        leg_dist_m: 0.0,
+        projected_elapsed_s: 0,
+        cutoff: None,
+        is_refill: true,
+    },
+    watch_core::record::RoadbookCheckpoint {
+        cum_dist_m: 90.0,
+        leg_dist_m: 90.0,
+        projected_elapsed_s: 30,
+        cutoff: Some(watch_core::roadbook::CutoffStatus::Safe),
+        is_refill: true,
+    },
+    watch_core::record::RoadbookCheckpoint {
+        cum_dist_m: 180.0,
+        leg_dist_m: 90.0,
+        projected_elapsed_s: 60,
+        cutoff: Some(watch_core::roadbook::CutoffStatus::Tight),
+        is_refill: false,
+    },
+];
+
 #[embassy_executor::task]
 pub async fn run(store: &'static SharedStore) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
@@ -224,6 +253,14 @@ pub async fn run(store: &'static SharedStore) {
         recorder.set_pacer_goal(1_000, 300);
         info!("record: sim demo pacer goal 1 km in 5:00");
     }
+    // Sim-only demo gear: a shoe at 700 km of an 800 km target, so the GearWear
+    // page shows a live DUE verdict that the run's mileage pushes further.
+    // Hardware stays unset until a settings sync (see watch_core::gear_wear).
+    #[cfg(feature = "sim-autostart")]
+    {
+        recorder.set_gear(Some(700_000.0), Some(800_000.0));
+        info!("record: sim demo gear 700 km / 800 km target");
+    }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
     // The canned sim course carries cut-off legs so the CutoffEta page shows a
@@ -232,6 +269,8 @@ pub async fn run(store: &'static SharedStore) {
     {
         recorder.set_cutoff_legs(&SIM_CUTOFFS);
         info!("record: sim cutoff legs loaded (90 m/2:00, 170 m/4:00)");
+        recorder.set_roadbook(&SIM_ROADBOOK);
+        info!("record: sim roadbook loaded (start / aid 90 m / finish 180 m)");
     }
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
