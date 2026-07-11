@@ -1026,6 +1026,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 widget.preferences.setThemeMode(mode);
               },
             ),
+            SwitchListTile(
+              title: Text(l10n.prefsShowCalories),
+              subtitle: Text(l10n.prefsShowCaloriesHint),
+              value: _bagValue<bool>(SettingsKeys.showCalories) ?? true,
+              onChanged: _bagReady
+                  ? (v) => _putUniversal(SettingsKeys.showCalories, v)
+                  : null,
+            ),
 
             _sectionLabel(l10n.prefsSectionActivityRecording),
             ListTile(

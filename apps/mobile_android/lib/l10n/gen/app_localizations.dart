@@ -10663,6 +10663,18 @@ abstract class AppLocalizations {
   /// **'Draw the unsnapped recorded line on the run map, even when a cleaned-up matched track exists'**
   String get prefsShowRawTrackSubtitle;
 
+  /// Toggle title for showing the calorie estimate on run detail
+  ///
+  /// In en, this message translates to:
+  /// **'Show calorie estimates'**
+  String get prefsShowCalories;
+
+  /// Subtitle of the show-calories toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated from distance and body weight (a 70 kg default when unset). Turn off to hide the calorie figure on run pages.'**
+  String get prefsShowCaloriesHint;
+
   /// Tile title for the default run privacy
   ///
   /// In en, this message translates to:

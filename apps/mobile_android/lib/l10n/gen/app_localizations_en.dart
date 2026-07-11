@@ -6411,6 +6411,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Draw the unsnapped recorded line on the run map, even when a cleaned-up matched track exists';
 
   @override
+  String get prefsShowCalories => 'Show calorie estimates';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      'Estimated from distance and body weight (a 70 kg default when unset). Turn off to hide the calorie figure on run pages.';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Default run privacy';
 
   @override

@@ -84,7 +84,7 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 
 - [ ] **Mobile mirror: session-derived Log-as-workout prefill on event detail** — web's event-detail Log-as-workout now seeds the gym composer from `workoutDraftFromSession` when the class carries a `session_plan_id` (2026-07-06); mobile's `event_detail_screen._logAsWorkout` still passes only the flat `workoutDraftFromTemplate` title (it never fetches the attached session plan). Mirror by loading the plan + expanding + passing `seedSets` to `showGymComposeSheet`. The Dart helper already exists (`workoutDraftFromSession` in `event_gym_template.dart`).
 
-- [ ] **Mobile mirror: honour `show_calories` on run detail** — web's run-detail calorie cell is now gated on the universal `show_calories` pref (default on, Settings → Preferences → Units & Display, 2026-07-06); mobile's `run_detail_screen` calorie tile ignores it and mobile Preferences has no toggle. Read the pref via `SettingsSyncService.effective` + add the toggle row.
+- [x] **Mobile mirror: honour `show_calories` on run detail** — done 2026-07-11. `run_detail_screen`'s calorie tile now gates on `SettingsSyncService.service.effective<bool>('show_calories') != false` (default on), and Settings → Preferences → Units & Display carries a "Show calorie estimates" `SwitchListTile` writing the universal bag via `_putUniversal`. `SettingsKeys.showCalories` registered; ARB keys `prefsShowCalories`/`prefsShowCaloriesHint` in all six locales; widget tests in `run_detail_screen_test.dart` (tile hidden when false / shown by default) + `settings_show_calories_test.dart` (toggle write path); mirrored to the iOS twin.
 
 ## Testing gaps
 
