@@ -10,8 +10,10 @@
 //! Sentences carried: RMC (validity + position + speed + course), GGA
 //! (fix quality + satellite count + altitude), GSV (satellites in view,
 //! for an honest signal meter), GSA (fix mode + DOP), GLL (position +
-//! validity), and VTG (course + speed over ground). Everything else returns
-//! `Sentence::Other` so callers can count-but-ignore it.
+//! validity), VTG (course + speed over ground), ZDA (authoritative UTC
+//! date + time) and GST (position-error stats, for an honest
+//! horizontal-accuracy figure). Everything else returns `Sentence::Other`
+//! so callers can count-but-ignore it.
 
 #![no_std]
 
@@ -44,6 +46,25 @@ pub struct GgaData {
     pub alt_m: Option<f32>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ZdaData {
+    pub time: Option<TimeOfDay>,
+    pub day: Option<u8>,
+    pub month: Option<u8>,
+    pub year: Option<u16>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GstData {
+    pub time: Option<TimeOfDay>,
+    /// Standard deviation of the latitude error, in metres (1-sigma).
+    pub std_lat_m: Option<f32>,
+    /// Standard deviation of the longitude error, in metres (1-sigma).
+    pub std_lon_m: Option<f32>,
+    /// Standard deviation of the altitude error, in metres (1-sigma).
+    pub std_alt_m: Option<f32>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Sentence {
     Rmc(RmcData),
@@ -72,7 +93,11 @@ pub enum Sentence {
         course_deg: Option<f32>,
         speed_mps: Option<f32>,
     },
-    /// Valid checksum, but a type we don't decode (ZDA, GST, ...).
+    /// Authoritative UTC date + time, reported by ZDA.
+    Zda(ZdaData),
+    /// Position-error statistics (per-axis 1-sigma), reported by GST.
+    Gst(GstData),
+    /// Valid checksum, but a sentence type we don't decode.
     Other,
 }
 
@@ -158,6 +183,8 @@ fn parse_sentence(body: &[u8]) -> Option<Sentence> {
         b"GSA" => parse_gsa(&mut fields),
         b"GLL" => parse_gll(&mut fields),
         b"VTG" => parse_vtg(&mut fields),
+        b"ZDA" => parse_zda(&mut fields).map(Sentence::Zda),
+        b"GST" => parse_gst(&mut fields).map(Sentence::Gst),
         _ => Some(Sentence::Other),
     }
 }
@@ -256,6 +283,45 @@ fn parse_vtg(f: &mut Fields) -> Option<Sentence> {
     Some(Sentence::Vtg {
         course_deg,
         speed_mps,
+    })
+}
+
+/// ZDA: `<time>,<day>,<month>,<year>,<zone_hr>,<zone_min>`. The local-zone
+/// offset fields are ignored — the watch stamps runs in UTC. Empty date
+/// fields report `None` like GGA's optional altitude; a sentence truncated
+/// before the year drops rather than reporting a partial date.
+fn parse_zda(f: &mut Fields) -> Option<ZdaData> {
+    let time = parse_time(f.next()?);
+    let day = parse_u32(f.next()?).map(|v| v as u8);
+    let month = parse_u32(f.next()?).map(|v| v as u8);
+    let year = parse_u32(f.next()?).map(|v| v as u16);
+    Some(ZdaData {
+        time,
+        day,
+        month,
+        year,
+    })
+}
+
+/// GST: `<time>,<rms>,<semi_major>,<semi_minor>,<orientation>,<std_lat>,
+/// <std_lon>,<std_alt>`. Only the per-axis 1-sigma metres are carried — the
+/// error-ellipse fields (rms + semi-axes + orientation) are read past by
+/// position. Empty stat fields report `None`; a sentence truncated before
+/// the altitude sigma drops.
+fn parse_gst(f: &mut Fields) -> Option<GstData> {
+    let time = parse_time(f.next()?);
+    let _rms = f.next()?;
+    let _semi_major = f.next()?;
+    let _semi_minor = f.next()?;
+    let _orientation = f.next()?;
+    let std_lat_m = parse_f32(f.next()?);
+    let std_lon_m = parse_f32(f.next()?);
+    let std_alt_m = parse_f32(f.next()?);
+    Some(GstData {
+        time,
+        std_lat_m,
+        std_lon_m,
+        std_alt_m,
     })
 }
 

@@ -246,6 +246,8 @@ fn whole_fixture_file_parses() {
             Sentence::Gsa { .. } => {}
             Sentence::Gll { .. } => {}
             Sentence::Vtg { .. } => {}
+            Sentence::Zda(_) => {}
+            Sentence::Gst(_) => {}
             Sentence::Other => other += 1,
         }
     }
@@ -331,4 +333,111 @@ fn vtg_empty_course_and_speed_reports_none() {
     };
     assert_eq!(course_deg, None);
     assert_eq!(speed_mps, None);
+}
+
+fn checksummed(body: &str) -> String {
+    let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+    format!("${}*{:02X}\r\n", body, cksum)
+}
+
+#[test]
+fn parses_zda() {
+    let Some(Sentence::Zda(zda)) = parse_one(&checksummed("GPZDA,073000.00,08,07,2026,00,00"))
+    else {
+        panic!("expected ZDA");
+    };
+    assert_eq!(zda.time, Some(7 * 3600 + 30 * 60));
+    assert_eq!(zda.day, Some(8));
+    assert_eq!(zda.month, Some(7));
+    assert_eq!(zda.year, Some(2026));
+}
+
+#[test]
+fn gn_talker_zda_parses_like_gp() {
+    // Multi-GNSS mode emits GN talkers; the date decodes the same.
+    let Some(Sentence::Zda(zda)) = parse_one(&checksummed("GNZDA,073000.00,08,07,2026,00,00"))
+    else {
+        panic!("expected ZDA");
+    };
+    assert_eq!(zda.day, Some(8));
+    assert_eq!(zda.year, Some(2026));
+}
+
+#[test]
+fn zda_bad_checksum_dropped() {
+    let zda = checksummed("GPZDA,073000.00,08,07,2026,00,00");
+    let corrupt = zda.replace("2026", "2027");
+    assert_eq!(parse_one(&corrupt), None);
+}
+
+#[test]
+fn zda_empty_date_fields_report_none() {
+    // Cold start before a time fix: every date field empty.
+    let Some(Sentence::Zda(zda)) = parse_one(&checksummed("GPZDA,,,,,,")) else {
+        panic!("expected ZDA");
+    };
+    assert_eq!(zda.time, None);
+    assert_eq!(zda.day, None);
+    assert_eq!(zda.month, None);
+    assert_eq!(zda.year, None);
+}
+
+#[test]
+fn zda_truncated_field_count_dropped() {
+    // Missing the year field entirely: drop, don't report a partial date.
+    assert_eq!(parse_one(&checksummed("GPZDA,073000.00,08,07")), None);
+}
+
+#[test]
+fn parses_gst() {
+    let Some(Sentence::Gst(gst)) =
+        parse_one(&checksummed("GPGST,073000.00,1.2,3.4,2.1,45.0,2.5,3.1,4.8"))
+    else {
+        panic!("expected GST");
+    };
+    assert_eq!(gst.time, Some(7 * 3600 + 30 * 60));
+    assert!((gst.std_lat_m.unwrap() - 2.5).abs() < 1e-4);
+    assert!((gst.std_lon_m.unwrap() - 3.1).abs() < 1e-4);
+    assert!((gst.std_alt_m.unwrap() - 4.8).abs() < 1e-4);
+}
+
+#[test]
+fn gl_talker_gst_parses_like_gp() {
+    // GLONASS constellation emits GL talkers; the stats decode the same.
+    let Some(Sentence::Gst(gst)) =
+        parse_one(&checksummed("GLGST,073000.00,1.2,3.4,2.1,45.0,2.5,3.1,4.8"))
+    else {
+        panic!("expected GST");
+    };
+    assert!((gst.std_lat_m.unwrap() - 2.5).abs() < 1e-4);
+    assert!((gst.std_lon_m.unwrap() - 3.1).abs() < 1e-4);
+}
+
+#[test]
+fn gst_bad_checksum_dropped() {
+    let gst = checksummed("GPGST,073000.00,1.2,3.4,2.1,45.0,2.5,3.1,4.8");
+    let corrupt = gst.replace("2.5", "9.5");
+    assert_eq!(parse_one(&corrupt), None);
+}
+
+#[test]
+fn gst_empty_std_fields_report_none() {
+    // Ellipse present but per-axis sigmas empty: report None, not a false 0.
+    let Some(Sentence::Gst(gst)) = parse_one(&checksummed("GPGST,073000.00,1.2,3.4,2.1,45.0,,,"))
+    else {
+        panic!("expected GST");
+    };
+    assert_eq!(gst.time, Some(7 * 3600 + 30 * 60));
+    assert_eq!(gst.std_lat_m, None);
+    assert_eq!(gst.std_lon_m, None);
+    assert_eq!(gst.std_alt_m, None);
+}
+
+#[test]
+fn gst_truncated_field_count_dropped() {
+    // Missing the longitude + altitude sigma fields entirely: drop.
+    assert_eq!(
+        parse_one(&checksummed("GPGST,073000.00,1.2,3.4,2.1,45.0,2.5")),
+        None
+    );
 }
