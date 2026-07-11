@@ -370,7 +370,7 @@ test.describe('structured workout execution → plan progress journey', () => {
 			// (25.4 km), not the planned target (24 km) —
 			// longestCompletedLongRunMetres prefers actualById from
 			// recentRuns. The km-preferring seed user formats it as "25.4 km".
-			const longest = page.locator('.longest-long .longest-value');
+			const longest = page.locator('.stat-chip[title="Longest long run"] .stat-value');
 			await expect(longest).toBeVisible({ timeout: 10_000 });
 			await expect(longest).toContainText(/25\.4/);
 		});

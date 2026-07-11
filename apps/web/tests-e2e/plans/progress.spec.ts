@@ -16,7 +16,7 @@ import { USER_A } from '../fixtures/users';
 test.describe('/plans/[id] progress header', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('phase marker highlights the current phase + longest long run shows', async ({ page }) => {
+	test('phase marker highlights the current phase + longest long run + distance banked show', async ({ page }) => {
 		const admin = getAdminClient();
 		const planId = crypto.randomUUID();
 		const week0Id = crypto.randomUUID();
@@ -62,8 +62,15 @@ test.describe('/plans/[id] progress header', () => {
 			await expect(page.locator('.phase-marker .phase-step.active')).toHaveText(/Base/);
 
 			// Longest long run stat renders the 24 km figure.
-			await expect(page.locator('.longest-long .longest-value')).toBeVisible();
-			await expect(page.locator('.longest-long .longest-value')).toHaveText(/24/);
+			const longestValue = page.locator('.stat-chip[title="Longest long run"] .stat-value');
+			await expect(longestValue).toBeVisible();
+			await expect(longestValue).toHaveText(/24/);
+
+			// Distance-banked stat: the one completed 24 km long run is both
+			// the banked total and the whole planned distance (24 of 24).
+			const bankedValue = page.locator('.stat-chip[title="Distance banked"] .stat-value');
+			await expect(bankedValue).toBeVisible();
+			await expect(bankedValue).toHaveText(/24.*24/);
 		} finally {
 			await admin.from('training_plans').delete().eq('id', planId);
 		}
