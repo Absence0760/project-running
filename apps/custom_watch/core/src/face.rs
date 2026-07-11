@@ -2009,9 +2009,13 @@ fn status_face(
     let mut rows: [Row; ROWS] = Default::default();
 
     let _ = write!(rows[0], "THREKIR");
+    // "EST" marks the battery figure as an unmeasured estimate, not a
+    // guaranteed runtime — the tier-1 bench can't measure power at all, so the
+    // number is a tier-2 projection derived in `gnss_mode`. Reading it as a spec
+    // ("~220H") would over-promise; "EST 220H" is honest at a glance.
     let _ = write!(
         rows[1],
-        "MODE {:<5}~{}H",
+        "MODE {:<5}EST {}H",
         mode.label(),
         mode.battery_est_h()
     );
@@ -2498,7 +2502,7 @@ mod tests {
         // Title row is static (no ticking uptime) so the idle screen doesn't
         // force a per-second wake; time of day still shows on the UTC row.
         assert_eq!(rows[0].as_str(), "THREKIR");
-        assert_eq!(rows[1].as_str(), "MODE PERF ~110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
         assert_eq!(rows[4].as_str(), "LON   -105.27050");
@@ -3414,7 +3418,7 @@ mod tests {
             42,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
-        assert_eq!(rows[1].as_str(), "MODE PERF ~110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
     }
 
     #[test]
@@ -3422,9 +3426,9 @@ mod tests {
         // The BTN3 mode picker's read-out: the tag plus the (projection-marked)
         // battery figure, one per mode, in the fixed row-1 slot.
         for (mode, expected) in [
-            (GnssMode::Performance, "MODE PERF ~110H"),
-            (GnssMode::Balanced, "MODE BAL  ~180H"),
-            (GnssMode::Expedition, "MODE EXP  ~220H"),
+            (GnssMode::Performance, "MODE PERF EST 110H"),
+            (GnssMode::Balanced, "MODE BAL  EST 180H"),
+            (GnssMode::Expedition, "MODE EXP  EST 220H"),
         ] {
             let rows = super::face_rows(Some(&fix()), None, None, None, 42, mode);
             assert_eq!(rows[1].as_str(), expected);
