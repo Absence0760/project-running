@@ -36,6 +36,13 @@
 //!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
 //! - [`page`] — which run-view screen shows + the page-button cycle order
+//! - [`statusbar`] — the idle-face GPS signal-strength bars + the run-view
+//!   page-position dot indicator (pure 0..=4 / active-of-total counts; the
+//!   face draws the pixels)
+//! - [`gauge`] — reduce pacer / gear / fuel / HR-zone metrics to normalised
+//!   bar-fill fractions the face draws as visual gauges
+//! - [`bar_chart`] — scale a distribution (zone times, pace buckets) into
+//!   bottom-aligned bar rectangles for a mini chart
 //! - [`link`] — phone-link status frames (sim transport today, BLE GATT
 //!   characteristic payload at step 6)
 //! - [`pacer`] — even-pace target-time virtual partner (ahead/behind vs a
@@ -101,6 +108,7 @@
 pub mod age_grade;
 pub mod alerts;
 pub mod badges;
+pub mod bar_chart;
 pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
@@ -115,6 +123,7 @@ pub mod fitness;
 pub mod fix;
 pub mod flash_store;
 pub mod fuel_plan;
+pub mod gauge;
 pub mod gear_wear;
 pub mod gnss_mode;
 pub mod grade_adjusted_pace;
@@ -134,6 +143,7 @@ pub mod roadbook;
 pub mod route_description;
 pub mod route_markers;
 pub mod run_store;
+pub mod statusbar;
 pub mod trackback;
 pub mod training_load;
 pub mod training_paces;
