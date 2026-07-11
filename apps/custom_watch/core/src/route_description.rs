@@ -337,7 +337,7 @@ mod tests {
             lat: 51.5,
             lng: -0.12 + 0.0007,
         };
-        assert!(LOOP_CLOSE_M >= 75.0);
+        const _: () = assert!(LOOP_CLOSE_M >= 75.0);
         let input = RouteDescriptionInput {
             distance_m: 5000.0,
             elevation_m: Some(0.0),
