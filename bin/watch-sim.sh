@@ -19,10 +19,16 @@
 #   bin/watch-sim.sh                      # build + simulate the default binary
 #   bin/watch-sim.sh --gui                # also open the live watch-screen window
 #   bin/watch-sim.sh --bin sensor_smoke   # simulate a specific binary
-#   bin/watch-sim.sh --nmea path/to.nmea  # substitute the GPS fixture
+#   bin/watch-sim.sh --fixture mountain_loop  # a named fixture from sim/nmea/
+#   bin/watch-sim.sh --nmea path/to.nmea  # substitute the GPS fixture (full path)
 #   bin/watch-sim.sh --no-autostart       # boot idle; BTN1 starts the run, so the
 #                                         # idle face (BTN3 GNSS-mode cycling) is
 #                                         # reachable before recording begins
+#
+# The default GPS fixture is sim/nmea/bench_jog.nmea. Select another named
+# fixture from sim/nmea/ with --fixture <name> (or the NMEA_FIXTURE env var);
+# --nmea <full-path> still overrides with an arbitrary file. bench_jog stays
+# the default when none is given.
 #
 # Requires: renode (workstation CLAUDE.md § Specific tool decisions) and
 # defmt-print (cargo install defmt-print --locked). No board, no probe-rs.
@@ -33,6 +39,9 @@ set -euo pipefail
 WORKSPACE="$REPO_ROOT/apps/custom_watch"
 BIN=app
 NMEA_FILE="$WORKSPACE/sim/nmea/bench_jog.nmea"
+# NMEA_FIXTURE selects a named fixture from sim/nmea/<name>.nmea (default:
+# bench_jog). --fixture overrides it; --nmea overrides both with a full path.
+[[ -n "${NMEA_FIXTURE:-}" ]] && NMEA_FILE="$WORKSPACE/sim/nmea/${NMEA_FIXTURE}.nmea"
 GUI=0
 PHONE_PORT=7788
 AUTOSTART=1
@@ -41,10 +50,11 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--gui)          GUI=1; shift ;;
 		--bin)          BIN="${2:?--bin needs a value}"; shift 2 ;;
+		--fixture)      NMEA_FILE="$WORKSPACE/sim/nmea/${2:?--fixture needs a value}.nmea"; shift 2 ;;
 		--nmea)         NMEA_FILE="${2:?--nmea needs a value}"; shift 2 ;;
 		--phone-port)   PHONE_PORT="${2:?--phone-port needs a value}"; shift 2 ;;
 		--no-autostart) AUTOSTART=0; shift ;;
-		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --nmea <file>, --phone-port <port>, --no-autostart)" ;;
+		*) fatal "unknown argument: $1 (supported: --gui, --bin <name>, --fixture <name>, --nmea <file>, --phone-port <port>, --no-autostart)" ;;
 	esac
 done
 
