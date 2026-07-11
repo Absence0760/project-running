@@ -615,6 +615,82 @@ mod tests {
     }
 
     #[test]
+    fn buffer_exactly_full_then_one_more_thins_without_panic() {
+        let mut tb = Trackback::new();
+        // 25 m hops (> the 20 m spacing) so every hop is kept: origin + 95 hops
+        // fills the buffer to exactly BREADCRUMB_CAP.
+        for i in 0..=95u32 {
+            tb.on_point(LAT0, LON0 + i as f64 * 25.0 * lon_per_m(), i);
+        }
+        assert_eq!(tb.view().len, BREADCRUMB_CAP, "buffer exactly full");
+        // The next qualifying point must thin in place, not index past the end.
+        tb.on_point(LAT0, LON0 + 96.0 * 25.0 * lon_per_m(), 96);
+        let v = tb.view();
+        assert!(v.len <= BREADCRUMB_CAP);
+        assert!(
+            v.len > BREADCRUMB_CAP / 2,
+            "still densely populated after one thin"
+        );
+        assert_eq!(v.points[0], (0.0, 0.0), "the start survives thinning");
+        let (last_e, _) = v.points[v.len - 1];
+        assert!(last_e > 2_300.0, "tail still reaches the runner: {last_e}");
+    }
+
+    #[test]
+    fn returning_to_the_exact_start_blanks_the_bearing() {
+        let mut tb = Trackback::new();
+        tb.on_point(LAT0, LON0, 0);
+        tb.on_point(LAT0, LON0 + 100.0 * lon_per_m(), 1);
+        assert!(
+            tb.view().bearing_to_start_deg.is_some(),
+            "100 m out: a bearing"
+        );
+        // Jump back onto the exact start: zero displacement, no meaningful bearing.
+        tb.on_point(LAT0, LON0, 2);
+        let v = tb.view();
+        assert_eq!(v.distance_to_start_m, 0.0);
+        assert!(
+            v.bearing_to_start_deg.is_none(),
+            "on the start the bearing is unstable: blank it"
+        );
+        assert!(v.bearing_sector().is_none());
+    }
+
+    #[test]
+    fn heading_gate_holds_just_under_five_metres_and_releases_just_over() {
+        // A hair under the 5 m separation gate: a real but tiny hop never
+        // manufactures a heading out of GPS noise.
+        let mut under = Trackback::new();
+        under.on_point(LAT0, LON0, 0);
+        under.on_point(LAT0, LON0 + 4.9 * lon_per_m(), 1);
+        assert!(under.view().heading_deg.is_none());
+
+        // Just over the gate: the same single hop now yields a heading.
+        let mut over = Trackback::new();
+        over.on_point(LAT0, LON0, 0);
+        over.on_point(LAT0, LON0 + 5.1 * lon_per_m(), 1);
+        let hdg = over.view().heading_deg.expect("5.1 m clears the gate");
+        assert!((hdg - 90.0).abs() < 1.0, "heading {hdg}");
+    }
+
+    #[test]
+    fn bearing_to_start_wraps_cleanly_through_north() {
+        // Runner due south of the start: the start is due north, so the bearing
+        // is ~0 and the (atan2 + 360) % 360 wrap must land in [0, 360), never
+        // 360 or a negative angle.
+        let mut tb = Trackback::new();
+        tb.on_point(LAT0, LON0, 0);
+        tb.on_point(LAT0 - 100.0 * lat_per_m(), LON0, 1);
+        let brg = tb.view().bearing_to_start_deg.unwrap();
+        assert!((0.0..360.0).contains(&brg), "bearing in range: {brg}");
+        assert!(
+            !(1.0..=359.0).contains(&brg),
+            "start due north of the runner: {brg}"
+        );
+        assert_eq!(tb.view().bearing_sector(), Some(0), "sector N");
+    }
+
+    #[test]
     fn sector_quantisation_boundaries() {
         assert_eq!(sector_of_deg(0.0), 0);
         assert_eq!(sector_of_deg(11.2), 0);
