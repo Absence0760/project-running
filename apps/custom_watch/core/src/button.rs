@@ -78,6 +78,72 @@ pub fn btn3_action(state: RecordState) -> Btn3Action {
     }
 }
 
+/// How long an armed stop stays armed. A first BTN2 press only *arms* the stop;
+/// a second press within this window confirms it. A single stray press expires
+/// harmlessly after this many seconds.
+pub const STOP_CONFIRM_WINDOW_S: u32 = 4;
+
+/// The outcome of feeding a BTN2 press to the [`StopGuard`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum StopPress {
+    /// The press armed the guard — nothing stops yet. The runner must press
+    /// BTN2 again within [`STOP_CONFIRM_WINDOW_S`] to actually stop.
+    Armed,
+    /// A second press inside the confirm window — the run should stop now.
+    Confirmed,
+    /// BTN2 is a no-op in this state (idle / finished); the guard is disarmed.
+    Inert,
+}
+
+/// Guards the terminal `Stop` behind a deliberate double-press so one cold or
+/// gloved mis-press can't end a multi-hour recording.
+///
+/// `Stop` is irreversible — a finished run parks every button and cannot resume
+/// ([`command_for`] is inert once `Finished`). So rather than let a single BTN2
+/// press stop, the first press *arms* the guard (a no-op the runner sees didn't
+/// stop) and only a second press within [`STOP_CONFIRM_WINDOW_S`] confirms it.
+/// A single accidental brush expires on its own. This is the lowest-friction
+/// guard that stays inside the five-button, no-chord budget (decisions §81) —
+/// no long-hold timing, no chord, no extra button — and it never touches the
+/// recorder until the runner confirms, so the run data is preserved exactly as
+/// before.
+///
+/// The state lives here (host-tested) rather than in the app's button task; the
+/// task supplies only the current [`RecordState`] and a monotonic `now_s`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StopGuard {
+    armed_at_s: Option<u32>,
+}
+
+impl StopGuard {
+    pub const fn new() -> Self {
+        Self { armed_at_s: None }
+    }
+
+    /// Feed a BTN2 press. `state` is the latest published recorder state and
+    /// `now_s` a monotonic seconds counter (the app passes uptime seconds).
+    pub fn press(&mut self, state: RecordState, now_s: u32) -> StopPress {
+        // BTN2 does nothing unless a run is in progress; a press in any other
+        // state disarms so a later run can't inherit a stale arm.
+        if command_for(Button::Stop, state).is_none() {
+            self.armed_at_s = None;
+            return StopPress::Inert;
+        }
+        match self.armed_at_s {
+            Some(armed) if now_s.saturating_sub(armed) <= STOP_CONFIRM_WINDOW_S => {
+                self.armed_at_s = None;
+                StopPress::Confirmed
+            }
+            // First press, or a press after the window lapsed — (re)arm.
+            _ => {
+                self.armed_at_s = Some(now_s);
+                StopPress::Armed
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +207,55 @@ mod tests {
         assert_eq!(command_for(Button::Primary, RecordState::Finished), None);
         assert_eq!(command_for(Button::Stop, RecordState::Finished), None);
         assert_eq!(command_for(Button::Lap, RecordState::Finished), None);
+    }
+
+    #[test]
+    fn stop_needs_two_presses_within_the_window() {
+        let mut g = StopGuard::new();
+        // First press only arms — the run is untouched.
+        assert_eq!(g.press(RecordState::Recording, 0), StopPress::Armed);
+        // A second press inside the window confirms.
+        assert_eq!(g.press(RecordState::Recording, 2), StopPress::Confirmed);
+        // After a confirm the guard is disarmed again — the next press re-arms.
+        assert_eq!(g.press(RecordState::Recording, 3), StopPress::Armed);
+    }
+
+    #[test]
+    fn a_single_stray_press_expires_without_stopping() {
+        let mut g = StopGuard::new();
+        assert_eq!(g.press(RecordState::Recording, 0), StopPress::Armed);
+        // A second press only past the window re-arms rather than confirming —
+        // the stray first press never stopped the run.
+        assert_eq!(
+            g.press(RecordState::Recording, STOP_CONFIRM_WINDOW_S + 1),
+            StopPress::Armed
+        );
+        // Confirming still needs a further prompt press inside the window.
+        assert_eq!(
+            g.press(RecordState::Recording, STOP_CONFIRM_WINDOW_S + 2),
+            StopPress::Confirmed
+        );
+    }
+
+    #[test]
+    fn confirm_works_from_paused_and_across_pause() {
+        let mut g = StopGuard::new();
+        // Arming while recording then confirming while paused is a valid stop —
+        // command_for allows Stop from both.
+        assert_eq!(g.press(RecordState::Recording, 0), StopPress::Armed);
+        assert_eq!(g.press(RecordState::Paused, 1), StopPress::Confirmed);
+    }
+
+    #[test]
+    fn press_is_inert_and_disarms_when_no_run_is_in_progress() {
+        let mut g = StopGuard::new();
+        assert_eq!(g.press(RecordState::Idle, 0), StopPress::Inert);
+        assert_eq!(g.press(RecordState::Finished, 0), StopPress::Inert);
+        // An arm that is followed by the run finishing must not survive: the
+        // Inert branch clears it, so a later run starts unarmed.
+        assert_eq!(g.press(RecordState::Recording, 1), StopPress::Armed);
+        assert_eq!(g.press(RecordState::Finished, 2), StopPress::Inert);
+        assert_eq!(g.press(RecordState::Recording, 3), StopPress::Armed);
     }
 
     // Driving the emitted commands through a real Recorder proves the mapping

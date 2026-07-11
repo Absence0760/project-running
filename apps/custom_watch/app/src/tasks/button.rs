@@ -24,7 +24,10 @@ use defmt::*;
 use embassy_futures::select::{select4, Either4};
 use embassy_nrf::gpio::Input;
 use embassy_time::{Duration, Instant, Timer};
-use watch_core::button::{btn3_action, command_for, Btn3Action, Button};
+use watch_core::button::{
+    btn3_action, command_for, Btn3Action, Button, RecordCommand, StopGuard, StopPress,
+    STOP_CONFIRM_WINDOW_S,
+};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::page::Page;
 use watch_core::record::RecordState;
@@ -51,6 +54,7 @@ pub async fn run(
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
     let mut mode = GnssMode::default();
+    let mut stop_guard = StopGuard::new();
     info!("button: BTN1 start/pause, BTN2 stop, BTN3 page/mode, BTN4 lap");
     loop {
         // Wait for whichever button is pressed first (falling edge = press).
@@ -111,7 +115,8 @@ pub async fn run(
         }
         // A confirmed press is an interaction, whether or not it maps to a
         // command in the current state — it wakes the face's animation window.
-        interaction_tx.send(Instant::now().as_secs() as u32);
+        let now_s = Instant::now().as_secs() as u32;
+        interaction_tx.send(now_s);
 
         // The toggle keys off the latest published run state. `try_get` never
         // waits: before the first snapshot the run is idle, which is correct.
@@ -119,9 +124,32 @@ pub async fn run(
             .try_get()
             .map(|snap| snap.state)
             .unwrap_or(RecordState::Idle);
-        if let Some(cmd) = command_for(button, state) {
-            info!("button: {} -> {}", button, cmd);
-            state::RECORD_CMD.send(cmd).await;
+        dispatch(button, state, now_s, &mut stop_guard).await;
+    }
+}
+
+/// Turn a confirmed press into a recording command, gating the terminal `Stop`
+/// behind the host-tested [`StopGuard`] double-press so a single cold/gloved
+/// mis-press can't end a multi-hour recording. Shared by the hardware and sim
+/// button tasks.
+async fn dispatch(button: Button, state: RecordState, now_s: u32, stop_guard: &mut StopGuard) {
+    match button {
+        Button::Stop => match stop_guard.press(state, now_s) {
+            StopPress::Confirmed => {
+                info!("button: BTN2 -> stop (confirmed)");
+                state::RECORD_CMD.send(RecordCommand::Stop).await;
+            }
+            StopPress::Armed => info!(
+                "button: BTN2 armed — press again within {=u32}s to stop",
+                STOP_CONFIRM_WINDOW_S
+            ),
+            StopPress::Inert => {}
+        },
+        _ => {
+            if let Some(cmd) = command_for(button, state) {
+                info!("button: {} -> {}", button, cmd);
+                state::RECORD_CMD.send(cmd).await;
+            }
         }
     }
 }
@@ -160,6 +188,7 @@ pub async fn run(
     let interaction_tx = state::INTERACTION.sender();
     let mut page = Page::default();
     let mut mode = GnssMode::default();
+    let mut stop_guard = StopGuard::new();
 
     // Active-low: pressed pulls the line low. Track the previous level per
     // button so a release→press transition (high→low) fires exactly once.
@@ -183,7 +212,8 @@ pub async fn run(
             }
             // A press is an interaction whether or not it issues a command —
             // it wakes the face's animation window, same as the hardware task.
-            interaction_tx.send(Instant::now().as_secs() as u32);
+            let now_s = Instant::now().as_secs() as u32;
+            interaction_tx.send(now_s);
             let state = record_rx
                 .try_get()
                 .map(|snap| snap.state)
@@ -216,10 +246,7 @@ pub async fn run(
                 1 => Button::Stop,
                 _ => Button::Lap,
             };
-            if let Some(cmd) = command_for(button, state) {
-                info!("button: {} -> {}", button, cmd);
-                state::RECORD_CMD.send(cmd).await;
-            }
+            dispatch(button, state, now_s, &mut stop_guard).await;
         }
     }
 }
