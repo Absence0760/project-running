@@ -6496,6 +6496,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Affiche la ligne enregistrée non ajustée sur la carte de course, même lorsqu\'un tracé corrigé existe';
 
   @override
+  String get prefsShowCalories => 'Afficher les estimations de calories';
+
+  @override
+  String get prefsShowCaloriesHint =>
+      'Estimées à partir de la distance et du poids corporel (70 kg par défaut si non renseigné). Désactivez pour masquer les calories sur les pages de course.';
+
+  @override
   String get prefsDefaultRunPrivacy => 'Confidentialité par défaut des courses';
 
   @override
