@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import { m } from '$lib/i18n/store.svelte';
 	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
+	import { parseWeightToKg, roundWeight, type WeightUnit } from '$lib/format/weight';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -52,7 +53,17 @@
 	// discoverable. Weight isn't Art 9, so it persists regardless.
 	let gender = $state<'male' | 'female' | 'nonbinary' | ''>('');
 	let dateOfBirth = $state('');
-	let bodyWeightKg = $state('');
+	// Body weight is entered in the unit implied by the distance choice in
+	// step 2: a runner who picked miles (US/GB/LR/MM) thinks of their weight
+	// in pounds, so asking for kg there both reads wrong beside an otherwise
+	// imperial session and risks a lbs value being silently stored as kg —
+	// which then inflates the TDEE / hydration math that consumes
+	// body_weight_kg. Storage stays canonical kg; this only changes display +
+	// parsing, exactly like preferred_unit for distance.
+	let bodyWeight = $state('');
+	const weightUnit = $derived<WeightUnit>(preferredUnit === 'mi' ? 'lbs' : 'kg');
+	const weightMin = $derived(weightUnit === 'lbs' ? 44 : 20);
+	const weightMax = $derived(weightUnit === 'lbs' ? 550 : 250);
 	let healthDataConsent = $state(false);
 
 	// ── Step 5: privacy default ───────────────────────────────
@@ -191,13 +202,14 @@
 			// 1. Universal prefs bag (units + goal + weight + privacy).
 			const bagChanges: Record<string, unknown> = {
 				preferred_unit: preferredUnit,
+				weight_unit: weightUnit,
 				privacy_default: privacyDefault,
 			};
 			if (primaryGoal) bagChanges[PRIMARY_GOAL_KEY] = primaryGoal;
-			if (bodyWeightKg) {
-				const w = parseFloat(bodyWeightKg);
-				if (Number.isFinite(w) && w > 0) bagChanges.body_weight_kg = w;
-			}
+			// The typed value is in the display unit (kg or lbs); store canonical
+			// kg. parseWeightToKg rejects empty / non-numeric / negative input.
+			const weightKg = parseWeightToKg(bodyWeight, weightUnit);
+			if (weightKg != null && weightKg > 0) bagChanges.body_weight_kg = roundWeight(weightKg);
 			// DOB mirrors into the prefs bag only under health consent —
 			// the bag copy feeds the coach/leaderboard read paths, which
 			// are Art 9 surfaces. The minor-exclusion floor reads the
@@ -374,8 +386,8 @@
 					</span>
 				</label>
 				<label class="field">
-					<span class="label-text">{m('onboarding.weightLabel')}</span>
-					<input type="number" inputmode="decimal" min="20" max="250" step="0.1" bind:value={bodyWeightKg} placeholder={m('onboarding.weightPlaceholder')} />
+					<span class="label-text">{m('onboarding.weightLabel', { unit: weightUnit })}</span>
+					<input type="number" inputmode="decimal" min={weightMin} max={weightMax} step="0.1" bind:value={bodyWeight} placeholder={m('onboarding.weightPlaceholder', { example: weightUnit === 'lbs' ? 155 : 70 })} />
 				</label>
 				{#if gender || dateOfBirth}
 					<label class="consent-row">
