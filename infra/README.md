@@ -105,7 +105,7 @@ Outputs the four NS records — paste those at the registrar that owns `threkir.
 ```bash
 cd ../github-oidc
 terraform init
-terraform apply -var "github_repo=<owner>/<repo>"
+terraform apply    # github_repo comes from the committed terraform.tfvars (public info)
 ```
 
 Outputs the two role ARNs:
