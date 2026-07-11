@@ -10914,6 +10914,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushSettingsAction => 'Einstellungen an Uhr senden';
+
+  @override
+  String get simWatchSettingsPushed => 'Einstellungen an die Uhr gesendet';
+
+  @override
+  String simWatchPushSettingsFailed(String error) {
+    return 'Senden der Einstellungen fehlgeschlagen: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Keine Läufe auf der Uhr zum Synchronisieren';
 
   @override

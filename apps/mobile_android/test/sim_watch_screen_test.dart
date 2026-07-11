@@ -28,6 +28,7 @@ List<int> _hex(String s) => [
 
 class _FakeSyncTransport implements WatchBleTransport {
   final _chunks = StreamController<List<int>>.broadcast();
+  final settingsWrites = <List<int>>[];
   @override
   Future<void> scan() async {}
   @override
@@ -48,6 +49,11 @@ class _FakeSyncTransport implements WatchBleTransport {
     final len = request[8] | request[9] << 8;
     final end = (offset + len).clamp(0, _goldenBlob.length);
     _chunks.add(_goldenBlob.sublist(offset, end));
+  }
+
+  @override
+  Future<void> writeSettings(List<int> frame) async {
+    settingsWrites.add(frame);
   }
 }
 
@@ -257,6 +263,35 @@ void main() {
       expect(delivered.first['source'], 'watch');
       expect((delivered.first['track'] as List), hasLength(3));
       expect(find.textContaining('Synced 1 of 1'), findsOneWidget);
+    });
+  });
+
+  group('settings push', () {
+    testWidgets('Push-settings action writes the encoded frame',
+        (tester) async {
+      final transport = _FakeSyncTransport();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SimWatchScreen(
+            transportFactory: () => transport,
+            runSink: (_) async {},
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+
+      expect(transport.settingsWrites, hasLength(1));
+      expect(transport.settingsWrites.single, hasLength(25));
+      expect(transport.settingsWrites.single.sublist(0, 6),
+          [0x53, 0x45, 0x54, 0x31, 0x01, 0x0f]);
+      expect(find.text('Settings pushed to the watch'), findsOneWidget);
     });
   });
 }

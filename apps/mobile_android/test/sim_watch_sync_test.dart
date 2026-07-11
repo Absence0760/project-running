@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/sim_watch_sync.dart';
 import '../lib/watch_ingest_queue.dart';
+import '../lib/watch_settings.dart';
 
 /// The frozen golden vector — one 3-point run blob. Kept byte-identical to
 /// the firmware's `run_store` test vector so a wire-format drift on either
@@ -52,6 +53,7 @@ class FakeWatchTransport implements WatchBleTransport {
   int scanCount = 0;
   int disconnectCount = 0;
   final requests = <List<int>>[];
+  final settingsWrites = <List<int>>[];
 
   FakeWatchTransport({required this.blob, required this.manifest});
 
@@ -75,6 +77,11 @@ class FakeWatchTransport implements WatchBleTransport {
     final end = (offset + len) > blob.length ? blob.length : (offset + len);
     final chunk = blob.sublist(offset, end);
     scheduleMicrotask(() => _chunks.add(chunk));
+  }
+
+  @override
+  Future<void> writeSettings(List<int> frame) async {
+    settingsWrites.add(frame);
   }
 
   @override
@@ -298,6 +305,36 @@ void main() {
       expect(result.failed, 1);
       expect(delivered, isEmpty);
       expect(transport.disconnectCount, 1);
+    });
+  });
+
+  group('WatchSyncClient.pushSettings (fake transport)', () {
+    test('connects, writes the encoded frame, disconnects', () async {
+      final transport = FakeWatchTransport(
+        blob: _goldenBlob(),
+        manifest: _goldenManifest(),
+      );
+      final client = WatchSyncClient(
+        transport: transport,
+        onRun: (_) async {},
+      );
+
+      await client.pushSettings(const WatchSettings(
+        maxHr: 190,
+        pacer: (distanceM: 42195, timeS: 14400),
+        gear: (baselineM: 500000.0, targetM: 800000.0),
+        zoneCeiling: 3,
+      ));
+
+      expect(transport.scanCount, 1);
+      expect(transport.disconnectCount, 1);
+      expect(transport.settingsWrites, hasLength(1));
+      expect(transport.requests, isEmpty);
+      final frame = Uint8List.fromList(transport.settingsWrites.single);
+      expect(
+        frame,
+        _hex('53455431010fbe00d3a40000403800000024f4480050434903'),
+      );
     });
   });
 }

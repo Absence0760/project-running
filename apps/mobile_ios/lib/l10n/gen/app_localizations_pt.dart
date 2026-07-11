@@ -10905,6 +10905,18 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushSettingsAction =>
+      'Enviar configurações para o relógio';
+
+  @override
+  String get simWatchSettingsPushed => 'Configurações enviadas para o relógio';
+
+  @override
+  String simWatchPushSettingsFailed(String error) {
+    return 'Falha ao enviar configurações: $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Nenhuma corrida no relógio para sincronizar';
 
   @override
@@ -21843,6 +21855,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String simWatchSyncFailed(String error) {
     return 'Falha na sincronização do relógio: $error';
+  }
+
+  @override
+  String get simWatchPushSettingsAction =>
+      'Enviar configurações para o relógio';
+
+  @override
+  String get simWatchSettingsPushed => 'Configurações enviadas para o relógio';
+
+  @override
+  String simWatchPushSettingsFailed(String error) {
+    return 'Falha ao enviar configurações: $error';
   }
 
   @override

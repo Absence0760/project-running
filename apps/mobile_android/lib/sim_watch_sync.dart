@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:uuid/uuid.dart';
 
+import 'watch_settings.dart';
+
 /// Pure Dart mirror of the custom watch's `run_store` blob format
 /// (`apps/custom_watch/core/src/run_store.rs`).
 ///
@@ -319,6 +321,10 @@ abstract class WatchBleTransport {
   /// slice of a run.
   Future<void> writeChunkRequest(List<int> request);
 
+  /// Write a [WatchSettings.encode] frame to the watch's settings
+  /// characteristic — the phone → watch config push.
+  Future<void> writeSettings(List<int> frame);
+
   /// Notifications carrying run-blob chunks, in request order.
   Stream<List<int>> get chunkStream;
 
@@ -385,6 +391,18 @@ class WatchSyncClient {
         onProgress?.call(i + 1, total);
       }
       return WatchSyncResult(synced: synced, failed: failed, total: total);
+    } finally {
+      await transport.disconnect();
+    }
+  }
+
+  /// Encode [settings] and push the single frame to the watch over the same
+  /// injected [WatchBleTransport] the run-sync path uses: connect, write the
+  /// settings characteristic, disconnect.
+  Future<void> pushSettings(WatchSettings settings) async {
+    await transport.scan();
+    try {
+      await transport.writeSettings(settings.encode());
     } finally {
       await transport.disconnect();
     }
