@@ -15,9 +15,9 @@
 //! rules, edge cases, and test count in lockstep. It consumes the
 //! [`crate::roadbook`] output: [`FuelLegInput::from_leg`] maps a `RoadbookLeg`
 //! into an input row, and the parallel `legs` array is sized to
-//! [`MAX_ROADBOOK_LEGS`]. The per-leg kcal reuses the web
-//! `exercise_calories.ts` `runCalories` cost (not ported as its own module
-//! here — inlined as [`KCAL_PER_KG_PER_KM`]).
+//! [`MAX_ROADBOOK_LEGS`]. The per-leg kcal reuses
+//! [`crate::exercise_calories::run_calories`] (the port of web
+//! `exercise_calories.ts` `runCalories`).
 //!
 //! Pure logic, no peripherals, no allocator — like the rest of `core`.
 
@@ -33,10 +33,6 @@ pub const DEFAULT_FLUID_PER_HOUR_ML: f64 = 500.0;
 pub const HEAT_FLUID_FACTOR: f64 = 1.5;
 /// Carbs per gel, for the carry-out gel count.
 pub const GEL_CARBS_G: f64 = 25.0;
-
-/// Gross running energy cost, kcal per kg of bodyweight per km — the web
-/// `exercise_calories.ts` `KCAL_PER_KG_PER_KM`.
-const KCAL_PER_KG_PER_KM: f64 = 1.036;
 
 /// Minimal per-leg input. Map each roadbook `RoadbookLeg` through
 /// [`FuelLegInput::from_leg`].
@@ -97,16 +93,6 @@ fn is_refill(leg: &FuelLegInput) -> bool {
     leg.services.iter().any(|&s| s == "water" || s == "food")
 }
 
-/// Calories burned running one leg. 0 when distance or bodyweight is missing /
-/// non-physical — the web `exercise_calories.ts` `runCalories`.
-fn run_calories(distance_m: f64, weight_kg: Option<f64>) -> f64 {
-    let Some(w) = weight_kg else { return 0.0 };
-    if w <= 0.0 || distance_m <= 0.0 {
-        return 0.0;
-    }
-    KCAL_PER_KG_PER_KM * w * (distance_m / 1000.0)
-}
-
 /// Build the fueling plan. The returned `legs` array is parallel to the input
 /// (and to the roadbook's legs), so the surface can render fuel alongside each
 /// checkpoint row.
@@ -135,7 +121,7 @@ pub fn build_fuel_plan(legs: &[FuelLegInput], opts: FuelPlanOptions) -> FuelPlan
         let _ = out.push(FuelLeg {
             carbs_g,
             fluid_ml,
-            kcal: run_calories(leg.leg_dist_m, weight),
+            kcal: crate::exercise_calories::run_calories(Some(leg.leg_dist_m), weight),
             carry_to_next_aid: None,
         });
         total_carbs_g += carbs_g;
