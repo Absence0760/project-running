@@ -28,3 +28,5 @@ envs/*/secrets.enc.yaml
 *.decrypted.*
 *.plain
 *.plain.*
+# terraform state rm / state surgery writes timestamped backups
+*.tfstate.*.backup
