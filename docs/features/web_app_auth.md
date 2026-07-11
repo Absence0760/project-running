@@ -11,7 +11,7 @@ The web app uses **Supabase Auth** end-to-end. There is no demo / mock login —
 Supported sign-in methods:
 
 - **Email + password** (sign-up via `/login`'s "Sign up" toggle, sign-in via the same form)
-- **Google OAuth** (`signInWithOAuth({ provider: 'google' })`)
+- **Google OAuth** (`signInWithOAuth({ provider: 'google' })`) — gated behind the fail-closed `PUBLIC_GOOGLE_AUTH_ENABLED` flag (`apps/web/src/lib/core/google_auth_flag.ts`). When the flag is off (the default until the Supabase `google` provider is configured) the button renders behind a "Soon" pill and clicking it surfaces the `login.googleSoon` notice instead of starting a redirect — same treatment as the Apple button. Flip the flag (set truthy) the same day you enable the provider; local dev + e2e turn it on in `.env.development`. On mobile the equivalent gate is the presence of `GOOGLE_WEB_CLIENT_ID` — an unconfigured build shows `googleSignInSoon` on tap.
 - **Apple OAuth** — *not yet shipped on web.* The button is rendered behind a "Soon" pill and clicking it surfaces a "coming soon" toast (`apps/web/src/routes/login/+page.svelte` `handleAppleSignIn`). Apple Services-ID configuration for the web OAuth flow is the unblocking step. Apple Sign-In *is* wired on mobile via the native `sign_in_with_apple` SDK — see `apps/mobile_android/lib/screens/sign_in_screen.dart`.
 
 Any one user can have **multiple identities linked**. A user who signed up with email can attach Google from `/settings/account` so the same account is reachable from either method. Apple identity linking will follow once the web Apple OAuth flow ships.
@@ -123,7 +123,7 @@ Identity linking is **opt-in** in Supabase. If `linkIdentity()` returns `manual_
 
 Three sign-in methods, all hitting Supabase Auth:
 
-1. **Continue with Google** — `auth.signInWithGoogle()`
+1. **Continue with Google** — `auth.signInWithGoogle()` when `PUBLIC_GOOGLE_AUTH_ENABLED` is truthy; otherwise `handleGoogleSoon` (the fail-closed "coming soon" notice)
 2. **Continue with Apple** — `auth.signInWithApple()`
 3. **Email + password** — toggles between sign-in and sign-up; both call `supabase.auth.*` directly
 
