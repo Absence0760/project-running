@@ -1,10 +1,13 @@
 # Releasing
 
-Per-app release workflows, triggered by git tags. Each app ships on its
-own cadence — tagging `mobile_android@1.2.3` cuts an Android release and
-does not touch web, backend, or any of the watches.
+Per-app release workflows, **triggered by publishing a GitHub Release**
+(not a bare tag push). Each app ships on its own cadence — publishing a
+`mobile_android@1.2.3` Release cuts an Android release and does not touch
+web, backend, or any of the watches. The published Release is the deploy
+gate: no Release object, no deploy (added 2026-07-11 — every
+`release-*.yml` moved from `on: push: tags` to `on: release: [published]`).
 
-This file covers the **tag → CI workflow** mechanics. For where each
+This file covers the **release → CI workflow** mechanics. For where each
 service runs in production (provider, region, sizing, secrets,
 observability, rollback, DR) see the per-service deployment plans:
 
@@ -24,6 +27,11 @@ don't match — use `flutter run` for local testing.
 
 ## Tag conventions
 
+The tag naming is unchanged — `gh release create` creates the tag as it
+publishes the Release, so the same `<app>@<version>` names route to the
+same workflows. What changed is the *trigger*: the Release, not the tag
+push, is what fires the deploy.
+
 ```
 mobile_android@1.2.3   → .github/workflows/release-android.yml
 mobile_ios@1.2.3       → .github/workflows/release-ios.yml
@@ -42,42 +50,58 @@ The glob is `<app>@*`, so any suffix works — `1.2.3`, `1.2.3-rc.1`,
 `2.0.0-beta.4`. The workflow parses the suffix as the `versionName` and
 derives a monotonic `versionCode` from `git rev-list --count HEAD`.
 
-**Apple Watch ships inside the iOS app.** `watch_ios@*` is a build
-smoke-check that creates an audit record; the canonical user-facing
-release is `mobile_ios@*`, which bundles the watchOS target.
+**Apple Watch ships inside the iOS app.** Publishing a `watch_ios@*`
+Release runs a build smoke-check only (no artifact, nothing written back
+to the Release); the canonical user-facing release is `mobile_ios@*`,
+which bundles the watchOS target.
 
 ## Cutting a release
 
 ```bash
-# Make sure main is green.
+# Make sure main is green, then publish a GitHub Release. `gh release
+# create` creates the tag AND the Release in one step; publishing it is
+# what triggers the deploy. Don't edit pubspec.yaml / build.gradle.kts
+# manually — the workflow reads the version from the tag name.
 git checkout main && git pull
-
-# Create an annotated tag. The workflow reads the version from the tag
-# name; don't edit pubspec.yaml or build.gradle.kts manually.
-git tag -a mobile_android@1.2.3 -m "Android 1.2.3"
-git push origin mobile_android@1.2.3
+gh release create mobile_android@1.2.3 --title "Android 1.2.3" --generate-notes
 ```
 
-GitHub Actions catches the tag, runs the matching workflow, and — on
-success — creates a GitHub Release with the built artifact(s) attached.
+You can also publish from the **Releases → Draft a new release** UI (pick
+or type the `<app>@<version>` tag, write notes, **Publish**), or via the
+`/release` skill. A plain `git push origin <tag>` does **nothing** now —
+the workflow only fires on `release: [published]`.
+
+`on: release` fires for every published Release in the repo, so each
+`release-*.yml` job is guarded to its own `<app>@` tag prefix; publishing
+a `web@*` Release runs only `release-web` (the other eight jobs evaluate
+their `if:` to false and are skipped). The artifact-building workflows
+(android, iOS, Wear, web) then attach their build output **back onto that
+same Release** for rollback; the deploy-only workflows (backend, worker,
+osrm, graph-cycle) don't write anything back — the Release is purely
+their trigger.
 
 **Every prod release job pauses for approval first** (added 2026-07-11):
 the deploy jobs declare the `production` GitHub environment, whose
 required-reviewer rule (repo Settings → Environments) holds the run at
 "Waiting for review" until an approver clicks **Approve and deploy** in
-the run's page. `release-web`'s preview leg resolves to the ungated
-`preview` environment instead, so continuous preview deploys stay
-approval-free. A tag that nobody approves within GitHub's 30-day wait
-window just expires — re-run the workflow from the tag to try again.
+the run's page. So a prod deploy now needs **two** deliberate acts — a
+published Release *and* an environment approval. `release-web`'s preview
+leg resolves to the ungated `preview` environment instead, so continuous
+preview deploys stay approval-free. A run nobody approves within GitHub's
+30-day wait window just expires — re-run the workflow to try again.
 
 ### What gets published where
 
-| Tag prefix | Runs | Signs | Publishes to | Also attaches to GitHub Release |
+The "Release" that triggers each row is published by a human (`gh release
+create` / UI / `/release`). The last column is what the workflow attaches
+**back** onto that Release afterward.
+
+| Release tag | Runs | Signs | Publishes to | Attaches back to the Release |
 |---|---|---|---|---|
 | `mobile_android@*` | ubuntu-latest | release keystore from secrets | Play Internal track | `.aab` |
 | `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.runapp.watchwear`) | `.aab` + `.apk` |
 | `mobile_ios@*` | macos-latest | *unsigned today* (skeleton until app ships) | — | `.ipa` |
-| `watch_ios@*` | macos-latest | — | — | build log |
+| `watch_ios@*` | macos-latest | — | — (build smoke-check only) | — |
 | `web@*` | ubuntu-latest | — | AWS S3 + CloudFront + Lambda (`prod` env at `threkir.com` / `www.threkir.com`) | build zip |
 | `backend@*` | ubuntu-latest | — | Supabase (migrations + functions on linked project) | — |
 | `worker@*` | ubuntu-latest | — | Fly.io `job_worker` app via `flyctl deploy --remote-only` | — |
