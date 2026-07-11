@@ -39,6 +39,10 @@
 //!   collapsed to a day index like [`current_week`])
 //! - [`grade_adjusted_pace`] — the Minetti GAP model (fourth parity port) +
 //!   the streaming grade estimator the recorder feeds
+//! - [`guided_runs`] — scripted coach-voice guided-run library + the
+//!   `(prev, now]` tick dispatcher that fires each timed cue (port of web
+//!   `training/guided_runs.ts`; cue/title text carried as i18n key identifiers,
+//!   the TTS speaking + `GuidedTranslate` injection are web/mobile-only)
 //! - [`hr_zones`] — the app's five-zone %-of-max HR ladder (mirrors web
 //!   `training/hr_zones.ts`) + the zone-for-BPM lookup
 //! - [`face`] — watch-face layout: state in, text rows out
@@ -201,6 +205,7 @@ pub mod gear_wear;
 pub mod gnss_mode;
 pub mod goals;
 pub mod grade_adjusted_pace;
+pub mod guided_runs;
 pub mod hr_zones;
 pub mod hydration;
 pub mod link;
