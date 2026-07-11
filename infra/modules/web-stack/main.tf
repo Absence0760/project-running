@@ -1340,13 +1340,16 @@ resource "aws_cloudfront_origin_request_policy" "lambda" {
   # collides with that signature, fails OAC, and 403s. The user's
   # Supabase JWT is therefore carried in `X-Supabase-Authorization`
   # (read by both the Lambda handler and the SvelteKit dev wrapper).
+  # `Accept-Encoding` is excluded here and in every policy below: the
+  # CreateOriginRequestPolicy API rejects it outright (InvalidArgument)
+  # — CloudFront owns that header; the cacheable behaviors forward a
+  # normalized form via the cache policies' enable_accept_encoding_*.
   headers_config {
     header_behavior = "whitelist"
     headers {
       items = [
         "content-type",
         "accept",
-        "accept-encoding",
         "x-supabase-authorization",
       ]
     }
@@ -1395,7 +1398,7 @@ resource "aws_cloudfront_origin_request_policy" "share_run" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["accept", "accept-encoding"]
+      items = ["accept"]
     }
   }
 }
@@ -1435,7 +1438,7 @@ resource "aws_cloudfront_origin_request_policy" "share_route" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["accept", "accept-encoding"]
+      items = ["accept"]
     }
   }
 }
@@ -1475,7 +1478,7 @@ resource "aws_cloudfront_origin_request_policy" "share_recap" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["accept", "accept-encoding"]
+      items = ["accept"]
     }
   }
 }
@@ -1515,7 +1518,7 @@ resource "aws_cloudfront_origin_request_policy" "share_badge" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["accept", "accept-encoding"]
+      items = ["accept"]
     }
   }
 }
@@ -1545,7 +1548,7 @@ resource "aws_cloudfront_origin_request_policy" "share_entity" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["accept", "accept-encoding"]
+      items = ["accept"]
     }
   }
 }
@@ -1563,7 +1566,7 @@ resource "aws_cloudfront_origin_request_policy" "generate_route" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["content-type", "accept", "accept-encoding", "x-supabase-authorization"]
+      items = ["content-type", "accept", "x-supabase-authorization"]
     }
   }
 }
