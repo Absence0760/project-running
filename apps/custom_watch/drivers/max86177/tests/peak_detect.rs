@@ -190,3 +190,116 @@ fn reset_clears_the_estimate() {
     assert!(!r.valid);
     assert_eq!(r.bpm, 0);
 }
+
+#[test]
+fn clean_signal_unchanged_by_the_guards() {
+    // Regression guard: the motion/outlier gates must not perturb a clean
+    // finger-on-sensor pulse. A steady 60 bpm still settles valid and correct.
+    converges_to(100, 60.0, 3);
+}
+
+#[test]
+fn implausibly_fast_rhythm_is_rejected() {
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+
+    assert!(
+        synth.run(&mut det, 60.0, 15).valid,
+        "clean rhythm reads valid first"
+    );
+
+    // A ~240 bpm "rhythm" is a motion / electrical artifact: every implied
+    // inter-beat interval sits outside the human band, so none is admitted to
+    // the smoothed rate. The detector must fall back to invalid rather than
+    // ever reporting a super-physiological heart rate as real.
+    let mut last = Reading {
+        bpm: 0,
+        valid: false,
+    };
+    for _ in 0..rate * 6 {
+        last = synth.step(&mut det, 240.0);
+        assert!(
+            !(last.valid && last.bpm > 220),
+            "must never report a valid rate above the plausible band, got {}",
+            last.bpm
+        );
+    }
+    assert!(
+        !last.valid,
+        "a super-physiological rhythm must read invalid"
+    );
+}
+
+#[test]
+fn low_amplitude_bumps_are_rejected() {
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+
+    assert!(
+        synth.run(&mut det, 72.0, 15).valid,
+        "strong signal establishes the amplitude reference"
+    );
+
+    // Collapse the pulse to a small fraction of the established amplitude while
+    // keeping a heartbeat cadence. These bumps clear the decayed envelope
+    // threshold and the absolute floor, but sit far below the held systolic
+    // reference, so the SNR gate refuses them. Give the envelope a few seconds
+    // to decay so the bumps actually fire, then require sustained invalid.
+    synth.amplitude = 25.0;
+    synth.run(&mut det, 72.0, 4);
+    for _ in 0..rate * 4 {
+        let r = synth.step(&mut det, 72.0);
+        assert!(
+            !r.valid,
+            "a low-SNR bump train must not manufacture a heart rate"
+        );
+    }
+}
+
+#[test]
+fn recovers_to_valid_after_artifacts_pass() {
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+
+    assert!(synth.run(&mut det, 72.0, 15).valid);
+
+    // A burst of fast motion artifact knocks the reading invalid...
+    assert!(!synth.run(&mut det, 240.0, 5).valid);
+
+    // ...and once a clean pulse returns the detector re-establishes a valid,
+    // correct rate — the invalidation was honest, not a latched dead state.
+    let recovered = synth.run(&mut det, 72.0, 15);
+    assert!(recovered.valid, "must recover once the artifact clears");
+    assert!(
+        recovered.bpm.abs_diff(72) <= 3,
+        "recovered rate should be correct, got {}",
+        recovered.bpm
+    );
+}
+
+#[test]
+fn sustained_weaker_signal_is_not_suppressed() {
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+
+    assert!(synth.run(&mut det, 72.0, 15).valid);
+
+    // A genuinely weaker (but real) pulse — a looser strap, not noise — must not
+    // be permanently rejected by the SNR gate: the amplitude reference bleeds
+    // down so the detector relearns the new level and reports again.
+    synth.amplitude = 60.0;
+    let relearned = synth.run(&mut det, 72.0, 12);
+    assert!(
+        relearned.valid,
+        "a sustained weaker pulse must not be suppressed for good"
+    );
+    assert!(
+        relearned.bpm.abs_diff(72) <= 3,
+        "relearned rate should be correct, got {}",
+        relearned.bpm
+    );
+}
