@@ -394,7 +394,7 @@ pub fn page_hero(
                 let (h, m, s) = hms(pred.rungs[1].predicted_s as u32);
                 let mut row = Row::new();
                 if h > 0 {
-                    let _ = write!(row, "{}:{:02}:{:02}", h.min(99), m, s);
+                    let _ = write!(row, "{}:{:02}:{:02}", h.min(999), m, s);
                 } else {
                     let _ = write!(row, "{}:{:02}", m, s);
                 }
@@ -812,7 +812,7 @@ fn pred_row(row: &mut Row, label: &str, rung: &LadderRung) {
     };
     let (h, m, s) = hms(rung.predicted_s as u32);
     if h > 0 {
-        let _ = write!(row, "{:<5}{}:{:02}:{:02} {}", label, h.min(99), m, s, flag);
+        let _ = write!(row, "{:<5}{}:{:02}:{:02} {}", label, h.min(999), m, s, flag);
     } else {
         let _ = write!(row, "{:<5}{}:{:02} {}", label, m, s, flag);
     }
@@ -1086,7 +1086,7 @@ fn roadbook_glance(
                     rows[3 + i],
                     "{:>6.2}K {}:{:02}:{:02} {}",
                     km,
-                    h.min(99),
+                    h.min(999),
                     m,
                     s,
                     cutoff_flag(leg.cutoff)
@@ -2456,6 +2456,40 @@ mod tests {
             }
             p = p.next();
         }
+    }
+
+    #[test]
+    fn secondary_time_rows_render_past_99_hours() {
+        use crate::record::{RoadbookLegView, RoadbookView};
+        // A roadbook checkpoint projected past 99 h is in range for a 112 h
+        // cutoff race. The hero clamps hours at 999; the secondary rows must
+        // match, so the arrival reads the true hour count, not a clamped 99.
+        let mut rec = snapshot(RecordState::Recording, 195_000.0);
+        rec.roadbook = Some(RoadbookView {
+            total: 1,
+            upcoming: [RoadbookLegView {
+                cum_dist_m: 195_000.0,
+                projected_elapsed_s: 105 * 3600 + 12 * 60 + 34,
+                cutoff: Some(CutoffStatus::Safe),
+            }; crate::record::ROADBOOK_WINDOW],
+            upcoming_len: 1,
+        });
+        let rows = page_rows(
+            Page::Roadbook,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert!(
+            rows[3].as_str().contains("105:12:34"),
+            "roadbook arrival clamped instead of rendering >99 h: {:?}",
+            rows[3]
+        );
     }
 
     #[test]
