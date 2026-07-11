@@ -52,9 +52,10 @@ pub static ALERT: Watch<CriticalSectionRawMutex, Option<Alert>, 1> = Watch::new(
 pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
 
 /// Course-projection status for the Nav page: the `nav` task publishes per fix
-/// (or once at boot when no course is loaded), the `ui` task renders it. One
-/// receiver (the `ui` task).
-pub static NAV: Watch<CriticalSectionRawMutex, NavView, 1> = Watch::new();
+/// (or once at boot when no course is loaded); the `ui` task renders it and
+/// `record` reads the distance-along-course it feeds the recorder for the
+/// cut-off ETA. Two receivers (`ui`, `record`).
+pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 
 /// Back-to-start navigation view (breadcrumb + distance/bearing to start):
 /// `record` publishes one per accepted fix — the same seam the flash track

@@ -39,6 +39,9 @@ use heapless::Vec;
 use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::{Alert, AlertEngine};
 use watch_core::button::RecordCommand;
+#[cfg(feature = "sim-course")]
+use watch_core::cutoff_eta::CutoffLeg;
+use watch_core::face::NavView;
 use watch_core::fix::Fix;
 use watch_core::flash_store::{MAX_POINTS_PER_RUN, SLOT_LEN};
 use watch_core::record::{RecordState, Recorder, Snapshot};
@@ -157,12 +160,30 @@ fn bpm_of(r: &HrReading) -> Option<u8> {
     (r.valid && (1..=255).contains(&r.bpm)).then_some(r.bpm as u8)
 }
 
+/// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
+/// distances along its NW->SW->SE polyline). Two aid-station-style cut-offs the
+/// bench_jog fixture sweeps past each lap, so the CutoffEta page shows a live
+/// on / tight / behind verdict under the sim. Hardware carries none until a
+/// course-push path lands, so its CutoffEta page reads "no cutoffs".
+#[cfg(feature = "sim-course")]
+static SIM_CUTOFFS: [CutoffLeg; 2] = [
+    CutoffLeg {
+        cum_dist_m: 90.0,
+        limit_elapsed_s: 120,
+    },
+    CutoffLeg {
+        cum_dist_m: 170.0,
+        limit_elapsed_s: 240,
+    },
+];
+
 #[embassy_executor::task]
 pub async fn run(store: &'static SharedStore) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut hr_rx = unwrap!(state::HR.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
+    let mut nav_rx = unwrap!(state::NAV.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
@@ -203,6 +224,13 @@ pub async fn run(store: &'static SharedStore) {
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
+    // The canned sim course carries cut-off legs so the CutoffEta page shows a
+    // live verdict; hardware has none until a course-push path lands.
+    #[cfg(feature = "sim-course")]
+    {
+        recorder.set_cutoff_legs(&SIM_CUTOFFS);
+        info!("record: sim cutoff legs loaded (90 m/2:00, 170 m/4:00)");
+    }
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
         // Finished don't, so drop the ticker there and wait purely on events.
@@ -226,6 +254,17 @@ pub async fn run(store: &'static SharedStore) {
         // run reaches the recorder.
         if let Some(mode) = mode_rx.try_changed() {
             recorder.set_fix_interval_s(mode.fix_interval_s());
+        }
+
+        // Feed the nav task's course projection to the recorder for the cut-off
+        // ETA. The nav task owns the course + projection (published per fix);
+        // the recorder stays course-agnostic and just folds the along-course
+        // distance in, withholding an ETA once the position goes stale.
+        if let Some(nav) = nav_rx.try_changed() {
+            recorder.set_route_position(match nav {
+                NavView::Status(s) => Some(s.along_m),
+                NavView::NoCourse | NavView::NoFix => None,
+            });
         }
 
         match event {
