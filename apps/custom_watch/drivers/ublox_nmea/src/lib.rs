@@ -9,8 +9,9 @@
 //! MAX-M10S emits `GN` talkers in multi-GNSS mode, older fixtures use `GP`.
 //! Sentences carried: RMC (validity + position + speed + course), GGA
 //! (fix quality + satellite count + altitude), GSV (satellites in view,
-//! for an honest signal meter), and GSA (fix mode + DOP). Everything else
-//! returns `Sentence::Other` so callers can count-but-ignore it.
+//! for an honest signal meter), GSA (fix mode + DOP), GLL (position +
+//! validity), and VTG (course + speed over ground). Everything else returns
+//! `Sentence::Other` so callers can count-but-ignore it.
 
 #![no_std]
 
@@ -59,7 +60,19 @@ pub enum Sentence {
         hdop: Option<f32>,
         vdop: Option<f32>,
     },
-    /// Valid checksum, but a type we don't decode (VTG, GLL, ...).
+    /// Geographic position lat/lon + status.
+    Gll {
+        lat_deg: Option<f64>,
+        lon_deg: Option<f64>,
+        /// Receiver marked the fix valid (`A` status).
+        valid: bool,
+    },
+    /// Course + speed over ground.
+    Vtg {
+        course_deg: Option<f32>,
+        speed_mps: Option<f32>,
+    },
+    /// Valid checksum, but a type we don't decode (ZDA, GST, ...).
     Other,
 }
 
@@ -143,6 +156,8 @@ fn parse_sentence(body: &[u8]) -> Option<Sentence> {
         b"GGA" => parse_gga(&mut fields).map(Sentence::Gga),
         b"GSV" => parse_gsv(&mut fields),
         b"GSA" => parse_gsa(&mut fields),
+        b"GLL" => parse_gll(&mut fields),
+        b"VTG" => parse_vtg(&mut fields),
         _ => Some(Sentence::Other),
     }
 }
@@ -212,6 +227,35 @@ fn parse_gsa(f: &mut Fields) -> Option<Sentence> {
         pdop,
         hdop,
         vdop,
+    })
+}
+
+/// GLL: `<lat>,<N/S>,<lon>,<E/W>,<time>,<status>`. Position + validity only;
+/// the time and mode-indicator fields are ignored.
+fn parse_gll(f: &mut Fields) -> Option<Sentence> {
+    let lat_deg = parse_coord(f.next()?, f.next()?, 2);
+    let lon_deg = parse_coord(f.next()?, f.next()?, 3);
+    let _time = f.next()?;
+    let valid = f.next()? == b"A";
+    Some(Sentence::Gll {
+        lat_deg,
+        lon_deg,
+        valid,
+    })
+}
+
+/// VTG: `<course_true>,T,<course_mag>,M,<speed_knots>,N,<speed_kmh>,K,<mode>`.
+/// Only the true course and the knots speed are carried; the magnetic course
+/// and the redundant km/h speed are ignored.
+fn parse_vtg(f: &mut Fields) -> Option<Sentence> {
+    let course_deg = parse_f32(f.next()?);
+    let _course_ref = f.next()?;
+    let _course_mag = f.next()?;
+    let _course_mag_ref = f.next()?;
+    let speed_mps = parse_f32(f.next()?).map(|kn| kn * 0.514_444);
+    Some(Sentence::Vtg {
+        course_deg,
+        speed_mps,
     })
 }
 

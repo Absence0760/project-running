@@ -244,6 +244,8 @@ fn whole_fixture_file_parses() {
                 gsv += 1;
             }
             Sentence::Gsa { .. } => {}
+            Sentence::Gll { .. } => {}
+            Sentence::Vtg { .. } => {}
             Sentence::Other => other += 1,
         }
     }
@@ -251,4 +253,82 @@ fn whole_fixture_file_parses() {
     assert_eq!(gga, 120);
     assert_eq!(gsv, 2); // the two GSV lines
     assert_eq!(other, 0);
+}
+
+#[test]
+fn parses_gll() {
+    let gll = "$GPGLL,4000.9000,N,10516.2300,W,073000.00,A*1D\r\n";
+    let Some(Sentence::Gll {
+        lat_deg,
+        lon_deg,
+        valid,
+    }) = parse_one(gll)
+    else {
+        panic!("expected GLL");
+    };
+    assert!(valid);
+    assert!((lat_deg.unwrap() - 40.015).abs() < 1e-9);
+    assert!((lon_deg.unwrap() - -105.2705).abs() < 1e-9);
+}
+
+#[test]
+fn gll_bad_checksum_dropped() {
+    let gll = "$GPGLL,4000.9000,N,10516.2300,W,073000.00,A*1D\r\n";
+    let corrupt = gll.replace("*1D", "*1E");
+    assert_eq!(parse_one(&corrupt), None);
+}
+
+#[test]
+fn void_gll_reports_invalid_without_position() {
+    // Cold start: status V, empty position fields.
+    let gll = "$GPGLL,,,,,073000.00,V*2C\r\n";
+    let Some(Sentence::Gll {
+        lat_deg,
+        lon_deg,
+        valid,
+    }) = parse_one(gll)
+    else {
+        panic!("expected GLL");
+    };
+    assert!(!valid);
+    assert_eq!(lat_deg, None);
+    assert_eq!(lon_deg, None);
+}
+
+#[test]
+fn parses_vtg() {
+    let vtg = "$GPVTG,90.0,T,,M,5.83,N,10.80,K,A*03\r\n";
+    let Some(Sentence::Vtg {
+        course_deg,
+        speed_mps,
+    }) = parse_one(vtg)
+    else {
+        panic!("expected VTG");
+    };
+    assert!((course_deg.unwrap() - 90.0).abs() < 1e-4);
+    assert!((speed_mps.unwrap() - 5.83 * 0.514_444).abs() < 1e-4);
+}
+
+#[test]
+fn vtg_bad_checksum_dropped() {
+    let vtg = "$GPVTG,90.0,T,,M,5.83,N,10.80,K,A*03\r\n";
+    let corrupt = vtg.replace("*03", "*04");
+    assert_eq!(parse_one(&corrupt), None);
+}
+
+#[test]
+fn vtg_empty_course_and_speed_reports_none() {
+    // Stationary/no-fix: empty course + speed fields.
+    let body = "GPVTG,,T,,M,,N,,K,N";
+    let cksum = body.bytes().fold(0u8, |c, b| c ^ b);
+    let sentence = format!("${}*{:02X}\r\n", body, cksum);
+    let Some(Sentence::Vtg {
+        course_deg,
+        speed_mps,
+    }) = parse_one(&sentence)
+    else {
+        panic!("expected VTG");
+    };
+    assert_eq!(course_deg, None);
+    assert_eq!(speed_mps, None);
 }
