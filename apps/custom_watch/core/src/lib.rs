@@ -128,6 +128,10 @@
 //! - [`plan_replan`] — propose future-only make-up / ease-off changes around
 //!   missed sessions (port of web `training/plan_replan.ts`; reuses
 //!   [`plan_adherence::weekly_drift`] + [`plan_adherence::missed_workout_advice`])
+//! - [`plan_adaptive_replan`] — gate a re-plan on a multi-week adherence trend
+//!   (2-of-3 trailing completed weeks flagged), then delegate the deltas to
+//!   [`plan_replan::replan_remaining`] (port of web
+//!   `training/plan_adaptive_replan.ts`; reuses [`plan_adherence::weekly_drift`])
 //! - [`current_week`] — bucket activities onto the seven days of the real
 //!   calendar week honouring the week-start pref (port of web
 //!   `training/current_week.ts`; ISO dates collapsed to a Unix-epoch day index)
@@ -215,6 +219,7 @@ pub mod nutrition_targets;
 pub mod pace_segments;
 pub mod pacer;
 pub mod page;
+pub mod plan_adaptive_replan;
 pub mod plan_adherence;
 pub mod plan_progress;
 pub mod plan_replan;
