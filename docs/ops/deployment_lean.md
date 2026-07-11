@@ -127,8 +127,34 @@ supabase link --project-ref <ref>
 supabase db push          # applies every migration; a few minutes on a fresh project
 ```
 
-Deploy the Edge Functions you actually use (auth flows need none; parkrun/strava/account
-lifecycle do — see [`apps/backend/deployment.md`](../../apps/backend/deployment.md) § Edge Function deploys).
+Deploy the rock-bottom Edge Function subset — the functions the web app actually calls
+that work without gated secrets (platform-injected env only; deployed 2026-07-11):
+
+```bash
+for fn in clip-public-track delete-account export-data race-results-import race-listings-sync; do
+  supabase functions deploy "$fn" --project-ref <ref>
+done
+```
+
+- `clip-public-track` — privacy-zone clipping for non-owner track viewers (privacy
+  invariant, not optional). `delete-account` — GDPR erasure; the third-party sweeps
+  (RevenueCat / FCM / Stripe) record `skipped` when their keys are unset. `export-data` —
+  nominally deprecated for the Go worker's `/v1/export`, but the worker is exactly what
+  this tier defers, so the EF is the load-bearing export path. `race-results-import` +
+  `race-listings-sync` — the parkrun and manual-paste legs work keyless; the
+  RunSignUp / UltraSignup / ChronoTrack legs answer 503 `provider_not_configured`.
+- **Skip**: `strava-import` (needs Strava OAuth creds, and token refresh lives on the
+  deferred worker — connections would go stale; Strava re-attaches with the worker rung),
+  `refresh-tokens` + `strava-webhook` (deprecated worker rollback paths, nothing calls
+  them), `revenuecat-webhook` (Pro isn't sold at this tier), and the Stripe money track
+  (`events-connect-onboard` / `events-checkout` / `events-cancel` / `donations-checkout` /
+  `stripe-events-webhook` — gated on keys + sign-off, all 503 fail-closed).
+- **Optional — `auth-email`** (six-locale branded auth mail,
+  [email.md § GoTrue auth emails](../features/email.md#gotrue-auth-emails-auth-email-edge-function)):
+  deploy the function and set `SEND_EMAIL_HOOK_SECRET` + `SMTP_*` secrets **before**
+  enabling the Dashboard → Auth → Hooks send-email hook — the hook is fail-closed, so
+  enabling it against an unconfigured function stops all auth mail. Without it, GoTrue's
+  built-in English templates send via the dashboard SMTP below, which is fine at this tier.
 
 > **Wire a custom SMTP even at rock-bottom.** Supabase's built-in auth email sender
 > (`noreply@mail.app.supabase.io`) is heavily rate-limited (a few messages/hour) and
