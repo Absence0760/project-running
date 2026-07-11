@@ -15,6 +15,7 @@ import '../reactive_ble_watch_transport.dart';
 import '../sim_watch_link.dart';
 import '../sim_watch_sync.dart';
 import '../watch_ingest_queue.dart';
+import '../watch_settings.dart';
 
 class SimWatchScreen extends StatefulWidget {
   final SimWatchLink Function(String host, int port) linkFactory;
@@ -62,7 +63,15 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
   String? _error;
   SimWatchStatus? _status;
   bool _syncing = false;
+  bool _pushingSettings = false;
   String? _syncMessage;
+
+  static const _demoSettings = WatchSettings(
+    maxHr: 190,
+    pacer: (distanceM: 42195, timeS: 14400),
+    gear: (baselineM: 500000.0, targetM: 800000.0),
+    zoneCeiling: 3,
+  );
 
   @override
   void initState() {
@@ -163,6 +172,26 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
     }
   }
 
+  Future<void> _pushSettings() async {
+    if (_pushingSettings) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _pushingSettings = true);
+    try {
+      final client = WatchSyncClient(
+        transport: widget.transportFactory(),
+        onRun: widget.runSink,
+      );
+      await client.pushSettings(_demoSettings);
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchSettingsPushed);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _syncMessage = l10n.simWatchPushSettingsFailed('$e'));
+    } finally {
+      if (mounted) setState(() => _pushingSettings = false);
+    }
+  }
+
   String _hms(int totalSeconds) {
     final h = totalSeconds ~/ 3600;
     final m = (totalSeconds ~/ 60) % 60;
@@ -183,6 +212,17 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
       appBar: AppBar(
         title: Text(l10n.simWatchTitle),
         actions: [
+          IconButton(
+            tooltip: l10n.simWatchPushSettingsAction,
+            icon: _pushingSettings
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.tune),
+            onPressed: _pushingSettings ? null : _pushSettings,
+          ),
           IconButton(
             tooltip: l10n.simWatchSyncAction,
             icon: _syncing

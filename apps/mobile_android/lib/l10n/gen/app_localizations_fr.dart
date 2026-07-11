@@ -10930,6 +10930,17 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get simWatchPushSettingsAction => 'Envoyer les réglages à la montre';
+
+  @override
+  String get simWatchSettingsPushed => 'Réglages envoyés à la montre';
+
+  @override
+  String simWatchPushSettingsFailed(String error) {
+    return 'Échec de l\'envoi des réglages : $error';
+  }
+
+  @override
   String get simWatchNoRuns => 'Aucune course à synchroniser sur la montre';
 
   @override
