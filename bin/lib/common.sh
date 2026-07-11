@@ -20,6 +20,12 @@ fi
 # REPO_ROOT — works regardless of CWD or symlinked invocation.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# README promises "$AWS_PROFILE, defaulting to running" but only
+# aws-login.sh implemented the default — every bare `aws` call in the
+# other scripts silently used the default profile in shells without
+# the export (e.g. non-interactive ones).
+export AWS_PROFILE="${AWS_PROFILE:-running}"
+
 if [[ -t 1 ]]; then
 	C_RESET=$'\033[0m'
 	C_BOLD=$'\033[1m'
