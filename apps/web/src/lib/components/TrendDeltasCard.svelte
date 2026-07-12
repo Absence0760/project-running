@@ -151,7 +151,7 @@
 		border-collapse: collapse;
 	}
 	.trend-table th[scope='col'] {
-		text-align: left;
+		text-align: start;
 		font-size: 0.72rem;
 		font-weight: 700;
 		text-transform: uppercase;
@@ -160,7 +160,7 @@
 		padding-bottom: var(--space-sm);
 	}
 	.trend-table th[scope='row'] {
-		text-align: left;
+		text-align: start;
 		font-weight: 600;
 		font-size: 0.9rem;
 		padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
@@ -172,7 +172,7 @@
 	.cur {
 		font-weight: 700;
 		font-variant-numeric: tabular-nums;
-		margin-right: 0.4rem;
+		margin-inline-end: 0.4rem;
 	}
 	.delta {
 		display: inline-flex;
