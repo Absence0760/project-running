@@ -3245,6 +3245,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get profileNotifYourRun => 'あなたのラン';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$nameさん他$count名';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return '他$count件';
+  }
+
+  @override
+  String get profileNotifShowLess => '折りたたむ';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$nameがあなたの$distにKudosを付けました';
   }

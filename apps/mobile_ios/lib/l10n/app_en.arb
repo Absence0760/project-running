@@ -4658,6 +4658,31 @@
   "@profileNotifYourRun": {
     "description": "Fallback for a run reference in notification text when distance is unknown"
   },
+  "profileNotifNameAndOthers": "{name} and {count} others",
+  "@profileNotifNameAndOthers": {
+    "description": "Actor name for a collapsed notification group (Alice and 4 others)",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileNotifAndOthers": "and {count} others",
+  "@profileNotifAndOthers": {
+    "description": "Expand toggle label for a collapsed notification group",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileNotifShowLess": "Show less",
+  "@profileNotifShowLess": {
+    "description": "Collapse toggle label for an expanded notification group"
+  },
   "profileNotifKudos": "{name} gave kudos to your {dist}",
   "@profileNotifKudos": {
     "description": "Notification text for a kudos",

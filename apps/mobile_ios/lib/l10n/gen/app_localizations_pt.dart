@@ -3452,6 +3452,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get profileNotifYourRun => 'sua corrida';
 
   @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name e mais $count';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'e mais $count';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Mostrar menos';
+
+  @override
   String profileNotifKudos(String name, String dist) {
     return '$name deu kudos à sua $dist';
   }
@@ -14414,6 +14427,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get profileNotifYourRun => 'sua corrida';
+
+  @override
+  String profileNotifNameAndOthers(String name, int count) {
+    return '$name e mais $count';
+  }
+
+  @override
+  String profileNotifAndOthers(int count) {
+    return 'e mais $count';
+  }
+
+  @override
+  String get profileNotifShowLess => 'Mostrar menos';
 
   @override
   String profileNotifKudos(String name, String dist) {
