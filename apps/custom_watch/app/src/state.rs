@@ -97,3 +97,11 @@ pub static FIX_QUALITY: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// recorder + alert engine through their settings-sync setters. `None` means
 /// nothing pushed yet. One receiver (the `record` task).
 pub static SETTINGS: Watch<CriticalSectionRawMutex, Option<WatchSettings>, 1> = Watch::new();
+
+/// QNH sea-level reference pressure (Pa) for the barometric-altitude
+/// calculation: the `record` task publishes a plausibility-guarded value when a
+/// pushed settings frame carries `sea_level_pa` (the mountain/desert weather-
+/// front recalibration); the `baro` task consumes it and swaps its altitude
+/// reference off the fixed `STANDARD_SEA_LEVEL_PA`. No value published means the
+/// baro task keeps its default reference. One receiver (the `baro` task).
+pub static SEA_LEVEL_PA: Watch<CriticalSectionRawMutex, f32, 1> = Watch::new();

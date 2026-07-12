@@ -49,8 +49,13 @@ pub async fn run(mut twim: Twim<'static>) {
     }
     let elevation_tx = state::ELEVATION.sender();
     let mut rec_rx = unwrap!(state::RECORD.receiver());
+    let mut sea_level_rx = unwrap!(state::SEA_LEVEL_PA.receiver());
     let mut vert = VertAccumulator::new();
     let mut moving = false;
+    // QNH reference for the altitude conversion. Defaults to the ISA standard
+    // until a phone settings push recalibrates it (state::SEA_LEVEL_PA) — the
+    // weather-front case where the fixed standard drifts the whole altitude.
+    let mut sea_level_pa = STANDARD_SEA_LEVEL_PA;
     let mut ticker = Ticker::every(SAMPLE);
     info!("baro: BMP581 streaming");
     loop {
@@ -63,9 +68,13 @@ pub async fn run(mut twim: Twim<'static>) {
             moving = snap.state == RecordState::Recording
                 && snap.current_speed_mps >= MIN_MOVING_SPEED_MPS as f32;
         }
+        // Pick up a recalibrated sea-level reference without blocking the tick.
+        if let Some(pa) = sea_level_rx.try_changed() {
+            sea_level_pa = pa;
+        }
         match sensor.read_pressure_pa() {
             Ok(Some(pa)) => {
-                let alt = altitude_m(pa, STANDARD_SEA_LEVEL_PA);
+                let alt = altitude_m(pa, sea_level_pa);
                 vert.push(alt, moving);
                 let reading = vert.reading(alt);
                 debug!(

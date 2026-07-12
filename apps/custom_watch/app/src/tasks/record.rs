@@ -34,6 +34,8 @@
 
 use defmt::*;
 use embassy_futures::select::{select, select3, Either, Either3};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::watch::Sender;
 use embassy_time::{Duration, Instant, Ticker};
 use heapless::Vec;
 use max86177::peak_detect::Reading as HrReading;
@@ -218,6 +220,7 @@ pub async fn run(store: &'static SharedStore) {
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
     let trackback_sender = state::TRACKBACK.sender();
+    let sea_level_tx = state::SEA_LEVEL_PA.sender();
     let mut recorder = Recorder::new();
     // On-run alerts ride this task because it already owns the recorder's
     // event cadence; the engine is pure and fed after the recorder updates,
@@ -266,7 +269,7 @@ pub async fn run(store: &'static SharedStore) {
             }),
             ..WatchSettings::default()
         };
-        apply_settings(&demo, &mut recorder, &mut alerts);
+        apply_settings(&demo, &mut recorder, &mut alerts, &sea_level_tx);
         info!("record: sim demo settings applied (pacer 1km/5:00, gear 700/800 km)");
     }
     #[cfg(not(feature = "sim-autostart"))]
@@ -320,7 +323,7 @@ pub async fn run(store: &'static SharedStore) {
         // applies each present field to the recorder + alert engine. Config, not
         // run data — L4, applied before the event mutates run totals.
         if let Some(Some(s)) = settings_rx.try_changed() {
-            apply_settings(&s, &mut recorder, &mut alerts);
+            apply_settings(&s, &mut recorder, &mut alerts, &sea_level_tx);
         }
 
         match event {
@@ -441,12 +444,27 @@ fn is_active(state: RecordState) -> bool {
     matches!(state, RecordState::Recording | RecordState::Paused)
 }
 
+/// Plausible QNH sea-level pressure window (Pa). A pushed `sea_level_pa` outside
+/// this is ignored — never published — the same "reject, don't clamp"
+/// discipline the recorder/alert setters keep for a garbage value. ~870–1080
+/// hPa spans every real weather system (record sea-level pressure extremes sit
+/// well inside it), so anything outside is a corrupt or misframed push.
+const MIN_SEA_LEVEL_PA: f32 = 87_000.0;
+const MAX_SEA_LEVEL_PA: f32 = 108_000.0;
+
 /// Apply a pushed settings frame: each present field feeds the recorder's (or
 /// alert engine's) existing settings-sync setter, which keeps its own
 /// plausibility guard, so a bad value is rejected the same way regardless of
-/// transport. Absent fields are left untouched — a partial push is a partial
+/// transport. The QNH sea-level reference has no setter (it is a `state` watch
+/// the baro task consumes), so its plausibility guard lives here — range-check,
+/// then publish. Absent fields are left untouched — a partial push is a partial
 /// update, never a reset of the rest.
-fn apply_settings(s: &WatchSettings, recorder: &mut Recorder, alerts: &mut AlertEngine) {
+fn apply_settings(
+    s: &WatchSettings,
+    recorder: &mut Recorder,
+    alerts: &mut AlertEngine,
+    sea_level_tx: &Sender<'static, CriticalSectionRawMutex, f32, 1>,
+) {
     if let Some(hr) = s.max_hr {
         recorder.set_max_hr(hr);
     }
@@ -458,6 +476,14 @@ fn apply_settings(s: &WatchSettings, recorder: &mut Recorder, alerts: &mut Alert
     }
     if let Some(z) = s.zone_ceiling {
         alerts.set_zone_ceiling(z);
+    }
+    if let Some(pa) = s.sea_level_pa {
+        if (MIN_SEA_LEVEL_PA..=MAX_SEA_LEVEL_PA).contains(&pa) {
+            sea_level_tx.send(pa);
+        }
+    }
+    if let Some(f) = s.fuel {
+        alerts.set_fuel_intervals(f.drink_interval_s, f.eat_interval_s);
     }
 }
 
