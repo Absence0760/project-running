@@ -644,6 +644,12 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
 
   Widget _buildPreview(
       ThemeData theme, AppLocalizations l10n, GeneratedPlan p) {
+    // A beginner walk-run plan is duration-based intervals, not pace-based —
+    // the VDOT badge + the five Daniels pace zones are jargon the runner who
+    // ticked "New to running?" can't parse. Detect it from the plan itself
+    // (every session is a walk_run workout) and hide the pace panel for it.
+    final isWalkRun = p.weeks
+        .any((w) => w.workouts.any((wo) => wo.kind == WorkoutKind.walkRun));
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -657,33 +663,35 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           Text(l10n.planNewPreviewTitle,
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 6,
-            children: [
-              _pacePill(theme, l10n.planNewPaceEasy, p.paces.easy),
-              _pacePill(theme, l10n.planNewPaceMarathon, p.paces.marathon),
-              _pacePill(theme, l10n.planNewPaceTempo, p.paces.tempo),
-              _pacePill(theme, l10n.planNewPaceInterval, p.paces.interval),
-              _pacePill(theme, l10n.planNewPaceRep, p.paces.repetition),
-            ],
-          ),
-          if (p.pacesAreFallback) ...[
-            const SizedBox(height: 6),
-            Text(
-              l10n.planNewPacesFallback,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-          if (p.vdot != null) ...[
+          if (!isWalkRun) ...[
             const SizedBox(height: 8),
-            Text(l10n.planNewVdot(formatFixed(p.vdot!, 1, activeLocaleTag)),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: [
+                _pacePill(theme, l10n.planNewPaceEasy, p.paces.easy),
+                _pacePill(theme, l10n.planNewPaceMarathon, p.paces.marathon),
+                _pacePill(theme, l10n.planNewPaceTempo, p.paces.tempo),
+                _pacePill(theme, l10n.planNewPaceInterval, p.paces.interval),
+                _pacePill(theme, l10n.planNewPaceRep, p.paces.repetition),
+              ],
+            ),
+            if (p.pacesAreFallback) ...[
+              const SizedBox(height: 6),
+              Text(
+                l10n.planNewPacesFallback,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            if (p.vdot != null) ...[
+              const SizedBox(height: 8),
+              Text(l10n.planNewVdot(formatFixed(p.vdot!, 1, activeLocaleTag)),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline)),
+            ],
           ],
           const SizedBox(height: 10),
           Text(l10n.planNewWeekOutline,
