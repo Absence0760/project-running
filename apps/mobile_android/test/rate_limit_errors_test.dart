@@ -102,6 +102,61 @@ void main() {
       );
     });
 
+    test('clone_plan_template + clone_public_plan buckets use "adopting plans"',
+        () {
+      // The training-plan adopt flows (clonePlanTemplate from a club
+      // template, clonePublicPlan from the public library) both go
+      // through enforce_create_rate_limit. Pin the shared verb.
+      expect(
+        rateLimitErrorMessage(
+          code: 'P0001',
+          message: 'rate limit exceeded for clone_plan_template, retry in 300s',
+        ),
+        "You're adopting plans too quickly — please wait 5 minutes and try again.",
+      );
+      expect(
+        rateLimitErrorMessage(
+          code: 'P0001',
+          message: 'rate limit exceeded for clone_public_plan, retry in 45s',
+        ),
+        "You're adopting plans too quickly — please wait 45 seconds and try again.",
+      );
+    });
+
+    test('clone_session_template bucket uses "adopting session plans"', () {
+      expect(
+        rateLimitErrorMessage(
+          code: 'P0001',
+          message:
+              'rate limit exceeded for clone_session_template, retry in 30s',
+        ),
+        "You're adopting session plans too quickly — please wait 30 seconds and try again.",
+      );
+    });
+
+    test('clone_gym_routine_template bucket uses "adopting gym routines"', () {
+      expect(
+        rateLimitErrorMessage(
+          code: 'P0001',
+          message:
+              'rate limit exceeded for clone_gym_routine_template, retry in 30s',
+        ),
+        "You're adopting gym routines too quickly — please wait 30 seconds and try again.",
+      );
+    });
+
+    test('publish_gym_routine_as_template bucket uses "publishing routines"',
+        () {
+      expect(
+        rateLimitErrorMessage(
+          code: 'P0001',
+          message:
+              'rate limit exceeded for publish_gym_routine_as_template, retry in 120s',
+        ),
+        "You're publishing routines too quickly — please wait 2 minutes and try again.",
+      );
+    });
+
     test('zero seconds defaults to "a few seconds"', () {
       final msg = rateLimitErrorMessage(
         code: 'P0001',

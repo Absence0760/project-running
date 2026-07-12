@@ -1792,6 +1792,46 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('template-clone / publish RPC wrappers translate P0001 via the shared helper', () => {
+	// Reason: the clone_plan_template / clone_public_plan /
+	// clone_session_template / clone_gym_routine_template /
+	// publish_gym_routine_as_template RPCs all raise the same
+	// enforce_create_rate_limit P0001 exception as create_club /
+	// create_route. Their data.ts wrappers used to `if (error) throw
+	// error` the raw postgres string straight into the caller's toast
+	// (e.g. plans/new, plans/library, clubs/[slug] adopt). Pin that
+	// each wrapper now routes the error through rateLimitErrorMessage +
+	// re-throws the friendly string, matching createClub / saveRoute /
+	// submitReport above.
+	const source = read('src/lib/core/data.ts');
+	function bodyOf(needle: string): string {
+		const start = source.indexOf(needle);
+		assert.ok(start >= 0, `Could not locate '${needle}' — rename?`);
+		const end = source.indexOf('return data as string;', start + needle.length);
+		assert.ok(end > start, `Could not locate the return landmark after '${needle}'`);
+		return source.slice(start, end);
+	}
+	for (const name of [
+		'export async function clonePlanTemplate(',
+		'export async function clonePublicPlan(',
+		'export async function cloneSessionTemplate(',
+		'export async function publishGymRoutineAsTemplate(',
+		'export async function cloneGymRoutineTemplate(',
+	]) {
+		const body = bodyOf(name);
+		assert.match(
+			body,
+			/rateLimitErrorMessage\(/,
+			`${name} must call rateLimitErrorMessage — every P0001 rate-limit bucket goes through the shared helper.`,
+		);
+		assert.match(
+			body,
+			/if\s*\(friendly\)\s*throw\s+new\s+Error\(friendly\)/,
+			`${name} must throw the friendly string when the helper recognises the bucket. Skipping the throw drops back to the raw postgres exception.`,
+		);
+	}
+});
+
 test('accessibility: sidebar profile popover has focus trap + ESC close + focus return', () => {
 	// Reason: audit/accessibility High — WCAG 2.1.2 (No Keyboard
 	// Trap, paradoxically — the prior version let Tab escape the
