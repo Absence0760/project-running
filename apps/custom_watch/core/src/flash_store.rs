@@ -248,6 +248,25 @@ impl SlotDir {
         }
     }
 
+    /// Reserve or reuse the slot holding `run_seq`. If a prior mid-run
+    /// checkpoint already placed this run, reuse ITS slot (updating the recorded
+    /// size) so a checkpoint and the final commit target the same page and the
+    /// commit supersedes the checkpoint; otherwise choose a fresh slot exactly
+    /// like [`place`](Self::place).
+    pub fn place_or_update(&mut self, run_seq: u32, size: u32, start_uptime_s: u32) -> usize {
+        if let Some((slot, _)) = self.find(run_seq) {
+            self.slots[slot] = Some(SlotMeta {
+                run_seq,
+                size,
+                start_uptime_s,
+                synced: false,
+            });
+            slot
+        } else {
+            self.place(run_seq, size, start_uptime_s)
+        }
+    }
+
     fn victim(&self) -> usize {
         for (i, s) in self.slots.iter().enumerate() {
             if s.is_none() {
@@ -414,6 +433,57 @@ mod tests {
         assert_eq!(dir.find(0), None, "evicted run is gone");
         assert_eq!(dir.find(4), Some((0, 100)));
         assert_eq!(dir.find(1), Some((1, 100)));
+    }
+
+    #[test]
+    fn place_or_update_reuses_the_slot_for_an_existing_run() {
+        // The first checkpoint places the run; later checkpoints + the final
+        // commit must land in the SAME slot so the commit supersedes rather than
+        // leaving a stale checkpoint in another slot.
+        let mut dir = SlotDir::new();
+        let s0 = dir.place_or_update(7, 100, 41);
+        let s1 = dir.place_or_update(7, 260, 41); // grew as more points staged
+        assert_eq!(s0, s1, "same run reuses its slot");
+        assert_eq!(dir.find(7), Some((s0, 260)), "size updated in place");
+        assert_eq!(dir.run_count(), 1, "no second slot consumed");
+
+        // A different run still takes a fresh slot.
+        let s2 = dir.place_or_update(8, 100, 50);
+        assert_ne!(s2, s0);
+        assert_eq!(dir.run_count(), 2);
+    }
+
+    #[test]
+    fn place_or_update_matches_place_for_a_brand_new_run() {
+        let mut a = SlotDir::new();
+        let mut b = SlotDir::new();
+        assert_eq!(a.place_or_update(3, 100, 10), b.place(3, 100, 10));
+        assert_eq!(a.find(3), b.find(3));
+    }
+
+    #[test]
+    fn recover_slot_reads_back_a_checkpoint_blob_as_a_partial_run() {
+        // A mid-run checkpoint (partial track + totals-so-far) written into a
+        // slot and power-cycled recovers exactly like a finished run — the whole
+        // point of checkpointing: a reset mid-run recovers a slightly-stale
+        // partial run instead of nothing.
+        let sink: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 9, 77).expect("start");
+        for t in 0..5 {
+            w.push_point(&a_point(t)).expect("push");
+        }
+        let ckpt = w.checkpoint_blob(321, 200, 210).expect("checkpoint");
+        let mut slot = [0xFFu8; SLOT_LEN];
+        slot[..ckpt.len()].copy_from_slice(&ckpt);
+        assert_eq!(
+            recover_slot(&slot),
+            Some(RecoveredRun {
+                run_seq: 9,
+                size: blob_len(5),
+                start_uptime_s: 77,
+            }),
+            "the partial run recovers with the totals-so-far"
+        );
     }
 
     #[test]

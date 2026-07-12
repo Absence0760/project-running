@@ -29,7 +29,7 @@
 //! Direct NVMC access while the SoftDevice is enabled can fault or assert. This
 //! compiles and is structured for that swap; it has never run on hardware.
 
-use defmt::{info, warn};
+use defmt::{debug, info, warn};
 use embassy_nrf::nvmc::{self, Nvmc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
@@ -193,7 +193,12 @@ impl<'d> RunStore<'d> {
             );
             return;
         }
-        let slot = self.dir.place(run_seq, blob.len() as u32, start_uptime_s);
+        // Reuse the slot a mid-run checkpoint already reserved for this run (if
+        // any) so the final commit supersedes the checkpoint in place; otherwise
+        // this picks a fresh slot exactly like a checkpoint-free run.
+        let slot = self
+            .dir
+            .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
         let start = flash_store::slot_offset(REGION_OFFSET, slot);
         let end = start + SLOT_LEN as u32;
         if let Err(e) = self.flash.erase(start, end) {
@@ -209,6 +214,57 @@ impl<'d> RunStore<'d> {
         }
         info!(
             "run_flash: stored run {=u32} ({=usize} B) in slot {=usize}",
+            run_seq,
+            blob.len(),
+            slot
+        );
+    }
+
+    /// Best-effort mid-run checkpoint: persist a *recoverable* snapshot of the
+    /// run-so-far to its flash slot so a battery swap or brown-out mid-run
+    /// recovers a slightly-stale partial run instead of losing the entire
+    /// in-progress track (which otherwise only reaches flash at stop). Reserves
+    /// the run's slot on the first checkpoint and rewrites that SAME slot in
+    /// place each time — the eventual [`commit`](Self::commit) lands in the same
+    /// slot and supersedes it. L4 / best-effort: any flash error only warns and
+    /// drops, so recording is never blocked (same contract as `commit`). The
+    /// caller bounds the cadence to keep flash erase cycles within endurance.
+    pub fn checkpoint(&mut self, run_seq: u32, start_uptime_s: u32, blob: &[u8]) {
+        if !self.available {
+            return;
+        }
+        if blob.len() > SLOT_LEN {
+            warn!(
+                "run_flash: checkpoint blob {=usize} B exceeds slot {=usize} B, dropped",
+                blob.len(),
+                SLOT_LEN
+            );
+            return;
+        }
+        let slot = self
+            .dir
+            .place_or_update(run_seq, blob.len() as u32, start_uptime_s);
+        let start = flash_store::slot_offset(REGION_OFFSET, slot);
+        let end = start + SLOT_LEN as u32;
+        if let Err(e) = self.flash.erase(start, end) {
+            warn!(
+                "run_flash: checkpoint erase slot {=usize} failed {:?}",
+                slot, e
+            );
+            self.dir.forget(slot);
+            return;
+        }
+        let mut sink = FlashSink::new(&mut self.flash, start, end);
+        if let Err(e) = sink.write(blob) {
+            warn!(
+                "run_flash: checkpoint write run {=u32} failed {:?}",
+                run_seq, e
+            );
+            self.dir.forget(slot);
+            return;
+        }
+        debug!(
+            "run_flash: checkpointed run {=u32} ({=usize} B) in slot {=usize}",
             run_seq,
             blob.len(),
             slot

@@ -282,6 +282,38 @@ impl<S: ByteSink> RunWriter<S> {
     }
 }
 
+impl<const N: usize> RunWriter<heapless::Vec<u8, N>> {
+    /// Emit a recoverable checkpoint blob of the run staged so far WITHOUT
+    /// consuming the writer: the staged `header|points` prefix plus a footer
+    /// stamped with the totals-so-far. It reuses the running CRC, so the result
+    /// is byte-identical in structure to what [`finalize`](Self::finalize) would
+    /// write for the same prefix + totals — a checkpoint reads back through
+    /// [`verify_blob`] / [`recover_slot`](crate::flash_store::recover_slot) as an
+    /// ordinary finished run. This lets the recorder persist a mid-run snapshot
+    /// to flash while continuing to stream into the same writer, so a reset
+    /// mid-run recovers a (slightly stale) partial run instead of nothing.
+    /// `None` only if the blob doesn't fit `N` (the sink is already `N`-bounded,
+    /// so this can't happen once a run staged into the same-sized sink).
+    pub fn checkpoint_blob(
+        &self,
+        distance_m: u32,
+        moving_s: u32,
+        elapsed_s: u32,
+    ) -> Option<heapless::Vec<u8, N>> {
+        let mut out = heapless::Vec::<u8, N>::new();
+        out.extend_from_slice(&self.sink).ok()?;
+        let footer = RunFooter {
+            distance_m,
+            moving_s,
+            elapsed_s,
+            crc32: self.crc.finish(),
+        }
+        .encode();
+        out.extend_from_slice(&footer).ok()?;
+        Some(out)
+    }
+}
+
 /// Verify a reassembled blob: magics present, length a whole number of points,
 /// and the stored CRC matches a recompute over header + points. The phone
 /// calls this before trusting a synced run.
@@ -458,6 +490,81 @@ mod tests {
         assert_eq!(footer.distance_m, 1234);
         assert_eq!(footer.moving_s, 600);
         assert_eq!(footer.elapsed_s, 620);
+    }
+
+    #[test]
+    fn checkpoint_blob_is_byte_identical_to_a_finalize() {
+        // A mid-run checkpoint of a staged writer must equal, byte-for-byte,
+        // what finalize would emit for the same prefix + totals — so a
+        // checkpointed partial run reads back exactly like a finished one and
+        // the wire format / golden vector is unchanged.
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 7, 41).expect("start");
+        for p in sample_points() {
+            w.push_point(&p).expect("push");
+        }
+        let ckpt = w.checkpoint_blob(1234, 600, 620).expect("checkpoint");
+        assert!(verify_blob(&ckpt));
+        assert_eq!(ckpt.len() as u32, blob_len(3));
+
+        // Identically-staged second writer, finalised: same bytes.
+        let sink2: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w2 = RunWriter::start(sink2, 7, 41).expect("start");
+        for p in sample_points() {
+            w2.push_point(&p).expect("push");
+        }
+        let finalised = w2.finalize(1234, 600, 620).expect("finalize");
+        assert_eq!(&ckpt[..], &finalised[..], "checkpoint == finalize");
+    }
+
+    #[test]
+    fn checkpoint_blob_does_not_consume_the_writer_and_later_supersedes() {
+        // The writer keeps streaming after a checkpoint, and a later checkpoint
+        // carries the newer points + totals (the eventual commit supersedes it).
+        let sink: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut w = RunWriter::start(sink, 1, 0).expect("start");
+        for i in 0..3u32 {
+            w.push_point(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            })
+            .expect("push");
+        }
+        let early = w.checkpoint_blob(100, 50, 60).expect("early checkpoint");
+        assert!(verify_blob(&early));
+        assert_eq!(point_count(early.len() as u32), Some(3));
+
+        for i in 3..10u32 {
+            w.push_point(&TrackPoint {
+                lat_e7: i as i32,
+                lon_e7: 0,
+                t_offset_s: i,
+                ele_dm: None,
+                bpm: None,
+            })
+            .expect("push");
+        }
+        let later = w.checkpoint_blob(400, 300, 320).expect("later checkpoint");
+        assert!(verify_blob(&later));
+        assert_eq!(point_count(later.len() as u32), Some(10));
+        assert!(later.len() > early.len(), "later checkpoint has more track");
+
+        // And the writer still finalises cleanly afterwards.
+        let fin = w.finalize(500, 400, 420).expect("finalize");
+        assert!(verify_blob(&fin));
+        assert_eq!(point_count(fin.len() as u32), Some(10));
+    }
+
+    #[test]
+    fn checkpoint_blob_zero_points_round_trips() {
+        let sink: heapless::Vec<u8, 64> = heapless::Vec::new();
+        let w = RunWriter::start(sink, 2, 9).expect("start");
+        let ckpt = w.checkpoint_blob(0, 0, 0).expect("checkpoint");
+        assert!(verify_blob(&ckpt));
+        assert_eq!(point_count(ckpt.len() as u32), Some(0));
     }
 
     #[test]
