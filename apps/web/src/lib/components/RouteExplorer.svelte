@@ -248,17 +248,17 @@
 	</div>
 
 	<div class="filters">
-		<select bind:value={distanceFilter} onchange={() => search()}>
+		<select aria-label={t('routeExplorer.filterDistance')} bind:value={distanceFilter} onchange={() => search()}>
 			{#each Object.entries(distanceOptions) as [key, opt]}
 				<option value={key}>{opt.label}</option>
 			{/each}
 		</select>
-		<select bind:value={surfaceFilter} onchange={() => search()}>
+		<select aria-label={t('routeExplorer.filterSurface')} bind:value={surfaceFilter} onchange={() => search()}>
 			{#each Object.entries(surfaceOptions) as [key, label]}
 				<option value={key}>{label}</option>
 			{/each}
 		</select>
-		<select bind:value={sort} onchange={() => search()}>
+		<select aria-label={t('routeExplorer.filterSort')} bind:value={sort} onchange={() => search()}>
 			<option value="popular">{t('routeExplorer.sortMostRun')}</option>
 			<option value="newest">{t('routeExplorer.sortNewest')}</option>
 			<option value="featured">{t('routeExplorer.sortFeatured')}</option>
