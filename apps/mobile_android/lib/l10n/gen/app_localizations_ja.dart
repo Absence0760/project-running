@@ -6570,6 +6570,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runSocialDelete => '削除';
 
   @override
+  String get runSocialReportComment => 'コメントを報告';
+
+  @override
+  String get runSocialReportReply => '返信を報告';
+
+  @override
   String get runSocialDeleteCommentTitle => 'このコメントを削除しますか？';
 
   @override
@@ -7198,6 +7204,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'ルートを報告';
+
+  @override
+  String get reportTitleComment => 'コメントを報告';
 
   @override
   String get reportTitlePost => '投稿を報告';

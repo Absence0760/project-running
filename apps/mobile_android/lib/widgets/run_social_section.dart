@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../social_service.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/top_banner.dart';
 
 /// Run-detail kudos pill + one-level comment thread + composer. Mirrors
@@ -231,6 +232,18 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     return false;
   }
 
+  bool _canReport(RunCommentRow c) =>
+      _viewerId != null && c.authorId != _viewerId;
+
+  void _reportComment(String commentId) {
+    showReportSheet(
+      context,
+      api: widget.api,
+      targetKind: 'comment',
+      targetId: commentId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -299,6 +312,9 @@ class _RunSocialSectionState extends State<RunSocialSection> {
                           _replyCtrl.clear();
                         }),
                 onDelete: () => _deleteComment(c.comment.id),
+                onReport: _canReport(c.comment)
+                    ? () => _reportComment(c.comment.id)
+                    : null,
               ),
               for (final r in (repliesByParent[c.comment.id] ?? const []))
                 Padding(
@@ -308,6 +324,9 @@ class _RunSocialSectionState extends State<RunSocialSection> {
                     canDelete: _canDelete(r.comment),
                     onReply: null,
                     onDelete: () => _deleteComment(r.comment.id),
+                    onReport: _canReport(r.comment)
+                        ? () => _reportComment(r.comment.id)
+                        : null,
                     isReply: true,
                   ),
                 ),
@@ -384,6 +403,7 @@ class _CommentTile extends StatelessWidget {
   final bool canDelete;
   final VoidCallback? onReply;
   final VoidCallback onDelete;
+  final VoidCallback? onReport;
   final bool isReply;
 
   const _CommentTile({
@@ -391,6 +411,7 @@ class _CommentTile extends StatelessWidget {
     required this.canDelete,
     required this.onReply,
     required this.onDelete,
+    this.onReport,
     this.isReply = false,
   });
 
@@ -443,6 +464,19 @@ class _CommentTile extends StatelessWidget {
                           minimumSize: const Size(48, 48),
                         ),
                         child: Text(l10n.runSocialReply),
+                      ),
+                    if (onReport != null)
+                      IconButton(
+                        onPressed: onReport,
+                        icon: const Icon(Icons.flag_outlined, size: 18),
+                        tooltip: isReply
+                            ? l10n.runSocialReportReply
+                            : l10n.runSocialReportComment,
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     if (canDelete)
                       TextButton(

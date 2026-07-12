@@ -6947,6 +6947,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runSocialDelete => 'Excluir';
 
   @override
+  String get runSocialReportComment => 'Denunciar comentário';
+
+  @override
+  String get runSocialReportReply => 'Denunciar resposta';
+
+  @override
   String get runSocialDeleteCommentTitle => 'Excluir este comentário?';
 
   @override
@@ -7592,6 +7598,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get reportTitleRoute => 'Denunciar rota';
+
+  @override
+  String get reportTitleComment => 'Denunciar comentário';
 
   @override
   String get reportTitlePost => 'Denunciar publicação';
@@ -17937,6 +17946,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get runSocialDelete => 'Excluir';
 
   @override
+  String get runSocialReportComment => 'Denunciar comentário';
+
+  @override
+  String get runSocialReportReply => 'Denunciar resposta';
+
+  @override
   String get runSocialDeleteCommentTitle => 'Excluir este comentário?';
 
   @override
@@ -18582,6 +18597,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get reportTitleRoute => 'Denunciar rota';
+
+  @override
+  String get reportTitleComment => 'Denunciar comentário';
 
   @override
   String get reportTitlePost => 'Denunciar publicação';

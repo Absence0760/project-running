@@ -11448,6 +11448,18 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get runSocialDelete;
 
+  /// Accessibility label / tooltip on the flag button of another user's comment
+  ///
+  /// In en, this message translates to:
+  /// **'Report comment'**
+  String get runSocialReportComment;
+
+  /// Accessibility label / tooltip on the flag button of another user's reply
+  ///
+  /// In en, this message translates to:
+  /// **'Report reply'**
+  String get runSocialReportReply;
+
   /// Confirm dialog title before deleting a run comment
   ///
   /// In en, this message translates to:
@@ -12605,6 +12617,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report route'**
   String get reportTitleRoute;
+
+  /// Report sheet title when reporting a run comment
+  ///
+  /// In en, this message translates to:
+  /// **'Report comment'**
+  String get reportTitleComment;
 
   /// Report sheet title when reporting a club post
   ///

@@ -545,6 +545,56 @@ void main() {
     });
   });
 
+  group('RunSocialSection — report comment (E2)', () {
+    testWidgets("another user's comment carries a Report flag that opens the sheet",
+        (tester) async {
+      final api = _SocialApi(
+        seedComments: [_comment('c1', authorId: 'someone-else')],
+      );
+      await _pumpApi(tester, api);
+
+      final flag = find.byTooltip('Report comment');
+      expect(flag, findsOneWidget);
+
+      await tester.tap(flag);
+      await tester.pumpAndSettle();
+      // The report sheet opened with the comment-specific title.
+      expect(find.text('Report comment'), findsWidgets);
+      expect(find.widgetWithText(FilledButton, 'Submit report'),
+          findsOneWidget);
+    });
+
+    testWidgets('own comment shows no Report flag', (tester) async {
+      final api = _SocialApi(
+        seedComments: [_comment('c1', authorId: 'viewer-1')],
+      );
+      await _pumpApi(tester, api);
+      expect(find.byTooltip('Report comment'), findsNothing);
+    });
+
+    testWidgets('signed-out viewer sees no Report flag', (tester) async {
+      final api = _SocialApi(
+        viewer: null,
+        seedComments: [_comment('c1', authorId: 'someone-else')],
+      );
+      await _pumpApi(tester, api);
+      expect(find.byTooltip('Report comment'), findsNothing);
+    });
+
+    testWidgets("another user's reply carries the reply-specific Report label",
+        (tester) async {
+      final api = _SocialApi(
+        seedComments: [
+          _comment('c1', authorId: 'someone-else'),
+          _comment('r1', authorId: 'third-user', parentId: 'c1'),
+        ],
+      );
+      await _pumpApi(tester, api);
+      expect(find.byTooltip('Report comment'), findsOneWidget);
+      expect(find.byTooltip('Report reply'), findsOneWidget);
+    });
+  });
+
   group('RunSocialSection — comment action tap targets (a11y >=48dp)', () {
     testWidgets('inline Reply + Delete meet the 48dp minimum hit target',
         (tester) async {

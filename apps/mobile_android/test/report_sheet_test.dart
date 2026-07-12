@@ -107,6 +107,11 @@ void main() {
       expect(find.text('Report run'), findsOneWidget);
     });
 
+    testWidgets('comment target renders its own title (E2)', (tester) async {
+      await _openSheet(tester, _FakeApiClient(), kind: 'comment');
+      expect(find.text('Report comment'), findsOneWidget);
+    });
+
     testWidgets('Submit forwards a run targetKind to the RPC (E2)',
         (tester) async {
       final api = _FakeApiClient();
