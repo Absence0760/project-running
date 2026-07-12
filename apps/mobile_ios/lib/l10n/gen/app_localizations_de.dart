@@ -3992,6 +3992,36 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String eventPhotosTitle(int count) {
+    return 'Fotos ($count)';
+  }
+
+  @override
+  String get eventAddPhoto => 'Foto hinzufügen';
+
+  @override
+  String get eventPhotoUploading => 'Wird hochgeladen…';
+
+  @override
+  String get eventNoPhotosYet => 'Noch keine Fotos.';
+
+  @override
+  String get eventNoPhotosAddHint => 'Füge als Erste(r) eines hinzu.';
+
+  @override
+  String get eventWhichRunPhoto => 'Zu welchem Lauf gehört dieses Foto?';
+
+  @override
+  String get eventNoRecentRuns =>
+      'Keine aktuellen Läufe gefunden. Zeichne zuerst einen Lauf auf und komm dann zurück.';
+
+  @override
+  String get eventPhotoRunnerFallback => 'Ein Läufer';
+
+  @override
+  String get eventPhotoUploadFailed => 'Foto konnte nicht hochgeladen werden.';
+
+  @override
   String get eventNoRsvps => 'Noch keine Zusagen – sei die/der Erste.';
 
   @override
@@ -4145,10 +4175,6 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get eventSubmitTimeSubtitle =>
       'Wähle einen Lauf zum Anhängen oder erfasse ein DNF / DNS.';
-
-  @override
-  String get eventNoRecentRuns =>
-      'Keine aktuellen Läufe gefunden. Zeichne zuerst einen Lauf auf und komm dann zurück.';
 
   @override
   String get eventRecordDnf => 'DNF erfassen';

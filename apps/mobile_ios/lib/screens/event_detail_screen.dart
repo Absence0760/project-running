@@ -24,6 +24,7 @@ import '../session_steps.dart';
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
+import '../widgets/event_photos.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/finisher_certificate_card.dart';
 import '../widgets/gym_compose_sheet.dart';
@@ -811,6 +812,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               label: Text(l10n.checkpointCheckinAction),
             ),
           ],
+          EventPhotos(
+            api: ApiClient(),
+            eventId: e.row.id,
+            instanceStart: active,
+            canAdd: widget.social.currentUserId != null,
+            myEventRunId: _myEventRunId(),
+            fetchRecentRuns: () => widget.social.fetchRecentRuns(limit: 20),
+          ),
           const SizedBox(height: 24),
           FundraiserSection(social: widget.social, eventId: e.row.id),
           Text(
@@ -992,6 +1001,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         chip('declined', l10n.eventRsvpDeclined),
       ],
     );
+  }
+
+  /// The viewer's own finished run for this event instance, if any — a
+  /// finisher's photo attaches straight to it (web's `myEventRunId`).
+  String? _myEventRunId() {
+    final uid = widget.social.currentUserId;
+    if (uid == null) return null;
+    for (final r in _results) {
+      if (r.userId == uid && r.runId != null) return r.runId;
+    }
+    return null;
   }
 
   Widget _metric(ThemeData theme, String label, String value) {

@@ -2786,6 +2786,10 @@ class ApiClient {
     required String extension,
     String? caption,
     int positionIdx = 0,
+    // When set, the photo joins the event's multi-attendee gallery (#49).
+    // The DB INSERT policy requires the uploader can see the event.
+    String? eventId,
+    DateTime? eventInstanceStart,
   }) async {
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) throw Exception('Not authenticated');
@@ -2802,6 +2806,9 @@ class ApiClient {
           RunPhotoRow.colStoragePath: '', // placeholder; updated below
           RunPhotoRow.colCaption: normaliseRunPhotoCaption(caption),
           RunPhotoRow.colPositionIdx: positionIdx,
+          RunPhotoRow.colEventId: eventId,
+          RunPhotoRow.colEventInstanceStart:
+              eventInstanceStart?.toIso8601String(),
         })
         .select()
         .single();
@@ -2850,6 +2857,52 @@ class ApiClient {
     if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
     if (paths.isNotEmpty) {
       await _client.storage.from(StorageBuckets.runPhotos).remove(paths);
+    }
+  }
+
+  /// Event gallery (#49): every photo tagged to this event instance,
+  /// across all attendees' runs. RLS lets anyone who can see the event
+  /// read these even when the underlying run is private. `run_id` is NOT
+  /// selected so a private run's UUID can't leak to an event viewer who
+  /// can't see that run — mirrors web `fetchEventPhotos`. Uploader names
+  /// come from a second batched query (the run→profile join isn't
+  /// expressible when the run may be invisible to the viewer). Returns []
+  /// on error (L4 — the gallery is auxiliary to the event detail).
+  Future<List<EventPhotoView>> fetchEventPhotos(
+    String eventId,
+    DateTime instanceStart, {
+    int limit = 100,
+  }) async {
+    try {
+      final rows = await _client
+          .from(RunPhotoRow.table)
+          .select(
+            'id, owner_id, storage_path, thumb_512_path, caption, '
+            'position_idx, created_at, event_id, event_instance_start',
+          )
+          .eq(RunPhotoRow.colEventId, eventId)
+          .eq(RunPhotoRow.colEventInstanceStart, instanceStart.toIso8601String())
+          .order(RunPhotoRow.colCreatedAt, ascending: true)
+          .limit(limit);
+      if (rows.isEmpty) return const [];
+      final ownerIds = <String>{
+        for (final r in rows) r['owner_id'] as String,
+      }.toList();
+      final profiles = await _client
+          .from('user_profiles')
+          .select('id, display_name')
+          .inFilter('id', ownerIds);
+      final nameById = <String, String?>{
+        for (final p in profiles)
+          p['id'] as String: p['display_name'] as String?,
+      };
+      return [
+        for (final r in rows)
+          EventPhotoView.fromJson(r, nameById[r['owner_id'] as String]),
+      ];
+    } catch (e) {
+      debugPrint('fetchEventPhotos failed: $e');
+      return const [];
     }
   }
 
@@ -6673,6 +6726,47 @@ class ApiClient {
 
   static String _isoDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+/// One photo in an event's multi-attendee gallery (#49) — the mobile
+/// mirror of web's `EventPhoto` (a `RunPhoto` MINUS `run_id`, PLUS the
+/// uploader's display name). `run_id` is intentionally absent so a
+/// private run's UUID never reaches an event viewer who can't see it.
+class EventPhotoView {
+  final String id;
+  final String ownerId;
+  final String storagePath;
+  final String? thumb512Path;
+  final String? caption;
+  final int positionIdx;
+  final DateTime createdAt;
+  final String? uploaderName;
+
+  const EventPhotoView({
+    required this.id,
+    required this.ownerId,
+    required this.storagePath,
+    this.thumb512Path,
+    this.caption,
+    required this.positionIdx,
+    required this.createdAt,
+    this.uploaderName,
+  });
+
+  factory EventPhotoView.fromJson(
+    Map<String, dynamic> json,
+    String? uploaderName,
+  ) =>
+      EventPhotoView(
+        id: json['id'] as String,
+        ownerId: json['owner_id'] as String,
+        storagePath: json['storage_path'] as String,
+        thumb512Path: json['thumb_512_path'] as String?,
+        caption: json['caption'] as String?,
+        positionIdx: (json['position_idx'] as num).toInt(),
+        createdAt: DateTime.parse(json['created_at'] as String),
+        uploaderName: uploaderName,
+      );
 }
 
 /// One athlete on a coach's roster, or one coach on an athlete's list — the
