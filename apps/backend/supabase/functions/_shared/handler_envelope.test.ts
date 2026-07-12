@@ -830,6 +830,9 @@ Deno.test({
 
     const acctId = `acct_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const eventId = `evt_acct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // A distinct later delivery (new event id → passes dedupe) used to prove
+    // onboarded_at is set-once and not rewritten on a subsequent account edit.
+    const laterEventId = `evt_acct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_2`;
     try {
       // Plant the payout account in the pre-onboarding state the
       // events-connect-onboard EF leaves it in (charges disabled until
@@ -892,6 +895,25 @@ Deno.test({
           `(a) instructor_payout_accounts not mirrored: ${JSON.stringify(after)}`,
         );
       }
+      const firstOnboardedAt = after.onboarded_at;
+
+      // (a2) A LATER distinct account.updated (new event id → passes dedupe,
+      // still details_submitted=true, e.g. the host added a second bank) must
+      // NOT rewrite onboarded_at — it is set-once. Regression guard for the
+      // "onboarded_at overwritten on every delivery" bug.
+      r = await postStripeEvent({ ...accountEvent, id: laterEventId });
+      if (r.status !== 200 || r.json?.account_synced !== true) {
+        throw new Error(
+          `(a2) expected 200 account_synced=true, got ${r.status} ${JSON.stringify(r.json)}`,
+        );
+      }
+      const afterLater = await readAcct();
+      if (afterLater?.onboarded_at !== firstOnboardedAt) {
+        throw new Error(
+          `(a2) onboarded_at rewritten on a later delivery (set-once violated): ` +
+            `${JSON.stringify(firstOnboardedAt)} -> ${JSON.stringify(afterLater?.onboarded_at)}`,
+        );
+      }
 
       // (b) Replay the same event id (fresh signature, valid freshness)
       // → 23505 dedupe → skipped, never re-applied.
@@ -903,7 +925,7 @@ Deno.test({
       }
     } finally {
       await svc(
-        `/rest/v1/webhook_events?provider=eq.stripe&event_id=eq.${eventId}`,
+        `/rest/v1/webhook_events?provider=eq.stripe&event_id=in.(${eventId},${laterEventId})`,
         { method: 'DELETE' },
       ).then((x) => x.body?.cancel());
       await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
