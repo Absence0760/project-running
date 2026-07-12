@@ -255,6 +255,11 @@ pub struct NavStatus {
     pub off_m: f64,
     pub along_m: f64,
     pub alerting: bool,
+    /// The next turn ahead on the course ([`crate::turn_cues`]), carried so the
+    /// `record` task can feed the recorder's TurnCue page without owning the
+    /// course. `None` when there is no upcoming turn (past the last one, or a
+    /// course with no turns).
+    pub next_turn: Option<crate::record::TurnCueView>,
 }
 
 /// Pixels of breathing room the fit keeps inside each panel edge.

@@ -3620,6 +3620,7 @@ mod tests {
             along_m,
             off_m,
             alerting,
+            next_turn: None,
         })
     }
 

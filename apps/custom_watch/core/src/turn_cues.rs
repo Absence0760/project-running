@@ -198,6 +198,30 @@ fn bearing_deg(a: &TurnCueWaypoint, b: &TurnCueWaypoint) -> f64 {
     (brng + 360.0) % 360.0
 }
 
+/// The first turn strictly ahead of `along_m` (metres from the course start) and
+/// how many turns remain from it onward (including it), capped at `u8::MAX`.
+/// `None` once the runner is past the last turn. Watch-local runtime read over
+/// the ported [`generate_turn_cues`] output — NOT part of the web/Dart parity.
+pub fn next_turn_ahead(cues: &[TurnCue], along_m: f64) -> Option<(TurnCue, u8)> {
+    let idx = cues.iter().position(|c| c.position_m > along_m)?;
+    let remaining = (cues.len() - idx).min(u8::MAX as usize) as u8;
+    Some((cues[idx], remaining))
+}
+
+/// The compact direction code the run-view TurnCue page renders (0 straight /
+/// 1 slight-left / 2 left / 4 slight-right / 5 right / 7 u-turn; the 3 sharp-left
+/// and 6 sharp-right codes are unused — the model has no sharp class). Watch-local.
+pub fn direction_code(d: TurnDirection) -> u8 {
+    match d {
+        TurnDirection::Straight => 0,
+        TurnDirection::SlightLeft => 1,
+        TurnDirection::Left => 2,
+        TurnDirection::SlightRight => 4,
+        TurnDirection::Right => 5,
+        TurnDirection::Uturn => 7,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,5 +317,48 @@ mod tests {
         let cues = gen(&w);
         assert_eq!(cues.len(), 1);
         assert_eq!(cues[0].direction, TurnDirection::Left);
+    }
+
+    fn cue_at(position_m: f64, direction: TurnDirection) -> TurnCue {
+        TurnCue {
+            position_m,
+            bearing_in_deg: 0.0,
+            bearing_out_deg: 0.0,
+            direction,
+            distance_from_start_m: position_m,
+        }
+    }
+
+    #[test]
+    fn next_turn_ahead_picks_the_first_turn_past_the_runner() {
+        let cues = [
+            cue_at(100.0, TurnDirection::Left),
+            cue_at(500.0, TurnDirection::Right),
+            cue_at(900.0, TurnDirection::Uturn),
+        ];
+        // Before any turn: the first, all three remaining.
+        let (c, rem) = next_turn_ahead(&cues, 0.0).unwrap();
+        assert_eq!(c.direction, TurnDirection::Left);
+        assert_eq!(rem, 3);
+        // Between turns 1 and 2: the second, two remaining.
+        let (c, rem) = next_turn_ahead(&cues, 200.0).unwrap();
+        assert_eq!(c.direction, TurnDirection::Right);
+        assert_eq!(rem, 2);
+        // Exactly at a turn counts as passed (strictly ahead) → the next one.
+        let (c, _) = next_turn_ahead(&cues, 500.0).unwrap();
+        assert_eq!(c.direction, TurnDirection::Uturn);
+        // Past the last turn, and an empty course, both yield nothing.
+        assert!(next_turn_ahead(&cues, 1000.0).is_none());
+        assert!(next_turn_ahead(&[], 0.0).is_none());
+    }
+
+    #[test]
+    fn direction_code_maps_every_variant() {
+        assert_eq!(direction_code(TurnDirection::Straight), 0);
+        assert_eq!(direction_code(TurnDirection::SlightLeft), 1);
+        assert_eq!(direction_code(TurnDirection::Left), 2);
+        assert_eq!(direction_code(TurnDirection::SlightRight), 4);
+        assert_eq!(direction_code(TurnDirection::Right), 5);
+        assert_eq!(direction_code(TurnDirection::Uturn), 7);
     }
 }

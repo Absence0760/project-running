@@ -317,6 +317,13 @@ pub async fn run(store: &'static SharedStore) {
                 NavView::Status(s) => Some(s.along_m),
                 NavView::NoCourse | NavView::NoFix => None,
             });
+            // The nav task owns the course, so it also carries the next turn
+            // ahead; feed it to the recorder's TurnCue page (course-agnostic
+            // recorder, same seam as the along-course distance above).
+            recorder.set_turn_cue(match nav {
+                NavView::Status(s) => s.next_turn,
+                NavView::NoCourse | NavView::NoFix => None,
+            });
         }
 
         // A pushed settings frame (from the ble task; the sim seeds one above)

@@ -16,6 +16,11 @@
 use defmt::{info, unwrap, warn};
 use watch_core::course::{Course, NavStatus, OffCourseAlert};
 use watch_core::face::NavView;
+use watch_core::record::TurnCueView;
+use watch_core::turn_cues::{
+    direction_code, generate_turn_cues, next_turn_ahead, TurnCueOptions, TurnCueWaypoint,
+    MAX_TURN_CUE_WAYPOINTS,
+};
 
 use crate::state;
 
@@ -69,6 +74,18 @@ pub async fn run(course: Option<&'static Course>) {
         course.total_m() as u32
     );
     sender.send(NavView::NoFix);
+    // Precompute the course's turns once — the course is static at tier 1, so
+    // each fix only has to find the next turn ahead of its along-distance
+    // (turn_cues::next_turn_ahead). This is what feeds the run-view TurnCue page.
+    let mut waypoints: heapless::Vec<TurnCueWaypoint, MAX_TURN_CUE_WAYPOINTS> =
+        heapless::Vec::new();
+    for cp in course.points() {
+        let _ = waypoints.push(TurnCueWaypoint {
+            lat: cp.lat_deg,
+            lng: cp.lon_deg,
+        });
+    }
+    let cues = generate_turn_cues(&waypoints, TurnCueOptions::default());
     let mut alert = OffCourseAlert::new();
     let mut fix_rx = unwrap!(state::FIX.receiver());
     // Bias each projection toward forward progress from the last reported
@@ -94,10 +111,16 @@ pub async fn run(course: Option<&'static Course>) {
         } else if was_active && !alert.active() {
             info!("nav: back on course ({} m along)", p.along_m as u32);
         }
+        let next_turn = next_turn_ahead(&cues, p.along_m).map(|(c, remaining)| TurnCueView {
+            direction: direction_code(c.direction),
+            distance_m: (c.position_m - p.along_m).max(0.0).min(u16::MAX as f64) as u16,
+            remaining,
+        });
         sender.send(NavView::Status(NavStatus {
             off_m: p.off_m,
             along_m: p.along_m,
             alerting: alert.active(),
+            next_turn,
         }));
     }
 }
