@@ -1,12 +1,20 @@
 //! Driver for the Maxim MAX86177 optical heart-rate AFE.
 //!
-//! Register-level bring-up over blocking I2C: soft-reset, configure a single
-//! PPG measurement channel with one LED, and drain raw photodiode counts from
-//! the FIFO. Tier 1 stops at raw samples — [`peak_detect`] turns the stream
-//! into a BPM estimate in pure, host-testable logic. The licensed Maxim HR
-//! algorithm is C and gets pulled in via `bindgen` post-tier-1; see
-//! `docs/architecture/decisions.md` § 80 ("Trade-offs we accept") for the FFI
-//! budget.
+//! Register-level bring-up over blocking I2C: soft-reset, configure a
+//! LED-driven PPG measurement channel plus an ambient (LED-off) channel, and
+//! drain raw photodiode counts from the FIFO. Tier 1 stops at raw samples —
+//! [`peak_detect`] turns the stream into a BPM estimate in pure, host-testable
+//! logic. The licensed Maxim HR algorithm is C and gets pulled in via
+//! `bindgen` post-tier-1; see `docs/architecture/decisions.md` § 80
+//! ("Trade-offs we accept") for the FFI budget.
+//!
+//! The ambient channel (MEAS2) samples the same photodiode with no LED driven,
+//! so it reads only the ambient light bleeding into the diode. In blinding sun
+//! that ambient bleed rails the LED-on PPG channel; subtracting the ambient
+//! sample from the PPG sample (see [`peak_detect::PeakDetector::push_ambient`])
+//! cancels it, so a worn-but-sunny wrist can still yield a real pulse instead
+//! of a saturated dead read. FIFO words are tagged per measurement
+//! ([`decode_fifo_word`]) so the two interleaved streams can be told apart.
 //!
 //! No community Rust crate exists for this part, so the register map is
 //! hand-rolled. Real implementation for step 5 of `apps/custom_watch/README.md`.
@@ -36,6 +44,9 @@ mod reg {
     pub const MEAS1_CONFIG_1: u8 = 0x15;
     pub const MEAS1_CONFIG_2: u8 = 0x16;
     pub const MEAS1_LEDA_CURRENT: u8 = 0x19;
+    pub const MEAS2_SELECT: u8 = 0x1A;
+    pub const MEAS2_CONFIG_1: u8 = 0x1B;
+    pub const MEAS2_CONFIG_2: u8 = 0x1C;
     pub const TEMP_CONFIG: u8 = 0x20;
     pub const TEMP_INT: u8 = 0x21;
     pub const TEMP_FRAC: u8 = 0x22;
@@ -46,6 +57,7 @@ const SHUTDOWN: u8 = 1 << 1;
 const FIFO_FLUSH: u8 = 1 << 4;
 const FIFO_ROLLOVER: u8 = 1 << 1;
 const MEAS1_ENABLE: u8 = 1 << 0;
+const MEAS2_ENABLE: u8 = 1 << 1;
 
 /// Almost-full interrupt threshold, in samples remaining. Unused at tier 1
 /// (we poll the counter) but set so the pin is meaningful once wired.
@@ -62,10 +74,55 @@ const MEAS1_CONFIG_1: u8 = 0x20;
 const MEAS1_CONFIG_2: u8 = 0x00;
 const MEAS1_LEDA_CURRENT: u8 = 0x40;
 
-/// FIFO words are three bytes: a tag in the upper bits and a 19-bit photodiode
-/// count in the lower bits.
+/// MEAS2 is the ambient / dark channel: the same photodiode and ADC settings as
+/// MEAS1 but with no LED selected, so it samples only the ambient light bleeding
+/// into the diode. `MEAS2_SELECT` drives no LED (the LED-select nibble is zero —
+/// what makes it a dark read); the ADC config mirrors MEAS1 so the two counts
+/// are on the same scale and can be subtracted directly. Bench-verify the exact
+/// datasheet encodings alongside the MEAS1 block.
+const MEAS2_SELECT: u8 = 0x00;
+const MEAS2_CONFIG_1: u8 = MEAS1_CONFIG_1;
+const MEAS2_CONFIG_2: u8 = MEAS1_CONFIG_2;
+
+/// FIFO words are three bytes: a per-measurement tag in the upper bits and a
+/// 19-bit photodiode count in the lower bits. With MEAS1 (PPG) and MEAS2
+/// (ambient) both enabled the FIFO interleaves the two streams, so the tag is
+/// what tells a PPG count from an ambient one.
 const SAMPLE_BYTES: usize = 3;
 const PPG_DATA_MASK: u32 = 0x0007_FFFF;
+
+/// The 19-bit data sits in the low bits; the measurement tag occupies the five
+/// bits above it. Datasheet-exact split and tag values are a bench-verify
+/// target.
+const FIFO_TAG_SHIFT: u32 = 19;
+const FIFO_TAG_MASK: u32 = 0x1F;
+
+/// FIFO tag identifying a MEAS1 (LED-on PPG) sample.
+pub const MEAS1_TAG: u8 = 0x01;
+
+/// FIFO tag identifying a MEAS2 (LED-off ambient) sample.
+pub const MEAS2_TAG: u8 = 0x02;
+
+/// One decoded FIFO word: which measurement produced it, and its 19-bit count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct FifoWord {
+    pub tag: u8,
+    pub value: u32,
+}
+
+/// Split a raw 3-byte FIFO word into its measurement tag and 19-bit photodiode
+/// count. Pure so it is exercised on the host; the [`read_tagged_sample`] path
+/// on the device wraps it around the I2C burst.
+///
+/// [`read_tagged_sample`]: Max86177::read_tagged_sample
+pub fn decode_fifo_word(buf: [u8; SAMPLE_BYTES]) -> FifoWord {
+    let raw = (u32::from(buf[0]) << 16) | (u32::from(buf[1]) << 8) | u32::from(buf[2]);
+    FifoWord {
+        tag: ((raw >> FIFO_TAG_SHIFT) & FIFO_TAG_MASK) as u8,
+        value: raw & PPG_DATA_MASK,
+    }
+}
 
 /// Bounded read budget for the reset bit to self-clear, so a dead bus fails
 /// fast instead of hanging `init`.
@@ -182,7 +239,12 @@ impl<I2C: I2c> Max86177<I2C> {
         self.write_reg(reg::MEAS1_CONFIG_1, MEAS1_CONFIG_1)?;
         self.write_reg(reg::MEAS1_CONFIG_2, MEAS1_CONFIG_2)?;
         self.write_reg(reg::MEAS1_LEDA_CURRENT, MEAS1_LEDA_CURRENT)?;
-        self.write_reg(reg::MEAS_ENABLE, MEAS1_ENABLE)?;
+
+        self.write_reg(reg::MEAS2_SELECT, MEAS2_SELECT)?;
+        self.write_reg(reg::MEAS2_CONFIG_1, MEAS2_CONFIG_1)?;
+        self.write_reg(reg::MEAS2_CONFIG_2, MEAS2_CONFIG_2)?;
+
+        self.write_reg(reg::MEAS_ENABLE, MEAS1_ENABLE | MEAS2_ENABLE)?;
 
         self.write_reg(reg::SYSTEM_CONFIG_1, 0)?;
         Ok(())
@@ -193,15 +255,24 @@ impl<I2C: I2c> Max86177<I2C> {
         Ok(self.read_reg(reg::FIFO_COUNTER)? as usize)
     }
 
-    /// Pop one raw photodiode count from the FIFO, or `None` if it is empty.
-    pub fn read_sample(&mut self) -> Result<Option<u32>, Error<I2C::Error>> {
+    /// Pop one FIFO word with its measurement tag, or `None` if the FIFO is
+    /// empty. With the ambient channel enabled the caller routes by
+    /// [`FifoWord::tag`] — [`MEAS1_TAG`] is a PPG count, [`MEAS2_TAG`] an
+    /// ambient one — to pair each PPG sample with the latest ambient for
+    /// subtraction.
+    pub fn read_tagged_sample(&mut self) -> Result<Option<FifoWord>, Error<I2C::Error>> {
         if self.available()? == 0 {
             return Ok(None);
         }
         let mut buf = [0u8; SAMPLE_BYTES];
         self.read_regs(reg::FIFO_DATA, &mut buf)?;
-        let raw = (u32::from(buf[0]) << 16) | (u32::from(buf[1]) << 8) | u32::from(buf[2]);
-        Ok(Some(raw & PPG_DATA_MASK))
+        Ok(Some(decode_fifo_word(buf)))
+    }
+
+    /// Pop one raw photodiode count from the FIFO, ignoring its tag, or `None`
+    /// if it is empty.
+    pub fn read_sample(&mut self) -> Result<Option<u32>, Error<I2C::Error>> {
+        Ok(self.read_tagged_sample()?.map(|w| w.value))
     }
 
     /// Set the MEAS1 LED-A drive current (LEDx_PA register code). Pair with

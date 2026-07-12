@@ -306,70 +306,19 @@ fn floor_signal_reads_off_wrist() {
 }
 
 #[test]
-fn ambient_railed_reads_saturated_not_off_wrist() {
-    // Blinding sun: ambient IR bleeds into the photodiode and drives the DC near
-    // full scale (0x7_FFFF) on a well-worn wrist. A flickering ambient AC on top
-    // is not a pulse. This must read Saturated — an honest "signal unavailable,
-    // too much light" — NOT off-wrist (the wrist is worn) and NEVER a fabricated
-    // BPM. The LED-current AGC cannot pull an ambient-sourced rail down, so the
-    // contact classifier is the only thing standing between bright sun and a
-    // garbage reading.
+fn saturated_rail_reads_saturated() {
+    // Bright ambient rails the ADC near full scale (0x7_FFFF) with no ambient
+    // subtraction available (single-channel `push`). A flickering ambient AC on
+    // top is not a pulse; the railed DC level gives it away and reads
+    // `Saturated` — distinct from an off-wrist dark floor — and never valid.
     let rate = 100;
     let mut det = PeakDetector::new(rate);
     let mut synth = Synth::new(rate);
     synth.dc = 524_000.0;
     let r = synth.run(&mut det, 72.0, 20);
     assert_eq!(det.contact(), Contact::Saturated);
-    assert_ne!(
-        det.contact(),
-        Contact::OffWrist,
-        "a worn-but-sunlit wrist must not be reported off-wrist"
-    );
-    assert!(!r.valid, "a railed signal must never report a heart rate");
-    assert_eq!(r.bpm, 0);
-}
-
-#[test]
-fn ambient_railed_with_no_ac_reads_saturated() {
-    // The pure railing signature: DC pinned near full scale with no AC envelope
-    // at all (a flat, saturated diode). Still Saturated, still no BPM.
-    let rate = 100;
-    let mut det = PeakDetector::new(rate);
-    let mut synth = Synth::new(rate);
-    synth.dc = 524_000.0;
-    synth.amplitude = 0.0;
-    synth.noise_amp = 2;
-    let r = synth.run(&mut det, 0.0, 20);
-    assert_eq!(det.contact(), Contact::Saturated);
     assert!(!r.valid);
     assert_eq!(r.bpm, 0);
-}
-
-#[test]
-fn ambient_railed_is_distinguishable_from_off_wrist() {
-    // The two invalid states must be told apart: a dark floor (diode near zero)
-    // is genuinely off-wrist, while a full-scale rail is saturation on a possibly
-    // worn wrist. Both blank the BPM, but the attribution differs — the point of
-    // the fix.
-    let rate = 100;
-
-    let mut dark = PeakDetector::new(rate);
-    let mut dark_synth = Synth::new(rate);
-    dark_synth.dc = 0.0;
-    dark_synth.run(&mut dark, 72.0, 20);
-
-    let mut bright = PeakDetector::new(rate);
-    let mut bright_synth = Synth::new(rate);
-    bright_synth.dc = 524_000.0;
-    bright_synth.run(&mut bright, 72.0, 20);
-
-    assert_eq!(dark.contact(), Contact::OffWrist);
-    assert_eq!(bright.contact(), Contact::Saturated);
-    assert_ne!(
-        dark.contact(),
-        bright.contact(),
-        "off-wrist and ambient-railed must be reported as distinct states"
-    );
 }
 
 #[test]
@@ -407,6 +356,198 @@ fn fresh_detector_reads_off_wrist() {
     // Fail-closed: before any sample, the sensor is off-wrist, not worn.
     let det = PeakDetector::new(100);
     assert_eq!(det.contact(), Contact::OffWrist);
+}
+
+/// A two-channel synth modelling the AFE under bright ambient light. A large
+/// ambient DC is common to both channels (it bleeds into the photodiode whether
+/// or not the LED is lit); only the PPG channel additionally carries the
+/// LED-reflected DC and the pulsatile AC. The ambient channel (LED off) sees the
+/// ambient DC alone, with its own independent noise — exactly what MEAS2 reads.
+/// Subtracting ambient from PPG must leave the LED-reflected pulse.
+struct AmbientSynth {
+    rate: u32,
+    ambient_dc: f64,
+    led_dc: f64,
+    amplitude: f64,
+    noise_amp: i32,
+    ppg_noise: Noise,
+    amb_noise: Noise,
+    phase: f64,
+}
+
+impl AmbientSynth {
+    fn new(rate: u32) -> Self {
+        Self {
+            rate,
+            ambient_dc: 460_000.0,
+            led_dc: 40_000.0,
+            amplitude: 400.0,
+            noise_amp: 6,
+            ppg_noise: Noise::new(0xA11E),
+            amb_noise: Noise::new(0x5A17),
+            phase: 0.0,
+        }
+    }
+
+    /// The raw PPG count (LED on): ambient + LED-reflected DC + pulse + noise.
+    fn ppg(&mut self, bpm: f64) -> i32 {
+        self.phase += 2.0 * PI * (bpm / 60.0) / self.rate as f64;
+        (self.ambient_dc
+            + self.led_dc
+            + self.amplitude * self.phase.sin()
+            + self.ppg_noise.sample(self.noise_amp) as f64) as i32
+    }
+
+    /// The ambient count (LED off): the shared ambient DC + independent noise.
+    fn ambient(&mut self) -> i32 {
+        (self.ambient_dc + self.amb_noise.sample(self.noise_amp) as f64) as i32
+    }
+
+    fn step_subtracted(&mut self, det: &mut PeakDetector, bpm: f64) -> Reading {
+        // Order matters: advance the pulse phase via ppg() first, then sample
+        // the ambient channel for the same instant.
+        let ppg = self.ppg(bpm);
+        let ambient = self.ambient();
+        det.push_ambient(ppg, ambient)
+    }
+
+    fn run_subtracted(&mut self, det: &mut PeakDetector, bpm: f64, secs: u32) -> Reading {
+        let mut last = Reading {
+            bpm: 0,
+            valid: false,
+        };
+        for _ in 0..self.rate * secs {
+            last = self.step_subtracted(det, bpm);
+        }
+        last
+    }
+}
+
+#[test]
+fn high_ambient_would_rail_without_subtraction() {
+    // Establish the premise the recovery relies on: fed the raw PPG count alone,
+    // the huge ambient DC rails the channel and the detector correctly reports
+    // Saturated / invalid. The next test shows subtraction recovering it.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = AmbientSynth::new(rate);
+    let mut last = Reading {
+        bpm: 0,
+        valid: false,
+    };
+    for _ in 0..rate * 20 {
+        let ppg = synth.ppg(72.0);
+        last = det.push(ppg);
+    }
+    assert_eq!(
+        det.contact(),
+        Contact::Saturated,
+        "raw PPG under bright ambient must rail"
+    );
+    assert!(
+        !last.valid,
+        "a railed channel must never report a heart rate"
+    );
+    assert_eq!(last.bpm, 0);
+}
+
+#[test]
+fn high_ambient_recovers_valid_bpm_after_subtraction() {
+    // The headline case: the same bright-sun scene that rails the raw channel
+    // yields a real, correct BPM once the ambient (LED-off) sample is subtracted.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = AmbientSynth::new(rate);
+    let r = synth.run_subtracted(&mut det, 72.0, 25);
+    assert_eq!(
+        det.contact(),
+        Contact::Worn,
+        "ambient subtraction must un-rail a worn wrist"
+    );
+    assert!(r.valid, "a real pulse must survive ambient subtraction");
+    assert!(
+        r.bpm.abs_diff(72) <= 3,
+        "recovered rate should be correct, got {}",
+        r.bpm
+    );
+}
+
+#[test]
+fn off_wrist_high_ambient_stays_invalid_after_subtraction() {
+    // The honesty guard: no wrist present (no LED-reflected DC, no pulse) but the
+    // same blinding ambient. Subtracting ambient collapses the net signal to the
+    // dark floor — it must NOT manufacture a pulse. Off-wrist, invalid, no BPM.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = AmbientSynth::new(rate);
+    synth.led_dc = 0.0;
+    synth.amplitude = 0.0;
+    let r = synth.run_subtracted(&mut det, 72.0, 20);
+    assert_eq!(
+        det.contact(),
+        Contact::OffWrist,
+        "no wrist under bright ambient must read off-wrist after subtraction"
+    );
+    assert!(
+        !r.valid,
+        "subtraction must never fabricate a pulse from ambient"
+    );
+    assert_eq!(r.bpm, 0);
+}
+
+#[test]
+fn zero_ambient_subtraction_matches_single_channel() {
+    // With no ambient the subtracted path must be bit-for-bit the single-channel
+    // path, so the ambient plumbing can't perturb a clean indoor read.
+    let rate = 100;
+    let mut det_sub = PeakDetector::new(rate);
+    let mut det_raw = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    for _ in 0..rate * 25 {
+        // Same synthesized sample fed both ways.
+        let sample = {
+            synth.phase += 2.0 * PI * (72.0 / 60.0) / rate as f64;
+            let t = synth.sample_index as f64 / rate as f64;
+            let v = synth.dc
+                + synth.drift_per_s * t
+                + synth.amplitude * synth.phase.sin()
+                + synth.noise.sample(synth.noise_amp) as f64;
+            synth.sample_index += 1;
+            v as i32
+        };
+        let a = det_sub.push_ambient(sample, 0);
+        let b = det_raw.push(sample);
+        assert_eq!(a, b, "push_ambient(x, 0) must equal push(x)");
+    }
+}
+
+#[test]
+fn clean_signal_not_regressed_by_ambient_path() {
+    // Regression guard: a clean indoor pulse driven through the ambient-subtracted
+    // path (ambient == 0) still converges valid and correct.
+    let rate = 100;
+    let mut det = PeakDetector::new(rate);
+    let mut synth = Synth::new(rate);
+    let mut last = Reading {
+        bpm: 0,
+        valid: false,
+    };
+    for _ in 0..rate * 25 {
+        let sample = {
+            synth.phase += 2.0 * PI * (60.0 / 60.0) / rate as f64;
+            let v = synth.dc
+                + synth.amplitude * synth.phase.sin()
+                + synth.noise.sample(synth.noise_amp) as f64;
+            synth.sample_index += 1;
+            v as i32
+        };
+        last = det.push_ambient(sample, 0);
+    }
+    assert!(
+        last.valid,
+        "clean pulse via the ambient path must read valid"
+    );
+    assert!(last.bpm.abs_diff(60) <= 3, "got {}", last.bpm);
 }
 
 #[test]
