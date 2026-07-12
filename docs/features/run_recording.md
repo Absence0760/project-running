@@ -164,12 +164,13 @@ If the local save throws (disk full, isolate crash, plugin failure), `_stop` del
 
 ### Recovery on next launch (`main.dart`)
 
-Immediately after `LocalRunStore.init()` and before `runApp`, the app checks for a leftover `in_progress.json`:
+Immediately after `LocalRunStore.init()` and before `runApp`, the app checks for a leftover `in_progress.json`. `evaluateInProgressPartial` returns one of three outcomes (decisions §230):
 
-- If the partial run has **≥ 3 waypoints and ≥ 50 m of distance**, it's promoted to a completed run (tagged `metadata.recovered_from_crash = true`) and saved via `store.save()`.
-- If it's smaller than that it's dropped silently (filters out "tap Start then background" noise).
-- Either way, `store.clearInProgress()` deletes the file so it doesn't get picked up twice.
-- If a run was recovered, a snackbar appears on first frame: *"Recovered unfinished run — X.XX km, Y min"*.
+- **`resumable`** — the partial has **≥ 3 waypoints and ≥ 50 m** *and* was last saved within the 48 h `kResumableWindow` (`in_progress_saved_at`). Cold start jumps to the run screen and offers **Resume** / **Finish now** / **Discard**. Resume calls `RunRecorder.resumeSession(...)`, which re-hydrates the track, distance, prior elapsed (`_elapsedOffset`), original `startedAt`, and restored laps (`lapsFromCanonicalJson`), then continues appending to the *same* NDJSON file — one continuous run, not a second record. The dead-process gap is deliberately **not** credited to elapsed (monotonic-clock honesty). This is the fix for a multi-day ultra whose process is killed mid-run.
+- **`recovered`** — the partial clears the size floor but is stale (older than the window, or has no timestamp — the safe default). It's promoted to a completed run (tagged `metadata.recovered_from_crash = true`), saved via `store.save()`, and a first-frame snackbar reads *"Recovered unfinished run — X.XX km, Y min"*. "Finish now" from the resumable prompt takes this same path.
+- **`discarded`** — below the size floor (filters out "tap Start then background" noise).
+
+In the `recovered` / `discarded` cases `store.clearInProgress()` deletes the file so it can't be picked up twice; the `resumable` branch keeps the file so the recorder can keep appending to it.
 
 ### Why a stable run id matters
 
