@@ -522,4 +522,28 @@ mod tests {
         assert!((acc.loss_m() - 10.0).abs() < 1e-3);
         assert_eq!(acc.gain_m(), 0.0);
     }
+
+    #[test]
+    fn stopped_with_live_gps_still_banks_nothing() {
+        // The composed case: moving-gate AND a live (Tracking) GPS bias. Warm the
+        // filter to Tracking on flat terrain while moving, then STOP while a
+        // weather front drifts baro up but GPS holds flat. The moving-gate must
+        // bank nothing regardless of the present GPS bias underneath.
+        let mut acc = VertAccumulator::new();
+        for _ in 0..(SEED_SAMPLES + 10) {
+            acc.push(1000.0, true, Some(1000.0));
+        }
+        let (g0, l0) = (acc.gain_m(), acc.loss_m());
+        assert_eq!(g0, 0.0);
+        assert_eq!(l0, 0.0);
+        for step in 1..=50 {
+            acc.push(1000.0 + step as f32, false, Some(1000.0));
+        }
+        assert_eq!(
+            acc.gain_m(),
+            g0,
+            "no gain banked while stopped, even with live GPS"
+        );
+        assert_eq!(acc.loss_m(), l0);
+    }
 }
