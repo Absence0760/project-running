@@ -10,6 +10,7 @@ use embassy_sync::watch::Watch;
 use max86177::peak_detect::Reading as HrReading;
 use watch_core::alerts::Alert;
 use watch_core::button::RecordCommand;
+use watch_core::course::Course;
 use watch_core::elevation::Reading as ElevationReading;
 use watch_core::face::NavView;
 use watch_core::fix::Fix;
@@ -59,6 +60,14 @@ pub static PAGE: Watch<CriticalSectionRawMutex, Page, 1> = Watch::new();
 /// `record` reads the distance-along-course it feeds the recorder for the
 /// cut-off ETA. Two receivers (`ui`, `record`).
 pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
+
+/// Pushed breadcrumb course (README course-push path): the `ble` task decodes a
+/// chunked phone write into a `course_store` frame, builds a `Course`, and
+/// publishes it here; the `nav` task swaps its active course to the pushed one
+/// (from `NoCourse`, or over the boot/sim course). `None` means nothing pushed
+/// yet. One receiver (the `nav` task). The 4 KiB value is the course's point
+/// buffer — held once here so a re-push replaces it cleanly, no static-cell reuse.
+pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 1> = Watch::new();
 
 /// Back-to-start navigation view (breadcrumb + distance/bearing to start):
 /// `record` publishes one per accepted fix — the same seam the flash track

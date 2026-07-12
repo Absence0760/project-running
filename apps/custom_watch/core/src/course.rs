@@ -82,6 +82,7 @@ pub struct Projection {
 }
 
 /// A compact in-RAM course: a fixed-capacity polyline plus its cached length.
+#[derive(Clone)]
 pub struct Course {
     points: Vec<CoursePoint, MAX_COURSE_POINTS>,
     total_m: f64,

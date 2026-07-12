@@ -193,6 +193,7 @@ pub mod button;
 pub mod challenge_progress;
 pub mod checkpoint_projection;
 pub mod course;
+pub mod course_store;
 pub mod current_week;
 pub mod cutoff_eta;
 pub mod distance_bands;
