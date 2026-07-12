@@ -3985,6 +3985,36 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String eventPhotosTitle(int count) {
+    return 'Fotos ($count)';
+  }
+
+  @override
+  String get eventAddPhoto => 'Adicionar foto';
+
+  @override
+  String get eventPhotoUploading => 'Enviando…';
+
+  @override
+  String get eventNoPhotosYet => 'Ainda não há fotos.';
+
+  @override
+  String get eventNoPhotosAddHint => 'Seja o primeiro a adicionar uma.';
+
+  @override
+  String get eventWhichRunPhoto => 'De qual corrida é esta foto?';
+
+  @override
+  String get eventNoRecentRuns =>
+      'Nenhuma corrida recente encontrada. Registre uma corrida primeiro e volte.';
+
+  @override
+  String get eventPhotoRunnerFallback => 'Um corredor';
+
+  @override
+  String get eventPhotoUploadFailed => 'Não foi possível enviar a foto.';
+
+  @override
   String get eventNoRsvps => 'Nenhuma confirmação ainda — seja o primeiro.';
 
   @override
@@ -4139,10 +4169,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get eventSubmitTimeSubtitle =>
       'Escolha uma corrida para anexar, ou registre um DNF / DNS.';
-
-  @override
-  String get eventNoRecentRuns =>
-      'Nenhuma corrida recente encontrada. Registre uma corrida primeiro e volte.';
 
   @override
   String get eventRecordDnf => 'Registrar DNF';
@@ -14949,6 +14975,36 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String eventPhotosTitle(int count) {
+    return 'Fotos ($count)';
+  }
+
+  @override
+  String get eventAddPhoto => 'Adicionar foto';
+
+  @override
+  String get eventPhotoUploading => 'Enviando…';
+
+  @override
+  String get eventNoPhotosYet => 'Ainda não há fotos.';
+
+  @override
+  String get eventNoPhotosAddHint => 'Seja o primeiro a adicionar uma.';
+
+  @override
+  String get eventWhichRunPhoto => 'De qual corrida é esta foto?';
+
+  @override
+  String get eventNoRecentRuns =>
+      'Nenhuma corrida recente encontrada. Registre uma corrida primeiro e volte.';
+
+  @override
+  String get eventPhotoRunnerFallback => 'Um corredor';
+
+  @override
+  String get eventPhotoUploadFailed => 'Não foi possível enviar a foto.';
+
+  @override
   String get eventNoRsvps => 'Nenhuma confirmação ainda — seja o primeiro.';
 
   @override
@@ -15103,10 +15159,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get eventSubmitTimeSubtitle =>
       'Escolha uma corrida para anexar, ou registre um DNF / DNS.';
-
-  @override
-  String get eventNoRecentRuns =>
-      'Nenhuma corrida recente encontrada. Registre uma corrida primeiro e volte.';
 
   @override
   String get eventRecordDnf => 'Registrar DNF';

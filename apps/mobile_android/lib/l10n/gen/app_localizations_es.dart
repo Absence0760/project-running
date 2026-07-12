@@ -3979,6 +3979,36 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String eventPhotosTitle(int count) {
+    return 'Fotos ($count)';
+  }
+
+  @override
+  String get eventAddPhoto => 'Añadir foto';
+
+  @override
+  String get eventPhotoUploading => 'Subiendo…';
+
+  @override
+  String get eventNoPhotosYet => 'Aún no hay fotos.';
+
+  @override
+  String get eventNoPhotosAddHint => 'Sé el primero en añadir una.';
+
+  @override
+  String get eventWhichRunPhoto => '¿De qué carrera es esta foto?';
+
+  @override
+  String get eventNoRecentRuns =>
+      'No se encontraron carreras recientes. Registra una carrera primero y vuelve.';
+
+  @override
+  String get eventPhotoRunnerFallback => 'Un corredor';
+
+  @override
+  String get eventPhotoUploadFailed => 'No se pudo subir la foto.';
+
+  @override
   String get eventNoRsvps => 'Aún no hay confirmaciones — sé el primero.';
 
   @override
@@ -4133,10 +4163,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get eventSubmitTimeSubtitle =>
       'Elige una carrera para adjuntar, o registra un DNF / DNS.';
-
-  @override
-  String get eventNoRecentRuns =>
-      'No se encontraron carreras recientes. Registra una carrera primero y vuelve.';
 
   @override
   String get eventRecordDnf => 'Registrar DNF';

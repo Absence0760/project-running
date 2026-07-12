@@ -5401,6 +5401,47 @@
       }
     }
   },
+  "eventPhotosTitle": "Photos ({count})",
+  "@eventPhotosTitle": {
+    "description": "Header for the event photo gallery",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventAddPhoto": "Add photo",
+  "@eventAddPhoto": {
+    "description": "Add-photo action on the event gallery"
+  },
+  "eventPhotoUploading": "Uploading…",
+  "@eventPhotoUploading": {
+    "description": "Label while an event photo uploads"
+  },
+  "eventNoPhotosYet": "No photos yet.",
+  "@eventNoPhotosYet": {
+    "description": "Empty event-gallery state"
+  },
+  "eventNoPhotosAddHint": "Be the first to add one.",
+  "@eventNoPhotosAddHint": {
+    "description": "Prompt to add the first event photo"
+  },
+  "eventWhichRunPhoto": "Which run is this photo from?",
+  "@eventWhichRunPhoto": {
+    "description": "Title of the recent-run picker for an event photo"
+  },
+  "eventNoRecentRuns": "No recent runs to attach a photo to.",
+  "@eventNoRecentRuns": {
+    "description": "Empty state in the event-photo run picker"
+  },
+  "eventPhotoRunnerFallback": "A runner",
+  "@eventPhotoRunnerFallback": {
+    "description": "Fallback uploader name on an event photo"
+  },
+  "eventPhotoUploadFailed": "Couldn't upload the photo.",
+  "@eventPhotoUploadFailed": {
+    "description": "Error when an event photo upload fails"
+  },
   "eventNoRsvps": "No RSVPs yet — be the first.",
   "@eventNoRsvps": {
     "description": "Empty attendees state"

@@ -3735,6 +3735,35 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String eventPhotosTitle(int count) {
+    return '写真 ($count)';
+  }
+
+  @override
+  String get eventAddPhoto => '写真を追加';
+
+  @override
+  String get eventPhotoUploading => 'アップロード中…';
+
+  @override
+  String get eventNoPhotosYet => 'まだ写真はありません。';
+
+  @override
+  String get eventNoPhotosAddHint => '最初の1枚を追加しましょう。';
+
+  @override
+  String get eventWhichRunPhoto => 'この写真はどのランのものですか？';
+
+  @override
+  String get eventNoRecentRuns => '最近のランが見つかりません。先にランを記録してから戻ってください。';
+
+  @override
+  String get eventPhotoRunnerFallback => 'ランナー';
+
+  @override
+  String get eventPhotoUploadFailed => '写真をアップロードできませんでした。';
+
+  @override
   String get eventNoRsvps => 'まだ参加表明はありません。最初になりましょう。';
 
   @override
@@ -3882,9 +3911,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get eventSubmitTimeSubtitle => '添付するランを選ぶか、DNF / DNSを記録してください。';
-
-  @override
-  String get eventNoRecentRuns => '最近のランが見つかりません。先にランを記録してから戻ってください。';
 
   @override
   String get eventRecordDnf => 'DNFを記録';

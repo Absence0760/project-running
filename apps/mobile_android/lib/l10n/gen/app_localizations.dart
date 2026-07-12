@@ -6620,6 +6620,60 @@ abstract class AppLocalizations {
   /// **'ATTENDEES ({count})'**
   String eventAttendees(int count);
 
+  /// Header for the event photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Photos ({count})'**
+  String eventPhotosTitle(int count);
+
+  /// Add-photo action on the event gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get eventAddPhoto;
+
+  /// Label while an event photo uploads
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get eventPhotoUploading;
+
+  /// Empty event-gallery state
+  ///
+  /// In en, this message translates to:
+  /// **'No photos yet.'**
+  String get eventNoPhotosYet;
+
+  /// Prompt to add the first event photo
+  ///
+  /// In en, this message translates to:
+  /// **'Be the first to add one.'**
+  String get eventNoPhotosAddHint;
+
+  /// Title of the recent-run picker for an event photo
+  ///
+  /// In en, this message translates to:
+  /// **'Which run is this photo from?'**
+  String get eventWhichRunPhoto;
+
+  /// Empty state in the submit-time sheet
+  ///
+  /// In en, this message translates to:
+  /// **'No recent runs found. Record a run first, then come back.'**
+  String get eventNoRecentRuns;
+
+  /// Fallback uploader name on an event photo
+  ///
+  /// In en, this message translates to:
+  /// **'A runner'**
+  String get eventPhotoRunnerFallback;
+
+  /// Error when an event photo upload fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t upload the photo.'**
+  String get eventPhotoUploadFailed;
+
   /// Empty attendees state
   ///
   /// In en, this message translates to:
@@ -6895,12 +6949,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick a run to attach, or record a DNF / DNS.'**
   String get eventSubmitTimeSubtitle;
-
-  /// Empty state in the submit-time sheet
-  ///
-  /// In en, this message translates to:
-  /// **'No recent runs found. Record a run first, then come back.'**
-  String get eventNoRecentRuns;
 
   /// Button to record a DNF result
   ///
