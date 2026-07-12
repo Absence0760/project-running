@@ -43,7 +43,7 @@
 			<span class="headline-sub">{m('dashConsistency.weeksTrained', { pct: stats.activePct })}</span>
 		</div>
 
-		<div class="week-strip" aria-hidden="true">
+		<div class="consistency-strip" aria-hidden="true">
 			{#each stats.weeklyDistanceM as distance, i (i)}
 				<span
 					class="week-cell"
@@ -115,7 +115,7 @@
 		font-size: 0.9rem;
 		color: var(--text-muted, #6b7280);
 	}
-	.week-strip {
+	.consistency-strip {
 		display: flex;
 		align-items: flex-end;
 		gap: 3px;

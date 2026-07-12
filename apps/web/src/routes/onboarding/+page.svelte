@@ -208,7 +208,10 @@
 			if (primaryGoal) bagChanges[PRIMARY_GOAL_KEY] = primaryGoal;
 			// The typed value is in the display unit (kg or lbs); store canonical
 			// kg. parseWeightToKg rejects empty / non-numeric / negative input.
-			const weightKg = parseWeightToKg(bodyWeight, weightUnit);
+			// `bind:value` on a type=number input coerces bodyWeight to a
+			// number (or null when empty); parseWeightToKg takes the raw typed
+			// string (it trims + tolerates a comma decimal), so stringify first.
+			const weightKg = parseWeightToKg(String(bodyWeight ?? ''), weightUnit);
 			if (weightKg != null && weightKg > 0) bagChanges.body_weight_kg = roundWeight(weightKg);
 			// DOB mirrors into the prefs bag only under health consent —
 			// the bag copy feeds the coach/leaderboard read paths, which
