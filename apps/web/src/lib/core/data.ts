@@ -3769,7 +3769,11 @@ export async function clonePlanTemplate(
 		template_id: templateId,
 		new_start_date: newStartDate,
 	});
-	if (error) throw error;
+	if (error) {
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return data as string;
 }
 
@@ -3845,7 +3849,11 @@ export async function clonePublicPlan(
 		template_id: templateId,
 		new_start_date: newStartDate,
 	});
-	if (error) throw error;
+	if (error) {
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return data as string;
 }
 
@@ -9470,7 +9478,11 @@ export async function cloneSessionTemplate(templateId: string): Promise<string> 
 	const { data, error } = await supabase.rpc('clone_session_template', {
 		template_id: templateId
 	});
-	if (error) throw error;
+	if (error) {
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return data as string;
 }
 
@@ -9498,7 +9510,11 @@ export async function publishGymRoutineAsTemplate(routineId: string, clubId: str
 		p_routine_id: routineId,
 		p_club_id: clubId
 	});
-	if (error) throw error;
+	if (error) {
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return data as string;
 }
 
@@ -9509,7 +9525,11 @@ export async function cloneGymRoutineTemplate(templateId: string): Promise<strin
 	const { data, error } = await supabase.rpc('clone_gym_routine_template', {
 		p_template_id: templateId
 	});
-	if (error) throw error;
+	if (error) {
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return data as string;
 }
 
