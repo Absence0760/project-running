@@ -210,17 +210,19 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		zipError = '';
-		zipProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: m('settingsIntegrations.readingArchive') };
+		zipProgress = { total: 0, imported: 0, skipped: 0, droppedUnsupported: 0, droppedPhotos: 0, failed: 0, currentName: m('settingsIntegrations.readingArchive') };
 		try {
 			const result = await importStravaZip(file, (p) => {
 				zipProgress = { ...p };
 			});
-			showToast(
-				result.failed
-					? m('settingsIntegrations.stravaZipImportWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
-					: m('settingsIntegrations.stravaZipImport', { imported: result.imported, skipped: result.skipped }),
-				'success',
-			);
+			let msg = result.failed
+				? m('settingsIntegrations.stravaZipImportWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
+				: m('settingsIntegrations.stravaZipImport', { imported: result.imported, skipped: result.skipped });
+			if (result.droppedUnsupported)
+				msg += ' ' + m('settingsIntegrations.stravaZipImportDropped', { dropped: result.droppedUnsupported });
+			if (result.droppedPhotos)
+				msg += ' ' + m('settingsIntegrations.stravaZipImportDroppedPhotos', { photos: result.droppedPhotos });
+			showToast(msg, 'success');
 		} catch (err) {
 			zipError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -397,7 +399,7 @@
 								style="width: {Math.min(
 									100,
 									Math.round(
-										((zipProgress.imported + zipProgress.skipped + zipProgress.failed) /
+										((zipProgress.imported + zipProgress.skipped + zipProgress.droppedUnsupported + zipProgress.failed) /
 											zipProgress.total) *
 											100,
 									),
@@ -409,8 +411,10 @@
 						{#if zipProgress.total === 0}
 							{zipProgress.currentName ?? '…'}
 						{:else}
-							{m('settingsIntegrations.progressDone', { done: zipProgress.imported + zipProgress.skipped + zipProgress.failed, total: zipProgress.total })} · {m('settingsIntegrations.progressImported', { imported: zipProgress.imported })} ·
-							{m('settingsIntegrations.progressSkipped', { skipped: zipProgress.skipped })}{zipProgress.failed
+							{m('settingsIntegrations.progressDone', { done: zipProgress.imported + zipProgress.skipped + zipProgress.droppedUnsupported + zipProgress.failed, total: zipProgress.total })} · {m('settingsIntegrations.progressImported', { imported: zipProgress.imported })} ·
+							{m('settingsIntegrations.progressSkipped', { skipped: zipProgress.skipped })}{zipProgress.droppedUnsupported
+								? ` · ${m('settingsIntegrations.progressDropped', { dropped: zipProgress.droppedUnsupported })}`
+								: ''}{zipProgress.failed
 								? ` · ${m('settingsIntegrations.progressFailed', { failed: zipProgress.failed })}`
 								: ''}
 							{#if zipProgress.currentName}
