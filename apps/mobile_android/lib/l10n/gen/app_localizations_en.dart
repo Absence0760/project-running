@@ -698,6 +698,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authOrDivider => 'OR';
 
   @override
+  String get authErrorOffline =>
+      'You appear to be offline. Check your connection and try again.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'Incorrect email or password. Please try again.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Too many attempts. Please wait a moment and try again.';
+
+  @override
+  String get authErrorGeneric => 'Something went wrong. Please try again.';
+
+  @override
   String get signInTitle => 'Sign In';
 
   @override

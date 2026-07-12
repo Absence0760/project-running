@@ -704,6 +704,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authOrDivider => 'O';
 
   @override
+  String get authErrorOffline =>
+      'Parece que no tienes conexión. Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'Correo electrónico o contraseña incorrectos. Inténtalo de nuevo.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+
+  @override
+  String get authErrorGeneric => 'Algo salió mal. Inténtalo de nuevo.';
+
+  @override
   String get signInTitle => 'Iniciar sesión';
 
   @override

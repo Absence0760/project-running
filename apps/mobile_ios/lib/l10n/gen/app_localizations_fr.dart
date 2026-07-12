@@ -705,6 +705,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authOrDivider => 'OU';
 
   @override
+  String get authErrorOffline =>
+      'Vous semblez être hors ligne. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-mail ou mot de passe incorrect. Veuillez réessayer.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Trop de tentatives. Veuillez patienter un instant et réessayer.';
+
+  @override
+  String get authErrorGeneric =>
+      'Une erreur s\'est produite. Veuillez réessayer.';
+
+  @override
   String get signInTitle => 'Se connecter';
 
   @override

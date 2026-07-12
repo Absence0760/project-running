@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 import 'sign_up_screen.dart';
@@ -50,7 +51,11 @@ class _SignInScreenState extends State<SignInScreen> {
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('SignInScreen._signIn failed: $e');
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -87,7 +92,11 @@ class _SignInScreenState extends State<SignInScreen> {
         duration: const Duration(seconds: 5),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('SignInScreen._sendPasswordReset failed: $e');
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -135,10 +144,18 @@ class _SignInScreenState extends State<SignInScreen> {
     } on GoogleSignInException catch (e) {
       // User cancelled — silent return, no error toast.
       if (e.code != GoogleSignInExceptionCode.canceled) {
-        if (mounted) setState(() => _error = e.toString());
+        debugPrint('SignInScreen._signInWithGoogle failed: $e');
+        if (mounted) {
+          setState(() => _error =
+              friendlyAuthError(AppLocalizations.of(context), e));
+        }
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('SignInScreen._signInWithGoogle failed: $e');
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -179,7 +196,11 @@ class _SignInScreenState extends State<SignInScreen> {
       widget.onSignedIn?.call();
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      debugPrint('SignInScreen._signInWithApple failed: $e');
+      if (mounted) {
+        setState(() => _error =
+            friendlyAuthError(AppLocalizations.of(context), e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

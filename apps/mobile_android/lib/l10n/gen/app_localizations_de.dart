@@ -703,6 +703,22 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authOrDivider => 'ODER';
 
   @override
+  String get authErrorOffline =>
+      'Du scheinst offline zu sein. Prüfe deine Verbindung und versuche es erneut.';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'E-Mail oder Passwort ist falsch. Bitte versuche es erneut.';
+
+  @override
+  String get authErrorRateLimited =>
+      'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.';
+
+  @override
+  String get authErrorGeneric =>
+      'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
+
+  @override
   String get signInTitle => 'Anmelden';
 
   @override

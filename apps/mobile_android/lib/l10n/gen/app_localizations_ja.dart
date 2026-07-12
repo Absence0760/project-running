@@ -683,6 +683,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get authOrDivider => 'または';
 
   @override
+  String get authErrorOffline => 'オフラインのようです。接続を確認してもう一度お試しください。';
+
+  @override
+  String get authErrorInvalidCredentials =>
+      'メールアドレスまたはパスワードが正しくありません。もう一度お試しください。';
+
+  @override
+  String get authErrorRateLimited => '試行回数が多すぎます。しばらく待ってからもう一度お試しください。';
+
+  @override
+  String get authErrorGeneric => '問題が発生しました。もう一度お試しください。';
+
+  @override
   String get signInTitle => 'サインイン';
 
   @override
